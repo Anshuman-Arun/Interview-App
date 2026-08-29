@@ -49,7 +49,7 @@ describe("secret redaction hardening", () => {
 
   it("handles escaped characters inside a quoted secret value", () => {
     const redacted = redactSecrets(
-      '{"apiKey":"abc\\\"def","status":"ok"}'
+      String.raw`{"apiKey":"abc\"def","status":"ok"}`
     );
 
     expect(JSON.parse(redacted)).toEqual({
@@ -119,9 +119,12 @@ describe("secret redaction hardening", () => {
   });
 
   it("removes the original secret substrings while retaining diagnostic context", () => {
-    const secrets = ["alpha-private", "beta-private", "gamma-private"];
+    const firstSecret = "alpha-private";
+    const secondSecret = "beta-private";
+    const thirdSecret = "gamma-private";
+    const secrets = [firstSecret, secondSecret, thirdSecret];
     const redacted = redactSecrets(
-      `status=failed Authorization: Bearer ${secrets[0]} api_key=${secrets[1]} clientToken=${secrets[2]} retry=false`
+      `status=failed Authorization: Bearer ${firstSecret} api_key=${secondSecret} clientToken=${thirdSecret} retry=false`
     );
 
     for (const secret of secrets) {
