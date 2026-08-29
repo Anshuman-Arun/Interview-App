@@ -14,11 +14,11 @@ import {
 } from "../../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../../packages/persistence/src/index.js";
 import { ADVERSARIAL_SECRET, type AdversarialFixture } from "./fixtures.js";
-import {
+import type {
   AdversarialModel,
-  type ModelDeliveryState,
-  type ModelGenerationState,
-  type ModelRequestState
+  ModelDeliveryState,
+  ModelGenerationState,
+  ModelRequestState
 } from "./model.js";
 
 const DELIVERY_MODEL_TO_STATE: Readonly<Record<
