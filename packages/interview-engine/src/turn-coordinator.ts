@@ -432,7 +432,9 @@ export class TurnCoordinator {
       const generation = state.generations[generationId];
       if (generation === undefined) throw new Error("Unknown generation");
       if (generation.status === "SUPERSEDED") return { drafts: [], result: { superseded: true } };
-      if (generation.status !== "ACTIVE") throw new Error(`Cannot supersede generation in ${generation.status}`);
+      if (generation.status !== "ACTIVE" && generation.status !== "PROPOSAL_RECEIVED" && generation.status !== "VALIDATED") {
+        throw new Error(`Cannot supersede generation in ${generation.status}`);
+      }
       return {
         drafts: [{ source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId, reason } }],
         result: { superseded: true }

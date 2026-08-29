@@ -7,7 +7,6 @@ import {
   DeliveryAtomSchema,
   DisclosureIdSchema,
   newDeliveryId,
-  newGenerationId,
   newRequestId,
   newSessionId,
   type DeliveryAtom,
@@ -37,6 +36,7 @@ import {
   type AudioPlayer,
   type RendererHandleResult
 } from "../apps/web/src/index.js";
+import { ensureCompatibleGeneration } from "./harness.js";
 
 const CLIENT_TOKEN = "renderer-audio-crash-client-token-long-enough";
 const CLIENT_ORIGIN = "http://127.0.0.1:5173";
@@ -329,9 +329,10 @@ async function queueAudio(
   writer: ReturnType<SessionRuntimeRegistry["get"]>,
   disclosureIds: readonly DisclosureId[] = []
 ): Promise<DeliveryAtom> {
+  const generationId = await ensureCompatibleGeneration(writer);
   const atom = DeliveryAtomSchema.parse({
     deliveryId: newDeliveryId(),
-    generationId: newGenerationId(),
+    generationId,
     content: {
       medium: "AUDIO",
       text: "Deterministic audio fixture",

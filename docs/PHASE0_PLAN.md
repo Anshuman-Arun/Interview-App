@@ -76,11 +76,11 @@ Each slice ends with tests, type checking, linting, replay checks where relevant
 
 ## 10. GenerationBasis and compatibility
 
-- Files: `generation.ts`, `compatibility.ts`.
+- Files: `generation.ts`, `packages/events/src/generation-compatibility.ts`, interview-engine re-export, delivery admission.
 - Types/functions: basis schema and three-valued compatibility.
 - Tests: board/transcript/problem/policy/epoch staleness, late generation, missing provenance returns `UNKNOWN`.
 - Dependencies: slice 9.
-- Complete when only `COMPATIBLE` can enter proposal validation/delivery.
+- Complete when only `COMPATIBLE` can enter proposal validation or transition from queued to physical delivery; missing provenance and stale/superseded generations fail closed inside the serialized transition.
 
 ## 11. Context Epoch
 
