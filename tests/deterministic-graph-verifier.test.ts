@@ -156,8 +156,8 @@ describe("deterministic Oxford two-colour graph verifier", () => {
     const colouringCount = 2 ** pairs.length;
 
     for (let mask = 0; mask < colouringCount; mask += 1) {
-      const edges = pairs.map(([left, right], pairIndex) => ({
-        endpoints: [left, right] as [string, string],
+      const edges: TwoColourGraphInterpretation["edges"] = pairs.map(([left, right], pairIndex) => ({
+        endpoints: [left, right],
         relation: (mask & (1 << pairIndex)) === 0 ? "ACQUAINTANCE" : "STRANGER"
       }));
 
