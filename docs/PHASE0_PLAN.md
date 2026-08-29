@@ -350,5 +350,6 @@ Recovered and integrated after review of closed PRs #3–#7:
 - an exported typed browser command client for every protocol-v1 command, with private token storage, strict response/correlation validation, and caller-stable RequestId retry;
 - conservative classification of fetch and response-body failures as transport uncertainty rather than malformed server responses;
 - exact command preflight validation for Origin, `POST`, and the two allowed non-simple headers, with no session mutation during preflight.
+- browser-safe Web Crypto UUID generation plus a transitive guard that rejects Node builtin imports from the shared domain/delivery runtime graph.
 
 Dedicated recovered suites pass together with the existing loopback and renderer integration tests. These slices add no real provider, paid API path, polished UI, or provider/session authority.

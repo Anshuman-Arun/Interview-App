@@ -265,3 +265,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: reflect arbitrary origins; accept arbitrary requested headers; include `OPTIONS` as an application method; require the secret on preflight.
 - Consequences: allowed clients can read scoped command responses, rejected origins are never reflected, and actual POSTs still require timing-safe token authentication.
 - Reversible: exact header names and caching duration are reversible; origin scoping and non-mutating preflight are not.
+
+## D034 — Shared ID generation uses the Web Crypto runtime surface
+
+- Decision: generate branded UUID-backed IDs through `globalThis.crypto.randomUUID()` and scan the transitive browser-shared domain/delivery import graph for Node builtins.
+- Reason: importing `node:crypto` from the shared domain barrel made otherwise browser-facing command and renderer clients dependent on Node-specific bundler behavior.
+- Alternatives considered: maintain separate browser/server ID factories; require a Node-polyfill plugin; fall back to `Math.random()`.
+- Consequences: Node 22 and modern secure browser contexts use one cryptographically secure implementation, while a deterministic repository test prevents Node builtins from silently re-entering the shared graph. A real browser production build is still pending.
+- Reversible: the secure UUID provider and static-graph test organization are reversible; weak-random fallback is not acceptable.
