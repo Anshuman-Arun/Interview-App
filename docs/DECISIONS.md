@@ -193,3 +193,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: trust any schema-valid worker result; persist raw worker traffic; accept revision-matching output without recomputation.
 - Consequences: accepted transcript analysis is replayable application truth, uncertain or tampered output terminates as discarded, and new compute operations need operation-specific validators. Worker error messages remain transient and only bounded application-owned reason codes enter events.
 - Reversible: the normalization algorithm is reversible; independent validation and fail-closed admission are not.
+
+## D025 — The first deterministic verifier accepts only complete formal graph interpretations
+
+- Decision: the Oxford graph verifier consumes strict protocol-v1 JSON containing every unordered vertex pair exactly once and produces a non-abstaining result only when interpretation confidence is exactly 1.
+- Reason: deterministic mathematics cannot compensate for an uncertain natural-language-to-formal interpretation. Complete graph encoding makes the checked claim precise and keeps abstention explicit.
+- Alternatives considered: parse free-form mathematical prose; infer omitted edges; accept a confidence threshold below 1.
+- Consequences: valid K6 encodings are exhaustively checkable and K5 counterexamples are correctly contradicted, while partial or ambiguous interpretations remain `UNRESOLVED` rather than being guessed.
+- Reversible: the protocol and confidence policy are versionable; deterministic checking with abstention is not.

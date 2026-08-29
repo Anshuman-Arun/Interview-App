@@ -284,3 +284,15 @@ Implemented after the worker process boundary:
 - real-worker, duplicate, stale, tampered, malformed, miscorrelated, restart, and replay tests.
 
 Additional worker operations remain deferred. Each must define its own independently checkable admission rule rather than inheriting authority from the subprocess.
+
+## Continuation progress — deterministic Oxford graph verifier
+
+Implemented as an isolated verification package slice:
+
+- strict protocol-v1 JSON interpretation for a complete two-colour graph;
+- structural rejection of unknown vertices, self-edges, duplicate unordered pairs, missing pairs, and extra fields;
+- deterministic monochromatic-triangle search returning `VERIFIED` or `CONTRADICTED` only for complete, unambiguous interpretations at confidence 1;
+- `UNRESOLVED` abstention for malformed, incomplete, ambiguous, or lower-confidence interpretations;
+- exhaustive testing of all 32,768 two-colourings of K6 plus the triangle-free five-cycle/complement K5 colouring.
+
+The verifier is not yet wired to model-produced EvidenceProposals. That later admission must keep interpretation confidence and verifier output distinct from authoritative student evidence.

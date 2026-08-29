@@ -27,7 +27,7 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Pedagogical policy | `packages/interview-engine/src/pedagogical-policy.ts` | `selectPedagogicalAction`, `RealizationRequest` | evidence, reasoning graph | 0 baseline; 2 advanced |
 | Reasoning graph contracts | `packages/domain/src/reasoning.ts` | versioned `ReasoningGraph`, approaches, milestones, edges | IDs/Zod | 0 |
 | Student evidence | `packages/domain/src/evidence.ts`, events state/reducer, `turn-coordinator.ts` | scoped proposal, provenance/threshold validation, authoritative update | event IDs, Zod | 0 baseline; 2 advanced policy |
-| Verifier contracts | `packages/domain/src/verification.ts`, `packages/verification/` | `VerificationResult`, `DeterministicVerifier` | domain | 0 contracts; 5 engines |
+| Verifier contracts | `packages/domain/src/verification.ts`, `packages/verification/src/two-colour-graph-verifier.ts` | `VerificationResult`, `DeterministicVerifier`, `TwoColourGraphVerifier`, strict formal graph interpretation | domain, Zod | 0 Oxford graph verifier implemented; additional engines later |
 | Provider capability model | `packages/domain/src/provider.ts` | `ModelCapabilities`, real cancellation/data-use semantics | Zod | 0 |
 | Provider policy/billing verification | `packages/providers/src/policy.ts` | `assertProviderPermitted`, `BillingVerification` | capabilities, clock | 0 |
 | MockModelAdapter | `packages/providers/src/mock-model-adapter.ts` | `MockModelAdapter`, `MockModelSession` | provider contracts, proposal | 0 |
