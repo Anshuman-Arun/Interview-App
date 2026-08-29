@@ -42,7 +42,7 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Delivery Coordinator | `packages/delivery/src/delivery-coordinator.ts` | queue/start/ack/cancel/recovery transitions | writer, events | 0 |
 | Renderer acknowledgements | `packages/delivery/src/renderer.ts` | `Renderer`, `RendererAcknowledgement`, `MockRenderer` | delivery IDs | 0 |
 | Whiteboard abstraction | `packages/domain/src/whiteboard.ts`, `packages/whiteboard/` | `WhiteboardAdapter`, ownership-layer board actions | board revisions | 0 contract; 3 integration |
-| Local compute worker boundary | `packages/local-compute/src/protocol.ts`, `worker-client.ts`, `workers/python/local_compute_worker.py` | `LocalComputeRequest`, `LocalComputeResponse`, `LocalComputeWorkerClient`, `LocalProcessInterruption` | domain IDs, Zod, Node child process, isolated Python stdio | 0 boundary implemented; production compute functions deferred |
+| Local compute worker boundary | `packages/local-compute/src/protocol.ts`, `worker-client.ts`, `workers/python/local_compute_worker.py`; admission in `packages/interview-engine/src/local-compute-coordinator.ts`; lifecycle in events/state/reducer | `LocalComputeRequest`, `LocalComputeResponse`, `LocalComputeWorkerClient`, `LocalComputeCoordinator`, `LocalComputeRequestState` | domain IDs, Zod, Node child process, isolated Python stdio, serialized writer | 0 transcript-analysis boundary and authoritative admission implemented; additional compute functions deferred |
 | Frontend/backend protocol | `packages/domain/src/protocol.ts`, `apps/server/src/loopback-command-server.ts`; later `apps/web` | versioned Zod command/response union; start/input/summary/reconnect/exposure/completion messages | domain schemas, writer, delivery | 0 browser-MVP boundary implemented; web client deferred |
 | Security boundaries | `packages/domain/src/security.ts`, `apps/server/src/loopback-command-server.ts` | loopback-only bind, exact Origin allowlist, constant-time client-token check, bounded JSON body, non-secret error responses | protocol/provider policy | 0 browser-MVP boundary implemented |
 | Testing infrastructure | `tests/`, `vitest.config.ts` | unit, replay, crash, idempotency, property tests | all implemented modules | 0 |
@@ -59,6 +59,7 @@ interview-engine --------------------> problems
    |       |         |                    |
    |       |         +------> providers   |
    |       +----------------> delivery    |
+   +------------------------> local-compute
    v                                      v
 persistence --------------------------> events
    |                                      |
@@ -111,10 +112,12 @@ Node supervisor
   -> one result proposal per stdout JSON line
   -> strict protocol-v1 Zod response
   -> request and source-revision correlation
-  -> application command inbox (future integration)
+  -> application-owned deterministic result validation
+  -> idempotent command through the serialized SessionWriter
+  -> semantic accepted/discarded event
 ```
 
-Malformed, unsolicited, oversized, or basis-mismatched worker output fails the process closed. A timeout interrupts the complete local worker process because Phase 0 has no honest per-request compute cancellation mechanism. Operational duplicate caches are bounded and disposable; they are not authoritative state.
+Malformed, unsolicited, oversized, or basis-mismatched worker output fails the process closed. Transcript analysis is accepted only while its request is pending, its persisted and callback revisions equal the current transcript revision, its committed InputEpisode remains available, and application code independently reproduces its normalized text and token count. Worker error text is never persisted. A timeout interrupts the complete local worker process because Phase 0 has no honest per-request compute cancellation mechanism. Operational duplicate caches are bounded and disposable; they are not authoritative state.
 
 ## Browser-MVP command boundary
 

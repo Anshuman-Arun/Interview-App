@@ -256,7 +256,7 @@ Implemented after the asynchronous inbox slice:
 - stable DeliveryId reconnect behavior and renderer-side visible-output deduplication tests.
 - first-use crash recovery that marks persisted in-flight deliveries `POSSIBLY_EXPOSED` before a restarted server handles reconnect.
 
-Still pending in Phase 0: worker-result admission into the authoritative command inbox, a real renderer/audio acknowledgement integration, richer evidence supersession, server-to-client streaming transport, and provider-specific adapter experiments.
+Still pending in Phase 0: a real renderer/audio acknowledgement integration, richer evidence supersession, server-to-client streaming transport, additional local-compute operations, and provider-specific adapter experiments.
 
 ## Continuation progress — local-compute worker boundary
 
@@ -271,4 +271,16 @@ Implemented after the authenticated loopback slice:
 - a deterministic Python worker that has no event, SQLite, provider, or application-state authority;
 - real-process and fault-injection tests.
 
-The worker output is not yet wired into an authoritative interview command. That admission path must validate current state and execute through `SessionWriter`; it is the next worker integration slice rather than an implicit capability of the subprocess.
+## Continuation progress — local-compute result admission
+
+Implemented after the worker process boundary:
+
+- semantic request, accepted-result, and discarded-result events with pure replay state;
+- transcript-analysis issuance only for committed speech InputEpisodes;
+- callback admission through the single serialized `SessionWriter` with durable RequestId idempotency;
+- exact persisted/callback/current transcript-revision checks;
+- independent application recomputation of normalized text and token count before acceptance;
+- bounded application-owned discard reasons with untrusted worker error messages excluded from events;
+- real-worker, duplicate, stale, tampered, malformed, miscorrelated, restart, and replay tests.
+
+Additional worker operations remain deferred. Each must define its own independently checkable admission rule rather than inheriting authority from the subprocess.

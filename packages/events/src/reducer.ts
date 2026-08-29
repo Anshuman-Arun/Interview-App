@@ -110,6 +110,47 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...request, status: "DISCARDED", discardReason: event.payload.reason } } };
       break;
     }
+    case "LOCAL_COMPUTE_REQUESTED":
+      if (state.localComputeRequests[event.payload.computeRequestId] !== undefined) throw new Error("Local compute request already exists");
+      next = {
+        ...state,
+        localComputeRequests: {
+          ...state.localComputeRequests,
+          [event.payload.computeRequestId]: { ...event.payload, status: "PENDING" }
+        }
+      };
+      break;
+    case "LOCAL_COMPUTE_RESULT_ACCEPTED": {
+      const request = state.localComputeRequests[event.payload.computeRequestId];
+      if (request === undefined || request.status !== "PENDING") throw new Error("Local compute request is not pending");
+      if (request.sourceTranscriptRevision !== event.payload.sourceTranscriptRevision) {
+        throw new Error("Local compute result basis does not match its request");
+      }
+      next = {
+        ...state,
+        localComputeRequests: {
+          ...state.localComputeRequests,
+          [event.payload.computeRequestId]: {
+            ...request,
+            status: "ACCEPTED",
+            result: { normalizedText: event.payload.normalizedText, tokenCount: event.payload.tokenCount }
+          }
+        }
+      };
+      break;
+    }
+    case "LOCAL_COMPUTE_RESULT_DISCARDED": {
+      const request = state.localComputeRequests[event.payload.computeRequestId];
+      if (request === undefined || request.status !== "PENDING") throw new Error("Local compute request is not pending");
+      next = {
+        ...state,
+        localComputeRequests: {
+          ...state.localComputeRequests,
+          [event.payload.computeRequestId]: { ...request, status: "DISCARDED", discardReason: event.payload.reason }
+        }
+      };
+      break;
+    }
     case "EVIDENCE_PROPOSED":
       next = { ...state, evidenceProposals: [...state.evidenceProposals, event.payload.proposal] };
       break;

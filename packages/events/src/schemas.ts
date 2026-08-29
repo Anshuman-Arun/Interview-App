@@ -58,6 +58,24 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   event("VISION_REQUESTED", z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema, regionId: z.string().min(1), relevantShapeIds: z.array(z.string().min(1)).min(1) }).strict()),
   event("VISION_RESULT_ACCEPTED", z.object({ visionRequestId: RequestIdSchema, observation: BoardObservationSchema }).strict()),
   event("VISION_RESULT_DISCARDED", z.object({ visionRequestId: RequestIdSchema, reason: z.string().min(1) }).strict()),
+  event("LOCAL_COMPUTE_REQUESTED", z.object({
+    computeRequestId: RequestIdSchema,
+    operation: z.literal("ANALYZE_TRANSCRIPT"),
+    inputEpisodeId: InputEpisodeIdSchema,
+    sourceTranscriptRevision: TranscriptRevisionSchema
+  }).strict()),
+  event("LOCAL_COMPUTE_RESULT_ACCEPTED", z.object({
+    computeRequestId: RequestIdSchema,
+    operation: z.literal("ANALYZE_TRANSCRIPT"),
+    sourceTranscriptRevision: TranscriptRevisionSchema,
+    normalizedText: z.string(),
+    tokenCount: z.number().int().nonnegative()
+  }).strict()),
+  event("LOCAL_COMPUTE_RESULT_DISCARDED", z.object({
+    computeRequestId: RequestIdSchema,
+    operation: z.literal("ANALYZE_TRANSCRIPT"),
+    reason: z.string().min(1)
+  }).strict()),
   event("EVIDENCE_PROPOSED", z.object({ proposal: EvidenceProposalSchema }).strict()),
   event("STUDENT_EVIDENCE_UPDATED", z.object({ key: EvidenceKeySchema, value: EvidenceValueSchema }).strict()),
   event("PEDAGOGICAL_ACTION_SELECTED", z.object({ turnId: TurnIdSchema, request: RealizationRequestSchema }).strict()),

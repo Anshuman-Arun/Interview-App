@@ -54,6 +54,18 @@ export interface VisionRequestState {
   readonly observation?: BoardObservation;
   readonly discardReason?: string;
 }
+export interface LocalComputeRequestState {
+  readonly computeRequestId: RequestId;
+  readonly operation: "ANALYZE_TRANSCRIPT";
+  readonly inputEpisodeId: InputEpisodeId;
+  readonly sourceTranscriptRevision: TranscriptRevision;
+  readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
+  readonly result?: {
+    readonly normalizedText: string;
+    readonly tokenCount: number;
+  };
+  readonly discardReason?: string;
+}
 export interface GenerationState {
   readonly generationId: GenerationId;
   readonly basis: GenerationBasis;
@@ -81,6 +93,7 @@ export interface SessionState {
   readonly deliveries: Readonly<Record<string, DeliveryAtom>>;
   readonly disclosureLedger: readonly DisclosureId[];
   readonly visionRequests: Readonly<Record<string, VisionRequestState>>;
+  readonly localComputeRequests: Readonly<Record<string, LocalComputeRequestState>>;
   readonly evidenceProposals: readonly EvidenceProposal[];
   readonly studentEvidence: Readonly<Record<string, EvidenceValue>>;
 }
@@ -103,6 +116,7 @@ export const initialSessionState = (sessionId: SessionId): SessionState => ({
   deliveries: {},
   disclosureLedger: [],
   visionRequests: {},
+  localComputeRequests: {},
   evidenceProposals: [],
   studentEvidence: {}
 });

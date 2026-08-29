@@ -47,6 +47,7 @@ const PACKAGE_RULES = new Map([
     "providers",
     "problems",
     "delivery",
+    "local-compute",
     "verification",
     "whiteboard"
   ])]

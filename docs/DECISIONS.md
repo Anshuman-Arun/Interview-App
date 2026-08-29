@@ -185,3 +185,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: retain the isolated linker and rely on long waits; manually reconstruct package links; use a machine-local override.
 - Consequences: dependency layout is flatter, so code must not rely on undeclared transitive packages. CI uses the same layout as local development.
 - Reversible: yes, after pnpm/Windows linker behavior is re-evaluated.
+
+## D024 — Transcript worker results require deterministic application recomputation
+
+- Decision: persist a transcript-analysis request basis, then accept its worker result only if the request remains pending, callback and result revisions equal both the request basis and current transcript revision, and application code independently reproduces the normalized text and token count from the committed speech InputEpisode.
+- Reason: the worker is disposable and non-authoritative. Schema and correlation validation establish shape and identity, but do not establish semantic correctness.
+- Alternatives considered: trust any schema-valid worker result; persist raw worker traffic; accept revision-matching output without recomputation.
+- Consequences: accepted transcript analysis is replayable application truth, uncertain or tampered output terminates as discarded, and new compute operations need operation-specific validators. Worker error messages remain transient and only bounded application-owned reason codes enter events.
+- Reversible: the normalization algorithm is reversible; independent validation and fail-closed admission are not.
