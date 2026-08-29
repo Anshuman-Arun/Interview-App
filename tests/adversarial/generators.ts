@@ -112,22 +112,22 @@ const RESTART_OPERATIONS: readonly RestartScheduleOperation[] = [
   "RELEASE_VERIFIER_DUPLICATE"
 ];
 
-export const coreScheduleArbitrary = fc.shuffledSubarray(CORE_OPERATIONS, {
+export const coreScheduleArbitrary = fc.shuffledSubarray([...CORE_OPERATIONS], {
   minLength: 7,
   maxLength: CORE_OPERATIONS.length
 });
 
-export const callbackScheduleArbitrary = fc.shuffledSubarray(CALLBACK_OPERATIONS, {
+export const callbackScheduleArbitrary = fc.shuffledSubarray([...CALLBACK_OPERATIONS], {
   minLength: 7,
   maxLength: CALLBACK_OPERATIONS.length
 });
 
-export const deliveryScheduleArbitrary = fc.shuffledSubarray(DELIVERY_OPERATIONS, {
+export const deliveryScheduleArbitrary = fc.shuffledSubarray([...DELIVERY_OPERATIONS], {
   minLength: 5,
   maxLength: DELIVERY_OPERATIONS.length
 });
 
-export const restartScheduleArbitrary = fc.shuffledSubarray(RESTART_OPERATIONS, {
+export const restartScheduleArbitrary = fc.shuffledSubarray([...RESTART_OPERATIONS], {
   minLength: 5,
   maxLength: RESTART_OPERATIONS.length
 });
