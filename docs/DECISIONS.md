@@ -281,3 +281,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: retain one cache per server; move recovery into every reconnect handler; rely only on reducer tolerance for duplicate events.
 - Consequences: concurrent first use shares one recovery promise and waits before serving the session. A deliberately duplicated caller still appends at most one recovery event because the SessionWriter transition rechecks current state.
 - Reversible: the composition API and cache placement are reversible; conservative recovery before transport use and serialized current-state validation are not.
+
+## D036 — Durable RequestId idempotency is bound to a canonical command fingerprint
+
+- Decision: every authoritative `SessionWriter` command supplies a runtime-valid operation and JSON-compatible payload identity. The writer hashes the canonical command envelope and identity with SHA-256; SQLite stores that fixed-length fingerprint beside the durable result and returns a duplicate only when fingerprints match exactly.
+- Reason: a processed `RequestId` alone cannot distinguish a retry of the same logical command from conflicting reuse, such as acknowledging exposure and completion with one ID. Binding the cached result to command identity makes conflicting reuse fail closed before state can advance.
+- Alternatives considered: key idempotency by `RequestId` alone; persist raw command payloads; compare only command names; silently trust legacy rows without fingerprints.
+- Consequences: identical retries remain durable across restart, different commands or payloads using the same `RequestId` raise a fixed `REQUEST_ID_CONFLICT`, and legacy processed-request rows without proof cannot be replayed as duplicates. Raw command identity and possible credentials are never persisted in the idempotency table.
+- Reversible: the canonical encoding and collision-resistant hash algorithm are versionable with a migration; binding a durable result to the exact logical command and failing closed when that proof is absent are not.

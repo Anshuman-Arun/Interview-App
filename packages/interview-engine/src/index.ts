@@ -1,4 +1,5 @@
 export * from "./compatibility.js";
+export * from "./command-fingerprint.js";
 export * from "./context-compiler.js";
 export * from "./disclosure-validator.js";
 export * from "./envelopes.js";

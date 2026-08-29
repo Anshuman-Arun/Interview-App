@@ -2,6 +2,7 @@ import {
   BoardRevisionSchema,
   BoardObservationSchema,
   CommandEnvelopeSchema,
+  CommandIdentityValueSchema,
   ContextEpochSchema,
   DeliveryAtomSchema,
   GenerationBasisSchema,
@@ -27,6 +28,7 @@ import {
   type BoardObservation,
   type BoardRevision,
   type CommandEnvelope,
+  type CommandIdentityValue,
   type DeliveryAtom,
   type GenerationBasis,
   type GenerationId,
@@ -70,12 +72,19 @@ export const ProcessProposalResultSchema = z.object({
 }).strict();
 export type ProcessProposalResult = z.infer<typeof ProcessProposalResultSchema>;
 
+function commandIdentityValue(value: unknown): CommandIdentityValue {
+  return CommandIdentityValueSchema.parse(JSON.parse(JSON.stringify(value)));
+}
+
 export class TurnCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
 
   public async startSession(problem: InterviewProblem, commandEnvelope?: CommandEnvelope): Promise<void> {
     const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" }));
-    await this.writer.execute(envelope, StartedResultSchema, (state) => {
+    await this.writer.execute(envelope, {
+      operation: "START_SESSION",
+      payload: { problemId: problem.id, problemVersion: problem.version, prompt: problem.public.prompt }
+    }, StartedResultSchema, (state) => {
       if (state.started) throw new Error("Session already started");
       return {
         drafts: [
@@ -91,7 +100,10 @@ export class TurnCoordinator {
     const inputEpisodeId = newInputEpisodeId();
     const turnId = newTurnId();
     const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "synthetic-user", inputEpisodeId, turnId }));
-    const result = await this.writer.execute(envelope, InputCommittedResultSchema, () => ({
+    const result = await this.writer.execute(envelope, {
+      operation: "COMMIT_SYNTHETIC_INPUT",
+      payload: { studentText }
+    }, InputCommittedResultSchema, () => ({
       drafts: [
         { source: "USER", type: "INPUT_EPISODE_STARTED", payload: { inputEpisodeId } },
         { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: studentText } },
@@ -106,7 +118,10 @@ export class TurnCoordinator {
   public async beginUtterance(): Promise<UtteranceId> {
     const utteranceId = newUtteranceId();
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "vad", correlationId: newRequestId() });
-    const result = await this.writer.execute(envelope, UtteranceStartedResultSchema, (state) => {
+    const result = await this.writer.execute(envelope, {
+      operation: "BEGIN_UTTERANCE",
+      payload: {}
+    }, UtteranceStartedResultSchema, (state) => {
       const invalidations: EventDraft[] = [];
       for (const generation of Object.values(state.generations)) {
         if (generation.status === "ACTIVE") {
@@ -130,7 +145,10 @@ export class TurnCoordinator {
 
   public async discardUtterance(utteranceId: UtteranceId, reason: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "vad", correlationId: newRequestId() });
-    await this.writer.execute(envelope, UtteranceDiscardedResultSchema, (state) => {
+    await this.writer.execute(envelope, {
+      operation: "DISCARD_UTTERANCE",
+      payload: { utteranceId, reason }
+    }, UtteranceDiscardedResultSchema, (state) => {
       const utterance = state.utterances[utteranceId];
       if (utterance === undefined || utterance.status !== "CAPTURING") throw new Error("Utterance is not being captured");
       return { drafts: [{ source: "USER", type: "UTTERANCE_DISCARDED", payload: { utteranceId, reason } }], result: { discarded: true } };
@@ -145,7 +163,10 @@ export class TurnCoordinator {
     const inputEpisodeId = input.inputEpisodeId ?? newInputEpisodeId();
     const startsEpisode = input.inputEpisodeId === undefined;
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "stt", inputEpisodeId });
-    const result = await this.writer.execute(envelope, UtteranceFinalizedResultSchema, (state) => {
+    const result = await this.writer.execute(envelope, {
+      operation: "FINALIZE_UTTERANCE",
+      payload: { utteranceId: input.utteranceId, text: input.text, inputEpisodeId, startsEpisode }
+    }, UtteranceFinalizedResultSchema, (state) => {
       const utterance = state.utterances[input.utteranceId];
       if (utterance === undefined || utterance.status !== "CAPTURING") throw new Error("Utterance is not being captured");
       if (!startsEpisode) {
@@ -165,7 +186,10 @@ export class TurnCoordinator {
 
   public async appendTypedInput(inputEpisodeId: InputEpisodeId, text: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "typed-input", inputEpisodeId });
-    await this.writer.execute(envelope, InputAppendedResultSchema, (state) => {
+    await this.writer.execute(envelope, {
+      operation: "APPEND_TYPED_INPUT",
+      payload: { inputEpisodeId, text }
+    }, InputAppendedResultSchema, (state) => {
       const episode = state.inputEpisodes[inputEpisodeId];
       if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
       return { drafts: [{ source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: text } }], result: { appended: true } };
@@ -174,7 +198,10 @@ export class TurnCoordinator {
 
   public async appendBoardInput(inputEpisodeId: InputEpisodeId, summary: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "whiteboard", inputEpisodeId });
-    await this.writer.execute(envelope, BoardInputAppendedResultSchema, (state) => {
+    await this.writer.execute(envelope, {
+      operation: "APPEND_BOARD_INPUT",
+      payload: { inputEpisodeId, summary }
+    }, BoardInputAppendedResultSchema, (state) => {
       const episode = state.inputEpisodes[inputEpisodeId];
       if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
       const boardRevision = BoardRevisionSchema.parse(state.boardRevision + 1);
@@ -191,7 +218,10 @@ export class TurnCoordinator {
   public async commitInputEpisode(inputEpisodeId: InputEpisodeId): Promise<TurnId> {
     const turnId = newTurnId();
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "turn-coordinator", inputEpisodeId, turnId });
-    const result = await this.writer.execute(envelope, InputCommittedResultSchema, (state) => {
+    const result = await this.writer.execute(envelope, {
+      operation: "COMMIT_INPUT_EPISODE",
+      payload: { inputEpisodeId }
+    }, InputCommittedResultSchema, (state) => {
       const episode = state.inputEpisodes[inputEpisodeId];
       if (episode === undefined || episode.status !== "ACTIVE" || episode.inputs.length === 0) throw new Error("Input episode is not ready to commit");
       const studentText = episode.inputs.map((item) => item.semanticContent).join(" ");
@@ -209,7 +239,10 @@ export class TurnCoordinator {
   public async requestVision(regionId: string, relevantShapeIds: readonly string[]): Promise<{ visionRequestId: RequestId; sourceBoardRevision: BoardRevision }> {
     const visionRequestId = newRequestId();
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "vision-coordinator", correlationId: visionRequestId });
-    const result = await this.writer.execute(envelope, VisionRequestedResultSchema, (state) => ({
+    const result = await this.writer.execute(envelope, {
+      operation: "REQUEST_VISION",
+      payload: { regionId, relevantShapeIds: [...relevantShapeIds] }
+    }, VisionRequestedResultSchema, (state) => ({
       drafts: [{ source: "APPLICATION", type: "VISION_REQUESTED", payload: { visionRequestId, sourceBoardRevision: state.boardRevision, regionId, relevantShapeIds: [...relevantShapeIds] } }],
       result: { visionRequestId, sourceBoardRevision: state.boardRevision }
     }));
@@ -220,7 +253,10 @@ export class TurnCoordinator {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const observation = BoardObservationSchema.parse(input.observation);
     const visionRequestId = envelope.correlationId;
-    const result = await this.writer.execute(envelope, VisionProcessedResultSchema, (state) => {
+    const result = await this.writer.execute(envelope, {
+      operation: "PROCESS_VISION_RESULT",
+      payload: { observation }
+    }, VisionProcessedResultSchema, (state) => {
       const request = state.visionRequests[visionRequestId];
       if (request === undefined || request.status !== "PENDING") return { drafts: [], result: { accepted: false, reason: "Vision request is not pending" } };
       const sameDependencySet = request.regionId === observation.regionId
@@ -241,7 +277,10 @@ export class TurnCoordinator {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const proposal = EvidenceProposalSchema.parse(input.proposal);
     const key = evidenceKeyToString(proposal.key);
-    const result = await this.writer.execute(envelope, EvidenceProcessedResultSchema, (state) => {
+    const result = await this.writer.execute(envelope, {
+      operation: "PROCESS_EVIDENCE_PROPOSAL",
+      payload: { proposal }
+    }, EvidenceProcessedResultSchema, (state) => {
       const reasons: string[] = [];
       if (state.problem?.id !== proposal.key.problemId) reasons.push("Evidence is scoped to a different problem");
       if (!proposal.evidenceEventIds.every((eventId) => state.eventIds.includes(eventId))) reasons.push("Evidence provenance references unknown events");
@@ -274,7 +313,10 @@ export class TurnCoordinator {
 
   public async selectAction(turnId: TurnId): Promise<RealizationRequest> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "pedagogical-policy", turnId });
-    const result = await this.writer.execute(envelope, RealizationRequestSchema, (state) => {
+    const result = await this.writer.execute(envelope, {
+      operation: "SELECT_PEDAGOGICAL_ACTION",
+      payload: { turnId }
+    }, RealizationRequestSchema, (state) => {
       const request = selectPedagogicalAction(state, turnId);
       return { drafts: [{ source: "APPLICATION", type: "PEDAGOGICAL_ACTION_SELECTED", payload: { turnId, request } }], result: request };
     });
@@ -284,7 +326,10 @@ export class TurnCoordinator {
   public async startGeneration(inputEpisodeId: InputEpisodeId, turnId: TurnId, provider: string): Promise<{ generationId: GenerationId; basis: GenerationBasis }> {
     const generationId = newGenerationId();
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "turn-coordinator", inputEpisodeId, turnId, generationId });
-    const result = await this.writer.execute(envelope, GenerationStartedResultSchema, (state) => {
+    const result = await this.writer.execute(envelope, {
+      operation: "START_GENERATION",
+      payload: { inputEpisodeId, turnId, provider }
+    }, GenerationStartedResultSchema, (state) => {
       if (state.lastCommittedInputSequence === undefined) throw new Error("No committed input exists");
       const basis: GenerationBasis = {
         contextEpoch: state.contextEpoch,
@@ -311,7 +356,15 @@ export class TurnCoordinator {
     const proposal = InterviewerProposalSchema.parse(input.proposal);
     const generationId = envelope.generationId;
     if (generationId === undefined) throw new Error("Provider result envelope is missing generationId");
-    const outcome = await this.writer.execute(envelope, ProcessProposalResultSchema, (state) => {
+    const outcome = await this.writer.execute(envelope, {
+      operation: "PROCESS_INTERVIEWER_PROPOSAL",
+      payload: {
+        problemId: input.problem.id,
+        problemVersion: input.problem.version,
+        protectedDisclosures: input.problem.interviewer.protectedDisclosures,
+        proposal: commandIdentityValue(proposal)
+      }
+    }, ProcessProposalResultSchema, (state) => {
       const generation = state.generations[generationId];
       if (generation === undefined) return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Unknown generation" } };
       if (generation.status !== "ACTIVE") return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Generation is not active" } };
@@ -361,7 +414,10 @@ export class TurnCoordinator {
 
   public async commitBoardPatch(summary: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "whiteboard" });
-    await this.writer.execute(envelope, CommittedResultSchema, (state) => ({
+    await this.writer.execute(envelope, {
+      operation: "COMMIT_BOARD_PATCH",
+      payload: { summary }
+    }, CommittedResultSchema, (state) => ({
       drafts: [{ source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary } }],
       result: { committed: true }
     }));
@@ -369,7 +425,10 @@ export class TurnCoordinator {
 
   public async supersedeGeneration(generationId: GenerationId, reason: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "turn-coordinator", generationId });
-    await this.writer.execute(envelope, SupersededResultSchema, (state) => {
+    await this.writer.execute(envelope, {
+      operation: "SUPERSEDE_GENERATION",
+      payload: { generationId, reason }
+    }, SupersededResultSchema, (state) => {
       const generation = state.generations[generationId];
       if (generation === undefined) throw new Error("Unknown generation");
       if (generation.status === "SUPERSEDED") return { drafts: [], result: { superseded: true } };
@@ -383,7 +442,10 @@ export class TurnCoordinator {
 
   public async correctTranscript(correctedText: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "transcript-correction" });
-    await this.writer.execute(envelope, CorrectedResultSchema, (state) => {
+    await this.writer.execute(envelope, {
+      operation: "CORRECT_TRANSCRIPT",
+      payload: { correctedText }
+    }, CorrectedResultSchema, (state) => {
       const invalidations: EventDraft[] = Object.values(state.evidenceHistory)
         .flatMap((records) => records.filter((record) => record.status === "ACTIVE"))
         .map((record): EventDraft => ({

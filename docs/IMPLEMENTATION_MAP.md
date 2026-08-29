@@ -12,9 +12,9 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | --- | --- | --- | --- | --- |
 | Session state | `packages/events/src/state.ts` | `SessionState`, `initialSessionState` | domain | 0 |
 | Serialized session writer | `packages/interview-engine/src/session-writer.ts` | `SessionWriter`, `SessionRuntimeRegistry` | events, persistence | 0 |
-| Commands/results | `packages/domain/src/commands.ts`, `packages/interview-engine/src/session-writer.ts` | `CommandEnvelope`, `CommandResult`, browser-safe Web Crypto ID factories, command-specific result schemas | domain IDs, Zod | 0 |
+| Commands/results | `packages/domain/src/commands.ts`, `packages/interview-engine/src/command-fingerprint.ts`, `packages/interview-engine/src/session-writer.ts` | `CommandEnvelope`, `CommandIdentity`, canonical SHA-256 command fingerprint, `CommandResult`, browser-safe Web Crypto ID factories, command-specific result schemas | domain IDs, Zod | 0 |
 | Event schemas | `packages/events/src/schemas.ts` | `SessionEventSchema`, `EventDraft`, event payload schemas | domain, Zod | 0 |
-| Event store | `packages/persistence/src/sqlite-event-store.ts` | `SqliteEventStore`, atomic `appendIdempotent` | events, `node:sqlite` | 0 |
+| Event store | `packages/persistence/src/sqlite-event-store.ts` | `SqliteEventStore`, atomic `appendIdempotent`, fingerprint-bound `processed_requests`, `RequestIdConflictError` | events, `node:sqlite` | 0 |
 | Upcasters | `packages/events/src/upcasters.ts` | `EventUpcaster`, `EventUpcasterRegistry` | event schemas | 0 |
 | State reducer | `packages/events/src/reducer.ts` | `reduceSessionEvent`, `replaySession` | state, schemas | 0 |
 | Snapshots | `packages/persistence/src/snapshots.ts` (deferred) | disposable `SessionSnapshot` cache | event store | post-0 optimization |

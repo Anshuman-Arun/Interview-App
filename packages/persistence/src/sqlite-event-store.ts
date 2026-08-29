@@ -1,6 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import {
+  CommandFingerprintSchema,
   newEventId,
+  type CommandFingerprint,
   type RequestId,
   type SessionId
 } from "../../domain/src/index.js";
@@ -18,6 +20,7 @@ export interface AppendIdempotentInput<TResult> {
   readonly causationId: RequestId;
   readonly correlationId: RequestId;
   readonly elapsedMs: number;
+  readonly commandFingerprint: CommandFingerprint;
   readonly drafts: readonly EventDraft[];
   readonly result: TResult;
 }
@@ -26,6 +29,15 @@ export interface AppendIdempotentResult<TResult> {
   readonly duplicate: boolean;
   readonly events: readonly SessionEvent[];
   readonly result: TResult;
+}
+
+export class RequestIdConflictError extends Error {
+  public readonly code = "REQUEST_ID_CONFLICT" as const;
+
+  public constructor() {
+    super("RequestId reuse conflicts with a different logical command");
+    this.name = "RequestIdConflictError";
+  }
 }
 
 export class SqliteEventStore {
@@ -49,10 +61,15 @@ export class SqliteEventStore {
       CREATE TABLE IF NOT EXISTS processed_requests (
         session_id TEXT NOT NULL,
         request_id TEXT NOT NULL,
+        command_fingerprint TEXT NOT NULL,
         result_json TEXT NOT NULL,
         PRIMARY KEY (session_id, request_id)
       ) STRICT;
     `);
+    const processedRequestColumns = this.database.prepare("PRAGMA table_info(processed_requests)").all() as unknown as readonly { name: string }[];
+    if (!processedRequestColumns.some((column) => column.name === "command_fingerprint")) {
+      this.database.exec("ALTER TABLE processed_requests ADD COLUMN command_fingerprint TEXT;");
+    }
   }
 
   public load(sessionId: SessionId): readonly SessionEvent[] {
@@ -62,22 +79,30 @@ export class SqliteEventStore {
     return rows.map((row) => this.upcasters.toCurrent(JSON.parse(row.event_json) as unknown));
   }
 
-  public getProcessedResult(sessionId: SessionId, requestId: RequestId): { readonly found: false } | { readonly found: true; readonly result: unknown } {
+  public getProcessedResult(sessionId: SessionId, requestId: RequestId):
+    | { readonly found: false }
+    | { readonly found: true; readonly commandFingerprint: string | null; readonly result: unknown } {
     const prior = this.database.prepare(
-      "SELECT result_json FROM processed_requests WHERE session_id = ? AND request_id = ?"
-    ).get(sessionId, requestId) as { result_json: string } | undefined;
+      "SELECT command_fingerprint, result_json FROM processed_requests WHERE session_id = ? AND request_id = ?"
+    ).get(sessionId, requestId) as { command_fingerprint: string | null; result_json: string } | undefined;
     return prior === undefined
       ? { found: false }
-      : { found: true, result: JSON.parse(prior.result_json) as unknown };
+      : {
+          found: true,
+          commandFingerprint: prior.command_fingerprint,
+          result: JSON.parse(prior.result_json) as unknown
+        };
   }
 
   public appendIdempotent<TResult>(input: AppendIdempotentInput<TResult>): AppendIdempotentResult<TResult> {
+    const commandFingerprint = CommandFingerprintSchema.parse(input.commandFingerprint);
     this.database.exec("BEGIN IMMEDIATE");
     try {
       const prior = this.database.prepare(
-        "SELECT result_json FROM processed_requests WHERE session_id = ? AND request_id = ?"
-      ).get(input.sessionId, input.requestId) as { result_json: string } | undefined;
+        "SELECT command_fingerprint, result_json FROM processed_requests WHERE session_id = ? AND request_id = ?"
+      ).get(input.sessionId, input.requestId) as { command_fingerprint: string | null; result_json: string } | undefined;
       if (prior !== undefined) {
+        if (prior.command_fingerprint !== commandFingerprint) throw new RequestIdConflictError();
         this.database.exec("COMMIT");
         return { duplicate: true, events: [], result: JSON.parse(prior.result_json) as TResult };
       }
@@ -118,8 +143,8 @@ export class SqliteEventStore {
         );
       }
       this.database.prepare(
-        "INSERT INTO processed_requests (session_id, request_id, result_json) VALUES (?, ?, ?)"
-      ).run(input.sessionId, input.requestId, JSON.stringify(input.result));
+        "INSERT INTO processed_requests (session_id, request_id, command_fingerprint, result_json) VALUES (?, ?, ?, ?)"
+      ).run(input.sessionId, input.requestId, commandFingerprint, JSON.stringify(input.result));
       this.database.exec("COMMIT");
       return { duplicate: false, events, result: input.result };
     } catch (error) {

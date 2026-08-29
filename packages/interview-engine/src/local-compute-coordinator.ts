@@ -73,7 +73,10 @@ export class LocalComputeCoordinator {
     }));
     const effectiveComputeRequestId = envelope.correlationId;
 
-    return this.writer.execute(envelope, WorkerTranscriptAnalysisRequestSchema, (state) => {
+    return this.writer.execute(envelope, {
+      operation: "REQUEST_TRANSCRIPT_ANALYSIS",
+      payload: { inputEpisodeId }
+    }, WorkerTranscriptAnalysisRequestSchema, (state) => {
       const text = transcriptText(state, inputEpisodeId);
       if (text === undefined) throw new Error("Transcript analysis requires committed speech input");
       const request = WorkerTranscriptAnalysisRequestSchema.parse({
@@ -106,7 +109,10 @@ export class LocalComputeCoordinator {
       throw new Error("Worker response RequestId does not match callback correlationId");
     }
 
-    return this.writer.execute(envelope, LocalComputeAdmissionResultSchema, (state) => {
+    return this.writer.execute(envelope, {
+      operation: "PROCESS_LOCAL_COMPUTE_RESULT",
+      payload: { response }
+    }, LocalComputeAdmissionResultSchema, (state) => {
       const request = state.localComputeRequests[response.requestId];
       if (request === undefined) return this.noEvent(response.requestId, "UNKNOWN_REQUEST");
       if (request.status !== "PENDING") return this.noEvent(response.requestId, "REQUEST_NOT_PENDING");

@@ -95,7 +95,17 @@ export class VerificationCoordinator {
     }));
     const effectiveRequestId = envelope.correlationId;
 
-    return this.writer.execute(envelope, VerificationWorkItemSchema, (state) => {
+    return this.writer.execute(envelope, {
+      operation: "REQUEST_VERIFICATION",
+      payload: {
+        inputEpisodeId: input.inputEpisodeId,
+        turnId: input.turnId,
+        verifier: input.verifier,
+        candidateFormalInterpretation: input.candidateFormalInterpretation,
+        interpretationConfidence: input.interpretationConfidence,
+        evidenceKey: input.evidenceKey
+      }
+    }, VerificationWorkItemSchema, (state) => {
       const episode = state.inputEpisodes[input.inputEpisodeId];
       const turn = state.turns[input.turnId];
       if (episode === undefined || episode.status !== "COMMITTED") throw new Error("Verification requires a committed InputEpisode");
@@ -160,7 +170,10 @@ export class VerificationCoordinator {
       ? undefined
       : await this.recompute(input.verifier, snapshotRequest.candidateFormalInterpretation, snapshotRequest.interpretationConfidence);
 
-    return this.writer.execute(envelope, VerificationAdmissionResultSchema, (state) => {
+    return this.writer.execute(envelope, {
+      operation: "PROCESS_VERIFICATION_RESULT",
+      payload: { result: supplied }
+    }, VerificationAdmissionResultSchema, (state) => {
       const verificationRequestId = envelope.correlationId;
       const request = state.verificationRequests[verificationRequestId];
       if (request === undefined) return this.noEvent(verificationRequestId, "UNKNOWN_REQUEST");
