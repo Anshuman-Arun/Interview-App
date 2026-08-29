@@ -30,8 +30,7 @@ export interface CoreHarness {
   readonly validator: DisclosureValidator;
 }
 
-export async function createCoreHarness(): Promise<CoreHarness> {
-  const store = new SqliteEventStore(":memory:");
+export async function createCoreHarness(store = new SqliteEventStore(":memory:")): Promise<CoreHarness> {
   const sessionId = newSessionId();
   const writer = new SessionRuntimeRegistry(store).get(sessionId);
   const turns = new TurnCoordinator(writer);
@@ -69,4 +68,3 @@ export async function authorizeSafeProbe(harness: CoreHarness, envelope = provid
   if (!result.accepted || result.deliveryAtoms[0] === undefined) throw new Error(`Safe proposal rejected: ${result.reason ?? "unknown"}`);
   return result.deliveryAtoms[0];
 }
-

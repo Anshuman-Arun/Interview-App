@@ -229,3 +229,31 @@ Each slice ends with tests, type checking, linting, replay checks where relevant
 ## Current-run target
 
 Complete slices 1-23, 26-27 at a coherent baseline, plus the highest-risk tests from 24-25. Any remaining work stays explicitly incomplete rather than represented by permissive stubs.
+
+## Continuation progress — asynchronous inbox slice
+
+Implemented after the initial vertical slice:
+
+- utterance onset/discard/finalization without conflating onset and Turn commitment;
+- speech → board → speech grouping inside one InputEpisode;
+- barge-in invalidation of active generation and delivery state;
+- vision request/result events with broad revision and dependency checks;
+- scoped evidence proposal and application-authoritative evidence update events;
+- runtime validation of every persisted command result, including duplicate reads;
+- file-backed SQLite close/reopen replay and idempotency tests;
+- expanded randomized multimodal/vision callback schedules.
+
+## Continuation progress — authenticated loopback protocol slice
+
+Implemented after the asynchronous inbox slice:
+
+- protocol-v1 discriminated command and response schemas;
+- Node built-in HTTP server bound exclusively to `127.0.0.1` or `::1`;
+- exact Origin allowlisting and constant-time client-token authentication before command construction;
+- bounded JSON bodies and generic, schema-validated, secret-free errors;
+- browser RequestId propagation into the durable writer for session start, typed Turn commitment, delivery reconnect, exposure acknowledgement, and completion acknowledgement;
+- allowlisted read-only session summary instead of serializing authoritative state;
+- stable DeliveryId reconnect behavior and renderer-side visible-output deduplication tests.
+- first-use crash recovery that marks persisted in-flight deliveries `POSSIBLY_EXPOSED` before a restarted server handles reconnect.
+
+Still pending in Phase 0: worker IPC transport, a real renderer/audio acknowledgement integration, richer evidence supersession, server-to-client streaming transport, and provider-specific adapter experiments.

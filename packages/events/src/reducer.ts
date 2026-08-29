@@ -1,4 +1,4 @@
-import { isDisclosedStatus } from "../../domain/src/index.js";
+import { evidenceKeyToString, isDisclosedStatus } from "../../domain/src/index.js";
 import type { DeliveryAtom, DisclosureId } from "../../domain/src/index.js";
 import type { SessionEvent } from "./schemas.js";
 import { initialSessionState, type GenerationState, type SessionState } from "./state.js";
@@ -48,6 +48,15 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "PROBLEM_PRESENTED":
       next = { ...state, problem: { id: event.payload.problemId, version: event.payload.problemVersion, prompt: event.payload.prompt } };
       break;
+    case "UTTERANCE_STARTED":
+      next = { ...state, utterances: { ...state.utterances, [event.payload.utteranceId]: { utteranceId: event.payload.utteranceId, status: "CAPTURING" } } };
+      break;
+    case "UTTERANCE_DISCARDED": {
+      const utterance = state.utterances[event.payload.utteranceId];
+      if (utterance === undefined || utterance.status !== "CAPTURING") throw new Error("Utterance is not being captured");
+      next = { ...state, utterances: { ...state.utterances, [event.payload.utteranceId]: { ...utterance, status: "DISCARDED" } } };
+      break;
+    }
     case "INPUT_EPISODE_STARTED":
       next = { ...state, inputEpisodes: { ...state.inputEpisodes, [event.payload.inputEpisodeId]: { inputEpisodeId: event.payload.inputEpisodeId, status: "ACTIVE", inputs: [] } } };
       break;
@@ -70,11 +79,43 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         turns: { ...state.turns, [event.payload.turnId]: { ...event.payload, committedSequence: event.sequence } }
       };
       break;
+    case "TRANSCRIPT_FINALIZED": {
+      const utterance = state.utterances[event.payload.utteranceId];
+      if (utterance === undefined || utterance.status !== "CAPTURING") throw new Error("Utterance is not being captured");
+      next = {
+        ...state,
+        transcriptRevision: event.payload.transcriptRevision,
+        utterances: { ...state.utterances, [event.payload.utteranceId]: { ...utterance, status: "FINALIZED", inputEpisodeId: event.payload.inputEpisodeId, text: event.payload.text } }
+      };
+      break;
+    }
     case "TRANSCRIPT_CORRECTED":
       next = { ...state, transcriptRevision: event.payload.transcriptRevision, contextEpoch: event.payload.contextEpoch };
       break;
     case "BOARD_PATCH_COMMITTED":
       next = { ...state, boardRevision: event.payload.boardRevision };
+      break;
+    case "VISION_REQUESTED":
+      next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...event.payload, status: "PENDING" } } };
+      break;
+    case "VISION_RESULT_ACCEPTED": {
+      const request = state.visionRequests[event.payload.visionRequestId];
+      if (request === undefined || request.status !== "PENDING") throw new Error("Vision request is not pending");
+      next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...request, status: "ACCEPTED", observation: event.payload.observation } } };
+      break;
+    }
+    case "VISION_RESULT_DISCARDED": {
+      const request = state.visionRequests[event.payload.visionRequestId];
+      if (request === undefined || request.status !== "PENDING") throw new Error("Vision request is not pending");
+      next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...request, status: "DISCARDED", discardReason: event.payload.reason } } };
+      break;
+    }
+    case "EVIDENCE_PROPOSED":
+      next = { ...state, evidenceProposals: [...state.evidenceProposals, event.payload.proposal] };
+      break;
+    case "STUDENT_EVIDENCE_UPDATED":
+      if (event.payload.value.lastUpdatedSequence !== event.sequence) throw new Error("Evidence lastUpdatedSequence must equal its authoritative event sequence");
+      next = { ...state, studentEvidence: { ...state.studentEvidence, [evidenceKeyToString(event.payload.key)]: event.payload.value } };
       break;
     case "PEDAGOGICAL_ACTION_SELECTED":
       next = { ...state, pedagogicalActions: { ...state.pedagogicalActions, [event.payload.turnId]: event.payload.request } };
@@ -120,7 +161,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       next = { ...state, problemStateRevision: event.payload.problemStateRevision, contextEpoch: event.payload.contextEpoch };
       break;
   }
-  return { ...next, sequence: event.sequence };
+  return { ...next, sequence: event.sequence, eventIds: [...next.eventIds, event.eventId] };
 }
 
 export function replaySession(sessionId: SessionState["sessionId"], events: readonly SessionEvent[]): SessionState {

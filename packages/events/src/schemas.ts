@@ -5,6 +5,9 @@ import {
   DeliveryAtomSchema,
   DeliveryIdSchema,
   DisclosureAnalysisSchema,
+  EvidenceKeySchema,
+  EvidenceProposalSchema,
+  EvidenceValueSchema,
   EventIdSchema,
   GenerationBasisSchema,
   GenerationIdSchema,
@@ -16,7 +19,9 @@ import {
   RequestIdSchema,
   SessionIdSchema,
   TranscriptRevisionSchema,
-  TurnIdSchema
+  TurnIdSchema,
+  UtteranceIdSchema,
+  BoardObservationSchema
 } from "../../domain/src/index.js";
 
 export const CURRENT_EVENT_SCHEMA_VERSION = 1 as const;
@@ -41,12 +46,20 @@ const event = <TType extends string, TPayload extends z.ZodType>(type: TType, pa
 export const SessionEventSchema = z.discriminatedUnion("type", [
   event("SESSION_STARTED", z.object({ startedAt: z.iso.datetime() }).strict()),
   event("PROBLEM_PRESENTED", z.object({ problemId: z.string().min(1), problemVersion: z.string().min(1), prompt: z.string().min(1) }).strict()),
+  event("UTTERANCE_STARTED", z.object({ utteranceId: UtteranceIdSchema }).strict()),
+  event("UTTERANCE_DISCARDED", z.object({ utteranceId: UtteranceIdSchema, reason: z.string().min(1) }).strict()),
   event("INPUT_EPISODE_STARTED", z.object({ inputEpisodeId: InputEpisodeIdSchema }).strict()),
   event("INPUT_EPISODE_UPDATED", z.object({ inputEpisodeId: InputEpisodeIdSchema, modality: z.enum(["SPEECH", "TYPING", "WHITEBOARD"]), semanticContent: z.string().min(1) }).strict()),
   event("INPUT_EPISODE_COMMITTED", z.object({ inputEpisodeId: InputEpisodeIdSchema }).strict()),
   event("TURN_COMMITTED", z.object({ turnId: TurnIdSchema, inputEpisodeId: InputEpisodeIdSchema, studentText: z.string().min(1) }).strict()),
+  event("TRANSCRIPT_FINALIZED", z.object({ utteranceId: UtteranceIdSchema, inputEpisodeId: InputEpisodeIdSchema, transcriptRevision: TranscriptRevisionSchema, text: z.string().min(1) }).strict()),
   event("TRANSCRIPT_CORRECTED", z.object({ transcriptRevision: TranscriptRevisionSchema, contextEpoch: ContextEpochSchema, correctedText: z.string().min(1) }).strict()),
   event("BOARD_PATCH_COMMITTED", z.object({ boardRevision: BoardRevisionSchema, summary: z.string().min(1) }).strict()),
+  event("VISION_REQUESTED", z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema, regionId: z.string().min(1), relevantShapeIds: z.array(z.string().min(1)).min(1) }).strict()),
+  event("VISION_RESULT_ACCEPTED", z.object({ visionRequestId: RequestIdSchema, observation: BoardObservationSchema }).strict()),
+  event("VISION_RESULT_DISCARDED", z.object({ visionRequestId: RequestIdSchema, reason: z.string().min(1) }).strict()),
+  event("EVIDENCE_PROPOSED", z.object({ proposal: EvidenceProposalSchema }).strict()),
+  event("STUDENT_EVIDENCE_UPDATED", z.object({ key: EvidenceKeySchema, value: EvidenceValueSchema }).strict()),
   event("PEDAGOGICAL_ACTION_SELECTED", z.object({ turnId: TurnIdSchema, request: RealizationRequestSchema }).strict()),
   event("MODEL_GENERATION_STARTED", z.object({ generationId: GenerationIdSchema, basis: GenerationBasisSchema, provider: z.string().min(1) }).strict()),
   event("MODEL_PROPOSAL_RECEIVED", z.object({ generationId: GenerationIdSchema, proposal: InterviewerProposalSchema }).strict()),

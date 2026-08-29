@@ -1,6 +1,7 @@
 import type { CommandEnvelope, CommandResult, SessionId } from "../../domain/src/index.js";
 import { reduceSessionEvent, replaySession, type EventDraft, type SessionState } from "../../events/src/index.js";
 import type { SqliteEventStore } from "../../persistence/src/index.js";
+import type { z } from "zod";
 
 export interface StateTransition<TResult> {
   readonly drafts: readonly EventDraft[];
@@ -34,15 +35,17 @@ export class SessionWriter {
 
   public execute<TResult>(
     envelope: CommandEnvelope,
+    resultSchema: z.ZodType<TResult>,
     handler: TransitionHandler<TResult>
   ): Promise<CommandResult<TResult>> {
     if (envelope.sessionId !== this.sessionId) return Promise.reject(new Error("Command session does not match writer session"));
     const run = (): CommandResult<TResult> => {
       const prior = this.store.getProcessedResult(this.sessionId, envelope.requestId);
       if (prior.found) {
-        return { duplicate: true, value: prior.result as TResult, appendedEventCount: 0 };
+        return { duplicate: true, value: resultSchema.parse(prior.result), appendedEventCount: 0 };
       }
       const transition = handler(this.state);
+      const validatedResult = resultSchema.parse(transition.result);
       const persisted = this.store.appendIdempotent({
         sessionId: this.sessionId,
         requestId: envelope.requestId,
@@ -50,14 +53,14 @@ export class SessionWriter {
         correlationId: envelope.correlationId,
         elapsedMs: this.elapsedOffset + Math.max(0, Date.now() - this.openedAt),
         drafts: transition.drafts,
-        result: transition.result
+        result: validatedResult
       });
       if (!persisted.duplicate) {
         this.state = persisted.events.reduce(reduceSessionEvent, this.state);
       }
       return {
         duplicate: persisted.duplicate,
-        value: persisted.result,
+        value: resultSchema.parse(persisted.result),
         appendedEventCount: persisted.events.length
       };
     };

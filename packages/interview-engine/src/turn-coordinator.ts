@@ -1,13 +1,31 @@
 import {
   BoardRevisionSchema,
+  BoardObservationSchema,
+  CommandEnvelopeSchema,
   ContextEpochSchema,
   DeliveryAtomSchema,
+  GenerationBasisSchema,
+  GenerationIdSchema,
+  InputEpisodeIdSchema,
   InterviewerProposalSchema,
+  EvidenceProposalSchema,
+  EvidenceKeySchema,
+  EvidenceValueSchema,
+  RequestIdSchema,
+  RealizationRequestSchema,
   TranscriptRevisionSchema,
+  TurnIdSchema,
+  UtteranceIdSchema,
+  evidenceKeyToString,
+  isEvidenceValueAllowed,
   newDeliveryId,
   newGenerationId,
   newInputEpisodeId,
+  newRequestId,
   newTurnId,
+  newUtteranceId,
+  type BoardObservation,
+  type BoardRevision,
   type CommandEnvelope,
   type DeliveryAtom,
   type GenerationBasis,
@@ -15,28 +33,49 @@ import {
   type InputEpisodeId,
   type InterviewProblem,
   type InterviewerProposal,
+  type EvidenceProposal,
   type RealizationRequest,
+  type RequestId,
+  type TranscriptRevision,
   type TurnId
+  ,type UtteranceId
 } from "../../domain/src/index.js";
 import type { EventDraft } from "../../events/src/index.js";
+import { z } from "zod";
 import { createCommandEnvelope } from "./envelopes.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
+import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
 import type { DisclosureValidator } from "./disclosure-validator.js";
 import type { SessionWriter } from "./session-writer.js";
 
-export interface ProcessProposalResult {
-  readonly accepted: boolean;
-  readonly deliveryAtoms: readonly DeliveryAtom[];
-  readonly reason?: string;
-}
+const StartedResultSchema = z.object({ started: z.literal(true) }).strict();
+const InputCommittedResultSchema = z.object({ inputEpisodeId: InputEpisodeIdSchema, turnId: TurnIdSchema }).strict();
+const GenerationStartedResultSchema = z.object({ generationId: GenerationIdSchema, basis: GenerationBasisSchema }).strict();
+const CommittedResultSchema = z.object({ committed: z.literal(true) }).strict();
+const SupersededResultSchema = z.object({ superseded: z.literal(true) }).strict();
+const CorrectedResultSchema = z.object({ corrected: z.literal(true) }).strict();
+const UtteranceStartedResultSchema = z.object({ utteranceId: UtteranceIdSchema }).strict();
+const UtteranceDiscardedResultSchema = z.object({ discarded: z.literal(true) }).strict();
+const UtteranceFinalizedResultSchema = z.object({ inputEpisodeId: InputEpisodeIdSchema, transcriptRevision: TranscriptRevisionSchema }).strict();
+const InputAppendedResultSchema = z.object({ appended: z.literal(true) }).strict();
+const BoardInputAppendedResultSchema = z.object({ appended: z.literal(true), boardRevision: BoardRevisionSchema }).strict();
+const VisionRequestedResultSchema = z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema }).strict();
+const VisionProcessedResultSchema = z.object({ accepted: z.boolean(), reason: z.string().min(1).optional() }).strict();
+const EvidenceProcessedResultSchema = z.object({ committed: z.boolean(), key: z.string().min(1), reason: z.string().min(1).optional() }).strict();
+export const ProcessProposalResultSchema = z.object({
+  accepted: z.boolean(),
+  deliveryAtoms: z.array(DeliveryAtomSchema),
+  reason: z.string().min(1).optional()
+}).strict();
+export type ProcessProposalResult = z.infer<typeof ProcessProposalResultSchema>;
 
 export class TurnCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
 
-  public async startSession(problem: InterviewProblem): Promise<void> {
-    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" });
-    await this.writer.execute(envelope, (state) => {
+  public async startSession(problem: InterviewProblem, commandEnvelope?: CommandEnvelope): Promise<void> {
+    const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" }));
+    await this.writer.execute(envelope, StartedResultSchema, (state) => {
       if (state.started) throw new Error("Session already started");
       return {
         drafts: [
@@ -48,11 +87,11 @@ export class TurnCoordinator {
     });
   }
 
-  public async commitInput(studentText: string): Promise<{ inputEpisodeId: InputEpisodeId; turnId: TurnId }> {
+  public async commitInput(studentText: string, commandEnvelope?: CommandEnvelope): Promise<{ inputEpisodeId: InputEpisodeId; turnId: TurnId }> {
     const inputEpisodeId = newInputEpisodeId();
     const turnId = newTurnId();
-    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "synthetic-user", inputEpisodeId, turnId });
-    const result = await this.writer.execute(envelope, () => ({
+    const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "synthetic-user", inputEpisodeId, turnId }));
+    const result = await this.writer.execute(envelope, InputCommittedResultSchema, () => ({
       drafts: [
         { source: "USER", type: "INPUT_EPISODE_STARTED", payload: { inputEpisodeId } },
         { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: studentText } },
@@ -64,9 +103,169 @@ export class TurnCoordinator {
     return result.value;
   }
 
+  public async beginUtterance(): Promise<UtteranceId> {
+    const utteranceId = newUtteranceId();
+    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "vad", correlationId: newRequestId() });
+    const result = await this.writer.execute(envelope, UtteranceStartedResultSchema, (state) => {
+      const invalidations: EventDraft[] = [];
+      for (const generation of Object.values(state.generations)) {
+        if (generation.status === "ACTIVE") {
+          invalidations.push({ source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId: generation.generationId, reason: "Speech onset" } });
+        }
+      }
+      for (const atom of Object.values(state.deliveries)) {
+        if (atom.status === "QUEUED") {
+          invalidations.push({ source: "APPLICATION", type: "DELIVERY_CANCELLED", payload: { deliveryId: atom.deliveryId, reason: "Speech onset before exposure" } });
+        } else if (atom.status === "DELIVERING") {
+          invalidations.push({ source: "APPLICATION", type: "DELIVERY_POSSIBLY_EXPOSED", payload: { deliveryId: atom.deliveryId, reason: "Speech onset while physical exposure was unacknowledged" } });
+        }
+      }
+      return {
+        drafts: [{ source: "USER", type: "UTTERANCE_STARTED", payload: { utteranceId } }, ...invalidations],
+        result: { utteranceId }
+      };
+    });
+    return result.value.utteranceId;
+  }
+
+  public async discardUtterance(utteranceId: UtteranceId, reason: string): Promise<void> {
+    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "vad", correlationId: newRequestId() });
+    await this.writer.execute(envelope, UtteranceDiscardedResultSchema, (state) => {
+      const utterance = state.utterances[utteranceId];
+      if (utterance === undefined || utterance.status !== "CAPTURING") throw new Error("Utterance is not being captured");
+      return { drafts: [{ source: "USER", type: "UTTERANCE_DISCARDED", payload: { utteranceId, reason } }], result: { discarded: true } };
+    });
+  }
+
+  public async finalizeUtterance(input: {
+    readonly utteranceId: UtteranceId;
+    readonly text: string;
+    readonly inputEpisodeId?: InputEpisodeId;
+  }): Promise<{ inputEpisodeId: InputEpisodeId; transcriptRevision: TranscriptRevision }> {
+    const inputEpisodeId = input.inputEpisodeId ?? newInputEpisodeId();
+    const startsEpisode = input.inputEpisodeId === undefined;
+    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "stt", inputEpisodeId });
+    const result = await this.writer.execute(envelope, UtteranceFinalizedResultSchema, (state) => {
+      const utterance = state.utterances[input.utteranceId];
+      if (utterance === undefined || utterance.status !== "CAPTURING") throw new Error("Utterance is not being captured");
+      if (!startsEpisode) {
+        const episode = state.inputEpisodes[inputEpisodeId];
+        if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
+      }
+      const transcriptRevision = TranscriptRevisionSchema.parse(state.transcriptRevision + 1);
+      const drafts: EventDraft[] = [
+        ...(startsEpisode ? [{ source: "APPLICATION", type: "INPUT_EPISODE_STARTED", payload: { inputEpisodeId } } as const] : []),
+        { source: "WORKER", type: "TRANSCRIPT_FINALIZED", payload: { utteranceId: input.utteranceId, inputEpisodeId, transcriptRevision, text: input.text } },
+        { source: "APPLICATION", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "SPEECH", semanticContent: input.text } }
+      ];
+      return { drafts, result: { inputEpisodeId, transcriptRevision } };
+    });
+    return result.value;
+  }
+
+  public async appendTypedInput(inputEpisodeId: InputEpisodeId, text: string): Promise<void> {
+    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "typed-input", inputEpisodeId });
+    await this.writer.execute(envelope, InputAppendedResultSchema, (state) => {
+      const episode = state.inputEpisodes[inputEpisodeId];
+      if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
+      return { drafts: [{ source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: text } }], result: { appended: true } };
+    });
+  }
+
+  public async appendBoardInput(inputEpisodeId: InputEpisodeId, summary: string): Promise<void> {
+    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "whiteboard", inputEpisodeId });
+    await this.writer.execute(envelope, BoardInputAppendedResultSchema, (state) => {
+      const episode = state.inputEpisodes[inputEpisodeId];
+      if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
+      const boardRevision = BoardRevisionSchema.parse(state.boardRevision + 1);
+      return {
+        drafts: [
+          { source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision, summary } },
+          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "WHITEBOARD", semanticContent: summary } }
+        ],
+        result: { appended: true, boardRevision }
+      };
+    });
+  }
+
+  public async commitInputEpisode(inputEpisodeId: InputEpisodeId): Promise<TurnId> {
+    const turnId = newTurnId();
+    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "turn-coordinator", inputEpisodeId, turnId });
+    const result = await this.writer.execute(envelope, InputCommittedResultSchema, (state) => {
+      const episode = state.inputEpisodes[inputEpisodeId];
+      if (episode === undefined || episode.status !== "ACTIVE" || episode.inputs.length === 0) throw new Error("Input episode is not ready to commit");
+      const studentText = episode.inputs.map((item) => item.semanticContent).join(" ");
+      return {
+        drafts: [
+          { source: "APPLICATION", type: "INPUT_EPISODE_COMMITTED", payload: { inputEpisodeId } },
+          { source: "APPLICATION", type: "TURN_COMMITTED", payload: { turnId, inputEpisodeId, studentText } }
+        ],
+        result: { inputEpisodeId, turnId }
+      };
+    });
+    return result.value.turnId;
+  }
+
+  public async requestVision(regionId: string, relevantShapeIds: readonly string[]): Promise<{ visionRequestId: RequestId; sourceBoardRevision: BoardRevision }> {
+    const visionRequestId = newRequestId();
+    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "vision-coordinator", correlationId: visionRequestId });
+    const result = await this.writer.execute(envelope, VisionRequestedResultSchema, (state) => ({
+      drafts: [{ source: "APPLICATION", type: "VISION_REQUESTED", payload: { visionRequestId, sourceBoardRevision: state.boardRevision, regionId, relevantShapeIds: [...relevantShapeIds] } }],
+      result: { visionRequestId, sourceBoardRevision: state.boardRevision }
+    }));
+    return result.value;
+  }
+
+  public async processVisionResult(input: { readonly envelope: CommandEnvelope; readonly observation: BoardObservation }): Promise<z.infer<typeof VisionProcessedResultSchema>> {
+    const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    const observation = BoardObservationSchema.parse(input.observation);
+    const visionRequestId = envelope.correlationId;
+    const result = await this.writer.execute(envelope, VisionProcessedResultSchema, (state) => {
+      const request = state.visionRequests[visionRequestId];
+      if (request === undefined || request.status !== "PENDING") return { drafts: [], result: { accepted: false, reason: "Vision request is not pending" } };
+      const sameDependencySet = request.regionId === observation.regionId
+        && request.relevantShapeIds.length === observation.relevantShapeIds.length
+        && request.relevantShapeIds.every((shapeId) => observation.relevantShapeIds.includes(shapeId));
+      const freshness = assessVisionFreshness(observation, state);
+      const sourceMatches = envelope.sourceRevision === request.sourceBoardRevision && observation.sourceBoardRevision === request.sourceBoardRevision;
+      if (freshness !== "FRESH" || !sourceMatches || !sameDependencySet) {
+        const reason = `Vision result rejected: freshness=${freshness}, sourceMatches=${String(sourceMatches)}, dependenciesMatch=${String(sameDependencySet)}`;
+        return { drafts: [{ source: "APPLICATION", type: "VISION_RESULT_DISCARDED", payload: { visionRequestId, reason } }], result: { accepted: false, reason } };
+      }
+      return { drafts: [{ source: "WORKER", type: "VISION_RESULT_ACCEPTED", payload: { visionRequestId, observation } }], result: { accepted: true } };
+    });
+    return result.value;
+  }
+
+  public async processEvidenceProposal(input: { readonly envelope: CommandEnvelope; readonly proposal: EvidenceProposal }): Promise<z.infer<typeof EvidenceProcessedResultSchema>> {
+    const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    const proposal = EvidenceProposalSchema.parse(input.proposal);
+    const key = evidenceKeyToString(proposal.key);
+    const result = await this.writer.execute(envelope, EvidenceProcessedResultSchema, (state) => {
+      const reasons: string[] = [];
+      if (state.problem?.id !== proposal.key.problemId) reasons.push("Evidence is scoped to a different problem");
+      if (!proposal.evidenceEventIds.every((eventId) => state.eventIds.includes(eventId))) reasons.push("Evidence provenance references unknown events");
+      if (proposal.inferenceConfidence < 0.7) reasons.push("Inference confidence is below the Phase 0 commit threshold");
+      if (!isEvidenceValueAllowed(proposal.key, proposal.proposedValue)) reasons.push("Evidence value is invalid for its dimension");
+      const proposedDraft: EventDraft = { source: "PROVIDER", type: "EVIDENCE_PROPOSED", payload: { proposal } };
+      if (reasons.length > 0) return { drafts: [proposedDraft], result: { committed: false, key, reason: reasons.join("; ") } };
+      const value = EvidenceValueSchema.parse({
+        value: proposal.proposedValue,
+        inferenceConfidence: proposal.inferenceConfidence,
+        evidenceEventIds: proposal.evidenceEventIds,
+        lastUpdatedSequence: state.sequence + 2
+      });
+      return {
+        drafts: [proposedDraft, { source: "APPLICATION", type: "STUDENT_EVIDENCE_UPDATED", payload: { key: EvidenceKeySchema.parse(proposal.key), value } }],
+        result: { committed: true, key }
+      };
+    });
+    return result.value;
+  }
+
   public async selectAction(turnId: TurnId): Promise<RealizationRequest> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "pedagogical-policy", turnId });
-    const result = await this.writer.execute(envelope, (state) => {
+    const result = await this.writer.execute(envelope, RealizationRequestSchema, (state) => {
       const request = selectPedagogicalAction(state, turnId);
       return { drafts: [{ source: "APPLICATION", type: "PEDAGOGICAL_ACTION_SELECTED", payload: { turnId, request } }], result: request };
     });
@@ -76,7 +275,7 @@ export class TurnCoordinator {
   public async startGeneration(inputEpisodeId: InputEpisodeId, turnId: TurnId, provider: string): Promise<{ generationId: GenerationId; basis: GenerationBasis }> {
     const generationId = newGenerationId();
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "turn-coordinator", inputEpisodeId, turnId, generationId });
-    const result = await this.writer.execute(envelope, (state) => {
+    const result = await this.writer.execute(envelope, GenerationStartedResultSchema, (state) => {
       if (state.lastCommittedInputSequence === undefined) throw new Error("No committed input exists");
       const basis: GenerationBasis = {
         contextEpoch: state.contextEpoch,
@@ -99,10 +298,11 @@ export class TurnCoordinator {
     readonly proposal: InterviewerProposal;
     readonly validator: DisclosureValidator;
   }): Promise<ProcessProposalResult> {
+    const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const proposal = InterviewerProposalSchema.parse(input.proposal);
-    const generationId = input.envelope.generationId;
+    const generationId = envelope.generationId;
     if (generationId === undefined) throw new Error("Provider result envelope is missing generationId");
-    const outcome = await this.writer.execute<ProcessProposalResult>(input.envelope, (state) => {
+    const outcome = await this.writer.execute(envelope, ProcessProposalResultSchema, (state) => {
       const generation = state.generations[generationId];
       if (generation === undefined) return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Unknown generation" } };
       if (generation.status !== "ACTIVE") return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Generation is not active" } };
@@ -152,7 +352,7 @@ export class TurnCoordinator {
 
   public async commitBoardPatch(summary: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "whiteboard" });
-    await this.writer.execute(envelope, (state) => ({
+    await this.writer.execute(envelope, CommittedResultSchema, (state) => ({
       drafts: [{ source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary } }],
       result: { committed: true }
     }));
@@ -160,7 +360,7 @@ export class TurnCoordinator {
 
   public async supersedeGeneration(generationId: GenerationId, reason: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "turn-coordinator", generationId });
-    await this.writer.execute(envelope, (state) => {
+    await this.writer.execute(envelope, SupersededResultSchema, (state) => {
       const generation = state.generations[generationId];
       if (generation === undefined) throw new Error("Unknown generation");
       if (generation.status === "SUPERSEDED") return { drafts: [], result: { superseded: true } };
@@ -174,7 +374,7 @@ export class TurnCoordinator {
 
   public async correctTranscript(correctedText: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "transcript-correction" });
-    await this.writer.execute(envelope, (state) => ({
+    await this.writer.execute(envelope, CorrectedResultSchema, (state) => ({
       drafts: [{ source: "APPLICATION", type: "TRANSCRIPT_CORRECTED", payload: {
         transcriptRevision: TranscriptRevisionSchema.parse(state.transcriptRevision + 1),
         contextEpoch: ContextEpochSchema.parse(state.contextEpoch + 1),
@@ -194,8 +394,3 @@ function rejectDrafts(generationId: GenerationId, proposal: InterviewerProposal,
     result: { accepted: false, deliveryAtoms: [], reason }
   };
 }
-
-export const currentState = (coordinator: TurnCoordinator): never => {
-  void coordinator;
-  throw new Error("Use the owning SessionWriter to inspect authoritative state");
-};

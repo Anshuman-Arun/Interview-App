@@ -89,3 +89,59 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: API integration behind `allowMeteredUsage=false`; CLI invocation using the user's normal configuration.
 - Consequences: Phase 0 executes entirely through `MockModelAdapter`; no cost or credential risk is introduced.
 - Reversible: yes after gates pass.
+
+## D012 — Runtime-validate every durable idempotency result
+
+- Decision: `SessionWriter.execute` requires a command-specific Zod result schema and parses both newly produced and previously persisted duplicate results.
+- Reason: the idempotency table is an external/persisted boundary; unchecked generic JSON would undermine the otherwise validated command/event path.
+- Alternatives considered: type assertions after `JSON.parse`; validating only event payloads; one permissive JSON-value schema.
+- Consequences: adding a command requires an explicit result schema, and corrupted/stale duplicate results fail closed before reaching callers.
+- Reversible: no in principle; individual schema organization is reversible.
+
+## D013 — Speech onset invalidates output before utterance validity is known
+
+- Decision: `UTTERANCE_STARTED` supersedes active generations, cancels queued atoms, and marks unacknowledged in-flight atoms `POSSIBLY_EXPOSED`; a later false-onset discard does not revive them.
+- Reason: this directly implements the frozen distinction between speech onset and Turn commitment while keeping barge-in independent of provider cancellation.
+- Alternatives considered: wait for STT validity before invalidation; revive superseded work after a false onset.
+- Consequences: occasional false onset can cause conservative regeneration or disclosure-budget consumption.
+- Reversible: no for the safety behavior; detection thresholds remain reversible.
+
+## D014 — Phase 0 vision freshness uses whole-board revision plus exact dependency identity
+
+- Decision: accept a vision result only when request revision, envelope revision, observation revision, region, and relevant shape-ID set all match current state.
+- Reason: fine-grained shape revision tracking is explicitly unfrozen; broad rejection is safe and testable now.
+- Alternatives considered: accept any same-region result; track per-shape revisions immediately.
+- Consequences: unrelated board edits can discard useful observations and trigger recomputation.
+- Reversible: yes.
+
+## D015 — Evidence commit threshold is a conservative Phase 0 constant
+
+- Decision: record valid `EVIDENCE_PROPOSED` events, but commit `STUDENT_EVIDENCE_UPDATED` only when scope and event provenance are valid, the dimension/value pair is allowed, and inference confidence is at least `0.7`.
+- Reason: the aggregation algorithm is unfrozen, but the authority boundary needs an executable conservative rule for the harness.
+- Alternatives considered: model output commits directly; no evidence commits in Phase 0; dimension-specific thresholds.
+- Consequences: low-confidence proposals remain auditable without becoming authoritative. The threshold is not a product-quality claim.
+- Reversible: yes.
+
+## D016 — Browser-MVP transport is versioned loopback HTTP
+
+- Decision: use one bounded `POST /v1/commands` endpoint on Node's built-in HTTP server, with a strict discriminated Zod union for protocol version 1.
+- Reason: the architecture leaves WebSocket versus equivalent IPC unfrozen. Request/response HTTP is enough for the current command, acknowledgement, and reconnect boundary without adding transport dependencies or implying streaming semantics that are not implemented.
+- Alternatives considered: WebSocket; Electron IPC; a framework router.
+- Consequences: provider/audio streaming events need a later server-to-client channel or polling extension; existing command types can migrate behind the same schemas.
+- Reversible: yes.
+
+## D017 — Authentication is consumed before domain command construction
+
+- Decision: bind to `127.0.0.1` or `::1`, require an exact allowed `Origin`, compare a dedicated client-token header in constant time, and construct the domain `CommandEnvelope` only after those checks pass.
+- Reason: the browser-MVP boundary must reject unexpected local and web clients while ensuring the secret cannot leak into event payloads, idempotency results, frontend state, or errors.
+- Alternatives considered: unauthenticated loopback; bearer token inside the JSON command; cookie authentication.
+- Consequences: the desktop launcher must transfer the token to the expected browser client out of band; OS credential integration remains deferred.
+- Reversible: header/bootstrap mechanics are reversible; pre-domain authentication and secret exclusion are not.
+
+## D018 — Renderer reconnect resumes only known in-flight DeliveryIds
+
+- Decision: a queued delivery reconnect atomically persists `DELIVERY_STARTED`; a delivering reconnect in the same live server runtime reissues the same `DeliveryCommand` and `DeliveryId` without another event; each server runtime first recovers persisted in-flight deliveries to `POSSIBLY_EXPOSED`, and terminal or uncertain statuses return no command.
+- Reason: delivery retry needs stable identity while avoiding a claim of transport-level exactly-once output.
+- Alternatives considered: mint a new delivery per reconnect; resend terminal deliveries; automatically convert reconnect to exposure.
+- Consequences: renderers must retain a bounded processed-`DeliveryId` cache and send separate idempotent exposure/completion acknowledgements.
+- Reversible: the transport shape is reversible; stable identity and conservative status semantics are frozen.

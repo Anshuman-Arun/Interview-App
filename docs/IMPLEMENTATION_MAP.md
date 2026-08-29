@@ -12,21 +12,21 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | --- | --- | --- | --- | --- |
 | Session state | `packages/events/src/state.ts` | `SessionState`, `initialSessionState` | domain | 0 |
 | Serialized session writer | `packages/interview-engine/src/session-writer.ts` | `SessionWriter`, `SessionRuntimeRegistry` | events, persistence | 0 |
-| Commands/results | `packages/domain/src/commands.ts` | `CommandEnvelope`, `CommandResult`, `AsyncResultEnvelope` | domain IDs, Zod | 0 |
+| Commands/results | `packages/domain/src/commands.ts`, `packages/interview-engine/src/session-writer.ts` | `CommandEnvelope`, `CommandResult`, command-specific result schemas | domain IDs, Zod | 0 |
 | Event schemas | `packages/events/src/schemas.ts` | `SessionEventSchema`, `EventDraft`, event payload schemas | domain, Zod | 0 |
 | Event store | `packages/persistence/src/sqlite-event-store.ts` | `SqliteEventStore`, atomic `appendIdempotent` | events, `node:sqlite` | 0 |
 | Upcasters | `packages/events/src/upcasters.ts` | `EventUpcaster`, `EventUpcasterRegistry` | event schemas | 0 |
 | State reducer | `packages/events/src/reducer.ts` | `reduceSessionEvent`, `replaySession` | state, schemas | 0 |
 | Snapshots | `packages/persistence/src/snapshots.ts` (deferred) | disposable `SessionSnapshot` cache | event store | post-0 optimization |
 | Turn Coordinator | `packages/interview-engine/src/turn-coordinator.ts` | `TurnCoordinator`, input/turn/generation command builders | writer, domain | 0 |
-| InputEpisode lifecycle | domain types + coordinator + event schemas | `InputEpisode`, start/update/commit events | domain, events | 0 |
+| InputEpisode lifecycle | domain types + `turn-coordinator.ts` + event schemas | utterance onset/discard/finalize; speech/typing/board episode updates; Turn commit | domain, events | 0 |
 | GenerationBasis | `packages/domain/src/generation.ts` | `GenerationBasis`, schema | revisions, IDs | 0 |
 | Compatibility checker | `packages/interview-engine/src/compatibility.ts` | `isGenerationBasisStillCompatible` | state, GenerationBasis | 0 |
 | Context Compiler | `packages/interview-engine/src/context-compiler.ts` | `compileContext`, `CompiledContext` | problem public data, policy, state | 0 |
 | Context Epoch | domain revisions + reducer | `ContextEpoch`; increment on non-monotonic truth changes | events | 0 |
 | Pedagogical policy | `packages/interview-engine/src/pedagogical-policy.ts` | `selectPedagogicalAction`, `RealizationRequest` | evidence, reasoning graph | 0 baseline; 2 advanced |
 | Reasoning graph contracts | `packages/domain/src/reasoning.ts` | versioned `ReasoningGraph`, approaches, milestones, edges | IDs/Zod | 0 |
-| Student evidence | `packages/domain/src/evidence.ts` | `EvidenceKey`, `EvidenceValue`, `EvidenceProposal` | event IDs, Zod | 0 contracts; 2 policy |
+| Student evidence | `packages/domain/src/evidence.ts`, events state/reducer, `turn-coordinator.ts` | scoped proposal, provenance/threshold validation, authoritative update | event IDs, Zod | 0 baseline; 2 advanced policy |
 | Verifier contracts | `packages/domain/src/verification.ts`, `packages/verification/` | `VerificationResult`, `DeterministicVerifier` | domain | 0 contracts; 5 engines |
 | Provider capability model | `packages/domain/src/provider.ts` | `ModelCapabilities`, real cancellation/data-use semantics | Zod | 0 |
 | Provider policy/billing verification | `packages/providers/src/policy.ts` | `assertProviderPermitted`, `BillingVerification` | capabilities, clock | 0 |
@@ -34,7 +34,7 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | GeminiApiAdapter | `packages/providers/src/gemini-api-adapter.ts` | disabled experiment boundary until billing/security gates pass | provider policy | late 0 experiment |
 | AntigravityCliAdapter | `packages/providers/src/antigravity-cli-adapter.ts` | disabled adapter until isolated deny rules proven | provider policy/security | late 0 experiment |
 | ReasoningProvider | `packages/domain/src/provider.ts` | `ReasoningProvider`, `ReasoningSession` | compiled context | 0 |
-| VisionProvider | `packages/domain/src/provider.ts` | `VisionProvider`, `BoardObservation` | whiteboard revisions | 0 |
+| VisionProvider | `packages/domain/src/provider.ts`, `vision-freshness.ts`, event state/reducer | `VisionProvider`, request/result lifecycle, `BoardObservation` freshness | whiteboard revisions | 0 |
 | InterviewerProposal | `packages/domain/src/proposal.ts` | runtime-validated proposal and board actions | pedagogy, disclosure | 0 |
 | Disclosure validator | `packages/interview-engine/src/disclosure-validator.ts` | `DisclosureValidator`, independent analyzer result | protected facts, compatibility | 0 baseline; 2 semantic model |
 | Protected disclosure model | `packages/domain/src/disclosure.ts`, `packages/problems/` | `ProtectedDisclosure`, levels, formulations | Zod | 0 |
@@ -43,8 +43,8 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Renderer acknowledgements | `packages/delivery/src/renderer.ts` | `Renderer`, `RendererAcknowledgement`, `MockRenderer` | delivery IDs | 0 |
 | Whiteboard abstraction | `packages/domain/src/whiteboard.ts`, `packages/whiteboard/` | `WhiteboardAdapter`, ownership-layer board actions | board revisions | 0 contract; 3 integration |
 | Local compute worker boundary | `workers/python/README.md`, later protocol schema | untrusted request/result envelopes; no authority | local IPC, commands | 0 contract; 4+ implementation |
-| Frontend/backend protocol | `packages/domain/src/protocol.ts`; later `apps/web` | authenticated versioned client commands/server events | domain schemas | 0 contract; 1 transport |
-| Security boundaries | `packages/domain/src/security.ts`; later `apps/server` transport | loopback/origin/client-token config, secret redaction | protocol/provider policy | 0 contract; 1 server |
+| Frontend/backend protocol | `packages/domain/src/protocol.ts`, `apps/server/src/loopback-command-server.ts`; later `apps/web` | versioned Zod command/response union; start/input/summary/reconnect/exposure/completion messages | domain schemas, writer, delivery | 0 browser-MVP boundary implemented; web client deferred |
+| Security boundaries | `packages/domain/src/security.ts`, `apps/server/src/loopback-command-server.ts` | loopback-only bind, exact Origin allowlist, constant-time client-token check, bounded JSON body, non-secret error responses | protocol/provider policy | 0 browser-MVP boundary implemented |
 | Testing infrastructure | `tests/`, `vitest.config.ts` | unit, replay, crash, idempotency, property tests | all implemented modules | 0 |
 | Hard-coded Oxford problem | `packages/problems/src/six-people.ts` | public/interviewer/private partitions, graph, protected facts | domain | 0 |
 | Synthetic vertical path | `packages/interview-engine/src/synthetic-interview.ts`, `apps/server/src/run-synthetic.ts` | `runSyntheticInterview` | writer through renderer | 0 |
@@ -95,3 +95,19 @@ untrusted callback/result
 ```
 
 Provider sessions, renderer caches, snapshots, and local workers are disposable. SQLite semantic events are authoritative.
+
+## Browser-MVP command boundary
+
+```text
+browser renderer
+  -> 127.0.0.1 or ::1 only
+  -> exact Origin + x-interview-client-token
+  -> POST /v1/commands (64 KiB maximum)
+  -> discriminated protocol-v1 Zod schema
+  -> CommandEnvelope without authentication material
+  -> SessionRuntimeRegistry
+  -> SessionWriter (all mutations)
+  -> typed, schema-validated response
+```
+
+The protocol deliberately does not serialize `SessionState`. Its summary is an allowlisted projection, typed input is not echoed, errors omit parser/internal details, and authentication values cannot enter command envelopes, event payloads, durable results, or responses. On a server runtime's first authenticated use of each session, persisted `DELIVERING` atoms are recovered through `SessionWriter` as `POSSIBLY_EXPOSED` before dispatch. During a live runtime, `RECONNECT_DELIVERY` returns the original content under the same `DeliveryId`; renderer-side `DeliveryId` memory supplies visible-output deduplication. Exposure and completion acknowledgements are separate idempotent commands.

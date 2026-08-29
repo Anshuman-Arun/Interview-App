@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
 import { SessionRuntimeRegistry, createCommandEnvelope } from "../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
@@ -60,12 +61,35 @@ describe("durable idempotency", () => {
     const harness = await createCoreHarness();
     try {
       const envelope = createCommandEnvelope({ sessionId: harness.sessionId, producer: "external-callback" });
-      const first = await harness.writer.execute(envelope, () => ({ drafts: [], result: { stable: "result" } }));
-      const second = await harness.writer.execute(envelope, () => {
+      const resultSchema = z.object({ stable: z.literal("result") }).strict();
+      const first = await harness.writer.execute(envelope, resultSchema, () => ({ drafts: [], result: { stable: "result" } }));
+      const second = await harness.writer.execute(envelope, resultSchema, () => {
         throw new Error("duplicate handler must not run");
       });
       expect(first.duplicate).toBe(false);
       expect(second).toEqual({ duplicate: true, value: { stable: "result" }, appendedEventCount: 0 });
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("does not persist events or idempotency metadata when a command result fails runtime validation", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const envelope = createCommandEnvelope({ sessionId: harness.sessionId, producer: "invalid-result-test" });
+      const count = harness.store.eventCount(harness.sessionId);
+      await expect(harness.writer.execute(
+        envelope,
+        z.object({ accepted: z.literal(true) }).strict(),
+        () => ({ drafts: [], result: { accepted: false as true } })
+      )).rejects.toThrow();
+      expect(harness.store.eventCount(harness.sessionId)).toBe(count);
+      const valid = await harness.writer.execute(
+        envelope,
+        z.object({ accepted: z.literal(true) }).strict(),
+        () => ({ drafts: [], result: { accepted: true as const } })
+      );
+      expect(valid.duplicate).toBe(false);
     } finally {
       harness.store.close();
     }

@@ -6,9 +6,10 @@ import type {
   RequestId,
   SessionId
 } from "../../domain/src/index.js";
-import { newRequestId } from "../../domain/src/index.js";
+import { CommandEnvelopeSchema, DeliveryCommandSchema, DeliveryIdSchema, DeliveryStatusSchema, newRequestId } from "../../domain/src/index.js";
 import type { EventDraft, SessionState } from "../../events/src/index.js";
 import type { Renderer } from "./renderer.js";
+import { z } from "zod";
 
 interface StateTransition<TResult> {
   readonly drafts: readonly EventDraft[];
@@ -25,15 +26,25 @@ function createDeliveryEnvelope(sessionId: SessionId, producer: string): Command
 export interface SessionTransitionSink {
   readonly sessionId: SessionId;
   readonly getState: () => Readonly<SessionState>;
-  readonly execute: <TResult>(envelope: CommandEnvelope, handler: TransitionHandler<TResult>) => Promise<CommandResult<TResult>>;
+  readonly execute: <TResult>(envelope: CommandEnvelope, resultSchema: z.ZodType<TResult>, handler: TransitionHandler<TResult>) => Promise<CommandResult<TResult>>;
 }
+
+const AcknowledgedResultSchema = z.literal(true);
+const CancelledResultSchema = z.object({ cancelled: z.literal(true) }).strict();
+const RecoveredResultSchema = z.object({ recovered: z.literal(true) }).strict();
+export const DeliveryReconnectResultSchema = z.object({
+  deliveryId: DeliveryIdSchema,
+  status: DeliveryStatusSchema,
+  command: DeliveryCommandSchema.optional()
+}).strict();
+export type DeliveryReconnectResult = z.infer<typeof DeliveryReconnectResultSchema>;
 
 export class DeliveryCoordinator {
   public constructor(private readonly writer: SessionTransitionSink) {}
 
   public async markStarted(deliveryId: DeliveryId): Promise<DeliveryCommand> {
     const envelope = createDeliveryEnvelope(this.writer.sessionId, "delivery-coordinator");
-    const result = await this.writer.execute(envelope, (state): StateTransition<DeliveryCommand> => {
+    const result = await this.writer.execute(envelope, DeliveryCommandSchema, (state): StateTransition<DeliveryCommand> => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined || atom.status !== "QUEUED") throw new Error("Only a queued delivery can start");
       return {
@@ -44,9 +55,29 @@ export class DeliveryCoordinator {
     return result.value;
   }
 
+  public async reconnect(deliveryId: DeliveryId, envelope: CommandEnvelope): Promise<DeliveryReconnectResult> {
+    const command = CommandEnvelopeSchema.parse(envelope);
+    const result = await this.writer.execute(command, DeliveryReconnectResultSchema, (state): StateTransition<DeliveryReconnectResult> => {
+      const atom = state.deliveries[deliveryId];
+      if (atom === undefined) throw new Error("Unknown delivery");
+      const deliveryCommand: DeliveryCommand = { deliveryId, content: atom.content };
+      if (atom.status === "QUEUED") {
+        return {
+          drafts: [{ source: "APPLICATION", type: "DELIVERY_STARTED", payload: { deliveryId } }],
+          result: { deliveryId, status: "DELIVERING", command: deliveryCommand }
+        };
+      }
+      if (atom.status === "DELIVERING") {
+        return { drafts: [], result: { deliveryId, status: atom.status, command: deliveryCommand } };
+      }
+      return { drafts: [], result: { deliveryId, status: atom.status } };
+    });
+    return result.value;
+  }
+
   public async acknowledgeExposed(deliveryId: DeliveryId, envelope?: CommandEnvelope): Promise<boolean> {
-    const command = envelope ?? createDeliveryEnvelope(this.writer.sessionId, "renderer");
-    const result = await this.writer.execute(command, (state) => {
+    const command = CommandEnvelopeSchema.parse(envelope ?? createDeliveryEnvelope(this.writer.sessionId, "renderer"));
+    const result = await this.writer.execute(command, AcknowledgedResultSchema, (state) => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined) throw new Error("Unknown delivery acknowledgement");
       if (atom.status === "EXPOSED" || atom.status === "COMPLETED") return { drafts: [], result: true };
@@ -57,8 +88,8 @@ export class DeliveryCoordinator {
   }
 
   public async acknowledgeCompleted(deliveryId: DeliveryId, envelope?: CommandEnvelope): Promise<boolean> {
-    const command = envelope ?? createDeliveryEnvelope(this.writer.sessionId, "renderer");
-    const result = await this.writer.execute(command, (state) => {
+    const command = CommandEnvelopeSchema.parse(envelope ?? createDeliveryEnvelope(this.writer.sessionId, "renderer"));
+    const result = await this.writer.execute(command, AcknowledgedResultSchema, (state) => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined) throw new Error("Unknown delivery acknowledgement");
       if (atom.status === "COMPLETED") return { drafts: [], result: true };
@@ -77,7 +108,7 @@ export class DeliveryCoordinator {
 
   public async cancelBeforeExposure(deliveryId: DeliveryId, reason: string): Promise<void> {
     const envelope = createDeliveryEnvelope(this.writer.sessionId, "delivery-coordinator");
-    await this.writer.execute(envelope, (state): StateTransition<{ cancelled: true }> => {
+    await this.writer.execute(envelope, CancelledResultSchema, (state): StateTransition<{ cancelled: true }> => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined) throw new Error("Unknown delivery");
       if (atom.status !== "QUEUED") throw new Error("Only a delivery known not to have started may be safely cancelled");
@@ -94,7 +125,7 @@ export class DeliveryCoordinator {
       .map((atom) => atom.deliveryId);
     for (const deliveryId of inFlight) {
       const envelope = createDeliveryEnvelope(this.writer.sessionId, "crash-recovery");
-      await this.writer.execute(envelope, (): StateTransition<{ recovered: true }> => ({
+      await this.writer.execute(envelope, RecoveredResultSchema, (): StateTransition<{ recovered: true }> => ({
         drafts: [{ source: "RECOVERY", type: "DELIVERY_POSSIBLY_EXPOSED", payload: { deliveryId, reason: "Delivery began but persisted exposure acknowledgement is absent after restart" } }],
         result: { recovered: true }
       }));

@@ -3,6 +3,9 @@ import type {
   ContextEpoch,
   DeliveryAtom,
   DisclosureId,
+  EvidenceProposal,
+  EvidenceValue,
+  EventId,
   GenerationBasis,
   GenerationId,
   InputEpisodeId,
@@ -12,7 +15,10 @@ import type {
   RealizationRequest,
   SessionId,
   TranscriptRevision,
-  TurnId
+  TurnId,
+  UtteranceId,
+  BoardObservation,
+  RequestId
 } from "../../domain/src/index.js";
 import {
   zeroBoardRevision,
@@ -33,6 +39,21 @@ export interface TurnState {
   readonly studentText: string;
   readonly committedSequence: number;
 }
+export interface UtteranceState {
+  readonly utteranceId: UtteranceId;
+  readonly status: "CAPTURING" | "DISCARDED" | "FINALIZED";
+  readonly inputEpisodeId?: InputEpisodeId;
+  readonly text?: string;
+}
+export interface VisionRequestState {
+  readonly visionRequestId: RequestId;
+  readonly sourceBoardRevision: BoardRevision;
+  readonly regionId: string;
+  readonly relevantShapeIds: readonly string[];
+  readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
+  readonly observation?: BoardObservation;
+  readonly discardReason?: string;
+}
 export interface GenerationState {
   readonly generationId: GenerationId;
   readonly basis: GenerationBasis;
@@ -51,12 +72,17 @@ export interface SessionState {
   readonly problemStateRevision: ProblemStateRevision;
   readonly policyRevision: PolicyRevision;
   readonly lastCommittedInputSequence?: number;
+  readonly eventIds: readonly EventId[];
+  readonly utterances: Readonly<Record<string, UtteranceState>>;
   readonly inputEpisodes: Readonly<Record<string, InputEpisodeState>>;
   readonly turns: Readonly<Record<string, TurnState>>;
   readonly generations: Readonly<Record<string, GenerationState>>;
   readonly pedagogicalActions: Readonly<Record<string, RealizationRequest>>;
   readonly deliveries: Readonly<Record<string, DeliveryAtom>>;
   readonly disclosureLedger: readonly DisclosureId[];
+  readonly visionRequests: Readonly<Record<string, VisionRequestState>>;
+  readonly evidenceProposals: readonly EvidenceProposal[];
+  readonly studentEvidence: Readonly<Record<string, EvidenceValue>>;
 }
 
 export const initialSessionState = (sessionId: SessionId): SessionState => ({
@@ -68,11 +94,15 @@ export const initialSessionState = (sessionId: SessionId): SessionState => ({
   boardRevision: zeroBoardRevision,
   problemStateRevision: zeroProblemStateRevision,
   policyRevision: zeroPolicyRevision,
+  eventIds: [],
+  utterances: {},
   inputEpisodes: {},
   turns: {},
   generations: {},
   pedagogicalActions: {},
   deliveries: {},
-  disclosureLedger: []
+  disclosureLedger: [],
+  visionRequests: {},
+  evidenceProposals: [],
+  studentEvidence: {}
 });
-

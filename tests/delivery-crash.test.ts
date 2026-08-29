@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   DeliveryAtomSchema,
   newDeliveryId
@@ -37,7 +38,7 @@ describe("delivery crash boundaries", () => {
         effectiveDisclosureLevel: 2,
         status: "VALIDATED"
       });
-      await harness.writer.execute(createCommandEnvelope({ sessionId: harness.sessionId, producer: "test-authorizer" }), () => ({
+      await harness.writer.execute(createCommandEnvelope({ sessionId: harness.sessionId, producer: "test-authorizer" }), z.object({ queued: z.literal(true) }).strict(), () => ({
         drafts: [{ source: "APPLICATION", type: "DELIVERY_QUEUED", payload: { atom } }],
         result: { queued: true }
       }));

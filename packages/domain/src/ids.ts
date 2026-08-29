@@ -34,8 +34,8 @@ function createId<TName extends string>(prefix: string): BrandedId<TName> {
 export const newSessionId = (): SessionId => createId<"SessionId">("session");
 export const newEventId = (): EventId => createId<"EventId">("event");
 export const newRequestId = (): RequestId => createId<"RequestId">("request");
+export const newUtteranceId = (): UtteranceId => createId<"UtteranceId">("utterance");
 export const newInputEpisodeId = (): InputEpisodeId => createId<"InputEpisodeId">("episode");
 export const newTurnId = (): TurnId => createId<"TurnId">("turn");
 export const newGenerationId = (): GenerationId => createId<"GenerationId">("generation");
 export const newDeliveryId = (): DeliveryId => createId<"DeliveryId">("delivery");
-
