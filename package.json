@@ -1,0 +1,32 @@
+{
+  "name": "technical-interview-app",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:replay": "vitest run tests/replay.test.ts tests/vertical-slice.test.ts",
+    "test:property": "vitest run tests/concurrency.property.test.ts",
+    "demo": "tsx apps/server/src/run-synthetic.ts",
+    "check": "tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.4.0",
+    "eslint": "^10.9.1",
+    "fast-check": "^4.9.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^4.1.11"
+  }
+}
