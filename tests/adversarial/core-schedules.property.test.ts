@@ -198,7 +198,12 @@ async function supersedeInitialGeneration(
   model: AdversarialModel
 ): Promise<void> {
   const status = model.generations.get(fixture.initialGenerationId);
-  if (status === "ACTIVE" || status === "SUPERSEDED") {
+  if (
+    status === "ACTIVE"
+    || status === "PROPOSAL_RECEIVED"
+    || status === "VALIDATED"
+    || status === "SUPERSEDED"
+  ) {
     await fixture.turns.supersedeGeneration(
       fixture.initialGenerationId,
       "adversarial cancellation"
