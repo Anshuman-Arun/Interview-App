@@ -117,15 +117,29 @@ async function executeCoreOperation(
       const compatibility = generation === undefined
         ? undefined
         : isGenerationBasisStillCompatible(generation.basis, state);
+      const canStart =
+        generation !== undefined
+        && generation.status !== "SUPERSEDED"
+        && generation.status !== "REJECTED"
+        && compatibility === "COMPATIBLE";
+
+      if (!canStart) {
+        const eventCount = fixture.store.eventCount(fixture.sessionId);
+        await expect(
+          fixture.delivery.markStarted(deliveryId)
+        ).rejects.toThrow(/generation|compatibility|provenance/iu);
+        expect(fixture.store.eventCount(fixture.sessionId)).toBe(eventCount);
+        expect(
+          fixture.writer.getState().deliveries[deliveryId]?.status
+        ).toBe("QUEUED");
+        return;
+      }
+
       await fixture.delivery.markStarted(deliveryId);
       model.noteDelivery(deliveryId, "DELIVERING");
-      if (generation !== undefined) {
-        expect(
-          compatibility,
-          "Production started a delivery whose generation basis was no longer COMPATIBLE"
-        ).toBe("COMPATIBLE");
-        expect(generation.status).not.toBe("SUPERSEDED");
-      }
+      expect(compatibility).toBe("COMPATIBLE");
+      expect(generation.status).not.toBe("SUPERSEDED");
+      expect(generation.status).not.toBe("REJECTED");
       return;
     }
     case "BILLING_CURRENT":
