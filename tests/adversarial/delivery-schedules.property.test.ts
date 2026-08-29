@@ -9,8 +9,7 @@ import {
 } from "../../packages/interview-engine/src/index.js";
 import {
   AdversarialFixture,
-  createReferenceModel,
-  firstDisclosureId
+  createReferenceModel
 } from "./fixtures.js";
 import {
   deliveryScheduleArbitrary,
@@ -34,9 +33,7 @@ describe("adversarial delivery schedules", () => {
 
         try {
           const beforeQueue = fixture.writer.getState().sequence;
-          const atom = await fixture.queueSyntheticDelivery({
-            disclosureIds: [firstDisclosureId()]
-          });
+          const atom = await fixture.queueSyntheticDelivery();
           model.advanceSequenceBy(
             fixture.writer.getState().sequence - beforeQueue
           );
