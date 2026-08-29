@@ -108,11 +108,11 @@ Each slice ends with tests, type checking, linting, replay checks where relevant
 
 ## 14. Reasoning graph contracts
 
-- Files: `reasoning.ts`, hard-coded problem graph.
-- Types/functions: version, approaches, milestones, optional prerequisites, merges, errors, extensions.
-- Tests: graph reference integrity and at least two approaches.
+- Files: `reasoning.ts`, hard-coded problem graph, `packages/problems/src/problem-integrity.ts`, `problem-catalog.ts`.
+- Types/functions: version, approaches, milestones, optional prerequisites, merges, errors, extensions, fixture/catalog integrity assertions.
+- Tests: graph/disclosure reference integrity, unique authored identities, provisional DAG validation, and at least two approaches.
 - Dependencies: slice 2.
-- Complete when the live model cannot rewrite the stored graph.
+- Complete when the live model cannot rewrite the stored graph and malformed authored fixtures fail before interview execution. **Complete for the Phase 0 catalog.**
 
 ## 15. Pedagogical action contracts
 
@@ -166,7 +166,7 @@ Each slice ends with tests, type checking, linting, replay checks where relevant
 
 - Files: `provider.ts`, `packages/providers/src/policy.ts`.
 - Types/functions: actual cancellation meanings, modalities, structured output, sessions, data use, usage, reasoning levels, provider-specific billing evidence.
-- Tests: missing/stale/unknown/metered verification; excessive data use.
+- Tests: malformed/missing/stale/future/unknown/metered verification; exact adapter-version binding; invalid runtime policy; excessive data use; secret-free deterministic errors.
 - Dependencies: clock and configuration.
 - Complete when no-metered mode requires current technical no-spend proof, not a boolean label.
 
@@ -339,3 +339,16 @@ Implemented in parallel and integrated after scoped evidence history:
 - real loopback, deterministic fake-audio, crash, malformed-input, cache-bound, secret-exclusion, and no-replay tests.
 
 No TTS, audio-frame persistence, polished frontend, production whiteboard surface, or exactly-once network claim is introduced.
+
+## Continuation progress — GitHub branch reconciliation and browser boundary hardening
+
+Recovered and integrated after review of closed PRs #3–#7:
+
+- complete authored-problem fixture and catalog integrity checks for graph references, provisional DAG structure, protected disclosures, normalized formulations, and `(problemId, version)` uniqueness;
+- strict runtime validation and deterministic rejection codes at the provider billing/data-use policy gate;
+- syntax-aware, bounded, idempotent secret redaction for JSON-like, header-like, query-like, quoted, camel-case, and multiline diagnostics;
+- an exported typed browser command client for every protocol-v1 command, with private token storage, strict response/correlation validation, and caller-stable RequestId retry;
+- conservative classification of fetch and response-body failures as transport uncertainty rather than malformed server responses;
+- exact command preflight validation for Origin, `POST`, and the two allowed non-simple headers, with no session mutation during preflight.
+
+Dedicated recovered suites pass together with the existing loopback and renderer integration tests. These slices add no real provider, paid API path, polished UI, or provider/session authority.

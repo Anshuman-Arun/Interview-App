@@ -98,7 +98,7 @@ This is important after an uncertain network result. If a request may have reach
 
 The client does not automatically retry commands. Automatic retries would require policy about timing, aborts, UI state, and whether the original outcome is actually uncertain.
 
-A transport error carries the RequestId but does not retain the raw fetch error or its message.
+A transport error carries the RequestId but does not retain the raw fetch/body-read error or its message. Failure while consuming the response body remains transport uncertainty because the server may already have committed the command.
 
 ## Error classes
 
@@ -150,13 +150,11 @@ The browser client:
 
 Authoritative mutation remains entirely server-side after authentication and protocol validation.
 
-## Current integration limitation
+## Current integration status
 
-This branch intentionally does not edit `apps/web/src/index.ts`, because that file already exists on the isolated renderer-stream branch.
+`apps/web/src/index.ts` exports the command client together with the renderer client and authenticated renderer-stream consumer. The command server's exact-Origin CORS boundary is covered by a dedicated real-loopback suite.
 
-The client is imported directly in its tests. When the browser slices are integrated, the web composition root can export/wire both the renderer stream and command client.
-
-The repository also does not yet contain the final Vite/browser build harness on `main`. This slice is validated through TypeScript, ESLint, and Node's standards-compatible `fetch`/Web API implementation. A later browser-build slice should verify the complete dependency graph under the actual Vite bundle.
+The repository does not yet contain the final Vite/browser build harness. This slice is validated through TypeScript, ESLint, Node's standards-compatible `fetch`/Web API implementation, and real loopback server integration tests. A later browser-build slice should verify the complete dependency graph under the actual browser bundle.
 
 ## Project credential constraint
 

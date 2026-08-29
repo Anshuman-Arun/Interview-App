@@ -25,11 +25,11 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Context Compiler | `packages/interview-engine/src/context-compiler.ts` | `compileContext`, `CompiledContext` | problem public data, policy, state | 0 |
 | Context Epoch | domain revisions + reducer | `ContextEpoch`; increment on non-monotonic truth changes | events | 0 |
 | Pedagogical policy | `packages/interview-engine/src/pedagogical-policy.ts` | `selectPedagogicalAction`, `RealizationRequest` | evidence, reasoning graph | 0 baseline; 2 advanced |
-| Reasoning graph contracts | `packages/domain/src/reasoning.ts` | versioned `ReasoningGraph`, approaches, milestones, edges | IDs/Zod | 0 |
+| Reasoning graph contracts | `packages/domain/src/reasoning.ts`, `packages/problems/src/problem-integrity.ts`, `problem-catalog.ts` | versioned `ReasoningGraph`; authored-fixture reference, uniqueness, provisional-DAG, disclosure-registry, and catalog integrity gates | IDs/Zod, authored problems | 0 implemented |
 | Student evidence | `packages/domain/src/evidence.ts`, events state/reducer, `turn-coordinator.ts`, `verification-coordinator.ts` | scoped proposal validation; `EvidenceRecordState` history; explicit supersession/staleness; application-authoritative inferred and deterministically verified updates | event IDs, Zod | 0 scoped history/supersession baseline; 2 advanced aggregation |
 | Verifier contracts | `packages/domain/src/verification.ts`, `packages/verification/src/two-colour-graph-verifier.ts`, `packages/interview-engine/src/verification-coordinator.ts`, events state/reducer | `VerificationResultSchema`, `DeterministicVerifier`, `TwoColourGraphVerifier`, `VerificationCoordinator`, strict work/admission schemas | domain, events, writer, Zod | 0 Oxford verifier and authoritative admission implemented; additional engines later |
 | Provider capability model | `packages/domain/src/provider.ts` | `ModelCapabilities`, real cancellation/data-use semantics | Zod | 0 |
-| Provider policy/billing verification | `packages/providers/src/policy.ts` | `assertProviderPermitted`, `BillingVerification` | capabilities, clock | 0 |
+| Provider policy/billing verification | `packages/providers/src/policy.ts` | `assertProviderPermitted`, runtime-validated `BillingVerification`, deterministic `ProviderPolicyErrorCode` | capabilities, clock, strict billing schema | 0 fail-closed baseline implemented; provider-specific proofs pending |
 | MockModelAdapter | `packages/providers/src/mock-model-adapter.ts` | `MockModelAdapter`, `MockModelSession` | provider contracts, proposal | 0 |
 | GeminiApiAdapter | `packages/providers/src/gemini-api-adapter.ts` | disabled experiment boundary until billing/security gates pass | provider policy | late 0 experiment |
 | AntigravityCliAdapter | `packages/providers/src/antigravity-cli-adapter.ts` | disabled adapter until isolated deny rules proven | provider policy/security | late 0 experiment |
@@ -43,15 +43,19 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Renderer acknowledgements | `packages/delivery/src/renderer.ts`, `renderer-stream-protocol.ts`, `apps/web/src/renderer-client.ts`, `apps/server/src/renderer-stream-server.ts` | `Renderer`, `MockRenderer`, `RendererClient`, stable-ID stream commands, separate exposed/completed acknowledgements | delivery IDs, authenticated loopback transport | 0 TEXT/AUDIO transport harness implemented |
 | Whiteboard abstraction | `packages/domain/src/whiteboard.ts`, `packages/whiteboard/` | `WhiteboardAdapter`, ownership-layer board actions | board revisions | 0 contract; 3 integration |
 | Local compute worker boundary | `packages/local-compute/src/protocol.ts`, `worker-client.ts`, `workers/python/local_compute_worker.py`; admission in `packages/interview-engine/src/local-compute-coordinator.ts`; lifecycle in events/state/reducer | `LocalComputeRequest`, `LocalComputeResponse`, `LocalComputeWorkerClient`, `LocalComputeCoordinator`, `LocalComputeRequestState` | domain IDs, Zod, Node child process, isolated Python stdio, serialized writer | 0 transcript-analysis boundary and authoritative admission implemented; additional compute functions deferred |
-| Frontend/backend protocol | `packages/domain/src/protocol.ts`, `apps/server/src/loopback-command-server.ts`, `renderer-stream-server.ts`, `apps/web/src/renderer-stream.ts` | versioned command/response union; exact-Origin CORS; authenticated SSE delivery stream; start/input/summary/reconnect/exposure/completion | domain schemas, writer, delivery | 0 thin browser transport implemented; polished UI deferred |
-| Security boundaries | `packages/domain/src/security.ts`, `apps/server/src/loopback-command-server.ts` | loopback-only bind, exact Origin allowlist, constant-time client-token check, bounded JSON body, non-secret error responses | protocol/provider policy | 0 browser-MVP boundary implemented |
-| Testing infrastructure | `tests/`, `vitest.config.ts` | unit, replay, crash, idempotency, property tests | all implemented modules | 0 |
-| Hard-coded Oxford problem | `packages/problems/src/six-people.ts` | public/interviewer/private partitions, graph, protected facts | domain | 0 |
+| Frontend/backend protocol | `packages/domain/src/protocol.ts`, `apps/server/src/loopback-command-server.ts`, `renderer-stream-server.ts`, `apps/web/src/command-client.ts`, `renderer-stream.ts` | strict command/response union; typed browser client; caller-stable RequestId retry; exact-Origin CORS; authenticated SSE; start/input/summary/reconnect/exposure/completion | domain schemas, writer, delivery | 0 thin browser transport implemented; polished UI deferred |
+| Security boundaries | `packages/domain/src/security.ts`, `apps/server/src/loopback-command-server.ts`, renderer transport | loopback-only bind, exact Origin and preflight method/header allowlists, constant-time client-token check, bounded bodies, syntax-aware idempotent secret redaction, fixed non-secret errors | protocol/provider policy | 0 browser-MVP boundary implemented |
+| Testing infrastructure | `tests/`, `vitest.config.ts`, `scripts/check-architecture-boundaries.mjs`, `.github/workflows/ci.yml` | unit, replay, crash, idempotency, exhaustive verifier, fixture integrity, provider-policy, redaction, browser transport, and randomized property tests on Windows/Linux CI | all implemented modules | 0 implemented and enforced in CI |
+| Hard-coded Oxford problem | `packages/problems/src/six-people.ts`, `problem-integrity.ts`, `problem-catalog.ts` | public/interviewer/private partitions, approach-aware graph, protected facts, validated immutable catalog projection | domain | 0 implemented |
 | Synthetic vertical path | `packages/interview-engine/src/synthetic-interview.ts`, `apps/server/src/run-synthetic.ts` | `runSyntheticInterview` | writer through renderer | 0 |
 
 ## Concrete dependency direction
 
 ```text
+apps/web -----------------------------> delivery
+   |                                      |
+   +------------------------------------> domain
+
 apps/server
    |
    v

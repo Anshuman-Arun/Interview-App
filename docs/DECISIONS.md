@@ -233,3 +233,35 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: retry every presenter exception; suppress every failed presentation permanently; add a generic boolean return value.
 - Consequences: detached DOM and rejected-before-start audio can retry safely, while uncertain outcomes stay conservative and application restart remains governed by `POSSIBLY_EXPOSED` recovery.
 - Reversible: the signaling API is reversible; uncertainty must continue to fail against duplicate exposure.
+
+## D030 — Phase 0 problem fixtures fail at authoring-load boundaries
+
+- Decision: validate every curated `InterviewProblem` and catalog entry when loaded, including identity/reference uniqueness, disclosure-registry consistency, normalized equivalent formulations, and an initial DAG integrity check.
+- Reason: malformed application-owned content must fail before it can silently change policy, disclosure, or verification behavior during an interview.
+- Alternatives considered: rely only on TypeScript shape checking; validate after a session starts; let the model repair graph defects.
+- Consequences: the first catalog is deterministic and rejects structural authoring errors. DAG topology remains an explicitly reversible Phase 0 implementation choice, not a permanent architecture constraint.
+- Reversible: yes for exact graph topology and validation placement; authored content must remain application-owned and validated.
+
+## D031 — Provider policy rejection is runtime-valid and code-addressable
+
+- Decision: accept policy and billing evidence as runtime input, validate malformed values before comparison, and return fixed `ProviderPolicyErrorCode` values without reflecting evidence content.
+- Reason: compile-time interfaces cannot establish the validity or freshness of configuration/evidence crossing an adapter or configuration boundary, and policy failures must not leak credentials.
+- Alternatives considered: typed-only comparison; permissive defaults for malformed data; provider-specific raw error propagation.
+- Consequences: unknown, stale, future-dated, adapter-mismatched, or structurally invalid evidence fails closed. Real adapters still need separate provider-specific proof that spend is technically impossible.
+- Reversible: error names and parsing organization are reversible; fail-closed runtime verification is not.
+
+## D032 — Browser command retries retain caller-owned RequestId
+
+- Decision: expose a typed browser command client whose authentication token is held in a private field and whose optional caller-supplied RequestId survives an uncertain network or response-body failure.
+- Reason: a transport failure may occur after the authoritative command committed, so retry safety depends on reusing the same durable idempotency identity.
+- Alternatives considered: generate a new RequestId for every HTTP attempt; expose raw fetch calls to UI code; infer success from transport state.
+- Consequences: responses and correlation identities are schema-checked, raw error bodies/causes are not retained, and the UI must deliberately reuse the original RequestId for the same logical retry.
+- Reversible: the client API is reversible; stable command identity across uncertain retry is not.
+
+## D033 — Browser preflight is an exact non-mutating allowlist gate
+
+- Decision: allow command preflight only for an exact configured Origin, `POST`, and `content-type` / `x-interview-client-token`; preflight never authenticates a token value or enters session dispatch.
+- Reason: browser CORS negotiation must enable the intended client without expanding the actual command surface or mutating authoritative state.
+- Alternatives considered: reflect arbitrary origins; accept arbitrary requested headers; include `OPTIONS` as an application method; require the secret on preflight.
+- Consequences: allowed clients can read scoped command responses, rejected origins are never reflected, and actual POSTs still require timing-safe token authentication.
+- Reversible: exact header names and caching duration are reversible; origin scoping and non-mutating preflight are not.

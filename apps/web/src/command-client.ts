@@ -289,9 +289,19 @@ export class BrowserCommandClient {
       );
     }
 
+    let responseText: string;
+    try {
+      responseText = await response.text();
+    } catch {
+      throw new BrowserCommandTransportError(
+        isSignalAborted(signal) ? "ABORTED" : "NETWORK",
+        command.requestId
+      );
+    }
+
     let payload: unknown;
     try {
-      payload = JSON.parse(await response.text()) as unknown;
+      payload = JSON.parse(responseText) as unknown;
     } catch {
       throw new BrowserCommandResponseError(
         "MALFORMED_JSON",

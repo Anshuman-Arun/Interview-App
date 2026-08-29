@@ -322,6 +322,34 @@ describe("browser command client", () => {
     expect(String(caught)).not.toContain(CLIENT_TOKEN);
   });
 
+  it("classifies an aborted response-body read as uncertain transport failure", async () => {
+    const controller = new AbortController();
+    const requestId = RequestIdSchema.parse("request_body_aborted");
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(streamController) {
+        controller.signal.addEventListener("abort", () => {
+          streamController.error(new Error(`body abort details ${CLIENT_TOKEN}`));
+        }, { once: true });
+      }
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+    const client = createClient({
+      requestIdFactory: () => requestId,
+      response
+    });
+
+    const pending = client.startSession(SESSION_ID, { signal: controller.signal });
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({
+      name: "BrowserCommandTransportError",
+      kind: "ABORTED",
+      requestId
+    });
+  });
+
   it("turns a valid server protocol error into a typed error without retaining its message", async () => {
     const requestId = RequestIdSchema.parse("request_conflict");
     const client = createClient({
