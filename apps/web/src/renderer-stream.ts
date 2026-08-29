@@ -15,22 +15,20 @@ type FetchLike = typeof fetch;
 export interface RendererStreamConsumerOptions {
   readonly streamUrl: string;
   readonly sessionId: string;
-  readonly clientToken: string;
-  readonly fetchImpl?: FetchLike;
+  readonly authenticatedFetch: FetchLike;
   readonly signal?: AbortSignal;
 }
 
 export interface LoopbackAcknowledgementSenderOptions {
   readonly commandUrl: string;
-  readonly clientToken: string;
-  readonly fetchImpl?: FetchLike;
+  readonly authenticatedFetch: FetchLike;
 }
 
 export async function consumeAuthenticatedRendererStream(
   options: RendererStreamConsumerOptions,
   renderer: RendererClient
 ): Promise<void> {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.authenticatedFetch;
   const attach = RendererStreamAttachRequestSchema.parse({
     protocolVersion: 1,
     type: "ATTACH_RENDERER_STREAM",
@@ -41,8 +39,7 @@ export async function consumeAuthenticatedRendererStream(
     method: "POST",
     headers: {
       accept: "text/event-stream",
-      "content-type": "application/json",
-      "x-interview-client-token": options.clientToken
+      "content-type": "application/json"
     },
     body: JSON.stringify(attach)
   };
@@ -92,7 +89,7 @@ export async function consumeAuthenticatedRendererStream(
 export function createLoopbackAcknowledgementSender(
   options: LoopbackAcknowledgementSenderOptions
 ): RendererAcknowledgementSender {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.authenticatedFetch;
 
   return {
     send: async (input: RendererAcknowledgementCommand): Promise<void> => {
@@ -100,8 +97,7 @@ export function createLoopbackAcknowledgementSender(
       const response = await fetchImpl(options.commandUrl, {
         method: "POST",
         headers: {
-          "content-type": "application/json",
-          "x-interview-client-token": options.clientToken
+          "content-type": "application/json"
         },
         body: JSON.stringify(command)
       });

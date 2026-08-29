@@ -106,8 +106,7 @@ describe("authenticated renderer stream transport", () => {
       sessionId,
       acknowledgementSender: createLoopbackAcknowledgementSender({
         commandUrl: `${commandAddress.url}/v1/commands`,
-        clientToken: CLIENT_TOKEN,
-        fetchImpl: fetchWithOrigin
+        authenticatedFetch: fetchWithAuth
       }),
       textPresenter: {
         presentText: (_text, deliveryId) => {
@@ -121,8 +120,7 @@ describe("authenticated renderer stream transport", () => {
     const consumer = consumeAuthenticatedRendererStream({
       streamUrl: streamAddress.streamUrl,
       sessionId,
-      clientToken: CLIENT_TOKEN,
-      fetchImpl: fetchWithOrigin,
+      authenticatedFetch: fetchWithAuth,
       signal: controller.signal
     }, renderer);
 
@@ -482,9 +480,10 @@ function authenticatedHeaders(): Record<string, string> {
   };
 }
 
-const fetchWithOrigin: typeof fetch = async (input, init) => {
+const fetchWithAuth: typeof fetch = async (input, init) => {
   const headers = new Headers(init?.headers);
   headers.set("origin", CLIENT_ORIGIN);
+  headers.set("x-interview-client-token", CLIENT_TOKEN);
   return fetch(input, { ...init, headers });
 };
 

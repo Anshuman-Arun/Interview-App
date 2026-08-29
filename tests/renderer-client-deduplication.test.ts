@@ -5,6 +5,7 @@ import {
   type DeliveryId
 } from "../packages/domain/src/index.js";
 import {
+  MAX_RENDERER_STREAM_MESSAGE_BYTES,
   RendererAcknowledgementCommandSchema,
   RendererStreamMessageSchema,
   type RendererAcknowledgementCommand,
@@ -12,6 +13,7 @@ import {
 } from "../packages/delivery/src/index.js";
 import {
   RendererClient,
+  consumeAuthenticatedRendererStream,
   type AudioPlaybackCallbacks,
   type AudioPlayer,
   type RendererAcknowledgementSender,
@@ -216,6 +218,34 @@ describe("renderer DeliveryId deduplication", () => {
     expect(audio.playCount).toBe(1);
   });
 
+
+
+  it("fails closed on malformed or oversized inbound stream events", async () => {
+    const sessionId = newSessionId();
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: new RecordingAcknowledgementSender(),
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: new HoldingAudioPlayer(),
+      requestIdFactory: requestIdFactory()
+    });
+
+    await expect(consumeAuthenticatedRendererStream({
+      streamUrl: "http://127.0.0.1:1/v1/renderer-stream",
+      sessionId,
+      authenticatedFetch: staticSseFetch("event: delivery\ndata: {not-json}\n\n")
+    }, renderer)).rejects.toThrow("not valid JSON");
+
+    const oversized = `event: delivery\ndata: ${"x".repeat(MAX_RENDERER_STREAM_MESSAGE_BYTES + 1)}\n\n`;
+    await expect(consumeAuthenticatedRendererStream({
+      streamUrl: "http://127.0.0.1:1/v1/renderer-stream",
+      sessionId,
+      authenticatedFetch: staticSseFetch(oversized)
+    }, renderer)).rejects.toThrow(/exceeded its bound/u);
+
+    expect(renderer.snapshot()).toEqual([]);
+  });
+
   it("strict runtime schemas reject extra fields, unknown message types, and malformed IDs", () => {
     const valid = textMessage();
 
@@ -251,3 +281,10 @@ describe("renderer DeliveryId deduplication", () => {
     }).success).toBe(false);
   });
 });
+
+function staticSseFetch(body: string): typeof fetch {
+  return async () => new Response(body, {
+    status: 200,
+    headers: { "content-type": "text/event-stream; charset=utf-8" }
+  });
+}

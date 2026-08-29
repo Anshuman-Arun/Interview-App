@@ -381,15 +381,15 @@ function consume(
   return consumeAuthenticatedRendererStream({
     streamUrl: address.streamUrl,
     sessionId,
-    clientToken: CLIENT_TOKEN,
-    fetchImpl: fetchWithOrigin,
+    authenticatedFetch: fetchWithAuth,
     signal: controller.signal
   }, renderer);
 }
 
-const fetchWithOrigin: typeof fetch = async (input, init) => {
+const fetchWithAuth: typeof fetch = async (input, init) => {
   const headers = new Headers(init?.headers);
   headers.set("origin", CLIENT_ORIGIN);
+  headers.set("x-interview-client-token", CLIENT_TOKEN);
   return fetch(input, { ...init, headers });
 };
 
