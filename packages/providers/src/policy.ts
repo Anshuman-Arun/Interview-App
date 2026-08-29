@@ -35,24 +35,18 @@ const dataUseRank: Record<DataUsePolicy, number> = {
 };
 
 export function assertProviderPermitted(input: {
-  readonly policy: ProviderPolicy;
+  readonly policy: unknown;
   readonly capabilities: ModelCapabilities;
   readonly billingVerification?: unknown;
   readonly adapterVersion: string;
   readonly now?: Date;
 }): void {
-  assertPolicyConfiguration(input.policy);
+  const policy = parsePolicyConfiguration(input.policy);
   assertAdapterVersion(input.adapterVersion);
   const now = assertClock(input.now);
 
   const providerDataUseRank = dataUseRank[input.capabilities.dataUse];
-  const maximumDataUseRank = dataUseRank[input.policy.maximumDataUse];
-  if (providerDataUseRank === undefined || maximumDataUseRank === undefined) {
-    throw new ProviderPolicyError(
-      "INVALID_POLICY",
-      "Provider data-use configuration is invalid"
-    );
-  }
+  const maximumDataUseRank = dataUseRank[policy.maximumDataUse];
   if (providerDataUseRank > maximumDataUseRank) {
     throw new ProviderPolicyError(
       "DATA_USE_EXCEEDS_POLICY",
@@ -60,7 +54,7 @@ export function assertProviderPermitted(input: {
     );
   }
 
-  if (input.policy.allowMeteredUsage) return;
+  if (policy.allowMeteredUsage) return;
 
   if (input.billingVerification === undefined) {
     throw new ProviderPolicyError(
@@ -127,7 +121,7 @@ export function assertProviderPermitted(input: {
       "Billing verification timestamp is in the future"
     );
   }
-  if (ageMs > input.policy.billingVerificationMaxAgeMs) {
+  if (ageMs > policy.billingVerificationMaxAgeMs) {
     throw new ProviderPolicyError(
       "VERIFICATION_STALE",
       "Billing verification is stale or invalid"
@@ -135,18 +129,44 @@ export function assertProviderPermitted(input: {
   }
 }
 
-function assertPolicyConfiguration(policy: ProviderPolicy): void {
-  if (
-    typeof policy.allowMeteredUsage !== "boolean"
-    || dataUseRank[policy.maximumDataUse] === undefined
-    || !Number.isFinite(policy.billingVerificationMaxAgeMs)
-    || policy.billingVerificationMaxAgeMs <= 0
-  ) {
-    throw new ProviderPolicyError(
-      "INVALID_POLICY",
-      "Provider policy configuration is invalid"
-    );
+function parsePolicyConfiguration(value: unknown): ProviderPolicy {
+  if (typeof value !== "object" || value === null) {
+    throw invalidPolicy();
   }
+
+  const candidate = value as Record<string, unknown>;
+  const allowMeteredUsage = candidate.allowMeteredUsage;
+  const maximumDataUse = candidate.maximumDataUse;
+  const billingVerificationMaxAgeMs = candidate.billingVerificationMaxAgeMs;
+
+  if (
+    typeof allowMeteredUsage !== "boolean"
+    || !isDataUsePolicy(maximumDataUse)
+    || typeof billingVerificationMaxAgeMs !== "number"
+    || !Number.isFinite(billingVerificationMaxAgeMs)
+    || billingVerificationMaxAgeMs <= 0
+  ) {
+    throw invalidPolicy();
+  }
+
+  return {
+    allowMeteredUsage,
+    maximumDataUse,
+    billingVerificationMaxAgeMs
+  };
+}
+
+function isDataUsePolicy(value: unknown): value is DataUsePolicy {
+  return value === "LOCAL_ONLY"
+    || value === "REMOTE_NO_TRAINING"
+    || value === "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT";
+}
+
+function invalidPolicy(): ProviderPolicyError {
+  return new ProviderPolicyError(
+    "INVALID_POLICY",
+    "Provider policy configuration is invalid"
+  );
 }
 
 function assertAdapterVersion(adapterVersion: string): void {
@@ -160,7 +180,7 @@ function assertAdapterVersion(adapterVersion: string): void {
 
 function assertClock(now: Date | undefined): Date {
   const value = now ?? new Date();
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+  if (!Number.isFinite(value.getTime())) {
     throw new ProviderPolicyError(
       "INVALID_CLOCK",
       "Provider policy clock is invalid"
