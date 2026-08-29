@@ -20,9 +20,9 @@ import {
   type RendererStreamErrorResponse
 } from "../../../packages/delivery/src/index.js";
 import {
-  createCommandEnvelope,
-  type SessionRuntimeRegistry
+  createCommandEnvelope
 } from "../../../packages/interview-engine/src/index.js";
+import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const DEFAULT_MAX_CONNECTIONS = 4;
@@ -30,7 +30,7 @@ const DEFAULT_MAX_CONNECTIONS_PER_SESSION = 1;
 
 export interface RendererStreamServerOptions {
   readonly security: LocalTransportSecurity;
-  readonly registry: SessionRuntimeRegistry;
+  readonly sessions: SessionRecoveryCoordinator;
   readonly port?: number;
   readonly maxConnections?: number;
   readonly maxConnectionsPerSession?: number;
@@ -82,7 +82,6 @@ class RendererStreamHttpError extends Error {
 
 export class RendererStreamServer {
   private readonly server: Server;
-  private readonly sessionRecovery = new Map<SessionId, Promise<void>>();
   private readonly connections = new Map<SessionId, Set<ActiveConnection>>();
   private readonly maxConnections: number;
   private readonly maxConnectionsPerSession: number;
@@ -170,8 +169,8 @@ export class RendererStreamServer {
       return { outcome: "NO_CLIENT", deliveryId };
     }
 
-    const writer = this.options.registry.get(sessionId);
-    await this.ensureSessionRecovered(sessionId, writer);
+    const writer = this.options.sessions.getWriter(sessionId);
+    await this.options.sessions.ensureRecovered(sessionId);
 
     const atom = writer.getState().deliveries[deliveryId];
     if (atom === undefined) {
@@ -266,8 +265,7 @@ export class RendererStreamServer {
         );
       }
 
-      const writer = this.options.registry.get(attach.sessionId);
-      await this.ensureSessionRecovered(attach.sessionId, writer);
+      await this.options.sessions.ensureRecovered(attach.sessionId);
       this.attach(response, attach.sessionId, origin);
     } catch (error) {
       if (response.headersSent) {
@@ -343,16 +341,6 @@ export class RendererStreamServer {
     return origin !== undefined && this.options.security.allowedOrigins.has(origin);
   }
 
-  private ensureSessionRecovered(
-    sessionId: SessionId,
-    writer: ReturnType<SessionRuntimeRegistry["get"]>
-  ): Promise<void> {
-    const existing = this.sessionRecovery.get(sessionId);
-    if (existing !== undefined) return existing;
-    const recovery = new DeliveryCoordinator(writer).recoverUncertainDeliveries().then(() => undefined);
-    this.sessionRecovery.set(sessionId, recovery);
-    return recovery;
-  }
 }
 
 function validateSecurity(security: LocalTransportSecurity): void {

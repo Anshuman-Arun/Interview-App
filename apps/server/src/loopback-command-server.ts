@@ -8,16 +8,15 @@ import {
   type ClientCommand,
   type LocalTransportSecurity,
   type ProtocolErrorResponse,
-  type ProtocolSuccessResponse,
-  type SessionId
+  type ProtocolSuccessResponse
 } from "../../../packages/domain/src/index.js";
 import { DeliveryCoordinator } from "../../../packages/delivery/src/index.js";
 import {
   TurnCoordinator,
   createCommandEnvelope
 } from "../../../packages/interview-engine/src/index.js";
-import type { SessionRuntimeRegistry } from "../../../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
+import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
@@ -31,7 +30,7 @@ const CORS_ALLOW_HEADERS = "content-type, x-interview-client-token";
 
 export interface LoopbackCommandServerOptions {
   readonly security: LocalTransportSecurity;
-  readonly registry: SessionRuntimeRegistry;
+  readonly sessions: SessionRecoveryCoordinator;
   readonly port?: number;
 }
 
@@ -53,7 +52,6 @@ class ProtocolHttpError extends Error {
 
 export class LoopbackCommandServer {
   private readonly server: Server;
-  private readonly sessionRecovery = new Map<SessionId, Promise<void>>();
   private boundAddress: BoundLoopbackAddress | undefined;
 
   public constructor(private readonly options: LoopbackCommandServerOptions) {
@@ -148,8 +146,8 @@ export class LoopbackCommandServer {
   }
 
   private async dispatch(command: ClientCommand): Promise<ProtocolSuccessResponse> {
-    const writer = this.options.registry.get(command.sessionId);
-    await this.ensureSessionRecovered(command.sessionId, writer);
+    const writer = this.options.sessions.getWriter(command.sessionId);
+    await this.options.sessions.ensureRecovered(command.sessionId);
     const envelope = createCommandEnvelope({
       sessionId: command.sessionId,
       requestId: command.requestId,
@@ -228,16 +226,6 @@ export class LoopbackCommandServer {
     }
   }
 
-  private ensureSessionRecovered(
-    sessionId: SessionId,
-    writer: ReturnType<SessionRuntimeRegistry["get"]>
-  ): Promise<void> {
-    const existing = this.sessionRecovery.get(sessionId);
-    if (existing !== undefined) return existing;
-    const recovery = new DeliveryCoordinator(writer).recoverUncertainDeliveries().then(() => undefined);
-    this.sessionRecovery.set(sessionId, recovery);
-    return recovery;
-  }
 }
 
 function toBoundAddress(host: "127.0.0.1" | "::1", address: AddressInfo): BoundLoopbackAddress {

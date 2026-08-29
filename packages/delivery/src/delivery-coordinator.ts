@@ -125,10 +125,16 @@ export class DeliveryCoordinator {
       .map((atom) => atom.deliveryId);
     for (const deliveryId of inFlight) {
       const envelope = createDeliveryEnvelope(this.writer.sessionId, "crash-recovery");
-      await this.writer.execute(envelope, RecoveredResultSchema, (): StateTransition<{ recovered: true }> => ({
-        drafts: [{ source: "RECOVERY", type: "DELIVERY_POSSIBLY_EXPOSED", payload: { deliveryId, reason: "Delivery began but persisted exposure acknowledgement is absent after restart" } }],
-        result: { recovered: true }
-      }));
+      await this.writer.execute(envelope, RecoveredResultSchema, (state): StateTransition<{ recovered: true }> => {
+        const atom = state.deliveries[deliveryId];
+        if (atom?.status !== "DELIVERING") {
+          return { drafts: [], result: { recovered: true } };
+        }
+        return {
+          drafts: [{ source: "RECOVERY", type: "DELIVERY_POSSIBLY_EXPOSED", payload: { deliveryId, reason: "Delivery began but persisted exposure acknowledgement is absent after restart" } }],
+          result: { recovered: true }
+        };
+      });
     }
     return inFlight;
   }

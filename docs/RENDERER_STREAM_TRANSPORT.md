@@ -252,15 +252,9 @@ This is stable identity plus idempotent presentation/acknowledgement. It is not 
 
 The existing command endpoint now implements exact-Origin CORS preflight and response headers for authenticated browser acknowledgements. The authentication token remains mandatory on POST and excluded from URLs, bodies, domain envelopes, events, results, and errors.
 
-### 1. Session recovery ownership is duplicated between the two server adapters
+Command and renderer-stream adapters now share one application-owned `SessionRecoveryCoordinator`; concurrent first use waits on the same recovery promise. The serialized recovery transition also rechecks current delivery status, so the promise cache remains an optimization rather than authority.
 
-The existing command server owns a per-instance “first authenticated use” recovery guard. The new stream server must independently perform the same recovery before stream attachment because no shared public recovery coordinator exists.
-
-Normal flow is safe when the command runtime is used to create/read the session before any stream delivery starts, which is how the integration tests are composed.
-
-A future cleanup should expose one application-owned session-recovery coordinator that both adapters call. Implementing that cleanly would require edits to existing server/interview-engine ownership outside this branch's allowed scope. No such change is made here.
-
-### 2. No durable renderer cache
+### 1. No durable renderer cache
 
 The renderer's processed-DeliveryId cache is intentionally bounded and in memory. It is not authoritative and contains no authentication secret.
 
@@ -268,10 +262,10 @@ Same-runtime reconnect can therefore deduplicate reissued DeliveryIds while that
 
 A later browser lifecycle design may choose a carefully scoped local idempotency cache, but this slice does not add browser persistence.
 
-### 3. No real audio generation
+### 2. No real audio generation
 
 AUDIO transports an existing local `audioRef`. This slice does not synthesize speech, stream audio frames, or persist transient audio chunks.
 
-### 4. No exactly-once network guarantee
+### 3. No exactly-once network guarantee
 
 SSE/fetch writes can fail or disconnect after durable start. The architecture deliberately relies on stable DeliveryId identity, renderer deduplication, idempotent acknowledgements, and conservative recovery rather than claiming exactly-once network or physical delivery.

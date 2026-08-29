@@ -28,6 +28,7 @@ import {
   RendererStreamServer,
   type BoundRendererStreamAddress
 } from "../apps/server/src/renderer-stream-server.js";
+import { SessionRecoveryCoordinator } from "../apps/server/src/session-recovery-coordinator.js";
 import {
   RendererClient,
   consumeAuthenticatedRendererStream,
@@ -68,13 +69,14 @@ describe("renderer audio crash and reconnect semantics", () => {
   it("reissues the same DeliveryId after disconnect before exposure without restarting audio", async () => {
     const store = new SqliteEventStore(":memory:");
     const registry = new SessionRuntimeRegistry(store);
+    const sessions = new SessionRecoveryCoordinator(registry);
     const commandServer = new LoopbackCommandServer({
       security: security(),
-      registry
+      sessions
     });
     const streamServer = new RendererStreamServer({
       security: security(),
-      registry
+      sessions
     });
 
     try {
@@ -151,13 +153,14 @@ describe("renderer audio crash and reconnect semantics", () => {
 
     try {
       let registry = new SessionRuntimeRegistry(store);
+      let sessions = new SessionRecoveryCoordinator(registry);
       const sessionId = newSessionId();
       const writer = registry.get(sessionId);
       const atom = await queueAudio(writer, [disclosureId]);
 
       streamServer = new RendererStreamServer({
         security: security(),
-        registry
+        sessions
       });
       let streamAddress = await streamServer.start();
 
@@ -194,9 +197,10 @@ describe("renderer audio crash and reconnect semantics", () => {
 
       store = new SqliteEventStore(databasePath);
       registry = new SessionRuntimeRegistry(store);
+      sessions = new SessionRecoveryCoordinator(registry);
       streamServer = new RendererStreamServer({
         security: security(),
-        registry
+        sessions
       });
       streamAddress = await streamServer.start();
 
@@ -237,13 +241,14 @@ describe("renderer audio crash and reconnect semantics", () => {
   it("does not replay audio after persisted EXPOSED when the renderer crashes before COMPLETED", async () => {
     const store = new SqliteEventStore(":memory:");
     const registry = new SessionRuntimeRegistry(store);
+    const sessions = new SessionRecoveryCoordinator(registry);
     const commandServer = new LoopbackCommandServer({
       security: security(),
-      registry
+      sessions
     });
     const streamServer = new RendererStreamServer({
       security: security(),
-      registry
+      sessions
     });
 
     try {

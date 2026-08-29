@@ -273,3 +273,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: maintain separate browser/server ID factories; require a Node-polyfill plugin; fall back to `Math.random()`.
 - Consequences: Node 22 and modern secure browser contexts use one cryptographically secure implementation, while a deterministic repository test prevents Node builtins from silently re-entering the shared graph. A real browser production build is still pending.
 - Reversible: the secure UUID provider and static-graph test organization are reversible; weak-random fallback is not acceptable.
+
+## D035 — Session crash recovery is shared above transport adapters
+
+- Decision: compose command and renderer-stream servers over one process-lifetime `SessionRecoveryCoordinator`, while independently rechecking delivery status inside each serialized recovery transition.
+- Reason: adapter-local recovery maps allowed both transports to observe the same persisted `DELIVERING` atom and race two semantic recovery commands. Recovery is application lifecycle work, not transport authority.
+- Alternatives considered: retain one cache per server; move recovery into every reconnect handler; rely only on reducer tolerance for duplicate events.
+- Consequences: concurrent first use shares one recovery promise and waits before serving the session. A deliberately duplicated caller still appends at most one recovery event because the SessionWriter transition rechecks current state.
+- Reversible: the composition API and cache placement are reversible; conservative recovery before transport use and serialized current-state validation are not.

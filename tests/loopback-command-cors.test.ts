@@ -11,6 +11,7 @@ import {
   LoopbackCommandServer,
   type BoundLoopbackAddress
 } from "../apps/server/src/loopback-command-server.js";
+import { SessionRecoveryCoordinator } from "../apps/server/src/session-recovery-coordinator.js";
 
 const CLIENT_TOKEN = "phase0-cors-test-client-token-that-is-long-enough";
 const CLIENT_ORIGIN = "http://127.0.0.1:5173";
@@ -29,7 +30,7 @@ describe("loopback command browser CORS boundary", () => {
         allowedOrigins: new Set([CLIENT_ORIGIN]),
         clientToken: CLIENT_TOKEN
       },
-      registry: new SessionRuntimeRegistry(store)
+      sessions: new SessionRecoveryCoordinator(new SessionRuntimeRegistry(store))
     });
     address = await server.start();
   });

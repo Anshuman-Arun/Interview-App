@@ -30,6 +30,7 @@ import {
   RendererStreamServer,
   type BoundRendererStreamAddress
 } from "../apps/server/src/renderer-stream-server.js";
+import { SessionRecoveryCoordinator } from "../apps/server/src/session-recovery-coordinator.js";
 import {
   RendererClient,
   consumeAuthenticatedRendererStream,
@@ -43,6 +44,7 @@ const CLIENT_ORIGIN = "http://127.0.0.1:5173";
 describe("authenticated renderer stream transport", () => {
   let store: SqliteEventStore;
   let registry: SessionRuntimeRegistry;
+  let sessions: SessionRecoveryCoordinator;
   let commandServer: LoopbackCommandServer;
   let commandAddress: BoundLoopbackAddress;
   let streamServer: RendererStreamServer;
@@ -51,13 +53,14 @@ describe("authenticated renderer stream transport", () => {
   beforeEach(async () => {
     store = new SqliteEventStore(":memory:");
     registry = new SessionRuntimeRegistry(store);
+    sessions = new SessionRecoveryCoordinator(registry);
     commandServer = new LoopbackCommandServer({
       security: {
         host: "127.0.0.1",
         allowedOrigins: new Set([CLIENT_ORIGIN]),
         clientToken: CLIENT_TOKEN
       },
-      registry
+      sessions
     });
     streamServer = new RendererStreamServer({
       security: {
@@ -65,7 +68,7 @@ describe("authenticated renderer stream transport", () => {
         allowedOrigins: new Set([CLIENT_ORIGIN]),
         clientToken: CLIENT_TOKEN
       },
-      registry
+      sessions
     });
     commandAddress = await commandServer.start();
     streamAddress = await streamServer.start();

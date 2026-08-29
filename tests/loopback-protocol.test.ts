@@ -20,6 +20,7 @@ import {
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import { LoopbackCommandServer, type BoundLoopbackAddress } from "../apps/server/src/loopback-command-server.js";
+import { SessionRecoveryCoordinator } from "../apps/server/src/session-recovery-coordinator.js";
 
 const CLIENT_TOKEN = "phase0-test-client-token-that-is-long-enough";
 const CLIENT_ORIGIN = "http://127.0.0.1:5173";
@@ -27,19 +28,21 @@ const CLIENT_ORIGIN = "http://127.0.0.1:5173";
 describe("authenticated loopback command protocol", () => {
   let store: SqliteEventStore;
   let registry: SessionRuntimeRegistry;
+  let sessions: SessionRecoveryCoordinator;
   let server: LoopbackCommandServer;
   let address: BoundLoopbackAddress;
 
   beforeEach(async () => {
     store = new SqliteEventStore(":memory:");
     registry = new SessionRuntimeRegistry(store);
+    sessions = new SessionRecoveryCoordinator(registry);
     server = new LoopbackCommandServer({
       security: {
         host: "127.0.0.1",
         allowedOrigins: new Set([CLIENT_ORIGIN]),
         clientToken: CLIENT_TOKEN
       },
-      registry
+      sessions
     });
     address = await server.start();
   });
@@ -269,13 +272,14 @@ describe("authenticated loopback command protocol", () => {
     expect(originalWriter.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
 
     registry = new SessionRuntimeRegistry(store);
+    sessions = new SessionRecoveryCoordinator(registry);
     server = new LoopbackCommandServer({
       security: {
         host: "127.0.0.1",
         allowedOrigins: new Set([CLIENT_ORIGIN]),
         clientToken: CLIENT_TOKEN
       },
-      registry
+      sessions
     });
     address = await server.start();
 

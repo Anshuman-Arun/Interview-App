@@ -340,6 +340,19 @@ Implemented in parallel and integrated after scoped evidence history:
 
 No TTS, audio-frame persistence, polished frontend, production whiteboard surface, or exactly-once network claim is introduced.
 
+## Continuation progress — shared transport recovery ownership
+
+Implemented after browser transport reconciliation:
+
+- one `SessionRecoveryCoordinator` shared by command and renderer transports;
+- one `LocalInterviewTransportRuntime` composition root that constructs both adapters over that coordinator;
+- concurrent startup coalescing and partial-start rollback;
+- failed recovery eviction for safe retry;
+- serialized current-state revalidation before every `POSSIBLY_EXPOSED` recovery append;
+- real file-backed restart coverage in which command and renderer first use race but produce exactly one recovery event and no visible replay.
+
+The coordinator's promise map is disposable process state. SQLite events remain authoritative, and the transition-level state recheck preserves correctness even if callers bypass the normal composition root.
+
 ## Continuation progress — GitHub branch reconciliation and browser boundary hardening
 
 Recovered and integrated after review of closed PRs #3–#7:
