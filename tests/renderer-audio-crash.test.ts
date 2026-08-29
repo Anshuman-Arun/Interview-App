@@ -90,8 +90,7 @@ describe("renderer audio crash and reconnect semantics", () => {
         sessionId,
         acknowledgementSender: createLoopbackAcknowledgementSender({
           commandUrl: `${commandAddress.url}/v1/commands`,
-          clientToken: CLIENT_TOKEN,
-          fetchImpl: fetchWithOrigin
+          authenticatedFetch: fetchWithAuth
         }),
         textPresenter: { presentText: () => undefined },
         audioPlayer: audio
@@ -260,8 +259,7 @@ describe("renderer audio crash and reconnect semantics", () => {
         sessionId,
         acknowledgementSender: createLoopbackAcknowledgementSender({
           commandUrl: `${commandAddress.url}/v1/commands`,
-          clientToken: CLIENT_TOKEN,
-          fetchImpl: fetchWithOrigin
+          authenticatedFetch: fetchWithAuth
         }),
         textPresenter: { presentText: () => undefined },
         audioPlayer: audio
@@ -286,8 +284,7 @@ describe("renderer audio crash and reconnect semantics", () => {
         sessionId,
         acknowledgementSender: createLoopbackAcknowledgementSender({
           commandUrl: `${commandAddress.url}/v1/commands`,
-          clientToken: CLIENT_TOKEN,
-          fetchImpl: fetchWithOrigin
+          authenticatedFetch: fetchWithAuth
         }),
         textPresenter: { presentText: () => undefined },
         audioPlayer: freshAudio
