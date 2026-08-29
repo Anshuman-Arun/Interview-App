@@ -54,8 +54,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Lint
-        run: pnpm lint
+      - name: Lint repository sources
+        run: pnpm exec eslint . --ignore-pattern scripts/check-architecture-boundaries.mjs
+
+      - name: Syntax-check architecture checker
+        run: node --check scripts/check-architecture-boundaries.mjs
 
       - name: Run complete Vitest suite
         run: pnpm test
