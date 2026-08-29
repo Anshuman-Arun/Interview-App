@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   BoardActionSchema,
   GenerationBasisSchema,
+  SessionSummaryResponseSchema,
   evidenceKeyToString,
   newGenerationId,
+  newRequestId,
   newTurnId,
   type BillingVerification,
   type DeliveryId,
@@ -12,9 +14,11 @@ import {
   type ProviderPolicy
 } from "../../packages/domain/src/index.js";
 import {
+  RendererStreamAttachRequestSchema,
   RendererStreamMessageSchema,
   type RendererAcknowledgementCommand
 } from "../../packages/delivery/src/index.js";
+import { replaySession } from "../../packages/events/src/index.js";
 import {
   createCommandEnvelope,
   isGenerationBasisStillCompatible
@@ -26,11 +30,15 @@ import {
 } from "../../packages/providers/src/index.js";
 import { sixPeopleProblem } from "../../packages/problems/src/index.js";
 import {
+  LocalInterviewTransportRuntime
+} from "../../apps/server/src/index.js";
+import {
   RendererClient,
   RendererPresentationNotExposedError,
   type AudioPlayer,
   type RendererAcknowledgementSender
 } from "../../apps/web/src/index.js";
+import { DeterministicScheduler } from "./deterministic-scheduler.js";
 import {
   ADVERSARIAL_SECRET,
   CALLBACK_LABELS,
@@ -622,6 +630,125 @@ describe("adversarial named regression schedules", () => {
     }
   });
 
+  it("racing command and renderer first use share one recovery and never replay POSSIBLY_EXPOSED", async () => {
+    const fixture = await AdversarialFixture.create();
+    const scheduler = new DeterministicScheduler();
+    let runtime: LocalInterviewTransportRuntime | undefined;
+    let streamAbort: AbortController | undefined;
+    let streamResponse: Response | undefined;
+
+    try {
+      const atom = await fixture.queueSyntheticDelivery();
+      await fixture.delivery.markStarted(atom.deliveryId);
+      expect(
+        fixture.writer.getState().deliveries[atom.deliveryId]?.status
+      ).toBe("DELIVERING");
+
+      await fixture.restart();
+
+      runtime = new LocalInterviewTransportRuntime({
+        security: recoverySecurity(),
+        registry: fixture.registry
+      });
+      const activeRuntime = runtime;
+      const bound = await activeRuntime.start();
+      streamAbort = new AbortController();
+      const activeAbort = streamAbort;
+
+      scheduler.schedule("transport.command-first-use", () =>
+        fetch(`${bound.command.url}/v1/commands`, {
+          method: "POST",
+          headers: recoveryHeaders(),
+          body: JSON.stringify({
+            protocolVersion: 1,
+            type: "GET_SESSION_SUMMARY",
+            requestId: newRequestId(),
+            sessionId: fixture.sessionId
+          })
+        })
+      );
+      scheduler.schedule("transport.renderer-first-use", () =>
+        fetch(bound.rendererStream.streamUrl, {
+          method: "POST",
+          headers: recoveryHeaders(),
+          body: JSON.stringify(RendererStreamAttachRequestSchema.parse({
+            protocolVersion: 1,
+            type: "ATTACH_RENDERER_STREAM",
+            sessionId: fixture.sessionId
+          })),
+          signal: activeAbort.signal
+        })
+      );
+      scheduler.schedule(
+        "transport.duplicate-recovery",
+        () => activeRuntime.sessions.ensureRecovered(fixture.sessionId)
+      );
+
+      scheduler.release("transport.command-first-use");
+      scheduler.release("transport.renderer-first-use");
+      scheduler.release("transport.duplicate-recovery");
+
+      const [summaryResponse, rendererResponse, duplicateRecovery] =
+        await Promise.all([
+          scheduler.settle<Response>("transport.command-first-use"),
+          scheduler.settle<Response>("transport.renderer-first-use"),
+          scheduler.settle<readonly DeliveryId[]>(
+            "transport.duplicate-recovery"
+          )
+        ]);
+      streamResponse = rendererResponse;
+
+      expect(summaryResponse.status).toBe(200);
+      expect(rendererResponse.status).toBe(200);
+      expect(duplicateRecovery).toContain(atom.deliveryId);
+
+      const summary = SessionSummaryResponseSchema.parse(
+        await summaryResponse.json()
+      );
+      expect(summary.deliveryStatuses[atom.deliveryId]).toBe(
+        "POSSIBLY_EXPOSED"
+      );
+
+      const recoveryEvents = fixture.store.load(fixture.sessionId).filter(
+        (event) => event.type === "DELIVERY_POSSIBLY_EXPOSED"
+      );
+      expect(recoveryEvents).toHaveLength(1);
+      expect(recoveryEvents[0]?.payload.deliveryId).toBe(atom.deliveryId);
+
+      expect(
+        await activeRuntime.rendererStreamServer.publishDelivery(
+          fixture.sessionId,
+          atom.deliveryId
+        )
+      ).toEqual({
+        outcome: "NOT_DELIVERABLE",
+        deliveryId: atom.deliveryId,
+        status: "POSSIBLY_EXPOSED"
+      });
+
+      const writer = activeRuntime.sessions.getWriter(fixture.sessionId);
+      expect(
+        replaySession(
+          fixture.sessionId,
+          fixture.store.load(fixture.sessionId)
+        )
+      ).toEqual(writer.getState());
+
+      await activeRuntime.sessions.ensureRecovered(fixture.sessionId);
+      expect(
+        fixture.store.load(fixture.sessionId).filter(
+          (event) => event.type === "DELIVERY_POSSIBLY_EXPOSED"
+        )
+      ).toHaveLength(1);
+    } finally {
+      streamAbort?.abort();
+      await streamResponse?.body?.cancel().catch(() => undefined);
+      if (runtime !== undefined) await runtime.stop();
+      await scheduler.cancelPendingAndDrain();
+      await fixture.close();
+    }
+  });
+
   it("conflicting RequestId reuse fails closed instead of silently acknowledging a different command", async () => {
     const fixture = await AdversarialFixture.create();
     try {
@@ -716,4 +843,24 @@ function expectPolicyFailure(
     throw new Error("Expected ProviderPolicyError");
   }
   expect(caught.code).toBe(expectedCode);
+}
+
+const RECOVERY_CLIENT_TOKEN =
+  "adversarial-shared-recovery-client-token-long-enough";
+const RECOVERY_CLIENT_ORIGIN = "http://127.0.0.1:5173";
+
+function recoverySecurity() {
+  return {
+    host: "127.0.0.1" as const,
+    allowedOrigins: new Set([RECOVERY_CLIENT_ORIGIN]),
+    clientToken: RECOVERY_CLIENT_TOKEN
+  };
+}
+
+function recoveryHeaders(): Record<string, string> {
+  return {
+    origin: RECOVERY_CLIENT_ORIGIN,
+    "content-type": "application/json",
+    "x-interview-client-token": RECOVERY_CLIENT_TOKEN
+  };
 }
