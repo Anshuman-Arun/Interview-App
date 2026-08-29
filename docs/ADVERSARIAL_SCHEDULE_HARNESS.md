@@ -258,7 +258,8 @@ Additional operation/regression assertions cover:
 14. secret-bearing malformed/error material not being persisted/reflected;
 15. UNKNOWN generation provenance producing no DeliveryAtom;
 16. whiteboard student-layer mutation rejected by runtime schema;
-17. conflicting RequestId reuse failing closed.
+17. stale queued delivery blocked after generation-basis invalidation;
+18. conflicting RequestId reuse failing closed.
 
 Counterexamples discovered by property testing should be minimized by fast-check and then promoted into this stable regression file.
 
@@ -382,13 +383,86 @@ Randomized state-machine testing provides reproducible empirical counterexamples
 
 ## Production defects discovered
 
-This section is updated only from reproducible executions of the harness. A defect entry must include:
+The final verification branch intentionally remains failing because it contains deterministic reproducers for genuine production defects. No production fix belongs on this verification-only branch.
 
-- affected frozen invariant;
-- fast-check seed/path or named deterministic regression;
-- minimized operation schedule;
-- observed events/state;
-- smallest likely production location;
-- whether the draft PR is green or intentionally failing.
+### ADV-001 — stale queued delivery can start after generation invalidation
 
-No production fix belongs on this verification-only branch.
+**Affected frozen invariant:** only output whose current GenerationBasis is `COMPATIBLE` may become deliverable; stale generation output must not progress toward exposure.
+
+**Discovered by randomized schedule:**
+
+```text
+suite: core
+seed: 20260829
+path: 6:1:2
+```
+
+Fast-check minimized the failing generated schedule to:
+
+```text
+RELEASE_PROVIDER_DUPLICATE
+BILLING_CURRENT
+BILLING_MISSING
+BOARD_REVISION
+BILLING_STALE
+PROVIDER_SWITCH
+START_QUEUED_DELIVERY
+RELEASE_VISION_PRIMARY
+```
+
+The irrelevant billing/vision/provider-switch operations can be removed manually. The stable named regression reduces the defect to:
+
+```text
+1. accept a COMPATIBLE provider proposal and queue its DeliveryAtom;
+2. commit a board revision;
+3. verify the originating GenerationBasis is now INCOMPATIBLE;
+4. call DeliveryCoordinator.markStarted(deliveryId).
+```
+
+**Observed production behavior:** `markStarted` succeeds, appends `DELIVERY_STARTED`, and moves the stale queued atom to `DELIVERING`.
+
+**Expected behavior:** the stale queued atom must not start. A revision-changing application transition should invalidate/cancel it, or the application orchestration boundary must reject start after a final compatibility check.
+
+**Smallest likely production location:** application-owned invalidation/orchestration around `TurnCoordinator.commitBoardPatch` / other basis-changing transitions and delivery-start authorization. `packages/delivery` itself must not gain an architecture-violating dependency on interview policy.
+
+This reproduces identically on Ubuntu and Windows.
+
+### ADV-002 — conflicting RequestId reuse returns a false duplicate success
+
+**Affected frozen invariant:** the same RequestId with the same command fingerprint is idempotent; conflicting RequestId reuse must fail closed.
+
+**Stable deterministic regression:**
+
+```text
+1. queue and start one DeliveryAtom;
+2. ACK_DELIVERY_EXPOSED using RequestId R;
+3. verify state is EXPOSED;
+4. ACK_DELIVERY_COMPLETED using the same RequestId R.
+```
+
+**Observed production behavior:** the second command resolves successfully with the previously persisted boolean result. No completion event is appended and authoritative delivery state remains `EXPOSED`.
+
+This means RequestId equality alone is currently treated as sufficient proof of duplicate-command identity.
+
+**Expected behavior:** the second use of `R` has a different command fingerprint and must be rejected as conflicting reuse.
+
+**Smallest likely production location:** the durable processed-request/idempotency boundary spanning `SessionWriter.execute` and `SqliteEventStore.processed_requests`, which currently persists RequestId/result but no command fingerprint/type identity.
+
+This reproduces identically on Ubuntu and Windows.
+
+### Verification status with known defects
+
+On CI run `33276173458`:
+
+- architecture boundary checker passed on Ubuntu and Windows;
+- typecheck passed on Ubuntu and Windows;
+- lint passed on Ubuntu and Windows;
+- callback-admission property passed;
+- delivery property passed;
+- restart/replay property passed;
+- the core property failed only on ADV-001;
+- the named regression package failed only on ADV-002 before ADV-001 was promoted into its own named regression;
+- all non-adversarial test files passed;
+- synthetic demo was not executed by the sequential CI workflow because Vitest intentionally failed first.
+
+The branch is therefore intentionally red until production fixes the frozen invariants above.
