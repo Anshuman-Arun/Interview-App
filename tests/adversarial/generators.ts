@@ -1,6 +1,8 @@
 import fc from "fast-check";
 
 export const DEFAULT_ADVERSARIAL_SEED = 20260829;
+const VALIDATION_STRESS_RUNS = 100;
+const VALIDATION_STRESS_BASE_SEED = 314159;
 
 export type CoreScheduleOperation =
   | "RELEASE_PROVIDER_PRIMARY"
@@ -160,9 +162,11 @@ export function propertyParameters(
   readonly path?: string;
   readonly verbose: 2;
 } {
-  const numRuns = positiveIntegerFromEnvironment("ADVERSARIAL_RUNS") ?? defaultRuns;
+  const numRuns = VALIDATION_STRESS_RUNS;
   const configuredSeed = integerFromEnvironment("ADVERSARIAL_SEED");
-  const seed = configuredSeed ?? DEFAULT_ADVERSARIAL_SEED + seedOffset;
+  const seed = configuredSeed
+    ?? VALIDATION_STRESS_BASE_SEED + seedOffset;
+  void defaultRuns;
   const selectedSuite = process.env.ADVERSARIAL_SUITE;
   const configuredPath = process.env.ADVERSARIAL_PATH?.trim();
   const path = selectedSuite === suite && configuredPath !== undefined && configuredPath.length > 0
