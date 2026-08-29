@@ -331,6 +331,10 @@ export class AdversarialFixture {
         sessionId: this.sessionId,
         producer: "adversarial-delivery-fixture"
       }),
+      {
+        operation: "QUEUE_ADVERSARIAL_DELIVERY",
+        payload: { deliveryId: atom.deliveryId }
+      },
       z.object({ queued: z.literal(true) }).strict(),
       () => ({
         drafts: [{
