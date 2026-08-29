@@ -521,6 +521,13 @@ describe("adversarial named regression schedules", () => {
           sessionId: fixture.sessionId,
           producer: "unknown-generation-fixture"
         }),
+        {
+          operation: "START_UNKNOWN_GENERATION_FIXTURE",
+          payload: {
+            generationId,
+            turnId: missingTurnId
+          }
+        },
         z.object({ started: z.literal(true) }).strict(),
         () => ({
           drafts: [{
