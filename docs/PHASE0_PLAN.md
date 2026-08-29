@@ -256,7 +256,7 @@ Implemented after the asynchronous inbox slice:
 - stable DeliveryId reconnect behavior and renderer-side visible-output deduplication tests.
 - first-use crash recovery that marks persisted in-flight deliveries `POSSIBLY_EXPOSED` before a restarted server handles reconnect.
 
-Still pending in Phase 0: a real renderer/audio acknowledgement integration, richer evidence supersession/aggregation, server-to-client streaming transport, additional local-compute and verification operations, and provider-specific adapter experiments.
+Still pending in Phase 0: a real renderer/audio acknowledgement integration, dimension-specific evidence aggregation, server-to-client streaming transport, additional local-compute and verification operations, and provider-specific adapter experiments.
 
 ## Continuation progress — local-compute worker boundary
 
@@ -309,3 +309,17 @@ Implemented after the isolated Oxford verifier:
 - fail-closed handling for stale work, verifier switching, tampering, exceptions, invalid output, malformed callbacks, duplicates, and restart.
 
 Natural-language-to-formal interpretation remains outside this deterministic slice. Any later model-produced interpretation must enter as a proposal with explicit confidence and may not bypass the same admission path.
+
+## Continuation progress — scoped evidence supersession
+
+Implemented after verification admission:
+
+- per-`EvidenceKey` immutable history records with `ACTIVE`, `SUPERSEDED`, and `STALE` status;
+- explicit prior evidence-event identity required whenever a new update supersedes an active value;
+- latest-active `studentEvidence` projection retained for policy consumption without becoming the historical authority;
+- conservative invalidation of active evidence after transcript self-correction;
+- fresh evidence may follow stale history without erasing or reviving the earlier record;
+- both model-proposed and deterministically verified evidence use the same supersession contract;
+- reducer conflict tests and randomized update/correction schedules continuously assert at most one active value and replay identity.
+
+Dimension-specific aggregation, decay, and contradiction policy remain Phase 2 work. Phase 0 records history and fails safely rather than inventing a universal aggregation score.

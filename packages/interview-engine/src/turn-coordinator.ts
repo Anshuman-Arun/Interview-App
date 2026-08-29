@@ -255,8 +255,17 @@ export class TurnCoordinator {
         evidenceEventIds: proposal.evidenceEventIds,
         lastUpdatedSequence: state.sequence + 2
       });
+      const activeEvidence = state.evidenceHistory[key]?.find((record) => record.status === "ACTIVE");
       return {
-        drafts: [proposedDraft, { source: "APPLICATION", type: "STUDENT_EVIDENCE_UPDATED", payload: { key: EvidenceKeySchema.parse(proposal.key), value } }],
+        drafts: [proposedDraft, {
+          source: "APPLICATION",
+          type: "STUDENT_EVIDENCE_UPDATED",
+          payload: {
+            key: EvidenceKeySchema.parse(proposal.key),
+            value,
+            ...(activeEvidence === undefined ? {} : { supersedesEventId: activeEvidence.evidenceEventId })
+          }
+        }],
         result: { committed: true, key }
       };
     });
@@ -374,14 +383,27 @@ export class TurnCoordinator {
 
   public async correctTranscript(correctedText: string): Promise<void> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "transcript-correction" });
-    await this.writer.execute(envelope, CorrectedResultSchema, (state) => ({
-      drafts: [{ source: "APPLICATION", type: "TRANSCRIPT_CORRECTED", payload: {
-        transcriptRevision: TranscriptRevisionSchema.parse(state.transcriptRevision + 1),
-        contextEpoch: ContextEpochSchema.parse(state.contextEpoch + 1),
-        correctedText
-      } }],
-      result: { corrected: true }
-    }));
+    await this.writer.execute(envelope, CorrectedResultSchema, (state) => {
+      const invalidations: EventDraft[] = Object.values(state.evidenceHistory)
+        .flatMap((records) => records.filter((record) => record.status === "ACTIVE"))
+        .map((record): EventDraft => ({
+          source: "APPLICATION",
+          type: "STUDENT_EVIDENCE_INVALIDATED",
+          payload: {
+            key: record.key,
+            invalidatesEventId: record.evidenceEventId,
+            reason: "Transcript correction made the supporting interpretation stale"
+          }
+        }));
+      return {
+        drafts: [{ source: "APPLICATION", type: "TRANSCRIPT_CORRECTED", payload: {
+          transcriptRevision: TranscriptRevisionSchema.parse(state.transcriptRevision + 1),
+          contextEpoch: ContextEpochSchema.parse(state.contextEpoch + 1),
+          correctedText
+        } }, ...invalidations],
+        result: { corrected: true }
+      };
+    });
   }
 }
 

@@ -95,7 +95,16 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     reason: z.string().min(1)
   }).strict()),
   event("EVIDENCE_PROPOSED", z.object({ proposal: EvidenceProposalSchema }).strict()),
-  event("STUDENT_EVIDENCE_UPDATED", z.object({ key: EvidenceKeySchema, value: EvidenceValueSchema }).strict()),
+  event("STUDENT_EVIDENCE_UPDATED", z.object({
+    key: EvidenceKeySchema,
+    value: EvidenceValueSchema,
+    supersedesEventId: EventIdSchema.optional()
+  }).strict()),
+  event("STUDENT_EVIDENCE_INVALIDATED", z.object({
+    key: EvidenceKeySchema,
+    invalidatesEventId: EventIdSchema,
+    reason: z.string().min(1)
+  }).strict()),
   event("PEDAGOGICAL_ACTION_SELECTED", z.object({ turnId: TurnIdSchema, request: RealizationRequestSchema }).strict()),
   event("MODEL_GENERATION_STARTED", z.object({ generationId: GenerationIdSchema, basis: GenerationBasisSchema, provider: z.string().min(1) }).strict()),
   event("MODEL_PROPOSAL_RECEIVED", z.object({ generationId: GenerationIdSchema, proposal: InterviewerProposalSchema }).strict()),

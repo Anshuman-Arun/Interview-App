@@ -81,6 +81,14 @@ export interface VerificationRequestState {
   readonly result?: VerificationResult;
   readonly discardReason?: string;
 }
+export interface EvidenceRecordState {
+  readonly evidenceEventId: EventId;
+  readonly key: EvidenceKey;
+  readonly value: EvidenceValue;
+  readonly status: "ACTIVE" | "SUPERSEDED" | "STALE";
+  readonly supersededByEventId?: EventId;
+  readonly invalidationReason?: string;
+}
 export interface GenerationState {
   readonly generationId: GenerationId;
   readonly basis: GenerationBasis;
@@ -112,6 +120,7 @@ export interface SessionState {
   readonly verificationRequests: Readonly<Record<string, VerificationRequestState>>;
   readonly evidenceProposals: readonly EvidenceProposal[];
   readonly studentEvidence: Readonly<Record<string, EvidenceValue>>;
+  readonly evidenceHistory: Readonly<Record<string, readonly EvidenceRecordState[]>>;
 }
 
 export const initialSessionState = (sessionId: SessionId): SessionState => ({
@@ -135,5 +144,6 @@ export const initialSessionState = (sessionId: SessionId): SessionState => ({
   localComputeRequests: {},
   verificationRequests: {},
   evidenceProposals: [],
-  studentEvidence: {}
+  studentEvidence: {},
+  evidenceHistory: {}
 });

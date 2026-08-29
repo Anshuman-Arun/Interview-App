@@ -22,6 +22,7 @@ export const EvidenceRatingSchema = z.enum([
   "JUSTIFIED", "INCOMPLETE", "UNJUSTIFIED", "NOT_APPLICABLE",
   "CONFIDENT", "UNCERTAIN"
 ]);
+export type EvidenceRating = z.infer<typeof EvidenceRatingSchema>;
 export const EvidenceValueSchema = z.object({
   value: EvidenceRatingSchema,
   inferenceConfidence: z.number().min(0).max(1),

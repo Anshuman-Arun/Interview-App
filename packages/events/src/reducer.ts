@@ -195,10 +195,57 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "EVIDENCE_PROPOSED":
       next = { ...state, evidenceProposals: [...state.evidenceProposals, event.payload.proposal] };
       break;
-    case "STUDENT_EVIDENCE_UPDATED":
+    case "STUDENT_EVIDENCE_UPDATED": {
       if (event.payload.value.lastUpdatedSequence !== event.sequence) throw new Error("Evidence lastUpdatedSequence must equal its authoritative event sequence");
-      next = { ...state, studentEvidence: { ...state.studentEvidence, [evidenceKeyToString(event.payload.key)]: event.payload.value } };
+      const key = evidenceKeyToString(event.payload.key);
+      const history = state.evidenceHistory[key] ?? [];
+      const activeRecords = history.filter((record) => record.status === "ACTIVE");
+      if (activeRecords.length > 1) throw new Error("Evidence history contains multiple active records");
+      const active = activeRecords[0];
+      if (active === undefined && event.payload.supersedesEventId !== undefined) throw new Error("Evidence update cannot supersede a missing active record");
+      if (active !== undefined && event.payload.supersedesEventId !== active.evidenceEventId) throw new Error("Evidence update must explicitly supersede the active record");
+      const superseded = history.map((record) => record.status === "ACTIVE"
+        ? { ...record, status: "SUPERSEDED" as const, supersededByEventId: event.eventId }
+        : record);
+      next = {
+        ...state,
+        studentEvidence: { ...state.studentEvidence, [key]: event.payload.value },
+        evidenceHistory: {
+          ...state.evidenceHistory,
+          [key]: [...superseded, {
+            evidenceEventId: event.eventId,
+            key: event.payload.key,
+            value: event.payload.value,
+            status: "ACTIVE"
+          }]
+        }
+      };
       break;
+    }
+    case "STUDENT_EVIDENCE_INVALIDATED": {
+      const key = evidenceKeyToString(event.payload.key);
+      const history = state.evidenceHistory[key] ?? [];
+      const activeRecords = history.filter((record) => record.status === "ACTIVE");
+      if (activeRecords.length > 1) throw new Error("Evidence history contains multiple active records");
+      const active = activeRecords[0];
+      if (active === undefined || active.evidenceEventId !== event.payload.invalidatesEventId) {
+        throw new Error("Evidence invalidation must identify the active record");
+      }
+      const remainingEvidence = Object.fromEntries(
+        Object.entries(state.studentEvidence).filter(([candidateKey]) => candidateKey !== key)
+      );
+      next = {
+        ...state,
+        studentEvidence: remainingEvidence,
+        evidenceHistory: {
+          ...state.evidenceHistory,
+          [key]: history.map((record) => record.evidenceEventId === event.payload.invalidatesEventId
+            ? { ...record, status: "STALE", invalidationReason: event.payload.reason }
+            : record)
+        }
+      };
+      break;
+    }
     case "PEDAGOGICAL_ACTION_SELECTED":
       next = { ...state, pedagogicalActions: { ...state.pedagogicalActions, [event.payload.turnId]: event.payload.request } };
       break;

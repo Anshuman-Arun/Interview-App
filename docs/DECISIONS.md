@@ -209,3 +209,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: trust schema-valid callbacks; invoke the verifier and append its output without a separate request lifecycle; treat verifier output as an EvidenceProposal.
 - Consequences: `VERIFIED`, `CONTRADICTED`, and `UNRESOLVED` are replayable statuses with provenance. Only `VERIFIED` atomically commits scoped claim-correctness evidence; contradiction and abstention remain recorded without inferring a student rating whose semantics may be ambiguous.
 - Reversible: verifier registration and evidence policy are reversible; application-owned admission, provenance, and abstention are not.
+
+## D027 — Evidence keeps scoped history with explicit supersession and conservative correction staleness
+
+- Decision: retain every accepted value as an `EvidenceRecordState`; require a new update to identify the currently active evidence event it supersedes; mark active evidence stale and remove it from the latest-active projection after transcript correction.
+- Reason: silently overwriting `studentEvidence[key]` discarded provenance and could leave policy acting on an inference whose supporting student statement had been corrected. The frozen architecture explicitly requires evidence to become stale or be superseded.
+- Alternatives considered: overwrite latest values only; invalidate evidence only when a model proposes a contradiction; implement confidence decay and dimension-specific aggregation immediately.
+- Consequences: replay reconstructs the complete scoped history and at most one active value per key. Transcript correction currently invalidates all active evidence conservatively because Phase 0 lacks fine-grained transcript dependency tracking.
+- Reversible: invalidation granularity and later aggregation policy are reversible; retained provenance and explicit supersession are not.

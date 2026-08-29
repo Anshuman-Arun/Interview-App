@@ -7,6 +7,7 @@ import {
   GenerationBasisSchema,
   RequestIdSchema,
   VerificationResultSchema,
+  evidenceKeyToString,
   newRequestId,
   type CommandEnvelope,
   type DeterministicVerifier,
@@ -197,6 +198,8 @@ export class VerificationCoordinator {
       const evidenceCommitted = recomputed.result.status === "VERIFIED";
       if (evidenceCommitted) {
         const evidenceEventIds = Array.from(new Set([...request.evidenceEventIds, request.requestedEventId]));
+        const evidenceKey = evidenceKeyToString(request.evidenceKey);
+        const activeEvidence = state.evidenceHistory[evidenceKey]?.find((record) => record.status === "ACTIVE");
         drafts.push({
           source: "APPLICATION",
           type: "STUDENT_EVIDENCE_UPDATED",
@@ -207,7 +210,8 @@ export class VerificationCoordinator {
               inferenceConfidence: recomputed.result.interpretationConfidence,
               evidenceEventIds,
               lastUpdatedSequence: state.sequence + 2
-            })
+            }),
+            ...(activeEvidence === undefined ? {} : { supersedesEventId: activeEvidence.evidenceEventId })
           }
         });
       }
