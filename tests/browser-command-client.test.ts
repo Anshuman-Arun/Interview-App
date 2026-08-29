@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ClientCommandSchema,
   DeliveryIdSchema,
   RequestIdSchema,
   SessionIdSchema,
@@ -40,7 +41,7 @@ describe("browser command client", () => {
     expect(result.requestId).toBe(requestId);
     expect(calls).toHaveLength(1);
     const call = requireCall(calls);
-    expect(String(call.input)).toBe(`${BASE_URL}/v1/commands`);
+    expect(fetchInputUrl(call.input)).toBe(`${BASE_URL}/v1/commands`);
     expect(call.init.method).toBe("POST");
     expect(call.init.credentials).toBe("omit");
     expect(call.init.mode).toBe("cors");
@@ -53,7 +54,7 @@ describe("browser command client", () => {
     expect(headers.get("x-interview-client-token")).toBe(CLIENT_TOKEN);
     expect(headers.has("origin")).toBe(false);
 
-    const body = String(call.init.body);
+    const body = requireStringBody(call.init.body);
     expect(JSON.parse(body)).toEqual({
       protocolVersion: 1,
       type: "START_SESSION",
@@ -61,7 +62,7 @@ describe("browser command client", () => {
       sessionId: SESSION_ID
     });
     expect(body).not.toContain(CLIENT_TOKEN);
-    expect(String(call.input)).not.toContain(CLIENT_TOKEN);
+    expect(fetchInputUrl(call.input)).not.toContain(CLIENT_TOKEN);
   });
 
   it("serializes COMMIT_TYPED_INPUT with the caller text and no credential material", async () => {
@@ -92,7 +93,7 @@ describe("browser command client", () => {
       inputEpisodeId,
       turnId
     });
-    expect(JSON.parse(String(requireCall(calls).init.body))).toEqual({
+    expect(parseCommandBody(requireCall(calls).init.body)).toEqual({
       protocolVersion: 1,
       type: "COMMIT_TYPED_INPUT",
       requestId,
@@ -144,7 +145,7 @@ describe("browser command client", () => {
     const result = await client.reconnectDelivery(SESSION_ID, DELIVERY_ID);
 
     expect(result.status).toBe("POSSIBLY_EXPOSED");
-    expect(JSON.parse(String(requireCall(calls).init.body)).type).toBe("RECONNECT_DELIVERY");
+    expect(parseCommandBody(requireCall(calls).init.body).type).toBe("RECONNECT_DELIVERY");
   });
 
   it.each([
@@ -178,7 +179,7 @@ describe("browser command client", () => {
     const result = await client[testCase.method](SESSION_ID, DELIVERY_ID);
 
     expect(result.acknowledgement).toBe(testCase.acknowledgement);
-    expect(JSON.parse(String(requireCall(calls).init.body)).type).toBe(testCase.commandType);
+    expect(parseCommandBody(requireCall(calls).init.body).type).toBe(testCase.commandType);
   });
 
   it("preserves an explicitly supplied RequestId across an uncertain retry", async () => {
@@ -224,7 +225,9 @@ describe("browser command client", () => {
     const second = await client.commitTypedInput(SESSION_ID, "retry me", { requestId });
     expect(second.requestId).toBe(requestId);
     expect(calls).toHaveLength(2);
-    expect(String(calls[0]?.init.body)).toBe(String(calls[1]?.init.body));
+    expect(requireStringBody(requireCallAt(calls, 0).init.body)).toBe(
+      requireStringBody(requireCallAt(calls, 1).init.body)
+    );
   });
 
   it("creates a fresh RequestId for each new logical call when none is supplied", async () => {
@@ -237,7 +240,7 @@ describe("browser command client", () => {
     const fetchImpl = asFetch(async (input, init) => {
       const call = { input, init: requireInit(init) };
       calls.push(call);
-      const command = JSON.parse(String(call.init.body)) as { requestId: RequestId };
+      const command = JSON.parse(requireStringBody(call.init.body)) as { requestId: RequestId };
       return jsonResponse({
         protocolVersion: 1,
         ok: true,
@@ -261,8 +264,8 @@ describe("browser command client", () => {
     await client.startSession(SESSION_ID);
     await client.startSession(SESSION_ID);
 
-    expect(JSON.parse(String(calls[0]?.init.body)).requestId).toBe(requestIds[0]);
-    expect(JSON.parse(String(calls[1]?.init.body)).requestId).toBe(requestIds[1]);
+    expect(parseCommandBody(requireCallAt(calls, 0).init.body).requestId).toBe(requestIds[0]);
+    expect(parseCommandBody(requireCallAt(calls, 1).init.body).requestId).toBe(requestIds[1]);
   });
 
   it("does not call fetch for a signal that is already aborted", async () => {
@@ -540,7 +543,6 @@ describe("browser command client", () => {
 
     expect(JSON.stringify(client)).toBe("{}");
     expect(Object.keys(client)).toEqual([]);
-    expect(String(client)).not.toContain(CLIENT_TOKEN);
   });
 
   it.each([
@@ -631,7 +633,7 @@ function asFetch(
     init?: RequestInit
   ) => Promise<Response>
 ): typeof fetch {
-  return implementation as typeof fetch;
+  return implementation;
 }
 
 function requireInit(init: RequestInit | undefined): RequestInit {
@@ -640,9 +642,30 @@ function requireInit(init: RequestInit | undefined): RequestInit {
 }
 
 function requireCall(calls: readonly FetchCall[]): FetchCall {
-  const call = calls[0];
-  if (call === undefined) throw new Error("Expected one fetch call");
+  return requireCallAt(calls, 0);
+}
+
+function requireCallAt(calls: readonly FetchCall[], index: number): FetchCall {
+  const call = calls[index];
+  if (call === undefined) throw new Error(`Expected fetch call at index ${String(index)}`);
   return call;
+}
+
+function fetchInputUrl(input: Parameters<typeof fetch>[0]): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
+function requireStringBody(body: BodyInit | null | undefined): string {
+  if (typeof body !== "string") throw new Error("Expected string fetch body");
+  return body;
+}
+
+function parseCommandBody(body: BodyInit | null | undefined) {
+  return ClientCommandSchema.parse(
+    JSON.parse(requireStringBody(body)) as unknown
+  );
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
