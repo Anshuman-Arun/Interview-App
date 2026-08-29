@@ -251,7 +251,7 @@ export class BrowserCommandClient {
     parseSuccess: (value: unknown) => TResult,
     signal: AbortSignal | undefined
   ): Promise<TResult> {
-    if (signal?.aborted === true) {
+    if (isSignalAborted(signal)) {
       throw new BrowserCommandTransportError("ABORTED", command.requestId);
     }
 
@@ -275,7 +275,7 @@ export class BrowserCommandClient {
       response = await this.#fetchImpl(this.#commandUrl, init);
     } catch {
       throw new BrowserCommandTransportError(
-        signal?.aborted === true ? "ABORTED" : "NETWORK",
+        isSignalAborted(signal) ? "ABORTED" : "NETWORK",
         command.requestId
       );
     }
@@ -384,6 +384,10 @@ function normalizeLoopbackBaseUrl(input: string): string {
   }
 
   return parsed.origin;
+}
+
+function isSignalAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted ?? false;
 }
 
 function defaultRequestIdFactory(): RequestId {
