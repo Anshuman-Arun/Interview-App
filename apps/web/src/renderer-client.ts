@@ -7,7 +7,8 @@ import {
   RendererAcknowledgementCommandSchema,
   RendererStreamMessageSchema,
   RendererStreamSessionIdSchema,
-  type RendererAcknowledgementCommand
+  type RendererAcknowledgementCommand,
+  type RendererStreamMessage
 } from "../../../packages/delivery/src/index.js";
 
 export interface RendererAcknowledgementSender {
@@ -299,13 +300,10 @@ export class HtmlAudioPlayer implements AudioPlayer {
 }
 
 function defaultRequestIdFactory(): string {
-  if (typeof globalThis.crypto?.randomUUID !== "function") {
-    throw new Error("Secure random UUID generation is unavailable");
-  }
   return `request_${globalThis.crypto.randomUUID()}`;
 }
 
-function contentFingerprint(content: RendererStreamMessageSchema["_output"]["command"]["content"]): string {
+function contentFingerprint(content: RendererStreamMessage["command"]["content"]): string {
   switch (content.medium) {
     case "TEXT":
       return `TEXT\u0000${content.text}`;

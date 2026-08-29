@@ -37,16 +37,18 @@ export async function consumeAuthenticatedRendererStream(
     sessionId: options.sessionId
   });
 
-  const response = await fetchImpl(options.streamUrl, {
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       accept: "text/event-stream",
       "content-type": "application/json",
       "x-interview-client-token": options.clientToken
     },
-    body: JSON.stringify(attach),
-    signal: options.signal
-  });
+    body: JSON.stringify(attach)
+  };
+  if (options.signal !== undefined) requestInit.signal = options.signal;
+
+  const response = await fetchImpl(options.streamUrl, requestInit);
 
   if (!response.ok) throw new Error("Renderer stream connection failed");
   const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
@@ -105,7 +107,7 @@ export function createLoopbackAcknowledgementSender(
       });
 
       if (!response.ok) throw new Error("Renderer acknowledgement was not accepted");
-      const parsed = DeliveryAcknowledgedResponseSchema.parse(await response.json());
+      const parsed = DeliveryAcknowledgedResponseSchema.parse(await response.json() as unknown);
       const expectedAcknowledgement = command.type === "ACK_DELIVERY_EXPOSED" ? "EXPOSED" : "COMPLETED";
       if (
         parsed.requestId !== command.requestId
