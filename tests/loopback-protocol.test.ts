@@ -65,6 +65,34 @@ describe("authenticated loopback command protocol", () => {
     expect(store.eventCount(sessionId)).toBe(0);
   });
 
+  it("supports exact-Origin browser preflight and emits no wildcard credential policy", async () => {
+    const preflight = await fetch(`${address.url}/v1/commands`, {
+      method: "OPTIONS",
+      headers: {
+        origin: CLIENT_ORIGIN,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type, x-interview-client-token"
+      }
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe(CLIENT_ORIGIN);
+    expect(preflight.headers.get("access-control-allow-origin")).not.toBe("*");
+    expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(preflight.headers.get("access-control-allow-headers")).toContain("x-interview-client-token");
+
+    const forbidden = await fetch(`${address.url}/v1/commands`, {
+      method: "OPTIONS",
+      headers: { origin: "http://attacker.invalid" }
+    });
+    expect(forbidden.status).toBe(403);
+    expect(forbidden.headers.get("access-control-allow-origin")).toBeNull();
+
+    const command = await postCommand(address, startCommand(newSessionId()));
+    expect(command.status).toBe(200);
+    expect(command.headers.get("access-control-allow-origin")).toBe(CLIENT_ORIGIN);
+    expect(command.headers.get("vary")).toContain("Origin");
+  });
+
   it("rejects malformed or non-JSON protocol commands without returning validation internals", async () => {
     const malformedJson = await postRaw(address, "{not-json", "application/json");
     expect(malformedJson.status).toBe(400);

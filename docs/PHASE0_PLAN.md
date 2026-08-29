@@ -256,7 +256,7 @@ Implemented after the asynchronous inbox slice:
 - stable DeliveryId reconnect behavior and renderer-side visible-output deduplication tests.
 - first-use crash recovery that marks persisted in-flight deliveries `POSSIBLY_EXPOSED` before a restarted server handles reconnect.
 
-Still pending in Phase 0: a real renderer/audio acknowledgement integration, dimension-specific evidence aggregation, server-to-client streaming transport, additional local-compute and verification operations, and provider-specific adapter experiments.
+Still pending in Phase 0: dimension-specific evidence aggregation, production audio generation, additional local-compute and verification operations, and provider-specific adapter experiments. The thin authenticated renderer stream and deterministic audio callback harness are implemented; polished UI and a full voice stack remain deferred.
 
 ## Continuation progress — local-compute worker boundary
 
@@ -323,3 +323,19 @@ Implemented after verification admission:
 - reducer conflict tests and randomized update/correction schedules continuously assert at most one active value and replay identity.
 
 Dimension-specific aggregation, decay, and contradiction policy remain Phase 2 work. Phase 0 records history and fails safely rather than inventing a universal aggregation score.
+
+## Continuation progress — authenticated renderer stream
+
+Implemented in parallel and integrated after scoped evidence history:
+
+- strict protocol-v1 delivery stream schemas over authenticated loopback SSE;
+- bounded connections, attachment bodies, stream messages, and renderer DeliveryId cache;
+- one stable DeliveryId abstraction for TEXT, AUDIO, and contract-only WHITEBOARD;
+- TEXT exposure only after visible insertion and AUDIO exposure only on the playback `playing` callback;
+- separate idempotent exposed/completed acknowledgements through the existing command server;
+- exact-Origin CORS preflight and response headers without weakening POST token authentication;
+- reconnect deduplication, same-ID acknowledgement retry, and conservative POSSIBLY_EXPOSED restart recovery;
+- explicit distinction between a presenter-proven pre-exposure failure, which permits safe retry, and an ambiguous failure, which suppresses duplicate presentation;
+- real loopback, deterministic fake-audio, crash, malformed-input, cache-bound, secret-exclusion, and no-replay tests.
+
+No TTS, audio-frame persistence, polished frontend, production whiteboard surface, or exactly-once network claim is introduced.

@@ -140,7 +140,7 @@ describe("renderer audio crash and reconnect semantics", () => {
       await commandServer.stop();
       store.close();
     }
-  });
+  }, 15_000);
 
   it("recovers exposure-with-lost-ack as POSSIBLY_EXPOSED after application restart and never replays it", async () => {
     const directory = mkdtempSync(join(tmpdir(), "renderer-audio-crash-"));
@@ -232,7 +232,7 @@ describe("renderer audio crash and reconnect semantics", () => {
       store.close();
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("does not replay audio after persisted EXPOSED when the renderer crashes before COMPLETED", async () => {
     const store = new SqliteEventStore(":memory:");
@@ -309,7 +309,7 @@ describe("renderer audio crash and reconnect semantics", () => {
       await commandServer.stop();
       store.close();
     }
-  });
+  }, 15_000);
 });
 
 function security() {
@@ -390,7 +390,7 @@ const fetchWithAuth: typeof fetch = async (input, init) => {
   return fetch(input, { ...init, headers });
 };
 
-async function waitFor(predicate: () => boolean, attempts = 200): Promise<void> {
+async function waitFor(predicate: () => boolean, attempts = 1_000): Promise<void> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (predicate()) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 5));

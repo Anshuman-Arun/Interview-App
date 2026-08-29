@@ -6,9 +6,9 @@ This slice is a narrow architecture harness for application-owned delivery trans
 
 Its purpose is to prove that TEXT and AUDIO traverse one stable DeliveryAtom / DeliveryId lifecycle:
 
-[
-	ext{QUEUED} ightarrow 	ext{DELIVERING} ightarrow 	ext{EXPOSED} ightarrow 	ext{COMPLETED}
-]
+```text
+QUEUED -> DELIVERING -> EXPOSED -> COMPLETED
+```
 
 with conservative recovery to `POSSIBLY_EXPOSED` when a persisted in-flight delivery is recovered after application restart.
 
@@ -31,8 +31,10 @@ Added:
 Changed:
 
 - `packages/delivery/src/index.ts` only to export the new transport protocol.
+- `apps/server/src/loopback-command-server.ts` during integration to add exact-Origin CORS preflight and permitted response headers.
+- `tests/loopback-protocol.test.ts` during integration to verify the browser acknowledgement CORS boundary.
 
-No dependency, package-manager, event-schema, reducer, persistence, provider, verifier, architecture-checker, or CI files are changed.
+No dependency, package-manager, event-schema, reducer, persistence, provider, verifier, architecture-checker, or CI files are changed by the renderer slice.
 
 ## Authority boundary
 
@@ -240,35 +242,17 @@ This is stable identity plus idempotent presentation/acknowledgement. It is not 
 
 ## Tests
 
-`tests/renderer-client-deduplication.test.ts` covers renderer-local receipt/exposure/completion separation, TEXT deduplication, AUDIO no-restart behavior, content mismatch fail-closed behavior, cache bounds, malformed/oversized inbound stream handling, and strict schemas.
+`tests/renderer-client-deduplication.test.ts` covers renderer-local receipt/exposure/completion separation, TEXT deduplication, AUDIO no-restart behavior, safe retry after presenter-proven non-exposure, conservative suppression after ambiguous presenter failure, content mismatch fail-closed behavior, cache bounds, malformed/oversized inbound stream handling, and strict schemas.
 
 `tests/renderer-stream-transport.test.ts` covers authenticated attachment, exact Origin/token rejection, bounds, TEXT/AUDIO use of the same transport abstraction, no-client QUEUED behavior, durable/idempotent acknowledgement routing through the existing command server, and secret exclusion.
 
 `tests/renderer-audio-crash.test.ts` covers deterministic audio start/completion callbacks, same-ID reconnect before exposure, lost exposure acknowledgement followed by application restart, POSSIBLY_EXPOSED recovery/no-replay, and persisted EXPOSED/no-replay after renderer crash.
 
-## Known limitations and requested changes outside this branch
+## Known limitations
 
-### 1. Existing command endpoint needs browser CORS integration
+The existing command endpoint now implements exact-Origin CORS preflight and response headers for authenticated browser acknowledgements. The authentication token remains mandatory on POST and excluded from URLs, bodies, domain envelopes, events, results, and errors.
 
-The new stream endpoint implements exact-Origin CORS preflight for its custom authentication header.
-
-The existing `apps/server/src/loopback-command-server.ts` does not currently handle browser OPTIONS preflight or emit `Access-Control-Allow-Origin`. A browser page served from a separate development origin such as `http://127.0.0.1:5173` therefore cannot use the custom-token acknowledgement POST path directly even though the command path's authentication and semantics are correct.
-
-That file is outside this task's exclusive write scope, so it was not changed.
-
-Minimal requested integration change:
-
-- add OPTIONS handling for `/v1/commands`;
-- accept only an exact configured Origin;
-- allow only POST plus `content-type` and `x-interview-client-token`;
-- emit exact `Access-Control-Allow-Origin` on permitted command responses;
-- keep credential authentication mandatory on POST and keep credential values out of command bodies/domain envelopes/errors.
-
-An equally valid later composition is to serve/reverse-proxy the renderer and command endpoint under one same-origin local application boundary.
-
-Until one of those changes is made, the browser-facing classes are an architecture harness and Node integration tests, not a claim of complete cross-origin browser E2E operation.
-
-### 2. Session recovery ownership is duplicated between the two server adapters
+### 1. Session recovery ownership is duplicated between the two server adapters
 
 The existing command server owns a per-instance “first authenticated use” recovery guard. The new stream server must independently perform the same recovery before stream attachment because no shared public recovery coordinator exists.
 
@@ -276,7 +260,7 @@ Normal flow is safe when the command runtime is used to create/read the session 
 
 A future cleanup should expose one application-owned session-recovery coordinator that both adapters call. Implementing that cleanly would require edits to existing server/interview-engine ownership outside this branch's allowed scope. No such change is made here.
 
-### 3. No durable renderer cache
+### 2. No durable renderer cache
 
 The renderer's processed-DeliveryId cache is intentionally bounded and in memory. It is not authoritative and contains no authentication secret.
 
@@ -284,10 +268,10 @@ Same-runtime reconnect can therefore deduplicate reissued DeliveryIds while that
 
 A later browser lifecycle design may choose a carefully scoped local idempotency cache, but this slice does not add browser persistence.
 
-### 4. No real audio generation
+### 3. No real audio generation
 
 AUDIO transports an existing local `audioRef`. This slice does not synthesize speech, stream audio frames, or persist transient audio chunks.
 
-### 5. No exactly-once network guarantee
+### 4. No exactly-once network guarantee
 
 SSE/fetch writes can fail or disconnect after durable start. The architecture deliberately relies on stable DeliveryId identity, renderer deduplication, idempotent acknowledgements, and conservative recovery rather than claiming exactly-once network or physical delivery.

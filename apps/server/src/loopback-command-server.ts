@@ -93,8 +93,14 @@ export class LoopbackCommandServer {
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const origin = headerValue(request, "origin");
     try {
-      this.authorize(request);
+      if (request.method === "OPTIONS" && request.url === "/v1/commands") {
+        this.authorizeOrigin(origin);
+        sendPreflight(response, origin);
+        return;
+      }
+      this.authorize(request, origin);
       if (request.method !== "POST" || request.url !== "/v1/commands") {
         throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
       }
@@ -104,26 +110,33 @@ export class LoopbackCommandServer {
       }
       const command = parseCommand(await readBody(request));
       const result = await this.dispatch(command);
-      sendJson(response, 200, ProtocolSuccessResponseSchema.parse(result));
+      sendJson(response, 200, ProtocolSuccessResponseSchema.parse(result), origin);
     } catch (error) {
       const protocolError = classifyError(error);
       sendJson(response, protocolError.status, ProtocolErrorResponseSchema.parse({
         protocolVersion: 1,
         ok: false,
         error: { code: protocolError.code, message: protocolError.message }
-      }));
+      }), this.allowedOrigin(origin) ? origin : undefined);
     }
   }
 
-  private authorize(request: IncomingMessage): void {
+  private authorize(request: IncomingMessage, origin: string | undefined): void {
     const token = headerValue(request, "x-interview-client-token");
     if (token === undefined || !constantTimeEquals(token, this.options.security.clientToken)) {
       throw new ProtocolHttpError(401, "UNAUTHORIZED", "Client authentication failed");
     }
-    const origin = headerValue(request, "origin");
+    this.authorizeOrigin(origin);
+  }
+
+  private authorizeOrigin(origin: string | undefined): void {
     if (origin === undefined || !this.options.security.allowedOrigins.has(origin)) {
       throw new ProtocolHttpError(403, "ORIGIN_FORBIDDEN", "Client origin is not allowed");
     }
+  }
+
+  private allowedOrigin(origin: string | undefined): boolean {
+    return origin !== undefined && this.options.security.allowedOrigins.has(origin);
   }
 
   private async dispatch(command: ClientCommand): Promise<ProtocolSuccessResponse> {
@@ -270,13 +283,36 @@ function classifyError(error: unknown): ProtocolHttpError {
   return new ProtocolHttpError(500, "INTERNAL_ERROR", "Command could not be completed");
 }
 
-function sendJson(response: ServerResponse, status: number, body: ProtocolSuccessResponse | ProtocolErrorResponse): void {
+function sendPreflight(response: ServerResponse, origin: string | undefined): void {
+  if (origin === undefined) throw new Error("Allowed preflight is missing Origin");
+  response.writeHead(204, {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-headers": "content-type, x-interview-client-token",
+    "access-control-max-age": "300",
+    "cache-control": "no-store",
+    vary: "Origin"
+  });
+  response.end();
+}
+
+function sendJson(
+  response: ServerResponse,
+  status: number,
+  body: ProtocolSuccessResponse | ProtocolErrorResponse,
+  origin?: string
+): void {
   const json = JSON.stringify(body);
-  response.writeHead(status, {
+  const headers: Record<string, string | number> = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
     "content-length": Buffer.byteLength(json),
     "x-content-type-options": "nosniff"
-  });
+  };
+  if (origin !== undefined) {
+    headers["access-control-allow-origin"] = origin;
+    headers.vary = "Origin";
+  }
+  response.writeHead(status, headers);
   response.end(json);
 }

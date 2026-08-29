@@ -13,6 +13,7 @@ import {
 } from "../packages/delivery/src/index.js";
 import {
   RendererClient,
+  RendererPresentationNotExposedError,
   consumeAuthenticatedRendererStream,
   type AudioPlaybackCallbacks,
   type AudioPlayer,
@@ -146,6 +147,56 @@ describe("renderer DeliveryId deduplication", () => {
     expect(duplicate.duplicate).toBe(true);
     expect(visible).toEqual([message.command.deliveryId]);
     expect(acknowledgements.commands).toHaveLength(2);
+  });
+
+  it("retries the same DeliveryId only after a presenter proves exposure never began", async () => {
+    let attempts = 0;
+    const visible: DeliveryId[] = [];
+    const client = new RendererClient({
+      sessionId: newSessionId(),
+      acknowledgementSender: new RecordingAcknowledgementSender(),
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          attempts += 1;
+          if (attempts === 1) throw new RendererPresentationNotExposedError("fixture proves no insertion occurred");
+          visible.push(deliveryId);
+        }
+      },
+      audioPlayer: new HoldingAudioPlayer(),
+      requestIdFactory: requestIdFactory()
+    });
+    const message = textMessage();
+
+    await expect(client.handleMessage(message)).rejects.toThrow("proves no insertion");
+    expect(client.snapshot()).toEqual([]);
+    const retried = await client.handleMessage(message);
+
+    expect(retried.duplicate).toBe(false);
+    expect(attempts).toBe(2);
+    expect(visible).toEqual([message.command.deliveryId]);
+  });
+
+  it("suppresses retry after an ambiguous presenter failure", async () => {
+    let attempts = 0;
+    const client = new RendererClient({
+      sessionId: newSessionId(),
+      acknowledgementSender: new RecordingAcknowledgementSender(),
+      textPresenter: {
+        presentText: () => {
+          attempts += 1;
+          throw new Error("presentation outcome unknown");
+        }
+      },
+      audioPlayer: new HoldingAudioPlayer(),
+      requestIdFactory: requestIdFactory()
+    });
+    const message = textMessage();
+
+    await expect(client.handleMessage(message)).rejects.toThrow("outcome unknown");
+    const duplicate = await client.handleMessage(message);
+
+    expect(duplicate).toMatchObject({ duplicate: true, phase: "RECEIVED" });
+    expect(attempts).toBe(1);
   });
 
   it("does not restart AUDIO when bytes are received again and exposes only on the playback-start callback", async () => {

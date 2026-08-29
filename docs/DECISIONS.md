@@ -217,3 +217,19 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: overwrite latest values only; invalidate evidence only when a model proposes a contradiction; implement confidence decay and dimension-specific aggregation immediately.
 - Consequences: replay reconstructs the complete scoped history and at most one active value per key. Transcript correction currently invalidates all active evidence conservatively because Phase 0 lacks fine-grained transcript dependency tracking.
 - Reversible: invalidation granularity and later aggregation policy are reversible; retained provenance and explicit supersession are not.
+
+## D028 — Renderer delivery uses authenticated SSE plus the existing command acknowledgement path
+
+- Decision: use a bounded authenticated POST-attached SSE stream for server-to-renderer delivery commands while retaining the existing authenticated command endpoint for exposed/completed acknowledgements.
+- Reason: Phase 0 needs a concrete server-to-client path and crash harness, but does not require bidirectional WebSocket framing. Reusing command acknowledgements preserves durable RequestId idempotency and one delivery state machine.
+- Alternatives considered: WebSocket; polling; a second acknowledgement endpoint; Electron-only IPC.
+- Consequences: delivery is not claimed exactly once. Stable DeliveryId identity, renderer deduplication, explicit physical-exposure callbacks, and conservative restart recovery provide the safety properties.
+- Reversible: the wire transport is reversible; stable identity and shared acknowledgement semantics are not.
+
+## D029 — Renderer retries require positive proof that exposure did not begin
+
+- Decision: a presenter may release a received DeliveryId for retry only by raising `RendererPresentationNotExposedError` before its exposure callback; generic failures retain the DeliveryId and suppress repeat presentation.
+- Reason: an arbitrary exception cannot prove whether text became visible or audio began. Retrying an ambiguous failure could duplicate user-visible disclosure.
+- Alternatives considered: retry every presenter exception; suppress every failed presentation permanently; add a generic boolean return value.
+- Consequences: detached DOM and rejected-before-start audio can retry safely, while uncertain outcomes stay conservative and application restart remains governed by `POSSIBLY_EXPOSED` recovery.
+- Reversible: the signaling API is reversible; uncertainty must continue to fail against duplicate exposure.

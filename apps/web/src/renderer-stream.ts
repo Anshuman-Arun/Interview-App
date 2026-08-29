@@ -45,7 +45,13 @@ export async function consumeAuthenticatedRendererStream(
   };
   if (options.signal !== undefined) requestInit.signal = options.signal;
 
-  const response = await fetchImpl(options.streamUrl, requestInit);
+  let response: Response;
+  try {
+    response = await fetchImpl(options.streamUrl, requestInit);
+  } catch (error) {
+    if (options.signal?.aborted === true) return;
+    throw error;
+  }
 
   if (!response.ok) throw new Error("Renderer stream connection failed");
   const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
@@ -57,7 +63,7 @@ export async function consumeAuthenticatedRendererStream(
   let buffer = "";
 
   try {
-    while (true) {
+    for (;;) {
       const chunk = await reader.read();
       if (chunk.done) break;
       buffer += decoder.decode(chunk.value, { stream: true });

@@ -75,6 +75,8 @@ interface TrackedDelivery {
 
 const DEFAULT_MAX_TRACKED_DELIVERIES = 256;
 
+export class RendererPresentationNotExposedError extends Error {}
+
 export class RendererClient {
   private readonly sessionId: SessionId;
   private readonly acknowledgementSender: RendererAcknowledgementSender;
@@ -130,31 +132,38 @@ export class RendererClient {
     };
     this.tracked.set(command.deliveryId, entry);
 
-    switch (command.content.medium) {
-      case "TEXT":
-        await this.textPresenter.presentText(command.content.text, command.deliveryId);
-        await this.markExposureBegan(entry);
-        await this.markPresentationCompleted(entry);
-        break;
-      case "AUDIO":
-        await this.audioPlayer.playAudio({
-          deliveryId: command.deliveryId,
-          audioRef: command.content.audioRef,
-          text: command.content.text,
-          callbacks: {
-            onStarted: () => this.markExposureBegan(entry),
-            onCompleted: () => this.markPresentationCompleted(entry)
+    try {
+      switch (command.content.medium) {
+        case "TEXT":
+          await this.textPresenter.presentText(command.content.text, command.deliveryId);
+          await this.markExposureBegan(entry);
+          await this.markPresentationCompleted(entry);
+          break;
+        case "AUDIO":
+          await this.audioPlayer.playAudio({
+            deliveryId: command.deliveryId,
+            audioRef: command.content.audioRef,
+            text: command.content.text,
+            callbacks: {
+              onStarted: () => this.markExposureBegan(entry),
+              onCompleted: () => this.markPresentationCompleted(entry)
+            }
+          });
+          break;
+        case "WHITEBOARD":
+          if (this.whiteboardPresenter === undefined) {
+            throw new RendererPresentationNotExposedError("WHITEBOARD renderer transport is contract-only in Phase 0");
           }
-        });
-        break;
-      case "WHITEBOARD":
-        if (this.whiteboardPresenter === undefined) {
-          throw new Error("WHITEBOARD renderer transport is contract-only in Phase 0");
-        }
-        await this.whiteboardPresenter.presentWhiteboard(command.content.action, command.deliveryId);
-        await this.markExposureBegan(entry);
-        await this.markPresentationCompleted(entry);
-        break;
+          await this.whiteboardPresenter.presentWhiteboard(command.content.action, command.deliveryId);
+          await this.markExposureBegan(entry);
+          await this.markPresentationCompleted(entry);
+          break;
+      }
+    } catch (error) {
+      if (error instanceof RendererPresentationNotExposedError && !entry.exposureBegan) {
+        this.tracked.delete(command.deliveryId);
+      }
+      throw error;
     }
 
     return {
@@ -259,7 +268,7 @@ export class DomTextPresenter implements TextPresenter {
 
   public presentText(text: string, deliveryId: DeliveryId): void {
     if (!this.container.isConnected) {
-      throw new Error("Text renderer container is not attached to the document");
+      throw new RendererPresentationNotExposedError("Text renderer container is not attached to the document");
     }
     const element = this.container.ownerDocument.createElement("div");
     element.dataset.deliveryId = deliveryId;
@@ -280,22 +289,26 @@ export class HtmlAudioPlayer implements AudioPlayer {
     readonly callbacks: AudioPlaybackCallbacks;
   }): Promise<void> {
     const audio = this.createAudio(input.audioRef);
-    let started = false;
-    let completed = false;
+    const playbackState = { started: false, completed: false };
 
     audio.addEventListener("playing", () => {
-      if (started) return;
-      started = true;
+      if (playbackState.started) return;
+      playbackState.started = true;
       void input.callbacks.onStarted();
     });
 
     audio.addEventListener("ended", () => {
-      if (completed) return;
-      completed = true;
+      if (playbackState.completed) return;
+      playbackState.completed = true;
       void input.callbacks.onCompleted();
     });
 
-    await audio.play();
+    try {
+      await audio.play();
+    } catch (error) {
+      if (!playbackState.started) throw new RendererPresentationNotExposedError("Audio playback did not start", { cause: error });
+      throw error;
+    }
   }
 }
 
