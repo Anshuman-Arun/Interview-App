@@ -4,9 +4,9 @@ export interface LocalTransportSecurity {
   readonly clientToken: string;
 }
 
-const QUOTED_SECRET_ASSIGNMENT_PATTERN = /(["'])((?:[a-z][a-z0-9]*[-_])*(?:authorization|api[-_]?key|access[-_]?token|client[-_]?token|token|secret))\1\s*:\s*("(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|[^\s,;&}\x5d]+)/giu;
-const AUTHORIZATION_ASSIGNMENT_PATTERN = /\b((?:[a-z][a-z0-9]*[-_])*authorization)\b\s*[:=]\s*("(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|(?:bearer|basic)\s+[^\s,;&}\x5d]+|[^\s,;&}\x5d]+)/giu;
-const SECRET_ASSIGNMENT_PATTERN = /\b((?:[a-z][a-z0-9]*[-_])*(?:api[-_]?key|access[-_]?token|client[-_]?token|token|secret))\b\s*[:=]\s*("(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|[^\s,;&}\x5d]+)/giu;
+const QUOTED_SECRET_ASSIGNMENT_PATTERN = /(["'])((?:[a-z][a-z0-9_-]*)?(?:authorization|api[-_]?key|access[-_]?token|client[-_]?token|token|secret))\1\s*:\s*(\[REDACTED\]|"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|(?:bearer|basic)\s+[^\s,;&}\x5d]+|[^\s,;&}\x5d]+)/giu;
+const AUTHORIZATION_ASSIGNMENT_PATTERN = /\b((?:[a-z][a-z0-9_-]*)?authorization)\b\s*[:=]\s*(\[REDACTED\]|"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|(?:bearer|basic)\s+[^\s,;&}\x5d]+|[^\s,;&}\x5d]+)/giu;
+const SECRET_ASSIGNMENT_PATTERN = /\b((?:[a-z][a-z0-9_-]*)?(?:api[-_]?key|access[-_]?token|client[-_]?token|token|secret))\b\s*[:=]\s*(\[REDACTED\]|"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|(?:bearer|basic)\s+[^\s,;&}\x5d]+|[^\s,;&}\x5d]+)/giu;
 
 export function redactSecrets(text: string): string {
   const quotedKeysRedacted = text.replace(
