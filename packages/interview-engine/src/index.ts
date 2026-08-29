@@ -1,6 +1,7 @@
 export * from "./compatibility.js";
 export * from "./command-fingerprint.js";
 export * from "./context-compiler.js";
+export * from "./context-coordinator.js";
 export * from "./disclosure-validator.js";
 export * from "./envelopes.js";
 export * from "./local-compute-coordinator.js";

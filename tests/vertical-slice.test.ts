@@ -14,6 +14,7 @@ describe("synthetic Phase 0 vertical slice", () => {
       "TURN_COMMITTED",
       "PEDAGOGICAL_ACTION_SELECTED",
       "MODEL_GENERATION_STARTED",
+      "GENERATION_CONTEXT_COMPILED",
       "MODEL_PROPOSAL_RECEIVED",
       "PROPOSAL_VALIDATED",
       "DELIVERY_QUEUED",
@@ -23,4 +24,3 @@ describe("synthetic Phase 0 vertical slice", () => {
     ]));
   });
 });
-

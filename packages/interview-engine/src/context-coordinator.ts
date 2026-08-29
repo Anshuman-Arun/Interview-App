@@ -1,0 +1,186 @@
+import { z } from "zod";
+import {
+  CommandEnvelopeSchema,
+  ContextCompilationManifestSchema,
+  GenerationIdSchema,
+  type CommandEnvelope,
+  type ContextCompilationManifest,
+  type GenerationId,
+  type InterviewProblem
+} from "../../domain/src/index.js";
+import type { SessionState } from "../../events/src/index.js";
+import { isGenerationBasisStillCompatible } from "./compatibility.js";
+import {
+  CompiledContextSchema,
+  canonicalJson,
+  compileContext,
+  createContextCompilationManifest,
+  type CompiledContext
+} from "./context-compiler.js";
+import { createCommandEnvelope } from "./envelopes.js";
+import type { SessionWriter } from "./session-writer.js";
+
+const ContextCompilationFailureReasonSchema = z.enum([
+  "UNKNOWN_GENERATION",
+  "GENERATION_NOT_ACTIVE",
+  "COMMAND_BASIS_MISMATCH",
+  "COMPATIBILITY_INCOMPATIBLE",
+  "COMPATIBILITY_UNKNOWN",
+  "PROBLEM_MISMATCH",
+  "ACTION_UNAVAILABLE",
+  "HASHING_UNAVAILABLE",
+  "STATE_CHANGED_DURING_COMPILATION",
+  "MANIFEST_CONFLICT"
+]);
+export type ContextCompilationFailureReason = z.infer<typeof ContextCompilationFailureReasonSchema>;
+
+export const GenerationContextCompilationResultSchema = z.discriminatedUnion("compiled", [
+  z.object({
+    compiled: z.literal(true),
+    context: CompiledContextSchema,
+    manifest: ContextCompilationManifestSchema
+  }).strict(),
+  z.object({
+    compiled: z.literal(false),
+    generationId: GenerationIdSchema,
+    reason: ContextCompilationFailureReasonSchema
+  }).strict()
+]);
+export type GenerationContextCompilationResult = z.infer<typeof GenerationContextCompilationResultSchema>;
+
+type ManifestFactory = typeof createContextCompilationManifest;
+
+type ContextAssessment =
+  | { readonly ok: true; readonly context: CompiledContext }
+  | { readonly ok: false; readonly reason: Exclude<ContextCompilationFailureReason, "HASHING_UNAVAILABLE" | "STATE_CHANGED_DURING_COMPILATION" | "MANIFEST_CONFLICT"> };
+
+function assessContext(
+  state: Readonly<SessionState>,
+  generationId: GenerationId,
+  problem: InterviewProblem
+): ContextAssessment {
+  const generation = state.generations[generationId];
+  if (generation === undefined) return { ok: false, reason: "UNKNOWN_GENERATION" };
+  if (generation.status !== "ACTIVE") return { ok: false, reason: "GENERATION_NOT_ACTIVE" };
+
+  const compatibility = isGenerationBasisStillCompatible(generation.basis, state);
+  if (compatibility === "INCOMPATIBLE") return { ok: false, reason: "COMPATIBILITY_INCOMPATIBLE" };
+  if (compatibility === "UNKNOWN") return { ok: false, reason: "COMPATIBILITY_UNKNOWN" };
+  if (state.problem?.id !== problem.id || state.problem.version !== problem.version) {
+    return { ok: false, reason: "PROBLEM_MISMATCH" };
+  }
+
+  const realizationRequest = state.pedagogicalActions[generation.basis.turnId];
+  if (realizationRequest === undefined) return { ok: false, reason: "ACTION_UNAVAILABLE" };
+  return {
+    ok: true,
+    context: compileContext({
+      state,
+      problem,
+      turnId: generation.basis.turnId,
+      realizationRequest
+    })
+  };
+}
+
+export class ContextCoordinator {
+  public constructor(
+    private readonly writer: SessionWriter,
+    private readonly manifestFactory: ManifestFactory = createContextCompilationManifest
+  ) {}
+
+  public async compileForGeneration(input: {
+    readonly generationId: GenerationId;
+    readonly problem: InterviewProblem;
+    readonly envelope?: CommandEnvelope;
+  }) {
+    const snapshot = this.writer.getState();
+    const snapshotGeneration = snapshot.generations[input.generationId];
+    const envelope = CommandEnvelopeSchema.parse(input.envelope ?? createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "context-coordinator",
+      generationId: input.generationId,
+      ...(snapshotGeneration?.basis.inputEpisodeId === undefined
+        ? {}
+        : { inputEpisodeId: snapshotGeneration.basis.inputEpisodeId }),
+      ...(snapshotGeneration === undefined ? {} : {
+        turnId: snapshotGeneration.basis.turnId,
+        contextEpoch: snapshotGeneration.basis.contextEpoch,
+        sourceRevision: snapshotGeneration.basis.committedInputSequence
+      })
+    }));
+
+    const snapshotAssessment = assessContext(snapshot, input.generationId, input.problem);
+    let prepared: { readonly context: CompiledContext; readonly manifest: ContextCompilationManifest } | undefined;
+    let preparationFailure: ContextCompilationFailureReason | undefined;
+    if (!snapshotAssessment.ok) {
+      preparationFailure = snapshotAssessment.reason;
+    } else if (snapshotGeneration === undefined) {
+      preparationFailure = "UNKNOWN_GENERATION";
+    } else {
+      try {
+        prepared = {
+          context: snapshotAssessment.context,
+          manifest: await this.manifestFactory({
+            context: snapshotAssessment.context,
+            problem: input.problem,
+            generationId: input.generationId,
+            generationBasis: snapshotGeneration.basis
+          })
+        };
+      } catch {
+        preparationFailure = "HASHING_UNAVAILABLE";
+      }
+    }
+
+    return this.writer.execute(envelope, {
+      operation: "COMPILE_GENERATION_CONTEXT",
+      payload: {
+        generationId: input.generationId,
+        problemId: input.problem.id,
+        problemVersion: input.problem.version
+      }
+    }, GenerationContextCompilationResultSchema, (state) => {
+      const fail = (reason: ContextCompilationFailureReason) => ({
+        drafts: [],
+        result: { compiled: false as const, generationId: input.generationId, reason }
+      });
+      if (prepared === undefined) return fail(preparationFailure ?? "HASHING_UNAVAILABLE");
+
+      const envelopeGeneration = state.generations[input.generationId];
+      if (
+        envelopeGeneration !== undefined
+        && (
+          envelope.generationId !== input.generationId
+          || envelope.inputEpisodeId !== envelopeGeneration.basis.inputEpisodeId
+          || envelope.turnId !== envelopeGeneration.basis.turnId
+          || envelope.contextEpoch !== envelopeGeneration.basis.contextEpoch
+          || envelope.sourceRevision !== envelopeGeneration.basis.committedInputSequence
+        )
+      ) return fail("COMMAND_BASIS_MISMATCH");
+
+      const currentAssessment = assessContext(state, input.generationId, input.problem);
+      if (!currentAssessment.ok) return fail(currentAssessment.reason);
+      if (canonicalJson(currentAssessment.context) !== canonicalJson(prepared.context)) {
+        return fail("STATE_CHANGED_DURING_COMPILATION");
+      }
+
+      const generation = state.generations[input.generationId];
+      if (generation === undefined) return fail("UNKNOWN_GENERATION");
+      const existing = generation.contextManifest;
+      if (existing !== undefined) {
+        if (canonicalJson(existing) !== canonicalJson(prepared.manifest)) return fail("MANIFEST_CONFLICT");
+        return { drafts: [], result: { compiled: true as const, context: prepared.context, manifest: existing } };
+      }
+
+      return {
+        drafts: [{
+          source: "APPLICATION",
+          type: "GENERATION_CONTEXT_COMPILED",
+          payload: { generationId: input.generationId, manifest: prepared.manifest }
+        }],
+        result: { compiled: true as const, context: prepared.context, manifest: prepared.manifest }
+      };
+    });
+  }
+}

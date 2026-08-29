@@ -1,5 +1,6 @@
 export * from "./billing.js";
 export * from "./commands.js";
+export * from "./context.js";
 export * from "./delivery.js";
 export * from "./disclosure.js";
 export * from "./evidence.js";
