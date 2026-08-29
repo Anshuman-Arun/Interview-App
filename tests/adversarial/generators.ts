@@ -162,7 +162,9 @@ export function propertyParameters(
   readonly path?: string;
   readonly verbose: 2;
 } {
-  const numRuns = VALIDATION_STRESS_RUNS;
+  const numRuns =
+    positiveIntegerFromEnvironment("ADVERSARIAL_RUNS")
+    ?? VALIDATION_STRESS_RUNS;
   const configuredSeed = integerFromEnvironment("ADVERSARIAL_SEED");
   const seed = configuredSeed
     ?? VALIDATION_STRESS_BASE_SEED + seedOffset;
