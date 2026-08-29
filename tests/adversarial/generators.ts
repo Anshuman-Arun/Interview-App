@@ -45,6 +45,12 @@ export type DeliveryScheduleOperation =
   | "RECONNECT"
   | "BARGE_IN";
 
+export type RecoveryScheduleOperation =
+  | "COMMAND_RECOVERY"
+  | "RENDERER_RECOVERY"
+  | "SHARED_DUPLICATE_RECOVERY"
+  | "INDEPENDENT_DUPLICATE_RECOVERY";
+
 export type RestartScheduleOperation =
   | "EVIDENCE_PROGRESSING"
   | "EVIDENCE_COMPLETE"
@@ -101,6 +107,13 @@ const DELIVERY_OPERATIONS: readonly DeliveryScheduleOperation[] = [
   "BARGE_IN"
 ];
 
+const RECOVERY_OPERATIONS: readonly RecoveryScheduleOperation[] = [
+  "COMMAND_RECOVERY",
+  "RENDERER_RECOVERY",
+  "SHARED_DUPLICATE_RECOVERY",
+  "INDEPENDENT_DUPLICATE_RECOVERY"
+];
+
 const RESTART_OPERATIONS: readonly RestartScheduleOperation[] = [
   "EVIDENCE_PROGRESSING",
   "EVIDENCE_COMPLETE",
@@ -130,6 +143,11 @@ export const deliveryScheduleArbitrary = fc.shuffledSubarray([...DELIVERY_OPERAT
 export const restartScheduleArbitrary = fc.shuffledSubarray([...RESTART_OPERATIONS], {
   minLength: 5,
   maxLength: RESTART_OPERATIONS.length
+});
+
+export const recoveryScheduleArbitrary = fc.shuffledSubarray([...RECOVERY_OPERATIONS], {
+  minLength: RECOVERY_OPERATIONS.length,
+  maxLength: RECOVERY_OPERATIONS.length
 });
 
 export function propertyParameters(
