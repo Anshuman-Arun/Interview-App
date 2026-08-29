@@ -61,10 +61,10 @@ Each slice ends with tests, type checking, linting, replay checks where relevant
 ## 8. Command/result envelopes and idempotency
 
 - Files: `packages/domain/src/commands.ts`; writer/store extensions.
-- Types/functions: request/causation/correlation identity and cached command result.
-- Tests: duplicate provider result and renderer ack produce no additional event/state change, including after restart.
+- Types/functions: request/causation/correlation identity, canonical logical-command fingerprint, and cached command result.
+- Tests: identical duplicate provider result and renderer ack produce no additional event/state change, including after restart; conflicting or legacy-unverifiable `RequestId` reuse fails closed.
 - Dependencies: slices 4, 7.
-- Complete when same `RequestId` returns the persisted prior result.
+- Complete when the same `RequestId` returns the persisted prior result only for the same logical command and conflicting reuse cannot append or mutate state.
 
 ## 9. InputEpisode/Turn/Generation lifecycle
 

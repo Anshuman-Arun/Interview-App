@@ -38,7 +38,7 @@ describe("delivery crash boundaries", () => {
         effectiveDisclosureLevel: 2,
         status: "VALIDATED"
       });
-      await harness.writer.execute(createCommandEnvelope({ sessionId: harness.sessionId, producer: "test-authorizer" }), z.object({ queued: z.literal(true) }).strict(), () => ({
+      await harness.writer.execute(createCommandEnvelope({ sessionId: harness.sessionId, producer: "test-authorizer" }), { operation: "QUEUE_TEST_DELIVERY", payload: { deliveryId } }, z.object({ queued: z.literal(true) }).strict(), () => ({
         drafts: [{ source: "APPLICATION", type: "DELIVERY_QUEUED", payload: { atom } }],
         result: { queued: true }
       }));

@@ -343,6 +343,7 @@ async function queueAudio(
   });
   await writer.execute(
     createCommandEnvelope({ sessionId: writer.sessionId, producer: "renderer-audio-test-fixture" }),
+    { operation: "QUEUE_TEST_AUDIO_DELIVERY", payload: { deliveryId: atom.deliveryId } },
     z.object({ queued: z.literal(true) }).strict(),
     () => ({
       drafts: [{

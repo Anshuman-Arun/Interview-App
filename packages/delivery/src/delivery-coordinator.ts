@@ -1,5 +1,6 @@
 import type {
   CommandEnvelope,
+  CommandIdentity,
   CommandResult,
   DeliveryCommand,
   DeliveryId,
@@ -26,7 +27,7 @@ function createDeliveryEnvelope(sessionId: SessionId, producer: string): Command
 export interface SessionTransitionSink {
   readonly sessionId: SessionId;
   readonly getState: () => Readonly<SessionState>;
-  readonly execute: <TResult>(envelope: CommandEnvelope, resultSchema: z.ZodType<TResult>, handler: TransitionHandler<TResult>) => Promise<CommandResult<TResult>>;
+  readonly execute: <TResult>(envelope: CommandEnvelope, commandIdentity: CommandIdentity, resultSchema: z.ZodType<TResult>, handler: TransitionHandler<TResult>) => Promise<CommandResult<TResult>>;
 }
 
 const AcknowledgedResultSchema = z.literal(true);
@@ -44,7 +45,7 @@ export class DeliveryCoordinator {
 
   public async markStarted(deliveryId: DeliveryId): Promise<DeliveryCommand> {
     const envelope = createDeliveryEnvelope(this.writer.sessionId, "delivery-coordinator");
-    const result = await this.writer.execute(envelope, DeliveryCommandSchema, (state): StateTransition<DeliveryCommand> => {
+    const result = await this.writer.execute(envelope, { operation: "START_DELIVERY", payload: { deliveryId } }, DeliveryCommandSchema, (state): StateTransition<DeliveryCommand> => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined || atom.status !== "QUEUED") throw new Error("Only a queued delivery can start");
       return {
@@ -57,7 +58,7 @@ export class DeliveryCoordinator {
 
   public async reconnect(deliveryId: DeliveryId, envelope: CommandEnvelope): Promise<DeliveryReconnectResult> {
     const command = CommandEnvelopeSchema.parse(envelope);
-    const result = await this.writer.execute(command, DeliveryReconnectResultSchema, (state): StateTransition<DeliveryReconnectResult> => {
+    const result = await this.writer.execute(command, { operation: "RECONNECT_DELIVERY", payload: { deliveryId } }, DeliveryReconnectResultSchema, (state): StateTransition<DeliveryReconnectResult> => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined) throw new Error("Unknown delivery");
       const deliveryCommand: DeliveryCommand = { deliveryId, content: atom.content };
@@ -77,7 +78,7 @@ export class DeliveryCoordinator {
 
   public async acknowledgeExposed(deliveryId: DeliveryId, envelope?: CommandEnvelope): Promise<boolean> {
     const command = CommandEnvelopeSchema.parse(envelope ?? createDeliveryEnvelope(this.writer.sessionId, "renderer"));
-    const result = await this.writer.execute(command, AcknowledgedResultSchema, (state) => {
+    const result = await this.writer.execute(command, { operation: "ACK_DELIVERY_EXPOSED", payload: { deliveryId } }, AcknowledgedResultSchema, (state) => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined) throw new Error("Unknown delivery acknowledgement");
       if (atom.status === "EXPOSED" || atom.status === "COMPLETED") return { drafts: [], result: true };
@@ -89,7 +90,7 @@ export class DeliveryCoordinator {
 
   public async acknowledgeCompleted(deliveryId: DeliveryId, envelope?: CommandEnvelope): Promise<boolean> {
     const command = CommandEnvelopeSchema.parse(envelope ?? createDeliveryEnvelope(this.writer.sessionId, "renderer"));
-    const result = await this.writer.execute(command, AcknowledgedResultSchema, (state) => {
+    const result = await this.writer.execute(command, { operation: "ACK_DELIVERY_COMPLETED", payload: { deliveryId } }, AcknowledgedResultSchema, (state) => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined) throw new Error("Unknown delivery acknowledgement");
       if (atom.status === "COMPLETED") return { drafts: [], result: true };
@@ -108,7 +109,7 @@ export class DeliveryCoordinator {
 
   public async cancelBeforeExposure(deliveryId: DeliveryId, reason: string): Promise<void> {
     const envelope = createDeliveryEnvelope(this.writer.sessionId, "delivery-coordinator");
-    await this.writer.execute(envelope, CancelledResultSchema, (state): StateTransition<{ cancelled: true }> => {
+    await this.writer.execute(envelope, { operation: "CANCEL_DELIVERY", payload: { deliveryId, reason } }, CancelledResultSchema, (state): StateTransition<{ cancelled: true }> => {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined) throw new Error("Unknown delivery");
       if (atom.status !== "QUEUED") throw new Error("Only a delivery known not to have started may be safely cancelled");
@@ -125,7 +126,7 @@ export class DeliveryCoordinator {
       .map((atom) => atom.deliveryId);
     for (const deliveryId of inFlight) {
       const envelope = createDeliveryEnvelope(this.writer.sessionId, "crash-recovery");
-      await this.writer.execute(envelope, RecoveredResultSchema, (state): StateTransition<{ recovered: true }> => {
+      await this.writer.execute(envelope, { operation: "RECOVER_DELIVERY", payload: { deliveryId } }, RecoveredResultSchema, (state): StateTransition<{ recovered: true }> => {
         const atom = state.deliveries[deliveryId];
         if (atom?.status !== "DELIVERING") {
           return { drafts: [], result: { recovered: true } };

@@ -1,7 +1,8 @@
-import type { CommandEnvelope, CommandResult, SessionId } from "../../domain/src/index.js";
+import type { CommandEnvelope, CommandIdentity, CommandResult, SessionId } from "../../domain/src/index.js";
 import { reduceSessionEvent, replaySession, type EventDraft, type SessionState } from "../../events/src/index.js";
-import type { SqliteEventStore } from "../../persistence/src/index.js";
+import { RequestIdConflictError, type SqliteEventStore } from "../../persistence/src/index.js";
 import type { z } from "zod";
+import { fingerprintCommand } from "./command-fingerprint.js";
 
 export interface StateTransition<TResult> {
   readonly drafts: readonly EventDraft[];
@@ -35,13 +36,21 @@ export class SessionWriter {
 
   public execute<TResult>(
     envelope: CommandEnvelope,
+    commandIdentity: CommandIdentity,
     resultSchema: z.ZodType<TResult>,
     handler: TransitionHandler<TResult>
   ): Promise<CommandResult<TResult>> {
     if (envelope.sessionId !== this.sessionId) return Promise.reject(new Error("Command session does not match writer session"));
+    let commandFingerprint: string;
+    try {
+      commandFingerprint = fingerprintCommand(envelope, commandIdentity);
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error("Command identity validation failed"));
+    }
     const run = (): CommandResult<TResult> => {
       const prior = this.store.getProcessedResult(this.sessionId, envelope.requestId);
       if (prior.found) {
+        if (prior.commandFingerprint !== commandFingerprint) throw new RequestIdConflictError();
         return { duplicate: true, value: resultSchema.parse(prior.result), appendedEventCount: 0 };
       }
       const transition = handler(this.state);
@@ -52,6 +61,7 @@ export class SessionWriter {
         causationId: envelope.causationId,
         correlationId: envelope.correlationId,
         elapsedMs: this.elapsedOffset + Math.max(0, Date.now() - this.openedAt),
+        commandFingerprint,
         drafts: transition.drafts,
         result: validatedResult
       });

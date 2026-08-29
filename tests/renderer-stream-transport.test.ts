@@ -436,6 +436,7 @@ async function queueDelivery(
   });
   await writer.execute(
     createCommandEnvelope({ sessionId: writer.sessionId, producer: "renderer-transport-test-fixture" }),
+    { operation: "QUEUE_TEST_RENDERER_DELIVERY", payload: { deliveryId: atom.deliveryId } },
     z.object({ queued: z.literal(true) }).strict(),
     () => ({
       drafts: [{

@@ -62,8 +62,9 @@ describe("durable idempotency", () => {
     try {
       const envelope = createCommandEnvelope({ sessionId: harness.sessionId, producer: "external-callback" });
       const resultSchema = z.object({ stable: z.literal("result") }).strict();
-      const first = await harness.writer.execute(envelope, resultSchema, () => ({ drafts: [], result: { stable: "result" } }));
-      const second = await harness.writer.execute(envelope, resultSchema, () => {
+      const identity = { operation: "TEST_STABLE_RESULT", payload: {} } as const;
+      const first = await harness.writer.execute(envelope, identity, resultSchema, () => ({ drafts: [], result: { stable: "result" } }));
+      const second = await harness.writer.execute(envelope, identity, resultSchema, () => {
         throw new Error("duplicate handler must not run");
       });
       expect(first.duplicate).toBe(false);
@@ -80,12 +81,14 @@ describe("durable idempotency", () => {
       const count = harness.store.eventCount(harness.sessionId);
       await expect(harness.writer.execute(
         envelope,
+        { operation: "TEST_RESULT_VALIDATION", payload: {} },
         z.object({ accepted: z.literal(true) }).strict(),
         () => ({ drafts: [], result: { accepted: false as true } })
       )).rejects.toThrow();
       expect(harness.store.eventCount(harness.sessionId)).toBe(count);
       const valid = await harness.writer.execute(
         envelope,
+        { operation: "TEST_RESULT_VALIDATION", payload: {} },
         z.object({ accepted: z.literal(true) }).strict(),
         () => ({ drafts: [], result: { accepted: true as const } })
       );
