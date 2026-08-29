@@ -167,9 +167,20 @@ async function releaseProvider(
 ): Promise<void> {
   const result = await fixture.release<ProviderCallbackResult>(label);
   if (result.accepted) {
-    model.noteGeneration(fixture.initialGenerationId, "VALIDATED");
+    const currentGeneration = model.generations.get(
+      fixture.initialGenerationId
+    );
+    if (
+      currentGeneration === "ACTIVE"
+      || currentGeneration === "PROPOSAL_RECEIVED"
+    ) {
+      model.noteGeneration(fixture.initialGenerationId, "VALIDATED");
+    }
+
     for (const atom of result.deliveryAtoms) {
-      model.noteDelivery(atom.deliveryId, "QUEUED");
+      if (!model.deliveries.has(atom.deliveryId)) {
+        model.noteDelivery(atom.deliveryId, "QUEUED");
+      }
     }
     return;
   }
