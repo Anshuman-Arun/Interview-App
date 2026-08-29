@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 type Brand<TName extends string> = { readonly __brand: TName };
@@ -28,7 +27,7 @@ export const DeliveryIdSchema = idSchema<"DeliveryId">();
 export const DisclosureIdSchema = idSchema<"DisclosureId">();
 
 function createId<TName extends string>(prefix: string): BrandedId<TName> {
-  return `${prefix}_${randomUUID()}` as BrandedId<TName>;
+  return `${prefix}_${globalThis.crypto.randomUUID()}` as BrandedId<TName>;
 }
 
 export const newSessionId = (): SessionId => createId<"SessionId">("session");
