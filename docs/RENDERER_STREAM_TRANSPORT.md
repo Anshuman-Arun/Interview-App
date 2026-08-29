@@ -6,9 +6,7 @@ This slice is a narrow architecture harness for application-owned delivery trans
 
 Its purpose is to prove that TEXT and AUDIO traverse one stable DeliveryAtom / DeliveryId lifecycle:
 
-[
-	ext{QUEUED} ightarrow 	ext{DELIVERING} ightarrow 	ext{EXPOSED} ightarrow 	ext{COMPLETED}
-]
+`QUEUED -> DELIVERING -> EXPOSED -> COMPLETED`
 
 with conservative recovery to `POSSIBLY_EXPOSED` when a persisted in-flight delivery is recovered after application restart.
 
