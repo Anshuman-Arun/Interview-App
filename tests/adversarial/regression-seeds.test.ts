@@ -571,6 +571,50 @@ describe("adversarial named regression schedules", () => {
     })).toThrow();
   });
 
+  it("stale queued delivery cannot start after its generation basis becomes incompatible", async () => {
+    const fixture = await AdversarialFixture.create();
+    try {
+      const result = await fixture.release<{
+        readonly accepted: boolean;
+        readonly deliveryAtoms: readonly { readonly deliveryId: DeliveryId }[];
+      }>(CALLBACK_LABELS.providerPrimary);
+      expect(result.accepted).toBe(true);
+      const deliveryId = result.deliveryAtoms[0]?.deliveryId;
+      if (deliveryId === undefined) throw new Error("Expected queued provider delivery");
+
+      const generation =
+        fixture.writer.getState().generations[fixture.initialGenerationId];
+      if (generation === undefined) throw new Error("Missing provider generation");
+      expect(
+        isGenerationBasisStillCompatible(
+          generation.basis,
+          fixture.writer.getState()
+        )
+      ).toBe("COMPATIBLE");
+
+      await fixture.turns.commitBoardPatch(
+        "minimal counterexample: relevant board state changed"
+      );
+      expect(
+        isGenerationBasisStillCompatible(
+          generation.basis,
+          fixture.writer.getState()
+        )
+      ).toBe("INCOMPATIBLE");
+
+      const count = fixture.store.eventCount(fixture.sessionId);
+      await expect(
+        fixture.delivery.markStarted(deliveryId)
+      ).rejects.toThrow();
+      expect(fixture.store.eventCount(fixture.sessionId)).toBe(count);
+      expect(
+        fixture.writer.getState().deliveries[deliveryId]?.status
+      ).not.toBe("DELIVERING");
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it("conflicting RequestId reuse fails closed instead of silently acknowledging a different command", async () => {
     const fixture = await AdversarialFixture.create();
     try {
