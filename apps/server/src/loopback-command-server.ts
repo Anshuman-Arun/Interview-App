@@ -21,6 +21,13 @@ import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
+const COMMAND_PATH = "/v1/commands";
+const CORS_ALLOWED_METHOD = "POST";
+const CORS_ALLOWED_HEADERS: ReadonlySet<string> = new Set([
+  "content-type",
+  "x-interview-client-token"
+]);
+const CORS_ALLOW_HEADERS = "content-type, x-interview-client-token";
 
 export interface LoopbackCommandServerOptions {
   readonly security: LocalTransportSecurity;
@@ -93,9 +100,18 @@ export class LoopbackCommandServer {
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const origin = headerValue(request, "origin");
+
     try {
-      this.authorize(request);
-      if (request.method !== "POST" || request.url !== "/v1/commands") {
+      if (request.method === "OPTIONS" && request.url === COMMAND_PATH) {
+        this.authorizeOrigin(origin);
+        assertValidPreflight(request);
+        sendPreflight(response, origin);
+        return;
+      }
+
+      this.authorize(request, origin);
+      if (request.method !== "POST" || request.url !== COMMAND_PATH) {
         throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
       }
       const contentType = headerValue(request, "content-type");
@@ -104,26 +120,33 @@ export class LoopbackCommandServer {
       }
       const command = parseCommand(await readBody(request));
       const result = await this.dispatch(command);
-      sendJson(response, 200, ProtocolSuccessResponseSchema.parse(result));
+      sendJson(response, 200, ProtocolSuccessResponseSchema.parse(result), origin);
     } catch (error) {
       const protocolError = classifyError(error);
       sendJson(response, protocolError.status, ProtocolErrorResponseSchema.parse({
         protocolVersion: 1,
         ok: false,
         error: { code: protocolError.code, message: protocolError.message }
-      }));
+      }), this.allowedOrigin(origin) ? origin : undefined);
     }
   }
 
-  private authorize(request: IncomingMessage): void {
+  private authorize(request: IncomingMessage, origin: string | undefined): void {
     const token = headerValue(request, "x-interview-client-token");
     if (token === undefined || !constantTimeEquals(token, this.options.security.clientToken)) {
       throw new ProtocolHttpError(401, "UNAUTHORIZED", "Client authentication failed");
     }
-    const origin = headerValue(request, "origin");
+    this.authorizeOrigin(origin);
+  }
+
+  private authorizeOrigin(origin: string | undefined): void {
     if (origin === undefined || !this.options.security.allowedOrigins.has(origin)) {
       throw new ProtocolHttpError(403, "ORIGIN_FORBIDDEN", "Client origin is not allowed");
     }
+  }
+
+  private allowedOrigin(origin: string | undefined): boolean {
+    return origin !== undefined && this.options.security.allowedOrigins.has(origin);
   }
 
   private async dispatch(command: ClientCommand): Promise<ProtocolSuccessResponse> {
@@ -270,13 +293,62 @@ function classifyError(error: unknown): ProtocolHttpError {
   return new ProtocolHttpError(500, "INTERNAL_ERROR", "Command could not be completed");
 }
 
-function sendJson(response: ServerResponse, status: number, body: ProtocolSuccessResponse | ProtocolErrorResponse): void {
+function assertValidPreflight(request: IncomingMessage): void {
+  const requestedMethod = headerValue(request, "access-control-request-method");
+  if (requestedMethod?.trim().toUpperCase() !== CORS_ALLOWED_METHOD) {
+    throw new ProtocolHttpError(
+      400,
+      "INVALID_COMMAND",
+      "CORS preflight requests may target only POST"
+    );
+  }
+
+  const requestedHeaders = headerValue(request, "access-control-request-headers");
+  if (requestedHeaders === undefined || requestedHeaders.trim().length === 0) return;
+
+  for (const header of requestedHeaders.split(",")) {
+    const normalized = header.trim().toLowerCase();
+    if (normalized.length === 0 || !CORS_ALLOWED_HEADERS.has(normalized)) {
+      throw new ProtocolHttpError(
+        400,
+        "INVALID_COMMAND",
+        "CORS preflight requested a header that is not allowed"
+      );
+    }
+  }
+}
+
+function sendPreflight(response: ServerResponse, origin: string | undefined): void {
+  if (origin === undefined) throw new Error("Allowed preflight is missing Origin");
+  response.writeHead(204, {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": CORS_ALLOWED_METHOD,
+    "access-control-allow-headers": CORS_ALLOW_HEADERS,
+    "access-control-max-age": "300",
+    "cache-control": "no-store",
+    "content-length": "0",
+    vary: "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+  });
+  response.end();
+}
+
+function sendJson(
+  response: ServerResponse,
+  status: number,
+  body: ProtocolSuccessResponse | ProtocolErrorResponse,
+  origin: string | undefined
+): void {
   const json = JSON.stringify(body);
-  response.writeHead(status, {
+  const headers: Record<string, string | number> = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
     "content-length": Buffer.byteLength(json),
     "x-content-type-options": "nosniff"
-  });
+  };
+  if (origin !== undefined) {
+    headers["access-control-allow-origin"] = origin;
+    headers.vary = "Origin";
+  }
+  response.writeHead(status, headers);
   response.end(json);
 }
