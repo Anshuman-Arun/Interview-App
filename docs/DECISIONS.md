@@ -170,10 +170,18 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Consequences: caches disappear on restart, so application-level `SessionWriter` idempotency remains required when a result is admitted to session state.
 - Reversible: cache size and placement are reversible; conflicting identity reuse must continue to fail closed.
 
-## D022 — Dependency build scripts are denied by default
+## D022 — Dependency build scripts require package-specific approval
 
-- Decision: CI installs with `--ignore-scripts`, and `pnpm-workspace.yaml` explicitly sets the only currently detected build-script package, `esbuild`, to `false` under `allowBuilds`.
-- Reason: Phase 0 does not require dependency lifecycle scripts, and `tsx`/Vitest use the locked platform binary package successfully without running `esbuild` installation code. An explicit decision also prevents pnpm's ignored-build policy from failing ambiguously.
+- Decision: `pnpm-workspace.yaml` explicitly sets the only currently detected build-script package, `esbuild`, to `false` under `allowBuilds`; CI performs an ordinary frozen-lockfile install subject to that package policy.
+- Reason: Phase 0 does not require this dependency lifecycle script, and `tsx`/Vitest use the locked platform binary package successfully without it. An explicit decision prevents pnpm's ignored-build policy from failing ambiguously. A blanket `--ignore-scripts` install was rejected after repeatable Windows relinking hangs during clean-install verification.
 - Alternatives considered: allow all dependency scripts; explicitly approve the `esbuild` script; leave the generated placeholder unresolved.
 - Consequences: a dependency that genuinely requires an installation script must receive a package-specific review and explicit policy change before CI can use it.
 - Reversible: yes, package by package after review.
+
+## D023 — pnpm uses the hoisted linker on the Windows-first workspace
+
+- Decision: set `node-linker=hoisted` in the repository `.npmrc`.
+- Reason: repeated clean installs with pnpm's default isolated linker stalled during Windows relinking with sustained CPU use and no `.bin` output, while the same frozen lockfile completed with the hoisted linker and passed every repository gate.
+- Alternatives considered: retain the isolated linker and rely on long waits; manually reconstruct package links; use a machine-local override.
+- Consequences: dependency layout is flatter, so code must not rely on undeclared transitive packages. CI uses the same layout as local development.
+- Reversible: yes, after pnpm/Windows linker behavior is re-evaluated.
