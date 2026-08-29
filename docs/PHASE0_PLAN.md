@@ -308,7 +308,23 @@ Implemented after the isolated Oxford verifier:
 - authoritative `UNRESOLVED` and `CONTRADICTED` results without fabricated positive or negative student evidence;
 - fail-closed handling for stale work, verifier switching, tampering, exceptions, invalid output, malformed callbacks, duplicates, and restart.
 
-Natural-language-to-formal interpretation remains outside this deterministic slice. Any later model-produced interpretation must enter as a proposal with explicit confidence and may not bypass the same admission path.
+Natural-language-to-formal interpretation generation remains outside this deterministic slice. The model-proposal admission bridge described below now enforces the boundary through which any later interpreter must enter.
+
+## Continuation progress — formal interpretation proposal admission
+
+Implemented after authoritative verification admission:
+
+- a strict `FormalInterpretationProposal` schema containing only a bounded candidate interpretation and explicit confidence;
+- exact source generation identity and callback basis-field checks, followed by full current `GenerationBasis` compatibility, before a proposal can open verifier work;
+- three-valued compatibility admission in which `INCOMPATIBLE` and `UNKNOWN` both fail closed and supersede the source generation;
+- application-owned verifier identity and scoped claim-correctness target selection;
+- one serialized transition that records the provider proposal and creates the semantic verification request;
+- one-consumer generation semantics under concurrent provider callbacks;
+- durable RequestId idempotency across duplicate callbacks and application restart;
+- replay-preserved proposal provenance linking verifier work to its source GenerationId and provider RequestId;
+- low-confidence proposals routed to deterministic abstention without creating student evidence.
+
+The natural-language interpreter itself remains unimplemented. No model output can directly commit verification status or evidence, and no real provider dependency was added.
 
 ## Continuation progress — scoped evidence supersession
 

@@ -6,6 +6,7 @@ import type {
   EvidenceProposal,
   EvidenceValue,
   EventId,
+  FormalInterpretationProposal,
   GenerationBasis,
   GenerationId,
   InputEpisodeId,
@@ -76,6 +77,8 @@ export interface VerificationRequestState {
   readonly interpretationConfidence: number;
   readonly evidenceKey: EvidenceKey;
   readonly evidenceEventIds: readonly EventId[];
+  readonly sourceGenerationId?: GenerationId | undefined;
+  readonly sourceProposalRequestId?: RequestId | undefined;
   readonly requestedEventId: EventId;
   readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
   readonly result?: VerificationResult;
@@ -95,6 +98,7 @@ export interface GenerationState {
   readonly provider: string;
   readonly status: "ACTIVE" | "PROPOSAL_RECEIVED" | "VALIDATED" | "REJECTED" | "SUPERSEDED";
   readonly proposal?: InterviewerProposal;
+  readonly formalInterpretationProposal?: FormalInterpretationProposal;
 }
 export interface SessionState {
   readonly sessionId: SessionId;

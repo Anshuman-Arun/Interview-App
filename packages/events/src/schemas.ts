@@ -9,6 +9,7 @@ import {
   EvidenceProposalSchema,
   EvidenceValueSchema,
   EventIdSchema,
+  FormalInterpretationProposalSchema,
   GenerationBasisSchema,
   GenerationIdSchema,
   InputEpisodeIdSchema,
@@ -84,7 +85,9 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     candidateFormalInterpretation: z.string().min(1).max(100_000),
     interpretationConfidence: z.number().min(0).max(1),
     evidenceKey: EvidenceKeySchema,
-    evidenceEventIds: z.array(EventIdSchema).min(1)
+    evidenceEventIds: z.array(EventIdSchema).min(1),
+    sourceGenerationId: GenerationIdSchema.optional(),
+    sourceProposalRequestId: RequestIdSchema.optional()
   }).strict()),
   event("VERIFICATION_RESULT_ACCEPTED", z.object({
     verificationRequestId: RequestIdSchema,
@@ -108,6 +111,15 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   event("PEDAGOGICAL_ACTION_SELECTED", z.object({ turnId: TurnIdSchema, request: RealizationRequestSchema }).strict()),
   event("MODEL_GENERATION_STARTED", z.object({ generationId: GenerationIdSchema, basis: GenerationBasisSchema, provider: z.string().min(1) }).strict()),
   event("MODEL_PROPOSAL_RECEIVED", z.object({ generationId: GenerationIdSchema, proposal: InterviewerProposalSchema }).strict()),
+  event("FORMAL_INTERPRETATION_PROPOSAL_RECEIVED", z.object({
+    generationId: GenerationIdSchema,
+    proposalRequestId: RequestIdSchema,
+    proposal: FormalInterpretationProposalSchema
+  }).strict()),
+  event("FORMAL_INTERPRETATION_PROPOSAL_REJECTED", z.object({
+    generationId: GenerationIdSchema,
+    reason: z.string().min(1)
+  }).strict()),
   event("MODEL_GENERATION_SUPERSEDED", z.object({ generationId: GenerationIdSchema, reason: z.string().min(1) }).strict()),
   event("PROPOSAL_VALIDATED", z.object({ generationId: GenerationIdSchema, analysis: DisclosureAnalysisSchema }).strict()),
   event("PROPOSAL_REJECTED", z.object({ generationId: GenerationIdSchema, reason: z.string().min(1) }).strict()),
