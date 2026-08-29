@@ -145,3 +145,27 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: mint a new delivery per reconnect; resend terminal deliveries; automatically convert reconnect to exposure.
 - Consequences: renderers must retain a bounded processed-`DeliveryId` cache and send separate idempotent exposure/completion acknowledgements.
 - Reversible: the transport shape is reversible; stable identity and conservative status semantics are frozen.
+
+## D019 — Local compute uses isolated NDJSON stdio
+
+- Decision: supervise one Python process from Node using protocol-v1 newline-delimited JSON over stdin/stdout, launched with Python isolated mode and a small allowlisted environment.
+- Reason: worker language/process topology is unfrozen. Stdio avoids opening another authenticated network surface while still providing explicit, testable request/result envelopes.
+- Alternatives considered: loopback HTTP; Unix socket/named pipe; embedded Python; one process per request.
+- Consequences: stdout is protocol-only, diagnostics are bounded/redacted from stderr, and production streaming audio/frame transport will need a separate transient channel or framing extension.
+- Reversible: yes.
+
+## D020 — Worker timeout interrupts the whole local process
+
+- Decision: when a request times out or the worker emits malformed, unsolicited, oversized, or basis-mismatched output, reject pending work and terminate the subprocess with semantics named `INTERRUPT_LOCAL_PROCESS`.
+- Reason: the Phase 0 worker has no reliable per-request cancellation primitive. Continuing to trust the process after a framing/provenance violation would be unsafe, and calling termination provider-compute cancellation would be inaccurate.
+- Alternatives considered: ignore malformed lines; leave timed-out work running; implement in-process task cancellation immediately.
+- Consequences: unrelated concurrent worker requests are also rejected and must be retried through application-owned idempotent commands after a new process is started.
+- Reversible: yes, once a demonstrably safe request-level cancellation mechanism exists.
+
+## D021 — Worker duplicate cache is operational only
+
+- Decision: both Node supervision and Python retain bounded recent `RequestId` fingerprints/results; identical duplicates reuse the result and conflicting reuse fails closed.
+- Reason: this makes retries inexpensive and testable while preserving the frozen rule that only application events and durable command results are authoritative.
+- Alternatives considered: no worker deduplication; durable worker database; trusting duplicate callback ordering.
+- Consequences: caches disappear on restart, so application-level `SessionWriter` idempotency remains required when a result is admitted to session state.
+- Reversible: cache size and placement are reversible; conflicting identity reuse must continue to fail closed.

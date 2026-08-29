@@ -256,4 +256,19 @@ Implemented after the asynchronous inbox slice:
 - stable DeliveryId reconnect behavior and renderer-side visible-output deduplication tests.
 - first-use crash recovery that marks persisted in-flight deliveries `POSSIBLY_EXPOSED` before a restarted server handles reconnect.
 
-Still pending in Phase 0: worker IPC transport, a real renderer/audio acknowledgement integration, richer evidence supersession, server-to-client streaming transport, and provider-specific adapter experiments.
+Still pending in Phase 0: worker-result admission into the authoritative command inbox, a real renderer/audio acknowledgement integration, richer evidence supersession, server-to-client streaming transport, and provider-specific adapter experiments.
+
+## Continuation progress — local-compute worker boundary
+
+Implemented after the authenticated loopback slice:
+
+- protocol-v1 discriminated Zod schemas for health and transcript-analysis requests/results;
+- a supervised Python subprocess over NDJSON stdio with isolated mode and an allowlisted environment;
+- strict RequestId and source-revision correlation;
+- bounded, non-authoritative duplicate-result caches and conflicting-ID rejection;
+- fail-closed handling for malformed, unsolicited, oversized, stale-basis, late, and timed-out results;
+- explicit whole-process `INTERRUPT_LOCAL_PROCESS` semantics;
+- a deterministic Python worker that has no event, SQLite, provider, or application-state authority;
+- real-process and fault-injection tests.
+
+The worker output is not yet wired into an authoritative interview command. That admission path must validate current state and execute through `SessionWriter`; it is the next worker integration slice rather than an implicit capability of the subprocess.

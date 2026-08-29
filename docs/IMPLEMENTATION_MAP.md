@@ -42,7 +42,7 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Delivery Coordinator | `packages/delivery/src/delivery-coordinator.ts` | queue/start/ack/cancel/recovery transitions | writer, events | 0 |
 | Renderer acknowledgements | `packages/delivery/src/renderer.ts` | `Renderer`, `RendererAcknowledgement`, `MockRenderer` | delivery IDs | 0 |
 | Whiteboard abstraction | `packages/domain/src/whiteboard.ts`, `packages/whiteboard/` | `WhiteboardAdapter`, ownership-layer board actions | board revisions | 0 contract; 3 integration |
-| Local compute worker boundary | `workers/python/README.md`, later protocol schema | untrusted request/result envelopes; no authority | local IPC, commands | 0 contract; 4+ implementation |
+| Local compute worker boundary | `packages/local-compute/src/protocol.ts`, `worker-client.ts`, `workers/python/local_compute_worker.py` | `LocalComputeRequest`, `LocalComputeResponse`, `LocalComputeWorkerClient`, `LocalProcessInterruption` | domain IDs, Zod, Node child process, isolated Python stdio | 0 boundary implemented; production compute functions deferred |
 | Frontend/backend protocol | `packages/domain/src/protocol.ts`, `apps/server/src/loopback-command-server.ts`; later `apps/web` | versioned Zod command/response union; start/input/summary/reconnect/exposure/completion messages | domain schemas, writer, delivery | 0 browser-MVP boundary implemented; web client deferred |
 | Security boundaries | `packages/domain/src/security.ts`, `apps/server/src/loopback-command-server.ts` | loopback-only bind, exact Origin allowlist, constant-time client-token check, bounded JSON body, non-secret error responses | protocol/provider policy | 0 browser-MVP boundary implemented |
 | Testing infrastructure | `tests/`, `vitest.config.ts` | unit, replay, crash, idempotency, property tests | all implemented modules | 0 |
@@ -68,7 +68,11 @@ persistence --------------------------> events
 
 verification --------------------------> domain
 whiteboard ----------------------------> domain
-workers/python --validated results-----> server command inbox
+local-compute -------------------------> domain
+      |
+      +-- supervised NDJSON stdio -----> workers/python
+                                           |
+                                           +-- untrusted result proposal
 ```
 
 Rules:
@@ -78,6 +82,7 @@ Rules:
 - `persistence` imports `events` and `domain`; it never calls interview policy.
 - `providers`, `problems`, `verification`, and `whiteboard` import only `domain` (providers may return proposals but never events).
 - `delivery` may create event drafts but cannot mutate session state or append independently; all drafts go through `SessionWriter`.
+- `local-compute` imports domain schemas only. It and `workers/python` cannot import events or persistence, open SQLite, or commit authoritative state.
 - `interview-engine` orchestrates policy and effects and is the only layer that joins persistence, providers, delivery, and problems.
 - Apps are composition roots. No lower package imports an app. No circular project dependency is permitted.
 
@@ -95,6 +100,21 @@ untrusted callback/result
 ```
 
 Provider sessions, renderer caches, snapshots, and local workers are disposable. SQLite semantic events are authoritative.
+
+## Local-compute process boundary
+
+```text
+Node supervisor
+  -> strict protocol-v1 Zod request
+  -> Python -I -u with allowlisted environment
+  -> one request per stdin JSON line
+  -> one result proposal per stdout JSON line
+  -> strict protocol-v1 Zod response
+  -> request and source-revision correlation
+  -> application command inbox (future integration)
+```
+
+Malformed, unsolicited, oversized, or basis-mismatched worker output fails the process closed. A timeout interrupts the complete local worker process because Phase 0 has no honest per-request compute cancellation mechanism. Operational duplicate caches are bounded and disposable; they are not authoritative state.
 
 ## Browser-MVP command boundary
 
