@@ -21,7 +21,7 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Turn Coordinator | `packages/interview-engine/src/turn-coordinator.ts` | `TurnCoordinator`, input/turn/generation command builders | writer, domain | 0 |
 | InputEpisode lifecycle | domain types + `turn-coordinator.ts` + event schemas | utterance onset/discard/finalize; speech/typing/board episode updates; Turn commit | domain, events | 0 |
 | GenerationBasis | `packages/domain/src/generation.ts` | `GenerationBasis`, schema | revisions, IDs | 0 |
-| Compatibility checker | `packages/interview-engine/src/compatibility.ts` | `isGenerationBasisStillCompatible` | state, GenerationBasis | 0 |
+| Compatibility checker | `packages/events/src/generation-compatibility.ts` (re-exported by interview-engine) | `isGenerationBasisStillCompatible` | state, GenerationBasis | 0 |
 | Context Compiler | `packages/interview-engine/src/context-compiler.ts` | `compileContext`, `CompiledContext` | problem public data, policy, state | 0 |
 | Context Epoch | domain revisions + reducer | `ContextEpoch`; increment on non-monotonic truth changes | events | 0 |
 | Pedagogical policy | `packages/interview-engine/src/pedagogical-policy.ts` | `selectPedagogicalAction`, `RealizationRequest` | evidence, reasoning graph | 0 baseline; 2 advanced |
@@ -39,7 +39,7 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Disclosure validator | `packages/interview-engine/src/disclosure-validator.ts` | `DisclosureValidator`, independent analyzer result | protected facts, compatibility | 0 baseline; 2 semantic model |
 | Protected disclosure model | `packages/domain/src/disclosure.ts`, `packages/problems/` | `ProtectedDisclosure`, levels, formulations | Zod | 0 |
 | DeliveryAtom | `packages/domain/src/delivery.ts` | atom/command/status/medium schemas | IDs, disclosure | 0 |
-| Delivery Coordinator | `packages/delivery/src/delivery-coordinator.ts` | queue/start/ack/cancel/recovery transitions | writer, events | 0 |
+| Delivery Coordinator | `packages/delivery/src/delivery-coordinator.ts` | queue/start/reconnect/ack/cancel/recovery transitions; serialized generation-status and three-valued basis admission before `DELIVERING` | writer, events | 0 |
 | Session recovery composition | `apps/server/src/session-recovery-coordinator.ts`, `local-interview-transport-runtime.ts` | one shared first-use recovery promise per session; composed command/renderer lifecycle; serialized recovery state recheck | registry, Delivery Coordinator, both loopback transports | 0 implemented |
 | Renderer acknowledgements | `packages/delivery/src/renderer.ts`, `renderer-stream-protocol.ts`, `apps/web/src/renderer-client.ts`, `apps/server/src/renderer-stream-server.ts` | `Renderer`, `MockRenderer`, `RendererClient`, stable-ID stream commands, separate exposed/completed acknowledgements | delivery IDs, authenticated loopback transport | 0 TEXT/AUDIO transport harness implemented |
 | Whiteboard abstraction | `packages/domain/src/whiteboard.ts`, `packages/whiteboard/` | `WhiteboardAdapter`, ownership-layer board actions | board revisions | 0 contract; 3 integration |

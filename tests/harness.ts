@@ -12,6 +12,7 @@ import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
+  isGenerationBasisStillCompatible,
   SessionRuntimeRegistry,
   TurnCoordinator,
   createCommandEnvelope,
@@ -67,4 +68,19 @@ export async function authorizeSafeProbe(harness: CoreHarness, envelope = provid
   });
   if (!result.accepted || result.deliveryAtoms[0] === undefined) throw new Error(`Safe proposal rejected: ${result.reason ?? "unknown"}`);
   return result.deliveryAtoms[0];
+}
+
+export async function ensureCompatibleGeneration(writer: SessionWriter): Promise<GenerationId> {
+  const existing = Object.values(writer.getState().generations).find((generation) =>
+    generation.status !== "SUPERSEDED"
+    && generation.status !== "REJECTED"
+    && isGenerationBasisStillCompatible(generation.basis, writer.getState()) === "COMPATIBLE"
+  );
+  if (existing !== undefined) return existing.generationId;
+  if (writer.getState().started) throw new Error("Test fixture has no compatible generation");
+  const turns = new TurnCoordinator(writer);
+  await turns.startSession(sixPeopleProblem);
+  const { inputEpisodeId, turnId } = await turns.commitInput("Renderer transport fixture input");
+  await turns.selectAction(turnId);
+  return (await turns.startGeneration(inputEpisodeId, turnId, "mock-renderer-fixture")).generationId;
 }

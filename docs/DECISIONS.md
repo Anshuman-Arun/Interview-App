@@ -289,3 +289,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: key idempotency by `RequestId` alone; persist raw command payloads; compare only command names; silently trust legacy rows without fingerprints.
 - Consequences: identical retries remain durable across restart, different commands or payloads using the same `RequestId` raise a fixed `REQUEST_ID_CONFLICT`, and legacy processed-request rows without proof cannot be replayed as duplicates. Raw command identity and possible credentials are never persisted in the idempotency table.
 - Reversible: the canonical encoding and collision-resistant hash algorithm are versionable with a migration; binding a durable result to the exact logical command and failing closed when that proof is absent are not.
+
+## D037 — Delivery start rechecks generation compatibility inside the serialized transition
+
+- Decision: both ordinary delivery start and queued reconnect resolve the atom's generation and evaluate its current `GenerationBasis` while holding the session's serialized transition position. Missing generation provenance, rejected/superseded status, `INCOMPATIBLE`, or `UNKNOWN` rejects the command without appending `DELIVERY_STARTED`.
+- Reason: proposal validation and physical delivery are separated in time. Transcript, board, problem, policy, or Context Epoch state can change while an atom remains queued, so validation-time compatibility cannot authorize later exposure.
+- Alternatives considered: check only when accepting the proposal; eagerly cancel every queued atom on every revision event; let the renderer decide freshness; allow reconnect to bypass the start gate.
+- Consequences: stale or unprovable output remains `QUEUED` and undisclosed, and every path from `QUEUED` to `DELIVERING` shares the same fail-closed gate. The pure checker lives with event state so delivery can depend on it without creating a delivery-to-engine cycle.
+- Reversible: checker placement and later fine-grained dependencies are reversible; serialized admission and rejection of `UNKNOWN` are not.

@@ -5,7 +5,6 @@ import {
   DeliveryAcknowledgedResponseSchema,
   ProtocolErrorResponseSchema,
   newDeliveryId,
-  newGenerationId,
   newRequestId,
   newSessionId,
   type DeliveryAtom,
@@ -37,6 +36,7 @@ import {
   createLoopbackAcknowledgementSender,
   type AudioPlayer
 } from "../apps/web/src/index.js";
+import { ensureCompatibleGeneration } from "./harness.js";
 
 const CLIENT_TOKEN = "renderer-stream-test-client-token-long-enough";
 const CLIENT_ORIGIN = "http://127.0.0.1:5173";
@@ -426,9 +426,10 @@ async function queueDelivery(
   content: DeliveryAtom["content"],
   disclosureIds: readonly DisclosureId[] = []
 ): Promise<DeliveryAtom> {
+  const generationId = await ensureCompatibleGeneration(writer);
   const atom = DeliveryAtomSchema.parse({
     deliveryId: newDeliveryId(),
-    generationId: newGenerationId(),
+    generationId,
     content,
     disclosureIds,
     effectiveDisclosureLevel: 0,

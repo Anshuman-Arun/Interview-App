@@ -8,7 +8,7 @@ import type {
   SessionId
 } from "../../domain/src/index.js";
 import { CommandEnvelopeSchema, DeliveryCommandSchema, DeliveryIdSchema, DeliveryStatusSchema, newRequestId } from "../../domain/src/index.js";
-import type { EventDraft, SessionState } from "../../events/src/index.js";
+import { isGenerationBasisStillCompatible, type EventDraft, type SessionState } from "../../events/src/index.js";
 import type { Renderer } from "./renderer.js";
 import { z } from "zod";
 
@@ -22,6 +22,18 @@ type TransitionHandler<TResult> = (state: Readonly<SessionState>) => StateTransi
 function createDeliveryEnvelope(sessionId: SessionId, producer: string): CommandEnvelope {
   const requestId: RequestId = newRequestId();
   return { requestId, sessionId, producer, causationId: requestId, correlationId: requestId };
+}
+
+function assertDeliveryCanStart(state: Readonly<SessionState>, deliveryId: DeliveryId): void {
+  const atom = state.deliveries[deliveryId];
+  if (atom === undefined || atom.status !== "QUEUED") throw new Error("Only a queued delivery can start");
+  const generation = state.generations[atom.generationId];
+  if (generation === undefined) throw new Error("Delivery generation provenance is unavailable");
+  if (generation.status === "SUPERSEDED" || generation.status === "REJECTED") {
+    throw new Error(`Delivery generation cannot be delivered: ${generation.status}`);
+  }
+  const compatibility = isGenerationBasisStillCompatible(generation.basis, state);
+  if (compatibility !== "COMPATIBLE") throw new Error(`Delivery generation compatibility is ${compatibility}`);
 }
 
 export interface SessionTransitionSink {
@@ -47,7 +59,8 @@ export class DeliveryCoordinator {
     const envelope = createDeliveryEnvelope(this.writer.sessionId, "delivery-coordinator");
     const result = await this.writer.execute(envelope, { operation: "START_DELIVERY", payload: { deliveryId } }, DeliveryCommandSchema, (state): StateTransition<DeliveryCommand> => {
       const atom = state.deliveries[deliveryId];
-      if (atom === undefined || atom.status !== "QUEUED") throw new Error("Only a queued delivery can start");
+      assertDeliveryCanStart(state, deliveryId);
+      if (atom === undefined) throw new Error("Unknown delivery");
       return {
         drafts: [{ source: "APPLICATION", type: "DELIVERY_STARTED", payload: { deliveryId } }],
         result: { deliveryId, content: atom.content }
@@ -63,6 +76,7 @@ export class DeliveryCoordinator {
       if (atom === undefined) throw new Error("Unknown delivery");
       const deliveryCommand: DeliveryCommand = { deliveryId, content: atom.content };
       if (atom.status === "QUEUED") {
+        assertDeliveryCanStart(state, deliveryId);
         return {
           drafts: [{ source: "APPLICATION", type: "DELIVERY_STARTED", payload: { deliveryId } }],
           result: { deliveryId, status: "DELIVERING", command: deliveryCommand }
