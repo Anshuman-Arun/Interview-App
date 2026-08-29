@@ -151,6 +151,47 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       };
       break;
     }
+    case "VERIFICATION_REQUESTED":
+      if (state.verificationRequests[event.payload.verificationRequestId] !== undefined) throw new Error("Verification request already exists");
+      next = {
+        ...state,
+        verificationRequests: {
+          ...state.verificationRequests,
+          [event.payload.verificationRequestId]: {
+            ...event.payload,
+            requestedEventId: event.eventId,
+            status: "PENDING"
+          }
+        }
+      };
+      break;
+    case "VERIFICATION_RESULT_ACCEPTED": {
+      const request = state.verificationRequests[event.payload.verificationRequestId];
+      if (request === undefined || request.status !== "PENDING") throw new Error("Verification request is not pending");
+      if (request.verifier !== event.payload.result.verifier || request.interpretationConfidence !== event.payload.result.interpretationConfidence) {
+        throw new Error("Verification result does not match its request");
+      }
+      next = {
+        ...state,
+        verificationRequests: {
+          ...state.verificationRequests,
+          [event.payload.verificationRequestId]: { ...request, status: "ACCEPTED", result: event.payload.result }
+        }
+      };
+      break;
+    }
+    case "VERIFICATION_RESULT_DISCARDED": {
+      const request = state.verificationRequests[event.payload.verificationRequestId];
+      if (request === undefined || request.status !== "PENDING") throw new Error("Verification request is not pending");
+      next = {
+        ...state,
+        verificationRequests: {
+          ...state.verificationRequests,
+          [event.payload.verificationRequestId]: { ...request, status: "DISCARDED", discardReason: event.payload.reason }
+        }
+      };
+      break;
+    }
     case "EVIDENCE_PROPOSED":
       next = { ...state, evidenceProposals: [...state.evidenceProposals, event.payload.proposal] };
       break;

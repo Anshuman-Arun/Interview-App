@@ -256,7 +256,7 @@ Implemented after the asynchronous inbox slice:
 - stable DeliveryId reconnect behavior and renderer-side visible-output deduplication tests.
 - first-use crash recovery that marks persisted in-flight deliveries `POSSIBLY_EXPOSED` before a restarted server handles reconnect.
 
-Still pending in Phase 0: a real renderer/audio acknowledgement integration, richer evidence supersession, server-to-client streaming transport, additional local-compute operations, and provider-specific adapter experiments.
+Still pending in Phase 0: a real renderer/audio acknowledgement integration, richer evidence supersession/aggregation, server-to-client streaming transport, additional local-compute and verification operations, and provider-specific adapter experiments.
 
 ## Continuation progress — local-compute worker boundary
 
@@ -295,4 +295,17 @@ Implemented as an isolated verification package slice:
 - `UNRESOLVED` abstention for malformed, incomplete, ambiguous, or lower-confidence interpretations;
 - exhaustive testing of all 32,768 two-colourings of K6 plus the triangle-free five-cycle/complement K5 colouring.
 
-The verifier is not yet wired to model-produced EvidenceProposals. That later admission must keep interpretation confidence and verifier output distinct from authoritative student evidence.
+## Continuation progress — authoritative verification admission
+
+Implemented after the isolated Oxford verifier:
+
+- runtime schemas for verifier results, persisted formal work items, and durable admission results;
+- full Context Epoch and revision basis captured when verification is requested;
+- callback identity/basis checks plus the existing three-valued compatibility check;
+- independent application rerun of the registered deterministic verifier before accepting a supplied result;
+- semantic request, accepted-result, and discarded-result events with pure replay state;
+- atomic positive claim-correctness evidence only for independently reproduced `VERIFIED` results;
+- authoritative `UNRESOLVED` and `CONTRADICTED` results without fabricated positive or negative student evidence;
+- fail-closed handling for stale work, verifier switching, tampering, exceptions, invalid output, malformed callbacks, duplicates, and restart.
+
+Natural-language-to-formal interpretation remains outside this deterministic slice. Any later model-produced interpretation must enter as a proposal with explicit confidence and may not bypass the same admission path.

@@ -21,7 +21,8 @@ import {
   TranscriptRevisionSchema,
   TurnIdSchema,
   UtteranceIdSchema,
-  BoardObservationSchema
+  BoardObservationSchema,
+  VerificationResultSchema
 } from "../../domain/src/index.js";
 
 export const CURRENT_EVENT_SCHEMA_VERSION = 1 as const;
@@ -74,6 +75,23 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   event("LOCAL_COMPUTE_RESULT_DISCARDED", z.object({
     computeRequestId: RequestIdSchema,
     operation: z.literal("ANALYZE_TRANSCRIPT"),
+    reason: z.string().min(1)
+  }).strict()),
+  event("VERIFICATION_REQUESTED", z.object({
+    verificationRequestId: RequestIdSchema,
+    verifier: z.string().min(1),
+    basis: GenerationBasisSchema,
+    candidateFormalInterpretation: z.string().min(1).max(100_000),
+    interpretationConfidence: z.number().min(0).max(1),
+    evidenceKey: EvidenceKeySchema,
+    evidenceEventIds: z.array(EventIdSchema).min(1)
+  }).strict()),
+  event("VERIFICATION_RESULT_ACCEPTED", z.object({
+    verificationRequestId: RequestIdSchema,
+    result: VerificationResultSchema
+  }).strict()),
+  event("VERIFICATION_RESULT_DISCARDED", z.object({
+    verificationRequestId: RequestIdSchema,
     reason: z.string().min(1)
   }).strict()),
   event("EVIDENCE_PROPOSED", z.object({ proposal: EvidenceProposalSchema }).strict()),

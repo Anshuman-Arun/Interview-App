@@ -201,3 +201,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: parse free-form mathematical prose; infer omitted edges; accept a confidence threshold below 1.
 - Consequences: valid K6 encodings are exhaustively checkable and K5 counterexamples are correctly contradicted, while partial or ambiguous interpretations remain `UNRESOLVED` rather than being guessed.
 - Reversible: the protocol and confidence policy are versionable; deterministic checking with abstention is not.
+
+## D026 — Verification admission independently reruns the named verifier
+
+- Decision: capture the formal interpretation, verifier identity, evidence scope, student-event provenance, and full revision basis in a semantic request; admit a callback only after application code reruns that named verifier and obtains an exactly matching runtime-valid result.
+- Reason: callback shape, identity, and revision checks cannot establish mathematical correctness. Rerunning the deterministic implementation prevents a stale, switched, malformed, or tampered result from becoming authoritative.
+- Alternatives considered: trust schema-valid callbacks; invoke the verifier and append its output without a separate request lifecycle; treat verifier output as an EvidenceProposal.
+- Consequences: `VERIFIED`, `CONTRADICTED`, and `UNRESOLVED` are replayable statuses with provenance. Only `VERIFIED` atomically commits scoped claim-correctness evidence; contradiction and abstention remain recorded without inferring a student rating whose semantics may be ambiguous.
+- Reversible: verifier registration and evidence policy are reversible; application-owned admission, provenance, and abstention are not.

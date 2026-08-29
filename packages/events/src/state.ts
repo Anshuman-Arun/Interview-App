@@ -18,7 +18,9 @@ import type {
   TurnId,
   UtteranceId,
   BoardObservation,
-  RequestId
+  RequestId,
+  VerificationResult,
+  EvidenceKey
 } from "../../domain/src/index.js";
 import {
   zeroBoardRevision,
@@ -66,6 +68,19 @@ export interface LocalComputeRequestState {
   };
   readonly discardReason?: string;
 }
+export interface VerificationRequestState {
+  readonly verificationRequestId: RequestId;
+  readonly verifier: string;
+  readonly basis: GenerationBasis;
+  readonly candidateFormalInterpretation: string;
+  readonly interpretationConfidence: number;
+  readonly evidenceKey: EvidenceKey;
+  readonly evidenceEventIds: readonly EventId[];
+  readonly requestedEventId: EventId;
+  readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
+  readonly result?: VerificationResult;
+  readonly discardReason?: string;
+}
 export interface GenerationState {
   readonly generationId: GenerationId;
   readonly basis: GenerationBasis;
@@ -94,6 +109,7 @@ export interface SessionState {
   readonly disclosureLedger: readonly DisclosureId[];
   readonly visionRequests: Readonly<Record<string, VisionRequestState>>;
   readonly localComputeRequests: Readonly<Record<string, LocalComputeRequestState>>;
+  readonly verificationRequests: Readonly<Record<string, VerificationRequestState>>;
   readonly evidenceProposals: readonly EvidenceProposal[];
   readonly studentEvidence: Readonly<Record<string, EvidenceValue>>;
 }
@@ -117,6 +133,7 @@ export const initialSessionState = (sessionId: SessionId): SessionState => ({
   disclosureLedger: [],
   visionRequests: {},
   localComputeRequests: {},
+  verificationRequests: {},
   evidenceProposals: [],
   studentEvidence: {}
 });

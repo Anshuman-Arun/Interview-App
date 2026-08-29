@@ -8,3 +8,4 @@ export * from "./session-writer.js";
 export * from "./synthetic-interview.js";
 export * from "./turn-coordinator.js";
 export * from "./vision-freshness.js";
+export * from "./verification-coordinator.js";
