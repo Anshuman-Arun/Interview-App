@@ -1,8 +1,8 @@
 import {
   DisclosureIdSchema,
-  assertReasoningGraphIntegrity,
   type InterviewProblem
 } from "../../domain/src/index.js";
+import { assertInterviewProblemIntegrity } from "./problem-integrity.js";
 
 const choosePersonDisclosure = DisclosureIdSchema.parse("disclosure_choose_person_pigeonhole");
 const completeTriangleDisclosure = DisclosureIdSchema.parse("disclosure_complete_monochromatic_triangle");
@@ -65,5 +65,4 @@ export const sixPeopleProblem: InterviewProblem = {
   }
 };
 
-assertReasoningGraphIntegrity(sixPeopleProblem.interviewer.reasoningGraph);
-
+assertInterviewProblemIntegrity(sixPeopleProblem);
