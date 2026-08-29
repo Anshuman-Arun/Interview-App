@@ -23,7 +23,7 @@ export function deferred<T>(): Deferred<T> {
 
 interface ScheduledTask<T> {
   readonly label: string;
-  readonly gate: Deferred<void>;
+  readonly gate: Deferred<undefined>;
   readonly completion: Promise<T | undefined>;
   released: boolean;
   cancelled: boolean;
@@ -36,7 +36,7 @@ export class DeterministicScheduler {
     if (label.trim().length === 0) throw new Error("Scheduled callback label must be non-empty");
     if (this.tasks.has(label)) throw new Error(`Scheduled callback already exists: ${label}`);
 
-    const gate = deferred<void>();
+    const gate = deferred<undefined>();
     const task: ScheduledTask<T> = {
       label,
       gate,
@@ -52,7 +52,7 @@ export class DeterministicScheduler {
       ...task,
       completion
     };
-    this.tasks.set(label, stored as ScheduledTask<unknown>);
+    this.tasks.set(label, stored);
   }
 
   public has(label: string): boolean {
@@ -75,7 +75,7 @@ export class DeterministicScheduler {
     if (task.cancelled) throw new Error(`Scheduled callback was cancelled: ${label}`);
     if (task.released) return;
     task.released = true;
-    task.gate.resolve();
+    task.gate.resolve(undefined);
   }
 
   public async settle<T>(label: string): Promise<T> {
@@ -97,7 +97,7 @@ export class DeterministicScheduler {
     for (const task of this.tasks.values()) {
       if (!task.released) {
         task.cancelled = true;
-        task.gate.resolve();
+        task.gate.resolve(undefined);
       }
     }
     await Promise.allSettled(Array.from(this.tasks.values(), (task) => task.completion));
