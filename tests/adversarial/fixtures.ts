@@ -9,7 +9,6 @@ import {
   EventIdSchema,
   evidenceKeyToString,
   newDeliveryId,
-  newGenerationId,
   newRequestId,
   newSessionId,
   type CommandEnvelope,
@@ -320,7 +319,7 @@ export class AdversarialFixture {
         };
     const atom = DeliveryAtomSchema.parse({
       deliveryId: newDeliveryId(),
-      generationId: newGenerationId(),
+      generationId: this.initialGenerationId,
       content,
       disclosureIds,
       effectiveDisclosureLevel: disclosureIds.length === 0 ? 0 : 2,
