@@ -169,3 +169,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: no worker deduplication; durable worker database; trusting duplicate callback ordering.
 - Consequences: caches disappear on restart, so application-level `SessionWriter` idempotency remains required when a result is admitted to session state.
 - Reversible: cache size and placement are reversible; conflicting identity reuse must continue to fail closed.
+
+## D022 — Dependency build scripts are denied by default
+
+- Decision: CI installs with `--ignore-scripts`, and `pnpm-workspace.yaml` explicitly sets the only currently detected build-script package, `esbuild`, to `false` under `allowBuilds`.
+- Reason: Phase 0 does not require dependency lifecycle scripts, and `tsx`/Vitest use the locked platform binary package successfully without running `esbuild` installation code. An explicit decision also prevents pnpm's ignored-build policy from failing ambiguously.
+- Alternatives considered: allow all dependency scripts; explicitly approve the `esbuild` script; leave the generated placeholder unresolved.
+- Consequences: a dependency that genuinely requires an installation script must receive a package-specific review and explicit policy change before CI can use it.
+- Reversible: yes, package by package after review.
