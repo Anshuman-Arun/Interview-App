@@ -1,5 +1,7 @@
 import type { DeterministicVerifier, VerificationResult } from "../../domain/src/index.js";
 
+export * from "./two-colour-graph-verifier.js";
+
 export class AbstainingVerifier implements DeterministicVerifier {
   public async verify(_statement: string, interpretationConfidence: number): Promise<VerificationResult> {
     return {
@@ -12,4 +14,3 @@ export class AbstainingVerifier implements DeterministicVerifier {
     };
   }
 }
-
