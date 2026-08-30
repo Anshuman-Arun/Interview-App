@@ -45,6 +45,7 @@ The schedules directly exercise:
 | Verification | `VerificationCoordinator`, `TwoColourGraphVerifier`, `AbstainingVerifier` |
 | Evidence | production scoped evidence update/supersession/invalidation |
 | Delivery | `DeliveryCoordinator` |
+| Shared restart recovery | `SessionRecoveryCoordinator`, `LocalInterviewTransportRuntime` |
 | Renderer | production `RendererClient` and `RendererPresentationNotExposedError` |
 | Billing | `assertProviderPermitted` |
 | Whiteboard ownership | production `BoardActionSchema` |
@@ -64,6 +65,7 @@ tests/adversarial/
   delivery-schedules.property.test.ts
   callback-admission.property.test.ts
   restart-replay.property.test.ts
+  shared-session-recovery.property.test.ts
   regression-seeds.test.ts
 ```
 
@@ -80,7 +82,8 @@ Scheduled callback families include:
 - local-compute result, primary and duplicate;
 - deterministic-verifier result, primary and duplicate;
 - renderer exposed acknowledgement, primary and duplicate;
-- renderer completed acknowledgement, primary and duplicate.
+- renderer completed acknowledgement, primary and duplicate;
+- command-first-use, renderer-first-use, shared duplicate, and independent duplicate recovery callers.
 
 Cancellation and state changes may occur before or after callback release because operation order is generated explicitly.
 
@@ -189,6 +192,17 @@ Delivery schedules randomize:
 
 Renderer acknowledgement callbacks are released through the deterministic scheduler rather than called by arbitrary timing.
 
+### Shared session-recovery schedules
+
+Shared recovery schedules randomize release ordering among:
+
+- command-side first use;
+- renderer-side first use;
+- a duplicate caller sharing the process-lifetime recovery coordinator;
+- an independent duplicate recovery coordinator.
+
+All four callbacks are held behind explicit deferred barriers and released without timing sleeps. The assertions require exactly one durable `DELIVERY_POSSIBLY_EXPOSED` transition, harmless duplicate callers, no reconnect/publish replay of `POSSIBLY_EXPOSED`, and live state equal to pure replay.
+
 ### Restart/replay schedules
 
 Restart schedules combine:
@@ -220,6 +234,9 @@ The following checks run after every generated operation where applicable:
 | Evidence cardinality | at most one ACTIVE evidence record exists per EvidenceKey |
 | Evidence projection | active history record equals `studentEvidence` projection |
 | Secret persistence | adversarial secret fixture does not occur in events or checked persisted results |
+| Shared recovery cardinality | racing recovery callers produce exactly one recovery event per uncertain delivery |
+| Uncertain replay suppression | `POSSIBLY_EXPOSED` never yields a reconnect/publish delivery command |
+| Recovery replay equality | state after shared recovery equals `replaySession(store.load())` |
 
 Additional operation/regression assertions cover:
 
@@ -259,7 +276,8 @@ Additional operation/regression assertions cover:
 15. UNKNOWN generation provenance producing no DeliveryAtom;
 16. whiteboard student-layer mutation rejected by runtime schema;
 17. stale queued delivery blocked after generation-basis invalidation;
-18. conflicting RequestId reuse failing closed.
+18. conflicting RequestId reuse failing closed;
+19. command/renderer first-use recovery race producing one conservative recovery event and no visible replay.
 
 Counterexamples discovered by property testing should be minimized by fast-check and then promoted into this stable regression file.
 
@@ -273,8 +291,9 @@ Default CI settings are intentionally bounded:
 | callbacks | 10 | 20260830 |
 | delivery | 8 | 20260831 |
 | restart | 6 | 20260832 |
+| shared-recovery | 8 | 20260833 |
 
-Total default property runs: **36**, plus named regressions.
+Total default property runs: **44**, plus named regressions.
 
 Each suite prints its run count, seed, and replay path before execution.
 
@@ -363,7 +382,7 @@ Cleanup:
 - closes SQLite;
 - recursively removes its temporary database directory.
 
-Renderer regression fixtures are in-process and do not start external servers or workers.
+Most renderer regression fixtures are in-process. The shared-recovery transport regression starts the production loopback command and renderer servers on ephemeral loopback ports and closes them in `finally`; it starts no external worker or provider process.
 
 This harness adds no process, package, worker, dependency, or CI configuration.
 
@@ -381,15 +400,15 @@ The harness cannot prove:
 
 Randomized state-machine testing provides reproducible empirical counterexamples and broad schedule coverage. Formal proof would require a separately specified transition system and proof obligations.
 
-## Production defects discovered
+## Historical production defects discovered by the harness
 
-The final verification branch intentionally remains failing because it contains deterministic reproducers for genuine production defects. No production fix belongs on this verification-only branch.
+The first adversarial pass found two real production defects. Both are now fixed on the authoritative base, and their stable regressions remain in the harness.
 
-### ADV-001 — stale queued delivery can start after generation invalidation
+### ADV-001 — stale queued delivery start
 
-**Affected frozen invariant:** only output whose current GenerationBasis is `COMPATIBLE` may become deliverable; stale generation output must not progress toward exposure.
+**Frozen invariant:** only output whose current GenerationBasis is `COMPATIBLE` may progress toward exposure.
 
-**Discovered by randomized schedule:**
+Original randomized counterexample:
 
 ```text
 suite: core
@@ -397,72 +416,128 @@ seed: 20260829
 path: 6:1:2
 ```
 
-Fast-check minimized the failing generated schedule to:
+The minimized regression is:
 
 ```text
-RELEASE_PROVIDER_DUPLICATE
-BILLING_CURRENT
-BILLING_MISSING
-BOARD_REVISION
-BILLING_STALE
-PROVIDER_SWITCH
-START_QUEUED_DELIVERY
-RELEASE_VISION_PRIMARY
+accepted provider proposal
+→ DeliveryAtom QUEUED
+→ basis-changing board revision
+→ GenerationBasis becomes INCOMPATIBLE
+→ attempted delivery start must fail closed
 ```
 
-The irrelevant billing/vision/provider-switch operations can be removed manually. The stable named regression reduces the defect to:
+Fixed on `main` by commit `10e96b2d634338e4d4b03ee1288f9108a538499b` (`Block stale queued delivery starts (#13)`).
+
+The exact historical property replay now passes at seed `20260829`, path `6:1:2`.
+
+### ADV-002 — conflicting RequestId reuse
+
+**Frozen invariant:** exact duplicate command identity may be idempotent; conflicting reuse of the same RequestId must fail closed.
+
+The stable regression reuses one RequestId for `ACK_DELIVERY_EXPOSED` and then `ACK_DELIVERY_COMPLETED`. The second command must be rejected rather than receive the first command's persisted result.
+
+Fixed on `main` by commit `edc93acf396d93675f1a943eb88659cc29e33dc1` (`Bind RequestId idempotency to command fingerprints (#12)`).
+
+The stable regression now passes.
+
+## Shared recovery reconciliation
+
+The reconciled harness incorporates the application-owned shared session-recovery boundary introduced on `main`.
+
+The generated and named schedules verify that:
+
+- command and renderer first use can race without double recovery;
+- duplicate recovery callers are harmless even when they do not share the same coordinator object;
+- one uncertain `DELIVERING` atom produces exactly one durable `DELIVERY_POSSIBLY_EXPOSED` event;
+- `POSSIBLY_EXPOSED` cannot be visibly replayed by reconnect or renderer publication;
+- live state after recovery is exactly equal to pure event replay.
+
+Callback ordering is controlled with deterministic deferred barriers rather than timing sleeps.
+
+## Reconciliation validation record
+
+Authoritative reconciliation base:
 
 ```text
-1. accept a COMPATIBLE provider proposal and queue its DeliveryAtom;
-2. commit a board revision;
-3. verify the originating GenerationBasis is now INCOMPATIBLE;
-4. call DeliveryCoordinator.markStarted(deliveryId).
+65c3a033e7d94eefc7356d746ec83753b6591675
 ```
 
-**Observed production behavior:** `markStarted` succeeds, appends `DELIVERY_STARTED`, and moves the stale queued atom to `DELIVERING`.
+### Bounded/default pass
 
-**Expected behavior:** the stale queued atom must not start. A revision-changing application transition should invalidate/cancel it, or the application orchestration boundary must reject start after a final compatibility check.
+CI run `33290351166`:
 
-**Smallest likely production location:** application-owned invalidation/orchestration around `TurnCoordinator.commitBoardPatch` / other basis-changing transitions and delivery-start authorization. `packages/delivery` itself must not gain an architecture-violating dependency on interview policy.
+- Ubuntu: 40/40 test files, 301/301 tests, 30.40 s Vitest duration;
+- Windows: 40/40 test files, 301/301 tests, 42.56 s Vitest duration;
+- architecture checker, typecheck, lint, and synthetic demo passed on both;
+- demo: eventCount 15, finalSequence 15, visibleDeliveryCount 1, replayMatches true.
 
-This reproduces identically on Ubuntu and Windows.
-
-### ADV-002 — conflicting RequestId reuse returns a false duplicate success
-
-**Affected frozen invariant:** the same RequestId with the same command fingerprint is idempotent; conflicting RequestId reuse must fail closed.
-
-**Stable deterministic regression:**
+Default generated schedules:
 
 ```text
-1. queue and start one DeliveryAtom;
-2. ACK_DELIVERY_EXPOSED using RequestId R;
-3. verify state is EXPOSED;
-4. ACK_DELIVERY_COMPLETED using the same RequestId R.
+core             12  seed 20260829
+callbacks        10  seed 20260830
+delivery          8  seed 20260831
+restart           6  seed 20260832
+shared-recovery   8  seed 20260833
 ```
 
-**Observed production behavior:** the second command resolves successfully with the previously persisted boolean result. No completion event is appended and authoritative delivery state remains `EXPOSED`.
+### Historical ADV-001 replay
 
-This means RequestId equality alone is currently treated as sufficient proof of duplicate-command identity.
+CI run `33290468056`:
 
-**Expected behavior:** the second use of `R` has a different command fingerprint and must be rejected as conflicting reuse.
+```text
+suite: core
+runs: 12
+seed: 20260829
+path: 6:1:2
+```
 
-**Smallest likely production location:** the durable processed-request/idempotency boundary spanning `SessionWriter.execute` and `SqliteEventStore.processed_requests`, which currently persists RequestId/result but no command fingerprint/type identity.
+The exact replay passed on Ubuntu and Windows. The complete suite and synthetic demo also passed.
 
-This reproduces identically on Ubuntu and Windows.
+### Extended randomized pass 1
 
-### Verification status with known defects
+CI run `33290559564`:
 
-On CI run `33276173458`:
+```text
+100 schedules per property suite
+5 randomized suites
+500 schedules total
+fixed seed: 314159
+path: none
+```
 
-- architecture boundary checker passed on Ubuntu and Windows;
-- typecheck passed on Ubuntu and Windows;
-- lint passed on Ubuntu and Windows;
-- callback-admission property passed;
-- delivery property passed;
-- restart/replay property passed;
-- the core property failed only on ADV-001;
-- the named regression package failed only on ADV-002 before ADV-001 was promoted into its own named regression;
-- all non-adversarial test files passed;
-- synthetic demo was not executed by the sequential CI workflow because Vitest intentionally failed first.
+All 500 schedules passed on both platforms.
 
-The branch is therefore intentionally red until production fixes the frozen invariants above.
+- Ubuntu Vitest duration: 45.90 s;
+- Windows Vitest duration: 133.71 s;
+- complete suite: 40/40 files, 301/301 tests;
+- architecture checker, typecheck, lint, and synthetic demo passed.
+
+### Extended randomized pass 2
+
+CI run `33290714333`:
+
+```text
+100 schedules per property suite
+5 randomized suites
+500 schedules total
+fixed seed: 271828
+path: none
+```
+
+All 500 schedules passed on both platforms.
+
+- Ubuntu Vitest duration: 48.37 s;
+- Windows Vitest duration: 128.22 s;
+- complete suite: 40/40 files, 301/301 tests;
+- architecture checker, typecheck, lint, and synthetic demo passed.
+
+No new production counterexample was found in either extended run.
+
+### Stress-timeout classification
+
+An earlier temporary 500-schedule configuration failed on Windows only because Vitest's default 5-second per-test timeout expired while the same schedules completed successfully on Ubuntu. This was classified as a **harness validation defect**, not a property counterexample: fast-check emitted no failing seed/path. The property suites now use a 120-second test timeout for extended validation; run counts and assertions were not reduced or weakened.
+
+## Current status
+
+The harness is intended to be green on the reconciled base. Historical production defects remain as permanent regressions. Passing randomized schedules provide reproducible empirical evidence, not exhaustive proof.
