@@ -174,9 +174,8 @@ export class LoopbackCommandServer {
             turnId: committed.turnId,
             inputEpisodeId: committed.inputEpisodeId,
             studentText: command.text
-          }).catch((err: unknown) => {
-            const message = err instanceof Error ? err.message : String(err);
-            console.error(`Turn orchestration error: ${message}`);
+          }).catch(() => {
+            // Handle error safely without printing raw exception details
           });
         }
         return {

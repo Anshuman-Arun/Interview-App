@@ -784,8 +784,5 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
 }
 
 function generateId(): string {
-  if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") {
-    return globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 12);
-  }
-  return Math.random().toString(36).slice(2, 14);
+  return globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 }

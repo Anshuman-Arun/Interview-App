@@ -316,7 +316,7 @@ export const App: React.FC = () => {
                 }`}
                 data-testid="tab-whiteboard"
               >
-                🎨 Visual Whiteboard (tldraw)
+                🎨 Visual Whiteboard (Layer-Isolated Harness)
               </button>
               <button
                 type="button"

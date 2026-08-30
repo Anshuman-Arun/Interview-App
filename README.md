@@ -92,7 +92,7 @@ corepack pnpm lint
 # 4. Production web application build (Vite client bundle)
 corepack pnpm build:web
 
-# 5. Vitest automated test suite (49 test files, 617+ tests)
+# 5. Vitest automated test suite (50 test files, 624 tests)
 corepack pnpm test
 
 # 6. End-to-end typed interview test suite
@@ -101,4 +101,3 @@ corepack pnpm test:e2e
 # 7. Run full check aggregate
 corepack pnpm check
 ```
-

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   newSessionId,
   type DeliveryId,
+  type RequestId,
   type SessionId
 } from "../packages/domain/src/index.js";
 import { replaySession } from "../packages/events/src/index.js";
@@ -184,5 +185,169 @@ describe("Executable Server Orchestration & End-to-End Delivery", () => {
       })
     });
     expect(unauthorizedRes.status).toBe(401);
+  });
+
+  it("handles duplicate and concurrent COMMIT_TYPED_INPUT idempotently without duplicate generations", async () => {
+    serverInstance = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:"
+    });
+
+    const commandUrl = serverInstance.bound.command.url;
+    const authenticatedFetch: typeof fetch = async (input, init = {}) => {
+      const headers = new Headers(init.headers);
+      headers.set("Origin", TEST_ORIGIN);
+      headers.set("x-interview-client-token", TEST_CLIENT_TOKEN);
+      return fetch(input, { ...init, headers });
+    };
+
+    const commandClient = new BrowserCommandClient({
+      baseUrl: commandUrl,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: authenticatedFetch
+    });
+
+    const sessionId: SessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+
+    // Send concurrent duplicate requests with same requestId
+    const dupRequestId = "req_dup_1" as RequestId;
+    const [res1, res2] = await Promise.all([
+      commandClient.commitTypedInput(sessionId, "Step 1: Vertices of K_6", {
+        requestId: dupRequestId
+      }),
+      commandClient.commitTypedInput(sessionId, "Step 1: Vertices of K_6", {
+        requestId: dupRequestId
+      })
+    ]);
+
+    expect(res1.turnId).toBe(res2.turnId);
+    expect(res1.inputEpisodeId).toBe(res2.inputEpisodeId);
+
+    // Wait for orchestration
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const state = serverInstance.registry.get(sessionId).getState();
+    const generationsForTurn = Object.values(state.generations).filter(
+      (g) => g.basis.turnId === res1.turnId
+    );
+    expect(generationsForTurn.length).toBeLessThanOrEqual(1);
+  });
+
+  it("recovers un-orchestrated turns after simulated crash between input commit and generation", async () => {
+    const dbPath = ":memory:";
+    serverInstance = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: dbPath
+    });
+
+    const sessionId: SessionId = newSessionId();
+    const writer = serverInstance.registry.get(sessionId);
+    const { TurnCoordinator } = await import("../packages/interview-engine/src/index.js");
+    const { sixPeopleProblem } = await import("../packages/problems/src/index.js");
+
+    const turns = new TurnCoordinator(writer);
+    await turns.startSession(sixPeopleProblem);
+
+    // Simulate crash after input commit: turn committed into event store, but server crashed before generation start
+    const { turnId } = await turns.commitInput("Student reasoned before crash");
+    expect(turnId).toBeDefined();
+
+    const stateBeforeRecovery = writer.getState();
+    expect(Object.keys(stateBeforeRecovery.generations)).toHaveLength(0);
+
+    // Now trigger orchestrator recovery
+    await serverInstance.runtime.orchestrator.recoverPendingTurns(sessionId);
+
+    // Wait for generation to complete
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const stateAfterRecovery = writer.getState();
+    expect(Object.keys(stateAfterRecovery.generations).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("persists all events and recovers exact session state across server process close and reopen with file-backed SQLite", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "interview-sqlite-test-"));
+    const dbFile = path.join(tempDir, "test-session.sqlite");
+
+    try {
+      // 1. First server instance
+      const server1 = await createAndStartServer({
+        host: "127.0.0.1",
+        commandPort: 0,
+        rendererStreamPort: 0,
+        clientToken: TEST_CLIENT_TOKEN,
+        allowedOrigins: [TEST_ORIGIN],
+        databasePath: dbFile
+      });
+
+      const client1 = new BrowserCommandClient({
+        baseUrl: server1.bound.command.url,
+        clientToken: TEST_CLIENT_TOKEN,
+        fetchImpl: (input, init) => {
+          const headers = new Headers(init?.headers);
+          headers.set("Origin", TEST_ORIGIN);
+          headers.set("x-interview-client-token", TEST_CLIENT_TOKEN);
+          return fetch(input, { ...init, headers });
+        }
+      });
+
+      const sessionId: SessionId = newSessionId();
+      await client1.startSession(sessionId);
+      await client1.commitTypedInput(sessionId, "Step 1 on persistent disk");
+
+      // Wait for turn to orchestrate and persist
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const state1 = server1.registry.get(sessionId).getState();
+      expect(state1.started).toBe(true);
+
+      // Stop first server
+      await server1.stop();
+
+      // 2. Second server instance reopening the exact same sqlite file
+      const server2 = await createAndStartServer({
+        host: "127.0.0.1",
+        commandPort: 0,
+        rendererStreamPort: 0,
+        clientToken: TEST_CLIENT_TOKEN,
+        allowedOrigins: [TEST_ORIGIN],
+        databasePath: dbFile
+      });
+
+      const client2 = new BrowserCommandClient({
+        baseUrl: server2.bound.command.url,
+        clientToken: TEST_CLIENT_TOKEN,
+        fetchImpl: (input, init) => {
+          const headers = new Headers(init?.headers);
+          headers.set("Origin", TEST_ORIGIN);
+          headers.set("x-interview-client-token", TEST_CLIENT_TOKEN);
+          return fetch(input, { ...init, headers });
+        }
+      });
+
+      const summary = await client2.getSessionSummary(sessionId);
+      expect(summary.started).toBe(true);
+      expect(summary.sequence).toBe(state1.sequence);
+
+      const state2 = server2.registry.get(sessionId).getState();
+      expect(state2).toEqual(state1);
+
+      await server2.stop();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

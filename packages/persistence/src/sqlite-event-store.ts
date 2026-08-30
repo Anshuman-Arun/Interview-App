@@ -161,6 +161,10 @@ export class SqliteEventStore {
   }
 
   public close(): void {
-    this.database.close();
+    try {
+      this.database.close();
+    } catch {
+      // already closed
+    }
   }
 }

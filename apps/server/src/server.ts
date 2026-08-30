@@ -1,3 +1,4 @@
+import path from "node:path";
 import process from "node:process";
 import { SqliteEventStore } from "../../../packages/persistence/src/index.js";
 import { SessionRuntimeRegistry } from "../../../packages/interview-engine/src/index.js";
@@ -28,7 +29,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
   const clientToken = config.clientToken ?? process.env["INTERVIEW_CLIENT_TOKEN"] ?? generateSecureToken();
   const rawOrigins = config.allowedOrigins ?? (process.env["CLIENT_ORIGIN"] ? [process.env["CLIENT_ORIGIN"], ...DEFAULT_ALLOWED_ORIGINS] : DEFAULT_ALLOWED_ORIGINS);
   const allowedOrigins = new Set(rawOrigins);
-  const databasePath = config.databasePath ?? process.env["DATABASE_PATH"] ?? ":memory:";
+  const databasePath = config.databasePath ?? process.env["DATABASE_PATH"] ?? path.join(process.cwd(), "interview-session.sqlite");
 
   const security: LocalTransportSecurity = {
     host,
@@ -53,6 +54,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
     store,
     registry,
     security,
+    databasePath,
     bound,
     async stop() {
       await runtime.stop();
@@ -70,9 +72,9 @@ async function main() {
   console.log(`  Command Endpoint:      ${instance.bound.command.url}/v1/commands`);
   console.log(`  Renderer Stream:       ${instance.bound.rendererStream.streamUrl}`);
   console.log(`  Allowed Origins:       ${[...instance.security.allowedOrigins].join(", ")}`);
-  console.log(`  Web Launch URL:        http://localhost:5173/?token=${instance.security.clientToken}`);
+  console.log(`  Database File:         ${instance.databasePath}`);
   console.log("--------------------------------------------------");
-  console.log("  Server is ready for authenticated browser connections.");
+  console.log("  Server is ready for authenticated client connections.");
 
   const handleShutdown = async (signal: string) => {
     console.log(`\nReceived ${signal}. Shutting down gracefully...`);

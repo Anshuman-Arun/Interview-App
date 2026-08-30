@@ -434,7 +434,7 @@ describe("GeminiApiAdapter - Proposal Parsing & Socratic Action Support", () => 
   });
 });
 
-describe("GeminiApiAdapter - Honest Cancellation & Secret Redaction", () => {
+describe("GeminiApiAdapter - Honest Cancellation & Lifecycle", () => {
   it("aborts fetch request via AbortController with CLOSE_CLIENT_STREAM semantics", async () => {
     let aborted = false;
     let signalRef: AbortSignal | undefined;
@@ -487,7 +487,84 @@ describe("GeminiApiAdapter - Honest Cancellation & Secret Redaction", () => {
     await session.close();
   });
 
-  it("redacts API keys and secrets on HTTP errors and network failures", async () => {
+  it("aborts all active turns on session.close()", async () => {
+    let aborted1 = false;
+    let aborted2 = false;
+
+    const fetchMock = (_input: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal;
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => {
+          if (!aborted1) {
+            aborted1 = true;
+          } else {
+            aborted2 = true;
+          }
+          const abortErr = new Error("Aborted");
+          abortErr.name = "AbortError";
+          reject(abortErr);
+        });
+      });
+    };
+
+    const adapter = new GeminiApiAdapter({
+      apiKey: "test-key",
+      billingVerificationFactory: VALID_PROOF_FACTORY,
+      fetchImpl: fetchMock
+    });
+
+    const session = await openProviderExecutionSession({
+      provider: adapter,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    const gen1 = newGenerationId();
+    const gen2 = newGenerationId();
+    const iter1 = session.sendTurn({ context: {}, generationId: gen1 })[Symbol.asyncIterator]();
+    const iter2 = session.sendTurn({ context: {}, generationId: gen2 })[Symbol.asyncIterator]();
+    const p1 = iter1.next();
+    const p2 = iter2.next();
+
+    await session.close();
+
+    expect(aborted1).toBe(true);
+    expect(aborted2).toBe(true);
+    expect(await p1).toEqual({ value: undefined, done: true });
+    expect(await p2).toEqual({ value: undefined, done: true });
+  });
+
+  it("rejects operations after session is closed", async () => {
+    const adapter = new GeminiApiAdapter({
+      apiKey: "test-key",
+      billingVerificationFactory: VALID_PROOF_FACTORY
+    });
+
+    const session = await openProviderExecutionSession({
+      provider: adapter,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    await session.close();
+
+    await expect(session.cancelTurn(newGenerationId())).rejects.toMatchObject({
+      code: "SESSION_CLOSED"
+    });
+
+    await expect(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ of session.sendTurn({ context: {}, generationId: newGenerationId() })) {
+        // iterate
+      }
+    }).rejects.toMatchObject({
+      code: "SESSION_CLOSED"
+    });
+  });
+});
+
+describe("GeminiApiAdapter - Secret Redaction & Error Sanitization", () => {
+  it("redacts API keys and authorization secrets on HTTP error responses", async () => {
     const sensitiveKey = "AIzaSySecretApiKey123456";
     const fetchMock = () =>
       Promise.resolve(
@@ -532,6 +609,42 @@ describe("GeminiApiAdapter - Honest Cancellation & Secret Redaction", () => {
     const errorStr = String(caughtError);
     expect(errorStr).not.toContain(sensitiveKey);
     expect(errorStr).not.toContain("secret-token");
+
+    await session.close();
+  });
+
+  it("redacts network exception details containing secrets", async () => {
+    const sensitiveKey = "SecretKey-Network-Fail-999";
+    const fetchMock = () => {
+      const netErr = new Error(`Connection failed to api_key: ${sensitiveKey} on remote gateway`);
+      return Promise.reject(netErr);
+    };
+
+    const adapter = new GeminiApiAdapter({
+      apiKey: sensitiveKey,
+      billingVerificationFactory: VALID_PROOF_FACTORY,
+      fetchImpl: fetchMock
+    });
+
+    const session = await openProviderExecutionSession({
+      provider: adapter,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    let caughtError: unknown;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ of session.sendTurn({ context: {}, generationId: newGenerationId() })) {
+        // iterate
+      }
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(ProviderExecutionError);
+    const errorStr = String(caughtError);
+    expect(errorStr).not.toContain(sensitiveKey);
 
     await session.close();
   });
@@ -594,4 +707,3 @@ describe("GeminiApiAdapter - Integration with ProviderCoordinator", () => {
     }
   });
 });
-

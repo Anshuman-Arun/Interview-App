@@ -15,11 +15,10 @@ import {
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 
-const DEFAULT_SAFE_PROBES = [
+const DEFAULT_INDEPENDENT_SAFE_PROBES = [
   "Why must at least three edges share the same color from vertex A?",
-  "Consider vertex A with 5 incident edges. By the Pigeonhole Principle, what can we say about the colors of those 5 edges?",
-  "Consider the three endpoints connected to vertex A by edges of the same color. What happens if any edge between them shares that color, and what happens if none of them do?",
   "Why must that step be true?",
+  "Why must that claim hold?",
   "Can you formalize the two cases for the edges among those three vertices?"
 ] as const;
 
@@ -32,33 +31,81 @@ export interface TurnOrchestrationInput {
 
 export class ServerTurnOrchestrator {
   private readonly validator: DisclosureValidator;
+  private readonly inFlight = new Map<string, Promise<void>>();
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
     private readonly getRendererStreamServer: () => RendererStreamServer | undefined,
-    safeProbes: readonly string[] = DEFAULT_SAFE_PROBES
+    validator?: DisclosureValidator
   ) {
-    this.validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(safeProbes));
+    this.validator = validator ?? new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(DEFAULT_INDEPENDENT_SAFE_PROBES));
   }
 
   public async orchestrateTurn(input: TurnOrchestrationInput): Promise<void> {
+    const key = `${input.sessionId}:${input.turnId}`;
+    const existing = this.inFlight.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const orchestration = this.executeOrchestration(input).finally(() => {
+      this.inFlight.delete(key);
+    });
+
+    this.inFlight.set(key, orchestration);
+    return orchestration;
+  }
+
+  public async recoverPendingTurns(sessionId: SessionId): Promise<void> {
+    const writer = this.sessions.getWriter(sessionId);
+    await this.sessions.ensureRecovered(sessionId);
+    const state = writer.getState();
+
+    for (const [turnId, turn] of Object.entries(state.turns)) {
+      if (turn.studentText.length === 0) continue;
+
+      const hasGeneration = Object.values(state.generations).some(
+        (g) => g.basis.turnId === turnId && (g.status === "ACTIVE" || g.status === "VALIDATED" || g.status === "PROPOSAL_RECEIVED")
+      );
+      const hasDeliveries = Object.values(state.deliveries).some(
+        (d) => Object.values(state.generations).some((g) => g.generationId === d.generationId && g.basis.turnId === turnId)
+      );
+
+      if (!hasGeneration && !hasDeliveries) {
+        await this.orchestrateTurn({
+          sessionId,
+          turnId: turnId as TurnId,
+          inputEpisodeId: turn.inputEpisodeId,
+          studentText: turn.studentText
+        });
+      }
+    }
+  }
+
+  private async executeOrchestration(input: TurnOrchestrationInput): Promise<void> {
     const writer = this.sessions.getWriter(input.sessionId);
     await this.sessions.ensureRecovered(input.sessionId);
+
+    // Check if turn already has generation or deliveries to ensure strict idempotency
+    const currentState = writer.getState();
+    const existingGeneration = Object.values(currentState.generations).find(
+      (g) => g.basis.turnId === input.turnId && (g.status === "ACTIVE" || g.status === "VALIDATED")
+    );
+    if (existingGeneration !== undefined) {
+      return;
+    }
 
     const turns = new TurnCoordinator(writer);
 
     // 1. Pedagogical policy selects the required action
     const realizationRequest = await turns.selectAction(input.turnId);
 
-    // 2. Select contextual Oxford Socratic probe for Ramsey R(3,3)
-    const probeText = this.selectSocraticProbe(input.studentText);
-
-    const proposal: InterviewerProposal = {
-      realizedAction: realizationRequest.requiredAction,
-      claimedDisclosureLevel: 0,
-      claimedDisclosureIds: [],
-      speechText: probeText
-    };
+    // 2. Select contextual Oxford Socratic probe based on maximumDisclosure authorized
+    const proposal = this.createInterviewerProposal(
+      input.studentText,
+      realizationRequest.requiredAction,
+      realizationRequest.maximumDisclosure
+    );
 
     // 3. MockModelAdapter with zero metered spend
     const provider = new MockModelAdapter({ proposal });
@@ -92,21 +139,37 @@ export class ServerTurnOrchestrator {
         }
       }
     } catch {
-      // Teardown / session close during test or shutdown is handled gracefully
+      // Safe semantic outcome handling - never print raw exception strings
     }
   }
 
-  private selectSocraticProbe(studentText: string): string {
+  private createInterviewerProposal(
+    studentText: string,
+    requiredAction: InterviewerProposal["realizedAction"],
+    maximumDisclosure: number
+  ): InterviewerProposal {
     const text = studentText.toLowerCase();
+
+    // If policy authorizes level 4 disclosure and student reached PHP milestone
     if (
-      text.includes("pigeonhole") ||
-      text.includes("3") ||
-      text.includes("three") ||
-      text.includes("same color") ||
-      text.includes("same colour")
+      maximumDisclosure >= 4 &&
+      (text.includes("pigeonhole") || text.includes("3") || text.includes("three") || text.includes("same color") || text.includes("same colour"))
     ) {
-      return "Consider the three endpoints connected to vertex A by edges of the same color. What happens if any edge between them shares that color, and what happens if none of them do?";
+      const protectedDisclosure = sixPeopleProblem.interviewer.protectedDisclosures[1];
+      return {
+        realizedAction: requiredAction,
+        claimedDisclosureLevel: 4,
+        claimedDisclosureIds: protectedDisclosure !== undefined ? [protectedDisclosure.id] : [],
+        speechText: "Consider the three endpoints connected to vertex A by edges of the same color. What happens if any edge between them shares that color, and what happens if none of them do?"
+      };
     }
-    return "Why must at least three edges share the same color from vertex A?";
+
+    // Default zero-disclosure probe
+    return {
+      realizedAction: requiredAction,
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      speechText: "Why must at least three edges share the same color from vertex A?"
+    };
   }
 }

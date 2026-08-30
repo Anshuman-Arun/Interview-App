@@ -1,3 +1,4 @@
+import React, { useEffect, useRef } from "react";
 import type {
   CanvasSnapshot,
   TldrawEditor,
@@ -9,7 +10,7 @@ export interface WhiteboardCanvasProps {
   readonly onEditorMount?: (editor: TldrawEditor) => void;
   readonly onBoardChange?: (snapshot: CanvasSnapshot) => void;
   readonly className?: string;
-  readonly style?: Record<string, string | number>;
+  readonly style?: React.CSSProperties;
   readonly readOnly?: boolean;
 }
 
@@ -69,14 +70,40 @@ export function createWhiteboardCanvasMount(props: WhiteboardCanvasProps): White
   };
 }
 
-export const WhiteboardCanvas = (props: WhiteboardCanvasProps): unknown => {
-  return {
-    type: "div",
-    props: {
-      "data-whiteboard-canvas": "true",
-      "data-readonly": props.readOnly ?? false,
-      className: props.className ?? "whiteboard-canvas-container",
-      style: props.style
+export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
+  adapter,
+  onEditorMount,
+  onBoardChange,
+  className = "whiteboard-canvas-container w-full h-full min-h-[380px]",
+  style,
+  readOnly = false
+}) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (adapter === undefined) return;
+    const editor = adapter.getEditor();
+    if (editor !== null) {
+      onEditorMount?.(editor);
+      if (onBoardChange !== undefined && editor.store?.listen !== undefined) {
+        const unlisten = editor.store.listen(() => {
+          onBoardChange(adapter.getCanvasSnapshot());
+        });
+        return () => {
+          unlisten();
+        };
+      }
     }
-  };
+    return undefined;
+  }, [adapter, onEditorMount, onBoardChange]);
+
+  return (
+    <div
+      ref={containerRef}
+      data-whiteboard-canvas="true"
+      data-readonly={String(readOnly)}
+      className={className}
+      style={style}
+    />
+  );
 };
