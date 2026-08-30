@@ -3,7 +3,7 @@ import fc from "fast-check";
 export const DEFAULT_ADVERSARIAL_SEED = 20260829;
 export const ADVERSARIAL_PROPERTY_TIMEOUT_MS = 120_000;
 const VALIDATION_STRESS_RUNS = 100;
-const VALIDATION_STRESS_SEED = 314159;
+const VALIDATION_STRESS_SEED = 271828;
 
 export type CoreScheduleOperation =
   | "RELEASE_PROVIDER_PRIMARY"
