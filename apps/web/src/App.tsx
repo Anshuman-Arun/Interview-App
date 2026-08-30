@@ -33,7 +33,6 @@ export const App: React.FC = () => {
   });
 
   const [inputUrl, setInputUrl] = useState(session.baseUrl);
-  const [inputToken, setInputToken] = useState(session.clientToken);
 
   const handleStartSession = async () => {
     try {
@@ -57,7 +56,6 @@ export const App: React.FC = () => {
   const handleSaveSettings = (e: React.SyntheticEvent): void => {
     e.preventDefault();
     session.setBaseUrl(inputUrl.trim());
-    session.setClientToken(inputToken.trim());
     setShowSettings(false);
   };
 
@@ -179,19 +177,6 @@ export const App: React.FC = () => {
                 onChange={(e) => setInputUrl(e.target.value)}
                 className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono w-56 focus:outline-none focus:border-indigo-400"
                 placeholder="http://127.0.0.1:43123"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1 flex-1 min-w-[280px]">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">
-                Client Auth Token (min 32 chars)
-              </label>
-              <input
-                type="password"
-                value={inputToken}
-                onChange={(e) => setInputToken(e.target.value)}
-                className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono w-full focus:outline-none focus:border-indigo-400"
-                placeholder="Client token..."
               />
             </div>
 

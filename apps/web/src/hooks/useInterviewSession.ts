@@ -45,9 +45,7 @@ export interface UseInterviewSessionResult {
   readonly contextEpoch: number;
   readonly error: string | null;
   readonly baseUrl: string;
-  readonly clientToken: string;
   readonly setBaseUrl: (url: string) => void;
-  readonly setClientToken: (token: string) => void;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
   readonly recoverSession: (sessionId: SessionId) => Promise<void>;
   readonly submitTypedInput: (text: string) => Promise<void>;
@@ -73,7 +71,7 @@ export function useInterviewSession(
   options: UseInterviewSessionOptions = {}
 ): UseInterviewSessionResult {
   const [baseUrl, setBaseUrl] = useState<string>(() => getInitialBaseUrl(options.baseUrl));
-  const [clientToken, setClientToken] = useState<string>(() => options.clientToken ?? "");
+  const clientTokenRef = useRef<string>(options.clientToken ?? "");
   const [sessionId, setSessionId] = useState<SessionId | null>(
     options.initialSessionId ?? null
   );
@@ -94,10 +92,10 @@ export function useInterviewSession(
   const getCommandClient = useCallback((): BrowserCommandClient => {
     return new BrowserCommandClient({
       baseUrl,
-      clientToken,
+      clientToken: clientTokenRef.current,
       fetchImpl
     });
-  }, [baseUrl, clientToken, fetchImpl]);
+  }, [baseUrl, fetchImpl]);
 
   const attachRendererStream = useCallback(
     async (targetSessionId: SessionId): Promise<void> => {
@@ -112,7 +110,9 @@ export function useInterviewSession(
 
       const authenticatedFetch: typeof fetch = async (input, init = {}) => {
         const headers = new Headers(init.headers);
-        headers.set("x-interview-client-token", clientToken);
+        if (clientTokenRef.current.length > 0) {
+          headers.set("x-interview-client-token", clientTokenRef.current);
+        }
         return fetchImpl(input, {
           ...init,
           headers
@@ -204,7 +204,7 @@ export function useInterviewSession(
         }
       }
     },
-    [baseUrl, clientToken, fetchImpl, options.whiteboardAdapter]
+    [baseUrl, fetchImpl, options.whiteboardAdapter]
   );
 
   const startSession = useCallback(
@@ -433,9 +433,7 @@ export function useInterviewSession(
     contextEpoch,
     error,
     baseUrl,
-    clientToken,
     setBaseUrl,
-    setClientToken,
     startSession,
     recoverSession,
     submitTypedInput,

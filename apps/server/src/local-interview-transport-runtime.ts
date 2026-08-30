@@ -41,6 +41,7 @@ export class LocalInterviewTransportRuntime {
     this.orchestrator =
       options.orchestrator ??
       new ServerTurnOrchestrator(this.sessions, () => this.rendererStreamServer);
+    this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.commandServer = new LoopbackCommandServer({
       security: options.security,
       sessions: this.sessions,

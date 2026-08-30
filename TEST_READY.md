@@ -9,16 +9,16 @@
 
 ## 1. Test Suite Summary
 
-The End-to-End (E2E) test suite implements comprehensive, opaque-box integration verification for all 13 features of the Phase 1 Typed Interview MVP, structured strictly across Tiers 1 through 4 as specified in `TEST_INFRA.md`.
+The End-to-End (E2E) test suite implements comprehensive integration verification for all 13 features of the Phase 1 Typed Interview MVP across coordinator, transport, and client interfaces, structured strictly across Tiers 1 through 4 as specified in `TEST_INFRA.md`.
 
 | Test Tier | Scope & Focus | Target Test Count | Executed & Passed | Pass Rate |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tier 1: Feature Coverage (Isolation)** | Happy path behavior for all 13 features tested via opaque-box interfaces | 65 (>=5 per feature) | **65** | 100% |
+| **Tier 1: Feature Coverage (Isolation)** | Happy path behavior for all 13 features tested across public interfaces | 65 (>=5 per feature) | **65** | 100% |
 | **Tier 2: Boundary & Corner Cases** | Edge cases, empty inputs, extreme sizes (20k chars), clock skew, invalid tokens, metered billing rejection, stale revisions | 65 (>=5 per feature) | **65** | 100% |
 | **Tier 3: Cross-Feature Combinations** | Pairwise subsystem interactions (student input + SSE streaming + whiteboard AI overlay + crash recovery) | 13 | **13** | 100% |
 | **Tier 4: Real-World Scenarios** | Oxford Ramsey R(3,3) proof progression (K_6, deg(v)=5, PHP partition, monochromatic K_3) | 5 | **5** | 100% |
 | **TOTAL E2E SUITE** | `tests/e2e-typed-interview.test.ts` | **148** | **148** | **100%** |
-| **FULL REPOSITORY SUITE** | All 50 test files in repository | **624** | **624** | **100%** |
+| **FULL REPOSITORY SUITE** | All 50 test files in repository | **628** | **628** | **100%** |
 
 ---
 
@@ -70,7 +70,7 @@ corepack pnpm lint
 
 - **Vitest Execution Output**:
   - `tests/e2e-typed-interview.test.ts`: 148 passed / 148 total
-  - Full repo: 50 test files passed, 624 passed / 624 total (100% pass rate)
+  - Full repo: 50 test files passed, 628 passed / 628 total (100% pass rate)
 - **Architecture Boundary Invariants**:
   - `check-architecture-boundaries.mjs`: 84 source files scanned, 0 boundary violations.
 - **ESLint Compliance**:

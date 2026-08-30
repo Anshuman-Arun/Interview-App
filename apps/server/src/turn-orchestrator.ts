@@ -16,7 +16,7 @@ import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 
 const DEFAULT_INDEPENDENT_SAFE_PROBES = [
-  "Why must at least three edges share the same color from vertex A?",
+  "What relations exist between vertex A and the other five people?",
   "Why must that step be true?",
   "Why must that claim hold?",
   "Can you formalize the two cases for the edges among those three vertices?"
@@ -58,20 +58,29 @@ export class ServerTurnOrchestrator {
 
   public async recoverPendingTurns(sessionId: SessionId): Promise<void> {
     const writer = this.sessions.getWriter(sessionId);
-    await this.sessions.ensureRecovered(sessionId);
     const state = writer.getState();
+
+    const turns = new TurnCoordinator(writer);
 
     for (const [turnId, turn] of Object.entries(state.turns)) {
       if (turn.studentText.length === 0) continue;
 
-      const hasGeneration = Object.values(state.generations).some(
-        (g) => g.basis.turnId === turnId && (g.status === "ACTIVE" || g.status === "VALIDATED" || g.status === "PROPOSAL_RECEIVED")
+      const hasValidatedGeneration = Object.values(state.generations).some(
+        (g) => g.basis.turnId === turnId && g.status === "VALIDATED"
       );
       const hasDeliveries = Object.values(state.deliveries).some(
         (d) => Object.values(state.generations).some((g) => g.generationId === d.generationId && g.basis.turnId === turnId)
       );
 
-      if (!hasGeneration && !hasDeliveries) {
+      // Clean up stranded in-flight generations from pre-crash processes
+      const strandedGenerations = Object.values(state.generations).filter(
+        (g) => g.basis.turnId === turnId && (g.status === "ACTIVE" || g.status === "PROPOSAL_RECEIVED")
+      );
+      for (const stranded of strandedGenerations) {
+        await turns.supersedeGeneration(stranded.generationId, "CRASH_RECOVERY_STRANDED");
+      }
+
+      if (!hasValidatedGeneration && !hasDeliveries) {
         await this.orchestrateTurn({
           sessionId,
           turnId: turnId as TurnId,
@@ -84,12 +93,11 @@ export class ServerTurnOrchestrator {
 
   private async executeOrchestration(input: TurnOrchestrationInput): Promise<void> {
     const writer = this.sessions.getWriter(input.sessionId);
-    await this.sessions.ensureRecovered(input.sessionId);
 
-    // Check if turn already has generation or deliveries to ensure strict idempotency
+    // Check if turn already has validated generation or deliveries to ensure strict idempotency
     const currentState = writer.getState();
     const existingGeneration = Object.values(currentState.generations).find(
-      (g) => g.basis.turnId === input.turnId && (g.status === "ACTIVE" || g.status === "VALIDATED")
+      (g) => g.basis.turnId === input.turnId && g.status === "VALIDATED"
     );
     if (existingGeneration !== undefined) {
       return;
@@ -155,12 +163,23 @@ export class ServerTurnOrchestrator {
       maximumDisclosure >= 4 &&
       (text.includes("pigeonhole") || text.includes("3") || text.includes("three") || text.includes("same color") || text.includes("same colour"))
     ) {
-      const protectedDisclosure = sixPeopleProblem.interviewer.protectedDisclosures[1];
+      const completeTriangle = sixPeopleProblem.interviewer.protectedDisclosures[1];
       return {
         realizedAction: requiredAction,
         claimedDisclosureLevel: 4,
-        claimedDisclosureIds: protectedDisclosure !== undefined ? [protectedDisclosure.id] : [],
+        claimedDisclosureIds: completeTriangle !== undefined ? [completeTriangle.id] : [],
         speechText: "Consider the three endpoints connected to vertex A by edges of the same color. What happens if any edge between them shares that color, and what happens if none of them do?"
+      };
+    }
+
+    // If policy authorizes level 2 disclosure
+    if (maximumDisclosure >= 2) {
+      const choosePerson = sixPeopleProblem.interviewer.protectedDisclosures[0];
+      return {
+        realizedAction: requiredAction,
+        claimedDisclosureLevel: 2,
+        claimedDisclosureIds: choosePerson !== undefined ? [choosePerson.id] : [],
+        speechText: "Why must at least three edges share the same color from vertex A?"
       };
     }
 
@@ -169,7 +188,7 @@ export class ServerTurnOrchestrator {
       realizedAction: requiredAction,
       claimedDisclosureLevel: 0,
       claimedDisclosureIds: [],
-      speechText: "Why must at least three edges share the same color from vertex A?"
+      speechText: "What relations exist between vertex A and the other five people?"
     };
   }
 }

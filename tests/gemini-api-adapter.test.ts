@@ -45,7 +45,7 @@ const PROPOSAL: InterviewerProposal = {
   realizedAction: "PROBE_JUSTIFICATION",
   claimedDisclosureLevel: 0,
   claimedDisclosureIds: [],
-  speechText: "Why must at least three edges share the same color from vertex A?"
+  speechText: "What relations exist between vertex A and the other five people?"
 };
 
 const VALID_PROOF_FACTORY = (now: Date) => ({
@@ -409,6 +409,201 @@ describe("GeminiApiAdapter - Proposal Parsing & Socratic Action Support", () => 
           status: 200,
           headers: { "Content-Type": "application/json" }
         })
+      );
+
+    const adapter = new GeminiApiAdapter({
+      apiKey: "test-key",
+      billingVerificationFactory: VALID_PROOF_FACTORY,
+      fetchImpl: fetchMock
+    });
+
+    const session = await openProviderExecutionSession({
+      provider: adapter,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    await expect(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ of session.sendTurn({ context: {}, generationId: newGenerationId() })) {
+        // iterate
+      }
+    }).rejects.toThrow(ProviderExecutionError);
+
+    await session.close();
+  });
+
+  it("parses markdown-fenced JSON responses containing proposals", async () => {
+    const validProposal: InterviewerProposal = {
+      realizedAction: "PROBE_JUSTIFICATION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      speechText: "Why must that claim hold?"
+    };
+
+    const fencedJson = `\`\`\`json\n${JSON.stringify(validProposal, null, 2)}\n\`\`\``;
+    const fetchMock = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: fencedJson }],
+                  role: "model"
+                },
+                finishReason: "STOP"
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      );
+
+    const adapter = new GeminiApiAdapter({
+      apiKey: "test-key",
+      billingVerificationFactory: VALID_PROOF_FACTORY,
+      fetchImpl: fetchMock
+    });
+
+    const session = await openProviderExecutionSession({
+      provider: adapter,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    const results: InterviewerProposal[] = [];
+    for await (const p of session.sendTurn({ context: {}, generationId: newGenerationId() })) {
+      results.push(p);
+    }
+
+    expect(results).toEqual([validProposal]);
+    await session.close();
+  });
+
+  it("parses direct raw JSON proposals without markdown fences", async () => {
+    const directProposal: InterviewerProposal = {
+      realizedAction: "PROBE_JUSTIFICATION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      speechText: "Can you formalize the first step?"
+    };
+
+    const fetchMock = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: JSON.stringify(directProposal) }],
+                  role: "model"
+                },
+                finishReason: "STOP"
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      );
+
+    const adapter = new GeminiApiAdapter({
+      apiKey: "test-key",
+      billingVerificationFactory: VALID_PROOF_FACTORY,
+      fetchImpl: fetchMock
+    });
+
+    const session = await openProviderExecutionSession({
+      provider: adapter,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    const results: InterviewerProposal[] = [];
+    for await (const p of session.sendTurn({ context: {}, generationId: newGenerationId() })) {
+      results.push(p);
+    }
+
+    expect(results).toEqual([directProposal]);
+    await session.close();
+  });
+
+  it("safely handles malformed non-JSON provider responses with ProviderExecutionError", async () => {
+    const fetchMock = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: "This is completely invalid raw text not conforming to JSON {{{" }],
+                  role: "model"
+                },
+                finishReason: "STOP"
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      );
+
+    const adapter = new GeminiApiAdapter({
+      apiKey: "test-key",
+      billingVerificationFactory: VALID_PROOF_FACTORY,
+      fetchImpl: fetchMock
+    });
+
+    const session = await openProviderExecutionSession({
+      provider: adapter,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    await expect(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ of session.sendTurn({ context: {}, generationId: newGenerationId() })) {
+        // iterate
+      }
+    }).rejects.toThrow(ProviderExecutionError);
+
+    await session.close();
+  });
+
+  it("rejects proposal responses that fail Zod schema validation", async () => {
+    // Missing required field "realizedAction"
+    const brokenSchemaProposal = {
+      claimedDisclosureLevel: 0,
+      speechText: "Missing realized action entirely"
+    };
+
+    const fetchMock = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: JSON.stringify(brokenSchemaProposal) }],
+                  role: "model"
+                },
+                finishReason: "STOP"
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
       );
 
     const adapter = new GeminiApiAdapter({
