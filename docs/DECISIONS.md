@@ -297,3 +297,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: check only when accepting the proposal; eagerly cancel every queued atom on every revision event; let the renderer decide freshness; allow reconnect to bypass the start gate.
 - Consequences: stale or unprovable output remains `QUEUED` and undisclosed, and every path from `QUEUED` to `DELIVERING` shares the same fail-closed gate. The pure checker lives with event state so delivery can depend on it without creating a delivery-to-engine cycle.
 - Reversible: checker placement and later fine-grained dependencies are reversible; serialized admission and rejection of `UNKNOWN` are not.
+
+## D038 — Model formalizations consume one generation and open verification atomically
+
+- Decision: accept a model-produced formal interpretation only as a strict proposal tied to one active GenerationId, exact callback identity/basis fields, and a fully compatible current GenerationBasis; in the same serialized transition, record the proposal and create application-scoped verifier work.
+- Reason: a formal-looking model result is not mathematical authority, and a separately appended proposal/request pair could be duplicated or become detached from its source generation under concurrent callbacks or restart.
+- Alternatives considered: let a provider invoke the verifier directly; treat formal JSON as verified evidence; create verifier work without generation provenance; reserve low-confidence proposals outside the verifier path.
+- Consequences: only one callback can consume a generation, stale or unknown compatibility fails closed, application code chooses the verifier and evidence scope, and low confidence remains explicit so the deterministic verifier can abstain. Natural-language interpretation generation is still deferred.
+- Reversible: the proposal schema and coordinator API are versionable; model proposals remaining non-authoritative and independently verified are not.

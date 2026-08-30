@@ -4,7 +4,9 @@ import {
   EvidenceKeySchema,
   EvidenceValueSchema,
   EventIdSchema,
+  FormalInterpretationProposalSchema,
   GenerationBasisSchema,
+  GenerationIdSchema,
   RequestIdSchema,
   VerificationResultSchema,
   evidenceKeyToString,
@@ -30,9 +32,34 @@ export const VerificationWorkItemSchema = z.object({
   candidateFormalInterpretation: z.string().min(1).max(100_000),
   interpretationConfidence: z.number().min(0).max(1),
   evidenceKey: EvidenceKeySchema,
-  evidenceEventIds: z.array(EventIdSchema).min(1)
+  evidenceEventIds: z.array(EventIdSchema).min(1),
+  sourceGenerationId: GenerationIdSchema.optional(),
+  sourceProposalRequestId: RequestIdSchema.optional()
 }).strict();
 export type VerificationWorkItem = z.infer<typeof VerificationWorkItemSchema>;
+
+const FormalInterpretationDiscardReasonSchema = z.enum([
+  "MISSING_GENERATION_ID",
+  "UNKNOWN_GENERATION",
+  "GENERATION_NOT_ACTIVE",
+  "CALLBACK_BASIS_MISMATCH",
+  "COMPATIBILITY_INCOMPATIBLE",
+  "COMPATIBILITY_UNKNOWN",
+  "PROBLEM_SCOPE_MISMATCH",
+  "EVIDENCE_SCOPE_UNSUPPORTED",
+  "PROVENANCE_UNAVAILABLE"
+]);
+export type FormalInterpretationDiscardReason = z.infer<typeof FormalInterpretationDiscardReasonSchema>;
+
+export const FormalInterpretationAdmissionResultSchema = z.discriminatedUnion("accepted", [
+  z.object({ accepted: z.literal(true), workItem: VerificationWorkItemSchema }).strict(),
+  z.object({
+    accepted: z.literal(false),
+    generationId: GenerationIdSchema.optional(),
+    reason: FormalInterpretationDiscardReasonSchema
+  }).strict()
+]);
+export type FormalInterpretationAdmissionResult = z.infer<typeof FormalInterpretationAdmissionResultSchema>;
 
 const VerificationDiscardReasonSchema = z.enum([
   "UNKNOWN_REQUEST",
@@ -75,6 +102,120 @@ function resultsEqual(left: VerificationResult, right: VerificationResult): bool
 
 export class VerificationCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
+
+  public async requestVerificationFromProposal(input: {
+    readonly envelope: CommandEnvelope;
+    readonly proposal: unknown;
+    readonly verifier: string;
+    readonly evidenceKey: EvidenceKey;
+  }) {
+    const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    const proposal = FormalInterpretationProposalSchema.parse(input.proposal);
+    const verificationRequestId = newRequestId();
+
+    return this.writer.execute(envelope, {
+      operation: "REQUEST_VERIFICATION_FROM_PROPOSAL",
+      payload: { proposal, verifier: input.verifier, evidenceKey: input.evidenceKey }
+    }, FormalInterpretationAdmissionResultSchema, (state) => {
+      const generationId = envelope.generationId;
+      if (generationId === undefined) {
+        return { drafts: [], result: { accepted: false as const, reason: "MISSING_GENERATION_ID" as const } };
+      }
+
+      const generation = state.generations[generationId];
+      if (generation === undefined) {
+        return {
+          drafts: [],
+          result: { accepted: false as const, generationId, reason: "UNKNOWN_GENERATION" as const }
+        };
+      }
+      if (generation.status !== "ACTIVE") {
+        return {
+          drafts: [],
+          result: { accepted: false as const, generationId, reason: "GENERATION_NOT_ACTIVE" as const }
+        };
+      }
+
+      const received: EventDraft = {
+        source: "PROVIDER",
+        type: "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED",
+        payload: { generationId, proposalRequestId: envelope.requestId, proposal }
+      };
+      const reject = (reason: FormalInterpretationDiscardReason, supersede: boolean) => {
+        const drafts: EventDraft[] = [received, {
+          source: "APPLICATION",
+          type: "FORMAL_INTERPRETATION_PROPOSAL_REJECTED",
+          payload: { generationId, reason }
+        }];
+        if (supersede) {
+          drafts.push({
+            source: "APPLICATION",
+            type: "MODEL_GENERATION_SUPERSEDED",
+            payload: { generationId, reason }
+          });
+        }
+        return {
+          drafts,
+          result: { accepted: false as const, generationId, reason }
+        };
+      };
+
+      if (
+        generation.basis.inputEpisodeId === undefined
+        || envelope.inputEpisodeId !== generation.basis.inputEpisodeId
+        || envelope.turnId !== generation.basis.turnId
+        || envelope.contextEpoch !== generation.basis.contextEpoch
+        || envelope.sourceRevision !== generation.basis.committedInputSequence
+      ) return reject("CALLBACK_BASIS_MISMATCH", true);
+
+      const compatibility = isGenerationBasisStillCompatible(generation.basis, state);
+      if (compatibility === "INCOMPATIBLE") return reject("COMPATIBILITY_INCOMPATIBLE", true);
+      if (compatibility === "UNKNOWN") return reject("COMPATIBILITY_UNKNOWN", true);
+
+      if (state.problem?.id !== input.evidenceKey.problemId) {
+        return reject("PROBLEM_SCOPE_MISMATCH", false);
+      }
+      if (input.evidenceKey.subject.kind !== "CLAIM" || input.evidenceKey.dimension !== "CORRECTNESS") {
+        return reject("EVIDENCE_SCOPE_UNSUPPORTED", false);
+      }
+
+      const turn = state.turns[generation.basis.turnId];
+      const evidenceEventId = turn === undefined ? undefined : state.eventIds[turn.committedSequence - 1];
+      if (evidenceEventId === undefined) return reject("PROVENANCE_UNAVAILABLE", false);
+
+      const workItem = VerificationWorkItemSchema.parse({
+        protocolVersion: 1,
+        verificationRequestId,
+        verifier: input.verifier,
+        basis: generation.basis,
+        candidateFormalInterpretation: proposal.candidateFormalInterpretation,
+        interpretationConfidence: proposal.interpretationConfidence,
+        evidenceKey: input.evidenceKey,
+        evidenceEventIds: [evidenceEventId],
+        sourceGenerationId: generationId,
+        sourceProposalRequestId: envelope.requestId
+      });
+
+      return {
+        drafts: [received, {
+          source: "APPLICATION",
+          type: "VERIFICATION_REQUESTED",
+          payload: {
+            verificationRequestId: workItem.verificationRequestId,
+            verifier: workItem.verifier,
+            basis: workItem.basis,
+            candidateFormalInterpretation: workItem.candidateFormalInterpretation,
+            interpretationConfidence: workItem.interpretationConfidence,
+            evidenceKey: workItem.evidenceKey,
+            evidenceEventIds: workItem.evidenceEventIds,
+            sourceGenerationId: generationId,
+            sourceProposalRequestId: envelope.requestId
+          }
+        }],
+        result: { accepted: true as const, workItem }
+      };
+    });
+  }
 
   public requestVerification(input: {
     readonly inputEpisodeId: InputEpisodeId;

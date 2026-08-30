@@ -255,6 +255,15 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "MODEL_PROPOSAL_RECEIVED":
       next = updateGeneration(state, event.payload.generationId, { status: "PROPOSAL_RECEIVED", proposal: event.payload.proposal });
       break;
+    case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
+      next = updateGeneration(state, event.payload.generationId, {
+        status: "PROPOSAL_RECEIVED",
+        formalInterpretationProposal: event.payload.proposal
+      });
+      break;
+    case "FORMAL_INTERPRETATION_PROPOSAL_REJECTED":
+      next = updateGeneration(state, event.payload.generationId, { status: "REJECTED" });
+      break;
     case "MODEL_GENERATION_SUPERSEDED":
       next = updateGeneration(state, event.payload.generationId, { status: "SUPERSEDED" });
       break;
