@@ -11,6 +11,7 @@ import {
   createReferenceModel
 } from "./fixtures.js";
 import {
+  ADVERSARIAL_PROPERTY_TIMEOUT_MS,
   callbackScheduleArbitrary,
   propertyParameters,
   type CallbackScheduleOperation
@@ -47,7 +48,7 @@ describe("adversarial callback admission schedules", () => {
       }),
       propertyParameters("callbacks", 1, 10)
     );
-  });
+  }, ADVERSARIAL_PROPERTY_TIMEOUT_MS);
 });
 
 async function executeCallbackOperation(

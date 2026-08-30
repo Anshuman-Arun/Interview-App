@@ -7,6 +7,7 @@ import {
   DeliveryAtomSchema,
   DisclosureIdSchema,
   EventIdSchema,
+  RealizationRequestSchema,
   evidenceKeyToString,
   newDeliveryId,
   newRequestId,
@@ -15,6 +16,7 @@ import {
   type DeliveryAtom,
   type DeliveryId,
   type DisclosureId,
+  type DisclosureLevel,
   type EvidenceKey,
   type EvidenceRating,
   type GenerationId,
@@ -309,6 +311,9 @@ export class AdversarialFixture {
     readonly disclosureIds?: readonly DisclosureId[];
   } = {}): Promise<DeliveryAtom> {
     const disclosureIds = input.disclosureIds ?? [];
+    const provenance = await this.authorizeSyntheticDeliveryProvenance(
+      disclosureIds
+    );
     const medium = input.medium ?? "TEXT";
     const content = medium === "TEXT"
       ? { medium: "TEXT" as const, text: "Adversarial reviewed delivery" }
@@ -319,10 +324,10 @@ export class AdversarialFixture {
         };
     const atom = DeliveryAtomSchema.parse({
       deliveryId: newDeliveryId(),
-      generationId: this.initialGenerationId,
+      generationId: provenance.generationId,
       content,
       disclosureIds,
-      effectiveDisclosureLevel: disclosureIds.length === 0 ? 0 : 2,
+      effectiveDisclosureLevel: provenance.effectiveDisclosureLevel,
       status: "VALIDATED"
     });
     await this.writer.execute(
@@ -345,6 +350,86 @@ export class AdversarialFixture {
       })
     );
     return atom;
+  }
+
+  private async authorizeSyntheticDeliveryProvenance(
+    disclosureIds: readonly DisclosureId[]
+  ): Promise<{
+    readonly generationId: GenerationId;
+    readonly effectiveDisclosureLevel: DisclosureLevel;
+  }> {
+    if (disclosureIds.length === 0) {
+      const state = this.writer.getState();
+      const generation = state.generations[this.initialGenerationId];
+      if (generation === undefined) {
+        throw new Error("Synthetic delivery fixture generation is missing");
+      }
+      const action = state.pedagogicalActions[generation.basis.turnId];
+      if (action === undefined || action.maximumDisclosure < 0) {
+        throw new Error("Synthetic delivery fixture lacks application authorization");
+      }
+      return {
+        generationId: this.initialGenerationId,
+        effectiveDisclosureLevel: 0
+      };
+    }
+
+    let effectiveDisclosureLevel: DisclosureLevel = 0;
+    for (const disclosureId of disclosureIds) {
+      const disclosure = sixPeopleProblem.interviewer.protectedDisclosures.find(
+        (candidate) => candidate.id === disclosureId
+      );
+      if (disclosure === undefined) {
+        throw new Error("Synthetic delivery fixture references an unknown disclosure");
+      }
+      if (disclosure.minimumDisclosureLevel > effectiveDisclosureLevel) {
+        effectiveDisclosureLevel = disclosure.minimumDisclosureLevel;
+      }
+    }
+
+    const committed = await this.turns.commitInput(
+      "Adversarial reviewed disclosure-delivery fixture."
+    );
+    const request = RealizationRequestSchema.parse({
+      requiredAction: "EXPLICIT_HINT",
+      target: "the reviewed disclosure fixture",
+      maximumDisclosure: effectiveDisclosureLevel
+    });
+    await this.writer.execute(
+      createCommandEnvelope({
+        sessionId: this.sessionId,
+        producer: "adversarial-pedagogy-fixture",
+        turnId: committed.turnId
+      }),
+      {
+        operation: "SELECT_ADVERSARIAL_PEDAGOGICAL_ACTION",
+        payload: {
+          turnId: committed.turnId,
+          maximumDisclosure: effectiveDisclosureLevel
+        }
+      },
+      z.object({ selected: z.literal(true) }).strict(),
+      () => ({
+        drafts: [{
+          source: "APPLICATION",
+          type: "PEDAGOGICAL_ACTION_SELECTED",
+          payload: {
+            turnId: committed.turnId,
+            request
+          }
+        }],
+        result: { selected: true as const }
+      })
+    );
+    const generation = await this.turns.startGeneration(
+      committed.inputEpisodeId,
+      committed.turnId,
+      "adversarial-reviewed-disclosure-fixture"
+    );
+    return {
+      generationId: generation.generationId,
+      effectiveDisclosureLevel
+    };
   }
 
   public async close(): Promise<void> {

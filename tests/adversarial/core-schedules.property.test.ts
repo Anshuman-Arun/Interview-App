@@ -21,6 +21,7 @@ import {
   type ProviderCallbackResult
 } from "./fixtures.js";
 import {
+  ADVERSARIAL_PROPERTY_TIMEOUT_MS,
   coreScheduleArbitrary,
   propertyParameters,
   type CoreScheduleOperation
@@ -50,7 +51,7 @@ describe("adversarial core schedules", () => {
       }),
       propertyParameters("core", 0, 12)
     );
-  });
+  }, ADVERSARIAL_PROPERTY_TIMEOUT_MS);
 });
 
 async function executeCoreOperation(

@@ -530,10 +530,10 @@ describe("adversarial named regression schedules", () => {
           producer: "unknown-generation-fixture"
         }),
         {
-          operation: "START_UNKNOWN_GENERATION_FIXTURE",
+          operation: "START_UNKNOWN_PROVENANCE_GENERATION",
           payload: {
             generationId,
-            turnId: missingTurnId
+            basis
           }
         },
         z.object({ started: z.literal(true) }).strict(),

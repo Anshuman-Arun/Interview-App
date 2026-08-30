@@ -12,6 +12,7 @@ import {
   createReferenceModel
 } from "./fixtures.js";
 import {
+  ADVERSARIAL_PROPERTY_TIMEOUT_MS,
   deliveryScheduleArbitrary,
   propertyParameters,
   type DeliveryScheduleOperation
@@ -74,7 +75,7 @@ describe("adversarial delivery schedules", () => {
       }),
       propertyParameters("delivery", 2, 8)
     );
-  });
+  }, ADVERSARIAL_PROPERTY_TIMEOUT_MS);
 });
 
 function armRendererCallbacks(

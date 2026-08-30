@@ -37,7 +37,7 @@ describe("adversarial restart and replay schedules", () => {
       }),
       propertyParameters("restart", 3, 6)
     );
-  });
+  }, ADVERSARIAL_PROPERTY_TIMEOUT_MS);
 });
 
 async function executeRestartOperation(

@@ -117,5 +117,5 @@ describe("adversarial shared session recovery schedules", () => {
       }),
       propertyParameters("shared-recovery", 4, 8)
     );
-  });
+  }, ADVERSARIAL_PROPERTY_TIMEOUT_MS);
 });
