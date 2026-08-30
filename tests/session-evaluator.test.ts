@@ -125,6 +125,7 @@ describe("Session Evaluator Engine", () => {
     expect(markdown).toContain("Technical Interview Evaluation Report");
     expect(markdown).toContain("100% unassisted session");
     expect(markdown).toContain(sixPeopleProblem.id);
+    expect(markdown.split("\n").every((line) => !/[\t ]+$/u.test(line))).toBe(true);
   });
 
   it("strictly uses authoritative EXPOSED and POSSIBLY_EXPOSED delivery status (ignores QUEUED/CANCELLED)", () => {

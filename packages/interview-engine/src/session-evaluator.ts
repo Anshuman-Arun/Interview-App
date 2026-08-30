@@ -254,9 +254,12 @@ export function generateEvaluationMarkdown(evaluation: SessionEvaluation): strin
 
   return `# Technical Interview Evaluation Report
 
-**Session ID**: \`${evaluation.sessionId}\`  
-**Problem**: \`${evaluation.problemId}\` (v${evaluation.problemVersion})  
-**Evaluated At**: ${evaluation.evaluatedAt}  
+**Session ID**: \`${evaluation.sessionId}\`
+
+**Problem**: \`${evaluation.problemId}\` (v${evaluation.problemVersion})
+
+**Evaluated At**: ${evaluation.evaluatedAt}
+
 **Overall Score**: **${String(scores.compositeScore)} / 100**
 
 ---
