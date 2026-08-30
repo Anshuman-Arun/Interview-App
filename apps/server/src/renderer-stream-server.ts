@@ -68,6 +68,7 @@ export type RendererStreamPublishResult =
 interface ActiveConnection {
   readonly sessionId: SessionId;
   readonly response: ServerResponse;
+  readonly sentDeliveryIds: Set<DeliveryId>;
 }
 
 class RendererStreamHttpError extends Error {
@@ -86,6 +87,8 @@ export class RendererStreamServer {
   private readonly maxConnections: number;
   private readonly maxConnectionsPerSession: number;
   private readonly maxMessageBytes: number;
+  private readonly publicationTails = new Map<SessionId, Promise<void>>();
+  private readonly disconnectClassifications = new Map<SessionId, Promise<void>>();
   private connectionCount = 0;
   private boundAddress: BoundRendererStreamAddress | undefined;
 
@@ -134,23 +137,41 @@ export class RendererStreamServer {
   }
 
   public async stop(): Promise<void> {
-    for (const set of this.connections.values()) {
-      for (const connection of set) {
-        if (!connection.response.destroyed) connection.response.end();
-      }
+    const activeConnections = [...this.connections.values()].flatMap((set) => [...set]);
+    for (const connection of activeConnections) {
+      if (!connection.response.destroyed) connection.response.end();
+      this.removeConnection(connection);
     }
+
+    const classificationResults = await Promise.allSettled(
+      [...this.disconnectClassifications.values()]
+    );
+    const classificationFailures = classificationResults
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result): unknown => result.reason as unknown);
+
     this.connections.clear();
     this.connectionCount = 0;
 
-    if (!this.server.listening) {
-      this.boundAddress = undefined;
-      return;
+    let closeFailure: unknown;
+    if (this.server.listening) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          this.server.close((error) => error === undefined ? resolve() : reject(error));
+        });
+      } catch (error) {
+        closeFailure = error;
+      }
     }
-
-    await new Promise<void>((resolve, reject) => {
-      this.server.close((error) => error === undefined ? resolve() : reject(error));
-    });
     this.boundAddress = undefined;
+
+    const failures: unknown[] = [
+      ...classificationFailures,
+      ...(closeFailure === undefined ? [] : [closeFailure])
+    ];
+    if (failures.length > 0) {
+      throw new AggregateError(failures, "Renderer stream shutdown failed");
+    }
   }
 
   public activeConnectionCount(): number {
@@ -163,6 +184,15 @@ export class RendererStreamServer {
   ): Promise<RendererStreamPublishResult> {
     const sessionId = RendererStreamSessionIdSchema.parse(sessionIdInput);
     const deliveryId = RendererStreamDeliveryIdSchema.parse(deliveryIdInput);
+    return this.serializePublication(sessionId, async () =>
+      this.publishDeliveryNow(sessionId, deliveryId)
+    );
+  }
+
+  private async publishDeliveryNow(
+    sessionId: SessionId,
+    deliveryId: DeliveryId
+  ): Promise<RendererStreamPublishResult> {
     const connection = this.firstLiveConnection(sessionId);
 
     if (connection === undefined) {
@@ -179,6 +209,10 @@ export class RendererStreamServer {
 
     if (atom.status !== "QUEUED" && atom.status !== "DELIVERING") {
       return { outcome: "NOT_DELIVERABLE", deliveryId, status: atom.status };
+    }
+
+    if (atom.status === "DELIVERING" && connection.sentDeliveryIds.has(deliveryId)) {
+      return { outcome: "SENT", deliveryId, status: "DELIVERING" };
     }
 
     const previewCommand = RendererStreamDeliveryCommandSchema.parse({
@@ -200,27 +234,37 @@ export class RendererStreamServer {
       return { outcome: "NO_CLIENT", deliveryId };
     }
 
-    const envelope = createCommandEnvelope({
-      sessionId,
-      producer: "renderer-stream-transport"
-    });
-    const reconnected = await new DeliveryCoordinator(writer).reconnect(deliveryId, envelope);
-    if (reconnected.command === undefined) {
-      return { outcome: "NOT_DELIVERABLE", deliveryId, status: reconnected.status };
-    }
+    connection.sentDeliveryIds.add(deliveryId);
+    try {
+      const envelope = createCommandEnvelope({
+        sessionId,
+        producer: "renderer-stream-transport"
+      });
+      const reconnected = await new DeliveryCoordinator(writer).reconnect(deliveryId, envelope);
+      if (reconnected.command === undefined) {
+        connection.sentDeliveryIds.delete(deliveryId);
+        return { outcome: "NOT_DELIVERABLE", deliveryId, status: reconnected.status };
+      }
 
-    const message = RendererStreamMessageSchema.parse({
-      protocolVersion: 1,
-      type: "DELIVERY_COMMAND",
-      command: reconnected.command
-    });
-    const wire = encodeSse(message);
-    if (Buffer.byteLength(wire, "utf8") > this.maxMessageBytes) {
-      return { outcome: "MESSAGE_TOO_LARGE", deliveryId, status: reconnected.status };
-    }
+      const message = RendererStreamMessageSchema.parse({
+        protocolVersion: 1,
+        type: "DELIVERY_COMMAND",
+        command: reconnected.command
+      });
+      const wire = encodeSse(message);
+      if (Buffer.byteLength(wire, "utf8") > this.maxMessageBytes) {
+        connection.sentDeliveryIds.delete(deliveryId);
+        return { outcome: "MESSAGE_TOO_LARGE", deliveryId, status: reconnected.status };
+      }
 
-    connection.response.write(wire);
-    return { outcome: "SENT", deliveryId, status: "DELIVERING" };
+      connection.response.write(wire);
+      return { outcome: "SENT", deliveryId, status: "DELIVERING" };
+    } catch (error) {
+      if (writer.getState().deliveries[deliveryId]?.status !== "DELIVERING") {
+        connection.sentDeliveryIds.delete(deliveryId);
+      }
+      throw error;
+    }
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -265,8 +309,9 @@ export class RendererStreamServer {
         );
       }
 
+      await this.awaitDisconnectClassification(attach.sessionId);
       await this.options.sessions.ensureRecovered(attach.sessionId);
-      this.attach(response, attach.sessionId, origin);
+      await this.attach(response, attach.sessionId, origin);
     } catch (error) {
       if (response.headersSent) {
         response.destroy();
@@ -277,7 +322,11 @@ export class RendererStreamServer {
     }
   }
 
-  private attach(response: ServerResponse, sessionId: SessionId, origin: string | undefined): void {
+  private async attach(
+    response: ServerResponse,
+    sessionId: SessionId,
+    origin: string | undefined
+  ): Promise<void> {
     if (origin === undefined) throw new Error("Authorized renderer stream is missing Origin");
 
     response.writeHead(200, {
@@ -290,7 +339,7 @@ export class RendererStreamServer {
     });
     response.flushHeaders();
 
-    const connection: ActiveConnection = { sessionId, response };
+    const connection: ActiveConnection = { sessionId, response, sentDeliveryIds: new Set() };
     const sessionConnections = this.connections.get(sessionId) ?? new Set<ActiveConnection>();
     sessionConnections.add(connection);
     this.connections.set(sessionId, sessionConnections);
@@ -304,6 +353,8 @@ export class RendererStreamServer {
     };
     response.once("close", cleanup);
     response.once("finish", cleanup);
+
+    await this.drainQueuedDeliveries(connection);
   }
 
   private firstLiveConnection(sessionId: SessionId): ActiveConnection | undefined {
@@ -321,6 +372,62 @@ export class RendererStreamServer {
     if (set === undefined || !set.delete(connection)) return;
     this.connectionCount = Math.max(0, this.connectionCount - 1);
     if (set.size === 0) this.connections.delete(connection.sessionId);
+
+    const previous = this.disconnectClassifications.get(connection.sessionId);
+    const classification = (previous ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(async () => this.classifyUncertainDisconnect(connection));
+    this.disconnectClassifications.set(connection.sessionId, classification);
+    void classification.catch(() => undefined);
+    const clearClassification = (): void => {
+      if (this.disconnectClassifications.get(connection.sessionId) === classification) {
+        this.disconnectClassifications.delete(connection.sessionId);
+      }
+    };
+    void classification.then(clearClassification, clearClassification);
+  }
+
+  private async classifyUncertainDisconnect(connection: ActiveConnection): Promise<void> {
+    if (connection.sentDeliveryIds.size === 0) return;
+    const writer = this.options.sessions.getWriter(connection.sessionId);
+    const deliveries = new DeliveryCoordinator(writer);
+    for (const deliveryId of connection.sentDeliveryIds) {
+      await deliveries.markPossiblyExposed(
+        deliveryId,
+        "Renderer connection ended after the delivery command may have been observed"
+      );
+    }
+  }
+
+  private async awaitDisconnectClassification(sessionId: SessionId): Promise<void> {
+    await this.disconnectClassifications.get(sessionId);
+  }
+
+  private async drainQueuedDeliveries(connection: ActiveConnection): Promise<void> {
+    const writer = this.options.sessions.getWriter(connection.sessionId);
+    const queuedDeliveryIds = Object.values(writer.getState().deliveries)
+      .filter((atom) => atom.status === "QUEUED")
+      .map((atom) => atom.deliveryId);
+    for (const deliveryId of queuedDeliveryIds) {
+      if (connection.response.destroyed || connection.response.writableEnded) return;
+      await this.publishDelivery(connection.sessionId, deliveryId);
+    }
+  }
+
+  private serializePublication<TResult>(
+    sessionId: SessionId,
+    operation: () => Promise<TResult>
+  ): Promise<TResult> {
+    const previous = this.publicationTails.get(sessionId) ?? Promise.resolve();
+    const result = previous.then(operation, operation);
+    const tail = result.then(() => undefined, () => undefined);
+    this.publicationTails.set(sessionId, tail);
+    void tail.finally(() => {
+      if (this.publicationTails.get(sessionId) === tail) {
+        this.publicationTails.delete(sessionId);
+      }
+    });
+    return result;
   }
 
   private authorize(request: IncomingMessage, origin: string | undefined): void {
