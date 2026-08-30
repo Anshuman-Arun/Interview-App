@@ -15,6 +15,7 @@ import {
   canonicalJson,
   compileContext,
   createContextCompilationManifest,
+  createProviderContextSpecFingerprint,
   type CompiledContext
 } from "./context-compiler.js";
 import { createCommandEnvelope } from "./envelopes.js";
@@ -27,6 +28,8 @@ const ContextCompilationFailureReasonSchema = z.enum([
   "COMPATIBILITY_INCOMPATIBLE",
   "COMPATIBILITY_UNKNOWN",
   "PROBLEM_MISMATCH",
+  "PROBLEM_PROVENANCE_UNKNOWN",
+  "PROBLEM_DEFINITION_MISMATCH",
   "ACTION_UNAVAILABLE",
   "HASHING_UNAVAILABLE",
   "STATE_CHANGED_DURING_COMPILATION",
@@ -49,6 +52,7 @@ export const GenerationContextCompilationResultSchema = z.discriminatedUnion("co
 export type GenerationContextCompilationResult = z.infer<typeof GenerationContextCompilationResultSchema>;
 
 type ManifestFactory = typeof createContextCompilationManifest;
+type ProblemFingerprintFactory = typeof createProviderContextSpecFingerprint;
 
 type ContextAssessment =
   | { readonly ok: true; readonly context: CompiledContext }
@@ -69,6 +73,9 @@ function assessContext(
   if (state.problem?.id !== problem.id || state.problem.version !== problem.version) {
     return { ok: false, reason: "PROBLEM_MISMATCH" };
   }
+  if (state.problem.providerContextSpecSha256 === undefined) {
+    return { ok: false, reason: "PROBLEM_PROVENANCE_UNKNOWN" };
+  }
 
   const realizationRequest = state.pedagogicalActions[generation.basis.turnId];
   if (realizationRequest === undefined) return { ok: false, reason: "ACTION_UNAVAILABLE" };
@@ -86,7 +93,8 @@ function assessContext(
 export class ContextCoordinator {
   public constructor(
     private readonly writer: SessionWriter,
-    private readonly manifestFactory: ManifestFactory = createContextCompilationManifest
+    private readonly manifestFactory: ManifestFactory = createContextCompilationManifest,
+    private readonly problemFingerprintFactory: ProblemFingerprintFactory = createProviderContextSpecFingerprint
   ) {}
 
   public async compileForGeneration(input: {
@@ -111,7 +119,11 @@ export class ContextCoordinator {
     }));
 
     const snapshotAssessment = assessContext(snapshot, input.generationId, input.problem);
-    let prepared: { readonly context: CompiledContext; readonly manifest: ContextCompilationManifest } | undefined;
+    let prepared: {
+      readonly context: CompiledContext;
+      readonly manifest: ContextCompilationManifest;
+      readonly providerContextSpecSha256: Awaited<ReturnType<ProblemFingerprintFactory>>;
+    } | undefined;
     let preparationFailure: ContextCompilationFailureReason | undefined;
     if (!snapshotAssessment.ok) {
       preparationFailure = snapshotAssessment.reason;
@@ -119,14 +131,19 @@ export class ContextCoordinator {
       preparationFailure = "UNKNOWN_GENERATION";
     } else {
       try {
-        prepared = {
-          context: snapshotAssessment.context,
-          manifest: await this.manifestFactory({
+        const [manifest, providerContextSpecSha256] = await Promise.all([
+          this.manifestFactory({
             context: snapshotAssessment.context,
             problem: input.problem,
             generationId: input.generationId,
             generationBasis: snapshotGeneration.basis
-          })
+          }),
+          this.problemFingerprintFactory(input.problem)
+        ]);
+        prepared = {
+          context: snapshotAssessment.context,
+          manifest,
+          providerContextSpecSha256
         };
       } catch {
         preparationFailure = "HASHING_UNAVAILABLE";
@@ -161,6 +178,9 @@ export class ContextCoordinator {
 
       const currentAssessment = assessContext(state, input.generationId, input.problem);
       if (!currentAssessment.ok) return fail(currentAssessment.reason);
+      if (state.problem?.providerContextSpecSha256 !== prepared.providerContextSpecSha256) {
+        return fail("PROBLEM_DEFINITION_MISMATCH");
+      }
       if (canonicalJson(currentAssessment.context) !== canonicalJson(prepared.context)) {
         return fail("STATE_CHANGED_DURING_COMPILATION");
       }

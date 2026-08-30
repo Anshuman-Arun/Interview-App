@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
   ContextCompilationManifestSchema,
   DisclosureIdSchema,
+  ProviderContextSpecFingerprintSchema,
   RealizationRequestSchema,
   type GenerationBasis,
   type GenerationId,
   type InterviewProblem,
+  type ProviderContextSpecFingerprint,
   type RealizationRequest,
   type TurnId
 } from "../../domain/src/index.js";
@@ -46,6 +48,18 @@ export async function sha256CanonicalJson(value: unknown): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export async function createProviderContextSpecFingerprint(
+  problem: InterviewProblem
+): Promise<ProviderContextSpecFingerprint> {
+  const digest = await sha256CanonicalJson({
+    id: problem.id,
+    version: problem.version,
+    public: problem.public,
+    interviewer: problem.interviewer
+  });
+  return ProviderContextSpecFingerprintSchema.parse(digest);
+}
+
 export async function createContextCompilationManifest(input: {
   readonly context: CompiledContext;
   readonly problem: InterviewProblem;
@@ -77,9 +91,14 @@ export function compileContext(input: {
 }): CompiledContext {
   const turn = input.state.turns[input.turnId];
   if (turn === undefined) throw new Error(`Unknown turn ${input.turnId}`);
+  if (
+    input.state.problem === undefined
+    || input.state.problem.id !== input.problem.id
+    || input.state.problem.version !== input.problem.version
+  ) throw new Error("Problem does not match the session's presented problem");
   const delivered = new Set(input.state.disclosureLedger);
   return CompiledContextSchema.parse({
-    problemPrompt: input.problem.public.prompt,
+    problemPrompt: input.state.problem.prompt,
     recentStudentWork: turn.studentText,
     realizationRequest: input.realizationRequest,
     deliveredFacts: [...delivered],

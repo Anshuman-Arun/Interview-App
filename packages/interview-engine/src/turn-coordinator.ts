@@ -45,6 +45,7 @@ import {
 import type { EventDraft } from "../../events/src/index.js";
 import { z } from "zod";
 import { createCommandEnvelope } from "./envelopes.js";
+import { createProviderContextSpecFingerprint } from "./context-compiler.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
@@ -80,16 +81,21 @@ export class TurnCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
 
   public async startSession(problem: InterviewProblem, commandEnvelope?: CommandEnvelope): Promise<void> {
+    const providerContextSpecSha256 = await createProviderContextSpecFingerprint(problem);
     const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" }));
     await this.writer.execute(envelope, {
       operation: "START_SESSION",
-      payload: { problemId: problem.id, problemVersion: problem.version, prompt: problem.public.prompt }
+      payload: { problemId: problem.id, problemVersion: problem.version, prompt: problem.public.prompt, providerContextSpecSha256 }
     }, StartedResultSchema, (state) => {
       if (state.started) throw new Error("Session already started");
       return {
         drafts: [
           { source: "APPLICATION", type: "SESSION_STARTED", payload: { startedAt: new Date().toISOString() } },
-          { source: "APPLICATION", type: "PROBLEM_PRESENTED", payload: { problemId: problem.id, problemVersion: problem.version, prompt: problem.public.prompt } }
+          {
+            source: "APPLICATION",
+            type: "PROBLEM_PRESENTED",
+            payload: { problemId: problem.id, problemVersion: problem.version, prompt: problem.public.prompt, providerContextSpecSha256 }
+          }
         ],
         result: { started: true }
       };
@@ -356,11 +362,13 @@ export class TurnCoordinator {
     const proposal = InterviewerProposalSchema.parse(input.proposal);
     const generationId = envelope.generationId;
     if (generationId === undefined) throw new Error("Provider result envelope is missing generationId");
+    const providerContextSpecSha256 = await createProviderContextSpecFingerprint(input.problem);
     const outcome = await this.writer.execute(envelope, {
       operation: "PROCESS_INTERVIEWER_PROPOSAL",
       payload: {
         problemId: input.problem.id,
         problemVersion: input.problem.version,
+        providerContextSpecSha256,
         protectedDisclosures: input.problem.interviewer.protectedDisclosures,
         proposal: commandIdentityValue(proposal)
       }
@@ -368,6 +376,12 @@ export class TurnCoordinator {
       const generation = state.generations[generationId];
       if (generation === undefined) return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Unknown generation" } };
       if (generation.status !== "ACTIVE") return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Generation is not active" } };
+      if (state.problem?.providerContextSpecSha256 === undefined) {
+        return rejectDrafts(generationId, proposal, "Problem definition provenance is unavailable");
+      }
+      if (state.problem.providerContextSpecSha256 !== providerContextSpecSha256) {
+        return rejectDrafts(generationId, proposal, "Problem definition does not match the session-bound provider context contract");
+      }
       const compatibility = isGenerationBasisStillCompatible(generation.basis, state);
       if (compatibility !== "COMPATIBLE") {
         return {
