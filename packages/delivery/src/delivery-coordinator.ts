@@ -153,4 +153,28 @@ export class DeliveryCoordinator {
     }
     return inFlight;
   }
+
+  public async markPossiblyExposed(deliveryId: DeliveryId, reason: string): Promise<boolean> {
+    const normalizedReason = reason.trim().slice(0, 512) || "Physical delivery may have occurred";
+    const envelope = createDeliveryEnvelope(this.writer.sessionId, "delivery-uncertainty");
+    const result = await this.writer.execute(
+      envelope,
+      { operation: "MARK_DELIVERY_POSSIBLY_EXPOSED", payload: { deliveryId, reason: normalizedReason } },
+      z.boolean(),
+      (state): StateTransition<boolean> => {
+        const atom = state.deliveries[deliveryId];
+        if (atom === undefined) throw new Error("Unknown delivery");
+        if (atom.status !== "DELIVERING") return { drafts: [], result: false };
+        return {
+          drafts: [{
+            source: "RECOVERY",
+            type: "DELIVERY_POSSIBLY_EXPOSED",
+            payload: { deliveryId, reason: normalizedReason }
+          }],
+          result: true
+        };
+      }
+    );
+    return result.value;
+  }
 }

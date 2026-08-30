@@ -46,7 +46,17 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       next = { ...state, started: true };
       break;
     case "PROBLEM_PRESENTED":
-      next = { ...state, problem: { id: event.payload.problemId, version: event.payload.problemVersion, prompt: event.payload.prompt } };
+      next = {
+        ...state,
+        problem: {
+          id: event.payload.problemId,
+          version: event.payload.problemVersion,
+          prompt: event.payload.prompt,
+          ...(event.payload.providerContextSpecSha256 === undefined
+            ? {}
+            : { providerContextSpecSha256: event.payload.providerContextSpecSha256 })
+        }
+      };
       break;
     case "UTTERANCE_STARTED":
       next = { ...state, utterances: { ...state.utterances, [event.payload.utteranceId]: { utteranceId: event.payload.utteranceId, status: "CAPTURING" } } };

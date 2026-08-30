@@ -49,13 +49,27 @@ export const sixPeopleProblem: InterviewProblem = {
         id: choosePersonDisclosure,
         fact: "Choose any person; among five incident relationships, at least three have the same type by pigeonhole.",
         minimumDisclosureLevel: 2,
-        equivalentFormulations: ["choose any person", "at least three edges have the same colour", "use the pigeonhole principle on five relationships"]
+        equivalentFormulations: [
+          "choose any person",
+          "at least three edges have the same colour",
+          "at least three edges have the same color",
+          "at least three edges share the same color",
+          "at least three edges share the same colour",
+          "use the pigeonhole principle on five relationships",
+          "by the pigeonhole principle"
+        ]
       },
       {
         id: completeTriangleDisclosure,
         fact: "Among those three people, a matching internal relation closes one triangle; otherwise all three opposite relations form the other triangle.",
         minimumDisclosureLevel: 4,
-        equivalentFormulations: ["if any internal edge matches", "otherwise the other three form a triangle", "complete the monochromatic triangle"]
+        equivalentFormulations: [
+          "if any internal edge matches",
+          "otherwise the other three form a triangle",
+          "complete the monochromatic triangle",
+          "what happens if any edge between them shares that color",
+          "what happens if none of them do"
+        ]
       }
     ]
   },

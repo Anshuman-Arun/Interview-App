@@ -43,6 +43,7 @@ export class RequestIdConflictError extends Error {
 export class SqliteEventStore {
   private readonly database: DatabaseSync;
   private readonly upcasters: EventUpcasterRegistry;
+  private closed = false;
 
   public constructor(path: string, upcasters = new EventUpcasterRegistry()) {
     this.database = new DatabaseSync(path);
@@ -161,6 +162,8 @@ export class SqliteEventStore {
   }
 
   public close(): void {
+    if (this.closed) return;
+    this.closed = true;
     this.database.close();
   }
 }

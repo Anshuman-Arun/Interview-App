@@ -1,14 +1,23 @@
 import { z } from "zod";
 import type { DeterministicVerifier, VerificationResult } from "../../domain/src/index.js";
+import { normalizeInterpretationConfidence } from "./confidence.js";
 
 export const TWO_COLOUR_GRAPH_PROTOCOL = "INTERVIEW_APP_TWO_COLOUR_GRAPH_CLAIM" as const;
 export const TWO_COLOUR_GRAPH_PROTOCOL_VERSION = 1 as const;
 export const TWO_COLOUR_GRAPH_VERIFIER_NAME = "oxford-two-colour-graph-verifier@1" as const;
+export const MAX_TWO_COLOUR_GRAPH_STATEMENT_CHARACTERS = 100_000 as const;
+export const MAX_TWO_COLOUR_GRAPH_VERTICES = 64 as const;
+export const MAX_TWO_COLOUR_GRAPH_EDGES = (
+  MAX_TWO_COLOUR_GRAPH_VERTICES * (MAX_TWO_COLOUR_GRAPH_VERTICES - 1)
+) / 2;
 
 export const TwoColourRelationSchema = z.enum(["ACQUAINTANCE", "STRANGER"]);
 export type TwoColourRelation = z.infer<typeof TwoColourRelationSchema>;
 
-const VertexIdSchema = z.string().min(1);
+const VertexIdSchema = z.string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u);
 
 export const TwoColourGraphEdgeSchema = z.object({
   endpoints: z.tuple([VertexIdSchema, VertexIdSchema]),
@@ -21,8 +30,8 @@ export const TwoColourGraphInterpretationSchema = z.object({
   problemId: z.literal("oxford-six-people"),
   problemVersion: z.literal("1.0.0"),
   claim: z.literal("ENCODED_GRAPH_HAS_MONOCHROMATIC_TRIANGLE"),
-  vertices: z.array(VertexIdSchema).min(1),
-  edges: z.array(TwoColourGraphEdgeSchema)
+  vertices: z.array(VertexIdSchema).min(1).max(MAX_TWO_COLOUR_GRAPH_VERTICES),
+  edges: z.array(TwoColourGraphEdgeSchema).max(MAX_TWO_COLOUR_GRAPH_EDGES)
 }).strict().superRefine((interpretation, context) => {
   const vertexIndex = new Map<string, number>();
 
@@ -165,31 +174,36 @@ function unresolved(interpretationConfidence: number, reason: string): Verificat
 
 export class TwoColourGraphVerifier implements DeterministicVerifier {
   public async verify(statement: string, interpretationConfidence: number): Promise<VerificationResult> {
-    if (!Number.isFinite(interpretationConfidence) || interpretationConfidence < 0 || interpretationConfidence > 1) {
-      return unresolved(interpretationConfidence, "Interpretation confidence must be a finite value between 0 and 1");
+    const normalized = normalizeInterpretationConfidence(interpretationConfidence);
+    if (!normalized.valid) {
+      return unresolved(normalized.value, "Interpretation confidence must be a finite value between 0 and 1");
     }
 
-    if (interpretationConfidence < 1) {
-      return unresolved(interpretationConfidence, "Formal interpretation confidence is insufficient");
+    if (normalized.value < 1) {
+      return unresolved(normalized.value, "Formal interpretation confidence is insufficient");
+    }
+
+    if (statement.length > MAX_TWO_COLOUR_GRAPH_STATEMENT_CHARACTERS) {
+      return unresolved(normalized.value, "Formal interpretation exceeds the deterministic verifier size limit");
     }
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(statement) as unknown;
     } catch {
-      return unresolved(interpretationConfidence, "Formal interpretation is not valid JSON");
+      return unresolved(normalized.value, "Formal interpretation is not valid JSON");
     }
 
     const interpretation = TwoColourGraphInterpretationSchema.safeParse(parsed);
     if (!interpretation.success) {
-      return unresolved(interpretationConfidence, "Formal interpretation is malformed, incomplete, or ambiguous");
+      return unresolved(normalized.value, "Formal interpretation is malformed, incomplete, or ambiguous");
     }
 
     const triangle = findMonochromaticTriangle(interpretation.data);
     if (triangle !== undefined) {
       return {
         status: "VERIFIED",
-        interpretationConfidence,
+        interpretationConfidence: normalized.value,
         verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
         reason: "Encoded complete two-colour graph contains a monochromatic triangle"
       };
@@ -197,7 +211,7 @@ export class TwoColourGraphVerifier implements DeterministicVerifier {
 
     return {
       status: "CONTRADICTED",
-      interpretationConfidence,
+      interpretationConfidence: normalized.value,
       verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
       reason: "Encoded complete two-colour graph contains no monochromatic triangle"
     };

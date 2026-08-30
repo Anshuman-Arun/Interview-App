@@ -1,6 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { dirname } from "node:path";
-import { createInterface, type Interface as ReadlineInterface } from "node:readline";
 import {
   LocalComputeRequestSchema,
   LocalComputeResponseSchema,
@@ -46,14 +45,20 @@ export class LocalComputeWorkerError extends Error {
 
 export class LocalComputeWorkerClient {
   private child: ChildProcessWithoutNullStreams | undefined;
-  private output: ReadlineInterface | undefined;
   private state: LocalComputeWorkerState = "NEW";
+  private responseBuffer = Buffer.alloc(0);
+  private readonly maxResponseLineBytes: number;
   private readonly pending = new Map<RequestId, PendingRequest>();
   private readonly completed = new Map<RequestId, CompletedRequest>();
   private readonly ignored = new Set<RequestId>();
   private readonly diagnostics: string[] = [];
 
-  public constructor(private readonly options: LocalComputeWorkerOptions) {}
+  public constructor(private readonly options: LocalComputeWorkerOptions) {
+    this.maxResponseLineBytes = options.maxResponseLineBytes ?? 128 * 1024;
+    if (!Number.isSafeInteger(this.maxResponseLineBytes) || this.maxResponseLineBytes <= 0) {
+      throw new LocalComputeWorkerError("PROTOCOL_ERROR", "Local compute response line limit must be a positive safe integer");
+    }
+  }
 
   public getState(): LocalComputeWorkerState {
     return this.state;
@@ -153,6 +158,7 @@ export class LocalComputeWorkerClient {
       return { semantics: "INTERRUPT_LOCAL_PROCESS", signalSent: false };
     }
     this.state = "INTERRUPTING";
+    this.responseBuffer = Buffer.alloc(0);
     this.rejectAll(new LocalComputeWorkerError("INTERRUPTED", "Local compute worker was interrupted"));
     return { semantics: "INTERRUPT_LOCAL_PROCESS", signalSent: child.kill() };
   }
@@ -177,15 +183,19 @@ export class LocalComputeWorkerClient {
   }
 
   private attachProcessHandlers(child: ChildProcessWithoutNullStreams): void {
-    this.output = createInterface({ input: child.stdout, crlfDelay: Infinity });
-    this.output.on("line", (line) => this.handleResponseLine(line));
+    child.stdout.on("data", (chunk: Buffer) => this.handleResponseChunk(chunk));
+    child.stdout.once("end", () => {
+      if (this.responseBuffer.length > 0 && this.state !== "STOPPED" && this.state !== "INTERRUPTING") {
+        this.failProtocol("Local compute worker ended with an unterminated response");
+      }
+    });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
       this.rememberDiagnostic(redactSecrets(chunk).trim().slice(0, 500));
     });
     child.once("exit", (code) => {
-      this.output?.close();
       this.state = "STOPPED";
+      this.responseBuffer = Buffer.alloc(0);
       this.rejectAll(new LocalComputeWorkerError("PROCESS_EXITED", `Local compute worker exited with code ${String(code)}`));
     });
     child.on("error", () => {
@@ -194,14 +204,47 @@ export class LocalComputeWorkerClient {
     });
   }
 
-  private handleResponseLine(line: string): void {
-    if (Buffer.byteLength(line, "utf8") > (this.options.maxResponseLineBytes ?? 128 * 1024)) {
-      this.failProtocol("Local compute response exceeded the line limit");
+  private handleResponseChunk(chunk: Buffer): void {
+    if (this.shouldIgnoreOutput()) return;
+    let offset = 0;
+    while (offset < chunk.length) {
+      const newline = chunk.indexOf(0x0a, offset);
+      const end = newline === -1 ? chunk.length : newline;
+      const fragment = chunk.subarray(offset, end);
+      if (this.responseBuffer.length + fragment.length > this.maxResponseLineBytes) {
+        this.failProtocol("Local compute response exceeded the line limit");
+        return;
+      }
+      if (fragment.length > 0) {
+        this.responseBuffer = this.responseBuffer.length === 0
+          ? Buffer.from(fragment)
+          : Buffer.concat([this.responseBuffer, fragment], this.responseBuffer.length + fragment.length);
+      }
+      if (newline === -1) return;
+
+      const line = this.responseBuffer;
+      this.responseBuffer = Buffer.alloc(0);
+      this.handleResponseLine(line);
+      if (this.shouldIgnoreOutput()) return;
+      offset = newline + 1;
+    }
+  }
+
+  private shouldIgnoreOutput(): boolean {
+    return this.state === "STOPPED" || this.state === "INTERRUPTING";
+  }
+
+  private handleResponseLine(line: Buffer): void {
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(line);
+    } catch {
+      this.failProtocol("Local compute worker emitted invalid UTF-8");
       return;
     }
     let decoded: unknown;
     try {
-      decoded = JSON.parse(line) as unknown;
+      decoded = JSON.parse(text) as unknown;
     } catch {
       this.failProtocol("Local compute worker emitted malformed JSON");
       return;
@@ -237,6 +280,7 @@ export class LocalComputeWorkerClient {
     const error = new LocalComputeWorkerError("PROTOCOL_ERROR", message);
     this.rejectAll(error);
     this.state = "INTERRUPTING";
+    this.responseBuffer = Buffer.alloc(0);
     this.child?.kill();
   }
 

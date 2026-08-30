@@ -13,8 +13,9 @@ import {
 import { replaySession } from "../packages/events/src/index.js";
 import {
   SessionRuntimeRegistry,
-  VerificationCoordinator,
+  VerificationCoordinator as UnscopedVerificationCoordinator,
   createCommandEnvelope,
+  type SessionWriter,
   type VerificationWorkItem
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
@@ -29,6 +30,17 @@ const claimEvidenceKey: EvidenceKey = {
   subject: { kind: "CLAIM", claimId: "encoded-graph-has-monochromatic-triangle" },
   dimension: "CORRECTNESS"
 };
+
+const verificationScopes = [{
+  verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+  evidenceKey: claimEvidenceKey
+}] as const;
+
+class VerificationCoordinator extends UnscopedVerificationCoordinator {
+  public constructor(writer: SessionWriter) {
+    super(writer, verificationScopes);
+  }
+}
 
 describe("formal interpretation proposal admission", () => {
   it("atomically consumes a current generation and opens deterministic verification", async () => {
@@ -236,6 +248,24 @@ describe("formal interpretation proposal admission", () => {
     expect(scopeHarness.writer.getState().generations[scopeHarness.generationId]?.status).toBe("REJECTED");
     expect(Object.values(scopeHarness.writer.getState().verificationRequests)).toHaveLength(0);
     scopeHarness.store.close();
+
+    const claimHarness = await createCoreHarness();
+    const claimCoordinator = new VerificationCoordinator(claimHarness.writer);
+    const wrongClaim = await claimCoordinator.requestVerificationFromProposal({
+      envelope: proposalEnvelope(claimHarness),
+      proposal: completeGraphProposal(1),
+      verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+      evidenceKey: {
+        ...claimEvidenceKey,
+        subject: { kind: "CLAIM", claimId: "unrelated-student-claim" }
+      }
+    });
+    expect(wrongClaim.value).toMatchObject({
+      accepted: false,
+      reason: "VERIFIER_SCOPE_UNAUTHORIZED"
+    });
+    expect(Object.values(claimHarness.writer.getState().verificationRequests)).toHaveLength(0);
+    claimHarness.store.close();
 
     const malformedHarness = await createCoreHarness();
     const malformedCoordinator = new VerificationCoordinator(malformedHarness.writer);

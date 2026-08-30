@@ -5,14 +5,23 @@ import {
   type SessionWriter
 } from "../../../packages/interview-engine/src/index.js";
 
+export interface TurnRecoveryDelegate {
+  readonly recoverPendingTurns: (sessionId: SessionId) => Promise<void>;
+}
+
 /**
  * Process-lifetime recovery ownership shared by every transport adapter.
  * A session is recovered at most once successfully in one application runtime.
  */
 export class SessionRecoveryCoordinator {
   private readonly recoveries = new Map<SessionId, Promise<readonly DeliveryId[]>>();
+  private delegate: TurnRecoveryDelegate | undefined;
 
   public constructor(private readonly registry: SessionRuntimeRegistry) {}
+
+  public setTurnRecoveryDelegate(delegate: TurnRecoveryDelegate): void {
+    this.delegate = delegate;
+  }
 
   public getWriter(sessionId: SessionId): SessionWriter {
     return this.registry.get(sessionId);
@@ -22,8 +31,14 @@ export class SessionRecoveryCoordinator {
     const existing = this.recoveries.get(sessionId);
     if (existing !== undefined) return existing;
 
-    const recovery = new DeliveryCoordinator(this.getWriter(sessionId))
-      .recoverUncertainDeliveries();
+    const recovery = (async () => {
+      const deliveryIds = await new DeliveryCoordinator(this.getWriter(sessionId)).recoverUncertainDeliveries();
+      if (this.delegate !== undefined) {
+        await this.delegate.recoverPendingTurns(sessionId);
+      }
+      return deliveryIds;
+    })();
+
     this.recoveries.set(sessionId, recovery);
     void recovery.catch(() => {
       if (this.recoveries.get(sessionId) === recovery) {

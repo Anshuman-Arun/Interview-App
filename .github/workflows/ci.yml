@@ -62,8 +62,20 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Build browser application
+        run: pnpm build:web
+
       - name: Run complete Vitest suite
         run: pnpm test
+
+      - name: Run replay verification
+        run: pnpm test:replay
+
+      - name: Run property test suite
+        run: pnpm test:property
+
+      - name: Run end-to-end typed interview suite
+        run: pnpm test:e2e
 
       - name: Run synthetic interview demo
         run: pnpm demo
