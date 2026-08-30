@@ -2,6 +2,7 @@ import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
   BoardActionSchema,
+  CommandIdentityValueSchema,
   GenerationBasisSchema,
   SessionSummaryResponseSchema,
   evidenceKeyToString,
@@ -533,7 +534,9 @@ describe("adversarial named regression schedules", () => {
           operation: "START_UNKNOWN_PROVENANCE_GENERATION",
           payload: {
             generationId,
-            basis
+            basis: CommandIdentityValueSchema.parse(
+              JSON.parse(JSON.stringify(basis))
+            )
           }
         },
         z.object({ started: z.literal(true) }).strict(),
