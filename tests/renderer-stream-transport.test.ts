@@ -127,19 +127,6 @@ describe("authenticated renderer stream transport", () => {
       signal: controller.signal
     }, renderer);
 
-    await waitFor(() => streamServer.activeConnectionCount() === 1);
-
-    expect(await streamServer.publishDelivery(sessionId, textAtom.deliveryId)).toEqual({
-      outcome: "SENT",
-      deliveryId: textAtom.deliveryId,
-      status: "DELIVERING"
-    });
-    expect(await streamServer.publishDelivery(sessionId, audioAtom.deliveryId)).toEqual({
-      outcome: "SENT",
-      deliveryId: audioAtom.deliveryId,
-      status: "DELIVERING"
-    });
-
     await waitFor(() =>
       writer.getState().deliveries[textAtom.deliveryId]?.status === "COMPLETED"
       && writer.getState().deliveries[audioAtom.deliveryId]?.status === "COMPLETED"
@@ -164,6 +151,9 @@ describe("authenticated renderer stream transport", () => {
 
     controller.abort();
     await consumer;
+    expect(deliveryLifecycle(store.load(sessionId), textAtom.deliveryId)).not.toContain(
+      "DELIVERY_POSSIBLY_EXPOSED"
+    );
   });
 
   it("leaves a queued delivery untouched when no renderer is connected", async () => {
@@ -178,6 +168,158 @@ describe("authenticated renderer stream transport", () => {
     });
     expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
     expect(deliveryLifecycle(store.load(sessionId), atom.deliveryId)).toEqual(["DELIVERY_QUEUED"]);
+  });
+
+  it("drains a delivery queued before renderer attachment exactly once", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const atom = await queueDelivery(writer, { medium: "TEXT", text: "queued before attach" });
+    const visible: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: createLoopbackAcknowledgementSender({
+        commandUrl: `${commandAddress.url}/v1/commands`,
+        authenticatedFetch: fetchWithAuth
+      }),
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+
+    await waitFor(() => writer.getState().deliveries[atom.deliveryId]?.status === "COMPLETED");
+    expect(visible).toEqual([atom.deliveryId]);
+    expect(deliveryLifecycle(store.load(sessionId), atom.deliveryId)).toEqual([
+      "DELIVERY_QUEUED",
+      "DELIVERY_STARTED",
+      "DELIVERY_EXPOSED",
+      "DELIVERY_COMPLETED"
+    ]);
+
+    controller.abort();
+    await consumer;
+  });
+
+  it("classifies an unacknowledged sent delivery as POSSIBLY_EXPOSED before replacement attachment", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const atom = await queueDelivery(writer, { medium: "TEXT", text: "uncertain disconnect" });
+    const firstVisible: DeliveryId[] = [];
+    const firstRenderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          firstVisible.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const firstController = new AbortController();
+    const firstConsumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: firstController.signal
+    }, firstRenderer);
+
+    await waitFor(() =>
+      firstVisible.length === 1
+      && writer.getState().deliveries[atom.deliveryId]?.status === "DELIVERING"
+    );
+    firstController.abort();
+    await firstConsumer;
+    await waitFor(() =>
+      writer.getState().deliveries[atom.deliveryId]?.status === "POSSIBLY_EXPOSED"
+    );
+
+    const replacementVisible: DeliveryId[] = [];
+    const replacementRenderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          replacementVisible.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const replacementController = new AbortController();
+    const replacementConsumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: replacementController.signal
+    }, replacementRenderer);
+
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+    expect(replacementVisible).toEqual([]);
+    expect(deliveryLifecycle(store.load(sessionId), atom.deliveryId)).toEqual([
+      "DELIVERY_QUEUED",
+      "DELIVERY_STARTED",
+      "DELIVERY_POSSIBLY_EXPOSED"
+    ]);
+
+    replacementController.abort();
+    await replacementConsumer;
+  });
+
+  it("serializes concurrent publication attempts without duplicating visible output", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const visible: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, { medium: "TEXT", text: "publish once" });
+    const results = await Promise.all([
+      streamServer.publishDelivery(sessionId, atom.deliveryId),
+      streamServer.publishDelivery(sessionId, atom.deliveryId)
+    ]);
+    expect(results).toEqual([
+      { outcome: "SENT", deliveryId: atom.deliveryId, status: "DELIVERING" },
+      { outcome: "SENT", deliveryId: atom.deliveryId, status: "DELIVERING" }
+    ]);
+    await waitFor(() => visible.length === 1);
+    expect(visible).toEqual([atom.deliveryId]);
+    expect(deliveryLifecycle(store.load(sessionId), atom.deliveryId)).toEqual([
+      "DELIVERY_QUEUED",
+      "DELIVERY_STARTED"
+    ]);
+
+    controller.abort();
+    await consumer;
+    await waitFor(() =>
+      writer.getState().deliveries[atom.deliveryId]?.status === "POSSIBLY_EXPOSED"
+    );
   });
 
   it("rejects unauthorized, malformed, oversized, and excess stream attachments before attaching", async () => {

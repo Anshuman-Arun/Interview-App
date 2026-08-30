@@ -66,7 +66,7 @@ class CountingRendererClient extends RendererClient {
 }
 
 describe("renderer audio crash and reconnect semantics", () => {
-  it("reissues the same DeliveryId after disconnect before exposure without restarting audio", async () => {
+  it("fails closed after disconnect when audio receipt lacks a persisted exposure acknowledgement", async () => {
     const store = new SqliteEventStore(":memory:");
     const registry = new SessionRuntimeRegistry(store);
     const sessions = new SessionRecoveryCoordinator(registry);
@@ -116,7 +116,10 @@ describe("renderer audio crash and reconnect semantics", () => {
 
       firstController.abort();
       await firstConsumer;
-      await waitFor(() => streamServer.activeConnectionCount() === 0);
+      await waitFor(() =>
+        streamServer.activeConnectionCount() === 0
+        && writer.getState().deliveries[atom.deliveryId]?.status === "POSSIBLY_EXPOSED"
+      );
 
       const secondController = new AbortController();
       const secondConsumer = consume(streamAddress, sessionId, renderer, secondController);
@@ -124,16 +127,16 @@ describe("renderer audio crash and reconnect semantics", () => {
 
       const secondPublish = await streamServer.publishDelivery(sessionId, atom.deliveryId);
       expect(secondPublish).toEqual({
-        outcome: "SENT",
+        outcome: "NOT_DELIVERABLE",
         deliveryId: atom.deliveryId,
-        status: "DELIVERING"
+        status: "POSSIBLY_EXPOSED"
       });
-      await waitFor(() => renderer.handledMessageCount === 2);
 
       expect(renderer.snapshot()).toHaveLength(1);
       expect(renderer.snapshot()[0]?.deliveryId).toBe(atom.deliveryId);
       expect(renderer.snapshot()[0]?.phase).toBe("RECEIVED");
       expect(audio.playCount).toBe(1);
+      expect(renderer.handledMessageCount).toBe(1);
 
       secondController.abort();
       await secondConsumer;
