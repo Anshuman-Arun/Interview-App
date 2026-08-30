@@ -1,3 +1,7 @@
 export * from "./problem-integrity.js";
 export * from "./six-people.js";
+export * from "./hilbert-hotel.js";
+export * from "./prisoner-hats.js";
+export * from "./gamblers-ruin.js";
+export * from "./biased-coin.js";
 export * from "./problem-catalog.js";
