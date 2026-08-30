@@ -1,0 +1,90 @@
+/* Oxford Technical Interview - Transcript & Input Styles */
+
+.transcript-feed-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #fafbfd;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.transcript-message {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.75rem;
+}
+
+.message-bubble {
+  max-width: 85%;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* Student Bubble (Indigo) */
+.student-math-bubble {
+  color: #ffffff;
+}
+
+.student-math-bubble .katex {
+  color: #ffffff;
+}
+
+.student-math-bubble .katex-html {
+  color: #ffffff;
+}
+
+/* AI Bubble (White with border) */
+.ai-math-bubble {
+  color: #0f172a;
+}
+
+.ai-math-bubble .katex {
+  color: #1e1b4b;
+}
+
+/* Delivery Status Badges */
+.delivery-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  transition: all 0.2s ease;
+}
+
+/* Live Math Preview */
+.live-math-preview {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #1e293b;
+}
+
+.live-math-preview .katex {
+  color: #312e81;
+}
+
+/* Streaming cursor */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 0.45rem;
+  height: 1rem;
+  background-color: #6366f1;
+  margin-left: 0.25rem;
+  vertical-align: middle;
+  animation: cursor-blink 0.8s infinite;
+}
