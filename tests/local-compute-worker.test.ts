@@ -82,6 +82,18 @@ describe("local compute worker boundary", () => {
     expect(client.getState()).toBe("RUNNING");
   });
 
+  it("reassembles valid NDJSON split across stdout chunks", async () => {
+    const client = track(clients, fixtureClient("fragmented"));
+    await client.start();
+    const result = await client.request({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      type: "HEALTH_CHECK"
+    });
+    expect(result).toMatchObject({ type: "HEALTH_RESULT", workerVersion: "test-fixture@1" });
+    expect(client.getState()).toBe("RUNNING");
+  });
+
   it("fails closed and interrupts the process on malformed or stale-basis output", async () => {
     for (const mode of ["malformed", "wrong_revision"] as const) {
       const client = track(clients, fixtureClient(mode));
@@ -96,6 +108,29 @@ describe("local compute worker boundary", () => {
       await waitForState(client, "STOPPED");
     }
   });
+
+  it.each([
+    ["oversized", 64],
+    ["invalid_utf8", 1_024]
+  ])("interrupts before admitting %s worker output", async (mode, maxResponseLineBytes) => {
+    const client = track(clients, fixtureClient(mode, 1_000, maxResponseLineBytes));
+    await client.start();
+    await expect(client.request({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      type: "HEALTH_CHECK"
+    })).rejects.toMatchObject({ code: "PROTOCOL_ERROR" });
+    await waitForState(client, "STOPPED");
+  });
+
+  it.each([0, -1, 1.5, Number.POSITIVE_INFINITY])(
+    "rejects invalid response line limit %s before spawning",
+    (maxResponseLineBytes) => {
+      expect(() => fixtureClient("duplicate", 1_000, maxResponseLineBytes)).toThrow(
+        expect.objectContaining({ code: "PROTOCOL_ERROR" })
+      );
+    }
+  );
 
   it("times out late work and exposes honest local-process interruption semantics", async () => {
     const delayed = track(clients, fixtureClient("delayed", 30));
@@ -132,12 +167,13 @@ describe("local compute worker boundary", () => {
   });
 });
 
-function fixtureClient(mode: string, requestTimeoutMs = 1_000): LocalComputeWorkerClient {
+function fixtureClient(mode: string, requestTimeoutMs = 1_000, maxResponseLineBytes?: number): LocalComputeWorkerClient {
   return new LocalComputeWorkerClient({
     executable: PYTHON,
     scriptPath: FIXTURE_WORKER,
     additionalArguments: [mode],
-    requestTimeoutMs
+    requestTimeoutMs,
+    ...(maxResponseLineBytes === undefined ? {} : { maxResponseLineBytes })
   });
 }
 
