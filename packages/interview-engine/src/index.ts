@@ -6,6 +6,7 @@ export * from "./disclosure-validator.js";
 export * from "./envelopes.js";
 export * from "./local-compute-coordinator.js";
 export * from "./pedagogical-policy.js";
+export * from "./provider-coordinator.js";
 export * from "./session-writer.js";
 export * from "./synthetic-interview.js";
 export * from "./turn-coordinator.js";

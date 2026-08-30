@@ -37,3 +37,21 @@ The returned report has two independent fields:
 `MockModelAdapter` supplies a current proof that its in-process implementation has no network or spend path. It can model honored or ignored cancellation without changing authoritative replay.
 
 No real provider is enabled. Each future adapter must implement and empirically test its own billing-verification mechanism, data-use declaration, capability declaration, and cancellation reporting. Unknown or stale proof fails closed.
+
+## Application orchestration
+
+`ProviderCoordinator` is the production caller above this low-level boundary. It performs this sequence:
+
+```text
+TurnCoordinator creates Generation + GenerationBasis
+  -> ContextCoordinator compiles and persists safe context identity
+  -> admitted ProviderExecutionSession opens
+  -> one final proposal is consumed with a stable RequestId
+  -> TurnCoordinator independently checks current compatibility and disclosure
+  -> validated DeliveryAtoms are queued
+  -> provider session closes
+```
+
+The in-flight execution map is operational and disposable. On restart, SQLite reconstructs the Generation, manifest, proposal decision, and deliveries; provider session memory is neither reconstructed nor trusted. A retry that needs new provider work starts a fresh Generation.
+
+Cancellation is recorded locally before awaiting an adapter cancellation call. If it races with proposal admission, the Generation is superseded and any resulting `QUEUED` atoms are cancelled before the coordinator returns completion. An atom that may already have begun exposure remains governed by the Delivery Coordinator's conservative exposure rules.
