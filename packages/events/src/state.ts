@@ -13,6 +13,7 @@ import type {
   InputEpisodeId,
   InterviewerProposal,
   PolicyRevision,
+  ProviderContextSpecFingerprint,
   ProblemStateRevision,
   RealizationRequest,
   SessionId,
@@ -106,7 +107,12 @@ export interface SessionState {
   readonly sessionId: SessionId;
   readonly sequence: number;
   readonly started: boolean;
-  readonly problem?: { readonly id: string; readonly version: string; readonly prompt: string };
+  readonly problem?: {
+    readonly id: string;
+    readonly version: string;
+    readonly prompt: string;
+    readonly providerContextSpecSha256?: ProviderContextSpecFingerprint;
+  };
   readonly contextEpoch: ContextEpoch;
   readonly transcriptRevision: TranscriptRevision;
   readonly boardRevision: BoardRevision;

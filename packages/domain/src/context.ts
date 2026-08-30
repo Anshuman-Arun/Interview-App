@@ -3,6 +3,8 @@ import { GenerationBasisSchema } from "./generation.js";
 import { GenerationIdSchema } from "./ids.js";
 
 export const Sha256HexSchema = z.string().regex(/^[0-9a-f]{64}$/u);
+export const ProviderContextSpecFingerprintSchema = Sha256HexSchema.brand("ProviderContextSpecFingerprint");
+export type ProviderContextSpecFingerprint = z.infer<typeof ProviderContextSpecFingerprintSchema>;
 
 export const ContextCompilationManifestSchema = z.object({
   schemaVersion: z.literal(1),

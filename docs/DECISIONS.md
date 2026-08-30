@@ -329,3 +329,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: let each server/UI call the lower-level coordinators directly; persist provider session handles; resume a provider session after restart; accept every proposal yielded by a stream.
 - Consequences: in-flight state remains disposable, a restart uses SQLite truth and starts fresh provider work under a new Generation, and late output from cancelled or stale Generations cannot create deliverable atoms. Context/provider failures supersede the Generation with fixed non-secret outcomes. Cancellation racing with accepted output cancels known-queued atoms before returning.
 - Reversible: the coordinator API and first-final-event stream convention may evolve with a typed streaming protocol; generation provenance, application-owned admission, idempotent callback identity, and provider-independent replay are not.
+
+## D042 — Provider-visible problem metadata is bound to the session by fingerprint
+
+- Decision: when presenting a problem, hash the canonical JSON of its identity, public partition, reasoning graph, and protected-disclosure metadata; persist only that SHA-256 fingerprint with `PROBLEM_PRESENTED`; and require an exact match before context compilation or proposal admission.
+- Reason: checking only `(problemId, version)` lets a same-version substituted object alter the provider prompt, reasoning graph, or disclosure registry after the session starts. Those fields determine what a model sees and what the application permits, so identity labels alone are insufficient provenance.
+- Alternatives considered: trust every caller to retain the original object; persist the entire interviewer partition; compare only the public prompt; include private solutions in the fingerprint.
+- Consequences: provider-visible authoring substitutions fail closed, private solution material is neither hashed into provider-context identity nor persisted, and legacy schema-v1 sessions replay but cannot resume provider work because their missing fingerprint is `UNKNOWN`. Event schema v2 has a built-in v1 upcast path that preserves this uncertainty.
+- Reversible: fingerprint field names and canonicalization versions can migrate through upcasters; session binding and fail-closed treatment of missing provenance are not.
