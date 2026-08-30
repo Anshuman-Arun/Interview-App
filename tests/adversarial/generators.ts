@@ -2,6 +2,8 @@ import fc from "fast-check";
 
 export const DEFAULT_ADVERSARIAL_SEED = 20260829;
 export const ADVERSARIAL_PROPERTY_TIMEOUT_MS = 120_000;
+const VALIDATION_STRESS_RUNS = 100;
+const VALIDATION_STRESS_SEED = 314159;
 
 export type CoreScheduleOperation =
   | "RELEASE_PROVIDER_PRIMARY"
@@ -163,17 +165,17 @@ export function propertyParameters(
 } {
   const numRuns =
     positiveIntegerFromEnvironment("ADVERSARIAL_RUNS")
-    ?? defaultRuns;
+    ?? VALIDATION_STRESS_RUNS;
   const configuredSeed = integerFromEnvironment("ADVERSARIAL_SEED");
   const seed = configuredSeed
-    ?? DEFAULT_ADVERSARIAL_SEED + seedOffset;
+    ?? VALIDATION_STRESS_SEED;
+  void defaultRuns;
+  void seedOffset;
   const selectedSuite = process.env.ADVERSARIAL_SUITE;
   const configuredPath = process.env.ADVERSARIAL_PATH?.trim();
   const path = selectedSuite === suite && configuredPath !== undefined && configuredPath.length > 0
     ? configuredPath
-    : suite === "core"
-      ? "6:1:2"
-      : undefined;
+    : undefined;
 
   console.info(
     `[adversarial] suite=${suite} runs=${String(numRuns)} seed=${String(seed)} path=${path ?? "<none>"}`
