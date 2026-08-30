@@ -34,12 +34,28 @@ def main() -> int:
         if mode == "malformed":
             print("this-is-not-json", flush=True)
             continue
+        if mode == "oversized":
+            print(json.dumps({"padding": "x" * 4096}), flush=True)
+            continue
+        if mode == "invalid_utf8":
+            sys.stdout.buffer.write(b'"\xff"\n')
+            sys.stdout.buffer.flush()
+            continue
         if mode == "delayed":
             time.sleep(0.25)
         response = response_for(request, wrong_revision=mode == "wrong_revision")
-        print(json.dumps(response, separators=(",", ":")), flush=True)
+        encoded = json.dumps(response, separators=(",", ":"))
+        if mode == "fragmented":
+            midpoint = len(encoded) // 2
+            sys.stdout.write(encoded[:midpoint])
+            sys.stdout.flush()
+            time.sleep(0.01)
+            sys.stdout.write(encoded[midpoint:] + "\n")
+            sys.stdout.flush()
+        else:
+            print(encoded, flush=True)
         if mode == "duplicate":
-            print(json.dumps(response, separators=(",", ":")), flush=True)
+            print(encoded, flush=True)
     return 0
 
 
