@@ -62,6 +62,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Build browser application
+        run: pnpm build:web
+
       - name: Run complete Vitest suite
         run: pnpm test
 
