@@ -89,6 +89,13 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "production code bypassing provider execution admission",
+      expectedCode: "PROVIDER_SESSION_ADMISSION",
+      files: {
+        "apps/server/src/bad.ts": "declare const provider: { createSession(): unknown }; provider[\"createSession\"]();\n"
+      }
+    },
+    {
       name: "credential-looking fields entering event schemas",
       expectedCode: "EVENT_CREDENTIAL_FIELD",
       files: {

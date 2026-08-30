@@ -28,6 +28,7 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx",
 const SCAN_ROOTS = ["apps", "packages", "workers"];
 const IGNORED_DIRECTORIES = new Set(["node_modules", ".git", "coverage", "dist"]);
 const AUTHORIZED_WRITER = "packages/interview-engine/src/session-writer.ts";
+const AUTHORIZED_PROVIDER_SESSION_FACTORY = "packages/providers/src/execution.ts";
 const PERSISTENCE_PREFIX = "packages/persistence/";
 
 const PACKAGE_RULES = new Map([
@@ -456,6 +457,22 @@ function isDisabledCapabilityValue(expression) {
 
 function checkProviders(records, violations) {
   for (const record of records) {
+    function visitSessionCreation(node) {
+      if (ts.isCallExpression(node)
+          && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
+          && callName(node.expression) === "createSession"
+          && record.relativePath !== AUTHORIZED_PROVIDER_SESSION_FACTORY) {
+        addViolation(
+          violations,
+          "PROVIDER_SESSION_ADMISSION",
+          record.relativePath,
+          "Direct provider createSession() calls bypass capability, billing, and policy admission."
+        );
+      }
+      ts.forEachChild(node, visitSessionCreation);
+    }
+    visitSessionCreation(record.sourceFile);
+
     if (!record.relativePath.startsWith("packages/providers/")) continue;
 
     for (const specifier of extractModuleSpecifiers(record.sourceFile)) {

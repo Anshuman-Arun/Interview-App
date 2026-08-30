@@ -34,13 +34,18 @@ const dataUseRank: Record<DataUsePolicy, number> = {
   REMOTE_MAY_BE_USED_FOR_IMPROVEMENT: 2
 };
 
-export function assertProviderPermitted(input: {
+export interface ProviderPolicyPreflight {
+  readonly policy: ProviderPolicy;
+  readonly now: Date;
+  readonly requiresBillingVerification: boolean;
+}
+
+export function preflightProviderPolicy(input: {
   readonly policy: unknown;
   readonly capabilities: ModelCapabilities;
-  readonly billingVerification?: unknown;
   readonly adapterVersion: string;
   readonly now?: Date;
-}): void {
+}): ProviderPolicyPreflight {
   const policy = parsePolicyConfiguration(input.policy);
   assertAdapterVersion(input.adapterVersion);
   const now = assertClock(input.now);
@@ -53,6 +58,18 @@ export function assertProviderPermitted(input: {
       "Provider data-use policy exceeds the configured maximum"
     );
   }
+
+  return { policy, now, requiresBillingVerification: !policy.allowMeteredUsage };
+}
+
+export function assertProviderPermitted(input: {
+  readonly policy: unknown;
+  readonly capabilities: ModelCapabilities;
+  readonly billingVerification?: unknown;
+  readonly adapterVersion: string;
+  readonly now?: Date;
+}): void {
+  const { policy, now } = preflightProviderPolicy(input);
 
   if (policy.allowMeteredUsage) return;
 
