@@ -162,6 +162,8 @@ Each slice ends with tests, type checking, linting, replay checks where relevant
 - Dependencies: slices 10, 12, 16.
 - Complete when no provider memory is needed to replay authoritative state. **Complete for the Phase 0 mock path.**
 
+The application-owned `ProviderCoordinator` now executes the mock path end to end: Generation creation, safe context compilation, admitted session opening, one-final-proposal consumption, authoritative proposal admission, and session disposal. Cancellation is GenerationId-scoped and remains effective when the raw provider ignores it. A provider switch creates a fresh Generation; output from the superseded provider remains inert.
+
 ## 21. Provider capability/policy contracts
 
 - Files: `provider.ts`, `packages/providers/src/policy.ts`, `execution.ts`, `scripts/check-architecture-boundaries.mjs`.
@@ -404,3 +406,9 @@ Dedicated recovered suites pass together with the existing loopback and renderer
 The synthetic path now opens `MockModelAdapter` only through `openProviderExecutionSession`. Runtime capability validation and application policy/privacy/clock preflight happen before any adapter method. In no-metered mode, the selected adapter must then supply current provider-specific proof that the generic policy gate accepts before session construction. Production calls to raw `provider.createSession()` outside that boundary fail the static architecture check.
 
 The guarded session independently drops output for a cancelled GenerationId even if a provider ignores or throws during cancellation. Its report preserves the narrower adapter result, so closing a client stream is never described as provider-side compute cancellation. Provider proposals are runtime-validated and provider error details are replaced with fixed non-secret failures. No real provider or network path was enabled.
+
+## Continuation progress — provider generation orchestration
+
+`packages/interview-engine/src/provider-coordinator.ts` now owns the disposable asynchronous execution between a committed Turn and `TurnCoordinator.processProposal`. It persists no provider memory. Each run records a new Generation and safe context manifest before provider use, allocates one stable proposal RequestId, supplies full basis provenance, accepts at most one final proposal, and closes the provider session.
+
+Context, policy, admission, empty-stream, and provider-stream failures supersede the Generation with fixed non-secret outcomes. Explicit cancellation marks the Generation before awaiting provider behavior, suppresses late output, and cancels any known-queued atoms before exposure. Static repository checks prevent production code from calling raw proposal admission outside this coordinator. Durable restart reconstruction remains entirely event based; a restarted application begins a fresh Generation rather than resuming provider memory.

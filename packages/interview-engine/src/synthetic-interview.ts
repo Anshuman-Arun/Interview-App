@@ -6,10 +6,9 @@ import { replaySession, type SessionEvent, type SessionState } from "../../event
 import { DeliveryCoordinator, MockRenderer } from "../../delivery/src/index.js";
 import { SqliteEventStore } from "../../persistence/src/index.js";
 import { sixPeopleProblem } from "../../problems/src/index.js";
-import { MockModelAdapter, openProviderExecutionSession } from "../../providers/src/index.js";
-import { ContextCoordinator } from "./context-coordinator.js";
+import { MockModelAdapter } from "../../providers/src/index.js";
 import { ClosedWorldDisclosureAnalyzer, DisclosureValidator } from "./disclosure-validator.js";
-import { createCommandEnvelope } from "./envelopes.js";
+import { ProviderCoordinator } from "./provider-coordinator.js";
 import { SessionRuntimeRegistry } from "./session-writer.js";
 import { TurnCoordinator } from "./turn-coordinator.js";
 
@@ -32,13 +31,6 @@ export async function runSyntheticInterview(databasePath = ":memory:"): Promise<
       "I represented people as vertices and relationships as two colours. I think one person must have three links of the same colour."
     );
     await turns.selectAction(turnId);
-    const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock-model");
-    const compilation = await new ContextCoordinator(writer).compileForGeneration({ generationId, problem: sixPeopleProblem });
-    if (!compilation.value.compiled) {
-      throw new Error(`Context compilation failed: ${compilation.value.reason}`);
-    }
-    const context = compilation.value.context;
-
     const safeProbe = "Why must that step be true?";
     const provider = new MockModelAdapter({
       proposal: {
@@ -48,34 +40,33 @@ export async function runSyntheticInterview(databasePath = ":memory:"): Promise<
         speechText: safeProbe
       }
     });
-    const providerSession = await openProviderExecutionSession({
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([safeProbe]));
+    const execution = await new ProviderCoordinator(writer).start({
+      inputEpisodeId,
+      turnId,
       provider,
       policy: { allowMeteredUsage: false, maximumDataUse: "LOCAL_ONLY", billingVerificationMaxAgeMs: 60_000 },
+      problem: sixPeopleProblem,
+      validator
     });
-    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([safeProbe]));
-    try {
-      for await (const proposal of providerSession.sendTurn({ context, generationId })) {
-        const envelope = createCommandEnvelope({ sessionId, producer: "mock-model", generationId, inputEpisodeId, turnId });
-        const authorized = await turns.processProposal({ envelope, problem: sixPeopleProblem, proposal, validator });
-        if (!authorized.accepted) throw new Error(`Synthetic proposal was rejected: ${authorized.reason ?? "unknown reason"}`);
-        const renderer = new MockRenderer();
-        const delivery = new DeliveryCoordinator(writer);
-        for (const atom of authorized.deliveryAtoms) await delivery.deliver(atom.deliveryId, renderer);
-        const events = store.load(sessionId);
-        const state = writer.getState();
-        const replayedState = replaySession(sessionId, events);
-        return {
-          state,
-          replayedState,
-          events,
-          visibleDeliveryCount: renderer.visibleDeliveryIds.length,
-          replayMatches: isDeepStrictEqual(state, replayedState)
-        };
-      }
-      throw new Error("Mock provider returned no proposal");
-    } finally {
-      await providerSession.close();
+    const authorized = await execution.completion;
+    if (authorized.status !== "ACCEPTED") {
+      const detail = authorized.status === "FAILED" ? `${authorized.stage}:${authorized.code}` : authorized.status;
+      throw new Error(`Synthetic proposal was not accepted: ${detail}`);
     }
+    const renderer = new MockRenderer();
+    const delivery = new DeliveryCoordinator(writer);
+    for (const atom of authorized.deliveryAtoms) await delivery.deliver(atom.deliveryId, renderer);
+    const events = store.load(sessionId);
+    const state = writer.getState();
+    const replayedState = replaySession(sessionId, events);
+    return {
+      state,
+      replayedState,
+      events,
+      visibleDeliveryCount: renderer.visibleDeliveryIds.length,
+      replayMatches: isDeepStrictEqual(state, replayedState)
+    };
   } finally {
     store.close();
   }

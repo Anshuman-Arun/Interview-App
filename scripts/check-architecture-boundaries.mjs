@@ -29,6 +29,7 @@ const SCAN_ROOTS = ["apps", "packages", "workers"];
 const IGNORED_DIRECTORIES = new Set(["node_modules", ".git", "coverage", "dist"]);
 const AUTHORIZED_WRITER = "packages/interview-engine/src/session-writer.ts";
 const AUTHORIZED_PROVIDER_SESSION_FACTORY = "packages/providers/src/execution.ts";
+const AUTHORIZED_PROVIDER_PROPOSAL_ADMISSION = "packages/interview-engine/src/provider-coordinator.ts";
 const PERSISTENCE_PREFIX = "packages/persistence/";
 
 const PACKAGE_RULES = new Map([
@@ -459,15 +460,24 @@ function checkProviders(records, violations) {
   for (const record of records) {
     function visitSessionCreation(node) {
       if (ts.isCallExpression(node)
-          && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
-          && callName(node.expression) === "createSession"
-          && record.relativePath !== AUTHORIZED_PROVIDER_SESSION_FACTORY) {
-        addViolation(
-          violations,
-          "PROVIDER_SESSION_ADMISSION",
-          record.relativePath,
-          "Direct provider createSession() calls bypass capability, billing, and policy admission."
-        );
+          && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))) {
+        const name = callName(node.expression);
+        if (name === "createSession" && record.relativePath !== AUTHORIZED_PROVIDER_SESSION_FACTORY) {
+          addViolation(
+            violations,
+            "PROVIDER_SESSION_ADMISSION",
+            record.relativePath,
+            "Direct provider createSession() calls bypass capability, billing, and policy admission."
+          );
+        }
+        if (name === "processProposal" && record.relativePath !== AUTHORIZED_PROVIDER_PROPOSAL_ADMISSION) {
+          addViolation(
+            violations,
+            "PROVIDER_PROPOSAL_ADMISSION",
+            record.relativePath,
+            "Direct processProposal() calls bypass generation-bound provider orchestration."
+          );
+        }
       }
       ts.forEachChild(node, visitSessionCreation);
     }

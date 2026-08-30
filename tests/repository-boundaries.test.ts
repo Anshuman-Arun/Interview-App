@@ -96,6 +96,13 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "production code bypassing generation-bound proposal orchestration",
+      expectedCode: "PROVIDER_PROPOSAL_ADMISSION",
+      files: {
+        "apps/server/src/bad.ts": "declare const turns: { processProposal(): unknown }; turns.processProposal();\n"
+      }
+    },
+    {
       name: "credential-looking fields entering event schemas",
       expectedCode: "EVENT_CREDENTIAL_FIELD",
       files: {
