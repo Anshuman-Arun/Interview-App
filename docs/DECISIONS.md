@@ -313,3 +313,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: hash ordinary `JSON.stringify` output; persist the full compiled context event; trust provider request logs; compute hashes without binding them to GenerationBasis.
 - Consequences: object insertion order cannot change identity, private problem partitions do not affect provider-context hashes, arrays retain semantic order, and a revision change during hashing fails closed. The idempotent command result retains the validated safe context for the caller, while the event contains hashes and provenance only.
 - Reversible: canonicalization/version labels and manifest fields are versionable; provider inputs remaining allowlisted, generation-bound, and reproducibly identifiable are not.
+
+## D040 — Provider session creation is reachable only through admitted execution
+
+- Decision: production code may create a raw `ReasoningSession` only inside `openProviderExecutionSession`, after runtime capability validation, application policy/privacy/clock preflight, and any required adapter-specific billing verification. The returned guarded session drops post-cancellation output locally and reports the adapter's actual cancellation effect separately.
+- Reason: validating caller-supplied billing evidence without controlling session creation leaves a bypass around the no-metered policy. Cancellation APIs also cannot safely equate closing a client stream with stopping provider compute.
+- Alternatives considered: rely on call-site discipline; pass billing evidence in from each caller; expose raw sessions after admission; describe every cancellation as server-side cancellation.
+- Consequences: the static architecture checker rejects direct production `provider.createSession()` calls; malformed policy and privacy failures invoke no adapter method; no-metered proof is obtained just in time from the selected adapter; cancellation always suppresses output for that GenerationId even when the adapter ignores it. No adapter proof or provider error content is persisted.
+- Reversible: wrapper APIs and cancellation report fields are versionable; technical admission before provider use, fail-closed no-metered verification, and truthful cancellation semantics are not.

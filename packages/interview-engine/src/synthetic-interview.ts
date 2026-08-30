@@ -6,7 +6,7 @@ import { replaySession, type SessionEvent, type SessionState } from "../../event
 import { DeliveryCoordinator, MockRenderer } from "../../delivery/src/index.js";
 import { SqliteEventStore } from "../../persistence/src/index.js";
 import { sixPeopleProblem } from "../../problems/src/index.js";
-import { MockModelAdapter, assertProviderPermitted } from "../../providers/src/index.js";
+import { MockModelAdapter, openProviderExecutionSession } from "../../providers/src/index.js";
 import { ContextCoordinator } from "./context-coordinator.js";
 import { ClosedWorldDisclosureAnalyzer, DisclosureValidator } from "./disclosure-validator.js";
 import { createCommandEnvelope } from "./envelopes.js";
@@ -48,40 +48,34 @@ export async function runSyntheticInterview(databasePath = ":memory:"): Promise<
         speechText: safeProbe
       }
     });
-    assertProviderPermitted({
+    const providerSession = await openProviderExecutionSession({
+      provider,
       policy: { allowMeteredUsage: false, maximumDataUse: "LOCAL_ONLY", billingVerificationMaxAgeMs: 60_000 },
-      capabilities: provider.capabilities,
-      adapterVersion: provider.adapterVersion,
-      billingVerification: {
-        billingClass: "VERIFIED_FREE_ONLY",
-        enforcementMechanism: "In-process deterministic mock contains no network or billing path",
-        verifiedAt: new Date().toISOString(),
-        adapterVersion: provider.adapterVersion,
-        spendImpossible: true
-      }
     });
-    const providerSession = await provider.createSession();
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([safeProbe]));
-    for await (const proposal of providerSession.sendTurn({ context, generationId })) {
-      const envelope = createCommandEnvelope({ sessionId, producer: "mock-model", generationId, inputEpisodeId, turnId });
-      const authorized = await turns.processProposal({ envelope, problem: sixPeopleProblem, proposal, validator });
-      if (!authorized.accepted) throw new Error(`Synthetic proposal was rejected: ${authorized.reason ?? "unknown reason"}`);
-      const renderer = new MockRenderer();
-      const delivery = new DeliveryCoordinator(writer);
-      for (const atom of authorized.deliveryAtoms) await delivery.deliver(atom.deliveryId, renderer);
+    try {
+      for await (const proposal of providerSession.sendTurn({ context, generationId })) {
+        const envelope = createCommandEnvelope({ sessionId, producer: "mock-model", generationId, inputEpisodeId, turnId });
+        const authorized = await turns.processProposal({ envelope, problem: sixPeopleProblem, proposal, validator });
+        if (!authorized.accepted) throw new Error(`Synthetic proposal was rejected: ${authorized.reason ?? "unknown reason"}`);
+        const renderer = new MockRenderer();
+        const delivery = new DeliveryCoordinator(writer);
+        for (const atom of authorized.deliveryAtoms) await delivery.deliver(atom.deliveryId, renderer);
+        const events = store.load(sessionId);
+        const state = writer.getState();
+        const replayedState = replaySession(sessionId, events);
+        return {
+          state,
+          replayedState,
+          events,
+          visibleDeliveryCount: renderer.visibleDeliveryIds.length,
+          replayMatches: isDeepStrictEqual(state, replayedState)
+        };
+      }
+      throw new Error("Mock provider returned no proposal");
+    } finally {
       await providerSession.close();
-      const events = store.load(sessionId);
-      const state = writer.getState();
-      const replayedState = replaySession(sessionId, events);
-      return {
-        state,
-        replayedState,
-        events,
-        visibleDeliveryCount: renderer.visibleDeliveryIds.length,
-        replayMatches: isDeepStrictEqual(state, replayedState)
-      };
     }
-    throw new Error("Mock provider returned no proposal");
   } finally {
     store.close();
   }

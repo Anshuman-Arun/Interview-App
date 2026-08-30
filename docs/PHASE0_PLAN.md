@@ -156,19 +156,19 @@ Each slice ends with tests, type checking, linting, replay checks where relevant
 
 ## 20. MockModelAdapter
 
-- Files: `mock-model-adapter.ts`.
-- Types/functions: deterministic capability declaration, proposal stream, cancellation behavior variants.
-- Tests: provider ignores cancellation and late result is discarded by app state.
+- Files: `packages/providers/src/mock-model-adapter.ts`, `execution.ts`.
+- Types/functions: deterministic capability declaration, proposal stream, adapter-specific in-process no-spend proof, cancellation behavior variants, guarded output suppression.
+- Tests: provider ignores cancellation, output released after cancellation is dropped, and provider switching remains isolated by GenerationId.
 - Dependencies: slices 10, 12, 16.
-- Complete when no provider memory is needed to replay authoritative state.
+- Complete when no provider memory is needed to replay authoritative state. **Complete for the Phase 0 mock path.**
 
 ## 21. Provider capability/policy contracts
 
-- Files: `provider.ts`, `packages/providers/src/policy.ts`.
-- Types/functions: actual cancellation meanings, modalities, structured output, sessions, data use, usage, reasoning levels, provider-specific billing evidence.
-- Tests: malformed/missing/stale/future/unknown/metered verification; exact adapter-version binding; invalid runtime policy; excessive data use; secret-free deterministic errors.
+- Files: `provider.ts`, `packages/providers/src/policy.ts`, `execution.ts`, `scripts/check-architecture-boundaries.mjs`.
+- Types/functions: runtime capability schemas; distinct `DROP_OUTPUT`, `CLOSE_CLIENT_STREAM`, `CANCEL_PROVIDER_COMPUTE`, and `INTERRUPT_LOCAL_PROCESS` results; policy/privacy/clock preflight; adapter-owned provider-specific billing proof; admitted execution session.
+- Tests: malformed/missing/stale/future/unknown/metered verification; exact adapter-version binding; invalid runtime policy; excessive data use before adapter invocation; cancellation overclaim; ignored cancellation; invalid output; secret-free deterministic errors; static direct-session bypass rejection.
 - Dependencies: clock and configuration.
-- Complete when no-metered mode requires current technical no-spend proof, not a boolean label.
+- Complete when no-metered mode requires current technical no-spend proof, not a boolean label. **Complete for the generic gate and MockModelAdapter; real-adapter proof remains provider-specific.**
 
 ## 22. ReasoningProvider/VisionProvider split
 
@@ -398,3 +398,9 @@ Recovered and integrated after review of closed PRs #3–#7:
 - browser-safe Web Crypto UUID generation plus a transitive guard that rejects Node builtin imports from the shared domain/delivery runtime graph.
 
 Dedicated recovered suites pass together with the existing loopback and renderer integration tests. These slices add no real provider, paid API path, polished UI, or provider/session authority.
+
+## Continuation progress — admitted provider execution boundary
+
+The synthetic path now opens `MockModelAdapter` only through `openProviderExecutionSession`. Runtime capability validation and application policy/privacy/clock preflight happen before any adapter method. In no-metered mode, the selected adapter must then supply current provider-specific proof that the generic policy gate accepts before session construction. Production calls to raw `provider.createSession()` outside that boundary fail the static architecture check.
+
+The guarded session independently drops output for a cancelled GenerationId even if a provider ignores or throws during cancellation. Its report preserves the narrower adapter result, so closing a client stream is never described as provider-side compute cancellation. Provider proposals are runtime-validated and provider error details are replaced with fixed non-secret failures. No real provider or network path was enabled.

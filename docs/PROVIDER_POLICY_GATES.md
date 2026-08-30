@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provider eligibility is decided by application-owned deterministic policy before a provider may be used. This gate separates two independent concerns:
+Provider eligibility is decided by application-owned deterministic policy before a provider may be used. Production callers enter through `openProviderExecutionSession`; direct `provider.createSession()` calls outside that module fail the repository architecture check. The gate separates two independent concerns:
 
 1. whether provider data use is within the configured privacy boundary;
 2. whether the configured billing mode permits the provider.
@@ -104,3 +104,27 @@ This policy module:
 - does not weaken data-use policy when metered use is enabled.
 
 Real provider adapters must separately demonstrate the provider-specific enforcement mechanism described by the architecture freeze. This generic gate validates evidence; it does not manufacture that evidence.
+
+## Execution ordering
+
+The execution boundary uses this fail-closed order:
+
+1. validate provider identity and the complete runtime capability declaration;
+2. validate application policy shape, adapter version, clock, and data-use compatibility without invoking the adapter;
+3. when no-metered mode requires it, ask the selected adapter for current provider-specific billing proof;
+4. validate that proof against policy and the exact adapter version;
+5. only then create the raw provider session.
+
+This ordering prevents malformed configuration or a privacy-policy violation from triggering even a billing/account probe. Billing evidence is used transiently and is not written to semantic events.
+
+## Cancellation truthfulness
+
+The admitted session guarantees local `DROP_OUTPUT` for a cancelled GenerationId. The adapter separately reports what happened physically:
+
+- `NONE`: no provider-side action was established;
+- `DROP_OUTPUT`: application output was discarded;
+- `CLOSE_CLIENT_STREAM`: only the client stream was closed;
+- `CANCEL_PROVIDER_COMPUTE`: provider compute cancellation was attempted, including whether the provider confirmed it;
+- `INTERRUPT_LOCAL_PROCESS`: a supervised local process received an interrupt signal.
+
+An adapter result may not exceed its declared capability. Cancellation failure or an ignored cancellation cannot re-enable output. These operational facts are not authoritative session state and do not make provider memory necessary for replay.
