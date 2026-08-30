@@ -12,6 +12,7 @@ import {
 import { DeterministicScheduler } from "./deterministic-scheduler.js";
 import { AdversarialFixture } from "./fixtures.js";
 import {
+  ADVERSARIAL_PROPERTY_TIMEOUT_MS,
   propertyParameters,
   recoveryScheduleArbitrary,
   type RecoveryScheduleOperation

@@ -8,6 +8,7 @@ import {
   createReferenceModel
 } from "./fixtures.js";
 import {
+  ADVERSARIAL_PROPERTY_TIMEOUT_MS,
   propertyParameters,
   restartScheduleArbitrary,
   type RestartScheduleOperation
