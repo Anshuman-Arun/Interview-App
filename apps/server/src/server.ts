@@ -6,8 +6,11 @@ import { LocalInterviewTransportRuntime } from "./local-interview-transport-runt
 
 const DEFAULT_COMMAND_PORT = 43123;
 const DEFAULT_RENDERER_STREAM_PORT = 43124;
-const DEFAULT_CLIENT_TOKEN = "test_client_token_phase1_typed_interview_mvp_secure_01";
 const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000"];
+
+function generateSecureToken(): string {
+  return globalThis.crypto.randomUUID().replace(/-/g, "") + globalThis.crypto.randomUUID().replace(/-/g, "");
+}
 
 export interface ServerConfig {
   readonly host?: "127.0.0.1" | "::1";
@@ -22,7 +25,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
   const host = config.host ?? "127.0.0.1";
   const commandPort = config.commandPort ?? (process.env["COMMAND_PORT"] ? parseInt(process.env["COMMAND_PORT"], 10) : DEFAULT_COMMAND_PORT);
   const rendererStreamPort = config.rendererStreamPort ?? (process.env["RENDERER_STREAM_PORT"] ? parseInt(process.env["RENDERER_STREAM_PORT"], 10) : DEFAULT_RENDERER_STREAM_PORT);
-  const clientToken = config.clientToken ?? process.env["INTERVIEW_CLIENT_TOKEN"] ?? DEFAULT_CLIENT_TOKEN;
+  const clientToken = config.clientToken ?? process.env["INTERVIEW_CLIENT_TOKEN"] ?? generateSecureToken();
   const rawOrigins = config.allowedOrigins ?? (process.env["CLIENT_ORIGIN"] ? [process.env["CLIENT_ORIGIN"], ...DEFAULT_ALLOWED_ORIGINS] : DEFAULT_ALLOWED_ORIGINS);
   const allowedOrigins = new Set(rawOrigins);
   const databasePath = config.databasePath ?? process.env["DATABASE_PATH"] ?? ":memory:";
@@ -67,6 +70,7 @@ async function main() {
   console.log(`  Command Endpoint:      ${instance.bound.command.url}/v1/commands`);
   console.log(`  Renderer Stream:       ${instance.bound.rendererStream.streamUrl}`);
   console.log(`  Allowed Origins:       ${[...instance.security.allowedOrigins].join(", ")}`);
+  console.log(`  Web Launch URL:        http://localhost:5173/?token=${instance.security.clientToken}`);
   console.log("--------------------------------------------------");
   console.log("  Server is ready for authenticated browser connections.");
 

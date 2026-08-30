@@ -67,7 +67,7 @@ const DEFAULT_CLIENT_TOKEN = "test_client_token_phase1_typed_interview_mvp_secur
 
 function getInitialBaseUrl(optionUrl?: string): string {
   if (optionUrl) return optionUrl;
-  if (typeof window !== "undefined" && window.location?.search) {
+  if (typeof window !== "undefined" && window.location.search.length > 0) {
     const params = new URLSearchParams(window.location.search);
     const queryUrl = params.get("apiUrl");
     if (queryUrl) return queryUrl;
@@ -77,7 +77,7 @@ function getInitialBaseUrl(optionUrl?: string): string {
 
 function getInitialClientToken(optionToken?: string): string {
   if (optionToken) return optionToken;
-  if (typeof window !== "undefined" && window.location?.search) {
+  if (typeof window !== "undefined" && window.location.search.length > 0) {
     const params = new URLSearchParams(window.location.search);
     const queryToken = params.get("token");
     if (queryToken && queryToken.length >= 32) return queryToken;
