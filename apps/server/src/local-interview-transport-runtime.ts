@@ -9,6 +9,7 @@ import {
   type BoundRendererStreamAddress
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 
 export interface LocalInterviewTransportRuntimeOptions {
   readonly security: LocalTransportSecurity;
@@ -18,6 +19,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererConnections?: number;
   readonly maxRendererConnectionsPerSession?: number;
   readonly maxRendererMessageBytes?: number;
+  readonly orchestrator?: ServerTurnOrchestrator;
 }
 
 export interface BoundLocalInterviewTransport {
@@ -28,6 +30,7 @@ export interface BoundLocalInterviewTransport {
 /** Composition root for the two authenticated browser transports. */
 export class LocalInterviewTransportRuntime {
   public readonly sessions: SessionRecoveryCoordinator;
+  public readonly orchestrator: ServerTurnOrchestrator;
   public readonly commandServer: LoopbackCommandServer;
   public readonly rendererStreamServer: RendererStreamServer;
   private bound: BoundLocalInterviewTransport | undefined;
@@ -35,9 +38,13 @@ export class LocalInterviewTransportRuntime {
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
     this.sessions = new SessionRecoveryCoordinator(options.registry);
+    this.orchestrator =
+      options.orchestrator ??
+      new ServerTurnOrchestrator(this.sessions, () => this.rendererStreamServer);
     this.commandServer = new LoopbackCommandServer({
       security: options.security,
       sessions: this.sessions,
+      orchestrator: this.orchestrator,
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })
     });
     this.rendererStreamServer = new RendererStreamServer({

@@ -17,6 +17,7 @@ import {
 } from "../../../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
@@ -31,6 +32,7 @@ const CORS_ALLOW_HEADERS = "content-type, x-interview-client-token";
 export interface LoopbackCommandServerOptions {
   readonly security: LocalTransportSecurity;
   readonly sessions: SessionRecoveryCoordinator;
+  readonly orchestrator?: ServerTurnOrchestrator;
   readonly port?: number;
 }
 
@@ -166,6 +168,17 @@ export class LoopbackCommandServer {
       }
       case "COMMIT_TYPED_INPUT": {
         const committed = await new TurnCoordinator(writer).commitInput(command.text, envelope);
+        if (this.options.orchestrator !== undefined) {
+          void this.options.orchestrator.orchestrateTurn({
+            sessionId: command.sessionId,
+            turnId: committed.turnId,
+            inputEpisodeId: committed.inputEpisodeId,
+            studentText: command.text
+          }).catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`Turn orchestration error: ${message}`);
+          });
+        }
         return {
           protocolVersion: 1,
           ok: true,

@@ -16,8 +16,8 @@
     "test:e2e": "vitest run tests/e2e-typed-interview.test.ts",
     "dev:web": "vite apps/web",
     "build:web": "vite build apps/web",
-    "dev:server": "tsx apps/server/src/index.ts",
-    "start:server": "tsx apps/server/src/index.ts",
+    "dev:server": "tsx apps/server/src/server.ts",
+    "start:server": "tsx apps/server/src/server.ts",
     "demo": "tsx apps/server/src/run-synthetic.ts",
     "check": "tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts"
   },
