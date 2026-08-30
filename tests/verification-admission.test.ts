@@ -11,8 +11,9 @@ import {
 import { replaySession } from "../packages/events/src/index.js";
 import {
   SessionRuntimeRegistry,
-  VerificationCoordinator,
+  VerificationCoordinator as UnscopedVerificationCoordinator,
   createCommandEnvelope,
+  type SessionWriter,
   type VerificationWorkItem
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
@@ -29,7 +30,88 @@ const claimEvidenceKey: EvidenceKey = {
   dimension: "CORRECTNESS"
 };
 
+const verificationScopes = [{
+  verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+  evidenceKey: claimEvidenceKey
+}] as const;
+
+class VerificationCoordinator extends UnscopedVerificationCoordinator {
+  public constructor(writer: SessionWriter) {
+    super(writer, verificationScopes);
+  }
+}
+
 describe("deterministic verification admission", () => {
+  it("requires an explicit exact verifier-to-evidence authorization before append", async () => {
+    const harness = await createCoreHarness();
+    const unscoped = new UnscopedVerificationCoordinator(harness.writer);
+    const eventCount = harness.store.eventCount(harness.sessionId);
+    const request = {
+      inputEpisodeId: harness.inputEpisodeId,
+      turnId: harness.turnId,
+      verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+      candidateFormalInterpretation: completeGraphStatement(6, () => "ACQUAINTANCE"),
+      interpretationConfidence: 1,
+      evidenceKey: claimEvidenceKey
+    };
+
+    await expect(unscoped.requestVerification(request)).rejects.toThrow(
+      "Verifier is not authorized for the requested evidence scope"
+    );
+    expect(harness.store.eventCount(harness.sessionId)).toBe(eventCount);
+
+    const wrongClaimCoordinator = new UnscopedVerificationCoordinator(harness.writer, [{
+      verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+      evidenceKey: {
+        ...claimEvidenceKey,
+        subject: { kind: "CLAIM", claimId: "unrelated-student-claim" }
+      }
+    }]);
+    await expect(wrongClaimCoordinator.requestVerification(request)).rejects.toThrow(
+      "Verifier is not authorized for the requested evidence scope"
+    );
+    expect(harness.store.eventCount(harness.sessionId)).toBe(eventCount);
+    harness.store.close();
+  });
+
+  it("rechecks persisted verifier scope before committing correctness evidence", async () => {
+    const harness = await createCoreHarness();
+    const authorized = new VerificationCoordinator(harness.writer);
+    const work = await issue(
+      authorized,
+      harness,
+      completeGraphStatement(6, () => "ACQUAINTANCE"),
+      1
+    );
+    const verifier = new TwoColourGraphVerifier();
+    const result = await verifier.verify(work.candidateFormalInterpretation, 1);
+    let unauthorizedVerifierCalled = false;
+    const unauthorizedVerifier: DeterministicVerifier = {
+      verify: async () => {
+        unauthorizedVerifierCalled = true;
+        return result;
+      }
+    };
+    const unscopedAfterRequest = new UnscopedVerificationCoordinator(harness.writer);
+    const admitted = await unscopedAfterRequest.processResult({
+      envelope: verificationEnvelope(harness, work),
+      result,
+      verifier: unauthorizedVerifier
+    });
+
+    expect(admitted.value).toEqual({
+      accepted: false,
+      verificationRequestId: work.verificationRequestId,
+      reason: "VERIFIER_SCOPE_UNAUTHORIZED"
+    });
+    expect(unauthorizedVerifierCalled).toBe(false);
+    expect(harness.writer.getState().studentEvidence[evidenceKeyToString(claimEvidenceKey)])
+      .toBeUndefined();
+    expect(replaySession(harness.sessionId, harness.store.load(harness.sessionId)))
+      .toEqual(harness.writer.getState());
+    harness.store.close();
+  });
+
   it("atomically admits a recomputed VERIFIED result and scoped evidence", async () => {
     const harness = await createCoreHarness();
     const coordinator = new VerificationCoordinator(harness.writer);

@@ -57,6 +57,11 @@ export const CLAIM_EVIDENCE_KEY: EvidenceKey = {
   dimension: "CORRECTNESS"
 };
 
+const VERIFICATION_SCOPES = [{
+  verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+  evidenceKey: CLAIM_EVIDENCE_KEY
+}] as const;
+
 export const MILESTONE_EVIDENCE_KEY: EvidenceKey = {
   problemId: "oxford-six-people",
   subject: {
@@ -185,7 +190,7 @@ export class AdversarialFixture {
     const workerRequest = (
       await localCompute.requestTranscriptAnalysis(finalized.inputEpisodeId)
     ).value;
-    const verification = new VerificationCoordinator(writer);
+    const verification = new VerificationCoordinator(writer, VERIFICATION_SCOPES);
     const verificationWork = (
       await verification.requestVerification({
         inputEpisodeId: finalized.inputEpisodeId,
@@ -265,7 +270,7 @@ export class AdversarialFixture {
     this.writer = this.registry.get(this.sessionId);
     this.turns = new TurnCoordinator(this.writer);
     this.localCompute = new LocalComputeCoordinator(this.writer);
-    this.verification = new VerificationCoordinator(this.writer);
+    this.verification = new VerificationCoordinator(this.writer, VERIFICATION_SCOPES);
     this.delivery = new DeliveryCoordinator(this.writer);
   }
 

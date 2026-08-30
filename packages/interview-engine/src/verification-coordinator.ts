@@ -24,10 +24,18 @@ import { createCommandEnvelope } from "./envelopes.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import type { SessionWriter } from "./session-writer.js";
 
+const VerifierIdSchema = z.string().trim().min(1).max(128);
+
+export const VerificationEvidenceScopeSchema = z.object({
+  verifier: VerifierIdSchema,
+  evidenceKey: EvidenceKeySchema
+}).strict();
+export type VerificationEvidenceScope = z.infer<typeof VerificationEvidenceScopeSchema>;
+
 export const VerificationWorkItemSchema = z.object({
   protocolVersion: z.literal(1),
   verificationRequestId: RequestIdSchema,
-  verifier: z.string().min(1),
+  verifier: VerifierIdSchema,
   basis: GenerationBasisSchema,
   candidateFormalInterpretation: z.string().min(1).max(100_000),
   interpretationConfidence: z.number().min(0).max(1),
@@ -47,6 +55,7 @@ const FormalInterpretationDiscardReasonSchema = z.enum([
   "COMPATIBILITY_UNKNOWN",
   "PROBLEM_SCOPE_MISMATCH",
   "EVIDENCE_SCOPE_UNSUPPORTED",
+  "VERIFIER_SCOPE_UNAUTHORIZED",
   "PROVENANCE_UNAVAILABLE"
 ]);
 export type FormalInterpretationDiscardReason = z.infer<typeof FormalInterpretationDiscardReasonSchema>;
@@ -70,6 +79,7 @@ const VerificationDiscardReasonSchema = z.enum([
   "VERIFIER_EXECUTION_FAILED",
   "VERIFIER_OUTPUT_INVALID",
   "VERIFIER_IDENTITY_MISMATCH",
+  "VERIFIER_SCOPE_UNAUTHORIZED",
   "RECOMPUTATION_MISMATCH"
 ]);
 export type VerificationDiscardReason = z.infer<typeof VerificationDiscardReasonSchema>;
@@ -101,7 +111,19 @@ function resultsEqual(left: VerificationResult, right: VerificationResult): bool
 }
 
 export class VerificationCoordinator {
-  public constructor(private readonly writer: SessionWriter) {}
+  private readonly authorizedScopes: ReadonlySet<string>;
+
+  public constructor(
+    private readonly writer: SessionWriter,
+    scopes: readonly VerificationEvidenceScope[] = []
+  ) {
+    this.authorizedScopes = new Set(
+      scopes.map((scope) => {
+        const parsed = VerificationEvidenceScopeSchema.parse(scope);
+        return verificationScopeKey(parsed.verifier, parsed.evidenceKey);
+      })
+    );
+  }
 
   public async requestVerificationFromProposal(input: {
     readonly envelope: CommandEnvelope;
@@ -111,11 +133,13 @@ export class VerificationCoordinator {
   }) {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const proposal = FormalInterpretationProposalSchema.parse(input.proposal);
+    const verifier = VerifierIdSchema.parse(input.verifier);
+    const evidenceKey = EvidenceKeySchema.parse(input.evidenceKey);
     const verificationRequestId = newRequestId();
 
     return this.writer.execute(envelope, {
       operation: "REQUEST_VERIFICATION_FROM_PROPOSAL",
-      payload: { proposal, verifier: input.verifier, evidenceKey: input.evidenceKey }
+      payload: { proposal, verifier, evidenceKey }
     }, FormalInterpretationAdmissionResultSchema, (state) => {
       const generationId = envelope.generationId;
       if (generationId === undefined) {
@@ -172,11 +196,14 @@ export class VerificationCoordinator {
       if (compatibility === "INCOMPATIBLE") return reject("COMPATIBILITY_INCOMPATIBLE", true);
       if (compatibility === "UNKNOWN") return reject("COMPATIBILITY_UNKNOWN", true);
 
-      if (state.problem?.id !== input.evidenceKey.problemId) {
+      if (state.problem?.id !== evidenceKey.problemId) {
         return reject("PROBLEM_SCOPE_MISMATCH", false);
       }
-      if (input.evidenceKey.subject.kind !== "CLAIM" || input.evidenceKey.dimension !== "CORRECTNESS") {
+      if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
         return reject("EVIDENCE_SCOPE_UNSUPPORTED", false);
+      }
+      if (!this.isScopeAuthorized(verifier, evidenceKey)) {
+        return reject("VERIFIER_SCOPE_UNAUTHORIZED", false);
       }
 
       const turn = state.turns[generation.basis.turnId];
@@ -186,11 +213,11 @@ export class VerificationCoordinator {
       const workItem = VerificationWorkItemSchema.parse({
         protocolVersion: 1,
         verificationRequestId,
-        verifier: input.verifier,
+        verifier,
         basis: generation.basis,
         candidateFormalInterpretation: proposal.candidateFormalInterpretation,
         interpretationConfidence: proposal.interpretationConfidence,
-        evidenceKey: input.evidenceKey,
+        evidenceKey,
         evidenceEventIds: [evidenceEventId],
         sourceGenerationId: generationId,
         sourceProposalRequestId: envelope.requestId
@@ -226,6 +253,8 @@ export class VerificationCoordinator {
     readonly evidenceKey: EvidenceKey;
     readonly envelope?: CommandEnvelope;
   }) {
+    const verifier = VerifierIdSchema.parse(input.verifier);
+    const evidenceKey = EvidenceKeySchema.parse(input.evidenceKey);
     const verificationRequestId = newRequestId();
     const envelope = CommandEnvelopeSchema.parse(input.envelope ?? createCommandEnvelope({
       sessionId: this.writer.sessionId,
@@ -241,10 +270,10 @@ export class VerificationCoordinator {
       payload: {
         inputEpisodeId: input.inputEpisodeId,
         turnId: input.turnId,
-        verifier: input.verifier,
+        verifier,
         candidateFormalInterpretation: input.candidateFormalInterpretation,
         interpretationConfidence: input.interpretationConfidence,
-        evidenceKey: input.evidenceKey
+        evidenceKey
       }
     }, VerificationWorkItemSchema, (state) => {
       const episode = state.inputEpisodes[input.inputEpisodeId];
@@ -252,9 +281,12 @@ export class VerificationCoordinator {
       if (episode === undefined || episode.status !== "COMMITTED") throw new Error("Verification requires a committed InputEpisode");
       if (turn === undefined || turn.inputEpisodeId !== input.inputEpisodeId) throw new Error("Verification Turn does not match its InputEpisode");
       if (state.lastCommittedInputSequence === undefined) throw new Error("Verification requires a committed Turn");
-      if (state.problem?.id !== input.evidenceKey.problemId) throw new Error("Verification evidence is scoped to a different problem");
-      if (input.evidenceKey.subject.kind !== "CLAIM" || input.evidenceKey.dimension !== "CORRECTNESS") {
+      if (state.problem?.id !== evidenceKey.problemId) throw new Error("Verification evidence is scoped to a different problem");
+      if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
         throw new Error("Phase 0 deterministic verification may commit only claim correctness evidence");
+      }
+      if (!this.isScopeAuthorized(verifier, evidenceKey)) {
+        throw new Error("Verifier is not authorized for the requested evidence scope");
       }
 
       const evidenceEventId = state.eventIds[turn.committedSequence - 1];
@@ -272,11 +304,11 @@ export class VerificationCoordinator {
       const workItem = VerificationWorkItemSchema.parse({
         protocolVersion: 1,
         verificationRequestId: effectiveRequestId,
-        verifier: input.verifier,
+        verifier,
         basis,
         candidateFormalInterpretation: input.candidateFormalInterpretation,
         interpretationConfidence: input.interpretationConfidence,
-        evidenceKey: input.evidenceKey,
+        evidenceKey,
         evidenceEventIds: [evidenceEventId]
       });
       return {
@@ -307,7 +339,9 @@ export class VerificationCoordinator {
     const supplied = VerificationResultSchema.parse(input.result);
 
     const snapshotRequest = this.writer.getState().verificationRequests[envelope.correlationId];
-    const recomputed = snapshotRequest === undefined || snapshotRequest.status !== "PENDING"
+    const recomputed = snapshotRequest === undefined
+      || snapshotRequest.status !== "PENDING"
+      || !this.isScopeAuthorized(snapshotRequest.verifier, snapshotRequest.evidenceKey)
       ? undefined
       : await this.recompute(input.verifier, snapshotRequest.candidateFormalInterpretation, snapshotRequest.interpretationConfidence);
 
@@ -339,6 +373,9 @@ export class VerificationCoordinator {
       const compatibility = isGenerationBasisStillCompatible(request.basis, state);
       if (compatibility === "INCOMPATIBLE") return discard("COMPATIBILITY_INCOMPATIBLE");
       if (compatibility === "UNKNOWN") return discard("COMPATIBILITY_UNKNOWN");
+      if (!this.isScopeAuthorized(request.verifier, request.evidenceKey)) {
+        return discard("VERIFIER_SCOPE_UNAUTHORIZED");
+      }
       if (recomputed === undefined) return discard("REQUEST_NOT_PENDING");
       if (!recomputed.ok) return discard(recomputed.reason);
       if (recomputed.result.verifier !== request.verifier) return discard("VERIFIER_IDENTITY_MISMATCH");
@@ -399,4 +436,12 @@ export class VerificationCoordinator {
       result: { accepted: false as const, verificationRequestId, reason }
     };
   }
+
+  private isScopeAuthorized(verifier: string, evidenceKey: EvidenceKey): boolean {
+    return this.authorizedScopes.has(verificationScopeKey(verifier, evidenceKey));
+  }
+}
+
+function verificationScopeKey(verifier: string, evidenceKey: EvidenceKey): string {
+  return `${verifier}\u0000${evidenceKeyToString(evidenceKey)}`;
 }
