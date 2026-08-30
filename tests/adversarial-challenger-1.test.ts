@@ -274,8 +274,7 @@ describe("Adversarial Test 1: Whiteboard Layer Isolation & Student Shape Immutab
 describe("Adversarial Test 2: Gemini Provider Gating & Admission Fail-Closed Defense", () => {
   it("rejects metered provider when policy forbids metered usage", async () => {
     const adapter = new GeminiApiAdapter({
-      apiKey: "paid-key",
-      isFreeTierKey: false
+      apiKey: "paid-key"
     });
 
     await expect(

@@ -14,13 +14,21 @@ export interface GeminiApiAdapterOptions {
   readonly model?: string;
   readonly baseUrl?: string;
   readonly fetchImpl?: typeof fetch;
-  readonly isFreeTierKey?: boolean;
   readonly billingVerificationFactory?: (now: Date) => unknown;
   readonly dataUse?: "LOCAL_ONLY" | "REMOTE_NO_TRAINING" | "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT";
   readonly name?: string;
   readonly adapterVersion?: string;
 }
 
+/**
+ * GeminiApiAdapter implements ReasoningProvider for Google's Gemini models.
+ *
+ * NOTE: Remote Gemini API keys inherit Google Cloud project billing configurations
+ * and do not offer technical guarantees against metered spend purely from key strings.
+ * Therefore, under no-metered policy (`allowMeteredUsage: false`), this adapter
+ * fails closed by default unless an explicit technical billing verification proof factory
+ * is configured. It is treated as an experimental provider.
+ */
 export class GeminiApiAdapter implements ReasoningProvider {
   public readonly name: string;
   public readonly adapterVersion: string;
@@ -48,22 +56,14 @@ export class GeminiApiAdapter implements ReasoningProvider {
       return this.options.billingVerificationFactory(input.now);
     }
 
-    if (this.options.isFreeTierKey === false) {
-      return {
-        billingClass: "METERED" as const,
-        enforcementMechanism: "Metered API key without technical spend impossibility proof",
-        verifiedAt: input.now.toISOString(),
-        adapterVersion: this.adapterVersion,
-        spendImpossible: false
-      };
-    }
-
+    // By default, Google AI Studio / Gemini API keys cannot prove impossibility of spend
+    // without an active project-level sandbox/quota contract. Fail closed.
     return {
-      billingClass: "VERIFIED_FREE_ONLY" as const,
-      enforcementMechanism: "Google AI Studio Free Tier key with hard rate-limiting and zero metered spend path",
+      billingClass: "UNKNOWN" as const,
+      enforcementMechanism: "Unverified remote API key; automatic Google project billing verification is not implemented",
       verifiedAt: input.now.toISOString(),
       adapterVersion: this.adapterVersion,
-      spendImpossible: true
+      spendImpossible: false
     };
   }
 
@@ -170,13 +170,33 @@ export class GeminiApiAdapter implements ReasoningProvider {
   }
 }
 
+const CANONICAL_SOCRATIC_ACTIONS = [
+  "WAIT",
+  "CLARIFY",
+  "PROBE_JUSTIFICATION",
+  "CHECK_LOCAL_STEP",
+  "ASK_FOR_EXAMPLE",
+  "ASK_FOR_COUNTEREXAMPLE",
+  "SIMPLIFY_CASE",
+  "CHANGE_REPRESENTATION",
+  "FOCUS_ATTENTION",
+  "RECALL_RELEVANT_FACT",
+  "CHALLENGE_ASSUMPTION",
+  "DIRECTIONAL_NUDGE",
+  "EXPLICIT_HINT",
+  "VERIFY",
+  "GENERALIZE",
+  "ASK_ALTERNATE_SOLUTION"
+] as const;
+
 function formatPrompt(context: unknown): string {
   if (typeof context === "object" && context !== null) {
     const record = context as Record<string, unknown>;
     const sections: string[] = [
-      "You are an Oxford-style mathematical interview tutor.",
-      "Your role is to guide the student toward rigorous mathematical reasoning using Socratic questions.",
-      "Respond strictly with a JSON object conforming to the InterviewerProposal schema."
+      "You are an Oxford-style mathematical interview tutor realizing an application-selected Socratic action.",
+      "Your role is to guide the student toward rigorous mathematical reasoning using Socratic questions with the minimum necessary disclosure.",
+      "The application owns all pedagogical policy and disclosure authorization. You are realizing the requested action.",
+      "Respond strictly with a single JSON object conforming to the InterviewerProposal schema."
     ];
 
     if (typeof record["problemPrompt"] === "string") {
@@ -186,7 +206,7 @@ function formatPrompt(context: unknown): string {
       sections.push(`\nRecent Student Work:\n${record["recentStudentWork"]}`);
     }
     if (record["realizationRequest"] !== undefined) {
-      sections.push(`\nRealization Request:\n${JSON.stringify(record["realizationRequest"], null, 2)}`);
+      sections.push(`\nApplication Realization Request:\n${JSON.stringify(record["realizationRequest"], null, 2)}`);
     }
     if (Array.isArray(record["deliveredFacts"])) {
       sections.push(`\nDelivered Disclosures:\n${record["deliveredFacts"].join(", ")}`);
@@ -199,16 +219,16 @@ function formatPrompt(context: unknown): string {
       "\nExpected Output Schema (InterviewerProposal):",
       JSON.stringify(
         {
-          realizedAction:
-            "PROBE_JUSTIFICATION | PROMPT_STEP | HIGHLIGHT_DISCREPANCY | RESTATE_GOAL | REQUEST_FORMALIZATION | WAIT | GIVE_EXAMPLE | CONGRATULATE",
-          claimedDisclosureLevel: "0 | 1 | 2 | 3",
+          realizedAction: CANONICAL_SOCRATIC_ACTIONS.join(" | "),
+          claimedDisclosureLevel: "0 | 1 | 2 | 3 | 4 | 5",
           claimedDisclosureIds: ["<string>"],
           speechText: "<string>",
           boardActions: []
         },
         null,
         2
-      )
+      ),
+      "\nNote: claimedDisclosureLevel (0-5) and claimedDisclosureIds are untrusted model metadata and will be independently validated against the application disclosure boundary."
     );
 
     return sections.join("\n");
