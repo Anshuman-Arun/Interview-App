@@ -65,13 +65,31 @@ interface PendingSubmissionRecord {
 const DEFAULT_BASE_URL = "http://127.0.0.1:43123";
 const DEFAULT_CLIENT_TOKEN = "test_client_token_phase1_typed_interview_mvp_secure_01";
 
+function getInitialBaseUrl(optionUrl?: string): string {
+  if (optionUrl) return optionUrl;
+  if (typeof window !== "undefined" && window.location?.search) {
+    const params = new URLSearchParams(window.location.search);
+    const queryUrl = params.get("apiUrl");
+    if (queryUrl) return queryUrl;
+  }
+  return DEFAULT_BASE_URL;
+}
+
+function getInitialClientToken(optionToken?: string): string {
+  if (optionToken) return optionToken;
+  if (typeof window !== "undefined" && window.location?.search) {
+    const params = new URLSearchParams(window.location.search);
+    const queryToken = params.get("token");
+    if (queryToken && queryToken.length >= 32) return queryToken;
+  }
+  return DEFAULT_CLIENT_TOKEN;
+}
+
 export function useInterviewSession(
   options: UseInterviewSessionOptions = {}
 ): UseInterviewSessionResult {
-  const [baseUrl, setBaseUrl] = useState<string>(options.baseUrl ?? DEFAULT_BASE_URL);
-  const [clientToken, setClientToken] = useState<string>(
-    options.clientToken ?? DEFAULT_CLIENT_TOKEN
-  );
+  const [baseUrl, setBaseUrl] = useState<string>(() => getInitialBaseUrl(options.baseUrl));
+  const [clientToken, setClientToken] = useState<string>(() => getInitialClientToken(options.clientToken));
   const [sessionId, setSessionId] = useState<SessionId | null>(
     options.initialSessionId ?? null
   );
