@@ -17,3 +17,4 @@ export * from "./security.js";
 export * from "./verification.js";
 export * from "./whiteboard.js";
 export * from "./evaluation.js";
+export * from "./trading.js";
