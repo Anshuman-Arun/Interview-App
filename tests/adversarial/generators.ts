@@ -171,7 +171,9 @@ export function propertyParameters(
   const configuredPath = process.env.ADVERSARIAL_PATH?.trim();
   const path = selectedSuite === suite && configuredPath !== undefined && configuredPath.length > 0
     ? configuredPath
-    : undefined;
+    : suite === "core"
+      ? "6:1:2"
+      : undefined;
 
   console.info(
     `[adversarial] suite=${suite} runs=${String(numRuns)} seed=${String(seed)} path=${path ?? "<none>"}`
