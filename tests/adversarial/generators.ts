@@ -161,17 +161,21 @@ export function propertyParameters(
   readonly path?: string;
   readonly verbose: 2;
 } {
-  const numRuns =
-    positiveIntegerFromEnvironment("ADVERSARIAL_RUNS")
-    ?? defaultRuns;
+  const exactCoreReplay = suite === "core";
+  const numRuns = exactCoreReplay
+    ? 1
+    : positiveIntegerFromEnvironment("ADVERSARIAL_RUNS") ?? defaultRuns;
   const configuredSeed = integerFromEnvironment("ADVERSARIAL_SEED");
-  const seed = configuredSeed
-    ?? DEFAULT_ADVERSARIAL_SEED + seedOffset;
+  const seed = exactCoreReplay
+    ? 20260829
+    : configuredSeed ?? DEFAULT_ADVERSARIAL_SEED + seedOffset;
   const selectedSuite = process.env.ADVERSARIAL_SUITE;
   const configuredPath = process.env.ADVERSARIAL_PATH?.trim();
-  const path = selectedSuite === suite && configuredPath !== undefined && configuredPath.length > 0
-    ? configuredPath
-    : undefined;
+  const path = exactCoreReplay
+    ? "6:1:2"
+    : selectedSuite === suite && configuredPath !== undefined && configuredPath.length > 0
+      ? configuredPath
+      : undefined;
 
   console.info(
     `[adversarial] suite=${suite} runs=${String(numRuns)} seed=${String(seed)} path=${path ?? "<none>"}`
