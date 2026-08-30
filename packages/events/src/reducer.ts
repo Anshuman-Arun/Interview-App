@@ -1,4 +1,4 @@
-import { evidenceKeyToString, isDisclosedStatus } from "../../domain/src/index.js";
+import { evidenceKeyToString, generationBasesEqual, isDisclosedStatus } from "../../domain/src/index.js";
 import type { DeliveryAtom, DisclosureId } from "../../domain/src/index.js";
 import type { SessionEvent } from "./schemas.js";
 import { initialSessionState, type GenerationState, type SessionState } from "./state.js";
@@ -252,6 +252,17 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "MODEL_GENERATION_STARTED":
       next = { ...state, generations: { ...state.generations, [event.payload.generationId]: { generationId: event.payload.generationId, basis: event.payload.basis, provider: event.payload.provider, status: "ACTIVE" } } };
       break;
+    case "GENERATION_CONTEXT_COMPILED": {
+      const generation = state.generations[event.payload.generationId];
+      if (generation === undefined || generation.status !== "ACTIVE") throw new Error("Context compilation requires an active generation");
+      if (generation.contextManifest !== undefined) throw new Error("Generation context is already compiled");
+      if (
+        event.payload.manifest.generationId !== event.payload.generationId
+        || !generationBasesEqual(event.payload.manifest.generationBasis, generation.basis)
+      ) throw new Error("Context manifest does not match its generation basis");
+      next = updateGeneration(state, event.payload.generationId, { contextManifest: event.payload.manifest });
+      break;
+    }
     case "MODEL_PROPOSAL_RECEIVED":
       next = updateGeneration(state, event.payload.generationId, { status: "PROPOSAL_RECEIVED", proposal: event.payload.proposal });
       break;

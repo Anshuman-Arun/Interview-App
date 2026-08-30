@@ -305,3 +305,11 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: let a provider invoke the verifier directly; treat formal JSON as verified evidence; create verifier work without generation provenance; reserve low-confidence proposals outside the verifier path.
 - Consequences: only one callback can consume a generation, stale or unknown compatibility fails closed, application code chooses the verifier and evidence scope, and low confidence remains explicit so the deterministic verifier can abstain. Natural-language interpretation generation is still deferred.
 - Reversible: the proposal schema and coordinator API are versionable; model proposals remaining non-authoritative and independently verified are not.
+
+## D039 — Generation context identity uses canonical SHA-256 manifests
+
+- Decision: before provider use, compile the allowlisted safe context for one active generation, hash its canonical JSON and the authored reasoning graph with SHA-256, and persist only the versioned manifest through the serialized writer.
+- Reason: reproducibility requires stable prompt/problem identity, while persisting a second raw prompt copy in the semantic event would unnecessarily duplicate student content and expand the sensitive event surface. Hashing outside the writer also requires a current-state recheck before admission.
+- Alternatives considered: hash ordinary `JSON.stringify` output; persist the full compiled context event; trust provider request logs; compute hashes without binding them to GenerationBasis.
+- Consequences: object insertion order cannot change identity, private problem partitions do not affect provider-context hashes, arrays retain semantic order, and a revision change during hashing fails closed. The idempotent command result retains the validated safe context for the caller, while the event contains hashes and provenance only.
+- Reversible: canonicalization/version labels and manifest fields are versionable; provider inputs remaining allowlisted, generation-bound, and reproducibly identifiable are not.

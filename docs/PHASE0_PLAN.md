@@ -369,6 +369,22 @@ Implemented after browser transport reconciliation:
 
 The coordinator's promise map is disposable process state. SQLite events remain authoritative, and the transition-level state recheck preserves correctness even if callers bypass the normal composition root.
 
+## Continuation progress — generation context reproducibility
+
+Implemented as an independent Context Compiler hardening slice:
+
+- a versioned `ContextCompilationManifest` containing the exact GenerationId/Basis, problem identity, compiler version, and SHA-256 algorithm identity;
+- canonical JSON encoding with sorted object keys and array-order preservation;
+- separate SHA-256 hashes for the complete safe provider context and application-owned reasoning graph;
+- semantic `GENERATION_CONTEXT_COMPILED` persistence before the synthetic provider is invoked;
+- no prompt, student text, protected-fact text, canonical solution, or verification notes in the manifest event;
+- serialized current-state and command-basis revalidation after asynchronous hashing;
+- one manifest per active generation under duplicate, concurrent, and restart execution;
+- fail-closed results for stale, unknown, mismatched, changed-during-hash, conflicting, or unavailable-hash conditions;
+- deterministic replay of the manifest as application-owned generation provenance.
+
+This establishes the Phase 0 prompt/problem hash boundary without making provider history authoritative. Broader build, SDK, operating-system, and media reproducibility metadata remains later work.
+
 ## Continuation progress — GitHub branch reconciliation and browser boundary hardening
 
 Recovered and integrated after review of closed PRs #3–#7:

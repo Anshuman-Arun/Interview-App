@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   BoardRevisionSchema,
   ContextEpochSchema,
+  ContextCompilationManifestSchema,
   DeliveryAtomSchema,
   DeliveryIdSchema,
   DisclosureAnalysisSchema,
@@ -110,6 +111,10 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   }).strict()),
   event("PEDAGOGICAL_ACTION_SELECTED", z.object({ turnId: TurnIdSchema, request: RealizationRequestSchema }).strict()),
   event("MODEL_GENERATION_STARTED", z.object({ generationId: GenerationIdSchema, basis: GenerationBasisSchema, provider: z.string().min(1) }).strict()),
+  event("GENERATION_CONTEXT_COMPILED", z.object({
+    generationId: GenerationIdSchema,
+    manifest: ContextCompilationManifestSchema
+  }).strict()),
   event("MODEL_PROPOSAL_RECEIVED", z.object({ generationId: GenerationIdSchema, proposal: InterviewerProposalSchema }).strict()),
   event("FORMAL_INTERPRETATION_PROPOSAL_RECEIVED", z.object({
     generationId: GenerationIdSchema,

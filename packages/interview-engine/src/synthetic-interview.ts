@@ -7,7 +7,7 @@ import { DeliveryCoordinator, MockRenderer } from "../../delivery/src/index.js";
 import { SqliteEventStore } from "../../persistence/src/index.js";
 import { sixPeopleProblem } from "../../problems/src/index.js";
 import { MockModelAdapter, assertProviderPermitted } from "../../providers/src/index.js";
-import { compileContext } from "./context-compiler.js";
+import { ContextCoordinator } from "./context-coordinator.js";
 import { ClosedWorldDisclosureAnalyzer, DisclosureValidator } from "./disclosure-validator.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import { SessionRuntimeRegistry } from "./session-writer.js";
@@ -31,9 +31,13 @@ export async function runSyntheticInterview(databasePath = ":memory:"): Promise<
     const { inputEpisodeId, turnId } = await turns.commitInput(
       "I represented people as vertices and relationships as two colours. I think one person must have three links of the same colour."
     );
-    const realizationRequest = await turns.selectAction(turnId);
+    await turns.selectAction(turnId);
     const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock-model");
-    const context = compileContext({ state: writer.getState(), problem: sixPeopleProblem, turnId, realizationRequest });
+    const compilation = await new ContextCoordinator(writer).compileForGeneration({ generationId, problem: sixPeopleProblem });
+    if (!compilation.value.compiled) {
+      throw new Error(`Context compilation failed: ${compilation.value.reason}`);
+    }
+    const context = compilation.value.context;
 
     const safeProbe = "Why must that step be true?";
     const provider = new MockModelAdapter({

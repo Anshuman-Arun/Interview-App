@@ -23,3 +23,13 @@ export type GenerationBasis = z.infer<typeof GenerationBasisSchema>;
 export const CompatibilitySchema = z.enum(["COMPATIBLE", "INCOMPATIBLE", "UNKNOWN"]);
 export type Compatibility = z.infer<typeof CompatibilitySchema>;
 
+export function generationBasesEqual(left: GenerationBasis, right: GenerationBasis): boolean {
+  return left.contextEpoch === right.contextEpoch
+    && left.committedInputSequence === right.committedInputSequence
+    && left.transcriptRevision === right.transcriptRevision
+    && left.boardRevision === right.boardRevision
+    && left.problemStateRevision === right.problemStateRevision
+    && left.policyRevision === right.policyRevision
+    && left.inputEpisodeId === right.inputEpisodeId
+    && left.turnId === right.turnId;
+}

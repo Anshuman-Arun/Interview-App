@@ -1,6 +1,7 @@
 import type {
   BoardRevision,
   ContextEpoch,
+  ContextCompilationManifest,
   DeliveryAtom,
   DisclosureId,
   EvidenceProposal,
@@ -97,6 +98,7 @@ export interface GenerationState {
   readonly basis: GenerationBasis;
   readonly provider: string;
   readonly status: "ACTIVE" | "PROPOSAL_RECEIVED" | "VALIDATED" | "REJECTED" | "SUPERSEDED";
+  readonly contextManifest?: ContextCompilationManifest;
   readonly proposal?: InterviewerProposal;
   readonly formalInterpretationProposal?: FormalInterpretationProposal;
 }
