@@ -1,3 +1,7 @@
+export * from "./shape-model.js";
+export * from "./dirty-region-coalescer.js";
+export * from "./whiteboard-session.js";
+
 import { BoardActionSchema, type BoardAction, type WhiteboardAdapter } from "../../domain/src/index.js";
 
 export class InMemoryAiOverlay implements WhiteboardAdapter {
