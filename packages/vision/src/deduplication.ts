@@ -1,5 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
-import { ImageSnapshot, VisionImageArtifact, type VisionRasterSource } from "./types.js";
+import {
+  ImageSnapshot,
+  VisionImageArtifact,
+  assertVisionRasterSource,
+  type VisionRasterSource
+} from "./types.js";
 
 function imageDigest(source: VisionRasterSource): string {
   return source.metadata.contentDigest;
@@ -14,17 +19,22 @@ function imageRevision(source: VisionRasterSource): number {
 }
 
 export function exactImagePayloadDuplicate(left: VisionRasterSource, right: VisionRasterSource): boolean {
+  assertVisionRasterSource(left);
+  assertVisionRasterSource(right);
   if (imageByteSize(left) !== imageByteSize(right) || imageDigest(left) !== imageDigest(right)) return false;
-  const leftBytes = Buffer.from(left.readBytes());
-  const rightBytes = Buffer.from(right.readBytes());
-  return timingSafeEqual(leftBytes, rightBytes);
+  return timingSafeEqual(left.readBytes(), right.readBytes());
 }
 
 export function revisionImageProcessingKey(source: VisionRasterSource): string {
+  assertVisionRasterSource(source);
   return `${String(imageRevision(source))}:${imageDigest(source)}`;
 }
 
 export function cropPayloadKey(crop: VisionImageArtifact): string {
+  assertVisionRasterSource(crop);
+  if (!(crop instanceof VisionImageArtifact) || crop.metadata.kind !== "CROP") {
+    throw new TypeError("cropPayloadKey requires a crop artifact");
+  }
   return crop.metadata.contentDigest;
 }
 
@@ -37,6 +47,7 @@ export function deduplicateExactImagePayloads<T extends VisionRasterSource>(imag
   const unique: T[] = [];
 
   for (const image of images) {
+    assertVisionRasterSource(image);
     const key = `${String(image.metadata.byteSize)}:${image.metadata.contentDigest}`;
     const bucket = buckets.get(key) ?? [];
     if (bucket.some((candidate) => exactImagePayloadDuplicate(candidate, image))) continue;
@@ -49,10 +60,12 @@ export function deduplicateExactImagePayloads<T extends VisionRasterSource>(imag
 }
 
 export function sourceSnapshotId(source: VisionRasterSource): string {
+  assertVisionRasterSource(source);
   return source instanceof ImageSnapshot ? source.metadata.snapshotId : source.metadata.sourceSnapshotId;
 }
 
 export function imageIdentity(source: VisionRasterSource): string {
+  assertVisionRasterSource(source);
   if (source instanceof ImageSnapshot) {
     return `snapshot:${source.metadata.snapshotId}:${source.metadata.contentDigest}`;
   }
