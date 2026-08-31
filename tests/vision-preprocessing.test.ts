@@ -713,6 +713,18 @@ describe("vision snapshot validation and hashing", () => {
     expect(deduplicateExactImagePayloads(images)).toEqual([source]);
   });
 
+  it("fails closed on hostile deduplication entry access", () => {
+    const images: ImageSnapshot[] = [];
+    Object.defineProperty(images, "0", {
+      enumerable: true,
+      get() {
+        throw new Error("hostile image entry");
+      }
+    });
+    Object.defineProperty(images, "length", { value: 1 });
+    expect(() => deduplicateExactImagePayloads(images)).toThrowError(TypeError);
+  });
+
   it("bounds public exact-dedup candidate collections", () => {
     const source = snapshot(makePng(1, 1));
     expect(() => deduplicateExactImagePayloads(Array.from({ length: 2049 }, () => source)))
@@ -766,6 +778,22 @@ describe("vision geometry", () => {
       { width: 10, height: 10 }
     )).toThrowError(VisionPreprocessingError);
     expect(imageBounds({ width: 10, height: 5 })).toEqual({ x: 0, y: 0, width: 10, height: 5 });
+  });
+
+  it("fails closed on revoked or hostile geometry collections", () => {
+    const revoked = Proxy.revocable([] as Array<{ x: number; y: number; width: number; height: number }>, {});
+    revoked.revoke();
+    expect(() => unionRects(revoked.proxy)).toThrowError(TypeError);
+
+    const hostile: Array<{ x: number; y: number; width: number; height: number }> = [];
+    Object.defineProperty(hostile, "0", {
+      enumerable: true,
+      get() {
+        throw new Error("hostile geometry entry");
+      }
+    });
+    Object.defineProperty(hostile, "length", { value: 1 });
+    expect(() => unionRects(hostile)).toThrowError(TypeError);
   });
 
   it("bounds public rectangle collection operations", () => {
@@ -1771,6 +1799,18 @@ describe("provider-neutral request preparation and budgeting", () => {
       maxTotalPixels: 1_000_000,
       maxCropsOrTiles: 0
     })).toThrowError(VisionPreprocessingError);
+  });
+
+  it("fails closed on hostile request candidate entry access", () => {
+    const candidates: ImageSnapshot[] = [];
+    Object.defineProperty(candidates, "0", {
+      enumerable: true,
+      get() {
+        throw new Error("hostile request entry");
+      }
+    });
+    Object.defineProperty(candidates, "length", { value: 1 });
+    expect(() => prepareVisionBatch(candidates, "analysis")).toThrowError(TypeError);
   });
 
   it("maps hostile candidate length access to a clean invalid-image failure", () => {
