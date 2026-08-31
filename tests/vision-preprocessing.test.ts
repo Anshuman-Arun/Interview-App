@@ -1087,6 +1087,34 @@ describe("provider-neutral request preparation and budgeting", () => {
       .rejects.toMatchObject({ code: "INVALID_IMAGE" });
   });
 
+  it("snapshots batch candidate accessors once before bounded-prefix budgeting", () => {
+    const first = snapshot(makePng(2, 2), { id: "first-candidate", revision: 4 });
+    const second = snapshot(makePng(2, 2), { id: "second-candidate", revision: 4 });
+    let reads = 0;
+    const candidates: ImageSnapshot[] = [];
+    Object.defineProperty(candidates, "0", {
+      enumerable: true,
+      configurable: true,
+      get() {
+        reads += 1;
+        return reads === 1 ? first : second;
+      }
+    });
+    Object.defineProperty(candidates, "length", { value: 1 });
+
+    const batch = prepareVisionBatch(candidates, "analysis", {
+      maxImages: 0,
+      maxTotalBytes: 0,
+      maxTotalPixels: 0,
+      maxCropsOrTiles: 0
+    }, "BOUNDED_PREFIX");
+
+    expect(reads).toBe(1);
+    expect(batch.deferredImageIdentities).toEqual([
+      prepareVisionImageRequest(first, "analysis").imageIdentity
+    ]);
+  });
+
   it("supports a zero request budget with explicit bounded-prefix deferral", () => {
     const source = snapshot(makePng(2, 2));
     const batch = prepareVisionBatch([source], "analysis", {
