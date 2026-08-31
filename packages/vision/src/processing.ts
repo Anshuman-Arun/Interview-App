@@ -264,7 +264,8 @@ function decodeSource(source: VisionRasterSource, signal?: AbortSignal): Decoded
     throw new VisionPreprocessingError("INVALID_IMAGE", "Previously validated image payload could not be decoded");
   }
   throwIfAborted(signal);
-  if (!Number.isFinite(decoded.gamma) || (decoded.gamma ?? 0) < 0) {
+  const gamma = decoded.gamma ?? 0;
+  if (!Number.isFinite(gamma) || gamma < 0) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Decoded PNG gamma metadata is invalid");
   }
   if (decoded.width !== source.metadata.width || decoded.height !== source.metadata.height) {
@@ -278,7 +279,7 @@ function decodeSource(source: VisionRasterSource, signal?: AbortSignal): Decoded
     width: decoded.width,
     height: decoded.height,
     data: decoded.data,
-    gamma: decoded.gamma ?? 0
+    gamma
   };
 }
 
