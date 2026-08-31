@@ -51,11 +51,11 @@ function parseCanonicalInteger(
   return BigInt(value);
 }
 
-export function parseBoundedInteger(value: string): bigint {
+export function parseBoundedInteger(value: unknown): bigint {
   return parseCanonicalInteger(value, MAX_INTEGER_DECIMAL_DIGITS, "INTEGER_LIMIT_EXCEEDED");
 }
 
-export function parseBoundedIntermediateInteger(value: string): bigint {
+export function parseBoundedIntermediateInteger(value: unknown): bigint {
   return parseCanonicalInteger(
     value,
     MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
@@ -67,7 +67,7 @@ export function formatInteger(value: bigint): string {
   return assertIntermediateIntegerBound(value).toString();
 }
 
-export function assertIntermediateIntegerBound(value: bigint): bigint {
+export function assertIntermediateIntegerBound(value: unknown): bigint {
   if (typeof value !== "bigint") {
     throw new BoundedMathError("INVALID_INTEGER", "Exact integer values must use bigint");
   }

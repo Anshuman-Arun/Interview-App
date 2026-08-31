@@ -89,6 +89,34 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
+  it("classifies sign-aware integer digit overflow as a resource limit", async () => {
+    for (const operand of [
+      "9".repeat(MAX_INTEGER_DECIMAL_DIGITS + 1),
+      `-${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS + 1)}`
+    ]) {
+      const result = await verifyJson(new ModularArithmeticVerifier(), {
+        protocol: MODULAR_ARITHMETIC_PROTOCOL,
+        protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+        claim: { kind: "DIVISIBILITY", divisor: "1", dividend: integer(operand) }
+      });
+      expect(result.status).toBe("UNRESOLVED");
+      expect(result.reason).toContain("RESOURCE_LIMIT");
+    }
+
+    for (const claimed of [
+      "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1),
+      `-${"9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1)}`
+    ]) {
+      const result = await verifyJson(new CombinatorialCountingVerifier(), {
+        protocol: COMBINATORIAL_COUNTING_PROTOCOL,
+        protocolVersion: COMBINATORIAL_COUNTING_PROTOCOL_VERSION,
+        claim: { kind: "BINOMIAL", n: 1, k: 1, claimed }
+      });
+      expect(result.status).toBe("UNRESOLVED");
+      expect(result.reason).toContain("RESOURCE_LIMIT");
+    }
+  });
+
   it("enforces exact claimed-result digit boundaries", () => {
     const atLimit = "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS);
     const overLimit = "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1);

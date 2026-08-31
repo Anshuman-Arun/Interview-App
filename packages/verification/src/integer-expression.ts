@@ -9,19 +9,27 @@ import {
 } from "./limits.js";
 import { BoundedMathError, assertIntermediateIntegerBound, parseBoundedInteger } from "./math-utils.js";
 
-export const IntegerStringSchema = z.string()
-  .min(1)
-  .max(MAX_INTEGER_DECIMAL_DIGITS + 1)
-  .regex(/^(?:0|-?[1-9]\d*)$/u)
-  .refine((value) => (value.startsWith("-") ? value.length - 1 : value.length) <= MAX_INTEGER_DECIMAL_DIGITS);
+function boundedIntegerStringSchema(maximumDigits: number) {
+  return z.string()
+    .min(1)
+    .max(maximumDigits + 1)
+    .regex(/^(?:0|-?[1-9]\d*)$/u)
+    .superRefine((value, context) => {
+      const digits = value.startsWith("-") ? value.length - 1 : value.length;
+      if (digits > maximumDigits) {
+        context.addIssue({
+          code: "too_big",
+          origin: "string",
+          maximum: maximumDigits,
+          inclusive: true,
+          message: `Integer exceeds the configured ${String(maximumDigits)}-digit limit`
+        });
+      }
+    });
+}
 
-export const IntermediateIntegerStringSchema = z.string()
-  .min(1)
-  .max(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1)
-  .regex(/^(?:0|-?[1-9]\d*)$/u)
-  .refine(
-    (value) => (value.startsWith("-") ? value.length - 1 : value.length) <= MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS
-  );
+export const IntegerStringSchema = boundedIntegerStringSchema(MAX_INTEGER_DECIMAL_DIGITS);
+export const IntermediateIntegerStringSchema = boundedIntegerStringSchema(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS);
 
 export const PositiveIntegerStringSchema = IntegerStringSchema.refine(
   (value) => value !== "0" && !value.startsWith("-")
