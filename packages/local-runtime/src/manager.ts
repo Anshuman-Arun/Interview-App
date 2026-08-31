@@ -912,13 +912,45 @@ export class LocalRuntimeManager {
         try {
           await record.cleanupPromise;
         } catch {
-          // Failure remains observable in status; recurse to residual-tree handling.
+          // Failure remains observable in status; stop still performs bounded residual cleanup below.
         }
       }
-      if (record.child === child) {
-        await waitForManagedTreeExit(record, child, this.platform, terminationTimeout(record.definition));
+      if (record.startPromise !== undefined) {
+        try {
+          await record.startPromise;
+        } catch {
+          // Startup failure/cancellation owns its cleanup before stop takes over.
+        }
       }
-      return this.runStop(record);
+      if (record.child !== child) return this.runStop(record);
+
+      record.residualProcess = child;
+      record.state = "STOPPING";
+      const timeoutMs = terminationTimeout(record.definition);
+      await terminateChildTree(child, this.platform, "SIGTERM", timeoutMs);
+      if (await waitForManagedTreeExit(record, child, this.platform, timeoutMs)) {
+        record.residualProcess = undefined;
+        this.clearLiveReadiness(record);
+        record.state = "STOPPED";
+        return Object.freeze({ componentId: record.definition.id, disposition: "TERMINATED" });
+      }
+      await forceKillChildTree(child, this.platform, timeoutMs);
+      if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
+        record.state = "FAILED";
+        record.failure = this.failure(
+          "TERMINATION_FAILED",
+          `Could not terminate dead-root residual tree for ${record.definition.id}`,
+          record.environment.secretValues
+        );
+        throw new LocalRuntimeError(
+          "TERMINATION_FAILED",
+          `Could not terminate dead-root residual tree for ${record.definition.id}`
+        );
+      }
+      record.residualProcess = undefined;
+      this.clearLiveReadiness(record);
+      record.state = "STOPPED";
+      return Object.freeze({ componentId: record.definition.id, disposition: "FORCED" });
     }
     if (child === undefined) {
       if (record.cleanupPromise !== undefined) {
