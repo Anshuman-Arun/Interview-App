@@ -193,34 +193,37 @@ function nonnegativeSafeInteger(value: number, name: string): number {
 }
 
 function parsePlanningDimensions(input: PixelDimensions): PixelDimensions {
-  let parsed: ReturnType<typeof PixelDimensionsSchema.safeParse>;
+  let ownInput: Readonly<Record<string, unknown>>;
   try {
-    parsed = PixelDimensionsSchema.safeParse(input);
+    ownInput = snapshotOwnEnumerableRecord(input, "Planning dimensions");
   } catch {
     throw new RangeError("Planning dimensions could not be read safely");
   }
+  const parsed = PixelDimensionsSchema.safeParse(ownInput);
   if (!parsed.success) throw new RangeError("Planning dimensions must be positive safe integers");
   return parsed.data;
 }
 
 function parseDownscaleEnvelope(input: DownscaleEnvelope): DownscaleEnvelope {
-  let parsed: ReturnType<typeof DownscaleEnvelopeSchema.safeParse>;
+  let ownInput: Readonly<Record<string, unknown>>;
   try {
-    parsed = DownscaleEnvelopeSchema.safeParse(input);
+    ownInput = snapshotOwnEnumerableRecord(input, "Downscale envelope");
   } catch {
     throw new RangeError("Downscale envelope could not be read safely");
   }
+  const parsed = DownscaleEnvelopeSchema.safeParse(ownInput);
   if (!parsed.success) throw new RangeError("Downscale envelope is invalid or contains unknown keys");
   return parsed.data;
 }
 
 function parseTileConfig(input: TileConfig): TileConfig {
-  let parsed: ReturnType<typeof TileConfigSchema.safeParse>;
+  let ownInput: Readonly<Record<string, unknown>>;
   try {
-    parsed = TileConfigSchema.safeParse(input);
+    ownInput = snapshotOwnEnumerableRecord(input, "Tile configuration");
   } catch {
     throw new RangeError("Tile configuration could not be read safely");
   }
+  const parsed = TileConfigSchema.safeParse(ownInput);
   if (!parsed.success) throw new RangeError("Tile configuration is invalid or contains unknown keys");
   return parsed.data;
 }
