@@ -1,5 +1,21 @@
 import { z } from "zod";
 
+const NonBlankStringSchema = z.string().refine(
+  (value) => value.trim().length > 0,
+  { message: "Expected non-blank text" }
+);
+const PositiveFiniteNumberSchema = z.number().finite().positive();
+const NonnegativeFiniteNumberSchema = z.number().finite().nonnegative();
+const PositiveSafeIntegerSchema = z.number().refine(
+  (value) => Number.isSafeInteger(value) && value > 0,
+  { message: "Expected a positive safe integer" }
+);
+const NonnegativeSafeIntegerSchema = z.number().refine(
+  (value) => Number.isSafeInteger(value) && value >= 0,
+  { message: "Expected a non-negative safe integer" }
+);
+const ProbabilitySchema = z.number().finite().min(0).max(1);
+
 export const OrderSideSchema = z.enum(["BUY", "SELL"]);
 export type OrderSide = z.infer<typeof OrderSideSchema>;
 
@@ -7,49 +23,62 @@ export const OrderTypeSchema = z.enum(["LIMIT", "MARKET"]);
 export type OrderType = z.infer<typeof OrderTypeSchema>;
 
 export const LimitOrderSchema = z.object({
-  id: z.string().min(1),
+  id: NonBlankStringSchema,
   side: OrderSideSchema,
-  price: z.number(),
-  size: z.number().positive().int(),
-  timestamp: z.number().nonnegative()
-}).strict();
+  price: PositiveFiniteNumberSchema,
+  size: PositiveSafeIntegerSchema,
+  timestamp: NonnegativeFiniteNumberSchema
+}).strict().refine(
+  (order) => Number.isFinite(order.price * order.size),
+  { message: "Limit-order notional must remain finite" }
+);
 export type LimitOrder = z.infer<typeof LimitOrderSchema>;
 
 export const QuotePairSchema = z.object({
-  bidPrice: z.number(),
-  bidSize: z.number().positive().int(),
-  askPrice: z.number(),
-  askSize: z.number().positive().int()
-}).strict().refine((q) => q.bidPrice < q.askPrice, {
-  message: "Bid price must be strictly less than ask price"
-});
+  bidPrice: PositiveFiniteNumberSchema,
+  bidSize: PositiveSafeIntegerSchema,
+  askPrice: PositiveFiniteNumberSchema,
+  askSize: PositiveSafeIntegerSchema
+}).strict()
+  .refine((q) => q.bidPrice < q.askPrice, {
+    message: "Bid price must be strictly less than ask price"
+  })
+  .refine(
+    (q) => Number.isFinite(q.bidPrice * q.bidSize)
+      && Number.isFinite(q.askPrice * q.askSize),
+    { message: "Quote notionals must remain finite" }
+  );
 export type QuotePair = z.infer<typeof QuotePairSchema>;
 
 export const OrderFillSchema = z.object({
-  fillId: z.string().min(1),
-  orderId: z.string().min(1),
+  fillId: NonBlankStringSchema,
+  orderId: NonBlankStringSchema,
+  matchedOrderId: NonBlankStringSchema.optional(),
   side: OrderSideSchema,
-  price: z.number(),
-  size: z.number().positive().int(),
-  counterparty: z.string().min(1),
-  timestamp: z.number().nonnegative()
-}).strict();
+  price: PositiveFiniteNumberSchema,
+  size: PositiveSafeIntegerSchema,
+  counterparty: NonBlankStringSchema,
+  timestamp: NonnegativeFiniteNumberSchema
+}).strict().refine(
+  (fill) => Number.isFinite(fill.price * fill.size),
+  { message: "Fill notional must remain finite" }
+);
 export type OrderFill = z.infer<typeof OrderFillSchema>;
 
 export const PositionRiskLimitsSchema = z.object({
-  maxPosition: z.number().positive().int().default(100),
-  maxDrawdown: z.number().positive().default(500),
-  stopLossThreshold: z.number().positive().default(300)
+  maxPosition: PositiveSafeIntegerSchema.default(100),
+  maxDrawdown: PositiveFiniteNumberSchema.default(500),
+  stopLossThreshold: PositiveFiniteNumberSchema.default(300)
 }).strict();
 export type PositionRiskLimits = z.infer<typeof PositionRiskLimitsSchema>;
 
 export const MarketStateSchema = z.object({
-  bestBid: z.number().optional(),
-  bestAsk: z.number().optional(),
-  midPrice: z.number().optional(),
-  spread: z.number().nonnegative().optional(),
-  lastTradePrice: z.number().optional(),
-  totalVolume: z.number().int().nonnegative().default(0)
+  bestBid: PositiveFiniteNumberSchema.optional(),
+  bestAsk: PositiveFiniteNumberSchema.optional(),
+  midPrice: PositiveFiniteNumberSchema.optional(),
+  spread: NonnegativeFiniteNumberSchema.optional(),
+  lastTradePrice: PositiveFiniteNumberSchema.optional(),
+  totalVolume: NonnegativeSafeIntegerSchema.default(0)
 }).strict();
 export type MarketState = z.infer<typeof MarketStateSchema>;
 
@@ -58,26 +87,34 @@ export type TradingGameType = z.infer<typeof TradingGameTypeSchema>;
 
 export const TradingGameConfigSchema = z.object({
   gameType: TradingGameTypeSchema,
-  rounds: z.number().int().positive().default(10),
-  initialCash: z.number().default(1000),
-  fairValue: z.number(),
-  noiseTraderProbability: z.number().min(0).max(1).default(0.7),
-  informedTraderProbability: z.number().min(0).max(1).default(0.3),
+  rounds: PositiveSafeIntegerSchema.default(10),
+  initialCash: NonnegativeFiniteNumberSchema.default(1000),
+  fairValue: PositiveFiniteNumberSchema,
+  noiseTraderProbability: ProbabilitySchema.default(0.7),
+  informedTraderProbability: ProbabilitySchema.default(0.3),
   riskLimits: PositionRiskLimitsSchema.optional()
-}).strict();
+}).strict().refine(
+  (config) => config.noiseTraderProbability + config.informedTraderProbability <= 1,
+  {
+    path: ["noiseTraderProbability"],
+    message: "noiseTraderProbability + informedTraderProbability must be <= 1"
+  }
+);
 export type TradingGameConfig = z.infer<typeof TradingGameConfigSchema>;
 
 export const TradingGameResultSchema = z.object({
   gameType: TradingGameTypeSchema,
-  totalPnL: z.number(),
-  realizedPnL: z.number(),
-  unrealizedPnL: z.number(),
-  finalPosition: z.number().int(),
-  finalCash: z.number(),
-  tradeCount: z.number().int().nonnegative(),
-  maxDrawdown: z.number().nonnegative(),
-  averageSpread: z.number().nonnegative(),
-  quoteComplianceRate: z.number().min(0).max(1),
-  score: z.number().min(0).max(100)
+  totalPnL: z.number().finite(),
+  realizedPnL: z.number().finite(),
+  unrealizedPnL: z.number().finite(),
+  finalPosition: z.number().refine(Number.isSafeInteger, {
+    message: "finalPosition must be a safe integer"
+  }),
+  finalCash: z.number().finite(),
+  tradeCount: NonnegativeSafeIntegerSchema,
+  maxDrawdown: NonnegativeFiniteNumberSchema,
+  averageSpread: NonnegativeFiniteNumberSchema,
+  quoteComplianceRate: ProbabilitySchema,
+  score: z.number().finite().min(0).max(100)
 }).strict();
 export type TradingGameResult = z.infer<typeof TradingGameResultSchema>;
