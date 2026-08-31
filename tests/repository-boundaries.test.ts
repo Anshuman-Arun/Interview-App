@@ -137,6 +137,27 @@ describe("repository architecture boundary checker", () => {
         "packages/vision/src/index.ts": "export * from \"./internal-artifact-construction.js\";\n"
       }
     },
+    {
+      name: "vision indirectly re-exporting an imported construction capability",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/leak.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport { secret };\n"
+      }
+    },
+    {
+      name: "vision exposing a construction capability as an exported value",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/leak.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport const leaked = secret;\n"
+      }
+    },
+    {
+      name: "vision exposing a construction capability through an exported function",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/leak.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport function leaked() { return secret; }\n"
+      }
+    },
 
     {
       name: "an unmapped new project package",
