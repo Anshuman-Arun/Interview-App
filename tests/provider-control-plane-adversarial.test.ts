@@ -1200,6 +1200,38 @@ describe("provider definition and capability hostile values", () => {
     expect(setRegistry.getProvider("set-provider").id).toBe("set-provider");
   });
 
+  it("does not let monkey-patched WeakSet.delete corrupt shared-object validation", () => {
+    const originalDelete = WeakSet.prototype.delete;
+    const shared = { value: 1 };
+    let parsed: ReturnType<typeof validateProviderConfiguration> | undefined;
+
+    try {
+      Object.defineProperty(WeakSet.prototype, "delete", {
+        configurable: true,
+        writable: true,
+        value() {
+          return false;
+        }
+      });
+
+      parsed = validateProviderConfiguration(settingsConfiguration({
+        left: shared,
+        right: shared
+      }));
+    } finally {
+      Object.defineProperty(WeakSet.prototype, "delete", {
+        configurable: true,
+        writable: true,
+        value: originalDelete
+      });
+    }
+
+    expect(parsed?.settings).toEqual({
+      left: { value: 1 },
+      right: { value: 1 }
+    });
+  });
+
   it("does not let a targeted Set.has override hide duplicate identities", () => {
     const originalHas = Set.prototype.has;
     let duplicateModelError: unknown;

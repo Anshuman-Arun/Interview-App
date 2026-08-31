@@ -136,6 +136,7 @@ const SET_HAS_INTRINSIC = Set.prototype.has;
 const SET_ADD_INTRINSIC = Set.prototype.add;
 const WEAK_SET_HAS_INTRINSIC = WeakSet.prototype.has;
 const WEAK_SET_ADD_INTRINSIC = WeakSet.prototype.add;
+const WEAK_SET_DELETE_INTRINSIC = WeakSet.prototype.delete;
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
   const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
@@ -153,6 +154,10 @@ function weakSetHas(set: WeakSet<object>, value: object): boolean {
 
 function weakSetAdd(set: WeakSet<object>, value: object): void {
   Reflect.apply(WEAK_SET_ADD_INTRINSIC, set, [value]);
+}
+
+function weakSetDelete(set: WeakSet<object>, value: object): void {
+  Reflect.apply(WEAK_SET_DELETE_INTRINSIC, set, [value]);
 }
 
 export type ProviderConfigurationSafetyErrorCode =
@@ -495,7 +500,7 @@ function inspectConfigurationValue(
     if (Array.isArray(value)) return inspectConfigurationArray(value, state, depth, rejectSecrets);
     return inspectConfigurationRecord(value, state, depth, rejectSecrets);
   } finally {
-    state.seen.delete(value);
+    weakSetDelete(state.seen, value);
   }
 }
 
