@@ -932,6 +932,33 @@ describe("local worker lifecycle manager", () => {
     expect(observed).toMatchObject({ inheritedValue: "inherited-safe-value" });
   });
 
+  it("fails closed when Windows tree-aware termination is unavailable", async () => {
+    if (process.platform !== "win32") return;
+
+    const originalSystemRoot = process.env.SystemRoot;
+    const originalUpperSystemRoot = process.env.SYSTEMROOT;
+    const runtime = manager();
+    runtime.register(definition("unverified-windows-tree", "ignore-shutdown", {
+      shutdownTimeoutMs: 20,
+      terminationTimeoutMs: 40,
+      gracefulShutdown: () => undefined
+    }));
+
+    await runtime.start("unverified-windows-tree");
+    try {
+      process.env.SystemRoot = "relative-untrusted-root";
+      delete process.env.SYSTEMROOT;
+      await expect(runtime.stop("unverified-windows-tree"))
+        .rejects.toMatchObject({ code: "TERMINATION_FAILED" });
+      expect(runtime.getStatus("unverified-windows-tree").state).toBe("FAILED");
+    } finally {
+      if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+      else process.env.SystemRoot = originalSystemRoot;
+      if (originalUpperSystemRoot === undefined) delete process.env.SYSTEMROOT;
+      else process.env.SYSTEMROOT = originalUpperSystemRoot;
+    }
+  });
+
   it("terminates an owned descendant tree during escalation", async () => {
     const runtime = manager();
     let childPid: number | undefined;
