@@ -1255,12 +1255,19 @@ export class ModelAssetManager {
         );
       }
 
+      const activeStagingBytes = await this.activeStagingBytes(paths);
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+      }
+      const alreadyMaterialized = Math.min(activeStagingBytes, shared.reservedBytes);
+      const unreservedMaterializedBytes = activeStagingBytes - alreadyMaterialized;
+
       if (this.maxCacheBytes !== undefined) {
         const usedBytes = await this.managedCacheBytes(paths);
         if (signal.aborted) {
           throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
         }
-        const projected = usedBytes + reservedProjection;
+        const projected = usedBytes + reservedProjection + unreservedMaterializedBytes;
         if (!Number.isSafeInteger(projected) || projected > this.maxCacheBytes) {
           throw new ModelAssetError(
             "CACHE_LIMIT_EXCEEDED",
@@ -1269,11 +1276,6 @@ export class ModelAssetManager {
         }
       }
 
-      const activeStagingBytes = await this.activeStagingBytes(paths);
-      if (signal.aborted) {
-        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
-      }
-      const alreadyMaterialized = Math.min(activeStagingBytes, shared.reservedBytes);
       const outstandingReservation = reservedProjection - alreadyMaterialized;
       const available = await availableDiskBytes(paths.temporary);
       if (signal.aborted) {
