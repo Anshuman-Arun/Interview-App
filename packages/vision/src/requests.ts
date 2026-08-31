@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { boundedArrayLength } from "./array-validation.js";
 import { z } from "zod";
 import { imageIdentity } from "./deduplication.js";
 import {
@@ -12,12 +13,6 @@ import {
   type VisionRasterSource
 } from "./types.js";
 import type { BoardRevision } from "../../domain/src/index.js";
-
-function assertArrayInput(value: unknown): void {
-  if (!Array.isArray(value)) {
-    throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must be an array");
-  }
-}
 
 export const VisionPurposeSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/u);
 export type VisionPurpose = z.infer<typeof VisionPurposeSchema>;
@@ -193,19 +188,29 @@ export function prepareVisionBatch(
   budgetInput: VisionRequestBudget = DEFAULT_VISION_REQUEST_BUDGET,
   strategyInput: VisionBudgetStrategy = "FAIL"
 ): PreparedVisionBatch {
-  assertArrayInput(sources);
+  let sourceCount: number;
+  try {
+    sourceCount = boundedArrayLength(
+      sources,
+      MAX_VISION_REQUEST_CANDIDATES,
+      "Vision batch candidates"
+    );
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw new VisionPreprocessingError(
+        "REQUEST_BUDGET_EXCEEDED",
+        `Vision batch accepts at most ${String(MAX_VISION_REQUEST_CANDIDATES)} candidate images`
+      );
+    }
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must be a bounded array");
+  }
+
   const budget = RequestBudgetSchema.parse(budgetInput);
   const strategy = VisionBudgetStrategySchema.parse(strategyInput);
   const validatedPurpose = VisionPurposeSchema.parse(purpose);
-  if (sources.length > MAX_VISION_REQUEST_CANDIDATES) {
-    throw new VisionPreprocessingError(
-      "REQUEST_BUDGET_EXCEEDED",
-      `Vision batch accepts at most ${String(MAX_VISION_REQUEST_CANDIDATES)} candidate images`
-    );
-  }
 
   const candidates: VisionRasterSource[] = [];
-  for (let index = 0; index < sources.length; index += 1) {
+  for (let index = 0; index < sourceCount; index += 1) {
     const source = sources[index];
     if (source === undefined) {
       throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
