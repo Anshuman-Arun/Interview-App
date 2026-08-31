@@ -1874,10 +1874,10 @@ export async function evaluateProviderReadiness(input: {
     }
     let available: unknown;
     try {
-      available = await hasSecret.call(resolver, freezeNullPrototype({
+      available = await Reflect.apply(hasSecret, resolver, [freezeNullPrototype({
         providerId: resolved.provider.id,
         reference
-      }));
+      })]);
     } catch {
       return freezeNullPrototype({
         state: "UNKNOWN",

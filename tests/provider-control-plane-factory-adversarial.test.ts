@@ -558,6 +558,35 @@ describe("credential readiness edge cases", () => {
     });
   });
 
+  it("invokes readiness resolver functions without reading an overridden call property", async () => {
+    let callGetterReads = 0;
+    const hasSecret: NonNullable<ProviderSecretResolver["hasSecret"]> = async () => true;
+    Object.defineProperty(hasSecret, "call", {
+      configurable: true,
+      get() {
+        callGetterReads += 1;
+        throw new Error("Authorization: Bearer call-property-secret");
+      }
+    });
+    const resolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        return "runtime-only-key";
+      },
+      hasSecret
+    };
+
+    await expect(evaluateProviderReadiness({
+      registry: registerBuiltInProviders(),
+      configuration: GEMINI_CONFIGURATION,
+      secretResolver: resolver
+    })).resolves.toEqual({
+      state: "AVAILABLE",
+      providerId: "gemini-api",
+      modelId: "gemini-2.5-flash"
+    });
+    expect(callGetterReads).toBe(0);
+  });
+
   it("treats accessor-backed resolver methods as UNKNOWN without invoking them", async () => {
     let getterCalls = 0;
     const resolver = Object.defineProperty({
