@@ -2047,6 +2047,38 @@ describe("local worker lifecycle manager", () => {
     expect(lines).toEqual([first, "READY-LINE"]);
   });
 
+  it("preserves a bare trailing carriage return at EOF", () => {
+    const lines: string[] = [];
+    let malformed = 0;
+    const exact = new BoundedLineFramer(
+      4,
+      (line) => lines.push(line),
+      () => {
+        malformed += 1;
+      }
+    );
+    exact.append(Buffer.from("abc\r", "utf8"));
+    exact.flush();
+
+    expect(lines).toEqual(["abc\r"]);
+    expect(malformed).toBe(0);
+
+    const oversizedLines: string[] = [];
+    let oversizedMalformed = 0;
+    const oversized = new BoundedLineFramer(
+      3,
+      (line) => oversizedLines.push(line),
+      () => {
+        oversizedMalformed += 1;
+      }
+    );
+    oversized.append(Buffer.from("abc\r", "utf8"));
+    oversized.flush();
+
+    expect(oversizedLines).toEqual([]);
+    expect(oversizedMalformed).toBe(1);
+  });
+
   it("accepts a max-sized CRLF line when the terminator is fragmented", () => {
     const lines: string[] = [];
     let malformed = 0;
