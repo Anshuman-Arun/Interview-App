@@ -363,3 +363,24 @@ export function installedPayloadPath(installationDirectory: string, manifest: As
   assertPathInsideRoot(installationDirectory, candidate);
   return candidate;
 }
+
+export async function sumArtifactPayloadBytes(root: string): Promise<number> {
+  let entry;
+  try {
+    entry = await lstat(root);
+  } catch (error) {
+    if (errnoCode(error) === "ENOENT") return 0;
+    throw new ModelAssetError("IO_ERROR", "Unable to inspect artifact payload usage.", { cause: error });
+  }
+  if (entry.isSymbolicLink()) return 0;
+  if (entry.isFile()) return path.basename(root).toLowerCase() === "manifest.json" ? 0 : entry.size;
+  if (!entry.isDirectory()) return 0;
+  let total = 0;
+  for (const child of await readdir(root)) {
+    total += await sumArtifactPayloadBytes(path.join(root, child));
+    if (!Number.isSafeInteger(total)) {
+      throw new ModelAssetError("CACHE_LIMIT_EXCEEDED", "Artifact payload usage exceeds safe integer limits.");
+    }
+  }
+  return total;
+}
