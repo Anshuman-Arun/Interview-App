@@ -20,6 +20,28 @@ const SafeBoardRevisionSchema = BoardRevisionSchema.refine(
   "Board revision must remain within JavaScript safe integer range"
 );
 
+export interface ImageValidationLimits {
+  readonly maxEncodedBytes: number;
+  readonly maxWidth: number;
+  readonly maxHeight: number;
+  readonly maxPixels: number;
+}
+
+export const DEFAULT_IMAGE_VALIDATION_LIMITS: Readonly<ImageValidationLimits> = Object.freeze({
+  maxEncodedBytes: 16 * 1024 * 1024,
+  maxWidth: 8192,
+  maxHeight: 8192,
+  maxPixels: 32 * 1024 * 1024
+});
+
+export const HARD_IMAGE_VALIDATION_LIMITS: Readonly<ImageValidationLimits> = Object.freeze({
+  maxEncodedBytes: 64 * 1024 * 1024,
+  maxWidth: 16_384,
+  maxHeight: 16_384,
+  maxPixels: 64 * 1024 * 1024
+});
+
+
 interface PayloadIntegrityMetadata {
   readonly width: number;
   readonly height: number;
@@ -103,13 +125,18 @@ export const ImageSnapshotMetadataSchema = z.object({
   sourceRevision: SafeBoardRevisionSchema,
   capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-  width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  width: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth),
+  height: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight),
   mimeType: ImageMimeTypeSchema,
   encoding: ImageEncodingSchema,
-  byteSize: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  byteSize: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes),
   contentDigest: Sha256DigestSchema
-}).strict();
+}).strict().superRefine((metadata, context) => {
+  const pixels = metadata.width * metadata.height;
+  if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
+    context.addIssue({ code: "custom", message: "Snapshot metadata exceeds the package hard pixel cap" });
+  }
+});
 export type ImageSnapshotMetadata = z.infer<typeof ImageSnapshotMetadataSchema>;
 
 export const VisionImageArtifactKindSchema = z.enum(["CROP", "RESIZED", "TILE"]);
@@ -143,15 +170,19 @@ export const VisionImageArtifactMetadataSchema = z.object({
   sourceRevision: SafeBoardRevisionSchema,
   sourceImageIdentity: VisionRasterIdentitySchema,
   parentArtifactId: VisionArtifactIdSchema.optional(),
-  width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  width: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth),
+  height: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight),
   mimeType: ImageMimeTypeSchema,
   encoding: ImageEncodingSchema,
-  byteSize: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  byteSize: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes),
   contentDigest: Sha256DigestSchema,
   sourceBounds: ArtifactSourceBoundsSchema,
   coordinateTransform: CoordinateTransformSchema
 }).strict().superRefine((metadata, context) => {
+  const pixels = metadata.width * metadata.height;
+  if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
+    context.addIssue({ code: "custom", message: "Artifact metadata exceeds the package hard pixel cap" });
+  }
   if (metadata.parentArtifactId === metadata.artifactId) {
     context.addIssue({ code: "custom", message: "Artifact parent ID must differ from artifact ID" });
   }
@@ -201,27 +232,6 @@ export class VisionPreprocessingError extends Error {
     this.code = code;
   }
 }
-
-export interface ImageValidationLimits {
-  readonly maxEncodedBytes: number;
-  readonly maxWidth: number;
-  readonly maxHeight: number;
-  readonly maxPixels: number;
-}
-
-export const DEFAULT_IMAGE_VALIDATION_LIMITS: Readonly<ImageValidationLimits> = Object.freeze({
-  maxEncodedBytes: 16 * 1024 * 1024,
-  maxWidth: 8192,
-  maxHeight: 8192,
-  maxPixels: 32 * 1024 * 1024
-});
-
-export const HARD_IMAGE_VALIDATION_LIMITS: Readonly<ImageValidationLimits> = Object.freeze({
-  maxEncodedBytes: 64 * 1024 * 1024,
-  maxWidth: 16_384,
-  maxHeight: 16_384,
-  maxPixels: 64 * 1024 * 1024
-});
 
 export class ImageSnapshot {
   readonly #bytes: Buffer;
@@ -456,11 +466,16 @@ export function visionRasterIdentity(source: VisionRasterSource): string {
 export const ImagePayloadReferenceMetadataSchema = z.object({
   imageIdentity: VisionRasterIdentitySchema,
   mimeType: ImageMimeTypeSchema,
-  width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  byteSize: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  width: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth),
+  height: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight),
+  byteSize: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes),
   contentDigest: Sha256DigestSchema
-}).strict();
+}).strict().superRefine((metadata, context) => {
+  const pixels = metadata.width * metadata.height;
+  if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
+    context.addIssue({ code: "custom", message: "Payload reference metadata exceeds the package hard pixel cap" });
+  }
+});
 export type ImagePayloadReferenceMetadata = z.infer<typeof ImagePayloadReferenceMetadataSchema>;
 
 export class ImagePayloadReference {
