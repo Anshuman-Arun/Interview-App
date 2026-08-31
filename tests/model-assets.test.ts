@@ -1688,6 +1688,20 @@ describe("local model asset manager", () => {
       code: "INVALID_CONFIGURATION"
     });
     expect(proxyReads).toBe(0);
+
+    const alteredController = new AbortController();
+    let listenerReads = 0;
+    Object.defineProperty(alteredController.signal, "addEventListener", {
+      configurable: true,
+      get() {
+        listenerReads += 1;
+        throw new Error("altered signal listener getter should not run");
+      }
+    });
+    await expect(UnsafeInstall(manifest, alteredController.signal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    expect(listenerReads).toBe(0);
   });
 
   it("rejects malformed runtime redirect security configuration", async () => {
