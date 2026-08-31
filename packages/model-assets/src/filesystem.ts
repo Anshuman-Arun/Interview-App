@@ -54,6 +54,24 @@ export interface CachePaths {
   readonly rootInode: number;
 }
 
+function validateOptionalAbortSignal(value: unknown): AbortSignal | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object"
+      || value === null
+      || !("aborted" in value)
+      || typeof value.aborted !== "boolean"
+      || !("addEventListener" in value)
+      || typeof value.addEventListener !== "function"
+      || !("removeEventListener" in value)
+      || typeof value.removeEventListener !== "function") {
+    throw new ModelAssetError(
+      "INVALID_CONFIGURATION",
+      "Cancellation signal must be an AbortSignal when provided."
+    );
+  }
+  return value as AbortSignal;
+}
+
 function errnoCode(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
   return typeof error.code === "string" ? error.code : undefined;
@@ -398,6 +416,7 @@ export async function verifyArtifactFile(
   expectations: FileVerificationExpectations,
   signal?: AbortSignal
 ): Promise<FileVerificationResult> {
+  const validatedSignal = validateOptionalAbortSignal(signal);
   const rawFilePath: unknown = filePath;
   if (typeof rawFilePath !== "string"
       || rawFilePath.length === 0
@@ -433,7 +452,7 @@ export async function verifyArtifactFile(
       || maximum <= 0) {
     throw new ModelAssetError("INVALID_CONFIGURATION", "Verification byte limit must be a positive safe integer.");
   }
-  if (signal?.aborted === true) throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
+  if (validatedSignal?.aborted === true) throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
 
   const openedFile = await openStableRegularFile(
     rawFilePath,
@@ -447,7 +466,7 @@ export async function verifyArtifactFile(
       "Artifact file size exceeds safe integer byte accounting."
     );
   }
-  if (signal?.aborted === true) {
+  if (validatedSignal?.aborted === true) {
     await openedFile.handle.close().catch(() => undefined);
     throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
   }
@@ -462,17 +481,27 @@ export async function verifyArtifactFile(
 
   const hash = createHash("sha256");
   let bytes = 0;
-  const stream = openedFile.handle.createReadStream({
-    highWaterMark: 1024 * 1024,
-    autoClose: false
-  });
+  let stream;
+  try {
+    stream = openedFile.handle.createReadStream({
+      highWaterMark: 1024 * 1024,
+      autoClose: false
+    });
+  } catch (error) {
+    await openedFile.handle.close().catch(() => undefined);
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to create an artifact verification stream.",
+      { cause: error }
+    );
+  }
   const abortListener = (): void => {
     stream.destroy(new ModelAssetError("CANCELLED", "Artifact verification was cancelled."));
   };
-  signal?.addEventListener("abort", abortListener, { once: true });
+  validatedSignal?.addEventListener("abort", abortListener, { once: true });
   try {
     for await (const chunk of stream) {
-      if (signal?.aborted === true) {
+      if (validatedSignal?.aborted === true) {
         throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
       }
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -491,16 +520,16 @@ export async function verifyArtifactFile(
     }
   } catch (error) {
     if (error instanceof ModelAssetError) throw error;
-    if (signal?.aborted === true) {
+    if (validatedSignal?.aborted === true) {
       throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.", { cause: error });
     }
     throw new ModelAssetError("IO_ERROR", "Unable to read artifact for verification.", { cause: error });
   } finally {
-    signal?.removeEventListener("abort", abortListener);
+    validatedSignal?.removeEventListener("abort", abortListener);
     await openedFile.handle.close().catch(() => undefined);
   }
 
-  if (signal?.aborted === true) {
+  if (validatedSignal?.aborted === true) {
     throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
   }
   if (bytes !== expectedSize) {
@@ -645,10 +674,20 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
 
   const chunks: Buffer[] = [];
   let bytes = 0;
-  const stream = openedManifest.handle.createReadStream({
-    highWaterMark: 16 * 1024,
-    autoClose: false
-  });
+  let stream;
+  try {
+    stream = openedManifest.handle.createReadStream({
+      highWaterMark: 16 * 1024,
+      autoClose: false
+    });
+  } catch (error) {
+    await openedManifest.handle.close().catch(() => undefined);
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to create a cached manifest read stream.",
+      { cause: error }
+    );
+  }
   try {
     for await (const chunk of stream) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
