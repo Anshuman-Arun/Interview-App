@@ -1811,6 +1811,38 @@ describe("vision runtime schema boundaries", () => {
     )).toThrow();
   });
 
+  it("rejects inherited or hostile nested diagnostic dimensions", () => {
+    const inheritedDimensions = Object.create({ width: 1, height: 1 });
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "CROP",
+      sourceDimensions: inheritedDimensions as { width: number; height: number },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS"
+    })).toThrow();
+
+    const hostileDimensions = new Proxy({}, {
+      ownKeys() {
+        throw new Error("hostile nested dimensions");
+      }
+    });
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "CROP",
+      sourceDimensions: hostileDimensions as { width: number; height: number },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS"
+    })).toThrow(TypeError);
+  });
+
   it("rejects invalid preprocessing error codes at runtime", () => {
     expect(() => new VisionPreprocessingError(
       "NOT_A_REAL_VISION_ERROR" as never,
