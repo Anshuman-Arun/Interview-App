@@ -171,6 +171,9 @@ export type ImageSnapshotMetadata = z.infer<typeof ImageSnapshotMetadataSchema>;
 export const VisionImageArtifactKindSchema = z.enum(["CROP", "RESIZED", "TILE"]);
 export type VisionImageArtifactKind = z.infer<typeof VisionImageArtifactKindSchema>;
 
+export const VisionArtifactIdSchema = z.string().regex(/^img_[0-9a-f]{64}$/u);
+export type VisionArtifactId = z.infer<typeof VisionArtifactIdSchema>;
+
 export const ArtifactSourceBoundsSchema = z.object({
   x: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   y: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -187,11 +190,11 @@ export const ArtifactSourceBoundsSchema = z.object({
 export type ArtifactSourceBounds = z.infer<typeof ArtifactSourceBoundsSchema>;
 
 export const VisionImageArtifactMetadataSchema = z.object({
-  artifactId: z.string().min(1).max(96),
+  artifactId: VisionArtifactIdSchema,
   kind: VisionImageArtifactKindSchema,
   sourceSnapshotId: z.string().min(1).max(128),
   sourceRevision: BoardRevisionSchema,
-  parentArtifactId: z.string().min(1).max(96).optional(),
+  parentArtifactId: VisionArtifactIdSchema.optional(),
   width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   mimeType: ImageMimeTypeSchema,
