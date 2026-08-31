@@ -6,6 +6,7 @@ const STABLE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u;
 const VERSION_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._+-]{0,62}[A-Za-z0-9])?$/u;
 const PORTABLE_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/u;
 const WINDOWS_DEVICE_NAME_PATTERN = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu;
+const MAX_HTTP_URL_LENGTH = 2_048;
 
 function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== "object"
@@ -131,16 +132,17 @@ export const PortableAssetFilenameSchema = z.string()
 export const Sha256DigestSchema = z.string().regex(/^[0-9a-f]{64}$/u);
 export type Sha256Digest = z.infer<typeof Sha256DigestSchema>;
 
-const HttpSourceUrlSchema = z.url().max(2048).refine((value) => {
+const HttpSourceUrlSchema = z.url().max(MAX_HTTP_URL_LENGTH).refine((value) => {
   try {
     const url = new URL(value);
     return (url.protocol === "http:" || url.protocol === "https:")
       && url.username.length === 0
-      && url.password.length === 0;
+      && url.password.length === 0
+      && url.href.length <= MAX_HTTP_URL_LENGTH;
   } catch {
     return false;
   }
-}, "sourceUrl must be an HTTP(S) URL without embedded credentials");
+}, "sourceUrl must be a bounded HTTP(S) URL without embedded credentials");
 
 const OptionalMetadataTextSchema = z.string().min(1).max(512);
 
