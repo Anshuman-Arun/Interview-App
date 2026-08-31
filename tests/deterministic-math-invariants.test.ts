@@ -13,9 +13,13 @@ import {
   MAX_COMBINATORIAL_N,
   MAX_INTEGER_DECIMAL_DIGITS,
   MAX_MATH_STATEMENT_CHARACTERS,
+  MAX_POWER_EXPONENT,
+  MAX_PROBABILITY_OUTCOMES,
+  MAX_RECURRENCE_ORDER,
   MAX_RECURRENCE_SEQUENCE_LENGTH,
   MAX_STRUCTURED_ARRAY_ITEMS,
   MAX_STRUCTURED_INPUT_NODES,
+  MAX_VARIADIC_EXPRESSION_TERMS,
   MODULAR_ARITHMETIC_PROTOCOL,
   MODULAR_ARITHMETIC_PROTOCOL_VERSION,
   MODULAR_ARITHMETIC_VERIFIER_NAME,
@@ -180,6 +184,84 @@ describe("deterministic math verifier invariants", () => {
     }), 1);
     expect(result).toMatchObject({ status: "UNRESOLVED" });
     expect(result.reason).toContain("RESOURCE_LIMIT");
+  });
+
+  it("classifies verifier-specific schema maxima as resource limits", async () => {
+    const cases = [
+      {
+        verifier: new ModularArithmeticVerifier(),
+        statement: {
+          protocol: MODULAR_ARITHMETIC_PROTOCOL,
+          protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+          claim: {
+            kind: "DIVISIBILITY",
+            divisor: "1",
+            dividend: {
+              kind: "SUM",
+              terms: Array.from(
+                { length: MAX_VARIADIC_EXPRESSION_TERMS + 1 },
+                () => integer("1")
+              )
+            }
+          }
+        }
+      },
+      {
+        verifier: new ModularArithmeticVerifier(),
+        statement: {
+          protocol: MODULAR_ARITHMETIC_PROTOCOL,
+          protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+          claim: {
+            kind: "DIVISIBILITY",
+            divisor: "1",
+            dividend: {
+              kind: "POWER",
+              base: integer("1"),
+              exponent: MAX_POWER_EXPONENT + 1
+            }
+          }
+        }
+      },
+      {
+        verifier: new FiniteRecurrenceVerifier(),
+        statement: {
+          protocol: FINITE_RECURRENCE_PROTOCOL,
+          protocolVersion: FINITE_RECURRENCE_PROTOCOL_VERSION,
+          initial: Array.from({ length: MAX_RECURRENCE_ORDER + 1 }, () => rational("0")),
+          recurrence: {
+            kind: "LINEAR_PREVIOUS_TERMS",
+            coefficients: Array.from({ length: MAX_RECURRENCE_ORDER + 1 }, () => rational("0")),
+            constant: rational("0")
+          },
+          claim: { kind: "VALUE_AT_INDEX", index: 0, value: rational("0") }
+        }
+      },
+      {
+        verifier: new ProbabilityArithmeticVerifier(),
+        statement: {
+          protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+          protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+          claim: {
+            kind: "FINITE_EXPECTATION",
+            outcomes: Array.from(
+              { length: MAX_PROBABILITY_OUTCOMES + 1 },
+              () => ({
+                probability: rational("1", String(MAX_PROBABILITY_OUTCOMES + 1)),
+                value: rational("0")
+              })
+            ),
+            claimedExpectation: rational("0")
+          }
+        }
+      }
+    ];
+
+    for (const { verifier, statement } of cases) {
+      const result = await verifier.verify(JSON.stringify(statement), 1);
+      expect(VerificationResultSchema.parse(result)).toEqual(result);
+      expect(result.status).toBe("UNRESOLVED");
+      expect(result.reason).toContain("RESOURCE_LIMIT");
+    }
   });
 
   it("enforces recurrence and combinatorial cardinality bounds", async () => {
