@@ -1622,6 +1622,49 @@ describe("local model asset manager", () => {
     ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
   });
 
+  it("rejects accessor-backed configuration without invoking getters", async () => {
+    const root = await newRoot();
+    const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
+    const UnsafeVerifier = verifyArtifactFile as unknown as (
+      filePath: string,
+      expectations: unknown
+    ) => Promise<unknown>;
+
+    let managerGetterReads = 0;
+    const managerOptions: Record<string, unknown> = {
+      maxArtifactBytes: 1024
+    };
+    Object.defineProperty(managerOptions, "rootDir", {
+      enumerable: true,
+      get() {
+        managerGetterReads += 1;
+        throw new Error("manager getter should not run");
+      }
+    });
+    expect(() => new UnsafeManager(managerOptions)).toThrow(
+      expect.objectContaining({ code: "INVALID_CONFIGURATION" })
+    );
+    expect(managerGetterReads).toBe(0);
+
+    const file = path.join(root, "verify-accessor.bin");
+    await writeFile(file, "x");
+    let verifierGetterReads = 0;
+    const expectations: Record<string, unknown> = {
+      sha256: sha256(Buffer.from("x"))
+    };
+    Object.defineProperty(expectations, "sizeBytes", {
+      enumerable: true,
+      get() {
+        verifierGetterReads += 1;
+        throw new Error("verifier getter should not run");
+      }
+    });
+    await expect(UnsafeVerifier(file, expectations)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    expect(verifierGetterReads).toBe(0);
+  });
+
   it("rejects unknown manager option keys", async () => {
     const root = await newRoot();
     const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
