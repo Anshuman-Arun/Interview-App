@@ -9,6 +9,7 @@ import {
   buildLocalEnvironment,
   type LocalComponentDefinition
 } from "../packages/local-runtime/src/index.js";
+import { BoundedLineFramer } from "../packages/local-runtime/src/buffer.js";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/local-runtime-worker.mjs", import.meta.url));
 const temporaryRoots: string[] = [];
@@ -785,6 +786,25 @@ describe("local worker lifecycle manager", () => {
     expect(built.environment.SAFE_VALUE).toBe("visible");
     expect(built.environment.MODEL_API_KEY).toBe(secret);
     expect(built.secretValues).toContain(secret);
+  });
+
+  it("reassembles a heavily fragmented bounded output line", () => {
+    const lines: string[] = [];
+    let malformed = 0;
+    const framer = new BoundedLineFramer(
+      4_096,
+      (line) => lines.push(line),
+      () => {
+        malformed += 1;
+      }
+    );
+    const first = "x".repeat(2_048);
+    const bytes = Buffer.from(`${first}\nREADY-LINE\n`, "utf8");
+
+    for (const byte of bytes) framer.append(Buffer.from([byte]));
+
+    expect(malformed).toBe(0);
+    expect(lines).toEqual([first, "READY-LINE"]);
   });
 
   it("recovers framing after invalid UTF-8 and accepts CRLF readiness lines", async () => {
