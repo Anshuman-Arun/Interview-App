@@ -75,6 +75,19 @@ describe("deterministic math utilities", () => {
     const unreducedNegativeDenominator = { numerator: 2n, denominator: -4n };
     expect(equalRationals(unreducedNegativeDenominator, rational(-1n, 2n))).toBe(true);
     expect(compareRationals(unreducedNegativeDenominator, rational(-1n, 3n))).toBe(-1);
+
+    expect(addRationals(
+      { numerator: 2n, denominator: 4n },
+      { numerator: 1n, denominator: -2n }
+    )).toEqual(rational(0n, 1n));
+    expect(multiplyRationals(
+      { numerator: 2n, denominator: 4n },
+      { numerator: 4n, denominator: 2n }
+    )).toEqual(rational(1n, 1n));
+    expect(divideRationals(
+      { numerator: 2n, denominator: 4n },
+      { numerator: 4n, denominator: 8n }
+    )).toEqual(rational(1n, 1n));
   });
 
   it("computes exact finite sums, products, and standard counting formulas", () => {
