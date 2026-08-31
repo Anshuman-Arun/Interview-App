@@ -3,6 +3,7 @@ declare module "pngjs" {
     readonly width: number;
     readonly height: number;
     readonly data: Buffer;
+    readonly gamma?: number;
   }
 
   interface PngReadOptions {
