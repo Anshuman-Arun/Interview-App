@@ -4,7 +4,11 @@ import { performance } from "node:perf_hooks";
 import { types as utilTypes } from "node:util";
 import { DIAGNOSTIC_SANITIZATION_LIMITS, sanitizeDiagnosticRecord, sanitizeDiagnosticText } from "../../diagnostics/src/index.js";
 import { BoundedLineBuffer, BoundedLineFramer, redactKnownSecrets } from "./buffer.js";
-import { buildLocalEnvironment, type BuiltLocalEnvironment } from "./environment.js";
+import {
+  buildLocalEnvironment,
+  snapshotParentEnvironmentRecord,
+  type BuiltLocalEnvironment
+} from "./environment.js";
 import type {
   LocalComponentDefinition,
   LocalComponentHandshake,
@@ -107,7 +111,7 @@ export class LocalRuntimeManager {
     const inspectedOptions = inspectManagerOptions(options);
     this.parentEnvironment = inspectedOptions.parentEnvironment === undefined
       ? process.env
-      : snapshotParentEnvironment(inspectedOptions.parentEnvironment);
+      : snapshotParentEnvironmentRecord(inspectedOptions.parentEnvironment);
     this.now = inspectedOptions.now ?? (() => new Date());
     this.fetchImpl = inspectedOptions.fetch ?? globalThis.fetch;
     this.platform = process.platform;
@@ -1196,33 +1200,6 @@ export class LocalRuntimeManager {
   }
 }
 
-function snapshotParentEnvironment(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  let prototype: unknown;
-  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
-  try {
-    prototype = Object.getPrototypeOf(parent);
-    descriptors = Object.getOwnPropertyDescriptors(parent);
-  } catch {
-    throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment could not be inspected");
-  }
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment must be a plain data object");
-  }
-
-  const snapshot = Object.create(null) as NodeJS.ProcessEnv;
-  for (const [key, descriptor] of Object.entries(descriptors)) {
-    if (descriptor.enumerable !== true) continue;
-    if (!("value" in descriptor)) {
-      throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment may not contain accessors");
-    }
-    if (descriptor.value === undefined) continue;
-    if (typeof descriptor.value !== "string") {
-      throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment values must be strings or undefined");
-    }
-    snapshot[key] = descriptor.value;
-  }
-  return Object.freeze(snapshot);
-}
 
 function inspectManagerOptions(options: unknown): LocalRuntimeManagerOptions {
   const descriptors = inspectRuntimeOptions(
