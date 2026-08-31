@@ -5,32 +5,47 @@ const TRUNCATED_MARKER = "[TRUNCATED]";
 const MALFORMED_MARKER = "[MALFORMED_OUTPUT]";
 const REDACTED_MARKER = "[REDACTED]";
 
+const MAX_REDACTION_REGEX_PATTERNS = 128;
+const MAX_REDACTION_REGEX_SOURCE_LENGTH = 64 * 1024;
+
+type RedactionMatcher =
+  | { readonly kind: "REGEX"; readonly regex: RegExp }
+  | { readonly kind: "LITERAL"; readonly literal: string };
+
+const redactionMatcherCache = new WeakMap<readonly string[], readonly RedactionMatcher[]>();
+
 export function redactKnownSecrets(value: string, secretValues: readonly string[]): string {
+  if (value.length === 0 || secretValues.length === 0) return value;
+  const matchers = redactionMatchers(secretValues);
   let mask: Uint8Array | undefined;
 
-  for (const secret of secretValues) {
-    if (secret.length === 0 || secret.length > value.length) continue;
-    let searchFrom = 0;
-    for (;;) {
-      const match = value.indexOf(secret, searchFrom);
-      if (match < 0) break;
-      const matchEnd = match + secret.length;
-      let overlapsExistingRedaction = false;
-      if (mask !== undefined) {
-        for (let index = match; index < matchEnd; index += 1) {
-          if (mask[index] === 1) {
-            overlapsExistingRedaction = true;
-            break;
-          }
-        }
-      }
-      if (!overlapsExistingRedaction) {
+  for (const matcher of matchers) {
+    if (matcher.kind === "LITERAL") {
+      if (matcher.literal.length > value.length) continue;
+      let searchFrom = 0;
+      for (;;) {
+        const match = value.indexOf(matcher.literal, searchFrom);
+        if (match < 0) break;
         mask ??= new Uint8Array(value.length);
-        mask.fill(1, match, matchEnd);
-        searchFrom = matchEnd;
-      } else {
+        mask.fill(1, match, match + matcher.literal.length);
         searchFrom = match + 1;
       }
+      continue;
+    }
+
+    const regex = matcher.regex;
+    regex.lastIndex = 0;
+    for (;;) {
+      const match = regex.exec(value);
+      if (match === null) break;
+      const matched = match[1];
+      if (matched !== undefined && matched.length > 0) {
+        mask ??= new Uint8Array(value.length);
+        mask.fill(1, match.index, match.index + matched.length);
+      }
+      // The lookahead is intentionally zero-width so overlapping secret
+      // occurrences are found. Advance manually to guarantee progress.
+      regex.lastIndex = match.index + 1;
     }
   }
 
@@ -49,6 +64,62 @@ export function redactKnownSecrets(value: string, secretValues: readonly string[
     output.push(value.slice(start, index));
   }
   return output.join("");
+}
+
+function redactionMatchers(secretValues: readonly string[]): readonly RedactionMatcher[] {
+  const cached = redactionMatcherCache.get(secretValues);
+  if (cached !== undefined) return cached;
+
+  const matchers: RedactionMatcher[] = [];
+  let batch: string[] = [];
+  let batchSourceLength = 0;
+
+  const flushBatch = (): void => {
+    if (batch.length === 0) return;
+    const source = `(?=(${batch.join("|")}))`;
+    try {
+      matchers.push(Object.freeze({ kind: "REGEX", regex: new RegExp(source, "g") }));
+    } catch {
+      for (const escaped of batch) {
+        // Escaped literals only reach this fallback if the runtime refuses the
+        // bounded regex source. Decode from the original batch below instead.
+        const original = unescapeRegexLiteral(escaped);
+        matchers.push(Object.freeze({ kind: "LITERAL", literal: original }));
+      }
+    }
+    batch = [];
+    batchSourceLength = 0;
+  };
+
+  for (const secret of secretValues) {
+    if (secret.length === 0) continue;
+    const escaped = escapeRegexLiteral(secret);
+    const nextSourceLength = batchSourceLength + escaped.length + (batch.length === 0 ? 0 : 1);
+    if (batch.length > 0
+        && (batch.length >= MAX_REDACTION_REGEX_PATTERNS
+          || nextSourceLength > MAX_REDACTION_REGEX_SOURCE_LENGTH)) {
+      flushBatch();
+    }
+    if (escaped.length > MAX_REDACTION_REGEX_SOURCE_LENGTH) {
+      matchers.push(Object.freeze({ kind: "LITERAL", literal: secret }));
+      continue;
+    }
+    batch.push(escaped);
+    batchSourceLength += escaped.length + (batch.length === 1 ? 0 : 1);
+  }
+  flushBatch();
+
+  const frozen = Object.freeze(matchers);
+  redactionMatcherCache.set(secretValues, frozen);
+  return frozen;
+}
+
+function escapeRegexLiteral(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/gu, "\\$&");
+}
+
+function unescapeRegexLiteral(value: string): string {
+  return value.replace(/\\([\\^$.*+?()[\]{}|])/gu, "$1");
 }
 
 export class BoundedLineBuffer {
