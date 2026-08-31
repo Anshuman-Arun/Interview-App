@@ -352,18 +352,13 @@ export class ModelAssetManager {
     }
 
     const paths = await this.getSafeCachePaths();
-    const directoryHandle = await opendir(paths.temporary);
-    let inspectedEntries = 0;
-    for await (const entry of directoryHandle) {
-      inspectedEntries += 1;
-      if (inspectedEntries > this.maxListEntries) {
-        throw new ModelAssetError(
-          "CACHE_LIMIT_EXCEEDED",
-          "Temporary cache entry count exceeds the configured cleanup limit."
-        );
-      }
-      if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry.name));
+    const entries = await this.listCacheEntryNames(
+      paths.temporary,
+      "Temporary cache entry count exceeds the configured cleanup limit."
+    );
+    for (const entry of entries) {
+      if (!TEMPORARY_ENTRY_PATTERN.test(entry)) continue;
+      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry));
     }
     this.lastFailures.clear();
   }
@@ -386,24 +381,34 @@ export class ModelAssetManager {
       keepManifestValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
     );
     const paths = await this.getSafeCachePaths();
-    const directoryHandle = await opendir(paths.artifacts);
+    const entries = await this.listCacheEntryNames(
+      paths.artifacts,
+      "Artifact cache entry count exceeds the configured cleanup limit."
+    );
     let removed = 0;
-    let inspectedEntries = 0;
 
-    for await (const entry of directoryHandle) {
-      inspectedEntries += 1;
-      if (inspectedEntries > this.maxListEntries) {
-        throw new ModelAssetError(
-          "CACHE_LIMIT_EXCEEDED",
-          "Artifact cache entry count exceeds the configured cleanup limit."
-        );
-      }
-      if (!INSTALLATION_KEY_PATTERN.test(entry.name) || keepKeys.has(entry.name)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry.name));
-      this.lastFailures.delete(entry.name);
+    for (const entry of entries) {
+      if (!INSTALLATION_KEY_PATTERN.test(entry) || keepKeys.has(entry)) continue;
+      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry));
+      this.lastFailures.delete(entry);
       removed += 1;
     }
     return removed;
+  }
+
+  private async listCacheEntryNames(
+    directoryPath: string,
+    limitMessage: string
+  ): Promise<readonly string[]> {
+    const names: string[] = [];
+    const directory = await opendir(directoryPath);
+    for await (const entry of directory) {
+      if (names.length >= this.maxListEntries) {
+        throw new ModelAssetError("CACHE_LIMIT_EXCEEDED", limitMessage);
+      }
+      names.push(entry.name);
+    }
+    return names;
   }
 
   private recordFailure(key: string, error: unknown): void {
