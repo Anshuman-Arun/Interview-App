@@ -316,6 +316,13 @@ export function assertVisionRasterSource(value: unknown): asserts value is Visio
   }
 }
 
+function rasterIdentity(source: VisionRasterSource): string {
+  if (source instanceof ImageSnapshot) {
+    return `snapshot:${source.metadata.snapshotId}:${source.metadata.contentDigest}`;
+  }
+  return `artifact:${source.metadata.artifactId}:${source.metadata.contentDigest}`;
+}
+
 export const ImagePayloadReferenceMetadataSchema = z.object({
   imageIdentity: z.string().min(1).max(256),
   mimeType: ImageMimeTypeSchema,
@@ -330,10 +337,10 @@ export class ImagePayloadReference {
   readonly #source: VisionRasterSource;
   public readonly metadata: ImagePayloadReferenceMetadata;
 
-  public constructor(imageIdentity: string, sourceInput: VisionRasterSource) {
+  public constructor(sourceInput: VisionRasterSource) {
     assertVisionRasterSource(sourceInput);
     this.metadata = Object.freeze(ImagePayloadReferenceMetadataSchema.parse({
-      imageIdentity,
+      imageIdentity: rasterIdentity(sourceInput),
       mimeType: sourceInput.metadata.mimeType,
       width: sourceInput.metadata.width,
       height: sourceInput.metadata.height,
