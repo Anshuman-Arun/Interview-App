@@ -3,6 +3,54 @@ import type { LocalOutputSnapshot } from "./types.js";
 
 const TRUNCATED_MARKER = "[TRUNCATED]";
 const MALFORMED_MARKER = "[MALFORMED_OUTPUT]";
+const REDACTED_MARKER = "[REDACTED]";
+
+interface RedactionSegment {
+  readonly text: string;
+  readonly redacted: boolean;
+}
+
+export function redactKnownSecrets(value: string, secretValues: readonly string[]): string {
+  let segments: readonly RedactionSegment[] = [{ text: value, redacted: false }];
+  let changed = false;
+
+  for (const secret of secretValues) {
+    if (secret.length === 0) continue;
+    const next: RedactionSegment[] = [];
+
+    for (const segment of segments) {
+      if (segment.redacted || segment.text.length === 0) {
+        next.push(segment);
+        continue;
+      }
+
+      let start = 0;
+      let match = segment.text.indexOf(secret, start);
+      if (match < 0) {
+        next.push(segment);
+        continue;
+      }
+
+      changed = true;
+      while (match >= 0) {
+        if (match > start) {
+          next.push({ text: segment.text.slice(start, match), redacted: false });
+        }
+        next.push({ text: REDACTED_MARKER, redacted: true });
+        start = match + secret.length;
+        match = segment.text.indexOf(secret, start);
+      }
+      if (start < segment.text.length) {
+        next.push({ text: segment.text.slice(start), redacted: false });
+      }
+    }
+
+    segments = next;
+  }
+
+  if (!changed) return value;
+  return segments.map((segment) => segment.text).join("");
+}
 
 export class BoundedLineBuffer {
   private readonly lines: string[] = [];
@@ -16,10 +64,7 @@ export class BoundedLineBuffer {
   ) {}
 
   public push(rawLine: string): void {
-    let line = rawLine;
-    for (const secret of this.secretValues) {
-      if (secret.length > 0) line = line.split(secret).join("[REDACTED]");
-    }
+    let line = redactKnownSecrets(rawLine, this.secretValues);
     line = sanitizeDiagnosticText(line);
     if (line.length === 0) return;
 
