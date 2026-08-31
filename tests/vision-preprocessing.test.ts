@@ -1606,6 +1606,18 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).toThrowError(RangeError);
   });
 
+  it("rejects overlap that is not smaller than each tile dimension even for a one-tile source", () => {
+    expect(() => planImageTiles(
+      { width: 2, height: 2 },
+      { tileWidth: 4, tileHeight: 4, overlap: 4, maxTileCount: 1 }
+    )).toThrowError(RangeError);
+
+    expect(() => planImageTiles(
+      { width: 2, height: 2 },
+      { tileWidth: 4, tileHeight: 3, overlap: 3, maxTileCount: 1 }
+    )).toThrowError(RangeError);
+  });
+
   it("allows maxTileCount zero as an explicit prohibition and fails before tile allocation", () => {
     expect(() => planImageTiles(
       { width: 4, height: 4 },
