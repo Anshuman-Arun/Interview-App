@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PNG } from "pngjs";
 import { computeVisionArtifactId } from "./artifact-identity.js";
+import { INTERNAL_VISION_ARTIFACT_CONSTRUCTION } from "./internal-artifact-construction.js";
 import { assertRectWithinImage, rectArea, validateImageRect, type ImageRect } from "./geometry.js";
 import { createVisionProcessingDiagnostics, type VisionProcessingDiagnostics } from "./diagnostics.js";
 import { sha256ImageBytes } from "./snapshot.js";
@@ -395,7 +396,12 @@ function encodeArtifact(
     sourceBounds,
     coordinateTransform: transform
   });
-  return new VisionImageArtifact(source, metadata, encoded);
+  return new VisionImageArtifact(
+    INTERNAL_VISION_ARTIFACT_CONSTRUCTION,
+    source,
+    metadata,
+    encoded
+  );
 }
 
 async function cropDecodedRaster(
