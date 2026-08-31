@@ -1991,13 +1991,17 @@ function waitForSpawn(
   componentId: string,
   timeoutMs: number
 ): Promise<void> {
+  if (timeoutMs <= 0) {
+    return Promise.reject(new LocalRuntimeError("READINESS_TIMEOUT", `Startup timed out for ${componentId}`));
+  }
   return new Promise((resolve, reject) => {
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const cleanup = (): void => {
       child.off("spawn", onSpawn);
       child.off("error", onError);
       signal.removeEventListener("abort", onAbort);
-      clearTimeout(timer);
+      if (timer !== undefined) clearTimeout(timer);
     };
     const onSpawn = (): void => {
       if (settled) return;
@@ -2017,16 +2021,25 @@ function waitForSpawn(
       cleanup();
       reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
     };
-    const timer = setTimeout(() => {
+    child.once("spawn", onSpawn);
+    child.once("error", onError);
+    signal.addEventListener("abort", onAbort, { once: true });
+
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    if (child.pid !== undefined) {
+      onSpawn();
+      return;
+    }
+
+    timer = setTimeout(() => {
       if (settled) return;
       settled = true;
       cleanup();
       reject(new LocalRuntimeError("READINESS_TIMEOUT", `Startup timed out for ${componentId}`));
     }, timeoutMs);
-    child.once("spawn", onSpawn);
-    child.once("error", onError);
-    signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) onAbort();
   });
 }
 
