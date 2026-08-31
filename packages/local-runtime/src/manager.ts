@@ -408,7 +408,7 @@ export class LocalRuntimeManager {
       if (earlyReadiness !== undefined) {
         await earlyReadiness.catch(() => undefined);
       }
-      if (!record.expectedStop) await this.cleanupFailedAttempt(record, child);
+      if (!record.expectedStop) await this.cleanupFailedAttempt(record, child, signal);
       throw error;
     } finally {
       unlinkAttempt?.();
@@ -807,7 +807,11 @@ export class LocalRuntimeManager {
     }
   }
 
-  private async cleanupFailedAttempt(record: ComponentRecord, child: ChildProcessWithoutNullStreams): Promise<void> {
+  private async cleanupFailedAttempt(
+    record: ComponentRecord,
+    child: ChildProcessWithoutNullStreams,
+    signal: AbortSignal
+  ): Promise<void> {
     if (record.child !== child && !isOwnedProcessTreeAlive(child, this.platform)) return;
     record.residualProcess = child;
     const previousExpectedStop = record.expectedStop;
@@ -834,7 +838,7 @@ export class LocalRuntimeManager {
       record.residualProcess = undefined;
       cleaned = true;
     } finally {
-      if (cleaned) record.expectedStop = previousExpectedStop;
+      if (cleaned && !signal.aborted) record.expectedStop = previousExpectedStop;
     }
   }
 
@@ -1805,7 +1809,8 @@ async function terminateChildTree(
   const pid = child.pid;
   if (pid === undefined) return;
   if (platform === "win32") {
-    await runTaskkill(pid, false, commandTimeoutMs);
+    const treeTerminated = await runTaskkill(pid, false, commandTimeoutMs);
+    if (!treeTerminated && isChildAlive(child)) child.kill(signal);
     return;
   }
   try {
