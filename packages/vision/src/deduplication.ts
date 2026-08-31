@@ -59,7 +59,9 @@ export function deduplicateExactImagePayloads<T extends VisionRasterSource>(imag
   const buckets = new Map<string, T[]>();
   const unique: T[] = [];
 
-  for (const image of images) {
+  for (let index = 0; index < images.length; index += 1) {
+    const image = images[index];
+    if (image === undefined) throw new TypeError("Image collection must not contain missing entries");
     assertVisionRasterSource(image);
     const key = `${String(image.metadata.byteSize)}:${image.metadata.contentDigest}`;
     const bucket = buckets.get(key) ?? [];
