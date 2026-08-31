@@ -22,6 +22,7 @@ function imageRevision(source: VisionRasterSource): number {
 export function exactImagePayloadDuplicate(left: VisionRasterSource, right: VisionRasterSource): boolean {
   assertVisionRasterSource(left);
   assertVisionRasterSource(right);
+  if (left === right) return true;
   if (imageByteSize(left) !== imageByteSize(right) || imageDigest(left) !== imageDigest(right)) return false;
   return left.matchesEncodedBytes(right.readBytes());
 }
