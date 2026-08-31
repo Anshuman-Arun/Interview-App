@@ -194,7 +194,9 @@ function ownValue(record: Record<string, unknown>, key: string): unknown {
 }
 
 function clonePlainDataArray(value: unknown): readonly unknown[] | undefined {
-  if (!Array.isArray(value) || isProxy(value)) return undefined;
+  if (typeof value !== "object" || value === null || isProxy(value) || !Array.isArray(value)) {
+    return undefined;
+  }
   try {
     const prototype: unknown = Object.getPrototypeOf(value);
     if (prototype !== Array.prototype) return undefined;
