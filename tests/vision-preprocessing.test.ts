@@ -117,6 +117,48 @@ describe("vision snapshot validation and hashing", () => {
     }, value.readBytes())).toThrowError(RangeError);
   });
 
+  it("does not allow direct construction to bypass full PNG decoding", () => {
+    const value = snapshot(makePng(2, 2));
+    const truncated = value.readBytes().subarray(0, 29);
+    expect(() => new ImageSnapshot({
+      ...value.metadata,
+      byteSize: truncated.byteLength,
+      contentDigest: sha256ImageBytes(truncated)
+    }, truncated)).toThrowError(RangeError);
+  });
+
+  it("rejects CRC-corrupted PNG input after its cheap header checks pass", () => {
+    const corrupted = Buffer.from(makePng(2, 2));
+    const last = corrupted.length - 1;
+    const value = corrupted[last];
+    if (value === undefined) throw new Error("Generated PNG unexpectedly empty");
+    corrupted[last] = value ^ 0xff;
+
+    expect(() => snapshot(corrupted)).toThrowError(VisionPreprocessingError);
+    try {
+      snapshot(corrupted);
+    } catch (error) {
+      expectCode(error, "INVALID_IMAGE");
+    }
+  });
+
+  it("freezes validated image identity metadata and the container itself", () => {
+    const value = snapshot(makePng(2, 2));
+    expect(Object.isFrozen(value)).toBe(true);
+    expect(Object.isFrozen(value.metadata)).toBe(true);
+  });
+
+  it("rejects non-byte payloads at the runtime boundary", () => {
+    expect(() => createValidatedImageSnapshot({
+      snapshotId: "runtime-bad-bytes",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(0),
+      capturedAtMs: 0,
+      mimeType: "image/png",
+      encodedBytes: "not-bytes" as unknown as Uint8Array
+    })).toThrowError(VisionPreprocessingError);
+  });
+
   it("rejects malformed bytes and detectable MIME mismatch", () => {
     expect(() => snapshot(Buffer.from("not-a-png"))).toThrowError(VisionPreprocessingError);
     try {
@@ -223,6 +265,21 @@ describe("vision geometry", () => {
     )).toThrowError(VisionPreprocessingError);
     expect(imageBounds({ width: 10, height: 5 })).toEqual({ x: 0, y: 0, width: 10, height: 5 });
   });
+
+  it("rejects rectangles whose derived right or bottom edge leaves the safe integer range", () => {
+    expect(() => validateImageRect({
+      x: Number.MAX_SAFE_INTEGER,
+      y: 0,
+      width: 1,
+      height: 1
+    })).toThrowError(VisionPreprocessingError);
+    expect(() => validateImageRect({
+      x: 0,
+      y: Number.MAX_SAFE_INTEGER,
+      width: 1,
+      height: 1
+    })).toThrowError(VisionPreprocessingError);
+  });
 });
 
 describe("dirty-region planning", () => {
@@ -296,6 +353,22 @@ describe("dirty-region planning", () => {
     const config = { paddingPixels: 0, maxRegionCount: 4, maxTotalAnalyzedArea: 1000, fullFrameFallbackAreaRatio: 1 };
     expect(planDirtyRegions(input, { width: 20, height: 20 }, config))
       .toEqual(planDirtyRegions(input, { width: 20, height: 20 }, config));
+  });
+
+  it("validates dirty rectangles before configured over-count fallback", () => {
+    expect(() => planDirtyRegions([
+      { x: 0, y: 0, width: 2, height: 2 },
+      { x: 5, y: 5, width: 0, height: 2 }
+    ], { width: 20, height: 20 }, {
+      maxInputRegions: 1,
+      maxRegionCount: 1
+    })).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects dirty-region lists above the package hard count instead of triggering work", () => {
+    const tooMany = Array.from({ length: 2049 }, () => ({ x: 0, y: 0, width: 1, height: 1 }));
+    expect(() => planDirtyRegions(tooMany, { width: 20, height: 20 }))
+      .toThrowError(VisionPreprocessingError);
   });
 });
 
@@ -407,6 +480,13 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects high-overlap tile plans whose duplicated raw pixel work exceeds the hard ceiling", () => {
+    expect(() => planImageTiles(
+      { width: 8192, height: 8192 },
+      { tileWidth: 4096, tileHeight: 8192, overlap: 4000, maxTileCount: 50 }
+    )).toThrowError(VisionPreprocessingError);
+  });
+
   it("composes crop and tile coordinate transforms back to the original snapshot", async () => {
     const source = snapshot(makePng(12, 8));
     const crop = await cropImage(source, { x: 2, y: 1, width: 8, height: 6 });
@@ -439,6 +519,33 @@ describe("crop, resize, tiling, and cancellation", () => {
     setImmediate(() => controller.abort());
     await expect(work).rejects.toMatchObject({ code: "CANCELLED" });
   });
+
+  it("does not starve cancellation across many tiny tiles", async () => {
+    const source = snapshot(makePng(128, 8));
+    const controller = new AbortController();
+    const work = tileImage(source, {
+      tileWidth: 1,
+      tileHeight: 8,
+      overlap: 0,
+      maxTileCount: 128
+    }, { signal: controller.signal });
+    setImmediate(() => controller.abort());
+    await expect(work).rejects.toMatchObject({ code: "CANCELLED" });
+  });
+
+  it("rechecks cancellation after caller-supplied diagnostic timing", async () => {
+    const source = snapshot(makePng(4, 4));
+    const controller = new AbortController();
+    let calls = 0;
+    await expect(cropImage(source, { x: 0, y: 0, width: 2, height: 2 }, {
+      signal: controller.signal,
+      now: () => {
+        calls += 1;
+        if (calls === 2) controller.abort();
+        return calls;
+      }
+    })).rejects.toMatchObject({ code: "CANCELLED" });
+  });
 });
 
 describe("provider-neutral request preparation and budgeting", () => {
@@ -457,7 +564,11 @@ describe("provider-neutral request preparation and budgeting", () => {
       coordinateTransform: { offsetX: 2, offsetY: 1, scaleX: 1, scaleY: 1 }
     });
     expect(requestPayloadIsSafeReference(request)).toBe(true);
+    expect(Object.isFrozen(request.payload)).toBe(true);
     expect(Buffer.from(request.payload.readBytes()).equals(Buffer.from(crop.artifact.readBytes()))).toBe(true);
+    const callerCopy = request.payload.readBytes();
+    callerCopy.fill(0);
+    expect(sha256ImageBytes(request.payload.readBytes())).toBe(crop.artifact.metadata.contentDigest);
     expect(JSON.stringify(request.payload)).not.toContain(Buffer.from(crop.artifact.readBytes()).toString("base64"));
   });
 
@@ -472,6 +583,19 @@ describe("provider-neutral request preparation and budgeting", () => {
     const source = snapshot(makePng(3, 3), { revision: 6 });
     expect(prepareVisionImageRequest(source, "context").requestId)
       .toBe(prepareVisionImageRequest(source, "context").requestId);
+  });
+
+  it("rejects structurally similar but non-validated raster objects at runtime", async () => {
+    const real = snapshot(makePng(2, 2));
+    const fake = {
+      metadata: real.metadata,
+      readBytes: () => real.readBytes()
+    } as unknown as ImageSnapshot;
+
+    expect(() => prepareVisionImageRequest(fake, "analysis"))
+      .toThrowError(VisionPreprocessingError);
+    await expect(cropImage(fake, { x: 0, y: 0, width: 1, height: 1 }))
+      .rejects.toMatchObject({ code: "INVALID_IMAGE" });
   });
 
   it("validates batch purpose even when the candidate list is empty", () => {
