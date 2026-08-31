@@ -16,6 +16,7 @@ import {
   installedPayloadPath,
   pathEntryExists,
   readStoredManifest,
+  readStoredManifestWithIdentity,
   REMOVAL_TOMBSTONE_PATTERN,
   removeEntryInsideRoot,
   sumManagedCacheBytes,
@@ -808,6 +809,50 @@ export class ModelAssetManager {
     return paths;
   }
 
+  private async assertStoredManifestPath(
+    manifestPath: string,
+    identity: {
+      readonly device: bigint;
+      readonly inode: bigint;
+      readonly size: bigint;
+      readonly mtimeNs: bigint;
+      readonly ctimeNs: bigint;
+    }
+  ): Promise<void> {
+    let manifestStat: BigIntStats;
+    try {
+      manifestStat = await lstat(manifestPath, { bigint: true });
+    } catch (error) {
+      if (typeof error === "object"
+          && error !== null
+          && "code" in error
+          && error.code === "ENOENT") {
+        throw new ModelAssetError(
+          "CORRUPT_INSTALLATION",
+          "Installed artifact manifest disappeared before final acceptance.",
+          { cause: error }
+        );
+      }
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to re-inspect installed artifact manifest before final acceptance.",
+        { cause: error }
+      );
+    }
+    if (manifestStat.isSymbolicLink()
+        || !manifestStat.isFile()
+        || manifestStat.dev !== identity.device
+        || manifestStat.ino !== identity.inode
+        || manifestStat.size !== identity.size
+        || manifestStat.mtimeNs !== identity.mtimeNs
+        || manifestStat.ctimeNs !== identity.ctimeNs) {
+      throw new ModelAssetError(
+        "CORRUPT_INSTALLATION",
+        "Installed artifact manifest changed before final acceptance."
+      );
+    }
+  }
+
   private async assertVerifiedPayloadPath(
     payloadPath: string,
     identity: {
@@ -1300,8 +1345,9 @@ export class ModelAssetManager {
         "CORRUPT_INSTALLATION",
         { device: directoryStat.dev, inode: directoryStat.ino }
       );
-      const storedValue = await readStoredManifest(path.join(directory, "manifest.json"));
-      const stored = AssetManifestSchema.safeParse(storedValue);
+      const storedManifestPath = path.join(directory, "manifest.json");
+      const storedRead = await readStoredManifestWithIdentity(storedManifestPath);
+      const stored = AssetManifestSchema.safeParse(storedRead.value);
       if (!stored.success || artifactInstallationKey(stored.data) !== key) {
         return { status: "CORRUPT", errorCode: "CORRUPT_INSTALLATION" };
       }
@@ -1341,6 +1387,10 @@ export class ModelAssetManager {
         payload,
         verification.identity,
         "CORRUPT_INSTALLATION"
+      );
+      await this.assertStoredManifestPath(
+        storedManifestPath,
+        storedRead.identity
       );
       await validateCachePaths(paths);
       return { status: "INSTALLED", path: payload };
