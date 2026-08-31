@@ -367,15 +367,21 @@ export function assertVisionRasterSource(value: unknown): asserts value is Visio
 
 export function visionRasterIdentity(source: VisionRasterSource): string {
   assertVisionRasterSource(source);
-  if (ImageSnapshot.isValidatedInstance(source)) {
-    return JSON.stringify([
-      "snapshot",
-      source.metadata.snapshotId,
-      source.metadata.sourceRevision,
-      source.metadata.contentDigest
-    ]);
-  }
-  return `artifact:${source.metadata.artifactId}:${source.metadata.contentDigest}`;
+  const canonical = ImageSnapshot.isValidatedInstance(source)
+    ? JSON.stringify([
+        "vision-raster-v1",
+        "SNAPSHOT",
+        source.metadata.snapshotId,
+        source.metadata.sourceRevision,
+        source.metadata.contentDigest
+      ])
+    : JSON.stringify([
+        "vision-raster-v1",
+        "ARTIFACT",
+        source.metadata.artifactId,
+        source.metadata.contentDigest
+      ]);
+  return `raster_${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
 }
 
 export const ImagePayloadReferenceMetadataSchema = z.object({
