@@ -289,7 +289,14 @@ export class ModelAssetManager {
 
   public async verifyInstalledArtifact(manifestValue: unknown): Promise<boolean> {
     const manifest = parseAssetManifest(manifestValue);
-    return (await this.checkInstallation(manifest)).status === "INSTALLED";
+    const check = await this.checkInstallation(manifest);
+    if (check.status === "FAILED") {
+      throw new ModelAssetError(
+        check.errorCode ?? "IO_ERROR",
+        "Unable to verify the installed artifact because cache inspection failed."
+      );
+    }
+    return check.status === "INSTALLED";
   }
 
   public async getInstalledPath(manifestValue: unknown): Promise<string> {
