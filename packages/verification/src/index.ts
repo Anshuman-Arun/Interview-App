@@ -12,7 +12,6 @@ export * from "./modular-arithmetic-verifier.js";
 export * from "./probability-arithmetic-verifier.js";
 export * from "./rational-arithmetic-verifier.js";
 export * from "./two-colour-graph-verifier.js";
-export * from "./verifier-common.js";
 
 export class AbstainingVerifier implements DeterministicVerifier {
   public async verify(_statement: string, interpretationConfidence: number): Promise<VerificationResult> {

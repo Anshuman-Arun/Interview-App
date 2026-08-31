@@ -30,7 +30,9 @@ The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility
 
 The expression grammar is intentionally small. Integer powers accept only bounded non-negative integer exponents; `0^0` is deliberately treated as undefined and therefore abstains instead of choosing a convention. There is no algebra-string parser, symbolic simplifier, recurrence solver, theorem prover, or computer-algebra dependency.
 
-For `LINEAR_PREVIOUS_TERMS`, `coefficients[0]` multiplies the immediately previous sequence value, `coefficients[1]` the value two positions back, and so on; the constant is then added. The initial-condition count must exactly match the coefficient count.
+For `LINEAR_PREVIOUS_TERMS`, sequence indices are zero-based: `initial[0]` is index 0. `coefficients[0]` multiplies the immediately previous sequence value, `coefficients[1]` the value two positions back, and so on; the constant is then added. The initial-condition count must exactly match the coefficient count.
+
+Counting helpers use explicit total-function conventions at their finite-domain boundary: `C(n, k) = 0` and `P(n, k) = 0` when `k > n`; combinations with repetition return 1 for zero selections and 0 for positive selections from zero types.
 
 Probability-model inputs are validated as exact rationals in `[0, 1]`; conditioning and Bayes evidence probabilities must be strictly positive. Internally inconsistent supplied probability models abstain as malformed rather than being contradicted as though they were valid models. Claimed probability answers remain exact rational claims: an out-of-range claimed answer is contradicted when the supplied model itself is valid.
 
