@@ -944,6 +944,65 @@ describe("local worker lifecycle manager", () => {
     }
   });
 
+  it("lets an explicit start queued during crash cleanup reset the retry budget", async () => {
+    if (process.platform === "win32") return;
+
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-cleanup-manual-start-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
+    const runtime = manager();
+    let childPid: number | undefined;
+    let queuedStart: ReturnType<LocalRuntimeManager["start"]> | undefined;
+    let watcher: ReturnType<typeof setInterval> | undefined;
+
+    runtime.register(definition("cleanup-manual-start", "tree-crash-once-counter", {
+      terminationTimeoutMs: 200,
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 1, backoffMs: 50 },
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => {
+          if (typeof message !== "object" || message === null) return false;
+          const value = message as Record<string, unknown>;
+          if (typeof value.childPid === "number") {
+            childPid = value.childPid;
+            fixturePids.push(value.childPid);
+          }
+          if (value.attempt === 1 && watcher === undefined) {
+            watcher = setInterval(() => {
+              if (runtime.getStatus("cleanup-manual-start").state !== "FAILED") return;
+              if (watcher !== undefined) clearInterval(watcher);
+              watcher = undefined;
+              queuedStart = runtime.start("cleanup-manual-start");
+            }, 1);
+          }
+          return readyDecision(message);
+        }
+      }
+    }, [counter, "40"]));
+
+    try {
+      await runtime.start("cleanup-manual-start");
+      await waitForStatus(runtime, "cleanup-manual-start", (status) =>
+        status.state === "FAILED" && status.lastExit?.code === 17
+      );
+      const deadline = performance.now() + 1_000;
+      while (queuedStart === undefined && performance.now() < deadline) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 1));
+      }
+      expect(queuedStart).toBeDefined();
+      const recovered = await queuedStart;
+      expect(recovered.state).toBe("READY");
+      expect(recovered.restartCount).toBe(0);
+      expect(readFileSync(counter, "utf8")).toBe("2");
+      if (childPid !== undefined) {
+        await waitForPidExit(childPid);
+        expect(isPidAlive(childPid)).toBe(false);
+      }
+    } finally {
+      if (watcher !== undefined) clearInterval(watcher);
+    }
+  });
+
   it("serializes reentrant start behind an in-progress stop", async () => {
     const runtime = manager();
     let restarted: Promise<ReturnType<LocalRuntimeManager["getStatus"]>> | undefined;
