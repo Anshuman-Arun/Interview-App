@@ -812,8 +812,8 @@ export class ModelAssetManager {
       }
       return installedPayloadPath(installationDirectory, manifest);
     } finally {
+      await this.releaseCapacity(reservationBytes);
       setStagingDirectory(undefined);
-      this.releaseCapacity(reservationBytes);
       if (!published) {
         await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
       }
@@ -994,8 +994,10 @@ export class ModelAssetManager {
     });
   }
 
-  private releaseCapacity(bytes: number): void {
-    this.reservedBytes = Math.max(0, this.reservedBytes - bytes);
+  private async releaseCapacity(bytes: number): Promise<void> {
+    await this.withCapacityGate(async () => {
+      this.reservedBytes = Math.max(0, this.reservedBytes - bytes);
+    });
   }
 
   private async withCapacityGate<T>(operation: () => Promise<T>): Promise<T> {
