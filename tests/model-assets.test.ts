@@ -738,6 +738,30 @@ describe("local model asset manager", () => {
     expect(await manager.verifyInstalledArtifact(manifest)).toBe(true);
   });
 
+  it("treats unexpected installed-directory entries as corruption", async () => {
+    const payload = Buffer.from("strict-layout");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/strict-layout.bin");
+    await manager.importLocal(manifest, source);
+
+    const installation = path.join(root, "artifacts", artifactInstallationKey(manifest));
+    await writeFile(path.join(installation, "unexpected.txt"), "unexpected");
+
+    expect(await manager.inspect(manifest)).toMatchObject({
+      status: "CORRUPT",
+      errorCode: "CORRUPT_INSTALLATION"
+    });
+    expect(await manager.verifyInstalledArtifact(manifest)).toBe(false);
+    await expect(manager.getInstalledPath(manifest)).rejects.toMatchObject({
+      code: "NOT_INSTALLED"
+    });
+  });
+
   it("detects corruption of a previously installed artifact", async () => {
     const payload = Buffer.from("good-bytes");
     const root = await newRoot();
