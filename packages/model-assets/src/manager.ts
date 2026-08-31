@@ -1516,6 +1516,29 @@ export class ModelAssetManager {
             "Cache reservation accounting underflowed before atomic publication."
           );
         }
+
+        let effectiveMaxCacheBytes: number | undefined;
+        for (const activeLimit of shared.activeCacheLimitCounts.keys()) {
+          if (effectiveMaxCacheBytes === undefined || activeLimit < effectiveMaxCacheBytes) {
+            effectiveMaxCacheBytes = activeLimit;
+          }
+        }
+        if (effectiveMaxCacheBytes !== undefined) {
+          const usedBytes = await this.managedCacheBytes(paths);
+          const activeStagingBytes = await this.activeStagingBytes(paths);
+          const projectedBytes = usedBytes + Math.max(
+            activeStagingBytes,
+            shared.reservedBytes
+          );
+          if (!Number.isSafeInteger(projectedBytes)
+              || projectedBytes > effectiveMaxCacheBytes) {
+            throw new ModelAssetError(
+              "CACHE_LIMIT_EXCEEDED",
+              "Cache contents changed after reservation and now exceed the active cache-size limit."
+            );
+          }
+        }
+
         await atomicRenameDirectory(stagingDirectory, installationDirectory);
         shared.reservedBytes -= reservationBytes;
       });
