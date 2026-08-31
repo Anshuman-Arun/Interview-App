@@ -2013,6 +2013,22 @@ describe("local worker lifecycle manager", () => {
       .toBe("[REDACTED]");
   });
 
+  it("keeps tiny output budgets valid without partial marker fragments", () => {
+    const ascii = new BoundedLineBuffer(2, 4, []);
+    ascii.push("abcdef");
+    expect(ascii.snapshot()).toEqual({
+      lines: ["abcd"],
+      truncated: true
+    });
+
+    const unicode = new BoundedLineBuffer(2, 3, []);
+    unicode.push("🙂");
+    const unicodeSnapshot = unicode.snapshot();
+    expect(unicodeSnapshot.truncated).toBe(true);
+    expect(unicodeSnapshot.lines).toEqual([]);
+    expect(JSON.stringify(unicodeSnapshot)).not.toContain("\uFFFD");
+  });
+
   it("retains the newest bounded output through repeated eviction", () => {
     const buffer = new BoundedLineBuffer(3, 128, []);
     for (let index = 0; index < 5_000; index += 1) {
