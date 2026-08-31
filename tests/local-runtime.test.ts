@@ -2036,6 +2036,14 @@ describe("local worker lifecycle manager", () => {
     expect(() => runtime.register(definition("oversized-expected-version", "ready", {
       expectedHandshake: { componentVersion: "x".repeat(2_001) }
     }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(() => runtime.register(definition("implicit-backoff-cap", "ready", {
+      restartPolicy: {
+        mode: "ON_FAILURE",
+        maxRetries: 1,
+        maxBackoffMs: 99
+      }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
   });
 });
 
