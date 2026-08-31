@@ -41,8 +41,27 @@ export class BoundedLineBuffer {
     this.push(MALFORMED_MARKER);
   }
 
+  public clear(): void {
+    this.lines.length = 0;
+    this.bytes = 0;
+    this.truncated = false;
+  }
+
   public snapshot(): LocalOutputSnapshot {
-    const lines = this.truncated ? [TRUNCATED_MARKER, ...this.lines] : [...this.lines];
+    const lines = [...this.lines];
+    let bytes = this.bytes;
+
+    if (this.truncated) {
+      const marker = fitUtf8(TRUNCATED_MARKER, this.maxBytes);
+      const markerBytes = Buffer.byteLength(marker, "utf8");
+      while (lines.length >= this.maxLines || bytes + markerBytes > this.maxBytes) {
+        const removed = lines.shift();
+        if (removed === undefined) break;
+        bytes -= Buffer.byteLength(removed, "utf8");
+      }
+      if (markerBytes <= this.maxBytes && lines.length < this.maxLines) lines.unshift(marker);
+    }
+
     return Object.freeze({ lines: Object.freeze(lines), truncated: this.truncated });
   }
 }
