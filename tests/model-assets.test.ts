@@ -138,10 +138,7 @@ describe("local model asset manager", () => {
 
   it("validates current-platform resolver requests before reading fields", () => {
     const payload = Buffer.from("current-platform-resolver");
-    const manifest = manifestFor(payload, "https://example.test/current-platform.bin", {
-      platform: process.platform as AssetManifest["platform"],
-      architecture: process.arch as AssetManifest["architecture"]
-    });
+    const manifest = manifestFor(payload, "https://example.test/current-platform.bin");
 
     let getterReads = 0;
     const request: Record<string, unknown> = {
