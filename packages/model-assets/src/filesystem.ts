@@ -85,6 +85,11 @@ function errnoCode(error: unknown): string | undefined {
   return typeof error.code === "string" ? error.code : undefined;
 }
 
+function isDiskSpaceError(error: unknown): boolean {
+  const code = errnoCode(error);
+  return code === "ENOSPC" || code === "EDQUOT";
+}
+
 export function assertPathInsideRoot(root: string, candidate: string): void {
   const relative = path.relative(root, candidate);
   if (relative === "" || relative === ".") return;
@@ -140,6 +145,13 @@ export async function initializeCachePaths(rootInput: string): Promise<CachePath
     };
   } catch (error) {
     if (error instanceof ModelAssetError) throw error;
+    if (isDiskSpaceError(error)) {
+      throw new ModelAssetError(
+        "INSUFFICIENT_DISK_SPACE",
+        "Unable to initialize the asset cache because the filesystem has no available space or quota.",
+        { cause: error }
+      );
+    }
     throw new ModelAssetError("INVALID_CACHE_ROOT", "Unable to initialize the asset cache root.", { cause: error });
   }
 }
@@ -242,6 +254,13 @@ export async function ensureSafeDirectory(root: string, directory: string): Prom
       try {
         await mkdir(current);
       } catch (mkdirError) {
+        if (isDiskSpaceError(mkdirError)) {
+          throw new ModelAssetError(
+            "INSUFFICIENT_DISK_SPACE",
+            "Unable to create a cache directory because the filesystem has no available space or quota.",
+            { cause: mkdirError }
+          );
+        }
         if (errnoCode(mkdirError) !== "EEXIST") {
           throw new ModelAssetError("IO_ERROR", "Unable to create cache directory.", { cause: mkdirError });
         }
@@ -337,6 +356,13 @@ export async function removeEntryInsideRoot(
       const code = errnoCode(error);
       if (code === "ENOENT") return;
       if (code === "EEXIST") continue;
+      if (isDiskSpaceError(error)) {
+        throw new ModelAssetError(
+          "INSUFFICIENT_DISK_SPACE",
+          "Unable to allocate a cache-removal tombstone because the filesystem has no available space or quota.",
+          { cause: error }
+        );
+      }
       throw new ModelAssetError(
         "IO_ERROR",
         "Unable to atomically detach cache entry for safe removal.",
@@ -675,7 +701,7 @@ export async function copyLocalArtifactBounded(
   } catch (error) {
     if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.", { cause: error });
     if (error instanceof ModelAssetError) throw error;
-    if (errnoCode(error) === "ENOSPC") {
+    if (isDiskSpaceError(error)) {
       throw new ModelAssetError(
         "INSUFFICIENT_DISK_SPACE",
         "Local artifact import could not continue because the destination filesystem is full.",
@@ -802,7 +828,7 @@ export async function writeStoredManifest(manifestPath: string, serializedManife
   try {
     await writeFile(manifestPath, serializedManifest, { encoding: "utf8", flag: "wx", mode: 0o600 });
   } catch (error) {
-    if (errnoCode(error) === "ENOSPC") {
+    if (isDiskSpaceError(error)) {
       throw new ModelAssetError(
         "INSUFFICIENT_DISK_SPACE",
         "Unable to write staged asset metadata because the destination filesystem is full.",
@@ -817,7 +843,7 @@ export async function atomicRenameDirectory(source: string, destination: string)
   try {
     await rename(source, destination);
   } catch (error) {
-    if (errnoCode(error) === "ENOSPC") {
+    if (isDiskSpaceError(error)) {
       throw new ModelAssetError(
         "INSUFFICIENT_DISK_SPACE",
         "Unable to publish the verified artifact because the destination filesystem is full.",
