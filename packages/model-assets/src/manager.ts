@@ -1133,7 +1133,7 @@ export class ModelAssetManager {
           && !REMOVAL_TOMBSTONE_PATTERN.test(entry.name)) {
         continue;
       }
-      total += await sumManagedCacheBytes(path.join(paths.artifacts, entry.name));
+      total += await sumManagedCacheBytes(path.join(paths.artifacts, entry.name), this.maxListEntries);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -1160,7 +1160,7 @@ export class ModelAssetManager {
       if (!stagingEntry && !tombstoneEntry) continue;
       const candidate = path.join(paths.temporary, entry.name);
       if (stagingEntry && activeStagingDirectories.has(candidate)) continue;
-      total += await sumManagedCacheBytes(candidate);
+      total += await sumManagedCacheBytes(candidate, this.maxListEntries);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -1203,7 +1203,7 @@ export class ModelAssetManager {
   private async activeStagingBytes(paths: CachePaths): Promise<number> {
     let total = 0;
     for (const stagingDirectory of sharedCacheStateFor(paths).activeStagingDirectories) {
-      total += await sumManagedCacheBytes(stagingDirectory);
+      total += await sumManagedCacheBytes(stagingDirectory, this.maxListEntries);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
