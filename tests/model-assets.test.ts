@@ -396,6 +396,39 @@ describe("local model asset manager", () => {
     expect(await readFile(sentinel, "utf8")).toBe("keep-me");
   });
 
+  it("rejects replacement of the staging directory during transfer", async () => {
+    const payload = Buffer.from("staging-replacement");
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const fixture = await startFixtureServer(async (_request, response) => {
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.write(payload.subarray(0, 2));
+      started.resolve();
+      await release.promise;
+      response.end(payload.subarray(2));
+    });
+
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    const installation = manager.install(manifest);
+    await started.promise;
+
+    const temporaryEntries = await readdir(path.join(root, "tmp"));
+    expect(temporaryEntries).toHaveLength(1);
+    const staging = path.join(root, "tmp", temporaryEntries[0]!);
+    const detached = staging + "-detached";
+    await rename(staging, detached);
+    await mkdir(staging);
+
+    release.resolve();
+
+    await expect(installation).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    await rm(detached, { recursive: true, force: true });
+  });
+
   it("does not start network work for an already-cancelled request", async () => {
     const payload = Buffer.from("cancel-before-start");
     const fixture = await startFixtureServer((_request, response) => response.end(payload));
