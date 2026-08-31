@@ -39,6 +39,7 @@ import {
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_REDIRECTS = 5;
 const DEFAULT_MAX_LIST_ENTRIES = 10_000;
+const MANAGED_DIRECTORY_ENTRY_LIMIT = 2;
 const INSTALLATION_KEY_PATTERN = /^[0-9a-f]{64}$/u;
 const TEMPORARY_ENTRY_PATTERN = /^[0-9a-f]{64}-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const MANAGER_OPTION_KEYS = new Set([
@@ -801,7 +802,7 @@ export class ModelAssetManager {
 
   private async removeManagedEntry(paths: CachePaths, candidate: string): Promise<void> {
     await validateCachePaths(paths);
-    await removeEntryInsideRoot(paths.root, candidate, this.maxListEntries);
+    await removeEntryInsideRoot(paths.root, candidate, MANAGED_DIRECTORY_ENTRY_LIMIT);
   }
 
   private async assertArtifactDirectoryShape(
@@ -1156,7 +1157,7 @@ export class ModelAssetManager {
           && !REMOVAL_TOMBSTONE_PATTERN.test(entry.name)) {
         continue;
       }
-      total += await sumManagedCacheBytes(path.join(paths.artifacts, entry.name), this.maxListEntries);
+      total += await sumManagedCacheBytes(path.join(paths.artifacts, entry.name), MANAGED_DIRECTORY_ENTRY_LIMIT);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -1183,7 +1184,7 @@ export class ModelAssetManager {
       if (!stagingEntry && !tombstoneEntry) continue;
       const candidate = path.join(paths.temporary, entry.name);
       if (stagingEntry && activeStagingDirectories.has(candidate)) continue;
-      total += await sumManagedCacheBytes(candidate, this.maxListEntries);
+      total += await sumManagedCacheBytes(candidate, MANAGED_DIRECTORY_ENTRY_LIMIT);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -1226,7 +1227,7 @@ export class ModelAssetManager {
   private async activeStagingBytes(paths: CachePaths): Promise<number> {
     let total = 0;
     for (const stagingDirectory of sharedCacheStateFor(paths).activeStagingDirectories) {
-      total += await sumManagedCacheBytes(stagingDirectory, this.maxListEntries);
+      total += await sumManagedCacheBytes(stagingDirectory, MANAGED_DIRECTORY_ENTRY_LIMIT);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
