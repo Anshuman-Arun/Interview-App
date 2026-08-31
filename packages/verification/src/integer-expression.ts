@@ -19,6 +19,7 @@ import {
 function boundedIntegerStringSchema(maximumDigits: number) {
   return z.string()
     .min(1)
+    .max(maximumDigits + 1)
     .superRefine((value, context) => {
       if (!isCanonicalIntegerString(value)) {
         context.addIssue({
