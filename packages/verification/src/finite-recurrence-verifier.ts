@@ -1,11 +1,12 @@
 import { z } from "zod";
 import type { DeterministicVerifier, VerificationResult } from "../../domain/src/index.js";
 import { MAX_RECURRENCE_ORDER, MAX_RECURRENCE_SEQUENCE_LENGTH } from "./limits.js";
-import { RationalInputSchema } from "./rational-expression.js";
+import { IntermediateRationalInputSchema, RationalInputSchema } from "./rational-expression.js";
 import {
   addRationals,
   equalRationals,
   multiplyRationals,
+  parseIntermediateRationalInput,
   parseRationalInput,
   type ExactRational
 } from "./math-utils.js";
@@ -24,12 +25,12 @@ const RecurrenceRuleSchema = z.object({
 const RecurrenceClaimSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("GENERATED_PREFIX"),
-    values: z.array(RationalInputSchema).min(1).max(MAX_RECURRENCE_SEQUENCE_LENGTH)
+    values: z.array(IntermediateRationalInputSchema).min(1).max(MAX_RECURRENCE_SEQUENCE_LENGTH)
   }).strict(),
   z.object({
     kind: z.literal("VALUE_AT_INDEX"),
     index: z.number().int().min(0).max(MAX_RECURRENCE_SEQUENCE_LENGTH - 1),
-    value: RationalInputSchema
+    value: IntermediateRationalInputSchema
   }).strict()
 ]);
 
@@ -89,7 +90,7 @@ export class FiniteRecurrenceVerifier implements DeterministicVerifier {
         const actual = sequence[claim.index];
         if (actual === undefined) throw new Error("Recurrence index unexpectedly unavailable");
         return booleanClaimResult(
-          equalRationals(actual, parseRationalInput(claim.value)),
+          equalRationals(actual, parseIntermediateRationalInput(claim.value)),
           prepared.interpretationConfidence,
           FINITE_RECURRENCE_VERIFIER_NAME,
           "Finite recurrence evaluation matches the claimed indexed value",
@@ -98,7 +99,7 @@ export class FiniteRecurrenceVerifier implements DeterministicVerifier {
       }
 
       const sequence = extendSequence(initial, coefficients, constant, claim.values.length);
-      const claimed = claim.values.map(parseRationalInput);
+      const claimed = claim.values.map(parseIntermediateRationalInput);
       const matches = claimed.every((value, index) => {
         const actual = sequence[index];
         return actual !== undefined && equalRationals(actual, value);
