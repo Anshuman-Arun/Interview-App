@@ -113,7 +113,7 @@ function sharedCacheStateFor(paths: CachePaths): SharedCacheState {
 }
 
 function positiveSafeInteger(value: unknown, fallback: number, label: string): number {
-  const resolved = value ?? fallback;
+  const resolved = value === undefined ? fallback : value;
   if (typeof resolved !== "number" || !Number.isSafeInteger(resolved) || resolved <= 0) {
     throw new ModelAssetError(
       "INVALID_CONFIGURATION",
@@ -124,7 +124,7 @@ function positiveSafeInteger(value: unknown, fallback: number, label: string): n
 }
 
 function nonnegativeSafeInteger(value: unknown, fallback: number, label: string): number {
-  const resolved = value ?? fallback;
+  const resolved = value === undefined ? fallback : value;
   if (typeof resolved !== "number" || !Number.isSafeInteger(resolved) || resolved < 0) {
     throw new ModelAssetError(
       "INVALID_CONFIGURATION",
