@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { boundedArrayLength } from "./array-validation.js";
 import { PixelDimensionsSchema, VisionPreprocessingError } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
@@ -23,10 +24,6 @@ export const RectCornersSchema = z.object({
   y2: SAFE_INTEGER_SCHEMA
 }).strict();
 export type RectCorners = z.infer<typeof RectCornersSchema>;
-
-function assertArrayInput(value: unknown, label: string): void {
-  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
-}
 
 function invalidRect(message: string): never {
   throw new VisionPreprocessingError("INVALID_RECTANGLE", message);
@@ -91,11 +88,8 @@ export function rectsOverlap(left: ImageRect, right: ImageRect): boolean {
 }
 
 export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefined {
-  assertArrayInput(rectangles, "Rectangle collection");
-  if (rectangles.length > MAX_GEOMETRY_RECTANGLES) {
-    throw new RangeError(`At most ${String(MAX_GEOMETRY_RECTANGLES)} rectangles may be unioned at once`);
-  }
-  if (rectangles.length === 0) return undefined;
+  const rectangleCount = boundedArrayLength(rectangles, MAX_GEOMETRY_RECTANGLES, "Rectangle collection");
+  if (rectangleCount === 0) return undefined;
   const firstInput = rectangles[0];
   if (firstInput === undefined) invalidRect("Rectangle collection must not contain missing entries");
   const first = validateImageRect(firstInput);
@@ -104,7 +98,7 @@ export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefi
   let maxX = safeAdd(first.x, first.width, "Rectangle edge");
   let maxY = safeAdd(first.y, first.height, "Rectangle edge");
 
-  for (let index = 1; index < rectangles.length; index += 1) {
+  for (let index = 1; index < rectangleCount; index += 1) {
     const input = rectangles[index];
     if (input === undefined) invalidRect("Rectangle collection must not contain missing entries");
     const rect = validateImageRect(input);
