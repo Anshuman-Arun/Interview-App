@@ -279,6 +279,10 @@ export class ImageSnapshot {
   readonly #bytes: Buffer;
   public readonly metadata: ImageSnapshotMetadata;
 
+  public static isValidatedInstance(value: unknown): value is ImageSnapshot {
+    return typeof value === "object" && value !== null && #bytes in value;
+  }
+
   public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array);
   public constructor(metadata: ImageSnapshotMetadata, bytes: unknown) {
     const parsed = ImageSnapshotMetadataSchema.parse(metadata);
@@ -311,6 +315,10 @@ export class ImageSnapshot {
 export class VisionImageArtifact {
   readonly #bytes: Buffer;
   public readonly metadata: VisionImageArtifactMetadata;
+
+  public static isValidatedInstance(value: unknown): value is VisionImageArtifact {
+    return typeof value === "object" && value !== null && #bytes in value;
+  }
 
   public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array);
   public constructor(metadata: VisionImageArtifactMetadata, bytes: unknown) {
@@ -348,13 +356,14 @@ export class VisionImageArtifact {
 export type VisionRasterSource = ImageSnapshot | VisionImageArtifact;
 
 export function assertVisionRasterSource(value: unknown): asserts value is VisionRasterSource {
-  if (!(value instanceof ImageSnapshot) && !(value instanceof VisionImageArtifact)) {
+  if (!ImageSnapshot.isValidatedInstance(value) && !VisionImageArtifact.isValidatedInstance(value)) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Vision raster source must be a validated image snapshot or artifact");
   }
 }
 
 export function visionRasterIdentity(source: VisionRasterSource): string {
-  if (source instanceof ImageSnapshot) {
+  assertVisionRasterSource(source);
+  if (ImageSnapshot.isValidatedInstance(source)) {
     return `snapshot:${source.metadata.snapshotId}:${source.metadata.contentDigest}`;
   }
   return `artifact:${source.metadata.artifactId}:${source.metadata.contentDigest}`;
@@ -373,6 +382,10 @@ export type ImagePayloadReferenceMetadata = z.infer<typeof ImagePayloadReference
 export class ImagePayloadReference {
   readonly #source: VisionRasterSource;
   public readonly metadata: ImagePayloadReferenceMetadata;
+
+  public static isValidatedInstance(value: unknown): value is ImagePayloadReference {
+    return typeof value === "object" && value !== null && #source in value;
+  }
 
   public constructor(sourceInput: VisionRasterSource) {
     assertVisionRasterSource(sourceInput);
