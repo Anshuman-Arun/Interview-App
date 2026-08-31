@@ -66,8 +66,7 @@ describe("adversarial deterministic math verification", () => {
     const oversized = "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 100_000);
     expect(PositiveIntegerStringSchema.safeParse(oversized).success).toBe(false);
 
-    const runtimeParser = parseBoundedInteger as unknown as (value: unknown) => bigint;
-    expect(() => runtimeParser(17)).toThrow(BoundedMathError);
+    expect(() => parseBoundedInteger(17)).toThrow(BoundedMathError);
   });
 
   it("checks congruence without creating an avoidable over-limit subtraction", async () => {
