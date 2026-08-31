@@ -366,9 +366,43 @@ function rationalCounts(values: readonly ExactRational[]): Map<string, { value: 
   return counts;
 }
 
+function boundedCommonDenominator(values: readonly ExactRational[]): bigint | undefined {
+  let commonDenominator = 1n;
+  for (const value of values) {
+    const factor = gcdUnchecked(commonDenominator, value.denominator);
+    const candidate = (commonDenominator / factor) * value.denominator;
+    if (decimalDigitCount(candidate) > MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS) {
+      return undefined;
+    }
+    commonDenominator = candidate;
+  }
+  return commonDenominator;
+}
+
+function sumWithCommonDenominator(
+  values: readonly ExactRational[],
+  commonDenominator: bigint
+): ExactRational {
+  let numerator = 0n;
+  for (const value of values) {
+    numerator += value.numerator * (commonDenominator / value.denominator);
+  }
+
+  const cancellation = gcdUnchecked(numerator, commonDenominator);
+  return rational(
+    assertIntermediateIntegerBound(numerator / cancellation),
+    assertIntermediateIntegerBound(commonDenominator / cancellation)
+  );
+}
+
 export function sumRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
   const normalizedValues = values.map(normalizeRational);
+  const commonDenominator = boundedCommonDenominator(normalizedValues);
+  if (commonDenominator !== undefined) {
+    return sumWithCommonDenominator(normalizedValues, commonDenominator);
+  }
+
   const counts = rationalCounts(normalizedValues);
 
   // Remove exact additive-inverse pairs before bounded accumulation. This is
