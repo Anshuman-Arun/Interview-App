@@ -243,19 +243,32 @@ describe("adversarial deterministic math verification", () => {
   });
 
   it("bounds exported finite aggregate helpers by the shared container limit", () => {
-    expect(sumIntegers(Array.from({ length: MAX_FINITE_CONTAINER_ITEMS }, () => 1n)))
-      .toBe(BigInt(MAX_FINITE_CONTAINER_ITEMS));
+    const integerOnes = Array.from({ length: MAX_FINITE_CONTAINER_ITEMS }, () => 1n);
+    const rationalOnes = Array.from(
+      { length: MAX_FINITE_CONTAINER_ITEMS },
+      () => rational(1n, 1n)
+    );
+    expect(sumIntegers(integerOnes)).toBe(BigInt(MAX_FINITE_CONTAINER_ITEMS));
+    expect(productIntegers(integerOnes)).toBe(1n);
+    expect(sumRationals(rationalOnes))
+      .toEqual(rational(BigInt(MAX_FINITE_CONTAINER_ITEMS), 1n));
+    expect(productRationals(rationalOnes)).toEqual(rational(1n, 1n));
+
     const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
     expect(sumIntegers([maximum, maximum, -maximum])).toBe(maximum);
-    expect(sumRationals(Array.from({ length: MAX_FINITE_CONTAINER_ITEMS }, () => rational(1n, 1n))))
-      .toEqual(rational(BigInt(MAX_FINITE_CONTAINER_ITEMS), 1n));
 
-    expect(() => sumIntegers(
-      Array.from({ length: MAX_FINITE_CONTAINER_ITEMS + 1 }, () => 1n)
-    )).toThrow(BoundedMathError);
-    expect(() => sumRationals(
-      Array.from({ length: MAX_FINITE_CONTAINER_ITEMS + 1 }, () => rational(1n, 1n))
-    )).toThrow(BoundedMathError);
+    const oversizedIntegers = Array.from(
+      { length: MAX_FINITE_CONTAINER_ITEMS + 1 },
+      () => 1n
+    );
+    const oversizedRationals = Array.from(
+      { length: MAX_FINITE_CONTAINER_ITEMS + 1 },
+      () => rational(1n, 1n)
+    );
+    expect(() => sumIntegers(oversizedIntegers)).toThrow(BoundedMathError);
+    expect(() => productIntegers(oversizedIntegers)).toThrow(BoundedMathError);
+    expect(() => sumRationals(oversizedRationals)).toThrow(BoundedMathError);
+    expect(() => productRationals(oversizedRationals)).toThrow(BoundedMathError);
   });
 
   it("keeps variadic integer sums exact across cancelling bounded terms", async () => {
