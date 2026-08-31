@@ -172,6 +172,48 @@ describe("local model asset manager", () => {
     expect(getterReads).toBe(0);
   });
 
+  it("rejects proxy and accessor-backed manifest collections without reading them", () => {
+    const payload = Buffer.from("collection-isolation");
+    const manifest = manifestFor(payload, "https://example.test/collection.bin");
+    const request = {
+      familyId: manifest.familyId,
+      version: manifest.version,
+      platform: "linux",
+      architecture: "x64"
+    };
+
+    let accessorReads = 0;
+    const accessorCollection: unknown[] = [manifest];
+    Object.defineProperty(accessorCollection, "0", {
+      enumerable: true,
+      configurable: true,
+      get() {
+        accessorReads += 1;
+        throw new Error("manifest collection getter should not run");
+      }
+    });
+    const UnsafeResolver = resolveAssetManifest as unknown as (
+      manifests: unknown,
+      requestValue: unknown
+    ) => AssetManifest;
+    expect(() => UnsafeResolver(accessorCollection, request)).toThrow(
+      expect.objectContaining({ code: "INVALID_MANIFEST" })
+    );
+    expect(accessorReads).toBe(0);
+
+    let proxyReads = 0;
+    const proxiedCollection = new Proxy([manifest], {
+      get(target, property, receiver) {
+        proxyReads += 1;
+        return Reflect.get(target, property, receiver);
+      }
+    });
+    expect(() => UnsafeResolver(proxiedCollection, request)).toThrow(
+      expect.objectContaining({ code: "INVALID_MANIFEST" })
+    );
+    expect(proxyReads).toBe(0);
+  });
+
   it("resolves platform, architecture, and variant deterministically", () => {
     const payload = Buffer.from("resolver");
     const base = AssetManifestSchema.parse({
@@ -1434,6 +1476,49 @@ describe("local model asset manager", () => {
 
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
     expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
+  it("rejects proxy and accessor-backed keep collections before cleanup", async () => {
+    const payload = Buffer.from("keep-collection");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/keep-collection.bin");
+    await manager.importLocal(manifest, source);
+
+    let accessorReads = 0;
+    const accessorKeep: unknown[] = [manifest];
+    Object.defineProperty(accessorKeep, "0", {
+      enumerable: true,
+      configurable: true,
+      get() {
+        accessorReads += 1;
+        throw new Error("keep collection getter should not run");
+      }
+    });
+    const UnsafeClear = manager.clearUnused.bind(manager) as unknown as (
+      values: unknown
+    ) => Promise<number>;
+    await expect(UnsafeClear(accessorKeep)).rejects.toMatchObject({
+      code: "INVALID_MANIFEST"
+    });
+    expect(accessorReads).toBe(0);
+
+    let proxyReads = 0;
+    const proxiedKeep = new Proxy([manifest], {
+      get(target, property, receiver) {
+        proxyReads += 1;
+        return Reflect.get(target, property, receiver);
+      }
+    });
+    await expect(UnsafeClear(proxiedKeep)).rejects.toMatchObject({
+      code: "INVALID_MANIFEST"
+    });
+    expect(proxyReads).toBe(0);
+
+    expect(await manager.verifyInstalledArtifact(manifest)).toBe(true);
   });
 
   it("deterministically clears unused installed artifacts", async () => {
