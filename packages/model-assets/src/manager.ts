@@ -100,6 +100,7 @@ interface SharedCacheState {
   reservedBytes: number;
   readonly activeStagingDirectories: Set<string>;
   readonly activeInstallationCounts: Map<string, number>;
+  readonly activeCacheLimitCounts: Map<number, number>;
 }
 
 const sharedCacheStates = new Map<string, SharedCacheState>();
@@ -127,7 +128,8 @@ function sharedCacheStateFor(paths: CachePaths): SharedCacheState {
     pendingGateUsers: 0,
     reservedBytes: 0,
     activeStagingDirectories: new Set<string>(),
-    activeInstallationCounts: new Map<string, number>()
+    activeInstallationCounts: new Map<string, number>(),
+    activeCacheLimitCounts: new Map<number, number>()
   };
   sharedCacheStates.set(identity, created);
   return created;
@@ -137,7 +139,8 @@ function pruneSharedCacheState(shared: SharedCacheState): void {
   if (shared.pendingGateUsers !== 0
       || shared.reservedBytes !== 0
       || shared.activeStagingDirectories.size !== 0
-      || shared.activeInstallationCounts.size !== 0) {
+      || shared.activeInstallationCounts.size !== 0
+      || shared.activeCacheLimitCounts.size !== 0) {
     return;
   }
   if (sharedCacheStates.get(shared.identity) === shared) {
@@ -1030,22 +1033,44 @@ export class ModelAssetManager {
     });
   }
 
-  private async beginSharedInstallation(paths: CachePaths, key: string): Promise<void> {
+  private async beginSharedInstallation(
+    paths: CachePaths,
+    key: string,
+    maxCacheBytes: number | undefined
+  ): Promise<void> {
     await this.withMutationGate(paths, async (shared) => {
       shared.activeInstallationCounts.set(
         key,
         (shared.activeInstallationCounts.get(key) ?? 0) + 1
       );
+      if (maxCacheBytes !== undefined) {
+        shared.activeCacheLimitCounts.set(
+          maxCacheBytes,
+          (shared.activeCacheLimitCounts.get(maxCacheBytes) ?? 0) + 1
+        );
+      }
     });
   }
 
-  private async endSharedInstallation(paths: CachePaths, key: string): Promise<void> {
+  private async endSharedInstallation(
+    paths: CachePaths,
+    key: string,
+    maxCacheBytes: number | undefined
+  ): Promise<void> {
     await this.withMutationGate(paths, async (shared) => {
       const count = shared.activeInstallationCounts.get(key) ?? 0;
       if (count <= 1) {
         shared.activeInstallationCounts.delete(key);
       } else {
         shared.activeInstallationCounts.set(key, count - 1);
+      }
+      if (maxCacheBytes !== undefined) {
+        const limitCount = shared.activeCacheLimitCounts.get(maxCacheBytes) ?? 0;
+        if (limitCount <= 1) {
+          shared.activeCacheLimitCounts.delete(maxCacheBytes);
+        } else {
+          shared.activeCacheLimitCounts.set(maxCacheBytes, limitCount - 1);
+        }
       }
     });
   }
@@ -1058,7 +1083,7 @@ export class ModelAssetManager {
   ): Promise<string> {
     const paths = await this.getSafeCachePaths();
     const key = artifactInstallationKey(manifest);
-    await this.beginSharedInstallation(paths, key);
+    await this.beginSharedInstallation(paths, key, this.maxCacheBytes);
     try {
       const installationDirectory = path.join(paths.artifacts, key);
 
@@ -1219,7 +1244,7 @@ export class ModelAssetManager {
       }
     }
     } finally {
-      await this.endSharedInstallation(paths, key);
+      await this.endSharedInstallation(paths, key, this.maxCacheBytes);
     }
   }
 
@@ -1460,16 +1485,20 @@ export class ModelAssetManager {
       const alreadyMaterialized = Math.min(activeStagingBytes, shared.reservedBytes);
       const unreservedMaterializedBytes = activeStagingBytes - alreadyMaterialized;
 
-      if (this.maxCacheBytes !== undefined) {
+      const activeFiniteLimits = [...shared.activeCacheLimitCounts.keys()];
+      const effectiveMaxCacheBytes = activeFiniteLimits.length === 0
+        ? undefined
+        : Math.min(...activeFiniteLimits);
+      if (effectiveMaxCacheBytes !== undefined) {
         const usedBytes = await this.managedCacheBytes(paths);
         if (signal.aborted) {
           throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
         }
         const projected = usedBytes + reservedProjection + unreservedMaterializedBytes;
-        if (!Number.isSafeInteger(projected) || projected > this.maxCacheBytes) {
+        if (!Number.isSafeInteger(projected) || projected > effectiveMaxCacheBytes) {
           throw new ModelAssetError(
             "CACHE_LIMIT_EXCEEDED",
-            "Artifact installation would exceed the configured cache-size limit."
+            "Artifact installation would exceed the strictest active cache-size limit."
           );
         }
       }
