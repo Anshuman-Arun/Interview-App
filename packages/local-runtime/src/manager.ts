@@ -1417,7 +1417,8 @@ async function terminateChildTree(
   const pid = child.pid;
   if (pid === undefined) return;
   if (platform === "win32") {
-    await runTaskkill(pid, false, commandTimeoutMs);
+    const treeTerminated = await runTaskkill(pid, false, commandTimeoutMs);
+    if (!treeTerminated && isChildAlive(child)) child.kill(signal);
     return;
   }
   try {
@@ -1452,9 +1453,15 @@ function runTaskkill(
   timeoutMs: number
 ): Promise<boolean> {
   return new Promise((resolve) => {
+    const systemRoot = process.env["SystemRoot"] ?? process.env["SYSTEMROOT"];
+    if (systemRoot === undefined || systemRoot.length === 0 || systemRoot.includes("\0")) {
+      resolve(false);
+      return;
+    }
+    const executable = join(systemRoot, "System32", "taskkill.exe");
     let task: ReturnType<typeof spawn>;
     try {
-      task = spawn("taskkill", [
+      task = spawn(executable, [
         "/pid",
         String(pid),
         "/t",
