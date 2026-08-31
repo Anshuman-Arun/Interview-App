@@ -13,7 +13,9 @@ The initial package supports **PNG (`image/png`) only**. Browser and whiteboard 
 - maximum height: 8192 px
 - maximum pixels: 32 MiPixels
 
-Callers may lower or explicitly override those limits. Invalid, malformed, MIME-mismatched, oversized, or caller-dimension-mismatched snapshots fail closed.
+Callers may lower or explicitly override those limits, but package hard caps are 64 MiB encoded bytes, 16384 px per dimension, and 64 MiPixels. Invalid, malformed, MIME-mismatched, oversized, or caller-dimension-mismatched snapshots fail closed.
+
+Other hard resource ceilings prevent configuration from becoming effectively unbounded: dirty-region planning accepts at most 2048 input regions and 128 MiPixels of configured analysis area; processed outputs are capped at 64 MiB per image and 128 MiB combined tile output; prepared batches are capped at 128 MiB / 128 MiPixels, 256 images, 256 crops-or-tiles, and 1024 candidate inputs.
 
 ## Processing model
 
