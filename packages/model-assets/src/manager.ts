@@ -575,7 +575,7 @@ export class ModelAssetManager {
     const key = artifactInstallationKey(manifest);
     const installationDirectory = path.join(paths.artifacts, key);
 
-    const initial = await this.checkInstallation(manifest);
+    const initial = await this.checkInstallation(manifest, signal);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
     if (await pathEntryExists(installationDirectory)) {
       await removeEntryInsideRoot(paths.root, installationDirectory);
@@ -625,7 +625,7 @@ export class ModelAssetManager {
       }
 
       if (await pathEntryExists(installationDirectory)) {
-        const existing = await this.checkInstallation(manifest);
+        const existing = await this.checkInstallation(manifest, signal);
         if (existing.status === "INSTALLED" && existing.path !== undefined) {
           await removeEntryInsideRoot(paths.root, stagingDirectory);
           return existing.path;
@@ -644,7 +644,7 @@ export class ModelAssetManager {
         await atomicRenameDirectory(stagingDirectory, installationDirectory);
         published = true;
       } catch (error) {
-        const raced = await this.checkInstallation(manifest);
+        const raced = await this.checkInstallation(manifest, signal);
         if (raced.status === "INSTALLED" && raced.path !== undefined) {
           await removeEntryInsideRoot(paths.root, stagingDirectory);
           return raced.path;
@@ -661,7 +661,10 @@ export class ModelAssetManager {
     }
   }
 
-  private async checkInstallation(manifest: AssetManifest): Promise<InstallationCheck> {
+  private async checkInstallation(
+    manifest: AssetManifest,
+    signal?: AbortSignal
+  ): Promise<InstallationCheck> {
     const paths = await this.getSafeCachePaths();
     const key = artifactInstallationKey(manifest);
     const directory = path.join(paths.artifacts, key);
@@ -695,12 +698,16 @@ export class ModelAssetManager {
         sizeBytes: manifest.sizeBytes,
         sha256: manifest.sha256,
         maxBytes: this.maxArtifactBytes
-      });
+      }, signal);
       if (!verification.ok) {
         return { status: "CORRUPT", errorCode: verification.reason };
       }
+      if (signal?.aborted === true) {
+        throw new ModelAssetError("CANCELLED", "Artifact integrity inspection was cancelled.");
+      }
       return { status: "INSTALLED", path: payload };
     } catch (error) {
+      if (error instanceof ModelAssetError && error.code === "CANCELLED") throw error;
       return { status: "CORRUPT", errorCode: modelAssetErrorCode(error) };
     }
   }
