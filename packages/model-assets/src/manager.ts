@@ -2,7 +2,7 @@ import type { Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lstat, opendir } from "node:fs/promises";
 import path from "node:path";
-import { downloadHttpArtifact } from "./download.js";
+import { MAX_DOWNLOAD_TIMEOUT_MS, downloadHttpArtifact } from "./download.js";
 import {
   atomicRenameDirectory,
   availableDiskBytes,
@@ -147,6 +147,12 @@ export class ModelAssetManager {
       DEFAULT_DOWNLOAD_TIMEOUT_MS,
       "downloadTimeoutMs"
     );
+    if (this.downloadTimeoutMs > MAX_DOWNLOAD_TIMEOUT_MS) {
+      throw new ModelAssetError(
+        "INVALID_CONFIGURATION",
+        "downloadTimeoutMs exceeds the maximum timeout supported by Node.js."
+      );
+    }
     this.maxRedirects = nonnegativeSafeInteger(
       options.maxRedirects,
       DEFAULT_MAX_REDIRECTS,
