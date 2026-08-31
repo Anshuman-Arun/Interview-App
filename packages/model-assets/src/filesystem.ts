@@ -4,7 +4,6 @@ import {
   lstat,
   mkdir,
   opendir,
-  readFile,
   realpath,
   rename,
   rmdir,
@@ -369,16 +368,29 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
     throw new ModelAssetError("CORRUPT_INSTALLATION", "Installed artifact manifest is not a bounded regular file.");
   }
 
-  let serialized: string;
+  const chunks: Buffer[] = [];
+  let bytes = 0;
   try {
-    serialized = await readFile(manifestPath, "utf8");
+    for await (const chunk of createReadStream(manifestPath, { highWaterMark: 16 * 1024 })) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      bytes += buffer.byteLength;
+      if (bytes > MAX_STORED_MANIFEST_BYTES) {
+        throw new ModelAssetError(
+          "CORRUPT_INSTALLATION",
+          "Installed artifact manifest exceeds the cache metadata byte limit."
+        );
+      }
+      chunks.push(buffer);
+    }
   } catch (error) {
+    if (error instanceof ModelAssetError) throw error;
     throw new ModelAssetError(
       "IO_ERROR",
       "Unable to read installed artifact manifest.",
       { cause: error }
     );
   }
+  const serialized = Buffer.concat(chunks, bytes).toString("utf8");
   try {
     return JSON.parse(serialized) as unknown;
   } catch (error) {
