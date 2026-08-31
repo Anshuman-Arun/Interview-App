@@ -3,11 +3,11 @@ import type { DeterministicVerifier, VerificationResult } from "../../domain/src
 import { MAX_RECURRENCE_ORDER, MAX_RECURRENCE_SEQUENCE_LENGTH } from "./limits.js";
 import { IntermediateRationalInputSchema, RationalInputSchema } from "./rational-expression.js";
 import {
-  addRationals,
   equalRationals,
   multiplyRationals,
   parseIntermediateRationalInput,
   parseRationalInput,
+  sumRationals,
   type ExactRational
 } from "./math-utils.js";
 import { booleanClaimResult, mathFailure, prepareStructuredStatement } from "./verifier-common.js";
@@ -47,6 +47,68 @@ export const FiniteRecurrenceInterpretationSchema = z.object({
 });
 export type FiniteRecurrenceInterpretation = z.infer<typeof FiniteRecurrenceInterpretationSchema>;
 
+interface RecurrenceContribution {
+  readonly coefficient: ExactRational;
+  readonly previous: ExactRational;
+}
+
+function productsAreAdditiveInverses(
+  left: RecurrenceContribution,
+  right: RecurrenceContribution
+): boolean {
+  // Each coefficient is an operand-sized rational and each previous value is
+  // already an intermediate-sized rational. Cross-products here are therefore
+  // bounded comparison temporaries, not recurrence states.
+  const leftNumerator = left.coefficient.numerator * left.previous.numerator;
+  const leftDenominator = left.coefficient.denominator * left.previous.denominator;
+  const rightNumerator = right.coefficient.numerator * right.previous.numerator;
+  const rightDenominator = right.coefficient.denominator * right.previous.denominator;
+  return leftNumerator * rightDenominator === -(rightNumerator * leftDenominator);
+}
+
+function recurrenceStep(
+  sequence: readonly ExactRational[],
+  coefficients: readonly ExactRational[],
+  constant: ExactRational
+): ExactRational {
+  const contributions: RecurrenceContribution[] = coefficients.map((coefficient, index) => {
+    const previous = sequence[sequence.length - index - 1];
+    if (previous === undefined) {
+      throw new Error("Recurrence evaluation encountered an impossible missing term");
+    }
+    return { coefficient, previous };
+  });
+  const cancelled = new Set<number>();
+
+  for (let left = 0; left < contributions.length; left += 1) {
+    if (cancelled.has(left)) continue;
+    const leftContribution = contributions[left];
+    if (leftContribution === undefined) continue;
+
+    for (let right = left + 1; right < contributions.length; right += 1) {
+      if (cancelled.has(right)) continue;
+      const rightContribution = contributions[right];
+      if (
+        rightContribution !== undefined
+        && productsAreAdditiveInverses(leftContribution, rightContribution)
+      ) {
+        cancelled.add(left);
+        cancelled.add(right);
+        break;
+      }
+    }
+  }
+
+  const terms: ExactRational[] = [constant];
+  for (let index = 0; index < contributions.length; index += 1) {
+    if (cancelled.has(index)) continue;
+    const contribution = contributions[index];
+    if (contribution === undefined) continue;
+    terms.push(multiplyRationals(contribution.coefficient, contribution.previous));
+  }
+  return sumRationals(terms);
+}
+
 function extendSequence(
   initial: readonly ExactRational[],
   coefficients: readonly ExactRational[],
@@ -55,16 +117,7 @@ function extendSequence(
 ): readonly ExactRational[] {
   const sequence = [...initial];
   while (sequence.length < requiredLength) {
-    let next = constant;
-    for (let offset = 1; offset <= coefficients.length; offset += 1) {
-      const coefficient = coefficients[offset - 1];
-      const previous = sequence[sequence.length - offset];
-      if (coefficient === undefined || previous === undefined) {
-        throw new Error("Recurrence evaluation encountered an impossible missing term");
-      }
-      next = addRationals(next, multiplyRationals(coefficient, previous));
-    }
-    sequence.push(next);
+    sequence.push(recurrenceStep(sequence, coefficients, constant));
   }
   return sequence;
 }
