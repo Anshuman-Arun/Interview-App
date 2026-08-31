@@ -1013,6 +1013,80 @@ describe("provider definition and capability hostile values", () => {
     })).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
   });
 
+  it("does not let monkey-patched Array.find or Array.sort bypass lookup and requirements", () => {
+    const registry = new ProviderRegistry();
+    registry.register({
+      ...createSettingsProviderInput(),
+      models: [{
+        id: "first-model",
+        displayName: "First Model",
+        capabilities: createCapabilities()
+      }, {
+        id: "second-model",
+        displayName: "Second Model",
+        capabilities: createCapabilities()
+      }]
+    });
+
+    const originalFind = Object.getOwnPropertyDescriptor(Array.prototype, "find");
+    const originalSort = Object.getOwnPropertyDescriptor(Array.prototype, "sort");
+    let missingModelError: unknown;
+    let capabilityResult: unknown;
+    try {
+      Object.defineProperty(Array.prototype, "find", {
+        configurable: true,
+        writable: true,
+        value(this: unknown[]) {
+          return this[0];
+        }
+      });
+      Object.defineProperty(Array.prototype, "sort", {
+        configurable: true,
+        writable: true,
+        value() {
+          return [];
+        }
+      });
+
+      try {
+        resolveProviderConfiguration({
+          registry,
+          configuration: {
+            version: 1,
+            providerId: "settings-provider",
+            modelId: "missing-model",
+            enabled: true
+          }
+        });
+      } catch (error) {
+        missingModelError = error;
+      }
+
+      capabilityResult = matchCapabilityRequirements(
+        createCapabilities(),
+        ["IMAGE_INPUT"]
+      );
+    } finally {
+      if (originalFind === undefined) {
+        Reflect.deleteProperty(Array.prototype, "find");
+      } else {
+        Object.defineProperty(Array.prototype, "find", originalFind);
+      }
+      if (originalSort === undefined) {
+        Reflect.deleteProperty(Array.prototype, "sort");
+      } else {
+        Object.defineProperty(Array.prototype, "sort", originalSort);
+      }
+    }
+
+    expect(missingModelError).toMatchObject({ code: "UNKNOWN_MODEL" });
+    expect(capabilityResult).toEqual({
+      compatible: false,
+      unsupported: ["IMAGE_INPUT"],
+      unknown: []
+    });
+  });
+
   it("does not let a monkey-patched Array.includes bypass admission checks", () => {
     const credentialRegistry = new ProviderRegistry();
     credentialRegistry.register({

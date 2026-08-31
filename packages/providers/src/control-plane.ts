@@ -413,6 +413,37 @@ function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function sortedCodeUnitStringCopy<T extends string>(
+  values: readonly T[]
+): T[] {
+  const output: T[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === undefined) continue;
+    let insertionIndex = output.length;
+    while (
+      insertionIndex > 0
+      && compareCodeUnits(output[insertionIndex - 1] ?? "", value) > 0
+    ) {
+      output[insertionIndex] = output[insertionIndex - 1] as T;
+      insertionIndex -= 1;
+    }
+    output[insertionIndex] = value;
+  }
+  return output;
+}
+
+function readonlyStringArraysEqual(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
 function freezeNullPrototype<T extends object>(value: T): T {
   Object.setPrototypeOf(value, null);
   return Object.freeze(value);
@@ -946,7 +977,7 @@ function runtimeDataUseMatchesProviderKind(
 }
 
 function sortedReasoningLevels(capabilities: ModelCapabilities): readonly string[] {
-  return [...(capabilities.reasoningLevels ?? [])].sort(compareCodeUnits);
+  return sortedCodeUnitStringCopy(capabilities.reasoningLevels ?? []);
 }
 
 function adapterDefinitionMismatch(): ProviderControlPlaneError {
@@ -995,10 +1026,7 @@ function assertAdapterMatchesResolvedDefinition(
       reasoningMatches = declaredLevels === "UNKNOWN"
         ? executionReasoningLevels.length > 0
         : executionReasoningLevels.length > 0
-          && executionReasoningLevels.length === declaredLevels.length
-          && executionReasoningLevels.every(
-            (level, index) => level === declaredLevels[index]
-          );
+          && readonlyStringArraysEqual(executionReasoningLevels, declaredLevels);
     }
 
     if (
@@ -1084,7 +1112,7 @@ function freezeCapabilities(
   const reasoningLevels: ProviderModelCapabilities["reasoningLevels"] =
     capabilities.reasoningLevels === "UNKNOWN"
       ? "UNKNOWN"
-      : Object.freeze([...capabilities.reasoningLevels].sort(compareCodeUnits));
+      : Object.freeze(sortedCodeUnitStringCopy(capabilities.reasoningLevels));
   return freezeNullPrototype({ ...capabilities, reasoningLevels });
 }
 
@@ -1206,7 +1234,7 @@ function defineProviderValue(input: unknown): ProviderDefinition {
 
   return freezeNullPrototype({
     ...metadataResult.data,
-    credentialPurposes: Object.freeze([...credentialPurposes].sort(compareCodeUnits)),
+    credentialPurposes: Object.freeze(sortedCodeUnitStringCopy(credentialPurposes)),
     models: Object.freeze(models),
     ...(adapterFactory === undefined ? {} : { adapterFactory }),
     ...(validateSettings === undefined
@@ -1349,11 +1377,14 @@ export class ProviderRegistry {
     if (!parsedModelId.success) {
       throw new ProviderControlPlaneError("UNKNOWN_MODEL", "Model is not registered");
     }
-    const model = provider.models.find((candidate) => candidate.id === parsedModelId.data);
-    if (model === undefined) {
-      throw new ProviderControlPlaneError("UNKNOWN_MODEL", "Model is not registered for provider");
+    for (let index = 0; index < provider.models.length; index += 1) {
+      const model = provider.models[index];
+      if (model !== undefined && model.id === parsedModelId.data) return model;
     }
-    return model;
+    throw new ProviderControlPlaneError(
+      "UNKNOWN_MODEL",
+      "Model is not registered for provider"
+    );
   }
 
   #assertProviderIdAvailable(providerId: ProviderId): void {
@@ -1471,7 +1502,17 @@ export function matchCapabilityRequirements(
     normalizedRequirements.push(parsedRequirement.data);
   }
 
-  const normalized = [...new Set(normalizedRequirements)].sort(compareCodeUnits);
+  const uniqueRequirements: ProviderCapabilityKey[] = [];
+  for (let index = 0; index < normalizedRequirements.length; index += 1) {
+    const requirement = normalizedRequirements[index];
+    if (
+      requirement !== undefined
+      && !readonlyStringArrayContains(uniqueRequirements, requirement)
+    ) {
+      uniqueRequirements.push(requirement);
+    }
+  }
+  const normalized = sortedCodeUnitStringCopy(uniqueRequirements);
   const unsupported: ProviderCapabilityKey[] = [];
   const unknown: ProviderCapabilityKey[] = [];
   for (const requirement of normalized) {
