@@ -86,6 +86,10 @@ describe("local model asset manager", () => {
     const inheritedManifest = Object.create(manifest) as unknown;
     expect(AssetManifestSchema.safeParse(inheritedManifest).success).toBe(false);
 
+    const revokedManifest = Proxy.revocable({ ...manifest }, {});
+    revokedManifest.revoke();
+    expect(AssetManifestSchema.safeParse(revokedManifest.proxy).success).toBe(false);
+
     let getterReads = 0;
     const accessorManifest: Record<string, unknown> = { ...manifest };
     Object.defineProperty(accessorManifest, "sourceUrl", {
@@ -212,6 +216,12 @@ describe("local model asset manager", () => {
       expect.objectContaining({ code: "INVALID_MANIFEST" })
     );
     expect(proxyReads).toBe(0);
+
+    const revokedCollection = Proxy.revocable([manifest], {});
+    revokedCollection.revoke();
+    expect(() => UnsafeResolver(revokedCollection.proxy, request)).toThrow(
+      expect.objectContaining({ code: "INVALID_MANIFEST" })
+    );
   });
 
   it("resolves platform, architecture, and variant deterministically", () => {
@@ -1517,6 +1527,12 @@ describe("local model asset manager", () => {
       code: "INVALID_MANIFEST"
     });
     expect(proxyReads).toBe(0);
+
+    const revokedKeep = Proxy.revocable([manifest], {});
+    revokedKeep.revoke();
+    await expect(UnsafeClear(revokedKeep.proxy)).rejects.toMatchObject({
+      code: "INVALID_MANIFEST"
+    });
 
     expect(await manager.verifyInstalledArtifact(manifest)).toBe(true);
   });
