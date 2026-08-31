@@ -659,6 +659,58 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
+  it("cancels exact oversized recurrence contributions before enforcing the state bound", async () => {
+    const scale = 10n ** 120n;
+    const scaleText = scale.toString();
+    const scaleSquaredText = (scale * scale).toString();
+    const boundedExpected = (scale ** 34n).toString();
+
+    expect(boundedExpected.length).toBeLessThanOrEqual(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS);
+
+    const bounded = await verifyJson(new FiniteRecurrenceVerifier(), {
+      protocol: FINITE_RECURRENCE_PROTOCOL,
+      protocolVersion: FINITE_RECURRENCE_PROTOCOL_VERSION,
+      initial: [fraction("1"), fraction("1"), fraction(scaleText)],
+      recurrence: {
+        kind: "LINEAR_PREVIOUS_TERMS",
+        coefficients: [
+          fraction(scaleText),
+          fraction(scaleText),
+          fraction(`-${scaleSquaredText}`)
+        ],
+        constant: fraction("0")
+      },
+      claim: {
+        kind: "VALUE_AT_INDEX",
+        index: 69,
+        value: fraction(boundedExpected)
+      }
+    });
+    expect(bounded.status).toBe("VERIFIED");
+
+    const overLimit = await verifyJson(new FiniteRecurrenceVerifier(), {
+      protocol: FINITE_RECURRENCE_PROTOCOL,
+      protocolVersion: FINITE_RECURRENCE_PROTOCOL_VERSION,
+      initial: [fraction("1"), fraction("1"), fraction(scaleText)],
+      recurrence: {
+        kind: "LINEAR_PREVIOUS_TERMS",
+        coefficients: [
+          fraction(scaleText),
+          fraction(scaleText),
+          fraction(`-${scaleSquaredText}`)
+        ],
+        constant: fraction("0")
+      },
+      claim: {
+        kind: "VALUE_AT_INDEX",
+        index: 70,
+        value: fraction("0")
+      }
+    });
+    expect(overLimit.status).toBe("UNRESOLVED");
+    expect(overLimit.reason).toContain("RESOURCE_LIMIT");
+  });
+
   it("locks recurrence coefficient order and permits the maximum supported index", async () => {
     const ordered = await verifyJson(new FiniteRecurrenceVerifier(), {
       protocol: FINITE_RECURRENCE_PROTOCOL,
