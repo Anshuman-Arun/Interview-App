@@ -80,6 +80,48 @@ function readyDecision(message: unknown) {
 }
 
 describe("local worker lifecycle manager", () => {
+  it("rejects accessor-backed manager and start options without executing them", async () => {
+    let constructorGetterCalls = 0;
+    const hostileManagerOptions = Object.defineProperty({}, "fetch", {
+      enumerable: true,
+      get: () => {
+        constructorGetterCalls += 1;
+        return globalThis.fetch;
+      }
+    });
+    expect(() => new LocalRuntimeManager(
+      hostileManagerOptions as ConstructorParameters<typeof LocalRuntimeManager>[0]
+    )).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(constructorGetterCalls).toBe(0);
+
+    expect(() => new LocalRuntimeManager({
+      fetch: 42 as unknown as typeof globalThis.fetch
+    })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+
+    const runtime = manager();
+    runtime.register(definition("invalid-start-options", "ready"));
+    let signalGetterCalls = 0;
+    const hostileStartOptions = Object.defineProperty({}, "signal", {
+      enumerable: true,
+      get: () => {
+        signalGetterCalls += 1;
+        return new AbortController().signal;
+      }
+    });
+    expect(() => runtime.start(
+      "invalid-start-options",
+      hostileStartOptions as { readonly signal?: AbortSignal }
+    )).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(signalGetterCalls).toBe(0);
+
+    expect(() => runtime.start("invalid-start-options", {
+      signal: {} as AbortSignal
+    })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+
+    await expect(runtime.start("invalid-start-options"))
+      .resolves.toMatchObject({ state: "READY" });
+  });
+
   it("starts one process, coalesces duplicate starts, records readiness, and handshakes versions", async () => {
     const runtime = manager();
     runtime.register(definition("worker", "ready", {
