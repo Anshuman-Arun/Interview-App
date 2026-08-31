@@ -105,22 +105,26 @@ function nonnegativeSafeInteger(value: unknown, fallback: number, label: string)
   return resolved;
 }
 
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAbortSignal(value: unknown): value is AbortSignal {
+  if (!isUnknownRecord(value)) return false;
+  return typeof value["aborted"] === "boolean"
+    && typeof value["addEventListener"] === "function"
+    && typeof value["removeEventListener"] === "function";
+}
+
 function validateOptionalAbortSignal(value: unknown): AbortSignal | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== "object"
-      || value === null
-      || !("aborted" in value)
-      || typeof value.aborted !== "boolean"
-      || !("addEventListener" in value)
-      || typeof value.addEventListener !== "function"
-      || !("removeEventListener" in value)
-      || typeof value.removeEventListener !== "function") {
+  if (!isAbortSignal(value)) {
     throw new ModelAssetError(
       "INVALID_CONFIGURATION",
       "Cancellation signal must be an AbortSignal when provided."
     );
   }
-  return value as AbortSignal;
+  return value;
 }
 
 function modelAssetErrorCode(error: unknown): ModelAssetErrorCode {
@@ -150,13 +154,13 @@ export class ModelAssetManager {
 
   public constructor(options: ModelAssetManagerOptions) {
     const rawOptions: unknown = options;
-    if (typeof rawOptions !== "object" || rawOptions === null) {
+    if (!isUnknownRecord(rawOptions)) {
       throw new ModelAssetError(
         "INVALID_CONFIGURATION",
         "Model asset manager options must be an object."
       );
     }
-    const optionRecord = rawOptions as Record<string, unknown>;
+    const optionRecord = rawOptions;
     const rootDir = optionRecord["rootDir"];
     if (typeof rootDir !== "string" || !path.isAbsolute(rootDir)) {
       throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must be an absolute path.");
