@@ -15,6 +15,7 @@ import {
   MAX_MATH_STATEMENT_CHARACTERS,
   MAX_RECURRENCE_SEQUENCE_LENGTH,
   MAX_STRUCTURED_ARRAY_ITEMS,
+  MAX_STRUCTURED_INPUT_NODES,
   MODULAR_ARITHMETIC_PROTOCOL,
   MODULAR_ARITHMETIC_PROTOCOL_VERSION,
   MODULAR_ARITHMETIC_VERIFIER_NAME,
@@ -243,18 +244,38 @@ describe("deterministic math verifier invariants", () => {
     expect(overLimit.reason).toContain("RESOURCE_LIMIT");
   });
 
-  it("enforces the generic structured node budget independently of depth", async () => {
-    const result = await new ModularArithmeticVerifier().verify(JSON.stringify({
+  it("enforces the exact generic structured node budget independently of depth", async () => {
+    const verifier = new ModularArithmeticVerifier();
+    const base = {
       protocol: MODULAR_ARITHMETIC_PROTOCOL,
       protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
-      claim: { kind: "DIVISIBILITY", divisor: "2", dividend: integer("4") },
-      extra: Array.from(
-        { length: 1_000 },
-        () => Array.from({ length: 9 }, () => 0)
-      )
+      claim: { kind: "DIVISIBILITY", divisor: "2", dividend: integer("4") }
+    };
+
+    // base contributes 9 visited JSON nodes. The extra value contributes one
+    // outer array, 10 inner arrays, and 9,980 numeric leaves: 10,000 total.
+    expect(MAX_STRUCTURED_INPUT_NODES).toBe(10_000);
+    const atLimitExtra = Array.from(
+      { length: 10 },
+      () => Array.from({ length: 998 }, () => 0)
+    );
+    const atLimit = await verifier.verify(JSON.stringify({
+      ...base,
+      extra: atLimitExtra
     }), 1);
-    expect(result.status).toBe("UNRESOLVED");
-    expect(result.reason).toContain("RESOURCE_LIMIT");
+    expect(atLimit.status).toBe("UNRESOLVED");
+    expect(atLimit.reason).toContain("MALFORMED_INTERPRETATION");
+    expect(atLimit.reason).not.toContain("RESOURCE_LIMIT");
+
+    const overLimitExtra = atLimitExtra.map((row, index) =>
+      index === 0 ? [...row, 0] : row
+    );
+    const overLimit = await verifier.verify(JSON.stringify({
+      ...base,
+      extra: overLimitExtra
+    }), 1);
+    expect(overLimit.status).toBe("UNRESOLVED");
+    expect(overLimit.reason).toContain("RESOURCE_LIMIT");
   });
 
   it("is deterministic across repeated exact evaluation", async () => {
