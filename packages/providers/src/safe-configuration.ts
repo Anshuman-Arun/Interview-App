@@ -29,7 +29,7 @@ const SECRET_CONFIGURATION_KEYS = new Set([
   "cookie",
   "setcookie"
 ]);
-const STANDALONE_AUTH_PATTERN = /\b(?:bearer|basic)\s+[a-z0-9._~+/=-]+/iu;
+const STANDALONE_AUTH_PATTERN = /\b(?:bearer\s+(?=[a-z0-9._~+/-]{16,})(?=[a-z0-9._~+/-]*[0-9._~+/-])[a-z0-9._~+/-]+|basic\s+(?=[a-z0-9+/=]{8,})(?=[a-z0-9+/=]*[0-9+/=])[a-z0-9+/]+={0,2})/iu;
 const COMMON_API_KEY_PATTERN = /\b(?:sk-[a-z0-9_-]{8,}|AIza[a-z0-9_-]{20,})\b/iu;
 const PRIVATE_KEY_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/iu;
 

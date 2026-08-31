@@ -413,8 +413,59 @@ function inspectPlainDataObjectProperties(
   return Object.freeze(inspected);
 }
 
+class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
+  public constructor(
+    public readonly id: ProviderAdapterFactoryId,
+    private readonly createAdapterImpl: ProviderAdapterFactoryDefinition["createAdapter"]
+  ) {
+    Object.freeze(this);
+  }
+
+  public async createAdapter(
+    input: ProviderAdapterFactoryInput
+  ): Promise<ReasoningProvider> {
+    let resolved: ResolvedProviderConfiguration;
+    try {
+      resolved = input.resolved;
+    } catch {
+      throw new ProviderControlPlaneError(
+        "INVALID_FACTORY_INPUT",
+        "Provider adapter factory requires a control-plane resolution"
+      );
+    }
+    assertTrustedResolvedConfiguration(resolved);
+
+    let adapter: ReasoningProvider;
+    try {
+      adapter = await this.createAdapterImpl(input);
+    } catch (error) {
+      if (
+        error instanceof ProviderControlPlaneError
+        && (
+          error.code === "CREDENTIALS_REQUIRED"
+          || error.code === "CREDENTIAL_RESOLUTION_FAILED"
+          || error.code === "INVALID_FACTORY_INPUT"
+        )
+      ) {
+        throw new ProviderControlPlaneError(
+          error.code,
+          "Provider adapter factory rejected its input"
+        );
+      }
+      throw new ProviderControlPlaneError(
+        "ADAPTER_FACTORY_FAILED",
+        "Provider adapter factory failed"
+      );
+    }
+
+    assertAdapterMatchesResolvedDefinition(resolved, adapter);
+    return adapter;
+  }
+}
+
 function normalizeFactory(factory: unknown): ProviderAdapterFactory | undefined {
   if (factory === undefined) return undefined;
+  if (factory instanceof RegisteredProviderAdapterFactory) return factory;
   if (typeof factory !== "object" || factory === null) {
     throw new ProviderControlPlaneError(
       "INVALID_ADAPTER_FACTORY",
@@ -435,36 +486,7 @@ function normalizeFactory(factory: unknown): ProviderAdapterFactory | undefined 
       "Provider adapter factory is malformed"
     );
   }
-  return Object.freeze({
-    id: id.data,
-    async createAdapter(input: ProviderAdapterFactoryInput): Promise<ReasoningProvider> {
-      assertTrustedResolvedConfiguration(input.resolved);
-      let adapter: ReasoningProvider;
-      try {
-        adapter = await createAdapter(input);
-      } catch (error) {
-        if (
-          error instanceof ProviderControlPlaneError
-          && (
-            error.code === "CREDENTIALS_REQUIRED"
-            || error.code === "CREDENTIAL_RESOLUTION_FAILED"
-            || error.code === "INVALID_FACTORY_INPUT"
-          )
-        ) {
-          throw new ProviderControlPlaneError(
-            error.code,
-            "Provider adapter factory rejected its input"
-          );
-        }
-        throw new ProviderControlPlaneError(
-          "ADAPTER_FACTORY_FAILED",
-          "Provider adapter factory failed"
-        );
-      }
-      assertAdapterMatchesResolvedDefinition(input.resolved, adapter);
-      return adapter;
-    }
-  });
+  return new RegisteredProviderAdapterFactory(id.data, createAdapter);
 }
 
 function supportMatchesBoolean(
@@ -692,12 +714,12 @@ export function defineProvider(input: ProviderDefinitionInput): ProviderDefiniti
       (metadataResult.data.kind === "REMOTE_API"
         && (
           model.capabilities.remoteExecution !== "SUPPORTED"
-          || model.capabilities.localExecution === "SUPPORTED"
+          || model.capabilities.localExecution !== "UNSUPPORTED"
         ))
       || (metadataResult.data.kind === "LOCAL_PROCESS"
         && (
           model.capabilities.localExecution !== "SUPPORTED"
-          || model.capabilities.remoteExecution === "SUPPORTED"
+          || model.capabilities.remoteExecution !== "UNSUPPORTED"
         ))
     ) {
       throw new ProviderControlPlaneError(
@@ -1154,7 +1176,19 @@ export async function evaluateProviderReadiness(input: {
       });
     }
   } else {
-    if (input.secretResolver?.hasSecret === undefined) {
+    const resolver = input.secretResolver;
+    let hasSecret: ProviderSecretResolver["hasSecret"];
+    try {
+      hasSecret = resolver?.hasSecret;
+    } catch {
+      return Object.freeze({
+        state: "UNKNOWN",
+        providerId: resolved.provider.id,
+        modelId: resolved.model.id,
+        reason: "CREDENTIAL_STATUS_UNKNOWN"
+      });
+    }
+    if (typeof hasSecret !== "function" || resolver === undefined) {
       return Object.freeze({
         state: "UNKNOWN",
         providerId: resolved.provider.id,
@@ -1164,10 +1198,10 @@ export async function evaluateProviderReadiness(input: {
     }
     let available: unknown;
     try {
-      available = await input.secretResolver.hasSecret({
+      available = await hasSecret.call(resolver, Object.freeze({
         providerId: resolved.provider.id,
         reference
-      });
+      }));
     } catch {
       return Object.freeze({
         state: "UNKNOWN",

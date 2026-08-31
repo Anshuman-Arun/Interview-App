@@ -98,7 +98,7 @@ describe("provider configuration secret exclusion", () => {
 
   it("rejects common raw secret payloads even when hidden under innocuous keys", () => {
     for (const value of [
-      "Bearer abcdefghijklmnop",
+      "Bearer abcdefghijklmnop.12345678",
       "Basic Zm9vOmJhcg==",
       "AIza123456789012345678901234567890",
       "token=raw-private-token",
@@ -106,6 +106,23 @@ describe("provider configuration secret exclusion", () => {
     ]) {
       expect(() => validateProviderConfiguration(settingsConfiguration({ endpoint: value })))
         .toThrow(expect.objectContaining({ code: "SECRET_IN_CONFIGURATION" }));
+    }
+  });
+
+  it("does not classify ordinary descriptive text as a raw authorization credential", () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+
+    for (const mode of [
+      "Basic mode",
+      "Basic configuration",
+      "Bearer strategy",
+      "Use basic defaults"
+    ]) {
+      expect(() => resolveProviderConfiguration({
+        registry,
+        configuration: settingsConfiguration({ mode })
+      })).not.toThrow();
     }
   });
 
