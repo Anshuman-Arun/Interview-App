@@ -193,12 +193,17 @@ async function downloadResponseToFile(
               callback(null, chunk);
             }
           });
-          await pipeline(
-            response,
-            limiter,
-            destinationHandle.createWriteStream({ autoClose: false }),
-            { signal: options.signal }
-          );
+          const destinationStream = destinationHandle.createWriteStream({ autoClose: false });
+          try {
+            await pipeline(
+              response,
+              limiter,
+              destinationStream,
+              { signal: options.signal }
+            );
+          } finally {
+            destinationStream.destroy();
+          }
           if (bytes !== options.expectedBytes) {
             throw new ModelAssetError("SIZE_MISMATCH", "Downloaded artifact size does not match the manifest.");
           }
