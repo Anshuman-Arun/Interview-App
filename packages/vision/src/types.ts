@@ -5,6 +5,43 @@ import { BoardRevisionSchema, type BoardRevision } from "../../domain/src/index.
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
+const UNSUPPORTED_APNG_CHUNKS = new Set(["acTL", "fcTL", "fdAT"]);
+
+function assertStaticPngChunkStructure(bytes: Buffer): void {
+  let offset = PNG_SIGNATURE.length;
+  let chunkIndex = 0;
+  let foundEnd = false;
+
+  while (offset < bytes.length) {
+    if (offset + 12 > bytes.length) throw new RangeError("PNG contains a truncated chunk");
+    const chunkLength = bytes.readUInt32BE(offset);
+    const chunkType = bytes.toString("ascii", offset + 4, offset + 8);
+    const nextOffset = offset + 12 + chunkLength;
+    if (!Number.isSafeInteger(nextOffset) || nextOffset > bytes.length) {
+      throw new RangeError("PNG chunk length exceeds encoded payload bounds");
+    }
+    if (chunkIndex === 0 && (chunkType !== "IHDR" || chunkLength !== 13)) {
+      throw new RangeError("PNG must begin with exactly one IHDR chunk");
+    }
+    if (chunkIndex > 0 && chunkType === "IHDR") {
+      throw new RangeError("PNG contains multiple IHDR chunks");
+    }
+    if (UNSUPPORTED_APNG_CHUNKS.has(chunkType)) {
+      throw new RangeError("Animated PNG chunks are unsupported");
+    }
+    if (chunkType === "IEND") {
+      if (chunkLength !== 0) throw new RangeError("PNG IEND chunk must be empty");
+      if (nextOffset !== bytes.length) throw new RangeError("PNG contains trailing bytes after IEND");
+      foundEnd = true;
+      break;
+    }
+    offset = nextOffset;
+    chunkIndex += 1;
+  }
+
+  if (!foundEnd) throw new RangeError("PNG is missing its terminal IEND chunk");
+}
+
 interface PayloadIntegrityMetadata {
   readonly width: number;
   readonly height: number;
@@ -32,6 +69,7 @@ function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffe
   if (bytes.readUInt32BE(16) !== metadata.width || bytes.readUInt32BE(20) !== metadata.height) {
     throw new RangeError("Image payload dimensions do not match metadata");
   }
+  assertStaticPngChunkStructure(bytes);
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (digest !== metadata.contentDigest) throw new RangeError("Image payload digest does not match metadata");
 
