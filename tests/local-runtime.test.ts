@@ -1075,7 +1075,9 @@ describe("local worker lifecycle manager", () => {
 
   it("recovers framing after invalid UTF-8 and accepts CRLF readiness lines", async () => {
     const runtime = manager();
-    runtime.register(definition("invalid-utf8", "invalid-utf8-then-ready"));
+    runtime.register(definition("invalid-utf8", "invalid-utf8-then-ready", {
+      environment: { secrets: { RUNTIME_ONLY_SECRET: "[" } }
+    }));
     const invalidUtf8 = await runtime.start("invalid-utf8");
     expect(invalidUtf8.state).toBe("READY");
     expect(invalidUtf8.stdout.lines).toContain("[MALFORMED_OUTPUT]");
