@@ -1488,6 +1488,22 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "tmp"))).toEqual([]);
   });
 
+  it("rejects an oversized keep collection before deleting cache entries", async () => {
+    const payload = Buffer.from("bounded-keep-list");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root, { maxListEntries: 1 });
+    const manifest = manifestFor(payload, "https://example.test/bounded-keep-list.bin");
+    await manager.importLocal(manifest, source);
+
+    await expect(manager.clearUnused([manifest, manifest])).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect(await manager.verifyInstalledArtifact(manifest)).toBe(true);
+  });
+
   it("rejects proxy and accessor-backed keep collections before cleanup", async () => {
     const payload = Buffer.from("keep-collection");
     const root = await newRoot();
