@@ -632,6 +632,38 @@ describe("vision snapshot validation and hashing", () => {
     }
   });
 
+  it("fails closed on hostile snapshot input and validation-limit getters", () => {
+    const hostileInput = new Proxy({}, {
+      get() {
+        throw new Error("hostile snapshot getter");
+      }
+    });
+    try {
+      createValidatedImageSnapshot(hostileInput as unknown as Parameters<typeof createValidatedImageSnapshot>[0]);
+      throw new Error("Expected hostile snapshot rejection");
+    } catch (error) {
+      expectCode(error, "INVALID_IMAGE");
+    }
+
+    const validInput = {
+      snapshotId: "hostile-limits",
+      sourceType: "WHITEBOARD_SNAPSHOT" as const,
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: makePng(1, 1)
+    };
+    const hostileLimits = new Proxy({}, {
+      get() {
+        throw new Error("hostile limits getter");
+      }
+    });
+    expect(() => createValidatedImageSnapshot(
+      validInput,
+      hostileLimits as unknown as Parameters<typeof createValidatedImageSnapshot>[1]
+    )).toThrowError(RangeError);
+  });
+
   it("rejects null image limit overrides rather than silently using defaults", () => {
     expect(() => createValidatedImageSnapshot({
       snapshotId: "null-limits",
@@ -1139,6 +1171,32 @@ describe("crop, resize, tiling, and cancellation", () => {
       outcome: "SUCCESS"
     });
     expect(JSON.stringify(first.diagnostics)).not.toContain("encodedBytes");
+  });
+
+  it("fails closed on hostile processing option enumeration and getters", async () => {
+    const source = snapshot(makePng(2, 2));
+    const hostileEnumeration = new Proxy({}, {
+      ownKeys() {
+        throw new Error("hostile ownKeys trap");
+      }
+    });
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      hostileEnumeration as unknown as Parameters<typeof cropImage>[2]
+    )).rejects.toThrowError(TypeError);
+
+    const hostileGetter = Object.defineProperty({}, "maxOutputEncodedBytes", {
+      enumerable: true,
+      get() {
+        throw new Error("hostile option getter");
+      }
+    });
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      hostileGetter as unknown as Parameters<typeof cropImage>[2]
+    )).rejects.toThrowError(TypeError);
   });
 
   it("snapshots processing option getters once to prevent validation/use races", async () => {
