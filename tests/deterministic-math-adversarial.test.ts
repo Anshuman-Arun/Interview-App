@@ -23,6 +23,7 @@ import {
   MAX_PROBABILITY_OUTCOMES,
   MAX_RECURRENCE_SEQUENCE_LENGTH,
   MAX_VARIADIC_EXPRESSION_TERMS,
+  MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS,
   MODULAR_ARITHMETIC_PROTOCOL,
   MODULAR_ARITHMETIC_PROTOCOL_VERSION,
   ModularArithmeticVerifier,
@@ -62,6 +63,12 @@ const fractionExpression = (numerator: string, denominator = "1") => ({
   kind: "RATIONAL" as const,
   value: fraction(numerator, denominator)
 });
+
+function primePowerAtLeastDigits(base: bigint, minimumDigits: number): bigint {
+  let value = 1n;
+  while (value.toString().length < minimumDigits) value *= base;
+  return value;
+}
 
 async function verifyJson(verifier: DeterministicVerifier, value: unknown): Promise<VerificationResult> {
   const result = await verifier.verify(JSON.stringify(value), 1);
@@ -449,6 +456,60 @@ describe("adversarial deterministic math verification", () => {
       }
     });
     expect(result.status).toBe("VERIFIED");
+  });
+
+  it("bounds wide rational sum work while preserving the in-budget cancellation case", async () => {
+    const bases = [
+      2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n,
+      41n, 43n, 47n, 53n, 59n, 61n, 67n, 71n, 73n, 79n, 83n, 89n,
+      97n, 101n, 103n, 107n, 109n, 113n, 127n, 131n, 137n, 139n, 149n, 151n
+    ] as const;
+    const denominators = bases.map((base) => primePowerAtLeastDigits(base, 239));
+    for (const denominator of denominators) {
+      expect(denominator.toString().length).toBeGreaterThanOrEqual(239);
+      expect(denominator.toString().length).toBeLessThanOrEqual(241);
+    }
+
+    const underWorkProduct = denominators.slice(0, 35).reduce(
+      (product, denominator) => product * denominator,
+      1n
+    );
+    const overWorkProduct = underWorkProduct * denominators[35]!;
+    expect(underWorkProduct.toString().length)
+      .toBeLessThanOrEqual(MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS);
+    expect(overWorkProduct.toString().length)
+      .toBeGreaterThan(MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS);
+
+    const cancellationTerms = (count: number) => denominators.slice(0, count).flatMap(
+      (denominator) => [
+        fractionExpression("1", denominator.toString()),
+        fractionExpression("1", denominator.toString()),
+        fractionExpression("-2", denominator.toString())
+      ]
+    );
+
+    const withinBudget = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: { kind: "SUM", terms: cancellationTerms(35) },
+        right: fractionExpression("0")
+      }
+    });
+    expect(withinBudget.status).toBe("VERIFIED");
+
+    const overBudget = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: { kind: "SUM", terms: cancellationTerms(36) },
+        right: fractionExpression("0")
+      }
+    });
+    expect(overBudget.status).toBe("UNRESOLVED");
+    expect(overBudget.reason).toContain("RESOURCE_LIMIT");
   });
 
   it("cross-cancels rational product factors even without exact reciprocal pairs", async () => {
@@ -997,6 +1058,44 @@ describe("adversarial deterministic math verification", () => {
       }
     });
     expect(result.status).toBe("VERIFIED");
+  });
+
+  it("abstains before probability normalization exceeds the exact-work budget", async () => {
+    const bases = [
+      2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n,
+      41n, 43n, 47n, 53n, 59n, 61n, 67n, 71n, 73n, 79n, 83n, 89n,
+      97n, 101n, 103n, 107n, 109n, 113n, 127n, 131n, 137n, 139n, 149n, 151n
+    ] as const;
+    const scales = bases.map((base) => primePowerAtLeastDigits(base, 239));
+    const scaleProduct = scales.reduce((product, scale) => product * scale, 1n);
+    expect(scaleProduct.toString().length)
+      .toBeGreaterThan(MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS);
+
+    const outcomes = scales.flatMap((scale) => {
+      const denominator = 36n * scale;
+      return [
+        {
+          probability: fraction("1", denominator.toString()),
+          value: fraction("0")
+        },
+        {
+          probability: fraction((scale - 1n).toString(), denominator.toString()),
+          value: fraction("0")
+        }
+      ];
+    });
+
+    const result = await verifyJson(new ProbabilityArithmeticVerifier(), {
+      protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+      protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "FINITE_EXPECTATION",
+        outcomes,
+        claimedExpectation: fraction("0")
+      }
+    });
+    expect(result.status).toBe("UNRESOLVED");
+    expect(result.reason).toContain("RESOURCE_LIMIT");
   });
 
   it("cancels exact expectation terms before aggregate denominator overflow", async () => {
