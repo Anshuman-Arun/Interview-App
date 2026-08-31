@@ -3,8 +3,8 @@ import { createReadStream, createWriteStream } from "node:fs";
 import {
   lstat,
   mkdir,
+  opendir,
   readFile,
-  readdir,
   realpath,
   rename,
   rmdir,
@@ -153,14 +153,14 @@ export async function removeEntryInsideRoot(root: string, candidate: string): Pr
     }
   }
 
-  let children: string[];
   try {
-    children = await readdir(candidate);
+    const directory = await opendir(candidate);
+    for await (const child of directory) {
+      await removeEntryInsideRoot(root, path.join(candidate, child.name));
+    }
   } catch (error) {
+    if (error instanceof ModelAssetError) throw error;
     throw new ModelAssetError("IO_ERROR", "Unable to enumerate cache directory for removal.", { cause: error });
-  }
-  for (const child of children) {
-    await removeEntryInsideRoot(root, path.join(candidate, child));
   }
   try {
     await rmdir(candidate);
@@ -337,9 +337,9 @@ export async function sumRegularFileBytes(root: string): Promise<number> {
   if (entry.isFile()) return entry.size;
   if (!entry.isDirectory()) return 0;
   let total = 0;
-  const children = await readdir(root);
-  for (const child of children) {
-    total += await sumRegularFileBytes(path.join(root, child));
+  const directory = await opendir(root);
+  for await (const child of directory) {
+    total += await sumRegularFileBytes(path.join(root, child.name));
     if (!Number.isSafeInteger(total)) {
       throw new ModelAssetError("CACHE_LIMIT_EXCEEDED", "Cache usage exceeds safe integer accounting limits.");
     }
@@ -376,8 +376,9 @@ export async function sumArtifactPayloadBytes(root: string): Promise<number> {
   if (entry.isFile()) return path.basename(root).toLowerCase() === "manifest.json" ? 0 : entry.size;
   if (!entry.isDirectory()) return 0;
   let total = 0;
-  for (const child of await readdir(root)) {
-    total += await sumArtifactPayloadBytes(path.join(root, child));
+  const directory = await opendir(root);
+  for await (const child of directory) {
+    total += await sumArtifactPayloadBytes(path.join(root, child.name));
     if (!Number.isSafeInteger(total)) {
       throw new ModelAssetError("CACHE_LIMIT_EXCEEDED", "Artifact payload usage exceeds safe integer limits.");
     }
