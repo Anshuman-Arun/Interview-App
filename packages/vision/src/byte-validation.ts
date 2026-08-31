@@ -1,3 +1,5 @@
+import { isProxy } from "node:util/types";
+
 const rawTypedArrayPrototype: unknown = Object.getPrototypeOf(Uint8Array.prototype);
 if (typeof rawTypedArrayPrototype !== "object" || rawTypedArrayPrototype === null) {
   throw new Error("TypedArray prototype is unavailable");
@@ -13,9 +15,25 @@ if (typedArrayByteLengthGetter === undefined) {
 }
 
 export function actualUint8ArrayByteLength(value: Uint8Array): number {
-  const result: unknown = Reflect.apply(typedArrayByteLengthGetter, value, []);
+  let result: unknown;
+  try {
+    result = Reflect.apply(typedArrayByteLengthGetter, value, []);
+  } catch {
+    throw new TypeError("Value is not a direct readable Uint8Array");
+  }
   if (typeof result !== "number" || !Number.isSafeInteger(result) || result < 0) {
     throw new TypeError("TypedArray intrinsic returned an invalid byte length");
   }
   return result;
+}
+
+export function isDirectUint8Array(value: unknown): value is Uint8Array {
+  if (typeof value !== "object" || value === null || isProxy(value)) return false;
+  try {
+    if (!(value instanceof Uint8Array)) return false;
+    actualUint8ArrayByteLength(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
