@@ -1038,17 +1038,19 @@ export class ModelAssetManager {
     key: string,
     maxCacheBytes: number | undefined
   ): Promise<void> {
-    await this.withMutationGate(paths, async (shared) => {
-      shared.activeInstallationCounts.set(
-        key,
-        (shared.activeInstallationCounts.get(key) ?? 0) + 1
-      );
-      if (maxCacheBytes !== undefined) {
-        shared.activeCacheLimitCounts.set(
-          maxCacheBytes,
-          (shared.activeCacheLimitCounts.get(maxCacheBytes) ?? 0) + 1
+    await this.withCapacityGate(paths, async () => {
+      await this.withMutationGate(paths, async (shared) => {
+        shared.activeInstallationCounts.set(
+          key,
+          (shared.activeInstallationCounts.get(key) ?? 0) + 1
         );
-      }
+        if (maxCacheBytes !== undefined) {
+          shared.activeCacheLimitCounts.set(
+            maxCacheBytes,
+            (shared.activeCacheLimitCounts.get(maxCacheBytes) ?? 0) + 1
+          );
+        }
+      });
     });
   }
 
@@ -1057,21 +1059,23 @@ export class ModelAssetManager {
     key: string,
     maxCacheBytes: number | undefined
   ): Promise<void> {
-    await this.withMutationGate(paths, async (shared) => {
-      const count = shared.activeInstallationCounts.get(key) ?? 0;
-      if (count <= 1) {
-        shared.activeInstallationCounts.delete(key);
-      } else {
-        shared.activeInstallationCounts.set(key, count - 1);
-      }
-      if (maxCacheBytes !== undefined) {
-        const limitCount = shared.activeCacheLimitCounts.get(maxCacheBytes) ?? 0;
-        if (limitCount <= 1) {
-          shared.activeCacheLimitCounts.delete(maxCacheBytes);
+    await this.withCapacityGate(paths, async () => {
+      await this.withMutationGate(paths, async (shared) => {
+        const count = shared.activeInstallationCounts.get(key) ?? 0;
+        if (count <= 1) {
+          shared.activeInstallationCounts.delete(key);
         } else {
-          shared.activeCacheLimitCounts.set(maxCacheBytes, limitCount - 1);
+          shared.activeInstallationCounts.set(key, count - 1);
         }
-      }
+        if (maxCacheBytes !== undefined) {
+          const limitCount = shared.activeCacheLimitCounts.get(maxCacheBytes) ?? 0;
+          if (limitCount <= 1) {
+            shared.activeCacheLimitCounts.delete(maxCacheBytes);
+          } else {
+            shared.activeCacheLimitCounts.set(maxCacheBytes, limitCount - 1);
+          }
+        }
+      });
     });
   }
 
