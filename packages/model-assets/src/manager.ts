@@ -14,6 +14,7 @@ import {
   readStoredManifest,
   removeEntryInsideRoot,
   sumArtifactPayloadBytes,
+  validateCachePaths,
   verifyArtifactFile,
   writeStoredManifest,
   type CachePaths
@@ -34,6 +35,7 @@ const DEFAULT_DOWNLOAD_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_REDIRECTS = 5;
 const DEFAULT_MAX_LIST_ENTRIES = 10_000;
 const INSTALLATION_KEY_PATTERN = /^[0-9a-f]{64}$/u;
+const TEMPORARY_ENTRY_PATTERN = /^[0-9a-f]{64}-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 export interface ModelAssetManagerOptions {
   readonly rootDir: string;
@@ -157,6 +159,7 @@ export class ModelAssetManager {
       "maxListEntries"
     );
     this.cachePathsPromise = initializeCachePaths(options.rootDir);
+    void this.cachePathsPromise.catch(() => undefined);
   }
 
   public async install(manifestValue: unknown, signal?: AbortSignal): Promise<string> {
@@ -252,7 +255,7 @@ export class ModelAssetManager {
   }
 
   public async listInstalledArtifacts(): Promise<readonly InstalledArtifactSummary[]> {
-    const paths = await this.cachePathsPromise;
+    const paths = await this.getSafeCachePaths();
     const installed: InstalledArtifactSummary[] = [];
     const directoryHandle = await opendir(paths.artifacts);
     let inspectedEntries = 0;
@@ -326,7 +329,7 @@ export class ModelAssetManager {
         "Cannot remove an artifact while its installation is in flight."
       );
     }
-    const paths = await this.cachePathsPromise;
+    const paths = await this.getSafeCachePaths();
     await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, key));
     this.lastFailures.delete(key);
   }
@@ -339,9 +342,10 @@ export class ModelAssetManager {
       );
     }
 
-    const paths = await this.cachePathsPromise;
+    const paths = await this.getSafeCachePaths();
     const directoryHandle = await opendir(paths.temporary);
     for await (const entry of directoryHandle) {
+      if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
       await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry.name));
     }
     this.lastFailures.clear();
@@ -358,12 +362,12 @@ export class ModelAssetManager {
     const keepKeys = new Set(
       keepManifestValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
     );
-    const paths = await this.cachePathsPromise;
+    const paths = await this.getSafeCachePaths();
     const directoryHandle = await opendir(paths.artifacts);
     let removed = 0;
 
     for await (const entry of directoryHandle) {
-      if (keepKeys.has(entry.name)) continue;
+      if (!INSTALLATION_KEY_PATTERN.test(entry.name) || keepKeys.has(entry.name)) continue;
       await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry.name));
       this.lastFailures.delete(entry.name);
       removed += 1;
@@ -406,6 +410,9 @@ export class ModelAssetManager {
       setStage: (stage: "DOWNLOADING" | "VERIFYING") => void
     ) => Promise<string>
   ): Promise<string> {
+    if (signal?.aborted === true) {
+      throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+    }
     if (manifest.sizeBytes > this.maxArtifactBytes) {
       throw new ModelAssetError(
         "ARTIFACT_TOO_LARGE",
@@ -415,6 +422,10 @@ export class ModelAssetManager {
 
     const key = artifactInstallationKey(manifest);
     let entry = this.inFlight.get(key);
+    if (entry !== undefined && entry.controller.signal.aborted && !entry.settled) {
+      await this.waitForAbortedEntryToSettle(entry, signal);
+      entry = this.inFlight.get(key);
+    }
     if (entry === undefined) {
       const controller = new AbortController();
       entry = {
@@ -479,13 +490,49 @@ export class ModelAssetManager {
     });
   }
 
+  private async waitForAbortedEntryToSettle(
+    entry: InFlightEntry,
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (signal?.aborted === true) {
+      throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+    }
+
+    await new Promise<void>((resolvePromise, rejectPromise) => {
+      let completed = false;
+      const finish = (): void => {
+        if (completed) return;
+        completed = true;
+        signal?.removeEventListener("abort", abortListener);
+        resolvePromise();
+      };
+      const abortListener = (): void => {
+        if (completed) return;
+        completed = true;
+        signal?.removeEventListener("abort", abortListener);
+        rejectPromise(
+          new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.")
+        );
+      };
+
+      signal?.addEventListener("abort", abortListener, { once: true });
+      entry.promise.then(finish, finish);
+    });
+  }
+
+  private async getSafeCachePaths(): Promise<CachePaths> {
+    const paths = await this.cachePathsPromise;
+    await validateCachePaths(paths);
+    return paths;
+  }
+
   private async performInstallation(
     manifest: AssetManifest,
     signal: AbortSignal,
     setStage: (stage: "DOWNLOADING" | "VERIFYING") => void,
     stagePayload: (destination: string) => Promise<void>
   ): Promise<string> {
-    const paths = await this.cachePathsPromise;
+    const paths = await this.getSafeCachePaths();
     const key = artifactInstallationKey(manifest);
     const installationDirectory = path.join(paths.artifacts, key);
 
@@ -546,6 +593,13 @@ export class ModelAssetManager {
         await removeEntryInsideRoot(paths.root, installationDirectory);
       }
 
+      if (signal.aborted) {
+        throw new ModelAssetError(
+          "CANCELLED",
+          "Artifact installation was cancelled before publication."
+        );
+      }
+
       try {
         await atomicRenameDirectory(stagingDirectory, installationDirectory);
         published = true;
@@ -567,7 +621,7 @@ export class ModelAssetManager {
   }
 
   private async checkInstallation(manifest: AssetManifest): Promise<InstallationCheck> {
-    const paths = await this.cachePathsPromise;
+    const paths = await this.getSafeCachePaths();
     const key = artifactInstallationKey(manifest);
     const directory = path.join(paths.artifacts, key);
 
