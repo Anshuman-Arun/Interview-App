@@ -846,6 +846,30 @@ export class ModelAssetManager {
     }
   }
 
+  private async reconcileDestinationForInstall(
+    paths: CachePaths,
+    manifest: AssetManifest,
+    signal: AbortSignal
+  ): Promise<string | undefined> {
+    return await this.withMutationGate(paths, async () => {
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+      }
+      const current = await this.checkInstallation(manifest, signal);
+      if (current.status === "INSTALLED" && current.path !== undefined) {
+        return current.path;
+      }
+      this.rejectTransientInstallationFailure(current);
+      if (current.status === "CORRUPT") {
+        const directory = path.join(paths.artifacts, artifactInstallationKey(manifest));
+        if (await pathEntryExists(directory)) {
+          await this.removeManagedEntry(paths, directory);
+        }
+      }
+      return undefined;
+    });
+  }
+
   private async beginSharedInstallation(paths: CachePaths, key: string): Promise<void> {
     await this.withMutationGate(paths, async (shared) => {
       shared.activeInstallationCounts.set(
@@ -886,18 +910,9 @@ export class ModelAssetManager {
     if (signal.aborted) {
       throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
     }
-    if (await pathEntryExists(installationDirectory)) {
-      if (signal.aborted) {
-        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
-      }
-      const beforeRemoval = await this.checkInstallation(manifest, signal);
-      if (beforeRemoval.status === "INSTALLED" && beforeRemoval.path !== undefined) {
-        return beforeRemoval.path;
-      }
-      this.rejectTransientInstallationFailure(beforeRemoval);
-      if (beforeRemoval.status === "CORRUPT") {
-        await this.removeManagedEntry(paths, installationDirectory);
-      }
+    if (initial.status === "CORRUPT") {
+      const reconciled = await this.reconcileDestinationForInstall(paths, manifest, signal);
+      if (reconciled !== undefined) return reconciled;
     }
 
     const serializedManifest = serializeAssetManifest(manifest);
@@ -962,20 +977,16 @@ export class ModelAssetManager {
       }
 
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
-      if (await pathEntryExists(installationDirectory)) {
-        const existing = await this.checkInstallation(manifest, signal);
-        if (existing.status === "INSTALLED" && existing.path !== undefined) {
-          await this.removeManagedEntry(paths, stagingDirectory);
-          if (signal.aborted) {
-            throw new ModelAssetError(
-              "CANCELLED",
-              "Artifact installation request was cancelled."
-            );
-          }
-          return existing.path;
+      const existing = await this.reconcileDestinationForInstall(paths, manifest, signal);
+      if (existing !== undefined) {
+        await this.removeManagedEntry(paths, stagingDirectory);
+        if (signal.aborted) {
+          throw new ModelAssetError(
+            "CANCELLED",
+            "Artifact installation request was cancelled."
+          );
         }
-        this.rejectTransientInstallationFailure(existing);
-        await this.removeManagedEntry(paths, installationDirectory);
+        return existing;
       }
 
       if (signal.aborted) {
@@ -1165,21 +1176,23 @@ export class ModelAssetManager {
     stagingIdentity: { readonly device: number; readonly inode: number }
   ): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
-      if (signal.aborted) {
-        throw new ModelAssetError(
-          "CANCELLED",
-          "Artifact installation was cancelled before publication."
-        );
-      }
-      await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
-      if (signal.aborted) {
-        throw new ModelAssetError(
-          "CANCELLED",
-          "Artifact installation was cancelled before publication."
-        );
-      }
-      await atomicRenameDirectory(stagingDirectory, installationDirectory);
-      shared.reservedBytes = Math.max(0, shared.reservedBytes - reservationBytes);
+      await this.withMutationGate(paths, async () => {
+        if (signal.aborted) {
+          throw new ModelAssetError(
+            "CANCELLED",
+            "Artifact installation was cancelled before publication."
+          );
+        }
+        await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
+        if (signal.aborted) {
+          throw new ModelAssetError(
+            "CANCELLED",
+            "Artifact installation was cancelled before publication."
+          );
+        }
+        await atomicRenameDirectory(stagingDirectory, installationDirectory);
+        shared.reservedBytes = Math.max(0, shared.reservedBytes - reservationBytes);
+      });
     });
   }
 
