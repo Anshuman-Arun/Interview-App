@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { DIAGNOSTIC_SANITIZATION_LIMITS, sanitizeDiagnosticRecord, sanitizeDiagnosticText } from "../../diagnostics/src/index.js";
-import { BoundedLineBuffer, BoundedLineFramer } from "./buffer.js";
+import { BoundedLineBuffer, BoundedLineFramer, redactKnownSecrets } from "./buffer.js";
 import { buildLocalEnvironment, type BuiltLocalEnvironment } from "./environment.js";
 import type {
   LocalComponentDefinition,
@@ -304,8 +304,8 @@ export class LocalRuntimeManager {
   ): Promise<LocalComponentStatus> {
     let delayMs = initialBackoffMs;
     for (;;) {
-      if (delayMs > 0) await abortableDelay(delayMs, signal, record.definition.id);
       try {
+        if (delayMs > 0) await abortableDelay(delayMs, signal, record.definition.id);
         await this.spawnAndAwaitReadiness(record, signal);
         return this.snapshot(record);
       } catch (error) {
@@ -1869,14 +1869,6 @@ function sanitizeStatusText(value: string, secretValues: readonly string[]): str
 function safeErrorMessage(error: unknown, secretValues: readonly string[] = []): string {
   if (error instanceof Error) return sanitizeStatusText(error.message, secretValues);
   return "unknown error";
-}
-
-function redactKnownSecrets(value: string, secretValues: readonly string[]): string {
-  let output = value;
-  for (const secret of secretValues) {
-    if (secret.length > 0) output = output.split(secret).join("[REDACTED]");
-  }
-  return output;
 }
 
 function sanitizeHandshakeMetadata(
