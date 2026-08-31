@@ -16,6 +16,38 @@ export interface ArtifactDownloadOptions {
   readonly signal: AbortSignal;
 }
 
+function systemErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  return typeof error.code === "string" ? error.code : undefined;
+}
+
+function classifyTransferError(error: unknown): ModelAssetError {
+  const code = systemErrorCode(error);
+  if (code === "ENOSPC") {
+    return new ModelAssetError(
+      "INSUFFICIENT_DISK_SPACE",
+      "Artifact download could not continue because the destination filesystem is full.",
+      { cause: error }
+    );
+  }
+  if (code === "EACCES"
+      || code === "EPERM"
+      || code === "EEXIST"
+      || code === "ENOENT"
+      || code === "EISDIR"
+      || code === "EROFS"
+      || code === "EMFILE"
+      || code === "ENFILE"
+      || code === "EIO") {
+    return new ModelAssetError(
+      "IO_ERROR",
+      "Artifact download failed while writing the staging file.",
+      { cause: error }
+    );
+  }
+  return new ModelAssetError("NETWORK_ERROR", "Artifact HTTP request failed.", { cause: error });
+}
+
 function parseUrl(value: string): URL {
   let parsed: URL;
   try {
@@ -70,7 +102,7 @@ async function downloadResponseToFile(
       } else if (options.signal.aborted) {
         rejectPromise(new ModelAssetError("CANCELLED", "Artifact download was cancelled.", { cause: error }));
       } else {
-        rejectPromise(new ModelAssetError("NETWORK_ERROR", "Artifact HTTP request failed.", { cause: error }));
+        rejectPromise(classifyTransferError(error));
       }
     };
 
