@@ -34,15 +34,31 @@ function decimalDigitCount(value: bigint): number {
   return text.length;
 }
 
-export function parseBoundedInteger(value: string): bigint {
+function parseCanonicalInteger(
+  value: string,
+  maximumDigits: number,
+  limitCode: "INTEGER_LIMIT_EXCEEDED" | "INTERMEDIATE_LIMIT_EXCEEDED"
+): bigint {
   if (!/^(?:0|-?[1-9]\d*)$/u.test(value)) {
     throw new BoundedMathError("INVALID_INTEGER", "Integer must use canonical base-10 digits");
   }
   const digits = value.startsWith("-") ? value.length - 1 : value.length;
-  if (digits > MAX_INTEGER_DECIMAL_DIGITS) {
-    throw new BoundedMathError("INTEGER_LIMIT_EXCEEDED", "Integer exceeds the configured decimal digit limit");
+  if (digits > maximumDigits) {
+    throw new BoundedMathError(limitCode, "Integer exceeds the configured decimal digit limit");
   }
   return BigInt(value);
+}
+
+export function parseBoundedInteger(value: string): bigint {
+  return parseCanonicalInteger(value, MAX_INTEGER_DECIMAL_DIGITS, "INTEGER_LIMIT_EXCEEDED");
+}
+
+export function parseBoundedIntermediateInteger(value: string): bigint {
+  return parseCanonicalInteger(
+    value,
+    MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
+    "INTERMEDIATE_LIMIT_EXCEEDED"
+  );
 }
 
 export function formatInteger(value: bigint): string {
@@ -145,6 +161,13 @@ export function normalizeRational(value: ExactRational): ExactRational {
 
 export function parseRationalInput(value: RationalInput): ExactRational {
   return rational(parseBoundedInteger(value.numerator), parseBoundedInteger(value.denominator));
+}
+
+export function parseIntermediateRationalInput(value: RationalInput): ExactRational {
+  return rational(
+    parseBoundedIntermediateInteger(value.numerator),
+    parseBoundedIntermediateInteger(value.denominator)
+  );
 }
 
 export function serializeRational(value: ExactRational): RationalInput {
