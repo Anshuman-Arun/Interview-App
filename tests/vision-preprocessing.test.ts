@@ -473,6 +473,7 @@ describe("crop, resize, tiling, and cancellation", () => {
       sourceRevision: 11,
       width: 2,
       height: 2,
+      sourceBounds: { x: 1, y: 1, width: 2, height: 2 },
       coordinateTransform: { offsetX: 1, offsetY: 1, scaleX: 1, scaleY: 1 }
     });
     expect(rgbaAt(result.artifact.readBytes(), 0, 0)).toEqual([10, 20, 7, 255]);
@@ -529,6 +530,7 @@ describe("crop, resize, tiling, and cancellation", () => {
       width: 40,
       height: 20,
       sourceRevision: 3,
+      sourceBounds: { x: 0, y: 0, width: 100, height: 50 },
       coordinateTransform: { offsetX: 0, offsetY: 0, scaleX: 2.5, scaleY: 2.5 }
     });
 
@@ -590,6 +592,12 @@ describe("crop, resize, tiling, and cancellation", () => {
       maxTileCount: 6
     });
     expect(result.tiles).toHaveLength(6);
+    expect(result.tiles[4]?.artifact.metadata.sourceBounds).toEqual({
+      x: 3,
+      y: 2,
+      width: 4,
+      height: 4
+    });
     expect(result.tiles[4]?.artifact.metadata.coordinateTransform).toEqual({
       offsetX: 3,
       offsetY: 2,
