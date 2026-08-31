@@ -66,7 +66,21 @@ const SECRET_CONFIGURATION_KEYS = new Set([
   "passwordref",
   "passwordrefs",
   "passphraseref",
-  "passphraserefs"
+  "passphraserefs",
+  "secretaccesskey",
+  "secretaccesskeys",
+  "awssecretaccesskey",
+  "awssecretaccesskeys",
+  "accountkey",
+  "accountkeys",
+  "storageaccountkey",
+  "storageaccountkeys",
+  "subscriptionkey",
+  "subscriptionkeys",
+  "sastoken",
+  "sastokens",
+  "sharedaccesssignature",
+  "sharedaccesssignatures"
 ]);
 const BEARER_AUTH_PATTERN = /\bbearer\s+[a-z0-9._~+/-]{16,}/iu;
 const BASIC_AUTH_CANDIDATE_PATTERN =
@@ -75,7 +89,7 @@ const COMMON_API_KEY_PATTERN =
   /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,}|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|glpat-[a-z0-9_-]{20,}|hf_[a-z0-9]{20,})\b/iu;
 const CREDENTIAL_WORD_SEPARATOR = "[\\s._-]*";
 const HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN = new RegExp(
-  String.raw`(?:^|[^a-z0-9])(authorization(?:${CREDENTIAL_WORD_SEPARATOR}header)?|http${CREDENTIAL_WORD_SEPARATOR}authorization|auth${CREDENTIAL_WORD_SEPARATOR}header|api${CREDENTIAL_WORD_SEPARATOR}key|access${CREDENTIAL_WORD_SEPARATOR}token|refresh${CREDENTIAL_WORD_SEPARATOR}token|id${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}token|session${CREDENTIAL_WORD_SEPARATOR}token|auth${CREDENTIAL_WORD_SEPARATOR}token|bearer${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}secret|provider${CREDENTIAL_WORD_SEPARATOR}secret|webhook${CREDENTIAL_WORD_SEPARATOR}secret|secret${CREDENTIAL_WORD_SEPARATOR}key|secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|aws${CREDENTIAL_WORD_SEPARATOR}secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|password|passwd|passphrase|private${CREDENTIAL_WORD_SEPARATOR}key|credential|cookie|set${CREDENTIAL_WORD_SEPARATOR}cookie)\b["']?\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))`,
+  String.raw`(?:^|[^a-z0-9])(authorization(?:${CREDENTIAL_WORD_SEPARATOR}header)?|http${CREDENTIAL_WORD_SEPARATOR}authorization|auth${CREDENTIAL_WORD_SEPARATOR}header|api${CREDENTIAL_WORD_SEPARATOR}key|access${CREDENTIAL_WORD_SEPARATOR}token|refresh${CREDENTIAL_WORD_SEPARATOR}token|id${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}token|session${CREDENTIAL_WORD_SEPARATOR}token|auth${CREDENTIAL_WORD_SEPARATOR}token|bearer${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}secret|provider${CREDENTIAL_WORD_SEPARATOR}secret|webhook${CREDENTIAL_WORD_SEPARATOR}secret|secret${CREDENTIAL_WORD_SEPARATOR}key|secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|aws${CREDENTIAL_WORD_SEPARATOR}secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|account${CREDENTIAL_WORD_SEPARATOR}key|storage${CREDENTIAL_WORD_SEPARATOR}account${CREDENTIAL_WORD_SEPARATOR}key|subscription${CREDENTIAL_WORD_SEPARATOR}key|sas${CREDENTIAL_WORD_SEPARATOR}token|shared${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}signature|password|passwd|passphrase|private${CREDENTIAL_WORD_SEPARATOR}key|credential|cookie|set${CREDENTIAL_WORD_SEPARATOR}cookie)\b["']?\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))`,
   "iu"
 );
 const GENERIC_SECRET_ASSIGNMENT_PATTERN =
@@ -262,7 +276,15 @@ function isSecretConfigurationKey(key: string): boolean {
     || normalized.endsWith("passwordref")
     || normalized.endsWith("passwordrefs")
     || normalized.endsWith("passphraseref")
-    || normalized.endsWith("passphraserefs");
+    || normalized.endsWith("passphraserefs")
+    || normalized.endsWith("secretaccesskey")
+    || normalized.endsWith("secretaccesskeys")
+    || normalized.endsWith("subscriptionkey")
+    || normalized.endsWith("subscriptionkeys")
+    || normalized.endsWith("sastoken")
+    || normalized.endsWith("sastokens")
+    || normalized.endsWith("sharedaccesssignature")
+    || normalized.endsWith("sharedaccesssignatures");
 }
 
 const BASE64_ALPHABET =

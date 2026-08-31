@@ -177,6 +177,10 @@ describe("provider configuration secret exclusion", () => {
       "GITHUB_TOKEN=short-private-token",
       "MY_CLIENT_SECRET=abc",
       "MY_AUTH_HEADER=Bearer x",
+      "DefaultEndpointsProtocol=https;AccountName=demo;AccountKey=abc123;EndpointSuffix=core.windows.net",
+      "Ocp-Apim-Subscription-Key: abc123",
+      "Shared Access Signature: abc123",
+      "SAS Token=abc123",
       "{\"client_secret\":\"abc\"}",
       "{\"api_key\":\"abc123\"}",
       "{\"access_token\":\"short\"}",
@@ -274,7 +278,14 @@ describe("provider configuration secret exclusion", () => {
       { nested: { passwords: ["value-one"] } },
       { privateKeys: ["value-one"] },
       { authorizationHeader: "placeholder" },
-      { authHeader: "placeholder" }
+      { authHeader: "placeholder" },
+      { secretAccessKey: "value-one" },
+      { awsSecretAccessKey: "value-one" },
+      { accountKey: "value-one" },
+      { storageAccountKey: "value-one" },
+      { subscriptionKey: "value-one" },
+      { sasToken: "value-one" },
+      { sharedAccessSignature: "value-one" }
     ]) {
       expect(() => resolveProviderConfiguration({
         registry,
@@ -291,6 +302,9 @@ describe("provider configuration secret exclusion", () => {
         outputTokens: 512,
         inputTokens: 256,
         tokenCount: 42,
+        accountKeyRotationInterval: 30,
+        subscriptionKeyMode: "named",
+        sasTokenBudget: 1_024,
         stopToken: "<END>",
         eosToken: "</s>",
         specialTokens: ["<s>", "</s>"]
