@@ -52,6 +52,8 @@ export type ProviderControlPlaneErrorCode =
   | "CAPABILITY_STATUS_UNKNOWN";
 
 export class ProviderControlPlaneError extends Error {
+  readonly #controlPlaneErrorBrand = true;
+
   public constructor(
     public readonly code: ProviderControlPlaneErrorCode,
     message: string
@@ -59,7 +61,15 @@ export class ProviderControlPlaneError extends Error {
     super(message);
     this.name = "ProviderControlPlaneError";
   }
+
+  public static isControlPlaneError(value: unknown): value is ProviderControlPlaneError {
+    return typeof value === "object"
+      && value !== null
+      && #controlPlaneErrorBrand in value;
+  }
 }
+
+const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
 
 function machineIdSchema<TBrand extends string>() {
   return z.string()
@@ -767,7 +777,7 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
       adapter = await this.#createAdapterImpl(normalizedInput);
     } catch (error) {
       if (
-        error instanceof ProviderControlPlaneError
+        isProviderControlPlaneError(error)
         && (
           error.code === "CREDENTIALS_REQUIRED"
           || error.code === "CREDENTIAL_RESOLUTION_FAILED"
@@ -987,7 +997,7 @@ function assertAdapterMatchesResolvedDefinition(
       throw adapterDefinitionMismatch();
     }
   } catch (error) {
-    if (error instanceof ProviderControlPlaneError) throw error;
+    if (isProviderControlPlaneError(error)) throw error;
     throw adapterDefinitionMismatch();
   }
 }
@@ -1195,7 +1205,7 @@ function snapshotProviderDefinitionInputs(
     descriptors = Object.getOwnPropertyDescriptors(inputs);
     symbols = Object.getOwnPropertySymbols(inputs);
   } catch (error) {
-    if (error instanceof ProviderControlPlaneError) throw error;
+    if (isProviderControlPlaneError(error)) throw error;
     throw new ProviderControlPlaneError(
       "MALFORMED_DEFINITION",
       "Provider registration batch is malformed"
@@ -1349,7 +1359,7 @@ function resolveRegistrySelection(
     const model = providerRegistryGetModel.call(registry, providerId, modelId);
     return freezeNullPrototype({ provider, model });
   } catch (error) {
-    if (error instanceof ProviderControlPlaneError) throw error;
+    if (isProviderControlPlaneError(error)) throw error;
     throw new ProviderControlPlaneError(
       "INVALID_REGISTRY",
       "Provider registry is invalid"
@@ -1705,7 +1715,7 @@ export async function evaluateProviderReadiness(input: {
   } catch (error) {
     return freezeNullPrototype({
       state: "MISCONFIGURED",
-      reason: error instanceof ProviderControlPlaneError
+      reason: isProviderControlPlaneError(error)
         ? error.code
         : "MALFORMED_CONFIGURATION"
     });
@@ -1724,7 +1734,7 @@ export async function evaluateProviderReadiness(input: {
       state: "MISCONFIGURED",
       providerId: parsed.providerId,
       modelId: parsed.modelId,
-      reason: error instanceof ProviderControlPlaneError
+      reason: isProviderControlPlaneError(error)
         ? error.code
         : "INVALID_REGISTRY"
     });
@@ -1757,7 +1767,7 @@ export async function evaluateProviderReadiness(input: {
       configuration: parsed
     });
   } catch (error) {
-    const reason = error instanceof ProviderControlPlaneError
+    const reason = isProviderControlPlaneError(error)
       ? error.code
       : "MALFORMED_CONFIGURATION";
     return freezeNullPrototype({
@@ -1777,7 +1787,7 @@ export async function evaluateProviderReadiness(input: {
         state: "MISCONFIGURED",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
-        reason: error instanceof ProviderControlPlaneError
+        reason: isProviderControlPlaneError(error)
           ? error.code
           : "MALFORMED_REQUIREMENTS"
       });

@@ -1472,6 +1472,79 @@ describe("adapter factory adversarial boundary", () => {
       .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
   });
 
+  it("does not trust a monkey-patched ProviderControlPlaneError instanceof hook", async () => {
+    let codeGetterReads = 0;
+    const thrown = Object.defineProperty({}, "code", {
+      enumerable: true,
+      get() {
+        codeGetterReads += 1;
+        return "CREDENTIALS_REQUIRED";
+      }
+    });
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "instanceof-provider",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "instanceof-factory",
+        createAdapter() {
+          throw thrown;
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "instanceof-provider",
+        modelId: "test-model",
+        enabled: true
+      }
+    });
+
+    const originalHasInstance = Object.getOwnPropertyDescriptor(
+      ProviderControlPlaneError,
+      Symbol.hasInstance
+    );
+    let caught: unknown;
+    let invalidRegistry: unknown;
+    try {
+      Object.defineProperty(ProviderControlPlaneError, Symbol.hasInstance, {
+        configurable: true,
+        value: () => true
+      });
+      try {
+        await resolveAdapterFactory(resolved).createAdapter({ resolved });
+      } catch (error) {
+        caught = error;
+      }
+      try {
+        Reflect.apply(registerBuiltInProviders, undefined, [{}]);
+      } catch (error) {
+        invalidRegistry = error;
+      }
+    } finally {
+      if (originalHasInstance === undefined) {
+        Reflect.deleteProperty(ProviderControlPlaneError, Symbol.hasInstance);
+      } else {
+        Object.defineProperty(
+          ProviderControlPlaneError,
+          Symbol.hasInstance,
+          originalHasInstance
+        );
+      }
+    }
+
+    expect(caught).toMatchObject({ code: "ADAPTER_FACTORY_FAILED" });
+    expect(invalidRegistry).toMatchObject({ code: "INVALID_REGISTRY" });
+    expect(codeGetterReads).toBe(0);
+  });
+
   it("maps arbitrary factory failures, including spoofed control-plane codes, to a fixed error", async () => {
     for (const createAdapter of [
       () => {

@@ -12,6 +12,7 @@ import {
 } from "./control-plane.js";
 
 const registerProviderDefinitions = ProviderRegistry.prototype.registerMany;
+const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
 
 const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
 const PROPOSAL_KEYS = new Set([
@@ -326,7 +327,7 @@ export function registerBuiltInProviders(
       [MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT]
     );
   } catch (error) {
-    if (error instanceof ProviderControlPlaneError) throw error;
+    if (isProviderControlPlaneError(error)) throw error;
     throw new ProviderControlPlaneError(
       "INVALID_REGISTRY",
       "Provider registry is invalid"
