@@ -1225,6 +1225,44 @@ describe("local model asset manager", () => {
     })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
   });
 
+  it("rejects null optional manager settings instead of silently defaulting", async () => {
+    const root = await newRoot();
+    const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
+
+    for (const [name, value] of [
+      ["downloadTimeoutMs", null],
+      ["maxRedirects", null],
+      ["maxListEntries", null]
+    ] as const) {
+      expect(() => new UnsafeManager({
+        rootDir: root,
+        maxArtifactBytes: 1024,
+        [name]: value
+      })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
+    }
+  });
+
+  it("rejects impossible standalone verification bounds before file access", async () => {
+    const root = await newRoot();
+    const missing = path.join(root, "missing.bin");
+
+    await expect(verifyArtifactFile(missing, {
+      sizeBytes: 10,
+      sha256: "0".repeat(64),
+      maxBytes: 9
+    })).rejects.toMatchObject({ code: "ARTIFACT_TOO_LARGE" });
+
+    const UnsafeVerifier = verifyArtifactFile as unknown as (
+      filePath: string,
+      expectations: unknown
+    ) => Promise<unknown>;
+    await expect(UnsafeVerifier(missing, {
+      sizeBytes: 10,
+      sha256: "0".repeat(64),
+      maxBytes: null
+    })).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+  });
+
   it("rejects timeout values that overflow Node.js timers", async () => {
     const root = await newRoot();
     expect(() => managerFor(root, {
