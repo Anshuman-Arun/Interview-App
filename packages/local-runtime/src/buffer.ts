@@ -67,7 +67,7 @@ export class BoundedLineBuffer {
 }
 
 export class BoundedLineFramer {
-  private readonly pendingChunks: Buffer[] = [];
+  private readonly pending: Buffer;
   private pendingBytes = 0;
   private droppingOversizeLine = false;
 
@@ -75,7 +75,9 @@ export class BoundedLineFramer {
     private readonly maxLineBytes: number,
     private readonly onLine: (line: string) => void,
     private readonly onMalformed: () => void
-  ) {}
+  ) {
+    this.pending = Buffer.alloc(maxLineBytes);
+  }
 
   public append(chunk: Buffer): void {
     let offset = 0;
@@ -90,7 +92,7 @@ export class BoundedLineFramer {
           this.droppingOversizeLine = true;
           this.onMalformed();
         } else if (fragment.length > 0) {
-          this.pendingChunks.push(Buffer.from(fragment));
+          fragment.copy(this.pending, this.pendingBytes);
           this.pendingBytes += fragment.length;
         }
       }
@@ -114,16 +116,11 @@ export class BoundedLineFramer {
   }
 
   private clearPending(): void {
-    this.pendingChunks.length = 0;
     this.pendingBytes = 0;
   }
 
   private emitPending(): void {
-    let lineBuffer = this.pendingChunks.length === 0
-      ? Buffer.alloc(0)
-      : this.pendingChunks.length === 1
-        ? this.pendingChunks[0] as Buffer
-        : Buffer.concat(this.pendingChunks, this.pendingBytes);
+    let lineBuffer = this.pending.subarray(0, this.pendingBytes);
     if (lineBuffer.at(-1) === 0x0d) lineBuffer = lineBuffer.subarray(0, -1);
     try {
       const line = new TextDecoder("utf-8", { fatal: true }).decode(lineBuffer);
