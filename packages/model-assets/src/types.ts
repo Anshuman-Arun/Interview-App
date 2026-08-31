@@ -49,7 +49,8 @@ function clonePlainDataArray(value: unknown): readonly unknown[] | undefined {
   try {
     const prototype: unknown = Object.getPrototypeOf(value);
     if (prototype !== Array.prototype) return undefined;
-    const clone: unknown[] = new Array<unknown>(value.length);
+    const clone: unknown[] = [];
+    clone.length = value.length;
     for (let index = 0; index < value.length; index += 1) {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
       if (descriptor === undefined || !("value" in descriptor)) return undefined;
