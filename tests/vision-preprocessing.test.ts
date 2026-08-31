@@ -1184,6 +1184,20 @@ describe("crop, resize, tiling, and cancellation", () => {
     })).rejects.toThrowError(RangeError);
   });
 
+  it("observes an abort already queued while a synchronous codec boundary is running", async () => {
+    const source = snapshot(makePng(4, 4));
+    const controller = new AbortController();
+    setImmediate(() => {
+      controller.abort();
+    });
+
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      { signal: controller.signal }
+    )).rejects.toMatchObject({ code: "CANCELLED" });
+  });
+
   it("honors cancellation before work and during longer pixel loops", async () => {
     const source = snapshot(makePng(256, 256));
     const alreadyCancelled = new AbortController();
