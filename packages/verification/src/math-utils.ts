@@ -329,9 +329,11 @@ export function sumIntegers(values: readonly bigint[]): bigint {
 
 export function productIntegers(values: readonly bigint[]): bigint {
   assertFiniteContainerLength(values.length);
+  const boundedValues = values.map((value) => assertIntermediateIntegerBound(value));
+  if (boundedValues.some((value) => value === 0n)) return 0n;
+
   let product = 1n;
-  for (const value of values) {
-    assertIntermediateIntegerBound(value);
+  for (const value of boundedValues) {
     product = assertIntermediateIntegerBound(product * value);
   }
   return product;
@@ -344,7 +346,9 @@ export function sumRationals(values: readonly ExactRational[]): ExactRational {
 
 export function productRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
-  return values.reduce(multiplyRationals, rational(1n, 1n));
+  const normalizedValues = values.map(normalizeRational);
+  if (normalizedValues.some((value) => value.numerator === 0n)) return rational(0n, 1n);
+  return normalizedValues.reduce(multiplyRationals, rational(1n, 1n));
 }
 
 function assertCombinatorialInteger(value: number, label: string): void {

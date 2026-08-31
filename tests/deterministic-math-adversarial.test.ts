@@ -35,6 +35,8 @@ import {
   evaluateIntegerExpression,
   gcd,
   multiplyRationals,
+  productIntegers,
+  productRationals,
   parseBoundedInteger,
   parseBoundedIntermediateInteger,
   rational,
@@ -188,6 +190,35 @@ describe("adversarial deterministic math verification", () => {
     expect(() => sumRationals(
       Array.from({ length: MAX_FINITE_CONTAINER_ITEMS + 1 }, () => rational(1n, 1n))
     )).toThrow(BoundedMathError);
+  });
+
+  it("recognizes a zero product without overflowing earlier bounded factors", async () => {
+    const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
+
+    expect(productIntegers([maximum, maximum, 0n])).toBe(0n);
+    expect(productRationals([
+      rational(maximum, 1n),
+      rational(maximum, 1n),
+      rational(0n, 1n)
+    ])).toEqual(rational(0n, 1n));
+
+    const operand = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS);
+    const result = await verifyJson(new ModularArithmeticVerifier(), {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "DIVISIBILITY",
+        divisor: "7",
+        dividend: {
+          kind: "PRODUCT",
+          terms: [
+            ...Array.from({ length: 17 }, () => integer(operand)),
+            integer("0")
+          ]
+        }
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
   });
 
   it("fails closed for invalid direct integer-expression shapes", () => {

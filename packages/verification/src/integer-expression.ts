@@ -7,7 +7,12 @@ import {
   MAX_POWER_EXPONENT,
   MAX_VARIADIC_EXPRESSION_TERMS
 } from "./limits.js";
-import { BoundedMathError, assertIntermediateIntegerBound, parseBoundedInteger } from "./math-utils.js";
+import {
+  BoundedMathError,
+  assertIntermediateIntegerBound,
+  parseBoundedInteger,
+  productIntegers
+} from "./math-utils.js";
 
 function boundedIntegerStringSchema(maximumDigits: number) {
   return z.string()
@@ -137,11 +142,8 @@ function evaluateNode(expression: IntegerExpression, budget: EvaluationBudget, d
     }
     case "PRODUCT": {
       assertTermCount(expression.terms);
-      let result = 1n;
-      for (const term of expression.terms) {
-        result = assertIntermediateIntegerBound(result * evaluateNode(term, budget, depth + 1));
-      }
-      return result;
+      const values = expression.terms.map((term) => evaluateNode(term, budget, depth + 1));
+      return productIntegers(values);
     }
     default:
       throw new BoundedMathError("INVALID_EXPRESSION", "Unsupported integer expression node");
