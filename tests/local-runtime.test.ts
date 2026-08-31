@@ -492,6 +492,27 @@ describe("local worker lifecycle manager", () => {
     expect(runtime.getStatus("cancelled")).not.toHaveProperty("pid");
   });
 
+  it("does not commit READY when stop is requested from a readiness callback", async () => {
+    const runtime = manager();
+    let stopping: Promise<ReturnType<LocalRuntimeManager["stop"]> extends Promise<infer T> ? T : never> | undefined;
+    runtime.register(definition("readiness-stop-race", "line-ready", {
+      readiness: {
+        kind: "STDOUT_LINE",
+        evaluate: (line) => {
+          if (line !== "READY-LINE") return false;
+          stopping = runtime.stop("readiness-stop-race");
+          return true;
+        }
+      }
+    }));
+
+    const starting = runtime.start("readiness-stop-race");
+    await expect(starting).rejects.toMatchObject({ code: "START_CANCELLED" });
+    expect(stopping).toBeDefined();
+    if (stopping !== undefined) await stopping;
+    expect(runtime.getStatus("readiness-stop-race").state).toBe("STOPPED");
+  });
+
   it("lets stop own graceful cleanup when cancellation happens during STARTING", async () => {
     const runtime = manager();
     runtime.register(definition("starting-stop", "delayed-stdin-shutdown", {
