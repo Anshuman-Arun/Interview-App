@@ -409,7 +409,16 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
       { cause: error }
     );
   }
-  const serialized = Buffer.concat(chunks, bytes).toString("utf8");
+  let serialized: string;
+  try {
+    serialized = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks, bytes));
+  } catch (error) {
+    throw new ModelAssetError(
+      "CORRUPT_INSTALLATION",
+      "Installed artifact manifest is not valid UTF-8.",
+      { cause: error }
+    );
+  }
   try {
     return JSON.parse(serialized) as unknown;
   } catch (error) {
