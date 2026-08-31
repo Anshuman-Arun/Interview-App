@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createWriteStream, type BigIntStats, type Dir, type Stats } from "node:fs";
+import { type BigIntStats, type Dir, type Stats } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -845,7 +845,7 @@ export async function verifyArtifactFileWithIdentity(
 
 export async function copyLocalArtifactBounded(
   sourcePath: string,
-  destinationPath: string,
+  destinationHandle: FileHandle,
   expectedBytes: number,
   maxBytes: number,
   signal: AbortSignal
@@ -917,7 +917,7 @@ export async function copyLocalArtifactBounded(
     await pipeline(
       openedSource.handle.createReadStream({ autoClose: false }),
       limiter,
-      createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }),
+      destinationHandle.createWriteStream({ autoClose: false }),
       { signal }
     );
     if (bytes !== expectedBytes) {
