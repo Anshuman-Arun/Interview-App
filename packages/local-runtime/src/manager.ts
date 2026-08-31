@@ -478,9 +478,9 @@ export class LocalRuntimeManager {
     child: ChildProcessWithoutNullStreams
   ): Promise<void> {
     const timeoutMs = terminationTimeout(record.definition);
-    await terminateChildTree(child, this.platform, "SIGTERM");
+    await terminateChildTree(child, this.platform, "SIGTERM", timeoutMs);
     if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
-      await forceKillChildTree(child, this.platform);
+      await forceKillChildTree(child, this.platform, timeoutMs);
       if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
         throw new LocalRuntimeError(
           "TERMINATION_FAILED",
@@ -707,9 +707,9 @@ export class LocalRuntimeManager {
     record.expectedStop = true;
     const timeoutMs = terminationTimeout(record.definition);
     try {
-      await terminateChildTree(child, this.platform, "SIGTERM");
+      await terminateChildTree(child, this.platform, "SIGTERM", timeoutMs);
       if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
-        await forceKillChildTree(child, this.platform);
+        await forceKillChildTree(child, this.platform, timeoutMs);
         if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
           record.state = "FAILED";
           record.failure = this.failure(
@@ -756,13 +756,13 @@ export class LocalRuntimeManager {
       if (residual !== undefined && isOwnedProcessTreeAlive(residual, this.platform)) {
         record.state = "STOPPING";
         const timeoutMs = terminationTimeout(record.definition);
-        await terminateChildTree(residual, this.platform, "SIGTERM");
+        await terminateChildTree(residual, this.platform, "SIGTERM", timeoutMs);
         if (await waitForManagedTreeExit(record, residual, this.platform, timeoutMs)) {
           record.residualProcess = undefined;
           record.state = "STOPPED";
           return Object.freeze({ componentId: record.definition.id, disposition: "TERMINATED" });
         }
-        await forceKillChildTree(residual, this.platform);
+        await forceKillChildTree(residual, this.platform, timeoutMs);
         if (!(await waitForManagedTreeExit(record, residual, this.platform, timeoutMs))) {
           record.state = "FAILED";
           record.failure = this.failure(
@@ -790,11 +790,11 @@ export class LocalRuntimeManager {
     void this.requestGracefulShutdown(record, child);
     if (!(await waitForManagedTreeExit(record, child, this.platform, record.definition.shutdownTimeoutMs))) {
       disposition = "TERMINATED";
-      await terminateChildTree(child, this.platform, "SIGTERM");
       const terminationTimeoutMs = terminationTimeout(record.definition);
+      await terminateChildTree(child, this.platform, "SIGTERM", terminationTimeoutMs);
       if (!(await waitForManagedTreeExit(record, child, this.platform, terminationTimeoutMs))) {
         disposition = "FORCED";
-        await forceKillChildTree(child, this.platform);
+        await forceKillChildTree(child, this.platform, terminationTimeoutMs);
         if (!(await waitForManagedTreeExit(record, child, this.platform, terminationTimeoutMs))) {
           record.state = "FAILED";
           record.failure = this.failure(
@@ -832,8 +832,7 @@ export class LocalRuntimeManager {
       componentId: record.definition.id,
       pid,
       writeStdin: (data: string) => writeToStdin(child, data),
-      endStdin: () => child.stdin.end(),
-      signal: (signal?: NodeJS.Signals) => child.kill(signal)
+      endStdin: () => child.stdin.end()
     });
     try {
       await record.definition.gracefulShutdown(control);
@@ -1220,17 +1219,18 @@ function isChildAlive(child: ChildProcessWithoutNullStreams): boolean {
 async function terminateChildTree(
   child: ChildProcessWithoutNullStreams,
   platform: NodeJS.Platform,
-  signal: NodeJS.Signals
+  signal: NodeJS.Signals,
+  commandTimeoutMs: number
 ): Promise<void> {
   const pid = child.pid;
   if (pid === undefined) return;
   if (platform === "win32") {
-    const result = spawnSync("taskkill", ["/pid", String(pid), "/t"], {
+    spawnSync("taskkill", ["/pid", String(pid), "/t"], {
       shell: false,
       windowsHide: true,
-      stdio: "ignore"
+      stdio: "ignore",
+      timeout: commandTimeoutMs
     });
-    if ((result.error !== undefined || result.status !== 0) && isChildAlive(child)) child.kill(signal);
     return;
   }
   try {
@@ -1240,14 +1240,19 @@ async function terminateChildTree(
   }
 }
 
-async function forceKillChildTree(child: ChildProcessWithoutNullStreams, platform: NodeJS.Platform): Promise<void> {
+async function forceKillChildTree(
+  child: ChildProcessWithoutNullStreams,
+  platform: NodeJS.Platform,
+  commandTimeoutMs: number
+): Promise<void> {
   const pid = child.pid;
   if (pid === undefined) return;
   if (platform === "win32") {
     const result = spawnSync("taskkill", ["/pid", String(pid), "/t", "/f"], {
       shell: false,
       windowsHide: true,
-      stdio: "ignore"
+      stdio: "ignore",
+      timeout: commandTimeoutMs
     });
     if ((result.error !== undefined || result.status !== 0) && isChildAlive(child)) child.kill("SIGKILL");
     return;
