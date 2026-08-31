@@ -16,6 +16,46 @@ export const LocalClientIdentitySchema = z.object({
   origin: z.url()
 }).strict();
 
+export const SessionStatusSchema = z.enum(["CREATED", "ACTIVE", "COMPLETED", "ARCHIVED"]);
+export type SessionStatus = z.infer<typeof SessionStatusSchema>;
+
+const NonnegativeSafeIntegerSchema = z.number().refine(
+  (value) => Number.isSafeInteger(value) && value >= 0,
+  { message: "Expected a non-negative safe integer" }
+);
+
+export const StoredSessionSummarySchema = z.object({
+  sessionId: SessionIdSchema,
+  problemId: z.string().min(1).optional(),
+  problemVersion: z.string().min(1).optional(),
+  status: SessionStatusSchema,
+  sequence: NonnegativeSafeIntegerSchema,
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+  eventCount: NonnegativeSafeIntegerSchema
+}).strict();
+export type StoredSessionSummary = z.infer<typeof StoredSessionSummarySchema>;
+
+export const SessionHistoryEntrySchema = z.discriminatedUnion("role", [
+  z.object({
+    role: z.literal("STUDENT"),
+    sequence: z.number().int().positive(),
+    occurredAt: z.iso.datetime(),
+    turnId: TurnIdSchema,
+    inputEpisodeId: InputEpisodeIdSchema,
+    text: z.string().min(1)
+  }).strict(),
+  z.object({
+    role: z.literal("INTERVIEWER"),
+    sequence: z.number().int().positive(),
+    occurredAt: z.iso.datetime(),
+    deliveryId: DeliveryIdSchema,
+    text: z.string().min(1),
+    status: DeliveryStatusSchema
+  }).strict()
+]);
+export type SessionHistoryEntry = z.infer<typeof SessionHistoryEntrySchema>;
+
 const ProtocolCommandBaseSchema = z.object({
   protocolVersion: ProtocolVersionSchema,
   requestId: RequestIdSchema,
@@ -23,7 +63,28 @@ const ProtocolCommandBaseSchema = z.object({
 });
 
 export const StartSessionCommandSchema = ProtocolCommandBaseSchema.extend({
-  type: z.literal("START_SESSION")
+  type: z.literal("START_SESSION"),
+  problemId: z.string().min(1).optional()
+}).strict();
+
+export const ListSessionsCommandSchema = z.object({
+  protocolVersion: ProtocolVersionSchema,
+  requestId: RequestIdSchema,
+  type: z.literal("LIST_SESSIONS")
+}).strict();
+
+export const ResumeSessionCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("RESUME_SESSION")
+}).strict();
+
+export const CompleteSessionCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("COMPLETE_SESSION"),
+  summary: z.string().min(1).optional()
+}).strict();
+
+export const ArchiveSessionCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("ARCHIVE_SESSION"),
+  reason: z.string().min(1).optional()
 }).strict();
 
 export const CommitTypedInputCommandSchema = ProtocolCommandBaseSchema.extend({
@@ -52,6 +113,10 @@ export const AcknowledgeDeliveryCompletedCommandSchema = ProtocolCommandBaseSche
 
 export const ClientCommandSchema = z.discriminatedUnion("type", [
   StartSessionCommandSchema,
+  ListSessionsCommandSchema,
+  ResumeSessionCommandSchema,
+  CompleteSessionCommandSchema,
+  ArchiveSessionCommandSchema,
   CommitTypedInputCommandSchema,
   GetSessionSummaryCommandSchema,
   ReconnectDeliveryCommandSchema,
@@ -71,6 +136,39 @@ export const SessionStartedResponseSchema = ResponseBaseSchema.extend({
   sessionId: SessionIdSchema
 }).strict();
 
+export const SessionsListResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("SESSIONS_LIST"),
+  sessions: z.array(StoredSessionSummarySchema)
+}).strict();
+
+export const SessionResumedResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("SESSION_RESUMED"),
+  sessionId: SessionIdSchema,
+  sequence: NonnegativeSafeIntegerSchema,
+  started: z.boolean(),
+  status: SessionStatusSchema,
+  problemId: z.string().min(1).optional(),
+  contextEpoch: z.number().int().nonnegative(),
+  deliveryStatuses: z.record(DeliveryIdSchema, DeliveryStatusSchema),
+  history: z.array(SessionHistoryEntrySchema).default([])
+}).strict();
+
+export const SessionCompletedResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("SESSION_COMPLETED"),
+  sessionId: SessionIdSchema,
+  completedAt: z.string().min(1)
+}).strict();
+
+export const SessionArchivedResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("SESSION_ARCHIVED"),
+  sessionId: SessionIdSchema,
+  archivedAt: z.string().min(1)
+}).strict();
+
 export const InputCommittedResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("INPUT_COMMITTED"),
@@ -82,10 +180,12 @@ export const SessionSummaryResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("SESSION_SUMMARY"),
   sessionId: SessionIdSchema,
-  sequence: z.number().int().nonnegative(),
+  sequence: NonnegativeSafeIntegerSchema,
   started: z.boolean(),
+  status: SessionStatusSchema.optional(),
   contextEpoch: z.number().int().nonnegative(),
-  deliveryStatuses: z.record(DeliveryIdSchema, DeliveryStatusSchema)
+  deliveryStatuses: z.record(DeliveryIdSchema, DeliveryStatusSchema),
+  history: z.array(SessionHistoryEntrySchema).default([])
 }).strict();
 
 export const DeliveryReconnectResponseSchema = ResponseBaseSchema.extend({
@@ -105,6 +205,10 @@ export const DeliveryAcknowledgedResponseSchema = ResponseBaseSchema.extend({
 
 export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [
   SessionStartedResponseSchema,
+  SessionsListResponseSchema,
+  SessionResumedResponseSchema,
+  SessionCompletedResponseSchema,
+  SessionArchivedResponseSchema,
   InputCommittedResponseSchema,
   SessionSummaryResponseSchema,
   DeliveryReconnectResponseSchema,

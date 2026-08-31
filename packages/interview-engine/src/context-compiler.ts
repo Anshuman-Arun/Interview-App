@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   ContextCompilationManifestSchema,
@@ -43,21 +44,30 @@ export function canonicalJson(value: unknown): string {
   throw new Error("Canonical JSON accepts only JSON-compatible values");
 }
 
-export async function sha256CanonicalJson(value: unknown): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalJson(value)));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+export function sha256CanonicalJsonSync(value: unknown): string {
+  return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
-export async function createProviderContextSpecFingerprint(
+export async function sha256CanonicalJson(value: unknown): Promise<string> {
+  return sha256CanonicalJsonSync(value);
+}
+
+export function createProviderContextSpecFingerprintSync(
   problem: InterviewProblem
-): Promise<ProviderContextSpecFingerprint> {
-  const digest = await sha256CanonicalJson({
+): ProviderContextSpecFingerprint {
+  const digest = sha256CanonicalJsonSync({
     id: problem.id,
     version: problem.version,
     public: problem.public,
     interviewer: problem.interviewer
   });
   return ProviderContextSpecFingerprintSchema.parse(digest);
+}
+
+export async function createProviderContextSpecFingerprint(
+  problem: InterviewProblem
+): Promise<ProviderContextSpecFingerprint> {
+  return createProviderContextSpecFingerprintSync(problem);
 }
 
 export async function createContextCompilationManifest(input: {

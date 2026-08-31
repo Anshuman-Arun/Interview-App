@@ -77,9 +77,10 @@ export async function ensureCompatibleGeneration(writer: SessionWriter): Promise
     && isGenerationBasisStillCompatible(generation.basis, writer.getState()) === "COMPATIBLE"
   );
   if (existing !== undefined) return existing.generationId;
-  if (writer.getState().started) throw new Error("Test fixture has no compatible generation");
   const turns = new TurnCoordinator(writer);
-  await turns.startSession(sixPeopleProblem);
+  if (!writer.getState().started) {
+    await turns.startSession(sixPeopleProblem);
+  }
   const { inputEpisodeId, turnId } = await turns.commitInput("Renderer transport fixture input");
   await turns.selectAction(turnId);
   return (await turns.startGeneration(inputEpisodeId, turnId, "mock-renderer-fixture")).generationId;

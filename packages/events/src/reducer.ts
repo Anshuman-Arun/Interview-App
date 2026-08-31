@@ -43,7 +43,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
   let next: SessionState;
   switch (event.type) {
     case "SESSION_STARTED":
-      next = { ...state, started: true };
+      next = { ...state, started: true, status: "ACTIVE" };
       break;
     case "PROBLEM_PRESENTED":
       next = {
@@ -318,6 +318,25 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       break;
     case "PROBLEM_STATE_REVISION_CHANGED":
       next = { ...state, problemStateRevision: event.payload.problemStateRevision, contextEpoch: event.payload.contextEpoch };
+      break;
+    case "SESSION_COMPLETED":
+      next = {
+        ...state,
+        status: "COMPLETED",
+        completedAt: event.payload.completedAt,
+        ...(event.payload.summary ? { completionSummary: event.payload.summary } : {})
+      };
+      break;
+    case "SESSION_ARCHIVED":
+      next = {
+        ...state,
+        status: "ARCHIVED",
+        archivedAt: event.payload.archivedAt,
+        ...(event.payload.reason ? { archivalReason: event.payload.reason } : {})
+      };
+      break;
+    case "SESSION_RESUMED":
+      next = state;
       break;
   }
   return { ...next, sequence: event.sequence, eventIds: [...next.eventIds, event.eventId] };

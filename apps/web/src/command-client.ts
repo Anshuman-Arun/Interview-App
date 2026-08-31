@@ -6,17 +6,25 @@ import {
   InputCommittedResponseSchema,
   ProtocolErrorResponseSchema,
   RequestIdSchema,
+  SessionArchivedResponseSchema,
+  SessionCompletedResponseSchema,
+  SessionResumedResponseSchema,
   SessionStartedResponseSchema,
   SessionSummaryResponseSchema,
+  SessionsListResponseSchema,
   type ClientCommand,
   type DeliveryId,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse,
   type RequestId,
-  type SessionId
+  type SessionId,
+  type StoredSessionSummary
 } from "../../../packages/domain/src/index.js";
 
 type SessionStartedResponse = z.infer<typeof SessionStartedResponseSchema>;
+type SessionResumedResponse = z.infer<typeof SessionResumedResponseSchema>;
+type SessionCompletedResponse = z.infer<typeof SessionCompletedResponseSchema>;
+type SessionArchivedResponse = z.infer<typeof SessionArchivedResponseSchema>;
 type InputCommittedResponse = z.infer<typeof InputCommittedResponseSchema>;
 type SessionSummaryResponse = z.infer<typeof SessionSummaryResponseSchema>;
 type DeliveryReconnectResponse = z.infer<typeof DeliveryReconnectResponseSchema>;
@@ -108,6 +116,105 @@ export class BrowserCommandClient {
     const result = await this.send(
       command,
       (value) => SessionStartedResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async listSessions(
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<readonly StoredSessionSummary[]> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "LIST_SESSIONS",
+      requestId
+    });
+    const result = await this.send(
+      command,
+      (value) => SessionsListResponseSchema.parse(value),
+      options.signal
+    );
+    return result.sessions;
+  }
+
+  public async resumeSession(
+    sessionId: SessionId,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<SessionResumedResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "RESUME_SESSION",
+      requestId,
+      sessionId
+    });
+    const result = await this.send(
+      command,
+      (value) => SessionResumedResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async completeSession(
+    sessionId: SessionId,
+    summary?: string,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<SessionCompletedResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "COMPLETE_SESSION",
+      requestId,
+      sessionId,
+      ...(summary !== undefined ? { summary } : {})
+    });
+    const result = await this.send(
+      command,
+      (value) => SessionCompletedResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async archiveSession(
+    sessionId: SessionId,
+    reason?: string,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<SessionArchivedResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "ARCHIVE_SESSION",
+      requestId,
+      sessionId,
+      ...(reason !== undefined ? { reason } : {})
+    });
+    const result = await this.send(
+      command,
+      (value) => SessionArchivedResponseSchema.parse(value),
       options.signal
     );
     if (result.sessionId !== sessionId) {

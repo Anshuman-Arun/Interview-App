@@ -56,9 +56,16 @@ export class ServerTurnOrchestrator {
     return orchestration;
   }
 
+  public async waitForAll(): Promise<void> {
+    await Promise.all(Array.from(this.inFlight.values()));
+  }
+
   public async recoverPendingTurns(sessionId: SessionId): Promise<void> {
     const writer = this.sessions.getWriter(sessionId);
     const state = writer.getState();
+    if (!state.started || state.status !== "ACTIVE") {
+      return;
+    }
 
     const turns = new TurnCoordinator(writer);
 

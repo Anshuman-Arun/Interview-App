@@ -91,6 +91,8 @@ export class RendererStreamServer {
   private readonly disconnectClassifications = new Map<SessionId, Promise<void>>();
   private connectionCount = 0;
   private boundAddress: BoundRendererStreamAddress | undefined;
+  private stoppingRequested = false;
+  private stoppingPromise: Promise<void> | undefined;
 
   public constructor(private readonly options: RendererStreamServerOptions) {
     validateSecurity(options.security);
@@ -113,6 +115,9 @@ export class RendererStreamServer {
   }
 
   public async start(): Promise<BoundRendererStreamAddress> {
+    if (this.stoppingRequested) {
+      throw new Error("Renderer stream server is shutting down");
+    }
     if (this.boundAddress !== undefined) return this.boundAddress;
 
     await new Promise<void>((resolve, reject) => {
@@ -136,7 +141,34 @@ export class RendererStreamServer {
     return this.boundAddress;
   }
 
-  public async stop(): Promise<void> {
+  public stop(): Promise<void> {
+    if (this.stoppingPromise !== undefined) return this.stoppingPromise;
+
+    this.stoppingRequested = true;
+    const stopping = this.stopFully();
+    this.stoppingPromise = stopping;
+    const clearSuccess = (): void => {
+      if (this.stoppingPromise !== stopping) return;
+      this.stoppingPromise = undefined;
+      this.stoppingRequested = false;
+    };
+    const clearFailure = (): void => {
+      if (this.stoppingPromise === stopping) {
+        this.stoppingPromise = undefined;
+      }
+      // Keep stoppingRequested true after a failed shutdown. A retry may finish
+      // cleanup, but new delivery/attach work must not enter an ambiguous server.
+    };
+    void stopping.then(clearSuccess, clearFailure);
+    return stopping;
+  }
+
+  private async stopFully(): Promise<void> {
+    // Publications admitted before shutdown own renderer connection state.
+    // Drain them before disconnect classification so every delivery they start
+    // is included in the uncertainty pass below.
+    await Promise.all([...this.publicationTails.values()]);
+
     const activeConnections = [...this.connections.values()].flatMap((set) => [...set]);
     for (const connection of activeConnections) {
       if (!connection.response.destroyed) connection.response.end();
@@ -159,11 +191,13 @@ export class RendererStreamServer {
         await new Promise<void>((resolve, reject) => {
           this.server.close((error) => error === undefined ? resolve() : reject(error));
         });
+        this.boundAddress = undefined;
       } catch (error) {
         closeFailure = error;
       }
+    } else {
+      this.boundAddress = undefined;
     }
-    this.boundAddress = undefined;
 
     const failures: unknown[] = [
       ...classificationFailures,
@@ -182,6 +216,9 @@ export class RendererStreamServer {
     sessionIdInput: SessionId,
     deliveryIdInput: DeliveryId
   ): Promise<RendererStreamPublishResult> {
+    if (this.stoppingRequested) {
+      throw new Error("Renderer stream server is shutting down");
+    }
     const sessionId = RendererStreamSessionIdSchema.parse(sessionIdInput);
     const deliveryId = RendererStreamDeliveryIdSchema.parse(deliveryIdInput);
     return this.serializePublication(sessionId, async () =>
@@ -292,25 +329,20 @@ export class RendererStreamServer {
       }
 
       const attach = parseAttachRequest(await readBody(request));
-      if (this.connectionCount >= this.maxConnections) {
-        throw new RendererStreamHttpError(
-          429,
-          "TOO_MANY_CONNECTIONS",
-          "Renderer stream connection limit reached"
-        );
+      if (!this.options.sessions.hasSession(attach.sessionId)) {
+        throw new RendererStreamHttpError(404, "NOT_FOUND", "Session not found");
       }
-
-      const sessionConnections = this.connections.get(attach.sessionId);
-      if ((sessionConnections?.size ?? 0) >= this.maxConnectionsPerSession) {
-        throw new RendererStreamHttpError(
-          409,
-          "TOO_MANY_CONNECTIONS",
-          "Renderer stream session already has the maximum number of clients"
-        );
-      }
+      this.assertConnectionCapacity(attach.sessionId);
 
       await this.awaitDisconnectClassification(attach.sessionId);
       await this.options.sessions.ensureRecovered(attach.sessionId);
+      if (this.stoppingRequested) {
+        throw new RendererStreamHttpError(
+          503,
+          "INTERNAL_ERROR",
+          "Renderer stream server is shutting down"
+        );
+      }
       await this.attach(response, attach.sessionId, origin);
     } catch (error) {
       if (response.headersSent) {
@@ -328,6 +360,10 @@ export class RendererStreamServer {
     origin: string | undefined
   ): Promise<void> {
     if (origin === undefined) throw new Error("Authorized renderer stream is missing Origin");
+    // Recovery/classification above may yield. Re-check immediately before
+    // headers + connection insertion so concurrent attaches cannot both pass
+    // an earlier capacity snapshot.
+    this.assertConnectionCapacity(sessionId);
 
     response.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
@@ -355,6 +391,24 @@ export class RendererStreamServer {
     response.once("finish", cleanup);
 
     await this.drainQueuedDeliveries(connection);
+  }
+
+  private assertConnectionCapacity(sessionId: SessionId): void {
+    if (this.connectionCount >= this.maxConnections) {
+      throw new RendererStreamHttpError(
+        429,
+        "TOO_MANY_CONNECTIONS",
+        "Renderer stream connection limit reached"
+      );
+    }
+    const sessionConnections = this.connections.get(sessionId);
+    if ((sessionConnections?.size ?? 0) >= this.maxConnectionsPerSession) {
+      throw new RendererStreamHttpError(
+        409,
+        "TOO_MANY_CONNECTIONS",
+        "Renderer stream session already has the maximum number of clients"
+      );
+    }
   }
 
   private firstLiveConnection(sessionId: SessionId): ActiveConnection | undefined {
@@ -454,7 +508,11 @@ function validateSecurity(security: LocalTransportSecurity): void {
   if (!LOOPBACK_HOSTS.has(security.host)) {
     throw new Error("Renderer stream server may bind only to a loopback address");
   }
-  if (security.clientToken.length < 32) {
+  if (
+    typeof security.clientToken !== "string"
+    || security.clientToken.length < 32
+    || /[\r\n]/u.test(security.clientToken)
+  ) {
     throw new Error("Client token must contain at least 32 characters");
   }
   if (security.allowedOrigins.size === 0) {
@@ -469,7 +527,7 @@ function validateSecurity(security: LocalTransportSecurity): void {
 }
 
 function positiveInteger(value: number, label: string): number {
-  if (!Number.isInteger(value) || value < 1) {
+  if (!Number.isSafeInteger(value) || value < 1) {
     throw new Error(`${label} must be a positive integer`);
   }
   return value;

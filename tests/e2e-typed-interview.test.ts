@@ -1916,11 +1916,12 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       expect(statuses.every((s) => s === "POSSIBLY_EXPOSED")).toBe(true);
     });
 
-    it("handles summary fetch on non-existent session ID with started=false", async () => {
+    it("fails closed when fetching the summary for a non-existent session", async () => {
       const { client } = await spawnTestLoopback();
-      const summary = await client.getSessionSummary(SessionIdSchema.parse("session_nonexistent"));
-      expect(summary.started).toBe(false);
-      expect(summary.sequence).toBe(0);
+      const error = await client.getSessionSummary(SessionIdSchema.parse("session_nonexistent"))
+        .then(() => undefined, (reason: unknown) => reason);
+      expect(error).toBeInstanceOf(BrowserCommandProtocolError);
+      expect(error).toMatchObject({ status: 404, code: "NOT_FOUND" });
     });
 
     it("preserves contextEpoch across restarts", async () => {

@@ -42,10 +42,10 @@ import {
   type TurnId
   ,type UtteranceId
 } from "../../domain/src/index.js";
-import type { EventDraft } from "../../events/src/index.js";
+import type { EventDraft, SessionState } from "../../events/src/index.js";
 import { z } from "zod";
 import { createCommandEnvelope } from "./envelopes.js";
-import { createProviderContextSpecFingerprint } from "./context-compiler.js";
+import { createProviderContextSpecFingerprintSync } from "./context-compiler.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
@@ -66,6 +66,9 @@ const BoardInputAppendedResultSchema = z.object({ appended: z.literal(true), boa
 const VisionRequestedResultSchema = z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema }).strict();
 const VisionProcessedResultSchema = z.object({ accepted: z.boolean(), reason: z.string().min(1).optional() }).strict();
 const EvidenceProcessedResultSchema = z.object({ committed: z.boolean(), key: z.string().min(1), reason: z.string().min(1).optional() }).strict();
+const CompletedResultSchema = z.object({ completed: z.literal(true), completedAt: z.string() }).strict();
+const ArchivedResultSchema = z.object({ archived: z.literal(true), archivedAt: z.string() }).strict();
+const ResumedResultSchema = z.object({ resumed: z.literal(true), resumedAt: z.string() }).strict();
 export const ProcessProposalResultSchema = z.object({
   accepted: z.boolean(),
   deliveryAtoms: z.array(DeliveryAtomSchema),
@@ -77,11 +80,55 @@ function commandIdentityValue(value: unknown): CommandIdentityValue {
   return CommandIdentityValueSchema.parse(JSON.parse(JSON.stringify(value)));
 }
 
+function assertSessionActive(state: Readonly<SessionState>, operation: string): void {
+  if (!state.started || state.status !== "ACTIVE") {
+    throw new Error(`Cannot ${operation} in status ${state.status}`);
+  }
+}
+
+function terminalInvalidationDrafts(
+  state: Readonly<SessionState>,
+  reason: string
+): readonly EventDraft[] {
+  const drafts: EventDraft[] = [];
+
+  for (const generation of Object.values(state.generations)) {
+    if (generation.status === "ACTIVE" || generation.status === "PROPOSAL_RECEIVED") {
+      drafts.push({
+        source: "APPLICATION",
+        type: "MODEL_GENERATION_SUPERSEDED",
+        payload: { generationId: generation.generationId, reason }
+      });
+    }
+  }
+
+  for (const atom of Object.values(state.deliveries)) {
+    if (atom.status === "QUEUED") {
+      drafts.push({
+        source: "APPLICATION",
+        type: "DELIVERY_CANCELLED",
+        payload: { deliveryId: atom.deliveryId, reason }
+      });
+    } else if (atom.status === "DELIVERING") {
+      drafts.push({
+        source: "RECOVERY",
+        type: "DELIVERY_POSSIBLY_EXPOSED",
+        payload: {
+          deliveryId: atom.deliveryId,
+          reason: `${reason}; physical exposure acknowledgement was not persisted`
+        }
+      });
+    }
+  }
+
+  return drafts;
+}
+
 export class TurnCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
 
   public async startSession(problem: InterviewProblem, commandEnvelope?: CommandEnvelope): Promise<void> {
-    const providerContextSpecSha256 = await createProviderContextSpecFingerprint(problem);
+    const providerContextSpecSha256 = createProviderContextSpecFingerprintSync(problem);
     const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" }));
     await this.writer.execute(envelope, {
       operation: "START_SESSION",
@@ -102,6 +149,80 @@ export class TurnCoordinator {
     });
   }
 
+  public async completeSession(commandEnvelope?: CommandEnvelope, summary?: string): Promise<{ completed: true; completedAt: string }> {
+    const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" }));
+    const result = await this.writer.execute<{ completed: true; completedAt: string }>(envelope, {
+      operation: "COMPLETE_SESSION",
+      payload: { summary: summary ?? null }
+    }, CompletedResultSchema, (state) => {
+      if (!state.started || state.status !== "ACTIVE") {
+        throw new Error(`Cannot complete session in status ${state.status}`);
+      }
+      const completedAt = new Date().toISOString();
+      return {
+        drafts: [
+          ...terminalInvalidationDrafts(state, "Session completed"),
+          {
+            source: "APPLICATION",
+            type: "SESSION_COMPLETED",
+            payload: { completedAt, ...(summary !== undefined ? { summary } : {}) }
+          }
+        ],
+        result: { completed: true, completedAt }
+      };
+    });
+    return result.value;
+  }
+
+  public async archiveSession(commandEnvelope?: CommandEnvelope, reason?: string): Promise<{ archived: true; archivedAt: string }> {
+    const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" }));
+    const result = await this.writer.execute<{ archived: true; archivedAt: string }>(envelope, {
+      operation: "ARCHIVE_SESSION",
+      payload: { reason: reason ?? null }
+    }, ArchivedResultSchema, (state) => {
+      if (!state.started || (state.status !== "ACTIVE" && state.status !== "COMPLETED")) {
+        throw new Error(`Cannot archive session in status ${state.status}`);
+      }
+      const archivedAt = new Date().toISOString();
+      return {
+        drafts: [
+          ...terminalInvalidationDrafts(state, "Session archived"),
+          {
+            source: "APPLICATION",
+            type: "SESSION_ARCHIVED",
+            payload: { archivedAt, ...(reason !== undefined ? { reason } : {}) }
+          }
+        ],
+        result: { archived: true, archivedAt }
+      };
+    });
+    return result.value;
+  }
+
+  public async resumeSession(commandEnvelope?: CommandEnvelope): Promise<{ resumed: true; resumedAt: string }> {
+    const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" }));
+    const result = await this.writer.execute<{ resumed: true; resumedAt: string }>(envelope, {
+      operation: "RESUME_SESSION",
+      payload: {}
+    }, ResumedResultSchema, (state) => {
+      if (!state.started || state.status !== "ACTIVE") {
+        throw new Error(`Cannot resume session in status ${state.status}`);
+      }
+      const resumedAt = new Date().toISOString();
+      return {
+        drafts: [
+          {
+            source: "APPLICATION",
+            type: "SESSION_RESUMED",
+            payload: { resumedAt }
+          }
+        ],
+        result: { resumed: true, resumedAt }
+      };
+    });
+    return result.value;
+  }
+
   public async commitInput(studentText: string, commandEnvelope?: CommandEnvelope): Promise<{ inputEpisodeId: InputEpisodeId; turnId: TurnId }> {
     const inputEpisodeId = newInputEpisodeId();
     const turnId = newTurnId();
@@ -109,15 +230,20 @@ export class TurnCoordinator {
     const result = await this.writer.execute(envelope, {
       operation: "COMMIT_SYNTHETIC_INPUT",
       payload: { studentText }
-    }, InputCommittedResultSchema, () => ({
-      drafts: [
-        { source: "USER", type: "INPUT_EPISODE_STARTED", payload: { inputEpisodeId } },
-        { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: studentText } },
-        { source: "APPLICATION", type: "INPUT_EPISODE_COMMITTED", payload: { inputEpisodeId } },
-        { source: "APPLICATION", type: "TURN_COMMITTED", payload: { turnId, inputEpisodeId, studentText } }
-      ],
-      result: { inputEpisodeId, turnId }
-    }));
+    }, InputCommittedResultSchema, (state) => {
+      if (!state.started || state.status !== "ACTIVE") {
+        throw new Error(`Cannot commit input in status ${state.status}`);
+      }
+      return {
+        drafts: [
+          { source: "USER", type: "INPUT_EPISODE_STARTED", payload: { inputEpisodeId } },
+          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: studentText } },
+          { source: "APPLICATION", type: "INPUT_EPISODE_COMMITTED", payload: { inputEpisodeId } },
+          { source: "APPLICATION", type: "TURN_COMMITTED", payload: { turnId, inputEpisodeId, studentText } }
+        ],
+        result: { inputEpisodeId, turnId }
+      };
+    });
     return result.value;
   }
 
@@ -128,6 +254,7 @@ export class TurnCoordinator {
       operation: "BEGIN_UTTERANCE",
       payload: {}
     }, UtteranceStartedResultSchema, (state) => {
+      assertSessionActive(state, "begin utterance");
       const invalidations: EventDraft[] = [];
       for (const generation of Object.values(state.generations)) {
         if (generation.status === "ACTIVE") {
@@ -173,6 +300,7 @@ export class TurnCoordinator {
       operation: "FINALIZE_UTTERANCE",
       payload: { utteranceId: input.utteranceId, text: input.text, inputEpisodeId, startsEpisode }
     }, UtteranceFinalizedResultSchema, (state) => {
+      assertSessionActive(state, "finalize utterance");
       const utterance = state.utterances[input.utteranceId];
       if (utterance === undefined || utterance.status !== "CAPTURING") throw new Error("Utterance is not being captured");
       if (!startsEpisode) {
@@ -196,6 +324,7 @@ export class TurnCoordinator {
       operation: "APPEND_TYPED_INPUT",
       payload: { inputEpisodeId, text }
     }, InputAppendedResultSchema, (state) => {
+      assertSessionActive(state, "append typed input");
       const episode = state.inputEpisodes[inputEpisodeId];
       if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
       return { drafts: [{ source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: text } }], result: { appended: true } };
@@ -208,6 +337,7 @@ export class TurnCoordinator {
       operation: "APPEND_BOARD_INPUT",
       payload: { inputEpisodeId, summary }
     }, BoardInputAppendedResultSchema, (state) => {
+      assertSessionActive(state, "append board input");
       const episode = state.inputEpisodes[inputEpisodeId];
       if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
       const boardRevision = BoardRevisionSchema.parse(state.boardRevision + 1);
@@ -228,6 +358,7 @@ export class TurnCoordinator {
       operation: "COMMIT_INPUT_EPISODE",
       payload: { inputEpisodeId }
     }, InputCommittedResultSchema, (state) => {
+      assertSessionActive(state, "commit input episode");
       const episode = state.inputEpisodes[inputEpisodeId];
       if (episode === undefined || episode.status !== "ACTIVE" || episode.inputs.length === 0) throw new Error("Input episode is not ready to commit");
       const studentText = episode.inputs.map((item) => item.semanticContent).join(" ");
@@ -248,10 +379,13 @@ export class TurnCoordinator {
     const result = await this.writer.execute(envelope, {
       operation: "REQUEST_VISION",
       payload: { regionId, relevantShapeIds: [...relevantShapeIds] }
-    }, VisionRequestedResultSchema, (state) => ({
+    }, VisionRequestedResultSchema, (state) => {
+      assertSessionActive(state, "request vision");
+      return {
       drafts: [{ source: "APPLICATION", type: "VISION_REQUESTED", payload: { visionRequestId, sourceBoardRevision: state.boardRevision, regionId, relevantShapeIds: [...relevantShapeIds] } }],
       result: { visionRequestId, sourceBoardRevision: state.boardRevision }
-    }));
+      };
+    });
     return result.value;
   }
 
@@ -323,6 +457,7 @@ export class TurnCoordinator {
       operation: "SELECT_PEDAGOGICAL_ACTION",
       payload: { turnId }
     }, RealizationRequestSchema, (state) => {
+      assertSessionActive(state, "select pedagogical action");
       const request = selectPedagogicalAction(state, turnId);
       return { drafts: [{ source: "APPLICATION", type: "PEDAGOGICAL_ACTION_SELECTED", payload: { turnId, request } }], result: request };
     });
@@ -336,6 +471,7 @@ export class TurnCoordinator {
       operation: "START_GENERATION",
       payload: { inputEpisodeId, turnId, provider }
     }, GenerationStartedResultSchema, (state) => {
+      assertSessionActive(state, "start generation");
       if (state.lastCommittedInputSequence === undefined) throw new Error("No committed input exists");
       const basis: GenerationBasis = {
         contextEpoch: state.contextEpoch,
@@ -362,7 +498,7 @@ export class TurnCoordinator {
     const proposal = InterviewerProposalSchema.parse(input.proposal);
     const generationId = envelope.generationId;
     if (generationId === undefined) throw new Error("Provider result envelope is missing generationId");
-    const providerContextSpecSha256 = await createProviderContextSpecFingerprint(input.problem);
+    const providerContextSpecSha256 = createProviderContextSpecFingerprintSync(input.problem);
     const outcome = await this.writer.execute(envelope, {
       operation: "PROCESS_INTERVIEWER_PROPOSAL",
       payload: {
@@ -431,10 +567,13 @@ export class TurnCoordinator {
     await this.writer.execute(envelope, {
       operation: "COMMIT_BOARD_PATCH",
       payload: { summary }
-    }, CommittedResultSchema, (state) => ({
-      drafts: [{ source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary } }],
-      result: { committed: true }
-    }));
+    }, CommittedResultSchema, (state) => {
+      assertSessionActive(state, "commit board patch");
+      return {
+        drafts: [{ source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary } }],
+        result: { committed: true }
+      };
+    });
   }
 
   public async supersedeGeneration(generationId: GenerationId, reason: string): Promise<void> {
@@ -462,6 +601,7 @@ export class TurnCoordinator {
       operation: "CORRECT_TRANSCRIPT",
       payload: { correctedText }
     }, CorrectedResultSchema, (state) => {
+      assertSessionActive(state, "correct transcript");
       const invalidations: EventDraft[] = Object.values(state.evidenceHistory)
         .flatMap((records) => records.filter((record) => record.status === "ACTIVE"))
         .map((record): EventDraft => ({
