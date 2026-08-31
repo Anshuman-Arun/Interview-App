@@ -230,6 +230,9 @@ export async function downloadHttpArtifact(
   let timedOut = false;
   const externalAbort = (): void => controller.abort(options.signal.reason);
   options.signal.addEventListener("abort", externalAbort, { once: true });
+  if (options.signal.aborted) {
+    controller.abort(options.signal.reason);
+  }
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort(new Error("artifact download timeout"));
