@@ -54,6 +54,7 @@ export function redactKnownSecrets(value: string, secretValues: readonly string[
 
 export class BoundedLineBuffer {
   private readonly lines: string[] = [];
+  private head = 0;
   private bytes = 0;
   private truncated = false;
 
@@ -74,12 +75,15 @@ export class BoundedLineBuffer {
     this.lines.push(fitted);
     this.bytes += fittedBytes;
 
-    while (this.lines.length > this.maxLines || this.bytes > this.maxBytes) {
-      const removed = this.lines.shift();
+    while (this.lines.length - this.head > this.maxLines || this.bytes > this.maxBytes) {
+      const removed = this.lines[this.head];
       if (removed === undefined) break;
+      this.lines[this.head] = "";
+      this.head += 1;
       this.bytes -= Buffer.byteLength(removed, "utf8");
       this.truncated = true;
     }
+    this.compact();
   }
 
   public markMalformed(): void {
@@ -88,12 +92,13 @@ export class BoundedLineBuffer {
 
   public clear(): void {
     this.lines.length = 0;
+    this.head = 0;
     this.bytes = 0;
     this.truncated = false;
   }
 
   public snapshot(): LocalOutputSnapshot {
-    const lines = [...this.lines];
+    const lines = this.lines.slice(this.head);
     let bytes = this.bytes;
 
     if (this.truncated) {
@@ -108,6 +113,12 @@ export class BoundedLineBuffer {
     }
 
     return Object.freeze({ lines: Object.freeze(lines), truncated: this.truncated });
+  }
+
+  private compact(): void {
+    if (this.head < 1_024 || this.head * 2 < this.lines.length) return;
+    this.lines.splice(0, this.head);
+    this.head = 0;
   }
 }
 
