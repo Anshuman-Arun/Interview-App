@@ -33,7 +33,7 @@ export function snapshotOwnEnumerableRecord(
   if (allowedFields !== undefined) {
     for (const key of keys) {
       if (!allowedFields.has(key)) {
-        throw new RangeError(`${label} contains unknown field ${key}`);
+        throw new RangeError(`${label} contains an unknown field`);
       }
     }
   }
@@ -54,7 +54,7 @@ export function snapshotOwnEnumerableRecord(
     try {
       entryValue = Reflect.get(value, key);
     } catch {
-      throw new TypeError(`${label} field ${key} could not be read safely`);
+      throw new TypeError(`${label} contains a field that could not be read safely`);
     }
     snapshot[key] = entryValue;
   }
