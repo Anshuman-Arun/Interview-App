@@ -10,7 +10,7 @@ import {
   validateImageRect,
   type ImageRect
 } from "./geometry.js";
-import { PixelDimensionsSchema, VisionPreprocessingError } from "./types.js";
+import { VisionPreprocessingError } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
 export const DirtyRegionInputSchema = z.object({
@@ -237,9 +237,8 @@ export function planDirtyRegions(
     throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty-region input must be a bounded array");
   }
 
-  const safeDimensions = PixelDimensionsSchema.parse(dimensions);
   const safeConfig = normalizeConfig(config);
-  const frame = imageBounds(safeDimensions);
+  const frame = imageBounds(dimensions);
 
   if (dirtyRegionCount === 0) {
     const regions: readonly [] = Object.freeze([]);
