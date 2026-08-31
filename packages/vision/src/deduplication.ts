@@ -27,7 +27,11 @@ export function exactImagePayloadDuplicate(left: VisionRasterSource, right: Visi
 
 export function revisionImageProcessingKey(source: VisionRasterSource): string {
   assertVisionRasterSource(source);
-  return `${String(imageRevision(source))}:${imageDigest(source)}`;
+  return JSON.stringify([
+    sourceSnapshotId(source),
+    imageRevision(source),
+    imageDigest(source)
+  ]);
 }
 
 export function cropPayloadKey(crop: VisionImageArtifact): string {
