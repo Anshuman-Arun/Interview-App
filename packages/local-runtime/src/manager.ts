@@ -32,6 +32,7 @@ const MAX_STDERR_TAIL_LINES = 20;
 const MAX_OUTPUT_LINES = 10_000;
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_OUTPUT_LINE_BYTES = 256 * 1024;
+const MAX_RESTART_RETRIES = 100;
 const COMPONENT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
 export type LocalRuntimeErrorCode =
@@ -915,8 +916,7 @@ export class LocalRuntimeManager {
         componentId: record.definition.id,
         pid,
         writeStdin: (data: string) => writeToStdin(child, data),
-        endStdin: () => child.stdin.end(),
-        signal: (signal?: NodeJS.Signals) => child.kill(signal)
+        endStdin: () => child.stdin.end()
       });
       await record.definition.gracefulShutdown(control);
     } catch (error) {
@@ -1125,8 +1125,10 @@ function validateRestartPolicy(policy: LocalRestartPolicy): void {
   }
   if (policy.mode === "NEVER") return;
   if (policy.mode !== "ON_FAILURE") invalid("Unsupported restart policy");
-  if (!Number.isSafeInteger(policy.maxRetries) || policy.maxRetries < 0) {
-    invalid("restartPolicy.maxRetries must be a nonnegative safe integer");
+  if (!Number.isSafeInteger(policy.maxRetries)
+      || policy.maxRetries < 0
+      || policy.maxRetries > MAX_RESTART_RETRIES) {
+    invalid(`restartPolicy.maxRetries must be a nonnegative safe integer no greater than ${String(MAX_RESTART_RETRIES)}`);
   }
   if (policy.backoffMs !== undefined) nonnegativeTimer(policy.backoffMs, "restartPolicy.backoffMs");
   if (policy.maxBackoffMs !== undefined) nonnegativeTimer(policy.maxBackoffMs, "restartPolicy.maxBackoffMs");
@@ -1171,8 +1173,9 @@ function validateOutputLimits(output: LocalComponentDefinition["output"]): void 
       invalid(`output.maxLineBytes may not exceed ${String(MAX_OUTPUT_LINE_BYTES)}`);
     }
   }
-  const limits = outputLimitsForValues(output);
-  if (limits.maxLineBytes > limits.maxBytes) {
+  if (output.maxLineBytes !== undefined
+      && output.maxBytes !== undefined
+      && output.maxLineBytes > output.maxBytes) {
     invalid("output.maxLineBytes may not exceed output.maxBytes");
   }
 }
@@ -1487,8 +1490,7 @@ async function terminateChildTree(
   const pid = child.pid;
   if (pid === undefined) return;
   if (platform === "win32") {
-    const treeTerminated = await runTaskkill(pid, false, commandTimeoutMs);
-    if (!treeTerminated && isChildAlive(child)) child.kill(signal);
+    await runTaskkill(pid, false, commandTimeoutMs);
     return;
   }
   try {
