@@ -1482,6 +1482,17 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(Object.isFrozen(ImageSnapshot)).toBe(true);
   });
 
+  it("maps revoked or hostile raster proxies to clean invalid-image failures", () => {
+    const revocable = Proxy.revocable({}, {});
+    revocable.revoke();
+
+    expect(() => prepareVisionImageRequest(
+      revocable.proxy as unknown as ImageSnapshot,
+      "analysis"
+    )).toThrowError(VisionPreprocessingError);
+    expect(isCropOrTileArtifact(revocable.proxy)).toBe(false);
+  });
+
   it("rejects prototype-forged raster instances that never ran a validating constructor", () => {
     const real = snapshot(makePng(2, 2));
     const forged = Object.create(ImageSnapshot.prototype) as Record<string, unknown>;
