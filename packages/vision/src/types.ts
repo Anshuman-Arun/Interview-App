@@ -7,6 +7,40 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 
 const UNSUPPORTED_APNG_CHUNKS = new Set(["acTL", "fcTL", "fdAT"]);
 
+const SUPPORTED_PNG_BIT_DEPTHS = new Map<number, ReadonlySet<number>>([
+  [0, new Set([1, 2, 4, 8])],
+  [2, new Set([8])],
+  [3, new Set([1, 2, 4, 8])],
+  [4, new Set([8])],
+  [6, new Set([8])]
+]);
+
+function assertSupportedPngHeader(bytes: Buffer): void {
+  const bitDepth = bytes[24];
+  const colorType = bytes[25];
+  const compressionMethod = bytes[26];
+  const filterMethod = bytes[27];
+  const interlaceMethod = bytes[28];
+  if (bitDepth === undefined
+      || colorType === undefined
+      || compressionMethod === undefined
+      || filterMethod === undefined
+      || interlaceMethod === undefined) {
+    throw new RangeError("PNG IHDR is truncated");
+  }
+  if (compressionMethod !== 0 || filterMethod !== 0) {
+    throw new RangeError("PNG uses an unsupported compression or filter method");
+  }
+  if (interlaceMethod !== 0) {
+    throw new RangeError("Interlaced PNG payloads are unsupported for bounded preprocessing");
+  }
+  if (SUPPORTED_PNG_BIT_DEPTHS.get(colorType)?.has(bitDepth) !== true) {
+    throw new RangeError("PNG color type or bit depth is unsupported for bounded preprocessing");
+  }
+}
+
+
+
 function assertStaticPngChunkStructure(bytes: Buffer): void {
   let offset = PNG_SIGNATURE.length;
   let chunkIndex = 0;
@@ -69,9 +103,7 @@ function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffe
   if (bytes.readUInt32BE(16) !== metadata.width || bytes.readUInt32BE(20) !== metadata.height) {
     throw new RangeError("Image payload dimensions do not match metadata");
   }
-  if (bytes[28] !== 0) {
-    throw new RangeError("Interlaced PNG payloads are unsupported for bounded preprocessing");
-  }
+  assertSupportedPngHeader(bytes);
   assertStaticPngChunkStructure(bytes);
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (digest !== metadata.contentDigest) throw new RangeError("Image payload digest does not match metadata");
