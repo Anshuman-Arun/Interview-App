@@ -3,6 +3,13 @@ import { crc32 } from "node:zlib";
 const PNG_SIGNATURE_LENGTH = 8;
 const HARD_MAX_PNG_CHUNKS = 4096;
 const UNSUPPORTED_APNG_CHUNKS = new Set(["acTL", "fcTL", "fdAT"]);
+const UNSUPPORTED_RENDERING_METADATA_CHUNKS = new Set([
+  "cHRM",
+  "iCCP",
+  "sRGB",
+  "sBIT",
+  "bKGD"
+]);
 const KNOWN_CRITICAL_CHUNKS = new Set(["IHDR", "PLTE", "IDAT", "IEND"]);
 
 const SUPPORTED_PNG_BIT_DEPTHS = new Map<number, ReadonlySet<number>>([
@@ -99,6 +106,11 @@ export function assertStaticPngChunkStructure(bytes: Buffer): void {
     }
     if (UNSUPPORTED_APNG_CHUNKS.has(chunkType)) {
       throw new RangeError("Animated PNG chunks are unsupported");
+    }
+    if (UNSUPPORTED_RENDERING_METADATA_CHUNKS.has(chunkType)) {
+      throw new RangeError(
+        "PNG rendering metadata unsupported by the preprocessing codec is not accepted"
+      );
     }
 
     if (seenImageData && chunkType !== "IDAT" && chunkType !== "IEND") {
