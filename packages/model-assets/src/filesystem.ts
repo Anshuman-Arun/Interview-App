@@ -324,28 +324,6 @@ export async function atomicRenameDirectory(source: string, destination: string)
   }
 }
 
-export async function sumRegularFileBytes(root: string): Promise<number> {
-  let entry: Stats;
-  try {
-    entry = await lstat(root);
-  } catch (error) {
-    if (errnoCode(error) === "ENOENT") return 0;
-    throw new ModelAssetError("IO_ERROR", "Unable to inspect cache usage.", { cause: error });
-  }
-  if (entry.isSymbolicLink()) return 0;
-  if (entry.isFile()) return entry.size;
-  if (!entry.isDirectory()) return 0;
-  let total = 0;
-  const directory = await opendir(root);
-  for await (const child of directory) {
-    total += await sumRegularFileBytes(path.join(root, child.name));
-    if (!Number.isSafeInteger(total)) {
-      throw new ModelAssetError("CACHE_LIMIT_EXCEEDED", "Cache usage exceeds safe integer accounting limits.");
-    }
-  }
-  return total;
-}
-
 export async function availableDiskBytes(root: string): Promise<bigint | undefined> {
   try {
     const stats = await statfs(root, { bigint: true });
