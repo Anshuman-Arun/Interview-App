@@ -365,6 +365,7 @@ export class LocalRuntimeManager {
           record.definition.startupTimeoutMs
         )
       : undefined;
+    if (earlyReadiness !== undefined) void earlyReadiness.catch(() => undefined);
 
     try {
       await waitForSpawn(
@@ -686,10 +687,22 @@ export class LocalRuntimeManager {
         resolve(sanitizeReadyResult(normalized, record.environment.secretValues));
       };
       const onLine = (line: string): void => {
+        let decision: LocalReadinessDecision;
         try {
-          finish(evaluate(line));
+          decision = evaluate(line);
         } catch {
-          // Treat callback failures as a non-ready observation; untrusted output cannot crash the manager.
+          // A trusted evaluator may treat one malformed/unexpected line as not ready.
+          return;
+        }
+        try {
+          finish(decision);
+        } catch (error) {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error instanceof LocalRuntimeError
+            ? error
+            : new LocalRuntimeError("READINESS_FAILED", "Readiness callback returned an invalid decision"));
         }
       };
       const onExit = (): void => {
@@ -775,8 +788,9 @@ export class LocalRuntimeManager {
         if (normalized.ready) {
           return sanitizeReadyResult(normalized, record.environment.secretValues);
         }
-      } catch {
+      } catch (error) {
         if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
+        if (error instanceof LocalRuntimeError) throw error;
       }
       await abortableDelay(intervalMs, signal, record.definition.id);
     }
