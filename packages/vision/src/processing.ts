@@ -698,7 +698,16 @@ export function planImageTiles(dimensions: PixelDimensions, config: TileConfig):
         width: Math.min(safeConfig.tileWidth, source.width - x),
         height: Math.min(safeConfig.tileHeight, source.height - y)
       });
-      totalTilePixels += rectArea(bounds);
+      let tilePixels: number;
+      try {
+        tilePixels = rectArea(bounds);
+      } catch {
+        throw new VisionPreprocessingError(
+          "TILE_LIMIT_EXCEEDED",
+          "Tile pixel area exceeds the planner's safe numeric range"
+        );
+      }
+      totalTilePixels += tilePixels;
       if (!Number.isSafeInteger(totalTilePixels) || totalTilePixels > HARD_MAX_TOTAL_TILE_PIXELS) {
         throw new VisionPreprocessingError(
           "TILE_LIMIT_EXCEEDED",
