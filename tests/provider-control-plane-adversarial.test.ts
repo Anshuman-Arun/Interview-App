@@ -140,6 +140,8 @@ describe("provider configuration secret exclusion", () => {
       "Bearer abcdefghijklmnop",
       "Basic Zm9vOmJhcg==",
       "Basic dXNlcjpwYXNz",
+      "Basic dXNlcjpww6Rzcw==",
+      "Basic w7xzZXI6cMOkc3M="
       "AIza123456789012345678901234567890",
       "sk_abcdefghijklmnopqrstuvwxyz",
       "token=raw-private-token",

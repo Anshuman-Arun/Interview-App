@@ -199,7 +199,7 @@ function isSecretConfigurationKey(key: string): boolean {
 const BASE64_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-function decodePrintableBase64(candidate: string): string | undefined {
+function base64ContainsColon(candidate: string): boolean {
   const withoutPadding = candidate.replace(/=+$/u, "");
   const paddingLength = candidate.length - withoutPadding.length;
   if (
@@ -207,22 +207,21 @@ function decodePrintableBase64(candidate: string): string | undefined {
     || candidate.length % 4 === 1
     || paddingLength > 2
   ) {
-    return undefined;
+    return false;
   }
 
   let accumulator = 0;
   let bitCount = 0;
-  let decoded = "";
+  let sawColon = false;
   for (const character of withoutPadding) {
     const value = BASE64_ALPHABET.indexOf(character);
-    if (value < 0) return undefined;
+    if (value < 0) return false;
     accumulator = (accumulator << 6) | value;
     bitCount += 6;
     while (bitCount >= 8) {
       bitCount -= 8;
       const byte = (accumulator >> bitCount) & 0xff;
-      if (byte < 0x20 || byte > 0x7e) return undefined;
-      decoded += String.fromCharCode(byte);
+      if (byte === 0x3a) sawColon = true;
     }
     if (bitCount === 0) {
       accumulator = 0;
@@ -230,15 +229,13 @@ function decodePrintableBase64(candidate: string): string | undefined {
       accumulator &= (1 << bitCount) - 1;
     }
   }
-  if (bitCount > 0 && accumulator !== 0) return undefined;
-  return decoded;
+  if (bitCount > 0 && accumulator !== 0) return false;
+  return sawColon;
 }
 
 function containsBasicAuthCredential(value: string): boolean {
   const candidate = BASIC_AUTH_CANDIDATE_PATTERN.exec(value)?.[1];
-  if (candidate === undefined) return false;
-  const decoded = decodePrintableBase64(candidate);
-  return decoded !== undefined && decoded.includes(":");
+  return candidate !== undefined && base64ContainsColon(candidate);
 }
 
 export function containsSecretLikeConfigurationText(value: string): boolean {
