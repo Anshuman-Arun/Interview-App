@@ -28,13 +28,13 @@ Runtime-only secret values are actively removed from captured output, readiness/
 
 ## Output and crash records
 
-Stdout/stderr are framed as bounded UTF-8 lines using a fixed per-line buffer, so hostile fragmentation cannot create unbounded allocation growth or repeated whole-line copying. Oversized or invalid lines become diagnostic markers instead of causing unbounded accumulation. Recent output is limited by both line count and byte count and carries a `[TRUNCATED]` marker after eviction.
+Stdout/stderr are framed as bounded UTF-8 lines using a fixed per-line buffer, so hostile fragmentation cannot create unbounded allocation growth or repeated whole-line copying. Oversized or invalid lines become diagnostic markers instead of causing unbounded accumulation. Recent output is limited by both line count and byte count and carries a truncation marker after eviction when the configured byte budget can hold the full marker.
 
-Unexpected exits record exit code, signal where available, timestamp, previous lifecycle state, and a sanitized bounded stderr tail. Output is observational diagnostics only.
+Unexpected exits record exit code, signal where available, timestamp, previous lifecycle state, and a sanitized bounded stderr tail. Retained output is evicted in bounded amortized time so sustained worker chatter cannot turn the line cap into repeated whole-buffer shifts. Output is observational diagnostics only.
 
 ## Restart policy
 
-The default policy is `NEVER`. `ON_FAILURE` requires an explicit finite retry budget (capped at 100 retries) and supports bounded exponential backoff. The retry budget is shared across startup failures and later crashes until an explicit new `start()`/`restart()` operation resets it, preventing a process that repeatedly becomes ready and crashes from restarting forever. Deterministic version mismatches are not automatically retried.
+The default policy is `NEVER`. `ON_FAILURE` requires an explicit finite retry budget (capped at 100 retries) and supports bounded exponential backoff. The retry budget is shared across startup failures and later crashes until an explicit new `start()`/`restart()` operation resets it, preventing a process that repeatedly becomes ready and crashes from restarting forever. Deterministic version mismatches and invalid readiness/handshake contracts fail closed without consuming automatic retries; transient non-ready observations continue polling until the bounded startup timeout.
 
 ## Shutdown
 
