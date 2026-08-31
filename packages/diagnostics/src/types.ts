@@ -16,7 +16,7 @@ export interface DiagnosticRecord {
 export const DiagnosticValueSchema: z.ZodType<DiagnosticValue> = z.lazy(() =>
   z.union([
     z.string(),
-    z.number().finite(),
+    z.number(),
     z.boolean(),
     z.null(),
     z.array(DiagnosticValueSchema),

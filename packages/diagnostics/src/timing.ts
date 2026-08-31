@@ -21,7 +21,7 @@ export type TimingOutcome = z.infer<typeof TimingOutcomeSchema>;
 export const OperationTimingSchema = z.object({
   operation: z.string().min(1),
   category: TimingOperationCategorySchema,
-  elapsedMs: z.number().finite().nonnegative(),
+  elapsedMs: z.number().nonnegative(),
   outcome: TimingOutcomeSchema,
   tags: DiagnosticRecordSchema.optional()
 }).strict();
@@ -31,11 +31,11 @@ export const TimingAggregateSchema = z.object({
   operation: z.string().min(1),
   category: TimingOperationCategorySchema,
   count: z.number().int().positive(),
-  minMs: z.number().finite().nonnegative(),
-  maxMs: z.number().finite().nonnegative(),
-  meanMs: z.number().finite().nonnegative(),
-  p50Ms: z.number().finite().nonnegative(),
-  p95Ms: z.number().finite().nonnegative(),
+  minMs: z.number().nonnegative(),
+  maxMs: z.number().nonnegative(),
+  meanMs: z.number().nonnegative(),
+  p50Ms: z.number().nonnegative(),
+  p95Ms: z.number().nonnegative(),
   outcomes: z.object({
     SUCCESS: z.number().int().nonnegative(),
     FAILURE: z.number().int().nonnegative(),

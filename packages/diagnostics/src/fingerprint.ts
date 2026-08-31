@@ -2,11 +2,15 @@ import { createHash } from "node:crypto";
 import { sanitizeDiagnosticValue } from "./sanitize.js";
 import type { DiagnosticValue, Sha256Fingerprint } from "./types.js";
 
+function isDiagnosticArray(value: DiagnosticValue): value is readonly DiagnosticValue[] {
+  return Array.isArray(value);
+}
+
 function canonicalize(value: DiagnosticValue): string {
   if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
     return JSON.stringify(value);
   }
-  if (Array.isArray(value)) {
+  if (isDiagnosticArray(value)) {
     return `[${value.map((item) => canonicalize(item)).join(",")}]`;
   }
 
