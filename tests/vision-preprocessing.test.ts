@@ -1684,7 +1684,10 @@ describe("provider-neutral request preparation and budgeting", () => {
     const callerCopy = request.payload.readBytes();
     callerCopy.fill(0);
     expect(sha256ImageBytes(request.payload.readBytes())).toBe(crop.artifact.metadata.contentDigest);
-    expect(JSON.stringify(request.payload)).not.toContain(Buffer.from(crop.artifact.readBytes()).toString("base64"));
+    const encodedBase64 = Buffer.from(crop.artifact.readBytes()).toString("base64");
+    expect(JSON.stringify(request.payload)).not.toContain(encodedBase64);
+    expect(JSON.stringify(request)).not.toContain(encodedBase64);
+    expect(JSON.stringify(prepareVisionBatch([crop.artifact], "context"))).not.toContain(encodedBase64);
   });
 
   it("fails closed instead of throwing through hostile payload proxy traps", () => {
