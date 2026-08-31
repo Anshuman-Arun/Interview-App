@@ -504,9 +504,9 @@ function isStoredProviderDefinition(
   if (typeof value !== "object" || value === null) return false;
   try {
     const descriptor = Object.getOwnPropertyDescriptor(value, "id");
-    return descriptor !== undefined
-      && "value" in descriptor
-      && descriptor.value === expectedId
+    if (descriptor === undefined || !("value" in descriptor)) return false;
+    const storedId: unknown = descriptor.value;
+    return storedId === expectedId
       && Object.getPrototypeOf(value) === null
       && Object.isFrozen(value);
   } catch {
