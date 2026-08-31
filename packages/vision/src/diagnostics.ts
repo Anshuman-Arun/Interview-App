@@ -18,8 +18,8 @@ export const VisionProcessingDiagnosticsSchema = z.object({
   outputDimensions: PixelDimensionsSchema.optional(),
   inputBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   outputBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  cropCount: z.number().int().nonnegative().max(10_000),
-  tileCount: z.number().int().nonnegative().max(10_000),
+  cropCount: z.number().int().nonnegative().max(1),
+  tileCount: z.number().int().nonnegative().max(512),
   durationMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   outcome: VisionProcessingOutcomeSchema
 }).strict().superRefine((diagnostics, context) => {
