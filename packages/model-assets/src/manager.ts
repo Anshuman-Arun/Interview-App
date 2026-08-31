@@ -1,4 +1,4 @@
-import type { Dir, Stats } from "node:fs";
+import type { BigIntStats, Dir, Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lstat, opendir } from "node:fs/promises";
 import path from "node:path";
@@ -745,12 +745,12 @@ export class ModelAssetManager {
   private async assertSafeStagingDirectory(
     paths: CachePaths,
     stagingDirectory: string,
-    expectedIdentity?: { readonly device: number; readonly inode: number }
-  ): Promise<Stats> {
+    expectedIdentity?: { readonly device: bigint; readonly inode: bigint }
+  ): Promise<BigIntStats> {
     await validateCachePaths(paths);
-    let entry: Stats;
+    let entry: BigIntStats;
     try {
-      entry = await lstat(stagingDirectory);
+      entry = await lstat(stagingDirectory, { bigint: true });
     } catch (error) {
       throw new ModelAssetError(
         "IO_ERROR",
@@ -1173,7 +1173,7 @@ export class ModelAssetManager {
     installationDirectory: string,
     reservationBytes: number,
     signal: AbortSignal,
-    stagingIdentity: { readonly device: number; readonly inode: number }
+    stagingIdentity: { readonly device: bigint; readonly inode: bigint }
   ): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
       await this.withMutationGate(paths, async () => {
