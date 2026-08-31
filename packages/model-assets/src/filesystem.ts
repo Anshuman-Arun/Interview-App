@@ -914,12 +914,17 @@ export async function copyLocalArtifactBounded(
     }
   });
   try {
-    await pipeline(
-      openedSource.handle.createReadStream({ autoClose: false }),
-      limiter,
-      destinationHandle.createWriteStream({ autoClose: false }),
-      { signal }
-    );
+    const destinationStream = destinationHandle.createWriteStream({ autoClose: false });
+    try {
+      await pipeline(
+        openedSource.handle.createReadStream({ autoClose: false }),
+        limiter,
+        destinationStream,
+        { signal }
+      );
+    } finally {
+      destinationStream.destroy();
+    }
     if (bytes !== expectedBytes) {
       throw new ModelAssetError("SIZE_MISMATCH", "Local import size changed during copy.");
     }
