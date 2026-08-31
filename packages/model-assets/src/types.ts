@@ -183,9 +183,11 @@ export function resolveAssetManifest(
   manifests: readonly unknown[],
   requestValue: unknown
 ): AssetManifest {
-  if (!Array.isArray(manifests)) {
+  const rawManifests: unknown = manifests;
+  if (!Array.isArray(rawManifests)) {
     throw new ModelAssetError("INVALID_MANIFEST", "Asset manifest collection must be an array.");
   }
+  const manifestValues: readonly unknown[] = rawManifests;
   const requestResult = AssetResolutionRequestSchema.safeParse(requestValue);
   if (!requestResult.success) {
     throw new ModelAssetError("INVALID_MANIFEST", "Asset resolution request validation failed.");
@@ -195,7 +197,7 @@ export function resolveAssetManifest(
   let bestSpecificity = -1;
   let ambiguous = false;
 
-  for (const manifestValue of manifests) {
+  for (const manifestValue of manifestValues) {
     const manifest = parseAssetManifest(manifestValue);
     if (manifest.familyId !== request.familyId || manifest.version !== request.version) continue;
     if (manifest.platform !== undefined && manifest.platform !== request.platform) continue;
