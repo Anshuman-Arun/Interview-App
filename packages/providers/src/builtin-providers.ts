@@ -56,7 +56,8 @@ function readMockRuntimeMemberWithoutAccessors(
     }
     if (descriptor !== undefined) {
       if (!("value" in descriptor)) return invalidMockRuntime();
-      return descriptor.value;
+      const member: unknown = descriptor.value;
+      return member;
     }
     try {
       current = Object.getPrototypeOf(current);
@@ -111,7 +112,8 @@ function snapshotMockArray(
     if (descriptor === undefined || !("value" in descriptor)) {
       return invalidMockRuntime();
     }
-    snapshot.push(mapItem(descriptor.value));
+    const item: unknown = descriptor.value;
+    snapshot.push(mapItem(item));
   }
   return Object.freeze(snapshot);
 }

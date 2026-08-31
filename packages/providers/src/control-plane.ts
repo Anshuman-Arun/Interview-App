@@ -524,7 +524,8 @@ function readResolverMethodWithoutAccessors(
           "Provider secret resolver methods must not be accessors"
         );
       }
-      return descriptor.value;
+      const member: unknown = descriptor.value;
+      return member;
     }
 
     try {
@@ -815,7 +816,8 @@ function readAdapterMember(
   key: string
 ): unknown {
   try {
-    return Reflect.get(value, key);
+    const member: unknown = Reflect.get(value, key);
+    return member;
   } catch {
     throw adapterDefinitionMismatch();
   }
