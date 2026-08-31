@@ -209,7 +209,8 @@ function clonePlainDataArray(
         "Keep-manifest count exceeds the configured cleanup limit."
       );
     }
-    const clone: unknown[] = new Array<unknown>(value.length);
+    const clone: unknown[] = [];
+    clone.length = value.length;
     for (let index = 0; index < value.length; index += 1) {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
       if (descriptor === undefined || !("value" in descriptor)) return undefined;
