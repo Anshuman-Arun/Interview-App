@@ -271,7 +271,23 @@ export async function ensureSafeDirectory(root: string, directory: string): Prom
           throw new ModelAssetError("IO_ERROR", "Unable to create cache directory.", { cause: mkdirError });
         }
       }
-      const created = await lstat(current);
+      let created: Stats;
+      try {
+        created = await lstat(current);
+      } catch (verificationError) {
+        if (errnoCode(verificationError) === "ENOENT") {
+          throw new ModelAssetError(
+            "UNSAFE_PATH",
+            "Cache directory disappeared during creation verification.",
+            { cause: verificationError }
+          );
+        }
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to verify a newly created cache directory.",
+          { cause: verificationError }
+        );
+      }
       if (created.isSymbolicLink() || !created.isDirectory()) {
         throw new ModelAssetError("UNSAFE_PATH", "Cache directory creation raced with an unsafe filesystem entry.");
       }
