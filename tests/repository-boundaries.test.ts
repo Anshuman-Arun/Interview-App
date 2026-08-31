@@ -96,6 +96,14 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "browser importing a server wrapper around Node capabilities",
+      expectedCode: "BROWSER_PROCESS_CAPABILITY",
+      files: {
+        "apps/web/src/bad.ts": "import \"../../server/src/process-wrapper.js\";\n",
+        "apps/server/src/process-wrapper.ts": "import \"../../../packages/local-runtime/src/index.js\";\n"
+      }
+    },
+    {
       name: "provider code gaining process-backed tool execution",
       expectedCode: "PROVIDER_TOOL_CAPABILITY",
       files: {
