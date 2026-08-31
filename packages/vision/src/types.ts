@@ -169,6 +169,7 @@ export class ImageSnapshot {
 
   public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array) {
     const parsed = ImageSnapshotMetadataSchema.parse(metadata);
+    if (!(bytes instanceof Uint8Array)) throw new RangeError("Image payload must be a Uint8Array");
     if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
       throw new RangeError("Image payload exceeds the package hard encoded-byte cap");
     }
@@ -194,6 +195,7 @@ export class VisionImageArtifact {
 
   public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array) {
     const parsed = VisionImageArtifactMetadataSchema.parse(metadata);
+    if (!(bytes instanceof Uint8Array)) throw new RangeError("Image payload must be a Uint8Array");
     if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
       throw new RangeError("Image payload exceeds the package hard encoded-byte cap");
     }
