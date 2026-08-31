@@ -898,7 +898,26 @@ export class ModelAssetManager {
       }
     }
 
-    const finalDirectoryStat = await lstat(directoryPath, { bigint: true });
+    let finalDirectoryStat: BigIntStats;
+    try {
+      finalDirectoryStat = await lstat(directoryPath, { bigint: true });
+    } catch (error) {
+      if (typeof error === "object"
+          && error !== null
+          && "code" in error
+          && error.code === "ENOENT") {
+        throw new ModelAssetError(
+          errorCode,
+          "Artifact directory disappeared during final structural inspection.",
+          { cause: error }
+        );
+      }
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to complete artifact directory structural inspection.",
+        { cause: error }
+      );
+    }
     if (finalDirectoryStat.isSymbolicLink()
         || !finalDirectoryStat.isDirectory()
         || finalDirectoryStat.dev !== directoryStat.dev
