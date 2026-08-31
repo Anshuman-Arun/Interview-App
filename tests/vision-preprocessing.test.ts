@@ -1862,6 +1862,25 @@ describe("crop, resize, tiling, and cancellation", () => {
     })).rejects.toThrowError(RangeError);
   });
 
+  it("fails closed on throwing, nonnumeric, or proxied processing clocks", async () => {
+    const source = snapshot(makePng(2, 2));
+
+    await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
+      now: () => {
+        throw new Error("hostile clock");
+      }
+    })).rejects.toThrowError(TypeError);
+
+    await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
+      now: (() => "not-a-number") as unknown as () => number
+    })).rejects.toThrowError(RangeError);
+
+    const proxiedClock = new Proxy(() => 1, {});
+    await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
+      now: proxiedClock
+    })).rejects.toThrowError(TypeError);
+  });
+
   it("rejects unsafe processing clock values before pixel work begins", async () => {
     const source = snapshot(makePng(4, 4));
     await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
