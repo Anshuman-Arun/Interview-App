@@ -1481,7 +1481,10 @@ export class ModelAssetManager {
       await validateCachePaths(paths);
       return { status: "INSTALLED", path: payload };
     } catch (error) {
-      if (error instanceof ModelAssetError && error.code === "CANCELLED") throw error;
+      if (error instanceof ModelAssetError
+          && (error.code === "CANCELLED" || error.code === "INVALID_CACHE_ROOT")) {
+        throw error;
+      }
       const errorCode = modelAssetErrorCode(error);
       const operationalFailure = errorCode === "IO_ERROR"
         || errorCode === "ARTIFACT_TOO_LARGE"
