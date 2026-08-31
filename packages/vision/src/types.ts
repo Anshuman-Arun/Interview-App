@@ -69,6 +69,9 @@ function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffe
   if (bytes.readUInt32BE(16) !== metadata.width || bytes.readUInt32BE(20) !== metadata.height) {
     throw new RangeError("Image payload dimensions do not match metadata");
   }
+  if (bytes[28] !== 0) {
+    throw new RangeError("Interlaced PNG payloads are unsupported for bounded preprocessing");
+  }
   assertStaticPngChunkStructure(bytes);
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (digest !== metadata.contentDigest) throw new RangeError("Image payload digest does not match metadata");
