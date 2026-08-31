@@ -820,6 +820,60 @@ describe("local worker lifecycle manager", () => {
       .rejects.toMatchObject({ code: "READINESS_FAILED" });
   });
 
+  it("handles hostile readiness callback values without executing proxy traps", async () => {
+    const revokedDecision = Proxy.revocable({ ready: true }, {});
+    revokedDecision.revoke();
+    const returned = manager();
+    returned.register(definition("revoked-decision", "ready", {
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 2, backoffMs: 5 },
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => revokedDecision.proxy as unknown as { readonly ready: boolean }
+      }
+    }));
+    await expect(returned.start("revoked-decision"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+    expect(returned.getStatus("revoked-decision").restartCount).toBe(0);
+
+    let handshakeGetterCalls = 0;
+    const accessorHandshake = Object.defineProperty({}, "componentVersion", {
+      enumerable: true,
+      get: () => {
+        handshakeGetterCalls += 1;
+        return "fixture-1";
+      }
+    });
+    const accessor = manager();
+    accessor.register(definition("accessor-handshake", "ready", {
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: accessorHandshake as LocalComponentHandshake
+        })
+      }
+    }));
+    await expect(accessor.start("accessor-handshake"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+    expect(handshakeGetterCalls).toBe(0);
+
+    const revokedThrown = Proxy.revocable({}, {});
+    revokedThrown.revoke();
+    const throwing = manager();
+    throwing.register(definition("revoked-thrown", "ready", {
+      startupTimeoutMs: 60,
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        intervalMs: 5,
+        probe: () => {
+          throw revokedThrown.proxy;
+        }
+      }
+    }));
+    await expect(throwing.start("revoked-thrown"))
+      .rejects.toMatchObject({ code: "READINESS_TIMEOUT" });
+  });
+
   it("rejects malformed reported handshake metadata", async () => {
     const runtime = manager();
     runtime.register(definition("bad-handshake-shape", "ready", {
