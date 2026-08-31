@@ -75,13 +75,13 @@ const COMMON_API_KEY_PATTERN =
   /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,}|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|glpat-[a-z0-9_-]{20,}|hf_[a-z0-9]{20,})\b/iu;
 const CREDENTIAL_WORD_SEPARATOR = "[\\s._-]*";
 const HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN = new RegExp(
-  String.raw`\b(authorization(?:${CREDENTIAL_WORD_SEPARATOR}header)?|http${CREDENTIAL_WORD_SEPARATOR}authorization|auth${CREDENTIAL_WORD_SEPARATOR}header|api${CREDENTIAL_WORD_SEPARATOR}key|access${CREDENTIAL_WORD_SEPARATOR}token|refresh${CREDENTIAL_WORD_SEPARATOR}token|id${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}token|session${CREDENTIAL_WORD_SEPARATOR}token|auth${CREDENTIAL_WORD_SEPARATOR}token|bearer${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}secret|provider${CREDENTIAL_WORD_SEPARATOR}secret|webhook${CREDENTIAL_WORD_SEPARATOR}secret|secret${CREDENTIAL_WORD_SEPARATOR}key|secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|aws${CREDENTIAL_WORD_SEPARATOR}secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|password|passwd|passphrase|private${CREDENTIAL_WORD_SEPARATOR}key|credential|cookie|set${CREDENTIAL_WORD_SEPARATOR}cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))`,
+  String.raw`(?:^|[^a-z0-9])(authorization(?:${CREDENTIAL_WORD_SEPARATOR}header)?|http${CREDENTIAL_WORD_SEPARATOR}authorization|auth${CREDENTIAL_WORD_SEPARATOR}header|api${CREDENTIAL_WORD_SEPARATOR}key|access${CREDENTIAL_WORD_SEPARATOR}token|refresh${CREDENTIAL_WORD_SEPARATOR}token|id${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}token|session${CREDENTIAL_WORD_SEPARATOR}token|auth${CREDENTIAL_WORD_SEPARATOR}token|bearer${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}secret|provider${CREDENTIAL_WORD_SEPARATOR}secret|webhook${CREDENTIAL_WORD_SEPARATOR}secret|secret${CREDENTIAL_WORD_SEPARATOR}key|secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|aws${CREDENTIAL_WORD_SEPARATOR}secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|password|passwd|passphrase|private${CREDENTIAL_WORD_SEPARATOR}key|credential|cookie|set${CREDENTIAL_WORD_SEPARATOR}cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))`,
   "iu"
 );
 const GENERIC_SECRET_ASSIGNMENT_PATTERN =
-  /\b(?:token|secret)\b\s*[:=]\s*["']?([^\s"'&]{12,})["']?/iu;
+  /(?:^|[^a-z0-9])(?:token|secret)\b\s*[:=]\s*["']?([^\s"'&]{12,})["']?/iu;
 const AUTHORIZATION_SCHEME_VALUE_PATTERN = new RegExp(
-  String.raw`\b(?:authorization(?:${CREDENTIAL_WORD_SEPARATOR}header)?|http${CREDENTIAL_WORD_SEPARATOR}authorization|auth${CREDENTIAL_WORD_SEPARATOR}header)\b\s*[:=]\s*(?:bearer|basic)\s+[^\s&,;]+`,
+  String.raw`(?:^|[^a-z0-9])(?:authorization(?:${CREDENTIAL_WORD_SEPARATOR}header)?|http${CREDENTIAL_WORD_SEPARATOR}authorization|auth${CREDENTIAL_WORD_SEPARATOR}header)\b\s*[:=]\s*(?:bearer|basic)\s+[^\s&,;]+`,
   "iu"
 );
 const GENERIC_NON_SECRET_ASSIGNMENT_VALUES = new Set([
@@ -104,7 +104,8 @@ const AUTHORIZATION_NON_SECRET_ASSIGNMENT_VALUES = new Set([
 ]);
 const URL_USERINFO_PATTERN =
   /\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/iu;
-const PRIVATE_KEY_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/iu;
+const PRIVATE_KEY_PATTERN =
+  /-----BEGIN(?:(?: [A-Z0-9]+)? PRIVATE KEY| PGP PRIVATE KEY BLOCK)-----/iu;
 
 export const PROVIDER_CONFIGURATION_LIMITS = Object.freeze({
   maxDepth: 16,

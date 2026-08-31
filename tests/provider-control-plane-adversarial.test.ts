@@ -172,6 +172,11 @@ describe("provider configuration secret exclusion", () => {
       "client secret: abc",
       "secret access key = abc",
       "AWS Secret Access Key: abc",
+      "GEMINI_API_KEY=abc123",
+      "DATABASE_PASSWORD=hunter2",
+      "GITHUB_TOKEN=short-private-token",
+      "MY_CLIENT_SECRET=abc",
+      "MY_AUTH_HEADER=Bearer x",
       "authorization=Bearer x",
       "Authorization Header: Bearer x",
       "Auth Header = Basic YTpi",
@@ -180,7 +185,8 @@ describe("provider configuration secret exclusion", () => {
       "auth_header=Basic YTpi",
       "Basic dXNlcjpwYXNz)",
       "postgres://user:p%40ssw0rd@example.com/database",
-      "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----"
+      "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----",
+      "-----BEGIN PGP PRIVATE KEY BLOCK-----\nprivate-material\n-----END PGP PRIVATE KEY BLOCK-----"
     ]) {
       expect(() => validateProviderConfiguration(settingsConfiguration({ endpoint: value })))
         .toThrow(expect.objectContaining({ code: "SECRET_IN_CONFIGURATION" }));
@@ -222,6 +228,9 @@ describe("provider configuration secret exclusion", () => {
       "API key required",
       "client secret placeholder",
       "Authorization Header required",
+      "GEMINI_API_KEY required",
+      "DATABASE_PASSWORD policy",
+      "GITHUB_TOKEN documentation",
       "Basic Configuration)",
       "https://api.example.com/v1/models"
     ]) {
