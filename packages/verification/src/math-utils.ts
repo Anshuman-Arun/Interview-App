@@ -13,6 +13,10 @@ export type BoundedMathErrorCode =
   | "INVALID_MODULUS"
   | "INVALID_DIVISOR"
   | "INVALID_COMBINATORIAL_ARGUMENT"
+  | "COMBINATORIAL_LIMIT_EXCEEDED"
+  | "INVALID_PROBABILITY"
+  | "INVALID_EXPRESSION"
+  | "UNDEFINED_OPERATION"
   | "CONTAINER_LIMIT_EXCEEDED";
 
 export class BoundedMathError extends Error {
@@ -31,7 +35,7 @@ function decimalDigitCount(value: bigint): number {
 }
 
 export function parseBoundedInteger(value: string): bigint {
-  if (!/^-?(?:0|[1-9]\d*)$/u.test(value)) {
+  if (!/^(?:0|-?[1-9]\d*)$/u.test(value)) {
     throw new BoundedMathError("INVALID_INTEGER", "Integer must use canonical base-10 digits");
   }
   const digits = value.startsWith("-") ? value.length - 1 : value.length;
@@ -42,7 +46,7 @@ export function parseBoundedInteger(value: string): bigint {
 }
 
 export function formatInteger(value: bigint): string {
-  return value.toString();
+  return assertIntermediateIntegerBound(value).toString();
 }
 
 export function assertIntermediateIntegerBound(value: bigint): bigint {
@@ -56,8 +60,10 @@ export function assertIntermediateIntegerBound(value: bigint): bigint {
 }
 
 export function gcd(left: bigint, right: bigint): bigint {
-  let a = left < 0n ? -left : left;
-  let b = right < 0n ? -right : right;
+  let a = assertIntermediateIntegerBound(left);
+  let b = assertIntermediateIntegerBound(right);
+  a = a < 0n ? -a : a;
+  b = b < 0n ? -b : b;
   while (b !== 0n) {
     const remainder = a % b;
     a = b;
@@ -67,12 +73,16 @@ export function gcd(left: bigint, right: bigint): bigint {
 }
 
 export function lcm(left: bigint, right: bigint): bigint {
+  assertIntermediateIntegerBound(left);
+  assertIntermediateIntegerBound(right);
   if (left === 0n || right === 0n) return 0n;
   const value = assertIntermediateIntegerBound((left / gcd(left, right)) * right);
   return value < 0n ? -value : value;
 }
 
 export function normalizeModulo(value: bigint, modulus: bigint): bigint {
+  assertIntermediateIntegerBound(value);
+  assertIntermediateIntegerBound(modulus);
   if (modulus <= 0n) {
     throw new BoundedMathError("INVALID_MODULUS", "Modulus must be a positive integer");
   }
@@ -81,10 +91,15 @@ export function normalizeModulo(value: bigint, modulus: bigint): bigint {
 }
 
 export function areCongruent(left: bigint, right: bigint, modulus: bigint): boolean {
-  return normalizeModulo(left - right, modulus) === 0n;
+  assertIntermediateIntegerBound(left);
+  assertIntermediateIntegerBound(right);
+  const difference = assertIntermediateIntegerBound(left - right);
+  return normalizeModulo(difference, modulus) === 0n;
 }
 
 export function isDivisibleBy(dividend: bigint, divisor: bigint): boolean {
+  assertIntermediateIntegerBound(dividend);
+  assertIntermediateIntegerBound(divisor);
   if (divisor === 0n) {
     throw new BoundedMathError("INVALID_DIVISOR", "Divisor must be nonzero");
   }
@@ -108,6 +123,8 @@ function boundRational(value: ExactRational): ExactRational {
 }
 
 export function rational(numerator: bigint, denominator: bigint): ExactRational {
+  assertIntermediateIntegerBound(numerator);
+  assertIntermediateIntegerBound(denominator);
   if (denominator === 0n) {
     throw new BoundedMathError("DIVISION_BY_ZERO", "Rational denominator must be nonzero");
   }
@@ -122,21 +139,34 @@ export function rational(numerator: bigint, denominator: bigint): ExactRational 
   });
 }
 
+export function normalizeRational(value: ExactRational): ExactRational {
+  return rational(value.numerator, value.denominator);
+}
+
 export function parseRationalInput(value: RationalInput): ExactRational {
   return rational(parseBoundedInteger(value.numerator), parseBoundedInteger(value.denominator));
 }
 
 export function serializeRational(value: ExactRational): RationalInput {
+  const normalized = normalizeRational(value);
   return {
-    numerator: value.numerator.toString(),
-    denominator: value.denominator.toString()
+    numerator: normalized.numerator.toString(),
+    denominator: normalized.denominator.toString()
   };
 }
 
 export function addRationals(left: ExactRational, right: ExactRational): ExactRational {
+  const normalizedLeft = normalizeRational(left);
+  const normalizedRight = normalizeRational(right);
+  const commonFactor = gcd(normalizedLeft.denominator, normalizedRight.denominator);
+  const leftScale = normalizedRight.denominator / commonFactor;
+  const rightScale = normalizedLeft.denominator / commonFactor;
   return rational(
-    assertIntermediateIntegerBound(left.numerator * right.denominator + right.numerator * left.denominator),
-    assertIntermediateIntegerBound(left.denominator * right.denominator)
+    assertIntermediateIntegerBound(
+      assertIntermediateIntegerBound(normalizedLeft.numerator * leftScale)
+      + assertIntermediateIntegerBound(normalizedRight.numerator * rightScale)
+    ),
+    assertIntermediateIntegerBound(normalizedLeft.denominator * leftScale)
   );
 }
 
@@ -145,46 +175,69 @@ export function subtractRationals(left: ExactRational, right: ExactRational): Ex
 }
 
 export function multiplyRationals(left: ExactRational, right: ExactRational): ExactRational {
+  const normalizedLeft = normalizeRational(left);
+  const normalizedRight = normalizeRational(right);
+  const leftCancellation = gcd(normalizedLeft.numerator, normalizedRight.denominator);
+  const rightCancellation = gcd(normalizedRight.numerator, normalizedLeft.denominator);
   return rational(
-    assertIntermediateIntegerBound(left.numerator * right.numerator),
-    assertIntermediateIntegerBound(left.denominator * right.denominator)
+    assertIntermediateIntegerBound(
+      (normalizedLeft.numerator / leftCancellation) * (normalizedRight.numerator / rightCancellation)
+    ),
+    assertIntermediateIntegerBound(
+      (normalizedLeft.denominator / rightCancellation) * (normalizedRight.denominator / leftCancellation)
+    )
   );
 }
 
 export function divideRationals(left: ExactRational, right: ExactRational): ExactRational {
-  if (right.numerator === 0n) {
+  const normalizedRight = normalizeRational(right);
+  if (normalizedRight.numerator === 0n) {
     throw new BoundedMathError("DIVISION_BY_ZERO", "Cannot divide by zero");
   }
-  return rational(
-    assertIntermediateIntegerBound(left.numerator * right.denominator),
-    assertIntermediateIntegerBound(left.denominator * right.numerator)
-  );
+  return multiplyRationals(normalizeRational(left), rational(normalizedRight.denominator, normalizedRight.numerator));
 }
 
 export function negateRational(value: ExactRational): ExactRational {
-  return { numerator: -value.numerator, denominator: value.denominator };
+  const normalized = normalizeRational(value);
+  return { numerator: -normalized.numerator, denominator: normalized.denominator };
 }
 
 export function equalRationals(left: ExactRational, right: ExactRational): boolean {
-  return left.numerator === right.numerator && left.denominator === right.denominator;
+  const normalizedLeft = normalizeRational(left);
+  const normalizedRight = normalizeRational(right);
+  return normalizedLeft.numerator === normalizedRight.numerator
+    && normalizedLeft.denominator === normalizedRight.denominator;
 }
 
 export function compareRationals(left: ExactRational, right: ExactRational): -1 | 0 | 1 {
-  const leftScaled = assertIntermediateIntegerBound(left.numerator * right.denominator);
-  const rightScaled = assertIntermediateIntegerBound(right.numerator * left.denominator);
+  const normalizedLeft = normalizeRational(left);
+  const normalizedRight = normalizeRational(right);
+  const commonFactor = gcd(normalizedLeft.denominator, normalizedRight.denominator);
+  const leftScaled = assertIntermediateIntegerBound(
+    normalizedLeft.numerator * (normalizedRight.denominator / commonFactor)
+  );
+  const rightScaled = assertIntermediateIntegerBound(
+    normalizedRight.numerator * (normalizedLeft.denominator / commonFactor)
+  );
   const difference = assertIntermediateIntegerBound(leftScaled - rightScaled);
   return difference < 0n ? -1 : difference > 0n ? 1 : 0;
 }
 
 export function sumIntegers(values: readonly bigint[]): bigint {
   let total = 0n;
-  for (const value of values) total = assertIntermediateIntegerBound(total + value);
+  for (const value of values) {
+    assertIntermediateIntegerBound(value);
+    total = assertIntermediateIntegerBound(total + value);
+  }
   return total;
 }
 
 export function productIntegers(values: readonly bigint[]): bigint {
   let product = 1n;
-  for (const value of values) product = assertIntermediateIntegerBound(product * value);
+  for (const value of values) {
+    assertIntermediateIntegerBound(value);
+    product = assertIntermediateIntegerBound(product * value);
+  }
   return product;
 }
 
@@ -247,7 +300,7 @@ export function combinationsWithRepetition(types: number, selections: number): b
   const effectiveN = types + selections - 1;
   if (effectiveN > MAX_COMBINATORIAL_N) {
     throw new BoundedMathError(
-      "INVALID_COMBINATORIAL_ARGUMENT",
+      "COMBINATORIAL_LIMIT_EXCEEDED",
       "Combinations-with-repetition expansion exceeds the configured n limit"
     );
   }
