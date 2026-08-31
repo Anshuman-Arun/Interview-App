@@ -731,7 +731,14 @@ export class ModelAssetManager {
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
-      await this.removeManagedEntry(paths, installationDirectory);
+      const beforeRemoval = await this.checkInstallation(manifest, signal);
+      if (beforeRemoval.status === "INSTALLED" && beforeRemoval.path !== undefined) {
+        return beforeRemoval.path;
+      }
+      this.rejectTransientInstallationFailure(beforeRemoval);
+      if (beforeRemoval.status === "CORRUPT") {
+        await this.removeManagedEntry(paths, installationDirectory);
+      }
     }
 
     const serializedManifest = serializeAssetManifest(manifest);
