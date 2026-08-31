@@ -24,7 +24,7 @@ function systemErrorCode(error: unknown): string | undefined {
 
 function classifyTransferError(error: unknown): ModelAssetError {
   const code = systemErrorCode(error);
-  if (code === "ENOSPC") {
+  if (code === "ENOSPC" || code === "EDQUOT") {
     return new ModelAssetError(
       "INSUFFICIENT_DISK_SPACE",
       "Artifact download could not continue because the destination filesystem is full.",
