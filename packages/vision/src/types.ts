@@ -149,16 +149,22 @@ export const VisionRasterIdentitySchema = z.string().regex(/^raster_[0-9a-f]{64}
 export type VisionRasterIdentity = z.infer<typeof VisionRasterIdentitySchema>;
 
 export const ArtifactSourceBoundsSchema = z.object({
-  x: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  y: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+  x: z.number().int().nonnegative().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth - 1),
+  y: z.number().int().nonnegative().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight - 1),
+  width: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth),
+  height: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight)
 }).strict().superRefine((bounds, context) => {
-  if (!Number.isSafeInteger(bounds.x + bounds.width)) {
-    context.addIssue({ code: "custom", message: "sourceBounds right edge exceeds safe integer range" });
+  const right = bounds.x + bounds.width;
+  const bottom = bounds.y + bounds.height;
+  if (!Number.isSafeInteger(right) || right > HARD_IMAGE_VALIDATION_LIMITS.maxWidth) {
+    context.addIssue({ code: "custom", message: "sourceBounds right edge exceeds the package hard width cap" });
   }
-  if (!Number.isSafeInteger(bounds.y + bounds.height)) {
-    context.addIssue({ code: "custom", message: "sourceBounds bottom edge exceeds safe integer range" });
+  if (!Number.isSafeInteger(bottom) || bottom > HARD_IMAGE_VALIDATION_LIMITS.maxHeight) {
+    context.addIssue({ code: "custom", message: "sourceBounds bottom edge exceeds the package hard height cap" });
+  }
+  const pixels = bounds.width * bounds.height;
+  if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
+    context.addIssue({ code: "custom", message: "sourceBounds area exceeds the package hard pixel cap" });
   }
 });
 export type ArtifactSourceBounds = z.infer<typeof ArtifactSourceBoundsSchema>;
@@ -525,8 +531,8 @@ export const ImageSnapshotInputSchema = z.object({
   capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   mimeType: z.string().min(1).max(128),
-  declaredWidth: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
-  declaredHeight: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  declaredWidth: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth).optional(),
+  declaredHeight: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight).optional(),
   encodedBytes: z.instanceof(Uint8Array)
 }).strict();
 export type ImageSnapshotInput = z.infer<typeof ImageSnapshotInputSchema>;
