@@ -1137,8 +1137,11 @@ export class ModelAssetManager {
     } catch (error) {
       if (error instanceof ModelAssetError && error.code === "CANCELLED") throw error;
       const errorCode = modelAssetErrorCode(error);
+      const operationalFailure = errorCode === "IO_ERROR"
+        || errorCode === "ARTIFACT_TOO_LARGE"
+        || errorCode === "INVALID_CONFIGURATION";
       return {
-        status: errorCode === "IO_ERROR" ? "FAILED" : "CORRUPT",
+        status: operationalFailure ? "FAILED" : "CORRUPT",
         errorCode
       };
     }
