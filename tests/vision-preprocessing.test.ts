@@ -358,6 +358,15 @@ describe("vision snapshot validation and hashing", () => {
     } as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrowError(RangeError);
   });
 
+  it("bounds the public image hashing utility without allocating a huge fixture", () => {
+    class OversizedView extends Uint8Array {
+      public override get byteLength(): number {
+        return 64 * 1024 * 1024 + 1;
+      }
+    }
+    expect(() => sha256ImageBytes(new OversizedView(1))).toThrowError(RangeError);
+  });
+
   it("identifies exact image payloads and repeated processing identities", () => {
     const bytes = makePng(3, 3);
     const first = snapshot(bytes, { id: "a", revision: 9 });
