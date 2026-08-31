@@ -1,3 +1,4 @@
+import { isProxy } from "node:util/types";
 import { z } from "zod";
 import { PNG } from "pngjs";
 import { snapshotOwnEnumerableRecord } from "./object-validation.js";
@@ -30,6 +31,14 @@ const HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 128 * 1024 * 1024;
 export const HARD_MAX_TOTAL_TILE_PIXELS = 128 * 1024 * 1024;
 const COOPERATIVE_YIELD_ROWS = 16;
 const MIN_STATIC_PNG_ENCODED_BYTES = 58;
+const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
+  AbortSignal.prototype,
+  "aborted"
+)?.get;
+
+if (abortSignalAbortedGetter === undefined) {
+  throw new Error("AbortSignal aborted intrinsic is unavailable");
+}
 
 const DownscaleEnvelopeSchema = z.object({
   maxWidth: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -99,8 +108,10 @@ function isProcessingClock(value: unknown): value is () => number {
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
+  if (typeof value !== "object" || value === null || isProxy(value)) return false;
   try {
-    return value instanceof AbortSignal;
+    return value instanceof AbortSignal
+      && typeof Reflect.apply(abortSignalAbortedGetter, value, []) === "boolean";
   } catch {
     return false;
   }
@@ -248,7 +259,14 @@ function elapsed(startedAt: number, options: VisionProcessingOptions): number {
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) {
+  if (signal === undefined) return;
+  let aborted: unknown;
+  try {
+    aborted = Reflect.apply(abortSignalAbortedGetter, signal, []);
+  } catch {
+    throw new TypeError("AbortSignal could not be read safely");
+  }
+  if (aborted === true) {
     throw new VisionPreprocessingError("CANCELLED", "Image processing was cancelled");
   }
 }
