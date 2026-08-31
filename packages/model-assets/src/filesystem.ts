@@ -49,6 +49,9 @@ export type FileVerificationResult =
 export interface VerifiedFileIdentity {
   readonly device: bigint;
   readonly inode: bigint;
+  readonly size: bigint;
+  readonly mtimeNs: bigint;
+  readonly ctimeNs: bigint;
 }
 
 export type FileVerificationWithIdentity =
@@ -674,7 +677,10 @@ export async function verifyArtifactFileWithIdentity(
     actualSha256,
     identity: {
       device: fileStat.dev,
-      inode: fileStat.ino
+      inode: fileStat.ino,
+      size: fileStat.size,
+      mtimeNs: fileStat.mtimeNs,
+      ctimeNs: fileStat.ctimeNs
     }
   };
 }
