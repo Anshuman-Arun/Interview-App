@@ -290,6 +290,26 @@ describe("local worker lifecycle manager", () => {
     expect(runtime.getStatus("joined-cancel").state).toBe("READY");
   });
 
+  it("does not invoke readiness on a dead process's unterminated final line", async () => {
+    const runtime = manager();
+    let evaluatorCalls = 0;
+    runtime.register(definition("unterminated-ready-crash", "unterminated-ready-crash", {
+      readiness: {
+        kind: "STDOUT_LINE",
+        evaluate: () => {
+          evaluatorCalls += 1;
+          return true;
+        }
+      }
+    }));
+
+    await expect(runtime.start("unterminated-ready-crash"))
+      .rejects.toMatchObject({ code: "PROCESS_EXITED" });
+    expect(evaluatorCalls).toBe(0);
+    expect(runtime.getStatus("unterminated-ready-crash").stdout.lines)
+      .toContain("READY-LINE");
+  });
+
   it("times out readiness and ignores malformed stdout as trusted protocol", async () => {
     const runtime = manager();
     runtime.register(definition("malformed", "malformed-ready", { startupTimeoutMs: 100 }));
