@@ -207,7 +207,16 @@ export function prepareVisionBatch(
     throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must be a bounded array");
   }
 
-  const budget = RequestBudgetSchema.parse(budgetInput);
+  let parsedBudget: ReturnType<typeof RequestBudgetSchema.safeParse>;
+  try {
+    parsedBudget = RequestBudgetSchema.safeParse(budgetInput);
+  } catch {
+    throw new RangeError("Vision request budget could not be read safely");
+  }
+  if (!parsedBudget.success) {
+    throw new RangeError("Vision request budget is invalid or contains unknown keys");
+  }
+  const budget = parsedBudget.data;
   const strategy = VisionBudgetStrategySchema.parse(strategyInput);
   const validatedPurpose = VisionPurposeSchema.parse(purpose);
 
