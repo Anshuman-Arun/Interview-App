@@ -62,8 +62,14 @@ interface EvaluationBudget {
 }
 
 function assertTermCount(terms: readonly RationalExpression[]): void {
-  if (terms.length < 1 || terms.length > MAX_VARIADIC_EXPRESSION_TERMS) {
-    throw new BoundedMathError("INVALID_EXPRESSION", "Variadic rational expression term count is outside the supported range");
+  if (terms.length < 1) {
+    throw new BoundedMathError("INVALID_EXPRESSION", "Variadic rational expressions require at least one term");
+  }
+  if (terms.length > MAX_VARIADIC_EXPRESSION_TERMS) {
+    throw new BoundedMathError(
+      "INTERMEDIATE_LIMIT_EXCEEDED",
+      "Variadic rational expression exceeds the configured term limit"
+    );
   }
 }
 
