@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { actualUint8ArrayByteLength } from "./byte-validation.js";
 import { assertSupportedPngHeaderParameters } from "./png-validation.js";
 import {
   DEFAULT_IMAGE_VALIDATION_LIMITS,
@@ -98,7 +99,7 @@ function checkDimensions(header: PngHeader, limits: ImageValidationLimits): void
 export function sha256ImageBytes(bytes: Uint8Array): Sha256Digest;
 export function sha256ImageBytes(bytes: unknown): Sha256Digest {
   if (!(bytes instanceof Uint8Array)) throw new TypeError("Image digest input must be a Uint8Array");
-  if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
+  if (actualUint8ArrayByteLength(bytes) > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
     throw new RangeError("Image digest input exceeds the package hard encoded-byte cap");
   }
   return createHash("sha256").update(bytes).digest("hex");
@@ -118,10 +119,11 @@ export function createValidatedImageSnapshot(
   }
 
   const safeLimits = normalizeLimits(limits);
-  if (safeInput.encodedBytes.byteLength === 0) {
+  const encodedByteLength = actualUint8ArrayByteLength(safeInput.encodedBytes);
+  if (encodedByteLength === 0) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image input must not be empty");
   }
-  if (safeInput.encodedBytes.byteLength > safeLimits.maxEncodedBytes) {
+  if (encodedByteLength > safeLimits.maxEncodedBytes) {
     throw new VisionPreprocessingError("IMAGE_TOO_LARGE_BYTES", "Encoded image exceeds configured byte limit");
   }
   const bytes = Buffer.from(safeInput.encodedBytes);
