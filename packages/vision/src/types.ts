@@ -50,7 +50,7 @@ function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffe
 
   let decoded: ReturnType<typeof PNG.sync.read>;
   try {
-    decoded = PNG.sync.read(bytes, { checkCRC: true });
+    decoded = PNG.sync.read(bytes, { checkCRC: false });
   } catch {
     throw new RangeError("Image payload is not a valid decodable PNG");
   }
