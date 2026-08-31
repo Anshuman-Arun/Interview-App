@@ -606,7 +606,7 @@ export class LocalRuntimeManager {
   ): void {
     if (record.lastExitProcess === child) {
       if (record.lastExit !== undefined) {
-        const stderrLines = stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
+        const stderrLines = outputLinesWithoutSyntheticTruncationMarker(stderr.snapshot());
         record.lastExit = Object.freeze({
           ...record.lastExit,
           stderrTail: Object.freeze(stderrLines.slice(-MAX_STDERR_TAIL_LINES))
@@ -624,7 +624,7 @@ export class LocalRuntimeManager {
     previousState: LocalComponentState,
     unexpected: boolean
   ): InternalExitRecord {
-    const stderrLines = stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
+    const stderrLines = outputLinesWithoutSyntheticTruncationMarker(stderr.snapshot());
     return Object.freeze({
       code,
       signal,
@@ -1828,6 +1828,14 @@ function sanitizeHandshake(
     ...(capabilities === undefined ? {} : { capabilities: Object.freeze(capabilities) }),
     ...(handshake.metadata === undefined ? {} : { metadata: handshake.metadata })
   });
+}
+
+function outputLinesWithoutSyntheticTruncationMarker(
+  snapshot: LocalOutputSnapshot
+): readonly string[] {
+  return snapshot.truncated && snapshot.lines[0] === "[TRUNCATED]"
+    ? snapshot.lines.slice(1)
+    : snapshot.lines;
 }
 
 function cloneHandshake(handshake: LocalComponentHandshake): LocalComponentHandshake {
