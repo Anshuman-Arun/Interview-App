@@ -335,38 +335,58 @@ export class LocalRuntimeManager {
 
   private async spawnAndAwaitReadiness(record: ComponentRecord, signal: AbortSignal): Promise<void> {
     if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
+    const attemptStartedAt = performance.now();
     record.state = "STARTING";
     record.failure = undefined;
     record.readyAt = undefined;
     record.handshake = undefined;
     record.readinessDetail = undefined;
     record.startedAt = this.timestamp();
-    record.stdout.clear();
-    record.stderr.clear();
+
+    const limits = outputLimitsFor(record.definition);
+    const stdout = new BoundedLineBuffer(limits.maxLines, limits.maxBytes, record.environment.secretValues);
+    const stderr = new BoundedLineBuffer(limits.maxLines, limits.maxBytes, record.environment.secretValues);
+    record.stdout = stdout;
+    record.stderr = stderr;
 
     const child = this.spawnChild(record);
     record.child = child;
-    this.attachChild(record, child);
+    this.attachChild(record, child, stdout, stderr, limits.maxLineBytes);
 
     const attemptController = new AbortController();
     const unlinkAttempt = linkAbortSignal(signal, attemptController);
     const earlyReadiness = isStdoutReadiness(record.definition.readiness)
-      ? this.waitForReadiness(record, child, attemptController.signal)
+      ? this.waitForReadiness(
+          record,
+          child,
+          attemptController.signal,
+          record.definition.startupTimeoutMs
+        )
       : undefined;
 
     try {
-      await waitForSpawn(child, attemptController.signal, record.definition.id);
-      if (child.pid === undefined) throw new LocalRuntimeError("SPAWN_FAILED", `Component ${record.definition.id} did not receive a process id`);
+      await waitForSpawn(
+        child,
+        attemptController.signal,
+        record.definition.id,
+        record.definition.startupTimeoutMs
+      );
+      if (child.pid === undefined) {
+        throw new LocalRuntimeError("SPAWN_FAILED", `Component ${record.definition.id} did not receive a process id`);
+      }
+      const remainingMs = remainingStartupTimeout(record.definition.startupTimeoutMs, attemptStartedAt);
       const readiness = earlyReadiness
-        ?? await this.waitForReadiness(record, child, attemptController.signal);
+        ?? await this.waitForReadiness(record, child, attemptController.signal, remainingMs);
       if (child.exitCode !== null || child.signalCode !== null || record.child !== child) {
         throw new LocalRuntimeError("PROCESS_EXITED", `Component ${record.definition.id} exited during startup`);
       }
-      const handshake = readiness.handshake === undefined
+      if (readiness.handshake !== undefined) {
+        validateReportedHandshake(readiness.handshake, record.definition.id);
+      }
+      validateExpectedHandshake(record.definition.expectedHandshake, readiness.handshake, record.definition.id);
+      record.handshake = readiness.handshake === undefined
         ? undefined
         : sanitizeHandshake(readiness.handshake, record.environment.secretValues);
-      validateExpectedHandshake(record.definition.expectedHandshake, handshake, record.definition.id);
-      record.handshake = handshake;
       record.readinessDetail = readiness.detail;
       record.readyAt = this.timestamp();
       record.state = "READY";
@@ -399,50 +419,59 @@ export class LocalRuntimeManager {
     }
   }
 
-  private attachChild(record: ComponentRecord, child: ChildProcessWithoutNullStreams): void {
-    const maxLineBytes = record.definition.output?.maxLineBytes ?? DEFAULT_OUTPUT_MAX_LINE_BYTES;
+  private attachChild(
+    record: ComponentRecord,
+    child: ChildProcessWithoutNullStreams,
+    stdout: BoundedLineBuffer,
+    stderr: BoundedLineBuffer,
+    maxLineBytes: number
+  ): void {
     const stdoutFramer = new BoundedLineFramer(
       maxLineBytes,
       (line) => {
-        record.stdout.push(line);
-        for (const listener of [...record.stdoutListeners]) listener(line);
+        stdout.push(line);
+        if (record.child === child) {
+          for (const listener of [...record.stdoutListeners]) listener(line);
+        }
       },
-      () => record.stdout.markMalformed()
+      () => stdout.markMalformed()
     );
     const stderrFramer = new BoundedLineFramer(
       maxLineBytes,
-      (line) => record.stderr.push(line),
-      () => record.stderr.markMalformed()
+      (line) => stderr.push(line),
+      () => stderr.markMalformed()
     );
-    record.stdoutFramer = stdoutFramer;
-    record.stderrFramer = stderrFramer;
 
     child.stdin.on("error", () => {
-      if (record.child === child) record.stderr.push("Managed component stdin stream error");
+      stderr.push("Managed component stdin stream error");
     });
     child.stdout.on("error", () => {
-      if (record.child === child) record.stderr.push("Managed component stdout stream error");
+      stderr.push("Managed component stdout stream error");
     });
     child.stderr.on("error", () => {
-      if (record.child === child) record.stderr.push("Managed component stderr stream error");
+      stderr.push("Managed component stderr stream error");
     });
     child.stdout.on("data", (chunk: Buffer) => stdoutFramer.append(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderrFramer.append(chunk));
     let exitObserved = false;
     child.once("exit", (code, signal) => {
       exitObserved = true;
-      this.handleProcessExit(record, child, code, signal);
+      this.handleProcessExit(record, child, stderr, code, signal);
     });
     child.once("close", (code, signal) => {
       stdoutFramer.flush();
       stderrFramer.flush();
-      if (!exitObserved) this.handleProcessExit(record, child, code, signal);
-      this.handleProcessClose(record, child);
+      if (!exitObserved) this.handleProcessExit(record, child, stderr, code, signal);
+      this.handleProcessClose(record, child, stderr);
     });
     child.on("error", () => {
       if (record.child !== child) return;
       if (record.state === "READY" || record.state === "DEGRADED") {
-        record.failure = this.failure("PROCESS_EXITED", `Managed component ${record.definition.id} reported a process error`);
+        record.failure = this.failure(
+          "PROCESS_EXITED",
+          `Managed component ${record.definition.id} reported a process error`,
+          record.environment.secretValues
+        );
       }
     });
   }
@@ -450,14 +479,16 @@ export class LocalRuntimeManager {
   private handleProcessExit(
     record: ComponentRecord,
     child: ChildProcessWithoutNullStreams,
+    stderr: BoundedLineBuffer,
     code: number | null,
     signal: NodeJS.Signals | null
   ): void {
     if (record.child !== child) return;
     const previousState = record.state;
     const unexpected = !record.expectedStop && previousState !== "STOPPING" && previousState !== "STOPPED";
-    const exit = this.createExitRecord(record, code, signal, previousState, unexpected);
+    const exit = this.createExitRecord(stderr, code, signal, previousState, unexpected);
     record.lastExit = exit;
+    record.lastExitProcess = child;
     for (const listener of [...record.exitListeners]) listener(exit);
 
     if (!unexpected || previousState === "STARTING") return;
@@ -477,7 +508,7 @@ export class LocalRuntimeManager {
       (error: unknown) => {
         record.failure = this.failure(
           "TERMINATION_FAILED",
-          `Residual process-tree cleanup failed: ${safeErrorMessage(error)}`,
+          `Residual process-tree cleanup failed: ${safeErrorMessage(error, record.environment.secretValues)}`,
           record.environment.secretValues
         );
         if (record.cleanupPromise === cleanup) record.cleanupPromise = undefined;
@@ -487,14 +518,13 @@ export class LocalRuntimeManager {
 
   private handleProcessClose(
     record: ComponentRecord,
-    child: ChildProcessWithoutNullStreams
+    child: ChildProcessWithoutNullStreams,
+    stderr: BoundedLineBuffer
   ): void {
-    if (record.child !== child && record.residualProcess !== child) return;
-    const lastExit = record.lastExit;
-    if (lastExit !== undefined) {
-      const stderrLines = record.stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
+    if (record.lastExitProcess === child && record.lastExit !== undefined) {
+      const stderrLines = stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
       record.lastExit = Object.freeze({
-        ...lastExit,
+        ...record.lastExit,
         stderrTail: Object.freeze(stderrLines.slice(-MAX_STDERR_TAIL_LINES))
       });
     }
@@ -502,13 +532,13 @@ export class LocalRuntimeManager {
   }
 
   private createExitRecord(
-    record: ComponentRecord,
+    stderr: BoundedLineBuffer,
     code: number | null,
     signal: NodeJS.Signals | null,
     previousState: LocalComponentState,
     unexpected: boolean
   ): InternalExitRecord {
-    const stderrLines = record.stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
+    const stderrLines = stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
     return Object.freeze({
       code,
       signal,
