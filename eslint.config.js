@@ -23,7 +23,7 @@ export default tseslint.config(
     extends: [tseslint.configs.disableTypeChecked]
   },
   {
-    files: ["tests/fixtures/**/*.mjs"],
+    files: ["tests/fixtures/local-runtime-worker.mjs"],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       globals: {
