@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   symlink,
   writeFile
@@ -1085,6 +1086,77 @@ describe("local model asset manager", () => {
 
     await expect(manager.remove(manifest)).rejects.toMatchObject({ code: "UNSAFE_PATH" });
     expect(await readFile(sentinel, "utf8")).toBe("keep-me");
+  });
+
+  it("rejects replacement of the canonical cache root after initialization", async () => {
+    if (process.platform === "win32") return;
+
+    const payload = Buffer.from("root-replacement");
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/root-replacement.bin");
+    await manager.inspect(manifest);
+
+    const movedRoot = root + "-moved";
+    roots.push(movedRoot);
+    await rename(root, movedRoot);
+    await mkdir(root);
+
+    await expect(manager.inspect(manifest)).rejects.toMatchObject({
+      code: "INVALID_CACHE_ROOT"
+    });
+  });
+
+  it("never trusts a symlinked installed payload", async () => {
+    if (process.platform === "win32") return;
+
+    const payload = Buffer.from("payload-symlink");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    const alternate = path.join(sourceRoot, "alternate.bin");
+    await writeFile(source, payload);
+    await writeFile(alternate, payload);
+
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/payload-symlink.bin");
+    const installed = await manager.importLocal(manifest, source);
+    await rm(installed);
+    await symlink(alternate, installed, "file");
+
+    expect(await manager.inspect(manifest)).toMatchObject({
+      status: "CORRUPT",
+      errorCode: "UNSAFE_PATH"
+    });
+    await expect(manager.getInstalledPath(manifest)).rejects.toMatchObject({
+      code: "NOT_INSTALLED"
+    });
+  });
+
+  it("never trusts a symlinked cached manifest", async () => {
+    if (process.platform === "win32") return;
+
+    const payload = Buffer.from("manifest-symlink");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/manifest-symlink.bin");
+    await manager.importLocal(manifest, source);
+
+    const installation = path.join(root, "artifacts", artifactInstallationKey(manifest));
+    const manifestPath = path.join(installation, "manifest.json");
+    const outsideManifest = path.join(sourceRoot, "manifest.json");
+    await writeFile(outsideManifest, serializeAssetManifest(manifest));
+    await rm(manifestPath);
+    await symlink(outsideManifest, manifestPath, "file");
+
+    expect(await manager.inspect(manifest)).toMatchObject({
+      status: "CORRUPT",
+      errorCode: "CORRUPT_INSTALLATION"
+    });
   });
 
   it("does not follow a hostile symlink while removing a cache entry", async () => {
