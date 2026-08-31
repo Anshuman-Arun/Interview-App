@@ -137,12 +137,6 @@ export class ModelAssetManager {
     this.maxCacheBytes = options.maxCacheBytes === undefined
       ? undefined
       : positiveSafeInteger(options.maxCacheBytes, 0, "maxCacheBytes");
-    if (this.maxCacheBytes !== undefined && this.maxCacheBytes < this.maxArtifactBytes) {
-      throw new ModelAssetError(
-        "INVALID_CONFIGURATION",
-        "maxCacheBytes must be at least maxArtifactBytes when both limits are configured."
-      );
-    }
     this.downloadTimeoutMs = positiveSafeInteger(
       options.downloadTimeoutMs,
       DEFAULT_DOWNLOAD_TIMEOUT_MS,
