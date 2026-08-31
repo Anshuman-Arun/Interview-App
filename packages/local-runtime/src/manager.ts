@@ -174,16 +174,16 @@ export class LocalRuntimeManager {
       ));
     }
     if (record.stopPromise !== undefined) {
-      const queued = record.stopPromise.then(() => this.start(componentId, inspectedOptions));
-      return inspectedOptions.signal === undefined
-        ? queued
-        : awaitWithAbort(queued, inspectedOptions.signal, componentId);
+      const stopWait = inspectedOptions.signal === undefined
+        ? record.stopPromise
+        : awaitWithAbort(record.stopPromise, inspectedOptions.signal, componentId);
+      return stopWait.then(() => this.start(componentId, inspectedOptions));
     }
     if (record.cleanupPromise !== undefined) {
-      const queued = record.cleanupPromise.then(() => this.start(componentId, inspectedOptions));
-      return inspectedOptions.signal === undefined
-        ? queued
-        : awaitWithAbort(queued, inspectedOptions.signal, componentId);
+      const cleanupWait = inspectedOptions.signal === undefined
+        ? record.cleanupPromise
+        : awaitWithAbort(record.cleanupPromise, inspectedOptions.signal, componentId);
+      return cleanupWait.then(() => this.start(componentId, inspectedOptions));
     }
     if (record.startPromise !== undefined) {
       return inspectedOptions.signal === undefined
