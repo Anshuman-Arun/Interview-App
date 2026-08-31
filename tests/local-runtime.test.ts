@@ -1486,6 +1486,9 @@ describe("local worker lifecycle manager", () => {
     await runtime.stop("hostile-hook-error");
 
     expect(messageGetterCalls).toBe(0);
+    expect(runtime.getStatus("hostile-hook-error").failure).toMatchObject({
+      code: "GRACEFUL_SHUTDOWN_FAILED"
+    });
     expect(runtime.getStatus("hostile-hook-error").failure?.message)
       .toContain("unknown error");
   });
