@@ -246,6 +246,15 @@ describe("vision snapshot validation and hashing", () => {
       encodedBytes: makePng(1, 1)
     }).success).toBe(false);
 
+    expect(ImageSnapshotInputSchema.safeParse({
+      snapshotId: "empty-image",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: new Uint8Array()
+    }).success).toBe(false);
+
     expect(ArtifactSourceBoundsSchema.safeParse({
       x: HARD_IMAGE_VALIDATION_LIMITS.maxWidth - 1,
       y: 0,
