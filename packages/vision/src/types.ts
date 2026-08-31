@@ -267,9 +267,13 @@ export class ImageSnapshot {
   }
 
   public matchesEncodedBytes(candidate: unknown): boolean {
-    return candidate instanceof Uint8Array
-      && actualUint8ArrayByteLength(candidate) === this.#bytes.length
-      && this.#bytes.equals(candidate);
+    try {
+      return candidate instanceof Uint8Array
+        && actualUint8ArrayByteLength(candidate) === this.#bytes.length
+        && this.#bytes.equals(candidate);
+    } catch {
+      return false;
+    }
   }
 
   public toJSON(): ImageSnapshotMetadata {
@@ -403,9 +407,13 @@ export class VisionImageArtifact {
   }
 
   public matchesEncodedBytes(candidate: unknown): boolean {
-    return candidate instanceof Uint8Array
-      && actualUint8ArrayByteLength(candidate) === this.#bytes.length
-      && this.#bytes.equals(candidate);
+    try {
+      return candidate instanceof Uint8Array
+        && actualUint8ArrayByteLength(candidate) === this.#bytes.length
+        && this.#bytes.equals(candidate);
+    } catch {
+      return false;
+    }
   }
 
   public toJSON(): VisionImageArtifactMetadata {
