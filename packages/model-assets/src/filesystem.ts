@@ -46,6 +46,17 @@ export type FileVerificationResult =
       readonly actualSha256?: Sha256Digest;
     };
 
+export interface VerifiedFileIdentity {
+  readonly device: bigint;
+  readonly inode: bigint;
+}
+
+export type FileVerificationWithIdentity =
+  | (Extract<FileVerificationResult, { readonly ok: true }> & {
+      readonly identity: VerifiedFileIdentity;
+    })
+  | Extract<FileVerificationResult, { readonly ok: false }>;
+
 export interface CachePaths {
   readonly root: string;
   readonly artifacts: string;
@@ -510,6 +521,20 @@ export async function verifyArtifactFile(
   expectations: FileVerificationExpectations,
   signal?: AbortSignal
 ): Promise<FileVerificationResult> {
+  const result = await verifyArtifactFileWithIdentity(filePath, expectations, signal);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    actualBytes: result.actualBytes,
+    actualSha256: result.actualSha256
+  };
+}
+
+export async function verifyArtifactFileWithIdentity(
+  filePath: string,
+  expectations: FileVerificationExpectations,
+  signal?: AbortSignal
+): Promise<FileVerificationWithIdentity> {
   const validatedSignal = validateOptionalAbortSignal(signal);
   const rawFilePath: unknown = filePath;
   if (typeof rawFilePath !== "string"
@@ -643,7 +668,15 @@ export async function verifyArtifactFile(
   if (actualSha256 !== digest.data) {
     return { ok: false, reason: "DIGEST_MISMATCH", actualBytes: bytes, actualSha256 };
   }
-  return { ok: true, actualBytes: bytes, actualSha256 };
+  return {
+    ok: true,
+    actualBytes: bytes,
+    actualSha256,
+    identity: {
+      device: fileStat.dev,
+      inode: fileStat.ino
+    }
+  };
 }
 
 export async function copyLocalArtifactBounded(
