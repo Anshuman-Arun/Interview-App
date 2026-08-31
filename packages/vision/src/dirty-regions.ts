@@ -211,6 +211,16 @@ export function planDirtyRegions(
     return Object.freeze({ mode: "NONE" as const, regions, analyzedArea: 0 as const });
   }
 
+  let frameArea: number;
+  try {
+    frameArea = rectArea(frame);
+  } catch {
+    throw new VisionPreprocessingError(
+      "DIRTY_PLAN_EXCEEDS_BUDGET",
+      "Image frame area exceeds the planner's safe numeric range"
+    );
+  }
+
   const rasterRegions: ImageRect[] = [];
   for (let index = 0; index < dirtyRegionCount; index += 1) {
     const region = dirtyRegions[index];
@@ -261,7 +271,6 @@ export function planDirtyRegions(
     return fullFrameFallback(frame, safeConfig.maxTotalAnalyzedArea, "AREA_FRAGMENTATION");
   }
 
-  const frameArea = rectArea(frame);
   if (analyzedArea / frameArea >= safeConfig.fullFrameFallbackAreaRatio) {
     return fullFrameFallback(frame, safeConfig.maxTotalAnalyzedArea, "AREA_FRAGMENTATION");
   }
