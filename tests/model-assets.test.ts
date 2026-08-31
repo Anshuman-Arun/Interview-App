@@ -1522,6 +1522,26 @@ describe("local model asset manager", () => {
     }
   });
 
+  it("rejects unknown standalone verification expectation keys", async () => {
+    const root = await newRoot();
+    const file = path.join(root, "artifact.bin");
+    const payload = Buffer.from("verifier-typo");
+    await writeFile(file, payload);
+
+    const UnsafeVerifier = verifyArtifactFile as unknown as (
+      filePath: string,
+      expectations: unknown
+    ) => Promise<unknown>;
+
+    await expect(UnsafeVerifier(file, {
+      sizeBytes: payload.byteLength,
+      sha256: sha256(payload),
+      maxByte: payload.byteLength
+    })).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+  });
+
   it("rejects impossible standalone verification bounds before file access", async () => {
     const root = await newRoot();
     const missing = path.join(root, "missing.bin");
