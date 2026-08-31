@@ -16,6 +16,7 @@ import {
   VisionImageArtifact,
   VisionImageArtifactMetadataSchema,
   VisionPreprocessingError,
+  VisionProcessingDiagnosticsSchema,
   assertRectWithinImage,
   clipRectToBounds,
   coalesceOverlappingRegions,
@@ -1927,6 +1928,43 @@ describe("crop, resize, tiling, and cancellation", () => {
 });
 
 describe("vision runtime schema boundaries", () => {
+  it("makes the exported diagnostics schema use the same own-property boundary as the factory", () => {
+    const inherited = Object.create({
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS"
+    });
+    expect(VisionProcessingDiagnosticsSchema.safeParse(inherited).success).toBe(false);
+
+    let getterCalls = 0;
+    const withUnknownGetter: Record<string, unknown> = {
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS"
+    };
+    Object.defineProperty(withUnknownGetter, "rawImage", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "should-not-run";
+      }
+    });
+    expect(VisionProcessingDiagnosticsSchema.safeParse(withUnknownGetter).success).toBe(false);
+    expect(getterCalls).toBe(0);
+  });
+
   it("rejects inherited diagnostics fields instead of trusting the prototype chain", () => {
     const inherited = Object.create({
       operation: "CROP",
