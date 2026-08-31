@@ -1629,7 +1629,7 @@ function sanitizeHandshake(
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
     ...(handshake.modelVersionOrHash === undefined ? {} : { modelVersionOrHash: sanitizeDiagnosticText(redactKnownSecrets(handshake.modelVersionOrHash, secretValues)) }),
     ...(capabilities === undefined ? {} : { capabilities: Object.freeze(capabilities) }),
-    ...(handshake.metadata === undefined ? {} : { metadata: sanitizeHandshakeMetadata(handshake.metadata, secretValues) })
+    ...(handshake.metadata === undefined ? {} : { metadata: handshake.metadata })
   });
 }
 
