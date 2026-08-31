@@ -797,7 +797,7 @@ export class ModelAssetManager {
 
   private async removeManagedEntry(paths: CachePaths, candidate: string): Promise<void> {
     await validateCachePaths(paths);
-    await removeEntryInsideRoot(paths.root, candidate);
+    await removeEntryInsideRoot(paths.root, candidate, this.maxListEntries);
   }
 
   private async assertArtifactDirectoryShape(
