@@ -3,6 +3,7 @@ import type { InterviewerProposal } from "../packages/domain/src/index.js";
 import {
   GEMINI_API_PROVIDER_DEFINITION,
   MOCK_PROVIDER_DEFINITION,
+  ProviderConfigurationSchema,
   ProviderControlPlaneError,
   ProviderRegistry,
   createProviderConfigurationFingerprintMaterial,
@@ -14,7 +15,6 @@ import {
   resolveProviderConfiguration,
   toPersistableProviderConfiguration,
   toProviderDiagnosticMetadata,
-  type ProviderConfiguration,
   type ProviderDefinition,
   type ProviderSecretResolver
 } from "../packages/providers/src/index.js";
@@ -26,14 +26,14 @@ const PROPOSAL: InterviewerProposal = {
   speechText: "Why must that be true?"
 };
 
-const MOCK_CONFIGURATION: ProviderConfiguration = {
+const MOCK_CONFIGURATION = ProviderConfigurationSchema.parse({
   version: 1,
   providerId: "mock-model",
   modelId: "mock-default",
   enabled: true
-};
+});
 
-const GEMINI_CONFIGURATION: ProviderConfiguration = {
+const GEMINI_CONFIGURATION = ProviderConfigurationSchema.parse({
   version: 1,
   providerId: "gemini-api",
   modelId: "gemini-2.5-flash",
@@ -42,7 +42,7 @@ const GEMINI_CONFIGURATION: ProviderConfiguration = {
     id: "gemini-primary",
     purpose: "API_KEY"
   }
-};
+});
 
 function createUnknownCapabilityProvider(): ProviderDefinition {
   return defineProvider({
@@ -52,6 +52,7 @@ function createUnknownCapabilityProvider(): ProviderDefinition {
     definitionVersion: "1",
     capabilityVersion: "1",
     credentialRequirement: "NONE",
+    credentialPurposes: [],
     models: [{
       id: "uncertain-model",
       displayName: "Uncertain Model",
@@ -61,12 +62,20 @@ function createUnknownCapabilityProvider(): ProviderDefinition {
         toolCalling: "UNKNOWN",
         streaming: "UNSUPPORTED",
         reasoningControls: "UNKNOWN",
+        reasoningLevels: "UNKNOWN",
+        persistentSession: "UNKNOWN",
+        resumableSession: "UNKNOWN",
+        sessionSurvivesClientAbort: "UNKNOWN",
+        sessionSurvivesProviderCancel: "UNKNOWN",
+        usageReporting: "UNKNOWN",
         localExecution: "UNKNOWN",
         remoteExecution: "UNKNOWN",
         meteredExecution: "UNKNOWN",
         dataUse: "UNKNOWN",
         structuredOutput: "UNKNOWN",
-        cancellation: "UNKNOWN"
+        cancellation: "UNKNOWN",
+        contextWindowTokens: "UNKNOWN",
+        outputLimitTokens: "UNKNOWN"
       }
     }]
   });
@@ -111,6 +120,7 @@ describe("provider control plane registry", () => {
       definitionVersion: "1",
       capabilityVersion: "1",
       credentialRequirement: "NONE",
+      credentialPurposes: [],
       models: [model, model]
     })).toThrow(expect.objectContaining({ code: "DUPLICATE_MODEL" }));
   });
@@ -390,8 +400,11 @@ describe("adapter factory boundary and built-in registrations", () => {
     const secretResolver: ProviderSecretResolver = {
       async resolveSecret(reference) {
         expect(reference).toEqual({
-          id: "gemini-primary",
-          purpose: "API_KEY"
+          providerId: "gemini-api",
+          reference: {
+            id: "gemini-primary",
+            purpose: "API_KEY"
+          }
         });
         return "runtime-only-key";
       },

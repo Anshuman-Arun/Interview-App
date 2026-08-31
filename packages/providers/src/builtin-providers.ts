@@ -1,50 +1,36 @@
-import {
-  InterviewerProposalSchema,
-  type InterviewerProposal
-} from "../../domain/src/index.js";
+import { z } from "zod";
+import { InterviewerProposalSchema } from "../../domain/src/index.js";
 import { GeminiApiAdapter } from "./gemini-api-adapter.js";
 import { MockModelAdapter } from "./mock-model-adapter.js";
 import {
   ProviderControlPlaneError,
   ProviderRegistry,
   defineProvider,
-  type ProviderAdapterFactory,
+  type ProviderAdapterFactoryDefinition,
   type ProviderDefinition,
-  type SafeProviderConfigurationRecord
+  type ProviderDefinitionInput
 } from "./control-plane.js";
 
-export interface MockProviderFactoryRuntime {
-  readonly proposal: InterviewerProposal;
-}
+const MockProviderFactoryRuntimeSchema = z.object({
+  proposal: InterviewerProposalSchema
+}).strict();
+export type MockProviderFactoryRuntime = z.infer<typeof MockProviderFactoryRuntimeSchema>;
 
-function parseMockRuntime(value: unknown): MockProviderFactoryRuntime {
-  if (typeof value !== "object" || value === null) {
-    throw new ProviderControlPlaneError(
-      "MALFORMED_CONFIGURATION",
-      "Mock provider factory requires a runtime proposal"
-    );
-  }
-  const proposal = InterviewerProposalSchema.safeParse(
-    (value as Record<string, unknown>).proposal
-  );
-  if (!proposal.success) {
-    throw new ProviderControlPlaneError(
-      "MALFORMED_CONFIGURATION",
-      "Mock provider factory runtime proposal is malformed"
-    );
-  }
-  return Object.freeze({ proposal: proposal.data });
-}
-
-const mockFactory: ProviderAdapterFactory = {
+const mockFactory: ProviderAdapterFactoryDefinition = {
   id: "mock-model-adapter-factory",
   createAdapter(input) {
-    const runtime = parseMockRuntime(input.runtime);
-    return new MockModelAdapter({ proposal: runtime.proposal });
+    const runtime = MockProviderFactoryRuntimeSchema.safeParse(input.runtime);
+    if (!runtime.success) {
+      throw new ProviderControlPlaneError(
+        "INVALID_FACTORY_INPUT",
+        "Mock provider factory runtime is malformed"
+      );
+    }
+    return new MockModelAdapter({ proposal: runtime.data.proposal });
   }
 };
 
-const geminiFactory: ProviderAdapterFactory = {
+const geminiFactory: ProviderAdapterFactoryDefinition = {
   id: "gemini-api-adapter-factory",
   async createAdapter(input) {
     const reference = input.resolved.configuration.credentialRef;
@@ -54,27 +40,54 @@ const geminiFactory: ProviderAdapterFactory = {
         "Gemini API adapter requires a runtime credential resolver"
       );
     }
-    const apiKey = await input.secretResolver.resolveSecret(reference);
-    if (apiKey === undefined || apiKey.length === 0) {
+
+    let resolvedSecret: unknown;
+    try {
+      resolvedSecret = await input.secretResolver.resolveSecret({
+        providerId: input.resolved.provider.id,
+        reference
+      });
+    } catch {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Gemini API credential resolution failed"
+      );
+    }
+    if (resolvedSecret === undefined) {
       throw new ProviderControlPlaneError(
         "CREDENTIALS_REQUIRED",
         "Gemini API credential could not be resolved"
       );
     }
+    if (typeof resolvedSecret !== "string") {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Gemini API credential resolver returned an invalid value"
+      );
+    }
+    if (resolvedSecret.trim().length === 0) {
+      throw new ProviderControlPlaneError(
+        "CREDENTIALS_REQUIRED",
+        "Gemini API credential could not be resolved"
+      );
+    }
+
     return new GeminiApiAdapter({
-      apiKey,
+      apiKey: resolvedSecret,
       model: input.resolved.model.adapterModelId ?? input.resolved.model.id
     });
   }
 };
 
-export const MOCK_PROVIDER_DEFINITION: ProviderDefinition = defineProvider({
+const MOCK_PROVIDER_INPUT: ProviderDefinitionInput = {
   id: "mock-model",
   displayName: "Deterministic Mock Model",
   kind: "MOCK",
   definitionVersion: "1",
   capabilityVersion: "1",
+  adapterVersion: "1.0.0",
   credentialRequirement: "NONE",
+  credentialPurposes: [],
   models: [{
     id: "mock-default",
     displayName: "Deterministic Mock",
@@ -85,24 +98,34 @@ export const MOCK_PROVIDER_DEFINITION: ProviderDefinition = defineProvider({
       toolCalling: "UNSUPPORTED",
       streaming: "UNSUPPORTED",
       reasoningControls: "UNSUPPORTED",
+      reasoningLevels: [],
+      persistentSession: "UNSUPPORTED",
+      resumableSession: "UNSUPPORTED",
+      sessionSurvivesClientAbort: "UNSUPPORTED",
+      sessionSurvivesProviderCancel: "UNSUPPORTED",
+      usageReporting: "UNSUPPORTED",
       localExecution: "SUPPORTED",
       remoteExecution: "UNSUPPORTED",
       meteredExecution: "UNSUPPORTED",
       dataUse: "LOCAL_ONLY",
       structuredOutput: "FINAL_ONLY",
-      cancellation: "DROP_OUTPUT"
+      cancellation: "DROP_OUTPUT",
+      contextWindowTokens: "UNKNOWN",
+      outputLimitTokens: "UNKNOWN"
     }
   }],
   adapterFactory: mockFactory
-});
+};
 
-export const GEMINI_API_PROVIDER_DEFINITION: ProviderDefinition = defineProvider({
+const GEMINI_API_PROVIDER_INPUT: ProviderDefinitionInput = {
   id: "gemini-api",
   displayName: "Gemini API",
   kind: "REMOTE_API",
   definitionVersion: "1",
   capabilityVersion: "1",
+  adapterVersion: "1.0.0",
   credentialRequirement: "REQUIRED",
+  credentialPurposes: ["API_KEY"],
   models: [{
     id: "gemini-2.5-flash",
     displayName: "Gemini 2.5 Flash",
@@ -113,34 +136,32 @@ export const GEMINI_API_PROVIDER_DEFINITION: ProviderDefinition = defineProvider
       imageInput: "UNSUPPORTED",
       toolCalling: "UNSUPPORTED",
       streaming: "UNSUPPORTED",
-      reasoningControls: "UNKNOWN",
+      reasoningControls: "UNSUPPORTED",
+      reasoningLevels: [],
+      persistentSession: "UNSUPPORTED",
+      resumableSession: "UNSUPPORTED",
+      sessionSurvivesClientAbort: "UNSUPPORTED",
+      sessionSurvivesProviderCancel: "UNSUPPORTED",
+      usageReporting: "UNSUPPORTED",
       localExecution: "UNSUPPORTED",
       remoteExecution: "SUPPORTED",
       meteredExecution: "UNKNOWN",
       dataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
       structuredOutput: "FINAL_ONLY",
-      cancellation: "CLOSE_CLIENT_STREAM"
+      cancellation: "CLOSE_CLIENT_STREAM",
+      contextWindowTokens: "UNKNOWN",
+      outputLimitTokens: "UNKNOWN"
     }
   }],
   adapterFactory: geminiFactory
-});
+};
+
+export const MOCK_PROVIDER_DEFINITION: ProviderDefinition = defineProvider(MOCK_PROVIDER_INPUT);
+export const GEMINI_API_PROVIDER_DEFINITION: ProviderDefinition = defineProvider(GEMINI_API_PROVIDER_INPUT);
 
 export function registerBuiltInProviders(
   registry: ProviderRegistry = new ProviderRegistry()
 ): ProviderRegistry {
-  registry.register(MOCK_PROVIDER_DEFINITION);
-  registry.register(GEMINI_API_PROVIDER_DEFINITION);
+  registry.registerMany([MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT]);
   return registry;
-}
-
-export function rejectAllProviderSpecificSettings(
-  settings: SafeProviderConfigurationRecord
-): SafeProviderConfigurationRecord {
-  if (Object.keys(settings).length > 0) {
-    throw new ProviderControlPlaneError(
-      "UNSUPPORTED_SETTINGS",
-      "This provider does not accept provider-specific settings"
-    );
-  }
-  return Object.freeze({});
 }

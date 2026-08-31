@@ -33,12 +33,15 @@ application.
 ## Configuration and secrets
 
 `ProviderConfiguration` may contain an opaque `credentialRef`, but never raw credentials.
-Provider-specific `settings` are JSON-safe and reject secret-like keys such as API keys,
-tokens, cookies, passwords, and authorization fields.
+Provider-specific `settings` are bounded, plain JSON data. Validation rejects accessors,
+prototype-bearing/special-key objects, cycles, sparse or side-property arrays, non-finite values,
+oversized structures, credential-like keys, and common credential payloads. Provider-specific
+validators are required to return data that passes the same validation again.
 
 Use `toPersistableProviderConfiguration` before export/persistence when secret references
 should be excluded. `createProviderConfigurationFingerprintMaterial` is deterministic and
-is derived from that secret-reference-free form.
+is derived from that secret-reference-free form. It is canonical fingerprint *material*, not a
+digest; diagnostics callers should hash it rather than log the material itself.
 
 Raw credentials are obtained only at runtime through `ProviderSecretResolver`.
 
@@ -55,3 +58,18 @@ fail-closed behavior under no-metered policy.
 
 No automatic routing, fallback, escalation, settings UI, or interview-runtime integration is
 implemented here.
+
+
+## Registration and factory hardening
+
+Provider definitions are validated as plain data, reject duplicate provider/model identities and
+internally contradictory capability declarations, and are copied/frozen at registration. Batch
+registration is atomic. Executable definitions bind a declared adapter version to a captured
+factory function.
+
+Adapter creation remains descriptive setup, not execution admission. A resolved factory accepts
+only control-plane resolutions, converts factory/credential failures to fixed typed errors, and
+checks the returned adapter's execution identity/capabilities against registered metadata where
+the existing `ReasoningProvider` interface exposes a corresponding fact. It still does not call
+`createSession()`; production session creation remains exclusively behind the existing provider
+execution/policy boundary.
