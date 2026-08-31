@@ -766,6 +766,23 @@ describe("dirty-region planning", () => {
     });
   });
 
+  it("fails directly when coalesced dirty regions exceed the configured area budget", () => {
+    try {
+      planDirtyRegions([
+        { x: 0, y: 0, width: 80, height: 80 }
+      ], { width: 100, height: 100 }, {
+        paddingPixels: 0,
+        maxInputRegions: 4,
+        maxRegionCount: 4,
+        maxTotalAnalyzedArea: 5000,
+        fullFrameFallbackAreaRatio: 1
+      });
+      throw new Error("Expected dirty area budget rejection");
+    } catch (error) {
+      expectCode(error, "DIRTY_PLAN_EXCEEDS_BUDGET");
+    }
+  });
+
   it("fails when coverage ratio requires full-frame fallback but the full frame exceeds area budget", () => {
     expect(() => planDirtyRegions([
       { x: 0, y: 0, width: 50, height: 10 }
