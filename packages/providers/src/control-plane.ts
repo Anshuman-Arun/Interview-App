@@ -174,10 +174,22 @@ export type ProviderCredentialRequirement = z.infer<typeof ProviderCredentialReq
 export const ProviderCredentialPurposeSchema = z.enum(["API_KEY", "TOKEN", "OTHER"]);
 export type ProviderCredentialPurpose = z.infer<typeof ProviderCredentialPurposeSchema>;
 
-export const ProviderSecretReferenceSchema = z.object({
+const ProviderSecretReferenceObjectSchema = z.object({
   id: ProviderSecretReferenceIdSchema,
   purpose: ProviderCredentialPurposeSchema
 }).strict();
+
+const ProviderSecretReferenceEnvelopeSchema = z.unknown().transform((value, context) => {
+  try {
+    return inspectPlainProviderConfigurationValue(value);
+  } catch {
+    context.addIssue({ code: "custom", message: "MALFORMED_CONFIGURATION" });
+    return z.NEVER;
+  }
+});
+
+export const ProviderSecretReferenceSchema = ProviderSecretReferenceEnvelopeSchema
+  .pipe(ProviderSecretReferenceObjectSchema);
 export type ProviderSecretReference = z.infer<typeof ProviderSecretReferenceSchema>;
 
 const RawProviderConfigurationSchema = z.object({
@@ -225,13 +237,25 @@ export interface PersistableProviderConfiguration {
   readonly settings?: SafeProviderConfigurationRecord;
 }
 
-export const ProviderModelDefinitionSchema = z.object({
+const ProviderModelDefinitionObjectSchema = z.object({
   id: ProviderModelIdSchema,
   displayName: BoundedDisplayTextSchema,
   adapterModelId: BoundedDisplayTextSchema.optional(),
   capabilities: ProviderModelCapabilitiesSchema,
   metadataVersion: BoundedVersionTextSchema.optional()
 }).strict();
+
+const ProviderModelDefinitionEnvelopeSchema = z.unknown().transform((value, context) => {
+  try {
+    return inspectPlainProviderConfigurationValue(value);
+  } catch {
+    context.addIssue({ code: "custom", message: "MALFORMED_DEFINITION" });
+    return z.NEVER;
+  }
+});
+
+export const ProviderModelDefinitionSchema = ProviderModelDefinitionEnvelopeSchema
+  .pipe(ProviderModelDefinitionObjectSchema);
 export type ProviderModelDefinition = z.infer<typeof ProviderModelDefinitionSchema>;
 
 export interface ProviderSecretResolverRequest {
@@ -355,12 +379,12 @@ const PROVIDER_DEFINITION_INPUT_KEYS = new Set([
 ]);
 const PROVIDER_FACTORY_INPUT_KEYS = new Set(["id", "createAdapter"]);
 
-function assertPlainDataObjectShape(
+function inspectPlainDataObjectProperties(
   value: object,
   allowedKeys: ReadonlySet<string>,
   errorCode: "MALFORMED_DEFINITION" | "INVALID_ADAPTER_FACTORY",
   message: string
-): void {
+): Readonly<Record<string, unknown>> {
   let prototype: unknown;
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   let symbols: readonly symbol[];
@@ -375,6 +399,7 @@ function assertPlainDataObjectShape(
     throw new ProviderControlPlaneError(errorCode, message);
   }
   if (symbols.length > 0) throw new ProviderControlPlaneError(errorCode, message);
+  const inspected: Record<string, unknown> = {};
   for (const [key, descriptor] of Object.entries(descriptors)) {
     if (
       !allowedKeys.has(key)
@@ -383,12 +408,12 @@ function assertPlainDataObjectShape(
     ) {
       throw new ProviderControlPlaneError(errorCode, message);
     }
+    inspected[key] = descriptor.value;
   }
+  return Object.freeze(inspected);
 }
 
-function normalizeFactory(
-  factory: ProviderAdapterFactoryDefinition | undefined
-): ProviderAdapterFactory | undefined {
+function normalizeFactory(factory: unknown): ProviderAdapterFactory | undefined {
   if (factory === undefined) return undefined;
   if (typeof factory !== "object" || factory === null) {
     throw new ProviderControlPlaneError(
@@ -396,14 +421,14 @@ function normalizeFactory(
       "Provider adapter factory is malformed"
     );
   }
-  assertPlainDataObjectShape(
+  const inspected = inspectPlainDataObjectProperties(
     factory,
     PROVIDER_FACTORY_INPUT_KEYS,
     "INVALID_ADAPTER_FACTORY",
     "Provider adapter factory is malformed"
   );
-  const id = ProviderAdapterFactoryIdSchema.safeParse(factory.id);
-  const createAdapter = factory.createAdapter;
+  const id = ProviderAdapterFactoryIdSchema.safeParse(inspected.id);
+  const createAdapter = inspected.createAdapter;
   if (!id.success || typeof createAdapter !== "function") {
     throw new ProviderControlPlaneError(
       "INVALID_ADAPTER_FACTORY",
@@ -418,7 +443,14 @@ function normalizeFactory(
       try {
         adapter = await createAdapter(input);
       } catch (error) {
-        if (error instanceof ProviderControlPlaneError) {
+        if (
+          error instanceof ProviderControlPlaneError
+          && (
+            error.code === "CREDENTIALS_REQUIRED"
+            || error.code === "CREDENTIAL_RESOLUTION_FAILED"
+            || error.code === "INVALID_FACTORY_INPUT"
+          )
+        ) {
           throw new ProviderControlPlaneError(
             error.code,
             "Provider adapter factory rejected its input"
@@ -585,14 +617,15 @@ export function defineProvider(input: ProviderDefinitionInput): ProviderDefiniti
       "Provider definition is malformed"
     );
   }
-  assertPlainDataObjectShape(
+  const inspected = inspectPlainDataObjectProperties(
     input,
     PROVIDER_DEFINITION_INPUT_KEYS,
     "MALFORMED_DEFINITION",
     "Provider definition is malformed"
   );
-  const adapterFactory = normalizeFactory(input.adapterFactory);
-  if (input.validateSettings !== undefined && typeof input.validateSettings !== "function") {
+  const adapterFactory = normalizeFactory(inspected.adapterFactory);
+  const validateSettings = inspected.validateSettings;
+  if (validateSettings !== undefined && typeof validateSettings !== "function") {
     throw new ProviderControlPlaneError(
       "MALFORMED_DEFINITION",
       "Provider definition is malformed"
@@ -602,15 +635,15 @@ export function defineProvider(input: ProviderDefinitionInput): ProviderDefiniti
   let metadataInput: SafeProviderConfigurationValue;
   try {
     metadataInput = inspectPlainProviderConfigurationValue({
-      id: input.id,
-      displayName: input.displayName,
-      kind: input.kind,
-      definitionVersion: input.definitionVersion,
-      capabilityVersion: input.capabilityVersion,
-      ...(input.adapterVersion === undefined ? {} : { adapterVersion: input.adapterVersion }),
-      credentialRequirement: input.credentialRequirement,
-      credentialPurposes: input.credentialPurposes,
-      models: input.models
+      id: inspected.id,
+      displayName: inspected.displayName,
+      kind: inspected.kind,
+      definitionVersion: inspected.definitionVersion,
+      capabilityVersion: inspected.capabilityVersion,
+      ...(inspected.adapterVersion === undefined ? {} : { adapterVersion: inspected.adapterVersion }),
+      credentialRequirement: inspected.credentialRequirement,
+      credentialPurposes: inspected.credentialPurposes,
+      models: inspected.models
     });
   } catch {
     throw new ProviderControlPlaneError(
@@ -655,6 +688,23 @@ export function defineProvider(input: ProviderDefinitionInput): ProviderDefiniti
     }
     seenModelIds.add(model.id);
     assertDefinitionCapabilitiesConsistent(model.capabilities);
+    if (
+      (metadataResult.data.kind === "REMOTE_API"
+        && (
+          model.capabilities.remoteExecution !== "SUPPORTED"
+          || model.capabilities.localExecution === "SUPPORTED"
+        ))
+      || (metadataResult.data.kind === "LOCAL_PROCESS"
+        && (
+          model.capabilities.localExecution !== "SUPPORTED"
+          || model.capabilities.remoteExecution === "SUPPORTED"
+        ))
+    ) {
+      throw new ProviderControlPlaneError(
+        "MALFORMED_DEFINITION",
+        "Provider kind contradicts model execution capabilities"
+      );
+    }
   }
 
   const models = metadataResult.data.models
@@ -666,9 +716,9 @@ export function defineProvider(input: ProviderDefinitionInput): ProviderDefiniti
     credentialPurposes: Object.freeze([...credentialPurposes].sort(compareCodeUnits)),
     models: Object.freeze(models),
     ...(adapterFactory === undefined ? {} : { adapterFactory }),
-    ...(input.validateSettings === undefined
+    ...(validateSettings === undefined
       ? {}
-      : { validateSettings: input.validateSettings })
+      : { validateSettings })
   });
 }
 
