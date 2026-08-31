@@ -74,6 +74,15 @@ describe("adversarial deterministic math verification", () => {
     const oversized = "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 100_000);
     expect(PositiveIntegerStringSchema.safeParse(oversized).success).toBe(false);
 
+    const malformedOversized = `+${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS + 100_000)}`;
+    try {
+      parseBoundedInteger(malformedOversized);
+      throw new Error("Expected oversized integer input to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BoundedMathError);
+      expect((error as BoundedMathError).code).toBe("INTEGER_LIMIT_EXCEEDED");
+    }
+
     expect(() => parseBoundedInteger(17)).toThrow(BoundedMathError);
   });
 
