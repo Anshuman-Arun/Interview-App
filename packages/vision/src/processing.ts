@@ -357,15 +357,17 @@ export function planDownscale(dimensions: PixelDimensions, envelope: DownscaleEn
     });
   }
 
-  let resultWidth = Math.max(1, Math.floor(source.width * scale));
-  let resultHeight = Math.max(1, Math.floor(source.height * scale));
-  while (resultWidth * resultHeight > limits.maxPixels) {
-    if (resultWidth >= resultHeight && resultWidth > 1) resultWidth -= 1;
-    else if (resultHeight > 1) resultHeight -= 1;
-    else break;
+  let resultWidth = Math.min(limits.maxWidth, Math.max(1, Math.floor(source.width * scale)));
+  let resultHeight = Math.min(limits.maxHeight, Math.max(1, Math.floor(source.height * scale)));
+  const plannedPixels = resultWidth * resultHeight;
+  if (!Number.isSafeInteger(plannedPixels)) throw new RangeError("Planned pixel count exceeds safe integer range");
+  if (plannedPixels > limits.maxPixels) {
+    if (resultWidth >= resultHeight) {
+      resultWidth = Math.max(1, Math.floor(limits.maxPixels / resultHeight));
+    } else {
+      resultHeight = Math.max(1, Math.floor(limits.maxPixels / resultWidth));
+    }
   }
-  resultWidth = Math.min(resultWidth, limits.maxWidth);
-  resultHeight = Math.min(resultHeight, limits.maxHeight);
 
   return Object.freeze({
     resized: true,
