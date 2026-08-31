@@ -393,6 +393,42 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
+  it("accumulates cross-denominator rational sums before enforcing the reduced-result bound", async () => {
+    const specs: readonly (readonly [bigint, bigint])[] = [
+      [2n, 756n], [3n, 468n], [5n, 324n], [7n, 270n], [11n, 216n],
+      [13n, 198n], [17n, 180n], [23n, 162n], [29n, 162n], [31n, 144n],
+      [37n, 144n], [41n, 144n], [43n, 144n], [47n, 126n], [53n, 126n],
+      [59n, 126n], [61n, 126n], [67n, 126n], [71n, 126n]
+    ];
+    const parts = specs.map(([base, exponent]) => {
+      const q = base ** exponent;
+      expect(q % 19n).toBe(1n);
+      const denominator = 19n * q;
+      expect(denominator.toString().length).toBeLessThanOrEqual(MAX_INTEGER_DECIMAL_DIGITS);
+      return {
+        tiny: fractionExpression("1", denominator.toString()),
+        complement: fractionExpression((q - 1n).toString(), denominator.toString())
+      };
+    });
+
+    const result = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: {
+          kind: "SUM",
+          terms: [
+            ...parts.map((part) => part.tiny),
+            ...parts.map((part) => part.complement)
+          ]
+        },
+        right: fractionExpression("1")
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
+  });
+
   it("cross-cancels rational product factors even without exact reciprocal pairs", async () => {
     const leftScale = 10n ** 3000n + 7n;
     const rightScale = 10n ** 3000n + 11n;
