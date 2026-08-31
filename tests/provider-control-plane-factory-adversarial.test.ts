@@ -270,6 +270,29 @@ describe("provider registration snapshot semantics", () => {
   });
 });
 
+describe("provider definition bound consistency", () => {
+  function modelDefinitions(count: number) {
+    return Array.from({ length: count }, (_, index) => ({
+      id: "model-" + String(index).padStart(3, "0"),
+      displayName: "Model " + String(index),
+      capabilities: capabilities()
+    }));
+  }
+
+  it("accepts the schema's declared 128-model boundary", () => {
+    const definition = defineProvider(providerInput({
+      models: modelDefinitions(128)
+    }));
+    expect(definition.models).toHaveLength(128);
+  });
+
+  it("rejects definitions beyond the declared model boundary", () => {
+    expect(() => defineProvider(providerInput({
+      models: modelDefinitions(129)
+    }))).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+  });
+});
+
 describe("direct exported schema hardening", () => {
   it("does not invoke model-definition accessors", () => {
     let calls = 0;

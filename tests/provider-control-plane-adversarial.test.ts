@@ -153,6 +153,18 @@ describe("provider configuration secret exclusion", () => {
     }
   });
 
+  it("detects Basic credentials deterministically even when global atob is unavailable", () => {
+    const originalAtob = globalThis.atob;
+    try {
+      Reflect.set(globalThis, "atob", undefined);
+      expect(() => validateProviderConfiguration(settingsConfiguration({
+        endpoint: "Basic dXNlcjpwYXNz"
+      }))).toThrow(expect.objectContaining({ code: "SECRET_IN_CONFIGURATION" }));
+    } finally {
+      Reflect.set(globalThis, "atob", originalAtob);
+    }
+  });
+
   it("does not classify ordinary descriptive text as a raw authorization credential", () => {
     const registry = new ProviderRegistry();
     registry.register(createSettingsProviderInput());

@@ -64,6 +64,8 @@ export const PROVIDER_CONFIGURATION_LIMITS = Object.freeze({
   maxKeyLength: 128
 });
 
+const PROVIDER_DEFINITION_MAX_NODES = 16_384;
+
 export type ProviderConfigurationSafetyErrorCode =
   | "MALFORMED_CONFIGURATION"
   | "SECRET_IN_CONFIGURATION";
@@ -148,19 +150,49 @@ function isSecretConfigurationKey(key: string): boolean {
     || normalized.endsWith("authheader");
 }
 
+const BASE64_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function decodePrintableBase64(candidate: string): string | undefined {
+  const withoutPadding = candidate.replace(/=+$/u, "");
+  const paddingLength = candidate.length - withoutPadding.length;
+  if (
+    candidate.length < 8
+    || candidate.length % 4 === 1
+    || paddingLength > 2
+  ) {
+    return undefined;
+  }
+
+  let accumulator = 0;
+  let bitCount = 0;
+  let decoded = "";
+  for (const character of withoutPadding) {
+    const value = BASE64_ALPHABET.indexOf(character);
+    if (value < 0) return undefined;
+    accumulator = (accumulator << 6) | value;
+    bitCount += 6;
+    while (bitCount >= 8) {
+      bitCount -= 8;
+      const byte = (accumulator >> bitCount) & 0xff;
+      if (byte < 0x20 || byte > 0x7e) return undefined;
+      decoded += String.fromCharCode(byte);
+    }
+    if (bitCount === 0) {
+      accumulator = 0;
+    } else {
+      accumulator &= (1 << bitCount) - 1;
+    }
+  }
+  if (bitCount > 0 && accumulator !== 0) return undefined;
+  return decoded;
+}
+
 function containsBasicAuthCredential(value: string): boolean {
   const candidate = BASIC_AUTH_CANDIDATE_PATTERN.exec(value)?.[1];
-  if (candidate === undefined || candidate.length < 8 || candidate.length % 4 === 1) {
-    return false;
-  }
-  if (typeof globalThis.atob !== "function") return false;
-  try {
-    const padded = candidate + "=".repeat((4 - (candidate.length % 4)) % 4);
-    const decoded = globalThis.atob(padded);
-    return /^[\x20-\x7e]*:[\x20-\x7e]*$/u.test(decoded);
-  } catch {
-    return false;
-  }
+  if (candidate === undefined) return false;
+  const decoded = decodePrintableBase64(candidate);
+  return decoded !== undefined && decoded.includes(":");
 }
 
 export function containsSecretLikeConfigurationText(value: string): boolean {
@@ -303,20 +335,34 @@ function inspectConfigurationValue(
   }
 }
 
+function inspectProviderValue(
+  value: unknown,
+  rejectSecrets: boolean,
+  maxNodes: number
+): SafeProviderConfigurationValue {
+  return inspectConfigurationValue(value, {
+    seen: new WeakSet<object>(),
+    remainingNodes: maxNodes
+  }, 0, rejectSecrets);
+}
+
 function inspectProviderConfigurationValue(
   value: unknown,
   rejectSecrets: boolean
 ): SafeProviderConfigurationValue {
-  return inspectConfigurationValue(value, {
-    seen: new WeakSet<object>(),
-    remainingNodes: PROVIDER_CONFIGURATION_LIMITS.maxNodes
-  }, 0, rejectSecrets);
+  return inspectProviderValue(value, rejectSecrets, PROVIDER_CONFIGURATION_LIMITS.maxNodes);
 }
 
 export function inspectPlainProviderConfigurationValue(
   value: unknown
 ): SafeProviderConfigurationValue {
   return inspectProviderConfigurationValue(value, false);
+}
+
+export function inspectPlainProviderDefinitionValue(
+  value: unknown
+): SafeProviderConfigurationValue {
+  return inspectProviderValue(value, false, PROVIDER_DEFINITION_MAX_NODES);
 }
 
 export function inspectSafeProviderConfigurationValue(

@@ -11,6 +11,7 @@ import {
   SafeProviderConfigurationRecordSchema,
   containsSecretLikeConfigurationText,
   inspectPlainProviderConfigurationValue,
+  inspectPlainProviderDefinitionValue,
   type SafeProviderConfigurationRecord,
   type SafeProviderConfigurationValue
 } from "./safe-configuration.js";
@@ -914,7 +915,7 @@ function defineProviderValue(input: unknown): ProviderDefinition {
 
   let metadataInput: SafeProviderConfigurationValue;
   try {
-    metadataInput = inspectPlainProviderConfigurationValue({
+    metadataInput = inspectPlainProviderDefinitionValue({
       id: inspected.id,
       displayName: inspected.displayName,
       kind: inspected.kind,
