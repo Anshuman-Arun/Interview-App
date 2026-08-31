@@ -116,19 +116,9 @@ function inspectEnvironmentDefinition(
   const valuesValue = descriptors.values?.value as unknown;
   const secretsValue = descriptors.secrets?.value as unknown;
 
-  let inherit: readonly string[] | undefined;
-  if (inheritValue !== undefined) {
-    if (!Array.isArray(inheritValue)) throw new Error("environment.inherit must be an array");
-    if (inheritValue.length > MAX_CONFIGURED_ENVIRONMENT_KEYS) {
-      throw new Error(`environment.inherit may contain at most ${String(MAX_CONFIGURED_ENVIRONMENT_KEYS)} keys`);
-    }
-    const copy: string[] = [];
-    for (const key of inheritValue) {
-      validateEnvironmentKey(key);
-      copy.push(key);
-    }
-    inherit = Object.freeze(copy);
-  }
+  const inherit = inheritValue === undefined
+    ? undefined
+    : inspectEnvironmentKeyArray(inheritValue, "environment.inherit");
 
   const values = valuesValue === undefined
     ? undefined
@@ -151,12 +141,53 @@ function validateAndReturnStringRecord(
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
   }
-  const record = value as Readonly<Record<string, string>>;
-  const entries = ownDataEntries(record, label);
+  const entries = ownDataEntries(value as Readonly<Record<string, string>>, label);
   if (entries.length > MAX_CONFIGURED_ENVIRONMENT_KEYS) {
     throw new Error(`${label} may contain at most ${String(MAX_CONFIGURED_ENVIRONMENT_KEYS)} keys`);
   }
-  return record;
+  const copy = Object.create(null) as Record<string, string>;
+  for (const [key, entryValue] of entries) {
+    validateEnvironmentEntry(key, entryValue);
+    copy[key] = entryValue;
+  }
+  return Object.freeze(copy);
+}
+
+function inspectEnvironmentKeyArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    throw new Error(`${label} could not be inspected`);
+  }
+
+  const rawLength = descriptors.length?.value as unknown;
+  if (typeof rawLength !== "number" || !Number.isSafeInteger(rawLength) || rawLength < 0) {
+    throw new Error(`${label} has an invalid length`);
+  }
+  if (rawLength > MAX_CONFIGURED_ENVIRONMENT_KEYS) {
+    throw new Error(`${label} may contain at most ${String(MAX_CONFIGURED_ENVIRONMENT_KEYS)} keys`);
+  }
+
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (key === "length" || descriptor.enumerable !== true) continue;
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(key)) {
+      throw new Error(`${label} may not contain extra enumerable properties`);
+    }
+  }
+
+  const copy: string[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (descriptor === undefined || !("value" in descriptor)) {
+      throw new Error(`${label} must be a dense data-only array`);
+    }
+    validateEnvironmentKey(descriptor.value);
+    copy.push(descriptor.value);
+  }
+  return Object.freeze(copy);
 }
 
 function ownDataEntries(
