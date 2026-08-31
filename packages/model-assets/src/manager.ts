@@ -285,6 +285,12 @@ export class ModelAssetManager {
   public async getInstalledPath(manifestValue: unknown): Promise<string> {
     const manifest = parseAssetManifest(manifestValue);
     const check = await this.checkInstallation(manifest);
+    if (check.status === "FAILED") {
+      throw new ModelAssetError(
+        check.errorCode ?? "IO_ERROR",
+        "Unable to inspect the artifact installation safely."
+      );
+    }
     if (check.status !== "INSTALLED" || check.path === undefined) {
       throw new ModelAssetError(
         "NOT_INSTALLED",
@@ -321,7 +327,8 @@ export class ModelAssetManager {
         const parsed = AssetManifestSchema.safeParse(stored);
         if (!parsed.success || artifactInstallationKey(parsed.data) !== entry.name) continue;
         manifest = parsed.data;
-      } catch {
+      } catch (error) {
+        if (error instanceof ModelAssetError && error.code === "IO_ERROR") throw error;
         continue;
       }
 
