@@ -11,11 +11,11 @@ import { BoundedMathError, assertIntermediateIntegerBound, parseBoundedInteger }
 export const IntegerStringSchema = z.string()
   .min(1)
   .max(MAX_INTEGER_DECIMAL_DIGITS + 1)
-  .regex(/^-?(?:0|[1-9]\d*)$/u)
+  .regex(/^(?:0|-?[1-9]\d*)$/u)
   .refine((value) => (value.startsWith("-") ? value.length - 1 : value.length) <= MAX_INTEGER_DECIMAL_DIGITS);
 
 function integerStringSatisfies(value: string, predicate: (parsed: bigint) => boolean): boolean {
-  if (!/^-?(?:0|[1-9]\d*)$/u.test(value)) return false;
+  if (!/^(?:0|-?[1-9]\d*)$/u.test(value)) return false;
   try {
     return predicate(BigInt(value));
   } catch {
@@ -69,7 +69,21 @@ function consumeNode(budget: EvaluationBudget, depth: number): void {
   budget.remainingNodes -= 1;
 }
 
+function assertTermCount(terms: readonly IntegerExpression[]): void {
+  if (terms.length < 1 || terms.length > MAX_VARIADIC_EXPRESSION_TERMS) {
+    throw new BoundedMathError("INVALID_EXPRESSION", "Variadic integer expression term count is outside the supported range");
+  }
+}
+
 function integerPower(base: bigint, exponent: number): bigint {
+  assertIntermediateIntegerBound(base);
+  if (!Number.isInteger(exponent) || exponent < 0 || exponent > MAX_POWER_EXPONENT) {
+    throw new BoundedMathError("INVALID_EXPRESSION", "Integer exponent is outside the supported range");
+  }
+  if (base === 0n && exponent === 0) {
+    throw new BoundedMathError("UNDEFINED_OPERATION", "Zero to the zero power is not verified by this arithmetic grammar");
+  }
+
   let result = 1n;
   let factor = base;
   let remaining = exponent;
@@ -84,28 +98,42 @@ function integerPower(base: bigint, exponent: number): bigint {
 function evaluateNode(expression: IntegerExpression, budget: EvaluationBudget, depth: number): bigint {
   consumeNode(budget, depth);
   switch (expression.kind) {
-    case "INTEGER": return parseBoundedInteger(expression.value);
-    case "ADD": return assertIntermediateIntegerBound(
-      evaluateNode(expression.left, budget, depth + 1) + evaluateNode(expression.right, budget, depth + 1)
-    );
-    case "SUBTRACT": return assertIntermediateIntegerBound(
-      evaluateNode(expression.left, budget, depth + 1) - evaluateNode(expression.right, budget, depth + 1)
-    );
-    case "MULTIPLY": return assertIntermediateIntegerBound(
-      evaluateNode(expression.left, budget, depth + 1) * evaluateNode(expression.right, budget, depth + 1)
-    );
-    case "NEGATE": return -evaluateNode(expression.operand, budget, depth + 1);
-    case "POWER": return integerPower(evaluateNode(expression.base, budget, depth + 1), expression.exponent);
+    case "INTEGER":
+      return parseBoundedInteger(expression.value);
+    case "ADD":
+      return assertIntermediateIntegerBound(
+        evaluateNode(expression.left, budget, depth + 1) + evaluateNode(expression.right, budget, depth + 1)
+      );
+    case "SUBTRACT":
+      return assertIntermediateIntegerBound(
+        evaluateNode(expression.left, budget, depth + 1) - evaluateNode(expression.right, budget, depth + 1)
+      );
+    case "MULTIPLY":
+      return assertIntermediateIntegerBound(
+        evaluateNode(expression.left, budget, depth + 1) * evaluateNode(expression.right, budget, depth + 1)
+      );
+    case "NEGATE":
+      return -evaluateNode(expression.operand, budget, depth + 1);
+    case "POWER":
+      return integerPower(evaluateNode(expression.base, budget, depth + 1), expression.exponent);
     case "SUM": {
+      assertTermCount(expression.terms);
       let result = 0n;
-      for (const term of expression.terms) result = assertIntermediateIntegerBound(result + evaluateNode(term, budget, depth + 1));
+      for (const term of expression.terms) {
+        result = assertIntermediateIntegerBound(result + evaluateNode(term, budget, depth + 1));
+      }
       return result;
     }
     case "PRODUCT": {
+      assertTermCount(expression.terms);
       let result = 1n;
-      for (const term of expression.terms) result = assertIntermediateIntegerBound(result * evaluateNode(term, budget, depth + 1));
+      for (const term of expression.terms) {
+        result = assertIntermediateIntegerBound(result * evaluateNode(term, budget, depth + 1));
+      }
       return result;
     }
+    default:
+      throw new BoundedMathError("INVALID_EXPRESSION", "Unsupported integer expression node");
   }
 }
 
