@@ -1639,6 +1639,52 @@ describe("adapter factory adversarial boundary", () => {
       .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
   });
 
+  it("normalizes revoked Proxy values at private-brand boundaries", async () => {
+    const revokedResolution = Proxy.revocable({}, {});
+    revokedResolution.revoke();
+    expect(() => Reflect.apply(resolveAdapterFactory, undefined, [revokedResolution.proxy]))
+      .toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
+
+    const revokedFactory = Proxy.revocable({}, {});
+    revokedFactory.revoke();
+    const definitionInput = providerInput({ adapterVersion: "1.0.0" });
+    Reflect.set(definitionInput, "adapterFactory", revokedFactory.proxy);
+    expect(() => defineProvider(definitionInput))
+      .toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
+
+    const thrownProxy = Proxy.revocable({}, {});
+    thrownProxy.revoke();
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "revoked-error-provider",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "revoked-error-factory",
+        createAdapter() {
+          throw thrownProxy.proxy;
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "revoked-error-provider",
+        modelId: "test-model",
+        enabled: true
+      }
+    });
+
+    await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
+      .rejects.toMatchObject({ code: "ADAPTER_FACTORY_FAILED" });
+    expect(ProviderControlPlaneError.isControlPlaneError(thrownProxy.proxy)).toBe(false);
+  });
+
   it("does not trust a monkey-patched ProviderControlPlaneError instanceof hook", async () => {
     let codeGetterReads = 0;
     const thrown = Object.defineProperty({}, "code", {

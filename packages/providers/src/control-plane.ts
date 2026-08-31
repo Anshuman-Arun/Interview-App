@@ -69,9 +69,12 @@ export class ProviderControlPlaneError extends Error {
   }
 
   public static isControlPlaneError(value: unknown): value is ProviderControlPlaneError {
-    return typeof value === "object"
-      && value !== null
-      && #controlPlaneErrorBrand in value;
+    if (typeof value !== "object" || value === null) return false;
+    try {
+      return #controlPlaneErrorBrand in value;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -335,9 +338,12 @@ class ResolvedProviderConfigurationValue implements ResolvedProviderConfiguratio
   }
 
   public static isResolved(value: unknown): value is ResolvedProviderConfigurationValue {
-    return typeof value === "object"
-      && value !== null
-      && #resolutionBrand in value;
+    if (typeof value !== "object" || value === null) return false;
+    try {
+      return #resolutionBrand in value;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -886,9 +892,12 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
   }
 
   public static isRegistered(value: unknown): value is RegisteredProviderAdapterFactory {
-    return typeof value === "object"
-      && value !== null
-      && #createAdapterImpl in value;
+    if (typeof value !== "object" || value === null) return false;
+    try {
+      return #createAdapterImpl in value;
+    } catch {
+      return false;
+    }
   }
 
   async #createAdapter(
