@@ -195,8 +195,11 @@ describe("provider registration snapshot semantics", () => {
   it("rejects control characters in diagnostic-facing provider metadata", () => {
     for (const overrides of [
       { displayName: "Test\nProvider" },
+      { displayName: "\tTest Provider" },
       { definitionVersion: "1\nforged" },
-      { capabilityVersion: "1\u0000forged" }
+      { definitionVersion: "1\n" },
+      { capabilityVersion: "1\u0000forged" },
+      { capabilityVersion: "\r1" }
     ]) {
       expect(() => defineProvider(providerInput(overrides)))
         .toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));

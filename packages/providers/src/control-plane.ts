@@ -92,10 +92,12 @@ export type CapabilitySupport = z.infer<typeof CapabilitySupportSchema>;
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const NonBlankTextSchema = z.string()
-  .trim()
-  .min(1)
   .refine((value) => !CONTROL_CHARACTER_PATTERN.test(value), {
     message: "CONTROL_CHARACTERS_NOT_ALLOWED"
+  })
+  .transform((value) => value.trim())
+  .refine((value) => value.length > 0, {
+    message: "TEXT_MUST_NOT_BE_BLANK"
   });
 function nonSecretTextSchema(maxLength: number) {
   return NonBlankTextSchema.max(maxLength).refine(
