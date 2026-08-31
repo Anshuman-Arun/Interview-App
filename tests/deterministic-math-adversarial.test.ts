@@ -1238,6 +1238,29 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
+  it("contradicts a recurrence prefix as soon as an early value is wrong", async () => {
+    const growth = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS);
+    const result = await verifyJson(new FiniteRecurrenceVerifier(), {
+      protocol: FINITE_RECURRENCE_PROTOCOL,
+      protocolVersion: FINITE_RECURRENCE_PROTOCOL_VERSION,
+      initial: [fraction("1")],
+      recurrence: {
+        kind: "LINEAR_PREVIOUS_TERMS",
+        coefficients: [fraction(growth)],
+        constant: fraction("0")
+      },
+      claim: {
+        kind: "GENERATED_PREFIX",
+        values: [
+          fraction("2"),
+          ...Array.from({ length: 19 }, () => fraction("0"))
+        ]
+      }
+    });
+    expect(result.status).toBe("CONTRADICTED");
+    expect(result.reason).toContain("CLAIM_CONTRADICTED");
+  });
+
   it("reduces non-pairwise recurrence cancellation before enforcing the state bound", async () => {
     const scale = 10n ** 120n;
     const multiplier = 10n ** 16n;
