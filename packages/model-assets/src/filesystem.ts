@@ -79,7 +79,7 @@ export interface CachePaths {
 }
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !isProxy(value);
 }
 
 function ownValue(record: Record<string, unknown>, key: string): unknown {
