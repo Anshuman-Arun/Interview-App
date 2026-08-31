@@ -453,13 +453,13 @@ export class LocalRuntimeManager {
     );
 
     child.stdin.on("error", () => {
-      stderr.push("Managed component stdin stream error");
+      stderr.pushInternal("Managed component stdin stream error");
     });
     child.stdout.on("error", () => {
-      stderr.push("Managed component stdout stream error");
+      stderr.pushInternal("Managed component stdout stream error");
     });
     child.stderr.on("error", () => {
-      stderr.push("Managed component stderr stream error");
+      stderr.pushInternal("Managed component stderr stream error");
     });
     child.stdout.on("data", (chunk: Buffer) => stdoutFramer.append(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderrFramer.append(chunk));
