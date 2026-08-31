@@ -326,6 +326,58 @@ describe("adversarial deterministic math verification", () => {
     expect(productResult.status).toBe("VERIFIED");
   });
 
+  it("cross-cancels rational product factors even without exact reciprocal pairs", async () => {
+    const leftScale = 10n ** 3000n + 7n;
+    const rightScale = 10n ** 3000n + 11n;
+    expect(productRationals([
+      rational(2n * leftScale, 1n),
+      rational(rightScale, 1n),
+      rational(1n, leftScale),
+      rational(1n, 2n * rightScale)
+    ])).toEqual(rational(1n, 1n));
+
+    const operandA = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS);
+    const operandB = `${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS - 1)}8`;
+    const largeA = {
+      kind: "PRODUCT" as const,
+      terms: Array.from({ length: 8 }, () => fractionExpression(operandA))
+    };
+    const largeB = {
+      kind: "PRODUCT" as const,
+      terms: Array.from({ length: 8 }, () => fractionExpression(operandB))
+    };
+    const inverseA = {
+      kind: "PRODUCT" as const,
+      terms: Array.from({ length: 8 }, () => fractionExpression("1", operandA))
+    };
+    const inverseTwoB = {
+      kind: "PRODUCT" as const,
+      terms: [
+        fractionExpression("1", "2"),
+        ...Array.from({ length: 8 }, () => fractionExpression("1", operandB))
+      ]
+    };
+
+    const result = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: {
+          kind: "PRODUCT",
+          terms: [
+            { kind: "MULTIPLY", left: fractionExpression("2"), right: largeA },
+            largeB,
+            inverseA,
+            inverseTwoB
+          ]
+        },
+        right: fractionExpression("1")
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
+  });
+
   it("recognizes a zero product without overflowing earlier bounded factors", async () => {
     const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
 
