@@ -11,14 +11,31 @@ function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
   try {
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return false;
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    return Object.values(descriptors).every((descriptor) => "value" in descriptor);
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") return false;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined
+          || !("value" in descriptor)
+          || descriptor.enumerable !== true) {
+        return false;
+      }
+    }
+    return true;
   } catch {
     return false;
   }
 }
 
-const PlainDataRecordSchema = z.custom<Record<string, unknown>>(isPlainDataRecord);
+function cloneOwnDataRecord(value: Record<string, unknown>): Record<string, unknown> {
+  const clone = Object.create(null) as Record<string, unknown>;
+  for (const key of Object.keys(value)) {
+    clone[key] = value[key];
+  }
+  return clone;
+}
+
+const PlainDataRecordSchema = z.custom<Record<string, unknown>>(isPlainDataRecord)
+  .transform(cloneOwnDataRecord);
 
 export const AssetPlatformSchema = z.enum([
   "aix",
