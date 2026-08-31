@@ -481,7 +481,7 @@ export async function verifyArtifactFile(
 
   const hash = createHash("sha256");
   let bytes = 0;
-  let stream;
+  let stream: ReturnType<FileHandle["createReadStream"]>;
   try {
     stream = openedFile.handle.createReadStream({
       highWaterMark: 1024 * 1024,
@@ -674,7 +674,7 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
 
   const chunks: Buffer[] = [];
   let bytes = 0;
-  let stream;
+  let stream: ReturnType<FileHandle["createReadStream"]>;
   try {
     stream = openedManifest.handle.createReadStream({
       highWaterMark: 16 * 1024,
