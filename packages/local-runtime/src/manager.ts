@@ -907,6 +907,19 @@ export class LocalRuntimeManager {
     record.expectedStop = true;
     record.operationAbort?.abort();
     const child = record.child;
+    if (child !== undefined && !isChildAlive(child)) {
+      if (record.cleanupPromise !== undefined) {
+        try {
+          await record.cleanupPromise;
+        } catch {
+          // Failure remains observable in status; recurse to residual-tree handling.
+        }
+      }
+      if (record.child === child) {
+        await waitForManagedTreeExit(record, child, this.platform, terminationTimeout(record.definition));
+      }
+      return this.runStop(record);
+    }
     if (child === undefined) {
       if (record.cleanupPromise !== undefined) {
         try {
