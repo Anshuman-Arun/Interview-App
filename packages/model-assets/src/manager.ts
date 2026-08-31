@@ -611,7 +611,7 @@ export class ModelAssetManager {
   private async reserveCapacity(paths: CachePaths, requestedBytes: number): Promise<void> {
     await this.withCapacityGate(async () => {
       if (this.maxCacheBytes !== undefined) {
-        const usedBytes = await sumRegularFileBytes(paths.artifacts);
+        const usedBytes = await sumArtifactPayloadBytes(paths.artifacts);
         const projected = usedBytes + this.reservedBytes + requestedBytes;
         if (!Number.isSafeInteger(projected) || projected > this.maxCacheBytes) {
           throw new ModelAssetError(
