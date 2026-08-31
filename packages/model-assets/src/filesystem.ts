@@ -97,6 +97,12 @@ function ownValue(record: Record<string, unknown>, key: string): unknown {
 function isAbortSignal(value: unknown): value is AbortSignal {
   if (typeof value !== "object" || value === null || isProxy(value)) return false;
   try {
+    if (Object.getPrototypeOf(value) !== AbortSignal.prototype
+        || Object.hasOwn(value, "aborted")
+        || Object.hasOwn(value, "addEventListener")
+        || Object.hasOwn(value, "removeEventListener")) {
+      return false;
+    }
     const abortedGetter = Object.getOwnPropertyDescriptor(
       AbortSignal.prototype,
       "aborted"
