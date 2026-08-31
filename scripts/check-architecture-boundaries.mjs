@@ -411,6 +411,35 @@ function checkVisionInternalConstruction(records, violations) {
       return found;
     }
 
+    function hasExportModifier(node) {
+      return node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
+    }
+
+    function leaksInternalBindingThroughExportedDeclaration(node) {
+      if (ts.isVariableStatement(node) && hasExportModifier(node)) {
+        return node.declarationList.declarations.some((declaration) =>
+          declaration.initializer !== undefined
+            && exportedNodeReferencesInternalBinding(declaration.initializer)
+        );
+      }
+      if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && hasExportModifier(node)) {
+        let leaked = false;
+        function scanReturn(current) {
+          if (leaked) return;
+          if (ts.isReturnStatement(current)
+              && current.expression !== undefined
+              && exportedNodeReferencesInternalBinding(current.expression)) {
+            leaked = true;
+            return;
+          }
+          ts.forEachChild(current, scanReturn);
+        }
+        scanReturn(node);
+        return leaked;
+      }
+      return false;
+    }
+
     function visit(node) {
       if (ts.isExportDeclaration(node)) {
         if (node.moduleSpecifier !== undefined
@@ -435,6 +464,25 @@ function checkVisionInternalConstruction(records, violations) {
             "Vision snapshot/artifact construction capability may not be indirectly re-exported."
           );
         }
+      } else if (record.location.kind === "package"
+          && record.location.name === "vision"
+          && ts.isExportAssignment(node)
+          && exportedNodeReferencesInternalBinding(node.expression)) {
+        addViolation(
+          violations,
+          "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+          record.relativePath,
+          "Vision snapshot/artifact construction capability may not be exported as a value."
+        );
+      } else if (record.location.kind === "package"
+          && record.location.name === "vision"
+          && leaksInternalBindingThroughExportedDeclaration(node)) {
+        addViolation(
+          violations,
+          "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+          record.relativePath,
+          "Vision snapshot/artifact construction capability may not escape through an exported declaration."
+        );
       }
       ts.forEachChild(node, visit);
     }
