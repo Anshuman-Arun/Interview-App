@@ -1125,8 +1125,11 @@ export class LocalRuntimeManager {
   }
 
   private requireRecord(componentId: string): ComponentRecord {
-    if (typeof componentId !== "string") {
-      throw new LocalRuntimeError("INVALID_ARGUMENT", "Component id must be a string");
+    if (typeof componentId !== "string" || !COMPONENT_ID.test(componentId)) {
+      throw new LocalRuntimeError(
+        "INVALID_ARGUMENT",
+        "Component id must match the registered component-id format"
+      );
     }
     const record = this.components.get(componentId);
     if (record === undefined) throw new LocalRuntimeError("UNKNOWN_COMPONENT", `Unknown local component ${componentId}`);
