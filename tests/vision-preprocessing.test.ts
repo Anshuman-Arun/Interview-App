@@ -1793,6 +1793,32 @@ describe("crop, resize, tiling, and cancellation", () => {
   });
 });
 
+describe("vision runtime schema boundaries", () => {
+  it("rejects inherited diagnostics fields instead of trusting the prototype chain", () => {
+    const inherited = Object.create({
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS"
+    });
+    expect(() => createVisionProcessingDiagnostics(
+      inherited as Parameters<typeof createVisionProcessingDiagnostics>[0]
+    )).toThrow();
+  });
+
+  it("rejects invalid preprocessing error codes at runtime", () => {
+    expect(() => new VisionPreprocessingError(
+      "NOT_A_REAL_VISION_ERROR" as never,
+      "invalid"
+    )).toThrow();
+  });
+});
+
 describe("vision diagnostics validation", () => {
   it("rejects unknown fields and unsafe durations instead of silently dropping them", () => {
     expect(() => createVisionProcessingDiagnostics({
