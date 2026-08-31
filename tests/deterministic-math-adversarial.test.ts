@@ -1073,6 +1073,73 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
+  it("keeps finite-expectation status independent of outcome ordering", async () => {
+    const bases = [
+      3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n, 41n,
+      43n, 47n, 53n, 59n, 61n, 67n, 71n, 73n, 79n, 89n, 97n, 101n,
+      103n, 107n, 109n, 113n, 127n, 131n, 137n, 139n, 149n, 151n,
+      157n, 163n, 167n, 173n, 179n, 181n, 191n, 193n, 197n, 199n,
+      211n, 223n, 227n, 229n, 233n, 239n, 241n, 251n, 257n, 263n,
+      269n, 271n, 277n, 281n, 283n, 293n, 307n, 311n, 313n, 317n,
+      331n, 337n, 347n, 349n, 353n, 359n, 367n, 373n, 379n, 383n,
+      389n, 397n, 401n, 409n, 419n, 421n, 431n, 433n, 439n
+    ] as const;
+    expect(bases).toHaveLength(83);
+
+    const denominators = bases.map((base) => primePowerAtLeastDigits(base, 100));
+    let magnitude = 1n;
+    while ((magnitude * 997n).toString().length <= MAX_INTEGER_DECIMAL_DIGITS) {
+      magnitude *= 997n;
+    }
+    expect(magnitude.toString().length).toBeLessThanOrEqual(MAX_INTEGER_DECIMAL_DIGITS);
+
+    const denominatorProduct = denominators.reduce(
+      (product, denominator) => product * denominator,
+      1n
+    );
+    const positiveNumerator = magnitude * denominators.reduce(
+      (sum, denominator) => sum + denominatorProduct / denominator,
+      0n
+    );
+    expect(denominatorProduct.toString().length)
+      .toBeLessThanOrEqual(MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS);
+    expect(positiveNumerator.toString().length)
+      .toBeGreaterThan(MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS);
+
+    const probabilityDenominator = String(2 * denominators.length);
+    const positives = denominators.map((denominator) => ({
+      probability: fraction("1", probabilityDenominator),
+      value: fraction(magnitude.toString(), denominator.toString())
+    }));
+    const negatives = denominators.map((denominator) => ({
+      probability: fraction("1", probabilityDenominator),
+      value: fraction((-magnitude).toString(), denominator.toString())
+    }));
+    const alternating = denominators.flatMap((denominator) => [
+      {
+        probability: fraction("1", probabilityDenominator),
+        value: fraction(magnitude.toString(), denominator.toString())
+      },
+      {
+        probability: fraction("1", probabilityDenominator),
+        value: fraction((-magnitude).toString(), denominator.toString())
+      }
+    ]);
+
+    for (const outcomes of [[...positives, ...negatives], alternating]) {
+      const result = await verifyJson(new ProbabilityArithmeticVerifier(), {
+        protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+        protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+        claim: {
+          kind: "FINITE_EXPECTATION",
+          outcomes,
+          claimedExpectation: fraction("0")
+        }
+      });
+      expect(result.status).toBe("VERIFIED");
+    }
+  });
+
   it("abstains before probability normalization exceeds the exact-work budget", async () => {
     const bases = [
       2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n,
