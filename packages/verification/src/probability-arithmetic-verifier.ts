@@ -104,35 +104,60 @@ function assertProbability(value: ExactRational, label: string): ExactRational {
   return value;
 }
 
-function sumProbabilityMass(values: readonly ExactRational[]): ExactRational {
-  const one = rational(1n, 1n);
-  let pending = [...values];
+function probabilityNormalizationGcd(left: bigint, right: bigint): bigint {
+  let a = left < 0n ? -left : left;
+  let b = right < 0n ? -right : right;
+  while (b !== 0n) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+  return a;
+}
 
-  while (true) {
-    const groups = new Map<string, { denominator: bigint; numerator: bigint }>();
-    for (const value of pending) {
-      const key = value.denominator.toString();
-      const existing = groups.get(key);
-      if (existing === undefined) {
-        groups.set(key, { denominator: value.denominator, numerator: value.numerator });
-      } else {
-        existing.numerator += value.numerator;
-      }
+function assertProbabilityMassIsOne(values: readonly ExactRational[]): void {
+  const groups = new Map<string, { denominator: bigint; numerator: bigint }>();
+  for (const value of values) {
+    const key = value.denominator.toString();
+    const existing = groups.get(key);
+    if (existing === undefined) {
+      groups.set(key, { denominator: value.denominator, numerator: value.numerator });
+    } else {
+      existing.numerator += value.numerator;
     }
+  }
 
-    const grouped = [...groups.values()].map(({ numerator, denominator }) => {
-      const value = rational(numerator, denominator);
-      if (compareRationals(value, one) > 0) {
-        throw new BoundedMathError(
-          "INVALID_PROBABILITY",
-          "Finite expectation probabilities cannot sum to more than 1"
-        );
-      }
-      return value;
-    });
+  let totalNumerator = 0n;
+  let totalDenominator = 1n;
+  for (const { numerator, denominator } of groups.values()) {
+    // Probability inputs are individually limited to 256 decimal digits and
+    // there are at most MAX_PROBABILITY_OUTCOMES entries. Therefore this exact
+    // normalization denominator is bounded by the product of the supplied
+    // denominators even when it is larger than the 4,096-digit result/state
+    // limit. It is validation-only and is never exposed as an ExactRational.
+    const commonFactor = probabilityNormalizationGcd(totalDenominator, denominator);
+    const leftScale = denominator / commonFactor;
+    const rightScale = totalDenominator / commonFactor;
+    totalNumerator = totalNumerator * leftScale + numerator * rightScale;
+    totalDenominator *= leftScale;
 
-    if (grouped.length === pending.length) return sumRationals(grouped);
-    pending = grouped;
+    const cancellation = probabilityNormalizationGcd(totalNumerator, totalDenominator);
+    totalNumerator /= cancellation;
+    totalDenominator /= cancellation;
+
+    if (totalNumerator > totalDenominator) {
+      throw new BoundedMathError(
+        "INVALID_PROBABILITY",
+        "Finite expectation probabilities cannot sum to more than 1"
+      );
+    }
+  }
+
+  if (totalNumerator !== totalDenominator) {
+    throw new BoundedMathError(
+      "INVALID_PROBABILITY",
+      "Finite expectation probabilities must sum exactly to 1"
+    );
   }
 }
 
@@ -145,11 +170,7 @@ function evaluateProbabilityClaim(
         probability: assertProbability(parseRationalInput(outcome.probability), "Outcome probability"),
         value: outcome.value
       }));
-      const one = rational(1n, 1n);
-      const totalProbability = sumProbabilityMass(outcomes.map((outcome) => outcome.probability));
-      if (!equalRationals(totalProbability, one)) {
-        throw new BoundedMathError("INVALID_PROBABILITY", "Finite expectation probabilities must sum exactly to 1");
-      }
+      assertProbabilityMassIsOne(outcomes.map((outcome) => outcome.probability));
 
       const expectationTerms = outcomes.map((outcome) =>
         multiplyRationals(outcome.probability, parseRationalInput(outcome.value))
