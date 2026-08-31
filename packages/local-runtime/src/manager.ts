@@ -239,7 +239,7 @@ export class LocalRuntimeManager {
     initialBackoffMs: number
   ): Promise<LocalComponentStatus> {
     let delayMs = initialBackoffMs;
-    while (true) {
+    for (;;) {
       if (delayMs > 0) await abortableDelay(delayMs, signal, record.definition.id);
       try {
         await this.spawnAndAwaitReadiness(record, signal);
@@ -509,12 +509,9 @@ export class LocalRuntimeManager {
       record.stdoutListeners.add(onLine);
       record.exitListeners.add(onExit);
       signal.addEventListener("abort", onAbort, { once: true });
-      for (const line of record.startupStdoutLines) {
-        if (settled) break;
-        onLine(line);
-      }
-      if (!settled && (child.exitCode !== null || child.signalCode !== null)) onExit();
-      else if (!settled && signal.aborted) onAbort();
+      for (const line of record.startupStdoutLines) onLine(line);
+      if (child.exitCode !== null || child.signalCode !== null) onExit();
+      else if (signal.aborted) onAbort();
     });
   }
 
@@ -527,7 +524,7 @@ export class LocalRuntimeManager {
     if (strategy.kind !== "HTTP_LOOPBACK") throw new LocalRuntimeError("READINESS_FAILED", "Invalid HTTP readiness strategy");
     const url = parseLoopbackUrl(strategy.url);
     const intervalMs = strategy.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    while (true) {
+    for (;;) {
       ensureProcessAlive(record, child);
       throwIfAborted(signal, record.definition.id);
       try {
@@ -557,7 +554,7 @@ export class LocalRuntimeManager {
     const strategy = record.definition.readiness;
     if (strategy.kind !== "CUSTOM_LOCAL") throw new LocalRuntimeError("READINESS_FAILED", "Invalid custom readiness strategy");
     const intervalMs = strategy.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    while (true) {
+    for (;;) {
       ensureProcessAlive(record, child);
       throwIfAborted(signal, record.definition.id);
       const context: LocalReadinessContext = Object.freeze({
@@ -568,7 +565,7 @@ export class LocalRuntimeManager {
       try {
         const normalized = normalizeReadinessDecision(await strategy.probe(context));
         if (normalized.ready) return normalizeReadyResult(normalized);
-      } catch (error) {
+      } catch {
         if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
       }
       await abortableDelay(intervalMs, signal, record.definition.id);
@@ -893,16 +890,15 @@ function waitForProcessStability(
     };
     const timer = setTimeout(() => {
       if (settled) return;
-      try {
-        ensureProcessAlive(record, child);
+      if (record.child !== child || child.exitCode !== null || child.signalCode !== null) {
         settled = true;
         cleanup();
-        resolve();
-      } catch (error) {
-        settled = true;
-        cleanup();
-        reject(error);
+        reject(new LocalRuntimeError("PROCESS_EXITED", `Component ${record.definition.id} exited before readiness`));
+        return;
       }
+      settled = true;
+      cleanup();
+      resolve();
     }, stableMs);
     record.exitListeners.add(onExit);
     signal.addEventListener("abort", onAbort, { once: true });
