@@ -292,6 +292,14 @@ export class ImageSnapshot {
     }
   }
 
+  public matchesValidatedImagePayload(candidate: unknown): boolean {
+    if (!ImageSnapshot.isValidatedInstance(candidate)
+        && !VisionImageArtifact.isValidatedInstance(candidate)) {
+      return false;
+    }
+    return candidate.matchesEncodedBytes(this.#bytes);
+  }
+
   public toJSON(): ImageSnapshotMetadata {
     return this.metadata;
   }
@@ -430,6 +438,14 @@ export class VisionImageArtifact {
     } catch {
       return false;
     }
+  }
+
+  public matchesValidatedImagePayload(candidate: unknown): boolean {
+    if (!ImageSnapshot.isValidatedInstance(candidate)
+        && !VisionImageArtifact.isValidatedInstance(candidate)) {
+      return false;
+    }
+    return candidate.matchesEncodedBytes(this.#bytes);
   }
 
   public toJSON(): VisionImageArtifactMetadata {
