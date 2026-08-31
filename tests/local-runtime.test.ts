@@ -145,21 +145,24 @@ describe("local worker lifecycle manager", () => {
   });
 
   it("restarts a ready component through the public restart API", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-explicit-restart-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
     const runtime = manager();
-    runtime.register(definition("explicit-restart", "ready"));
+    runtime.register(definition("explicit-restart", "ready-counter", {}, [counter]));
 
     const first = await runtime.start("explicit-restart");
-    const firstPid = first.pid;
-    expect(firstPid).toBeTypeOf("number");
+    expect(first.state).toBe("READY");
+    expect(readFileSync(counter, "utf8")).toBe("1");
 
     const second = await runtime.restart("explicit-restart");
     expect(second.state).toBe("READY");
-    expect(second.pid).toBeTypeOf("number");
-    expect(second.pid).not.toBe(firstPid);
-    if (firstPid !== undefined) {
-      await waitForPidExit(firstPid);
-      expect(isPidAlive(firstPid)).toBe(false);
-    }
+    expect(readFileSync(counter, "utf8")).toBe("2");
+    expect(second.lastExit).toMatchObject({
+      code: 0,
+      signal: null,
+      unexpected: false
+    });
   });
 
   it("escalates shutdown when a process ignores graceful EOF", async () => {
