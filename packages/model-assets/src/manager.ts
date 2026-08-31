@@ -541,14 +541,16 @@ export class ModelAssetManager {
       );
     }
     const paths = await this.getSafeCachePaths();
-    await this.withMutationGate(paths, async (shared) => {
-      if ((shared.activeInstallationCounts.get(key) ?? 0) > 0) {
-        throw new ModelAssetError(
-          "ASSET_BUSY",
-          "Cannot remove an artifact while its installation is in flight."
-        );
-      }
-      await this.removeManagedEntry(paths, path.join(paths.artifacts, key));
+    await this.withCapacityGate(paths, async () => {
+      await this.withMutationGate(paths, async (shared) => {
+        if ((shared.activeInstallationCounts.get(key) ?? 0) > 0) {
+          throw new ModelAssetError(
+            "ASSET_BUSY",
+            "Cannot remove an artifact while its installation is in flight."
+          );
+        }
+        await this.removeManagedEntry(paths, path.join(paths.artifacts, key));
+      });
     });
     this.lastFailures.delete(key);
   }
