@@ -176,7 +176,14 @@ export const ArtifactSourceBoundsSchema = z.object({
   y: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
-}).strict();
+}).strict().superRefine((bounds, context) => {
+  if (!Number.isSafeInteger(bounds.x + bounds.width)) {
+    context.addIssue({ code: "custom", message: "sourceBounds right edge exceeds safe integer range" });
+  }
+  if (!Number.isSafeInteger(bounds.y + bounds.height)) {
+    context.addIssue({ code: "custom", message: "sourceBounds bottom edge exceeds safe integer range" });
+  }
+});
 export type ArtifactSourceBounds = z.infer<typeof ArtifactSourceBoundsSchema>;
 
 export const VisionImageArtifactMetadataSchema = z.object({
