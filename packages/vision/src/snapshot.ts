@@ -132,10 +132,20 @@ function checkDimensions(header: PngHeader, limits: ImageValidationLimits): void
 export function sha256ImageBytes(bytes: Uint8Array): Sha256Digest;
 export function sha256ImageBytes(bytes: unknown): Sha256Digest {
   if (!isDirectUint8Array(bytes)) throw new TypeError("Image digest input must be a direct readable Uint8Array");
-  if (actualUint8ArrayByteLength(bytes) > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
+  const initialLength = actualUint8ArrayByteLength(bytes);
+  if (initialLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
     throw new RangeError("Image digest input exceeds the package hard encoded-byte cap");
   }
-  return createHash("sha256").update(bytes).digest("hex");
+  let digest: string;
+  try {
+    digest = createHash("sha256").update(bytes).digest("hex");
+  } catch {
+    throw new TypeError("Image digest input changed or became unreadable during hashing");
+  }
+  if (actualUint8ArrayByteLength(bytes) !== initialLength) {
+    throw new TypeError("Image digest input changed while being hashed");
+  }
+  return digest;
 }
 
 export function createValidatedImageSnapshot(
@@ -176,7 +186,18 @@ export function createValidatedImageSnapshot(
   if (encodedByteLength > safeLimits.maxEncodedBytes) {
     throw new VisionPreprocessingError("IMAGE_TOO_LARGE_BYTES", "Encoded image exceeds configured byte limit");
   }
-  const bytes = Buffer.from(safeInput.encodedBytes);
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(safeInput.encodedBytes);
+  } catch {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Image bytes could not be copied safely");
+  }
+  if (bytes.length !== encodedByteLength) {
+    throw new VisionPreprocessingError(
+      "INVALID_IMAGE",
+      "Image byte container changed while the snapshot was being captured"
+    );
+  }
 
   const header = inspectPngHeader(bytes);
   checkDimensions(header, safeLimits);
