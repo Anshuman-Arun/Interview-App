@@ -164,7 +164,15 @@ async function downloadResponseToFile(
           let bytes = 0;
           const limiter = new Transform({
             transform(chunk: Buffer, _encoding, callback) {
-              bytes += chunk.byteLength;
+              const nextBytes = bytes + chunk.byteLength;
+              if (!Number.isSafeInteger(nextBytes)) {
+                callback(new ModelAssetError(
+                  "ARTIFACT_TOO_LARGE",
+                  "Artifact response exceeds safe integer byte accounting."
+                ));
+                return;
+              }
+              bytes = nextBytes;
               if (bytes > options.maxBytes) {
                 callback(new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact response exceeds the configured size limit."));
                 return;
