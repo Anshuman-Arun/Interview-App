@@ -2196,7 +2196,7 @@ function sanitizeStatusText(value: string, secretValues: readonly string[]): str
 }
 
 function safeErrorMessage(error: unknown, secretValues: readonly string[] = []): string {
-  if (typeof error !== "object" || error === null) return "unknown error";
+  if (typeof error !== "object" || error === null || utilTypes.isProxy(error)) return "unknown error";
   try {
     const descriptor = Object.getOwnPropertyDescriptor(error, "message");
     if (descriptor !== undefined && "value" in descriptor && typeof descriptor.value === "string") {
