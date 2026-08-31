@@ -2306,6 +2306,28 @@ describe("local worker lifecycle manager", () => {
       .toContain("unknown error");
   });
 
+  it("classifies failed graceful stdin writes separately from tree termination", async () => {
+    const runtime = manager();
+    let writeFailure: unknown;
+    runtime.register(definition("closed-graceful-stdin", "ignore-shutdown", {
+      shutdownTimeoutMs: 20,
+      terminationTimeoutMs: 100,
+      gracefulShutdown: async (control) => {
+        control.endStdin();
+        try {
+          await control.writeStdin("too-late\n");
+        } catch (error) {
+          writeFailure = error;
+        }
+      }
+    }));
+
+    await runtime.start("closed-graceful-stdin");
+    await runtime.stop("closed-graceful-stdin");
+    expect(writeFailure).toMatchObject({ code: "GRACEFUL_SHUTDOWN_FAILED" });
+    expect(runtime.getStatus("closed-graceful-stdin").state).toBe("STOPPED");
+  });
+
   it("does not expose direct process signaling through graceful shutdown controls", async () => {
     const runtime = manager();
     let signalExposed = true;
