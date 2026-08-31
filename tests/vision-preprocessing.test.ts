@@ -8,7 +8,9 @@ import {
 } from "../packages/vision/src/internal-artifact-construction.js";
 import {
   ArtifactSourceBoundsSchema,
+  DirtyRegionInputSchema,
   HARD_IMAGE_VALIDATION_LIMITS,
+  ImageRectSchema,
   ImagePayloadReferenceMetadataSchema,
   ImageSnapshot,
   ImageSnapshotInputSchema,
@@ -267,6 +269,22 @@ describe("vision snapshot validation and hashing", () => {
       y: 0,
       width: 8192,
       height: 8193
+    }).success).toBe(false);
+  });
+
+  it("makes exported geometry schemas reject unsafe derived edges directly", () => {
+    expect(ImageRectSchema.safeParse({
+      x: Number.MAX_SAFE_INTEGER,
+      y: 0,
+      width: 1,
+      height: 1
+    }).success).toBe(false);
+
+    expect(DirtyRegionInputSchema.safeParse({
+      x: Number.MAX_SAFE_INTEGER,
+      y: 0,
+      width: 1,
+      height: 0
     }).success).toBe(false);
   });
 
