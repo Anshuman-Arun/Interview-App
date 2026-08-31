@@ -229,7 +229,17 @@ export async function removeEntryInsideRoot(
     }
 
     const children: string[] = [];
-    const directory = await opendir(detached);
+    let directory;
+    try {
+      directory = await opendir(detached);
+    } catch (error) {
+      if (errnoCode(error) === "ENOENT") return;
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to open detached cache directory for cleanup.",
+        { cause: error }
+      );
+    }
     for await (const child of directory) {
       if (children.length >= maxEntries) {
         throw new ModelAssetError(
@@ -614,7 +624,17 @@ export async function sumManagedCacheBytes(
 
   let total = 0;
   let inspectedEntries = 0;
-  const directory = await opendir(root);
+  let directory;
+  try {
+    directory = await opendir(root);
+  } catch (error) {
+    if (errnoCode(error) === "ENOENT") return 0;
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to open managed cache directory for accounting.",
+      { cause: error }
+    );
+  }
   for await (const child of directory) {
     inspectedEntries += 1;
     if (inspectedEntries > maxEntries) {
