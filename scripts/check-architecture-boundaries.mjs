@@ -451,13 +451,32 @@ function checkVisionInternalConstruction(records, violations) {
       return ts.isIdentifier(current) && taintedBindingNames.has(current.text);
     }
 
+    function importsVisionContainerBinding(localName, exportedName) {
+      for (const statement of record.sourceFile.statements) {
+        if (!ts.isImportDeclaration(statement)
+            || !ts.isStringLiteralLike(statement.moduleSpecifier)
+            || !/(?:^|\/)types(?:\.[cm]?[jt]s)?$/u.test(statement.moduleSpecifier.text)
+            || statement.importClause?.namedBindings === undefined
+            || !ts.isNamedImports(statement.importClause.namedBindings)) {
+          continue;
+        }
+        for (const element of statement.importClause.namedBindings.elements) {
+          const importedName = element.propertyName?.text ?? element.name.text;
+          if (importedName === exportedName && element.name.text === localName) return true;
+        }
+      }
+      return false;
+    }
+
     function isSafeConstructionConsumption(node) {
       if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression)) return false;
       const allowedConstructor =
         (record.relativePath === "packages/vision/src/snapshot.ts"
-          && node.expression.text === "ImageSnapshot")
+          && node.expression.text === "ImageSnapshot"
+          && importsVisionContainerBinding("ImageSnapshot", "ImageSnapshot"))
         || (record.relativePath === "packages/vision/src/processing.ts"
-          && node.expression.text === "VisionImageArtifact");
+          && node.expression.text === "VisionImageArtifact"
+          && importsVisionContainerBinding("VisionImageArtifact", "VisionImageArtifact"));
       if (!allowedConstructor) return false;
       const firstArgument = node.arguments?.[0];
       return firstArgument !== undefined && isDirectTaintedBindingExpression(firstArgument);
