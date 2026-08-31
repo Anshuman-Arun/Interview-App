@@ -285,6 +285,19 @@ describe("vision snapshot validation and hashing", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("reports a PNG-signature prefix with a truncated header as INVALID_IMAGE, not MIME mismatch", () => {
+    const truncated = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52
+    ]);
+    try {
+      snapshot(truncated);
+      throw new Error("Expected truncated PNG rejection");
+    } catch (error) {
+      expectCode(error, "INVALID_IMAGE");
+    }
+  });
+
   it("rejects malformed bytes and detectable MIME mismatch", () => {
     expect(() => snapshot(Buffer.from("not-a-png"))).toThrowError(VisionPreprocessingError);
     try {
