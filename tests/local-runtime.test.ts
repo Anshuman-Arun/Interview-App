@@ -372,6 +372,16 @@ describe("local worker lifecycle manager", () => {
     expect(observedArgument).toBe(literalArgument);
   });
 
+  it("preserves literal truncation-marker stderr in exit history", async () => {
+    const runtime = manager();
+    runtime.register(definition("literal-truncated-stderr", "literal-truncated-crash"));
+
+    await expect(runtime.start("literal-truncated-stderr"))
+      .rejects.toMatchObject({ code: "PROCESS_EXITED" });
+    expect(runtime.getStatus("literal-truncated-stderr").lastExit?.stderrTail)
+      .toContain("[TRUNCATED]");
+  });
+
   it("detects immediate crashes and invalid executables", async () => {
     const runtime = manager();
     runtime.register(definition("crash", "crash"));
