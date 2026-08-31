@@ -1958,6 +1958,56 @@ describe("adapter factory adversarial boundary", () => {
     expect(underlyingResolverCalls).toBe(0);
   });
 
+  it("validates a discarded resolver shape even when no credential reference is configured", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "mock-model",
+      adapterVersion: "1.0.0",
+      credentialRequirement: "OPTIONAL",
+      credentialPurposes: ["API_KEY"],
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "optional-resolver-validation-factory",
+        createAdapter() {
+          return new MockModelAdapter({ proposal: PROPOSAL });
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "mock-model",
+        modelId: "test-model",
+        enabled: true
+      }
+    });
+    const factory = resolveAdapterFactory(resolved);
+
+    const malformedInput: Parameters<typeof factory.createAdapter>[0] = { resolved };
+    Reflect.set(malformedInput, "secretResolver", 42);
+    await expect(factory.createAdapter(malformedInput))
+      .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+
+    let getterCalls = 0;
+    const accessorResolver = Object.defineProperty({}, "resolveSecret", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error("must not execute");
+      }
+    });
+    const accessorInput: Parameters<typeof factory.createAdapter>[0] = { resolved };
+    Reflect.set(accessorInput, "secretResolver", accessorResolver);
+    await expect(factory.createAdapter(accessorInput))
+      .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(getterCalls).toBe(0);
+  });
+
   it("does not expose a resolver capability when no credential reference is configured", async () => {
     let resolverVisibleToFactory = true;
     const registry = new ProviderRegistry();

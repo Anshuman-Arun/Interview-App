@@ -749,7 +749,6 @@ function normalizeFactorySecretResolver(
   resolved: ResolvedProviderConfigurationValue
 ): ProviderSecretResolver | undefined {
   const expectedReference = resolved.configuration.credentialRef;
-  if (expectedReference === undefined) return undefined;
   if (value === undefined) return undefined;
   if (typeof value !== "object" || value === null) {
     throw new ProviderControlPlaneError(
@@ -769,6 +768,7 @@ function normalizeFactorySecretResolver(
       "Provider secret resolver is malformed"
     );
   }
+  if (expectedReference === undefined) return undefined;
 
   const expectedRequest = freezeNullPrototype({
     providerId: resolved.provider.id,
