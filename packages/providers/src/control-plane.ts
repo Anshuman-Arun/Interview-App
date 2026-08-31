@@ -59,6 +59,12 @@ export class ProviderControlPlaneError extends Error {
     message: string
   ) {
     super(message);
+    Object.defineProperty(this, "code", {
+      configurable: false,
+      enumerable: true,
+      writable: false,
+      value: code
+    });
     this.name = "ProviderControlPlaneError";
   }
 

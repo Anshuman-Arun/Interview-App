@@ -1712,6 +1712,61 @@ describe("adapter factory adversarial boundary", () => {
     expect(codeGetterReads).toBe(0);
   });
 
+  it("keeps branded control-plane error codes immutable during factory normalization", async () => {
+    let codeGetterReads = 0;
+    const thrown = new ProviderControlPlaneError(
+      "CREDENTIALS_REQUIRED",
+      "Authorization: Bearer private-branded-error-secret"
+    );
+    const redefined = Reflect.defineProperty(thrown, "code", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        codeGetterReads += 1;
+        throw new Error("Authorization: Bearer code-getter-secret");
+      }
+    });
+
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "branded-error-provider",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "branded-error-factory",
+        createAdapter() {
+          throw thrown;
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "branded-error-provider",
+        modelId: "test-model",
+        enabled: true
+      }
+    });
+
+    let caught: unknown;
+    try {
+      await resolveAdapterFactory(resolved).createAdapter({ resolved });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(redefined).toBe(false);
+    expect(codeGetterReads).toBe(0);
+    expect(caught).toMatchObject({ code: "CREDENTIALS_REQUIRED" });
+    expect(caught instanceof Error ? caught.message : "")
+      .not.toContain("private-branded-error-secret");
+  });
+
   it("maps arbitrary factory failures, including spoofed control-plane codes, to a fixed error", async () => {
     for (const createAdapter of [
       () => {
