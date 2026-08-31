@@ -103,7 +103,9 @@ export class LocalRuntimeManager {
 
   public constructor(options: LocalRuntimeManagerOptions = {}) {
     const inspectedOptions = inspectManagerOptions(options);
-    this.parentEnvironment = snapshotParentEnvironment(inspectedOptions.parentEnvironment ?? process.env);
+    this.parentEnvironment = inspectedOptions.parentEnvironment === undefined
+      ? process.env
+      : snapshotParentEnvironment(inspectedOptions.parentEnvironment);
     this.now = inspectedOptions.now ?? (() => new Date());
     this.fetchImpl = inspectedOptions.fetch ?? globalThis.fetch;
     this.platform = process.platform;
