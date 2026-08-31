@@ -681,8 +681,9 @@ export class ModelAssetManager {
 
   private async assertSafeStagingDirectory(
     paths: CachePaths,
-    stagingDirectory: string
-  ): Promise<void> {
+    stagingDirectory: string,
+    expectedIdentity?: { readonly device: number; readonly inode: number }
+  ): Promise<Stats> {
     await validateCachePaths(paths);
     let entry: Stats;
     try {
@@ -700,6 +701,14 @@ export class ModelAssetManager {
         "Artifact staging directory changed to an unsafe filesystem entry."
       );
     }
+    if (expectedIdentity !== undefined
+        && (entry.dev !== expectedIdentity.device || entry.ino !== expectedIdentity.inode)) {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Artifact staging directory was replaced during installation."
+      );
+    }
+    return entry;
   }
 
   private async removeManagedEntry(paths: CachePaths, candidate: string): Promise<void> {
@@ -798,11 +807,16 @@ export class ModelAssetManager {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled.");
       }
       await ensureSafeDirectory(paths.root, stagingDirectory);
+      const createdStaging = await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
+      const stagingIdentity = {
+        device: createdStaging.dev,
+        inode: createdStaging.ino
+      };
       const stagedPayload = installedPayloadPath(stagingDirectory, manifest);
 
       setStage("DOWNLOADING");
       await stagePayload(stagedPayload);
-      await this.assertSafeStagingDirectory(paths, stagingDirectory);
+      await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
 
       setStage("VERIFYING");
       const verification = await verifyArtifactFile(stagedPayload, {
@@ -817,7 +831,7 @@ export class ModelAssetManager {
         );
       }
 
-      await this.assertSafeStagingDirectory(paths, stagingDirectory);
+      await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
       await writeStoredManifest(
         path.join(stagingDirectory, "manifest.json"),
         serializedManifest
@@ -830,7 +844,7 @@ export class ModelAssetManager {
         );
       }
 
-      await this.assertSafeStagingDirectory(paths, stagingDirectory);
+      await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
       if (await pathEntryExists(installationDirectory)) {
         const existing = await this.checkInstallation(manifest, signal);
         if (existing.status === "INSTALLED" && existing.path !== undefined) {
@@ -854,14 +868,15 @@ export class ModelAssetManager {
         );
       }
 
-      await this.assertSafeStagingDirectory(paths, stagingDirectory);
+      await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
       try {
         await this.publishReservedArtifact(
           paths,
           stagingDirectory,
           installationDirectory,
           reservationBytes,
-          signal
+          signal,
+          stagingIdentity
         );
         reservationHeld = false;
         published = true;
@@ -1029,7 +1044,8 @@ export class ModelAssetManager {
     stagingDirectory: string,
     installationDirectory: string,
     reservationBytes: number,
-    signal: AbortSignal
+    signal: AbortSignal,
+    stagingIdentity: { readonly device: number; readonly inode: number }
   ): Promise<void> {
     await this.withCapacityGate(async () => {
       if (signal.aborted) {
@@ -1038,7 +1054,7 @@ export class ModelAssetManager {
           "Artifact installation was cancelled before publication."
         );
       }
-      await this.assertSafeStagingDirectory(paths, stagingDirectory);
+      await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
       if (signal.aborted) {
         throw new ModelAssetError(
           "CANCELLED",
