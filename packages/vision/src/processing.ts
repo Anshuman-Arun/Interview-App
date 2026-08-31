@@ -156,7 +156,9 @@ function nonnegativeSafeInteger(value: number, name: string): number {
 
 function now(options: VisionProcessingOptions): number {
   const value = (options.now ?? (() => globalThis.performance.now()))();
-  if (!Number.isFinite(value)) throw new RangeError("Processing clock must return a finite number");
+  if (!Number.isFinite(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
+    throw new RangeError("Processing clock must return a nonnegative finite value within safe numeric range");
+  }
   return value;
 }
 
