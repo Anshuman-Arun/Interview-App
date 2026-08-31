@@ -11,6 +11,9 @@ importers:
       katex:
         specifier: ^0.18.4
         version: 0.18.4
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -872,6 +875,10 @@ packages:
 
   pure-rand@8.4.2:
     resolution: {integrity: sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==}
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   react-dom@19.2.8:
     resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
@@ -1739,6 +1746,8 @@ snapshots:
   punycode@2.3.1: {}
 
   pure-rand@8.4.2: {}
+
+  pngjs@7.0.0: {}
 
   react-dom@19.2.8(react@19.2.8):
     dependencies:
