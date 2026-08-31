@@ -47,8 +47,8 @@ export function buildLocalEnvironment(
     const parentEntry = findParentEntry(parent, key, platform);
     if (parentEntry === undefined) continue;
     environment[parentEntry.key] = parentEntry.value;
-    if (SECRET_KEY.test(parentEntry.key) && parentEntry.value.length > 0) {
-      secretValues.add(parentEntry.value);
+    if (SECRET_KEY.test(parentEntry.key)) {
+      addSecretRedactionVariants(secretValues, parentEntry.value);
     }
   }
 
@@ -63,7 +63,7 @@ export function buildLocalEnvironment(
     }
     removeEquivalentKey(environment, key, platform);
     environment[key] = value;
-    if (SECRET_KEY.test(key) && value.length > 0) secretValues.add(value);
+    if (SECRET_KEY.test(key)) addSecretRedactionVariants(secretValues, value);
   }
 
   for (const [key, value] of ownDataEntries(inspectedDefinition?.secrets, "environment.secrets")) {
@@ -78,13 +78,38 @@ export function buildLocalEnvironment(
     }
     removeEquivalentKey(environment, key, platform);
     environment[key] = value;
-    if (value.length > 0) secretValues.add(value);
+    addSecretRedactionVariants(secretValues, value);
   }
 
   return Object.freeze({
     environment: Object.freeze(environment),
     secretValues: Object.freeze([...secretValues].sort((left, right) => right.length - left.length))
   });
+}
+
+function addSecretRedactionVariants(target: Set<string>, value: string): void {
+  if (value.length === 0) return;
+
+  const candidates = new Set<string>([value]);
+  for (const fragment of value.split(/\r\n|\r|\n/gu)) {
+    if (fragment.length > 0) candidates.add(fragment);
+  }
+
+  for (const candidate of [...candidates]) {
+    try {
+      const encoded = JSON.stringify(candidate);
+      if (typeof encoded === "string" && encoded.length >= 2) {
+        const inner = encoded.slice(1, -1);
+        if (inner.length > 0) candidates.add(inner);
+      }
+    } catch {
+      // Strings are JSON-serializable; this is defensive only.
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (candidate.length > 0) target.add(candidate);
+  }
 }
 
 function safelyIsEnvironmentArray(value: unknown, label: string): boolean {
