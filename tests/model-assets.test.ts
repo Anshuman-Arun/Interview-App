@@ -483,6 +483,13 @@ describe("local model asset manager", () => {
     await writeFile(wrong, Buffer.from("wrong"));
     const other = { ...manifest, artifactId: "other" };
     await expect(manager.importLocal(other, wrong)).rejects.toMatchObject({ code: "SIZE_MISMATCH" });
+
+    const sameSizeWrongDigest = path.join(sourceRoot, "wrong-digest.bin");
+    await writeFile(sameSizeWrongDigest, Buffer.alloc(payload.byteLength, 0x78));
+    const digestMismatch = { ...manifest, artifactId: "digest-mismatch" };
+    await expect(manager.importLocal(digestMismatch, sameSizeWrongDigest)).rejects.toMatchObject({
+      code: "DIGEST_MISMATCH"
+    });
   });
 
   it("coalesces duplicate installs and lets one waiter cancel without aborting another", async () => {
