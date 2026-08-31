@@ -1474,6 +1474,30 @@ describe("vision diagnostics validation", () => {
   });
 });
 
+  it("bounds diagnostics counts to work this package can actually perform", () => {
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "TILE",
+      sourceDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 0,
+      tileCount: 513,
+      durationMs: 1,
+      outcome: "FAILURE"
+    })).toThrow();
+
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 2,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "FAILURE"
+    })).toThrow();
+  });
+
   it("rejects semantically impossible successful diagnostics", () => {
     const base = {
       sourceDimensions: { width: 1, height: 1 },
