@@ -784,6 +784,147 @@ function normalizeFactory(factory: unknown): ProviderAdapterFactory | undefined 
   );
 }
 
+const MODEL_CAPABILITY_KEYS = new Set([
+  "inputModalities",
+  "textStreaming",
+  "structuredOutput",
+  "persistentSession",
+  "resumableSession",
+  "cancellation",
+  "sessionSurvivesClientAbort",
+  "sessionSurvivesProviderCancel",
+  "usageReporting",
+  "reasoningLevels",
+  "dataUse"
+]);
+const REQUIRED_MODEL_CAPABILITY_KEYS = [
+  "inputModalities",
+  "textStreaming",
+  "structuredOutput",
+  "persistentSession",
+  "resumableSession",
+  "cancellation",
+  "sessionSurvivesClientAbort",
+  "sessionSurvivesProviderCancel",
+  "usageReporting",
+  "dataUse"
+] as const;
+const SET_FOR_EACH = Set.prototype.forEach;
+const SET_ADD = Set.prototype.add;
+
+function snapshotDenseAdapterArray(value: unknown): readonly unknown[] {
+  if (!Array.isArray(value)) throw adapterDefinitionMismatch();
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    throw adapterDefinitionMismatch();
+  }
+  const rawLength: unknown = descriptors.length?.value;
+  if (
+    typeof rawLength !== "number"
+    || !Number.isSafeInteger(rawLength)
+    || rawLength < 0
+  ) {
+    throw adapterDefinitionMismatch();
+  }
+
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (descriptor === undefined || !("value" in descriptor)) {
+      throw adapterDefinitionMismatch();
+    }
+    const item: unknown = descriptor.value;
+    snapshot.push(item);
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotAdapterInputModalities(value: unknown): ReadonlySet<unknown> {
+  if (typeof value !== "object" || value === null) {
+    throw adapterDefinitionMismatch();
+  }
+  const snapshot = new Set<unknown>();
+  try {
+    Reflect.apply(SET_FOR_EACH, value, [
+      (item: unknown) => {
+        Reflect.apply(SET_ADD, snapshot, [item]);
+      }
+    ]);
+  } catch {
+    throw adapterDefinitionMismatch();
+  }
+  return snapshot;
+}
+
+function readAdapterDataMemberWithoutAccessors(
+  value: object,
+  key: string
+): unknown {
+  const seen = new Set<object>();
+  let current: object | null = value;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) return undefined;
+    if (seen.has(current)) throw adapterDefinitionMismatch();
+    seen.add(current);
+
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      throw adapterDefinitionMismatch();
+    }
+    if (descriptor !== undefined) {
+      if (!("value" in descriptor)) throw adapterDefinitionMismatch();
+      return descriptor.value;
+    }
+    try {
+      current = Object.getPrototypeOf(current);
+    } catch {
+      throw adapterDefinitionMismatch();
+    }
+  }
+  if (current !== null) throw adapterDefinitionMismatch();
+  return undefined;
+}
+
+function snapshotAdapterCapabilities(value: unknown): unknown {
+  if (typeof value !== "object" || value === null) {
+    throw adapterDefinitionMismatch();
+  }
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    throw adapterDefinitionMismatch();
+  }
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (descriptor.enumerable === true && !MODEL_CAPABILITY_KEYS.has(key)) {
+      throw adapterDefinitionMismatch();
+    }
+  }
+
+  const snapshot: Record<string, unknown> = {};
+  Object.setPrototypeOf(snapshot, null);
+  for (const key of REQUIRED_MODEL_CAPABILITY_KEYS) {
+    const item = readAdapterDataMemberWithoutAccessors(value, key);
+    snapshot[key] = key === "inputModalities"
+      ? snapshotAdapterInputModalities(item)
+      : item;
+  }
+  const reasoningLevels = readAdapterDataMemberWithoutAccessors(
+    value,
+    "reasoningLevels"
+  );
+  if (reasoningLevels !== undefined) {
+    snapshot.reasoningLevels = snapshotDenseAdapterArray(reasoningLevels);
+  }
+  return Object.freeze(snapshot);
+}
+
 function supportMatchesBoolean(
   declared: CapabilitySupport,
   actual: boolean
@@ -808,18 +949,26 @@ function assertAdapterMatchesResolvedDefinition(
   adapter: ReasoningProvider
 ): void {
   try {
+    if (typeof adapter !== "object" || adapter === null) {
+      throw adapterDefinitionMismatch();
+    }
+    const name = readAdapterDataMemberWithoutAccessors(adapter, "name");
+    const adapterVersion = readAdapterDataMemberWithoutAccessors(adapter, "adapterVersion");
+    const capabilities = readAdapterDataMemberWithoutAccessors(adapter, "capabilities");
+    const verifyBillingSafety = readAdapterDataMemberWithoutAccessors(adapter, "verifyBillingSafety");
+    const createSession = readAdapterDataMemberWithoutAccessors(adapter, "createSession");
     if (
-      typeof adapter !== "object"
-      || adapter === null
-      || adapter.name !== resolved.provider.id
-      || adapter.adapterVersion !== resolved.provider.adapterVersion
-      || typeof adapter.verifyBillingSafety !== "function"
-      || typeof adapter.createSession !== "function"
+      name !== resolved.provider.id
+      || adapterVersion !== resolved.provider.adapterVersion
+      || typeof verifyBillingSafety !== "function"
+      || typeof createSession !== "function"
     ) {
       throw adapterDefinitionMismatch();
     }
 
-    const parsed = ModelCapabilitiesSchema.safeParse(adapter.capabilities);
+    const parsed = ModelCapabilitiesSchema.safeParse(
+      snapshotAdapterCapabilities(capabilities)
+    );
     if (!parsed.success) throw adapterDefinitionMismatch();
     const execution = parsed.data;
     const declared = resolved.model.capabilities;

@@ -1087,6 +1087,102 @@ describe("adapter factory adversarial boundary", () => {
     expect(replacementCalls).toBe(0);
   });
 
+  it("rejects accessor-backed adapter identity without invoking the accessor", async () => {
+    let getterCalls = 0;
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "mock-model",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "accessor-model",
+        displayName: "Accessor Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "accessor-adapter-factory",
+        createAdapter() {
+          const adapter = new MockModelAdapter({ proposal: PROPOSAL });
+          Object.defineProperty(adapter, "name", {
+            configurable: true,
+            enumerable: true,
+            get() {
+              getterCalls += 1;
+              return "mock-model";
+            }
+          });
+          return adapter;
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "mock-model",
+        modelId: "accessor-model",
+        enabled: true
+      }
+    });
+
+    await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
+      .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects accessor-backed nested adapter capability arrays without invoking them", async () => {
+    let getterCalls = 0;
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "mock-model",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "reasoning-model",
+        displayName: "Reasoning Model",
+        capabilities: capabilities({
+          localExecution: "SUPPORTED",
+          remoteExecution: "UNSUPPORTED",
+          dataUse: "LOCAL_ONLY",
+          cancellation: "DROP_OUTPUT",
+          reasoningControls: "SUPPORTED",
+          reasoningLevels: ["high"]
+        })
+      }],
+      adapterFactory: {
+        id: "nested-accessor-factory",
+        createAdapter() {
+          const adapter = new MockModelAdapter({ proposal: PROPOSAL });
+          const levels = ["high"];
+          Object.defineProperty(levels, "0", {
+            configurable: true,
+            enumerable: true,
+            get() {
+              getterCalls += 1;
+              return "high";
+            }
+          });
+          Reflect.set(adapter, "capabilities", {
+            ...adapter.capabilities,
+            reasoningLevels: levels
+          });
+          return adapter;
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "mock-model",
+        modelId: "reasoning-model",
+        enabled: true
+      }
+    });
+
+    await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
+      .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
+    expect(getterCalls).toBe(0);
+  });
+
   it("rejects returned adapters whose identity contradicts registry metadata", async () => {
     const registry = new ProviderRegistry();
     registry.register(providerInput({
