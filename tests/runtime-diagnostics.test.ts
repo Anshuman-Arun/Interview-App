@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DiagnosticSnapshotSchema,
+  DiagnosticConfigurationError,
+  DIAGNOSTIC_SANITIZATION_LIMITS,
+  MAX_SNAPSHOT_HEALTH_OBSERVATIONS,
+  MAX_SNAPSHOT_TIMINGS,
+  MAX_SERIALIZED_DIAGNOSTIC_SNAPSHOT_BYTES,
+  MAX_TIMING_SAMPLES,
   RuntimeFingerprintSchema,
   SubsystemHealthSchema,
   TimingRecorder,
@@ -11,6 +17,7 @@ import {
   fingerprintDiagnosticConfiguration,
   sanitizeDiagnosticRecord,
   sanitizeDiagnosticText,
+  sanitizeDiagnosticValue,
   sanitizeErrorMetadata,
   serializeDiagnosticSnapshot,
   toDiagnosticProviderCapabilities,
@@ -45,6 +52,8 @@ describe("runtime diagnostics", () => {
     expect(canonical).not.toContain("first-private-value");
     expect(canonical).toContain("[REDACTED]");
     expect(fingerprintDiagnosticConfiguration(first)).toBe(fingerprintDiagnosticConfiguration(second));
+    expect(fingerprintDiagnosticConfiguration({ mode: "test", token: "first-token" }))
+      .toBe(fingerprintDiagnosticConfiguration({ token: "second-token", mode: "test" }));
   });
 
   it("recursively sanitizes fields, strings, bearer tokens, and error metadata", () => {
@@ -74,6 +83,10 @@ describe("runtime diagnostics", () => {
       expect(serialized).not.toContain(secret);
     }
     expect(sanitizeDiagnosticText("status=ok")).toBe("status=ok");
+    expect(sanitizeDiagnosticText("Basic\tstandalone-basic-private"))
+      .toBe("Basic [REDACTED]");
+    expect(sanitizeDiagnosticText('{"password":"quoted-password-private"}'))
+      .toBe('{"password":"[REDACTED]"}');
   });
 
   it("captures available runtime metadata while omitting unavailable optional values", () => {
@@ -129,6 +142,21 @@ describe("runtime diagnostics", () => {
 
     expect(capabilities.inputModalities).toEqual(["image", "text"]);
     expect(JSON.parse(JSON.stringify(capabilities))).toEqual(capabilities);
+
+    const sanitizedCapabilities = toDiagnosticProviderCapabilities({
+      inputModalities: new Set(["text"]),
+      textStreaming: false,
+      structuredOutput: "NONE",
+      persistentSession: false,
+      resumableSession: false,
+      cancellation: "NONE",
+      sessionSurvivesClientAbort: false,
+      sessionSurvivesProviderCancel: false,
+      usageReporting: false,
+      reasoningLevels: ["Bearer capability-private"],
+      dataUse: "LOCAL_ONLY"
+    });
+    expect(JSON.stringify(sanitizedCapabilities)).not.toContain("capability-private");
   });
 
   it("records monotonic latency spans and rejects double completion", () => {
@@ -232,5 +260,207 @@ describe("runtime diagnostics", () => {
       expect(json).not.toContain(secret);
     }
     expect(snapshot.timingAggregates[0]?.count).toBe(1);
+  });
+
+  it("redacts generic token fields and every caller-controlled snapshot string surface", () => {
+    const runtime = captureRuntimeFingerprint({
+      applicationVersion: "Bearer application-private",
+      provider: {
+        id: "Bearer provider-id-private",
+        model: "Basic provider-model-private"
+      },
+      problem: {
+        id: "Bearer problem-id-private",
+        version: "token=problem-version-private"
+      },
+      verifiers: [{
+        id: "Bearer verifier-id-private",
+        version: "token=verifier-version-private",
+        capabilities: ["Basic verifier-capability-private"]
+      }]
+    });
+    const snapshot = createDiagnosticSnapshot({
+      runtime,
+      timings: [{
+        operation: "Bearer timing-operation-private",
+        category: "OTHER",
+        elapsedMs: 1,
+        outcome: "SUCCESS",
+        tags: { token: "generic-token-private" }
+      }],
+      health: [{
+        subsystem: "OTHER",
+        componentId: "Bearer health-component-private",
+        state: "UNKNOWN"
+      }]
+    });
+    const json = serializeDiagnosticSnapshot(snapshot);
+
+    for (const secret of [
+      "application-private",
+      "provider-id-private",
+      "provider-model-private",
+      "problem-id-private",
+      "problem-version-private",
+      "verifier-id-private",
+      "verifier-version-private",
+      "verifier-capability-private",
+      "timing-operation-private",
+      "generic-token-private",
+      "health-component-private"
+    ]) {
+      expect(json).not.toContain(secret);
+    }
+  });
+
+  it("rejects non-JSON and ambiguous configuration values instead of hashing collisions", () => {
+    expect(fingerprintDiagnosticConfiguration({ value: 1 }))
+      .not.toBe(fingerprintDiagnosticConfiguration({ value: "1" }));
+
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+    for (const configuration of [
+      { value: 1n },
+      { value: Number.NaN },
+      { value: undefined },
+      { value: new Map([["mode", "test"]]) },
+      { value: (): void => undefined },
+      cyclic
+    ]) {
+      expect(() => fingerprintDiagnosticConfiguration(configuration))
+        .toThrow(DiagnosticConfigurationError);
+    }
+  });
+
+  it("canonicalizes keys with locale-independent code-unit ordering", () => {
+    expect(canonicalizeDiagnosticConfiguration({ "ä": 1, z: 2, A: 3 }))
+      .toBe('{"A":3,"z":2,"ä":1}');
+  });
+
+  it("does not invoke accessors while sanitizing or fingerprinting", () => {
+    let getterCalls = 0;
+    const record = Object.defineProperty({}, "danger", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return "Bearer getter-private";
+      }
+    });
+
+    expect(sanitizeDiagnosticValue(record)).toEqual({ danger: "[ACCESSOR_OMITTED]" });
+    expect(getterCalls).toBe(0);
+    expect(() => fingerprintDiagnosticConfiguration(record)).toThrow(/accessor/u);
+    expect(getterCalls).toBe(0);
+  });
+
+  it("bounds deep, wide, and long hostile diagnostic values", () => {
+    const root: Record<string, unknown> = {};
+    let cursor = root;
+    for (let depth = 0; depth < 100; depth += 1) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+    const sanitizedDeep = JSON.stringify(sanitizeDiagnosticValue(root));
+    const sanitizedWide = sanitizeDiagnosticValue(
+      Array.from({ length: DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems + 100 }, (_, index) => index)
+    );
+    const sanitizedLong = sanitizeDiagnosticText(
+      `${"x".repeat(DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength * 2)} Bearer omitted-private`
+    );
+
+    expect(sanitizedDeep).toContain("[TRUNCATED]");
+    expect(Array.isArray(sanitizedWide) ? sanitizedWide.length : 0)
+      .toBe(DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems + 1);
+    expect(sanitizedLong.length).toBeLessThanOrEqual(DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength);
+    expect(sanitizedLong).not.toContain("omitted-private");
+  });
+
+  it("handles uninspectable proxies without allowing diagnostics to throw", () => {
+    const revocable = Proxy.revocable({ token: "proxy-private" }, {});
+    revocable.revoke();
+    expect(() => sanitizeDiagnosticValue(revocable.proxy)).not.toThrow();
+    expect(sanitizeDiagnosticValue(revocable.proxy)).toBe("[UNINSPECTABLE_OBJECT]");
+  });
+
+  it("retains a bounded timing window and deeply freezes recorded metadata", () => {
+    let now = 0;
+    const recorder = new TimingRecorder({ now: () => now, maxSamples: 2 });
+    const first = recorder.start("first", "OTHER", { nested: { value: "original" } });
+    now = 1;
+    const firstSample = first.finish();
+    const nested = firstSample.tags?.nested;
+    expect(Object.isFrozen(firstSample)).toBe(true);
+    expect(Object.isFrozen(firstSample.tags)).toBe(true);
+    expect(Object.isFrozen(nested)).toBe(true);
+    if (typeof nested === "object" && nested !== null && !Array.isArray(nested)) {
+      expect(Reflect.set(nested, "value", "mutated")).toBe(false);
+    }
+
+    now = 2;
+    recorder.start("second", "OTHER").finish();
+    now = 3;
+    recorder.start("third", "OTHER").finish();
+    expect(recorder.getSamples().map((sample) => sample.operation)).toEqual(["second", "third"]);
+    expect(recorder.getDroppedSampleCount()).toBe(1);
+    expect(() => aggregateTimings(Array.from(
+      { length: MAX_TIMING_SAMPLES + 1 },
+      () => ({
+        operation: "bounded",
+        category: "OTHER" as const,
+        elapsedMs: 1,
+        outcome: "SUCCESS" as const
+      })
+    ))).toThrow(/at most/u);
+  });
+
+  it("bounds snapshot observation collections to their most recent entries", () => {
+    const runtime = captureRuntimeFingerprint();
+    const timings: OperationTiming[] = Array.from(
+      { length: MAX_SNAPSHOT_TIMINGS + 3 },
+      (_, index) => ({
+        operation: `operation-${String(index)}`,
+        category: "OTHER",
+        elapsedMs: index,
+        outcome: "SUCCESS"
+      })
+    );
+    const health = Array.from(
+      { length: MAX_SNAPSHOT_HEALTH_OBSERVATIONS + 2 },
+      (_, index) => ({
+        subsystem: "OTHER" as const,
+        componentId: `component-${String(index)}`,
+        state: "HEALTHY" as const
+      })
+    );
+    const snapshot = createDiagnosticSnapshot({ runtime, timings, health });
+
+    expect(snapshot.timings).toHaveLength(MAX_SNAPSHOT_TIMINGS);
+    expect(snapshot.timings[0]?.operation).toBe("operation-3");
+    expect(snapshot.health).toHaveLength(MAX_SNAPSHOT_HEALTH_OBSERVATIONS);
+    expect(snapshot.health[0]?.componentId).toBe("component-2");
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot.timings)).toBe(true);
+  });
+
+  it("refuses to serialize snapshots beyond the hard byte limit", () => {
+    const payload = "x".repeat(DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength);
+    const snapshot = DiagnosticSnapshotSchema.parse({
+      schemaVersion: 1,
+      generatedAt: "2026-08-30T20:00:00.000Z",
+      runtime: captureRuntimeFingerprint(),
+      timings: Array.from({ length: MAX_SNAPSHOT_TIMINGS }, (_, index) => ({
+        operation: `large-${String(index)}`,
+        category: "OTHER" as const,
+        elapsedMs: index,
+        outcome: "SUCCESS" as const,
+        tags: { first: payload, second: payload }
+      })),
+      timingAggregates: [],
+      health: []
+    });
+
+    expect(JSON.stringify(snapshot).length).toBeGreaterThan(MAX_SERIALIZED_DIAGNOSTIC_SNAPSHOT_BYTES);
+    expect(() => serializeDiagnosticSnapshot(snapshot, 0)).toThrow(/byte limit/u);
   });
 });

@@ -3,6 +3,10 @@ import {
   ModelCapabilitiesSchema,
   type ModelCapabilities
 } from "../../domain/src/index.js";
+import {
+  DIAGNOSTIC_SANITIZATION_LIMITS,
+  sanitizeDiagnosticValue
+} from "./sanitize.js";
 
 export type DiagnosticPrimitive = string | number | boolean | null;
 export type DiagnosticValue =
@@ -15,11 +19,11 @@ export interface DiagnosticRecord {
 
 export const DiagnosticValueSchema: z.ZodType<DiagnosticValue> = z.lazy(() =>
   z.union([
-    z.string(),
+    z.string().max(DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength),
     z.number(),
     z.boolean(),
     z.null(),
-    z.array(DiagnosticValueSchema),
+    z.array(DiagnosticValueSchema).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems + 1),
     z.record(z.string(), DiagnosticValueSchema)
   ])
 );
@@ -32,9 +36,11 @@ export const Sha256FingerprintSchema = z.string().regex(/^[0-9a-f]{64}$/u);
 export type Sha256Fingerprint = z.infer<typeof Sha256FingerprintSchema>;
 
 export const RuntimeComponentMetadataSchema = z.object({
-  id: z.string().min(1),
-  version: z.string().min(1).optional(),
-  capabilities: z.array(z.string().min(1)).optional()
+  id: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength),
+  version: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength).optional(),
+  capabilities: z.array(
+    z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength)
+  ).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems).optional()
 }).strict();
 export type RuntimeComponentMetadata = z.infer<typeof RuntimeComponentMetadataSchema>;
 
@@ -54,7 +60,9 @@ export const ProviderCapabilitiesDiagnosticSchema = z.object({
   sessionSurvivesClientAbort: z.boolean(),
   sessionSurvivesProviderCancel: z.boolean(),
   usageReporting: z.boolean(),
-  reasoningLevels: z.array(z.string().min(1)).optional(),
+  reasoningLevels: z.array(
+    z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength)
+  ).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems).optional(),
   dataUse: z.enum([
     "LOCAL_ONLY",
     "REMOTE_NO_TRAINING",
@@ -64,39 +72,41 @@ export const ProviderCapabilitiesDiagnosticSchema = z.object({
 export type ProviderCapabilitiesDiagnostic = z.infer<typeof ProviderCapabilitiesDiagnosticSchema>;
 
 export const ProviderRuntimeMetadataSchema = z.object({
-  id: z.string().min(1),
-  model: z.string().min(1).optional(),
-  version: z.string().min(1).optional(),
-  adapterVersion: z.string().min(1).optional(),
+  id: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength),
+  model: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength).optional(),
+  version: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength).optional(),
+  adapterVersion: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength).optional(),
   capabilities: ProviderCapabilitiesDiagnosticSchema.optional()
 }).strict();
 export type ProviderRuntimeMetadata = z.infer<typeof ProviderRuntimeMetadataSchema>;
 
 export const ProblemRuntimeMetadataSchema = z.object({
-  id: z.string().min(1),
-  version: z.string().min(1).optional(),
+  id: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength),
+  version: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength).optional(),
   sha256: Sha256FingerprintSchema.optional()
 }).strict();
 export type ProblemRuntimeMetadata = z.infer<typeof ProblemRuntimeMetadataSchema>;
 
 export const RuntimeEnvironmentSchema = z.object({
-  platform: z.string().min(1),
-  architecture: z.string().min(1),
-  nodeVersion: z.string().min(1),
-  pythonVersion: z.string().min(1).optional()
+  platform: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength),
+  architecture: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength),
+  nodeVersion: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength),
+  pythonVersion: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength).optional()
 }).strict();
 export type RuntimeEnvironment = z.infer<typeof RuntimeEnvironmentSchema>;
 
 export const RuntimeFingerprintSchema = z.object({
-  applicationVersion: z.string().min(1).optional(),
+  applicationVersion: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength).optional(),
   buildCommitSha: z.string().regex(/^[0-9a-f]{7,64}$/iu).optional(),
   runtime: RuntimeEnvironmentSchema,
   eventSchemaVersion: z.number().int().positive().optional(),
   configurationSha256: Sha256FingerprintSchema.optional(),
   problem: ProblemRuntimeMetadataSchema.optional(),
   provider: ProviderRuntimeMetadataSchema.optional(),
-  verifiers: z.array(RuntimeComponentMetadataSchema).optional(),
-  workers: z.array(RuntimeComponentMetadataSchema).optional()
+  verifiers: z.array(RuntimeComponentMetadataSchema)
+    .max(DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems).optional(),
+  workers: z.array(RuntimeComponentMetadataSchema)
+    .max(DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems).optional()
 }).strict();
 export type RuntimeFingerprint = z.infer<typeof RuntimeFingerprintSchema>;
 
@@ -124,10 +134,10 @@ export type DiagnosticSubsystem = z.infer<typeof DiagnosticSubsystemSchema>;
 
 export const SubsystemHealthSchema = z.object({
   subsystem: DiagnosticSubsystemSchema,
-  componentId: z.string().min(1).optional(),
+  componentId: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength).optional(),
   state: SubsystemHealthStateSchema,
   observedAt: z.iso.datetime().optional(),
-  detail: z.string().min(1).max(2_000).optional(),
+  detail: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength).optional(),
   metadata: DiagnosticRecordSchema.optional()
 }).strict();
 export type SubsystemHealth = z.infer<typeof SubsystemHealthSchema>;
@@ -136,7 +146,7 @@ export function toDiagnosticProviderCapabilities(
   capabilities: ModelCapabilities
 ): ProviderCapabilitiesDiagnostic {
   const parsed = ModelCapabilitiesSchema.parse(capabilities);
-  return ProviderCapabilitiesDiagnosticSchema.parse({
+  return ProviderCapabilitiesDiagnosticSchema.parse(sanitizeDiagnosticValue({
     inputModalities: [...parsed.inputModalities].sort(),
     textStreaming: parsed.textStreaming,
     structuredOutput: parsed.structuredOutput,
@@ -150,5 +160,5 @@ export function toDiagnosticProviderCapabilities(
       ? {}
       : { reasoningLevels: [...parsed.reasoningLevels].sort() }),
     dataUse: parsed.dataUse
-  });
+  }));
 }

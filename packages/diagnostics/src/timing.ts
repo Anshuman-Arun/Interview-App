@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { sanitizeDiagnosticRecord } from "./sanitize.js";
+import {
+  DIAGNOSTIC_SANITIZATION_LIMITS,
+  sanitizeDiagnosticRecord,
+  sanitizeDiagnosticText,
+  sanitizeDiagnosticValue
+} from "./sanitize.js";
 import { DiagnosticRecordSchema, type DiagnosticRecord } from "./types.js";
 
 export const TimingOperationCategorySchema = z.enum([
@@ -19,7 +24,7 @@ export const TimingOutcomeSchema = z.enum(["SUCCESS", "FAILURE", "CANCELLED"]);
 export type TimingOutcome = z.infer<typeof TimingOutcomeSchema>;
 
 export const OperationTimingSchema = z.object({
-  operation: z.string().min(1),
+  operation: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength),
   category: TimingOperationCategorySchema,
   elapsedMs: z.number().nonnegative(),
   outcome: TimingOutcomeSchema,
@@ -28,7 +33,7 @@ export const OperationTimingSchema = z.object({
 export type OperationTiming = z.infer<typeof OperationTimingSchema>;
 
 export const TimingAggregateSchema = z.object({
-  operation: z.string().min(1),
+  operation: z.string().min(1).max(DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength),
   category: TimingOperationCategorySchema,
   count: z.number().int().positive(),
   minMs: z.number().nonnegative(),
@@ -50,7 +55,11 @@ export interface TimingSpan {
 
 export interface TimingRecorderOptions {
   readonly now?: () => number;
+  readonly maxSamples?: number;
 }
+
+export const DEFAULT_MAX_TIMING_SAMPLES = 1_000;
+export const MAX_TIMING_SAMPLES = 10_000;
 
 function cloneTiming(sample: OperationTiming): OperationTiming {
   return Object.freeze({
@@ -58,8 +67,12 @@ function cloneTiming(sample: OperationTiming): OperationTiming {
     category: sample.category,
     elapsedMs: sample.elapsedMs,
     outcome: sample.outcome,
-    ...(sample.tags === undefined ? {} : { tags: Object.freeze({ ...sample.tags }) })
+    ...(sample.tags === undefined ? {} : { tags: sanitizeDiagnosticRecord(sample.tags) })
   });
+}
+
+function sanitizeTiming(sample: OperationTiming): OperationTiming {
+  return OperationTimingSchema.parse(sanitizeDiagnosticValue(sample));
 }
 
 function percentile(sorted: readonly number[], fraction: number): number {
@@ -67,10 +80,17 @@ function percentile(sorted: readonly number[], fraction: number): number {
   return sorted[index] ?? 0;
 }
 
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function aggregateTimings(samples: readonly OperationTiming[]): readonly TimingAggregate[] {
+  if (samples.length > MAX_TIMING_SAMPLES) {
+    throw new RangeError(`Timing aggregation accepts at most ${String(MAX_TIMING_SAMPLES)} samples`);
+  }
   const groups = new Map<string, OperationTiming[]>();
   for (const rawSample of samples) {
-    const sample = OperationTimingSchema.parse(rawSample);
+    const sample = sanitizeTiming(rawSample);
     const key = `${sample.category}\u0000${sample.operation}`;
     const group = groups.get(key);
     if (group === undefined) groups.set(key, [sample]);
@@ -101,17 +121,24 @@ export function aggregateTimings(samples: readonly OperationTiming[]): readonly 
         });
         return Object.freeze(aggregate);
       })
-      .sort((left, right) => left.category.localeCompare(right.category)
-        || left.operation.localeCompare(right.operation))
+      .sort((left, right) => compareCodeUnits(left.category, right.category)
+        || compareCodeUnits(left.operation, right.operation))
   );
 }
 
 export class TimingRecorder {
   readonly #now: () => number;
+  readonly #maxSamples: number;
   readonly #samples: OperationTiming[] = [];
+  #droppedSampleCount = 0;
 
   public constructor(options: TimingRecorderOptions = {}) {
     this.#now = options.now ?? (() => globalThis.performance.now());
+    const maxSamples = options.maxSamples ?? DEFAULT_MAX_TIMING_SAMPLES;
+    if (!Number.isSafeInteger(maxSamples) || maxSamples < 1 || maxSamples > MAX_TIMING_SAMPLES) {
+      throw new RangeError(`maxSamples must be an integer between 1 and ${String(MAX_TIMING_SAMPLES)}`);
+    }
+    this.#maxSamples = maxSamples;
   }
 
   public start(
@@ -119,6 +146,12 @@ export class TimingRecorder {
     category: TimingOperationCategory,
     tags?: Readonly<Record<string, unknown>>
   ): TimingSpan {
+    const safeCategory = TimingOperationCategorySchema.parse(category);
+    const safeOperation = sanitizeDiagnosticText(
+      operation,
+      DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength
+    );
+    if (safeOperation.length === 0) throw new Error("Timing operation must be non-empty");
     const startedAt = this.#now();
     const initialTags = tags === undefined ? undefined : sanitizeDiagnosticRecord(tags);
     let finished = false;
@@ -139,13 +172,17 @@ export class TimingRecorder {
               ...(finishTags ?? {})
             });
         const parsed = OperationTimingSchema.parse({
-          operation,
-          category,
+          operation: safeOperation,
+          category: safeCategory,
           elapsedMs,
           outcome,
           ...(mergedTags === undefined ? {} : { tags: mergedTags })
         });
-        const sample = cloneTiming(parsed);
+        const sample = cloneTiming(sanitizeTiming(parsed));
+        if (this.#samples.length === this.#maxSamples) {
+          this.#samples.shift();
+          this.#droppedSampleCount += 1;
+        }
         this.#samples.push(sample);
         return sample;
       }
@@ -158,5 +195,9 @@ export class TimingRecorder {
 
   public aggregate(): readonly TimingAggregate[] {
     return aggregateTimings(this.#samples);
+  }
+
+  public getDroppedSampleCount(): number {
+    return this.#droppedSampleCount;
   }
 }
