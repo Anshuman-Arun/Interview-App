@@ -38,7 +38,7 @@ export interface VisionDiagnosticsInput {
 }
 
 export function createVisionProcessingDiagnostics(input: VisionDiagnosticsInput): VisionProcessingDiagnostics {
-  return Object.freeze(VisionProcessingDiagnosticsSchema.parse({
+  const parsed = VisionProcessingDiagnosticsSchema.parse({
     operation: input.operation,
     sourceDimensions: input.sourceDimensions,
     ...(input.outputDimensions === undefined ? {} : { outputDimensions: input.outputDimensions }),
@@ -48,5 +48,12 @@ export function createVisionProcessingDiagnostics(input: VisionDiagnosticsInput)
     tileCount: input.tileCount,
     durationMs: input.durationMs,
     outcome: input.outcome
-  }));
+  });
+  return Object.freeze({
+    ...parsed,
+    sourceDimensions: Object.freeze({ ...parsed.sourceDimensions }),
+    ...(parsed.outputDimensions === undefined
+      ? {}
+      : { outputDimensions: Object.freeze({ ...parsed.outputDimensions }) })
+  });
 }
