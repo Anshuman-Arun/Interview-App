@@ -775,6 +775,35 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).toThrowError(VisionPreprocessingError);
   });
 
+  it("keeps immediate source bounds distinct from original coordinates across resize then crop", async () => {
+    const source = snapshot(makePng(8, 4));
+    const resized = await downscaleImage(source, {
+      maxWidth: 4,
+      maxHeight: 2,
+      maxPixels: 8
+    });
+    if (!(resized.image instanceof VisionImageArtifact)) {
+      throw new Error("Expected a resized artifact");
+    }
+
+    const crop = await cropImage(resized.image, { x: 1, y: 0, width: 2, height: 2 });
+    expect(crop.artifact.metadata.sourceBounds).toEqual({
+      x: 1,
+      y: 0,
+      width: 2,
+      height: 2
+    });
+    expect(crop.artifact.metadata.coordinateTransform).toEqual({
+      offsetX: 2,
+      offsetY: 0,
+      scaleX: 2,
+      scaleY: 2
+    });
+    expect(crop.artifact.metadata.sourceSnapshotId).toBe(source.metadata.snapshotId);
+    expect(crop.artifact.metadata.sourceRevision).toBe(source.metadata.sourceRevision);
+    expect(crop.artifact.metadata.parentArtifactId).toBe(resized.image.metadata.artifactId);
+  });
+
   it("composes crop and tile coordinate transforms back to the original snapshot", async () => {
     const source = snapshot(makePng(12, 8));
     const crop = await cropImage(source, { x: 2, y: 1, width: 8, height: 6 });
