@@ -1033,7 +1033,6 @@ function remainingStartupTimeout(totalMs: number, startedAt: number): number {
 function isRetryableStartFailure(error: LocalRuntimeError): boolean {
   return error.code === "SPAWN_FAILED"
     || error.code === "READINESS_TIMEOUT"
-    || error.code === "READINESS_FAILED"
     || error.code === "PROCESS_EXITED";
 }
 
@@ -1380,7 +1379,8 @@ function invalid(message: string): never {
   throw new LocalRuntimeError("INVALID_DEFINITION", message);
 }
 
-function parseLoopbackUrl(raw: string): URL {
+function parseLoopbackUrl(raw: unknown): URL {
+  if (typeof raw !== "string") invalid("HTTP readiness URL must be a string");
   let url: URL;
   try {
     url = new URL(raw);
@@ -1867,7 +1867,15 @@ function sanitizeStatusText(value: string, secretValues: readonly string[]): str
 }
 
 function safeErrorMessage(error: unknown, secretValues: readonly string[] = []): string {
-  if (error instanceof Error) return sanitizeStatusText(error.message, secretValues);
+  if (typeof error !== "object" || error === null) return "unknown error";
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(error, "message");
+    if (descriptor !== undefined && "value" in descriptor && typeof descriptor.value === "string") {
+      return sanitizeStatusText(descriptor.value, secretValues);
+    }
+  } catch {
+    // Error reporting must not invoke or depend on hostile accessors/proxy traps.
+  }
   return "unknown error";
 }
 
