@@ -348,11 +348,37 @@ interface WideRationalSum {
   readonly denominator: bigint;
 }
 
+function compareRationalDenominatorKeys(left: string, right: string): number {
+  if (left.length !== right.length) return left.length - right.length;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function groupRationalSumTerms(values: readonly ExactRational[]): readonly WideRationalSum[] {
+  const groups = new Map<string, WideRationalSum>();
+  for (const value of values) {
+    const key = value.denominator.toString();
+    const existing = groups.get(key);
+    if (existing === undefined) {
+      groups.set(key, { numerator: value.numerator, denominator: value.denominator });
+    } else {
+      groups.set(key, {
+        numerator: existing.numerator + value.numerator,
+        denominator: existing.denominator
+      });
+    }
+  }
+
+  return [...groups.entries()]
+    .filter(([, value]) => value.numerator !== 0n)
+    .sort(([left], [right]) => compareRationalDenominatorKeys(left, right))
+    .map(([, value]) => value);
+}
+
 function wideWorkComponentWithinBound(value: bigint): boolean {
   return decimalDigitCount(value) <= MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS;
 }
 
-function tryWideRationalSum(values: readonly ExactRational[]): ExactRational | undefined {
+function tryWideRationalSum(values: readonly WideRationalSum[]): ExactRational | undefined {
   let total: WideRationalSum = { numerator: 0n, denominator: 1n };
 
   for (const value of values) {
@@ -419,8 +445,9 @@ function sumWithCommonDenominator(
 export function sumRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
   const checkedValues = values.map(checkedRational);
+  const groupedValues = groupRationalSumTerms(checkedValues);
 
-  const wideResult = tryWideRationalSum(checkedValues);
+  const wideResult = tryWideRationalSum(groupedValues);
   if (wideResult !== undefined) return wideResult;
 
   const commonDenominator = boundedCommonDenominator(checkedValues);
