@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { PNG } from "pngjs";
 import { computeVisionArtifactId } from "./artifact-identity.js";
+import { INTERNAL_VISION_ARTIFACT_CONSTRUCTION } from "./internal-artifact-construction.js";
 import { actualUint8ArrayByteLength } from "./byte-validation.js";
 import {
   assertStaticPngChunkStructure,
@@ -280,15 +281,20 @@ export class VisionImageArtifact {
   }
 
   public constructor(
+    token: typeof INTERNAL_VISION_ARTIFACT_CONSTRUCTION,
     source: ImageSnapshot | VisionImageArtifact,
     metadata: VisionImageArtifactMetadata,
     bytes: Uint8Array
   );
   public constructor(
+    token: unknown,
     source: unknown,
     metadata: VisionImageArtifactMetadata,
     bytes: unknown
   ) {
+    if (token !== INTERNAL_VISION_ARTIFACT_CONSTRUCTION) {
+      throw new RangeError("Vision image artifacts may only be constructed by the preprocessing package");
+    }
     if (!ImageSnapshot.isValidatedInstance(source) && !VisionImageArtifact.isValidatedInstance(source)) {
       throw new RangeError("Vision artifact source must be a validated image snapshot or artifact");
     }
