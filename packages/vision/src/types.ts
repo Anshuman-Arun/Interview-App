@@ -355,7 +355,12 @@ export function assertVisionRasterSource(value: unknown): asserts value is Visio
 export function visionRasterIdentity(source: VisionRasterSource): string {
   assertVisionRasterSource(source);
   if (ImageSnapshot.isValidatedInstance(source)) {
-    return `snapshot:${source.metadata.snapshotId}:${source.metadata.contentDigest}`;
+    return JSON.stringify([
+      "snapshot",
+      source.metadata.snapshotId,
+      source.metadata.sourceRevision,
+      source.metadata.contentDigest
+    ]);
   }
   return `artifact:${source.metadata.artifactId}:${source.metadata.contentDigest}`;
 }
