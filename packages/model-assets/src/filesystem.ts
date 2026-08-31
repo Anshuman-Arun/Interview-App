@@ -717,6 +717,13 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
     await openedManifest.handle.close().catch(() => undefined);
   }
 
+  if (bytes !== manifestStat.size) {
+    throw new ModelAssetError(
+      "CORRUPT_INSTALLATION",
+      "Installed artifact manifest changed size while it was being read."
+    );
+  }
+
   let serialized: string;
   try {
     serialized = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks, bytes));
