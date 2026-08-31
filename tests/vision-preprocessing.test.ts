@@ -1812,6 +1812,44 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).rejects.toMatchObject({ code: "CANCELLED" });
   });
 
+  it("does not trust overridden or proxied AbortSignal aborted accessors", async () => {
+    const source = snapshot(makePng(2, 2));
+
+    const proxiedController = new AbortController();
+    proxiedController.abort();
+    const proxiedSignal = new Proxy(proxiedController.signal, {
+      get(target, property, receiver) {
+        if (property === "aborted") return false;
+        return Reflect.get(target, property, receiver);
+      }
+    });
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      { signal: proxiedSignal }
+    )).rejects.toThrowError(TypeError);
+
+    const mutatedController = new AbortController();
+    const mutatedSignal = mutatedController.signal;
+    const originalPrototype = Object.getPrototypeOf(mutatedSignal);
+    const lyingPrototype = Object.create(originalPrototype, {
+      aborted: {
+        configurable: true,
+        get() {
+          return false;
+        }
+      }
+    });
+    Object.setPrototypeOf(mutatedSignal, lyingPrototype);
+    mutatedController.abort();
+
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      { signal: mutatedSignal }
+    )).rejects.toMatchObject({ code: "CANCELLED" });
+  });
+
   it("observes an abort already queued while a synchronous codec boundary is running", async () => {
     const source = snapshot(makePng(4, 4));
     const controller = new AbortController();
