@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { MAX_EXPRESSION_DEPTH, MAX_EXPRESSION_NODES, MAX_VARIADIC_EXPRESSION_TERMS } from "./limits.js";
+import {
+  MAX_EXPRESSION_DEPTH,
+  MAX_EXPRESSION_NODES,
+  MAX_VARIADIC_EXPRESSION_TERMS
+} from "./limits.js";
 import { NonZeroIntegerStringSchema, IntegerStringSchema } from "./integer-expression.js";
 import {
   BoundedMathError,
@@ -33,11 +37,25 @@ export const RationalExpressionSchema: z.ZodType<RationalExpression> = z.lazy(()
   z.object({ kind: z.literal("MULTIPLY"), left: RationalExpressionSchema, right: RationalExpressionSchema }).strict(),
   z.object({ kind: z.literal("DIVIDE"), left: RationalExpressionSchema, right: RationalExpressionSchema }).strict(),
   z.object({ kind: z.literal("NEGATE"), operand: RationalExpressionSchema }).strict(),
-  z.object({ kind: z.literal("SUM"), terms: z.array(RationalExpressionSchema).min(1).max(MAX_VARIADIC_EXPRESSION_TERMS) }).strict(),
-  z.object({ kind: z.literal("PRODUCT"), terms: z.array(RationalExpressionSchema).min(1).max(MAX_VARIADIC_EXPRESSION_TERMS) }).strict()
+  z.object({
+    kind: z.literal("SUM"),
+    terms: z.array(RationalExpressionSchema).min(1).max(MAX_VARIADIC_EXPRESSION_TERMS)
+  }).strict(),
+  z.object({
+    kind: z.literal("PRODUCT"),
+    terms: z.array(RationalExpressionSchema).min(1).max(MAX_VARIADIC_EXPRESSION_TERMS)
+  }).strict()
 ]));
 
-interface EvaluationBudget { remainingNodes: number; }
+interface EvaluationBudget {
+  remainingNodes: number;
+}
+
+function assertTermCount(terms: readonly RationalExpression[]): void {
+  if (terms.length < 1 || terms.length > MAX_VARIADIC_EXPRESSION_TERMS) {
+    throw new BoundedMathError("INVALID_EXPRESSION", "Variadic rational expression term count is outside the supported range");
+  }
+}
 
 function evaluateNode(expression: RationalExpression, budget: EvaluationBudget, depth: number): ExactRational {
   if (depth > MAX_EXPRESSION_DEPTH || budget.remainingNodes <= 0) {
@@ -45,14 +63,26 @@ function evaluateNode(expression: RationalExpression, budget: EvaluationBudget, 
   }
   budget.remainingNodes -= 1;
   switch (expression.kind) {
-    case "RATIONAL": return parseRationalInput(expression.value);
-    case "ADD": return addRationals(evaluateNode(expression.left, budget, depth + 1), evaluateNode(expression.right, budget, depth + 1));
-    case "SUBTRACT": return subtractRationals(evaluateNode(expression.left, budget, depth + 1), evaluateNode(expression.right, budget, depth + 1));
-    case "MULTIPLY": return multiplyRationals(evaluateNode(expression.left, budget, depth + 1), evaluateNode(expression.right, budget, depth + 1));
-    case "DIVIDE": return divideRationals(evaluateNode(expression.left, budget, depth + 1), evaluateNode(expression.right, budget, depth + 1));
-    case "NEGATE": return negateRational(evaluateNode(expression.operand, budget, depth + 1));
-    case "SUM": return sumRationals(expression.terms.map((term) => evaluateNode(term, budget, depth + 1)));
-    case "PRODUCT": return productRationals(expression.terms.map((term) => evaluateNode(term, budget, depth + 1)));
+    case "RATIONAL":
+      return parseRationalInput(expression.value);
+    case "ADD":
+      return addRationals(evaluateNode(expression.left, budget, depth + 1), evaluateNode(expression.right, budget, depth + 1));
+    case "SUBTRACT":
+      return subtractRationals(evaluateNode(expression.left, budget, depth + 1), evaluateNode(expression.right, budget, depth + 1));
+    case "MULTIPLY":
+      return multiplyRationals(evaluateNode(expression.left, budget, depth + 1), evaluateNode(expression.right, budget, depth + 1));
+    case "DIVIDE":
+      return divideRationals(evaluateNode(expression.left, budget, depth + 1), evaluateNode(expression.right, budget, depth + 1));
+    case "NEGATE":
+      return negateRational(evaluateNode(expression.operand, budget, depth + 1));
+    case "SUM":
+      assertTermCount(expression.terms);
+      return sumRationals(expression.terms.map((term) => evaluateNode(term, budget, depth + 1)));
+    case "PRODUCT":
+      assertTermCount(expression.terms);
+      return productRationals(expression.terms.map((term) => evaluateNode(term, budget, depth + 1)));
+    default:
+      throw new BoundedMathError("INVALID_EXPRESSION", "Unsupported rational expression node");
   }
 }
 
