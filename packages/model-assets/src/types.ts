@@ -260,8 +260,8 @@ export function resolveAssetManifest(
   let bestSpecificity = -1;
   let ambiguous = false;
 
-  for (const manifestValue of manifestValues) {
-    const manifest = parseAssetManifest(manifestValue);
+  for (let index = 0; index < manifestValues.length; index += 1) {
+    const manifest = parseAssetManifest(manifestValues[index]);
     if (manifest.familyId !== request.familyId || manifest.version !== request.version) continue;
     if (manifest.platform !== undefined && manifest.platform !== request.platform) continue;
     if (manifest.architecture !== undefined && manifest.architecture !== request.architecture) continue;
