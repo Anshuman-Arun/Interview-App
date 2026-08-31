@@ -108,6 +108,29 @@ function assertProbability(value: ExactRational, label: string): ExactRational {
   return value;
 }
 
+function compareDenominatorKeys(left: string, right: string): number {
+  if (left.length !== right.length) return left.length - right.length;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function groupRationalsByDenominator(values: readonly ExactRational[]): readonly ExactRational[] {
+  const groups = new Map<string, { denominator: bigint; numerator: bigint }>();
+  for (const value of values) {
+    const key = value.denominator.toString();
+    const existing = groups.get(key);
+    if (existing === undefined) {
+      groups.set(key, { denominator: value.denominator, numerator: value.numerator });
+    } else {
+      existing.numerator += value.numerator;
+    }
+  }
+
+  return [...groups.entries()]
+    .sort(([left], [right]) => compareDenominatorKeys(left, right))
+    .map(([, value]) => rational(value.numerator, value.denominator))
+    .filter((value) => value.numerator !== 0n);
+}
+
 function probabilityNormalizationGcd(left: bigint, right: bigint): bigint {
   let a = left < 0n ? -left : left;
   let b = right < 0n ? -right : right;
@@ -164,23 +187,13 @@ function reduceWideAccumulator(total: WideRationalAccumulator): ExactRational {
 }
 
 function assertProbabilityMassIsOne(values: readonly ExactRational[]): void {
-  const groups = new Map<string, { denominator: bigint; numerator: bigint }>();
-  for (const value of values) {
-    const key = value.denominator.toString();
-    const existing = groups.get(key);
-    if (existing === undefined) {
-      groups.set(key, { denominator: value.denominator, numerator: value.numerator });
-    } else {
-      existing.numerator += value.numerator;
-    }
-  }
-
+  const groupedValues = groupRationalsByDenominator(values);
   let total: WideRationalAccumulator = { numerator: 0n, denominator: 1n };
-  for (const { numerator, denominator } of groups.values()) {
+  for (const value of groupedValues) {
     // This accumulator is validation-only and is not exposed as an
-    // ExactRational. The shared exact-work bound prevents a formally valid
-    // statement from forcing statement-scale BigInt gcd/multiplication work.
-    total = addToWideAccumulator(total, { numerator, denominator });
+    // ExactRational. Grouping and deterministic denominator ordering make the
+    // work profile independent of the provider's outcome ordering.
+    total = addToWideAccumulator(total, value);
 
     if (total.numerator > total.denominator) {
       throw new BoundedMathError(
@@ -212,8 +225,9 @@ function evaluateProbabilityClaim(
       const expectationTerms = outcomes.map((outcome) =>
         multiplyRationals(outcome.probability, parseRationalInput(outcome.value))
       );
+      const groupedExpectationTerms = groupRationalsByDenominator(expectationTerms);
       let expectationTotal: WideRationalAccumulator = { numerator: 0n, denominator: 1n };
-      for (const term of expectationTerms) {
+      for (const term of groupedExpectationTerms) {
         expectationTotal = addToWideAccumulator(expectationTotal, term);
       }
       const expectation = reduceWideAccumulator(expectationTotal);
