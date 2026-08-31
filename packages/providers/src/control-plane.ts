@@ -1704,18 +1704,9 @@ export interface CapabilityMatchResult {
   readonly unknown: readonly ProviderCapabilityKey[];
 }
 
-export function matchCapabilityRequirements(
-  capabilities: unknown,
+function normalizeCapabilityRequirements(
   requirements: unknown
-): CapabilityMatchResult {
-  const parsedCapabilities = ProviderModelCapabilitiesSchema.safeParse(capabilities);
-  if (!parsedCapabilities.success) {
-    throw new ProviderControlPlaneError(
-      "MALFORMED_CAPABILITIES",
-      "Provider capability declaration is malformed"
-    );
-  }
-
+): readonly ProviderCapabilityKey[] {
   let inspectedRequirements: SafeProviderConfigurationValue;
   try {
     inspectedRequirements = inspectPlainProviderConfigurationValue(requirements);
@@ -1732,7 +1723,7 @@ export function matchCapabilityRequirements(
     );
   }
 
-  const normalizedRequirements: ProviderCapabilityKey[] = [];
+  const uniqueRequirements: ProviderCapabilityKey[] = [];
   for (let index = 0; index < inspectedRequirements.length; index += 1) {
     const requirement = inspectedRequirements[index];
     const parsedRequirement = ProviderCapabilityKeySchema.safeParse(requirement);
@@ -1742,26 +1733,57 @@ export function matchCapabilityRequirements(
         "Provider capability requirements are malformed"
       );
     }
-    normalizedRequirements[normalizedRequirements.length] = parsedRequirement.data;
-  }
-
-  const uniqueRequirements: ProviderCapabilityKey[] = [];
-  for (let index = 0; index < normalizedRequirements.length; index += 1) {
-    const requirement = normalizedRequirements[index];
-    if (
-      requirement !== undefined
-      && !readonlyStringArrayContains(uniqueRequirements, requirement)
-    ) {
-      uniqueRequirements[uniqueRequirements.length] = requirement;
+    if (!readonlyStringArrayContains(uniqueRequirements, parsedRequirement.data)) {
+      uniqueRequirements[uniqueRequirements.length] = parsedRequirement.data;
     }
   }
-  const normalized = sortedCodeUnitStringCopy(uniqueRequirements);
+  return Object.freeze(sortedCodeUnitStringCopy(uniqueRequirements));
+}
+
+interface CapturedCapabilityRequirements {
+  readonly valid: boolean;
+  readonly value: readonly ProviderCapabilityKey[];
+}
+
+function captureCapabilityRequirements(
+  requirements: unknown
+): CapturedCapabilityRequirements {
+  try {
+    return freezeNullPrototype({
+      valid: true,
+      value: normalizeCapabilityRequirements(requirements)
+    });
+  } catch {
+    const empty: ProviderCapabilityKey[] = [];
+    return freezeNullPrototype({
+      valid: false,
+      value: Object.freeze(empty)
+    });
+  }
+}
+
+function requireCapturedCapabilityRequirements(
+  captured: CapturedCapabilityRequirements
+): readonly ProviderCapabilityKey[] {
+  if (!captured.valid) {
+    throw new ProviderControlPlaneError(
+      "MALFORMED_REQUIREMENTS",
+      "Provider capability requirements are malformed"
+    );
+  }
+  return captured.value;
+}
+
+function matchNormalizedCapabilityRequirements(
+  capabilities: ProviderModelCapabilities,
+  normalized: readonly ProviderCapabilityKey[]
+): CapabilityMatchResult {
   const unsupported: ProviderCapabilityKey[] = [];
   const unknown: ProviderCapabilityKey[] = [];
   for (let index = 0; index < normalized.length; index += 1) {
     const requirement = normalized[index];
     if (requirement === undefined) continue;
-    const support = supportForCapability(parsedCapabilities.data, requirement);
+    const support = supportForCapability(capabilities, requirement);
     if (support === "UNSUPPORTED") unsupported[unsupported.length] = requirement;
     if (support === "UNKNOWN") unknown[unknown.length] = requirement;
   }
@@ -1770,6 +1792,23 @@ export function matchCapabilityRequirements(
     unsupported: Object.freeze(unsupported),
     unknown: Object.freeze(unknown)
   });
+}
+
+export function matchCapabilityRequirements(
+  capabilities: unknown,
+  requirements: unknown
+): CapabilityMatchResult {
+  const parsedCapabilities = ProviderModelCapabilitiesSchema.safeParse(capabilities);
+  if (!parsedCapabilities.success) {
+    throw new ProviderControlPlaneError(
+      "MALFORMED_CAPABILITIES",
+      "Provider capability declaration is malformed"
+    );
+  }
+  return matchNormalizedCapabilityRequirements(
+    parsedCapabilities.data,
+    normalizeCapabilityRequirements(requirements)
+  );
 }
 
 function zodIssuesContainSecret(
@@ -1912,7 +1951,7 @@ function assertTrustedResolvedConfiguration(
 function resolveParsedProviderConfiguration(input: {
   readonly registry: unknown;
   readonly configuration: ProviderConfiguration;
-  readonly requirements?: unknown;
+  readonly requirements?: CapturedCapabilityRequirements;
 }): ResolvedProviderConfiguration {
   const { provider, model } = resolveRegistrySelection(
     input.registry,
@@ -1926,9 +1965,11 @@ function resolveParsedProviderConfiguration(input: {
 
   validateCredentialReference(provider, configuration.credentialRef);
   validateReasoningConfiguration(model, configuration.reasoning);
-  const match = matchCapabilityRequirements(
+  const match = matchNormalizedCapabilityRequirements(
     model.capabilities,
-    input.requirements === undefined ? [] : input.requirements
+    input.requirements === undefined
+      ? []
+      : requireCapturedCapabilityRequirements(input.requirements)
   );
   if (match.unsupported.length > 0) {
     throw new ProviderControlPlaneError(
@@ -1984,12 +2025,13 @@ export function resolveProviderConfiguration(input: {
     "MALFORMED_REQUIREMENTS",
     "Provider capability requirements are malformed"
   );
+  const requirements = requirementsProperty.present
+    ? captureCapabilityRequirements(requirementsProperty.value)
+    : undefined;
   return resolveParsedProviderConfiguration({
     registry: registryProperty.value,
     configuration: parsed,
-    ...(requirementsProperty.present
-      ? { requirements: requirementsProperty.value }
-      : {})
+    ...(requirements === undefined ? {} : { requirements })
   });
 }
 
@@ -2073,7 +2115,7 @@ export async function evaluateProviderReadiness(input: {
     });
   }
 
-  let requirements: unknown;
+  let requirements: CapturedCapabilityRequirements | undefined;
   try {
     const requirementsProperty = readOwnDataProperty(
       input,
@@ -2082,7 +2124,7 @@ export async function evaluateProviderReadiness(input: {
       "Provider capability requirements are malformed"
     );
     requirements = requirementsProperty.present
-      ? requirementsProperty.value
+      ? captureCapabilityRequirements(requirementsProperty.value)
       : undefined;
   } catch {
     return freezeNullPrototype({
@@ -2114,7 +2156,10 @@ export async function evaluateProviderReadiness(input: {
   if (requirements !== undefined) {
     let match: CapabilityMatchResult;
     try {
-      match = matchCapabilityRequirements(resolved.model.capabilities, requirements);
+      match = matchNormalizedCapabilityRequirements(
+        resolved.model.capabilities,
+        requireCapturedCapabilityRequirements(requirements)
+      );
     } catch (error) {
       return freezeNullPrototype({
         state: "MISCONFIGURED",

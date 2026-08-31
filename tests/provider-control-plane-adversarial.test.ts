@@ -12,6 +12,7 @@ import {
   matchCapabilityRequirements,
   resolveProviderConfiguration,
   validateProviderConfiguration,
+  type ProviderCapabilityKey,
   type ProviderDefinitionInput,
   type ProviderModelCapabilities,
   type ProviderSettingsValidator
@@ -923,6 +924,63 @@ describe("provider definition and capability hostile values", () => {
       reason: "MALFORMED_REQUIREMENTS"
     });
     expect(readinessReads).toBe(0);
+  });
+
+  it("captures capability requirements before provider settings validators can mutate them", async () => {
+    const resolutionRequirements: ProviderCapabilityKey[] = ["IMAGE_INPUT"];
+    const resolutionRegistry = new ProviderRegistry();
+    resolutionRegistry.register(createSettingsProviderInput((settings) => {
+      resolutionRequirements.length = 0;
+      return settings;
+    }));
+
+    expect(() => resolveProviderConfiguration({
+      registry: resolutionRegistry,
+      configuration: settingsConfiguration({ mode: "safe" }),
+      requirements: resolutionRequirements
+    })).toThrow(expect.objectContaining({ code: "INCOMPATIBLE_CAPABILITY" }));
+    expect(resolutionRequirements).toEqual([]);
+
+    const readinessRequirements: ProviderCapabilityKey[] = ["IMAGE_INPUT"];
+    const readinessRegistry = new ProviderRegistry();
+    readinessRegistry.register(createSettingsProviderInput((settings) => {
+      readinessRequirements.length = 0;
+      return settings;
+    }));
+
+    await expect(evaluateProviderReadiness({
+      registry: readinessRegistry,
+      configuration: settingsConfiguration({ mode: "safe" }),
+      requirements: readinessRequirements
+    })).resolves.toMatchObject({
+      state: "MISCONFIGURED",
+      reason: "INCOMPATIBLE_CAPABILITY"
+    });
+    expect(readinessRequirements).toEqual([]);
+  });
+
+  it("defers malformed requirement errors until after provider settings validation", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput(() => {
+      throw new Error("settings validator failed");
+    }));
+    const configuration = settingsConfiguration({ mode: "safe" });
+    const malformedRequirements = ["NOT_A_CAPABILITY"];
+
+    expect(() => resolveProviderConfiguration({
+      registry,
+      configuration,
+      requirements: malformedRequirements
+    })).toThrow(expect.objectContaining({ code: "MALFORMED_CONFIGURATION" }));
+
+    await expect(evaluateProviderReadiness({
+      registry,
+      configuration,
+      requirements: malformedRequirements
+    })).resolves.toMatchObject({
+      state: "MISCONFIGURED",
+      reason: "MALFORMED_CONFIGURATION"
+    });
   });
 
   it("does not invoke throwing configuration or registry accessors on operation envelopes", async () => {
