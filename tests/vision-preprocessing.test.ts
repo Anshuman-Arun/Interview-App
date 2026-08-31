@@ -453,6 +453,14 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(unchanged.image).toBe(source);
   });
 
+  it("uses premultiplied-alpha interpolation so transparent edges do not acquire dark halos", async () => {
+    const source = snapshot(makePng(2, 1, (x) => x === 0
+      ? [255, 255, 255, 255]
+      : [0, 0, 0, 0]));
+    const resized = await downscaleImage(source, { maxWidth: 1, maxHeight: 1, maxPixels: 1 });
+    expect(rgbaAt(resized.image.readBytes(), 0, 0)).toEqual([255, 255, 255, 128]);
+  });
+
   it("bounds extreme standalone downscale planning without a linear correction loop", () => {
     const plan = planDownscale(
       { width: Number.MAX_SAFE_INTEGER, height: 1 },
