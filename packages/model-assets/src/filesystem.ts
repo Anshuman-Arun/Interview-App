@@ -51,8 +51,7 @@ export interface CachePaths {
 
 function errnoCode(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
-  const code = Reflect.get(error, "code");
-  return typeof code === "string" ? code : undefined;
+  return typeof error.code === "string" ? error.code : undefined;
 }
 
 export function assertPathInsideRoot(root: string, candidate: string): void {
