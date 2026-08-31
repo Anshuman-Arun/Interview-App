@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import { BoardRevisionSchema } from "../packages/domain/src/index.js";
 import {
   ImageSnapshot,
+  VisionImageArtifact,
   VisionPreprocessingError,
   assertRectWithinImage,
   clipRectToBounds,
   coalesceOverlappingRegions,
   createValidatedImageSnapshot,
+  createVisionProcessingDiagnostics,
   cropImage,
   cropPayloadKey,
   deduplicateExactImagePayloads,
@@ -103,6 +105,21 @@ describe("vision snapshot validation and hashing", () => {
     bytes.fill(0);
     expect(value.metadata.contentDigest).toBe(originalDigest);
     expect(sha256ImageBytes(value.readBytes())).toBe(originalDigest);
+  });
+
+  it("rejects impossible artifact kind/source-bound combinations", async () => {
+    const source = snapshot(makePng(4, 4));
+    const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
+    expect(() => new VisionImageArtifact({
+      ...crop.metadata,
+      sourceBounds: { x: 1, y: 1, width: 3, height: 2 }
+    }, crop.readBytes())).toThrow();
+
+    expect(() => new VisionImageArtifact({
+      ...crop.metadata,
+      kind: "RESIZED",
+      sourceBounds: { x: 0, y: 0, width: crop.metadata.width, height: crop.metadata.height }
+    }, crop.readBytes())).toThrow();
   });
 
   it("rejects forged metadata when public image containers are constructed directly", () => {
@@ -244,6 +261,17 @@ describe("vision snapshot validation and hashing", () => {
     }
   });
 
+  it("rejects null image limit overrides rather than silently using defaults", () => {
+    expect(() => createValidatedImageSnapshot({
+      snapshotId: "null-limits",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: makePng(1, 1)
+    }, null as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrowError(RangeError);
+  });
+
   it("rejects unknown snapshot fields and misspelled validation limit keys", () => {
     const bytes = makePng(2, 2);
     expect(() => createValidatedImageSnapshot({
@@ -301,6 +329,12 @@ describe("vision snapshot validation and hashing", () => {
     expect(sameRevisionAndImage(left, right)).toBe(false);
   });
 
+  it("bounds public exact-dedup candidate collections", () => {
+    const source = snapshot(makePng(1, 1));
+    expect(() => deduplicateExactImagePayloads(Array.from({ length: 2049 }, () => source)))
+      .toThrowError(RangeError);
+  });
+
 describe("vision geometry", () => {
   it("normalizes, clips, expands, intersects, unions, and measures raster rectangles", () => {
     expect(normalizeRect({ x1: 8, y1: 9, x2: 2, y2: 3 })).toEqual({ x: 2, y: 3, width: 6, height: 6 });
@@ -333,6 +367,11 @@ describe("vision geometry", () => {
       { width: 10, height: 10 }
     )).toThrowError(VisionPreprocessingError);
     expect(imageBounds({ width: 10, height: 5 })).toEqual({ x: 0, y: 0, width: 10, height: 5 });
+  });
+
+  it("bounds public rectangle collection operations", () => {
+    const tooMany = Array.from({ length: 2049 }, () => ({ x: 0, y: 0, width: 1, height: 1 }));
+    expect(() => unionRects(tooMany)).toThrowError(RangeError);
   });
 
   it("rejects rectangles whose derived right or bottom edge leaves the safe integer range", () => {
@@ -454,6 +493,14 @@ describe("dirty-region planning", () => {
       maxRegionCount: 1
     });
     expect(plan).toEqual({ mode: "NONE", regions: [], analyzedArea: 0 });
+  });
+
+  it("rejects null planner configuration rather than silently using defaults", () => {
+    expect(() => planDirtyRegions(
+      [{ x: 0, y: 0, width: 1, height: 1 }],
+      { width: 10, height: 10 },
+      null as unknown as Parameters<typeof planDirtyRegions>[2]
+    )).toThrowError(RangeError);
   });
 
   it("validates dirty rectangles before configured over-count fallback", () => {
@@ -578,6 +625,30 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
   });
 
+  it("keeps configured overlap exact at a partial final tile instead of shifting it backward", () => {
+    const plan = planImageTiles({ width: 11, height: 4 }, {
+      tileWidth: 4,
+      tileHeight: 4,
+      overlap: 1,
+      maxTileCount: 4
+    });
+    expect(plan.map((item) => item.bounds)).toEqual([
+      { x: 0, y: 0, width: 4, height: 4 },
+      { x: 3, y: 0, width: 4, height: 4 },
+      { x: 6, y: 0, width: 4, height: 4 },
+      { x: 9, y: 0, width: 2, height: 4 }
+    ]);
+  });
+
+  it("accepts zero output-byte ceilings as an explicit way to prohibit image output", async () => {
+    const source = snapshot(makePng(4, 4));
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      { maxOutputEncodedBytes: 0 }
+    )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+  });
+
   it("plans deterministic overlapping tiles with exact original-coordinate mappings", async () => {
     const source = snapshot(makePng(10, 6), { revision: 12 });
     const plan = planImageTiles({ width: 10, height: 6 }, {
@@ -656,6 +727,16 @@ describe("crop, resize, tiling, and cancellation", () => {
     });
   });
 
+  it("rejects unsafe processing clock values before pixel work begins", async () => {
+    const source = snapshot(makePng(4, 4));
+    await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
+      now: () => -1
+    })).rejects.toThrowError(RangeError);
+    await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
+      now: () => Number.MAX_SAFE_INTEGER + 1
+    })).rejects.toThrowError(RangeError);
+  });
+
   it("honors cancellation before work and during longer pixel loops", async () => {
     const source = snapshot(makePng(256, 256));
     const alreadyCancelled = new AbortController();
@@ -697,6 +778,35 @@ describe("crop, resize, tiling, and cancellation", () => {
         return calls;
       }
     })).rejects.toMatchObject({ code: "CANCELLED" });
+  });
+});
+
+describe("vision diagnostics validation", () => {
+  it("rejects unknown fields and unsafe durations instead of silently dropping them", () => {
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS",
+      rawImage: "must-not-be-accepted"
+    } as unknown as Parameters<typeof createVisionProcessingDiagnostics>[0])).toThrow();
+
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: Number.MAX_SAFE_INTEGER + 1,
+      outcome: "SUCCESS"
+    })).toThrow();
   });
 });
 
@@ -748,6 +858,27 @@ describe("provider-neutral request preparation and budgeting", () => {
       .toThrowError(VisionPreprocessingError);
     await expect(cropImage(fake, { x: 0, y: 0, width: 1, height: 1 }))
       .rejects.toMatchObject({ code: "INVALID_IMAGE" });
+  });
+
+  it("supports a zero request budget with explicit bounded-prefix deferral", () => {
+    const source = snapshot(makePng(2, 2));
+    const batch = prepareVisionBatch([source], "analysis", {
+      maxImages: 0,
+      maxTotalBytes: 0,
+      maxTotalPixels: 0,
+      maxCropsOrTiles: 0
+    }, "BOUNDED_PREFIX");
+    expect(batch.requests).toEqual([]);
+    expect(batch.deferredImageIdentities).toEqual([prepareVisionImageRequest(source, "analysis").imageIdentity]);
+    expect(batch.totals).toEqual({ images: 0, totalBytes: 0, totalPixels: 0, cropsOrTiles: 0 });
+    expect(batch.truncated).toBe(true);
+
+    expect(() => prepareVisionBatch([source], "analysis", {
+      maxImages: 0,
+      maxTotalBytes: 0,
+      maxTotalPixels: 0,
+      maxCropsOrTiles: 0
+    }, "FAIL")).toThrowError(VisionPreprocessingError);
   });
 
   it("validates batch purpose even when the candidate list is empty", () => {
