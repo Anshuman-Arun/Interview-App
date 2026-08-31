@@ -179,7 +179,11 @@ export class LocalRuntimeManager {
     if (record.cleanupPromise !== undefined) {
       return record.cleanupPromise.then(() => this.start(componentId, inspectedOptions));
     }
-    if (record.startPromise !== undefined) return record.startPromise;
+    if (record.startPromise !== undefined) {
+      return inspectedOptions.signal === undefined
+        ? record.startPromise
+        : awaitWithAbort(record.startPromise, inspectedOptions.signal, componentId);
+    }
     if (record.state === "READY" || record.state === "DEGRADED") return Promise.resolve(this.snapshot(record));
     if (record.residualProcess !== undefined) {
       if (isOwnedProcessTreeAlive(record.residualProcess, this.platform)) {
