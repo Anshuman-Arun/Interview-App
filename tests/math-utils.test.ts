@@ -37,7 +37,8 @@ describe("deterministic math utilities", () => {
     expect(lcm(-6n, 15n)).toBe(30n);
     expect(lcm(0n, 15n)).toBe(0n);
     expect(isDivisibleBy(-21n, -7n)).toBe(true);
-    expect(() => isDivisibleBy(4n, 0n)).toThrow(BoundedMathError);
+    expect(isDivisibleBy(0n, 0n)).toBe(true);
+    expect(isDivisibleBy(4n, 0n)).toBe(false);
   });
 
   it("normalizes modular arithmetic for negative integers", () => {
