@@ -1172,7 +1172,7 @@ export class ModelAssetManager {
       }
       const alreadyMaterialized = Math.min(activeStagingBytes, this.reservedBytes);
       const outstandingReservation = reservedProjection - alreadyMaterialized;
-      const available = await availableDiskBytes(paths.root);
+      const available = await availableDiskBytes(paths.temporary);
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
