@@ -35,8 +35,16 @@ function asSafePositiveInteger(value: number, name: string): number {
 }
 
 function normalizeLimits(limits: unknown): Readonly<ImageValidationLimits> {
-  if (limits !== undefined && (typeof limits !== "object" || limits === null || Array.isArray(limits))) {
-    throw new RangeError("Image validation limits must be an object");
+  if (limits !== undefined) {
+    let isArray: boolean;
+    try {
+      isArray = Array.isArray(limits);
+    } catch {
+      throw new RangeError("Image validation limits could not be inspected safely");
+    }
+    if (typeof limits !== "object" || limits === null || isArray) {
+      throw new RangeError("Image validation limits must be an object");
+    }
   }
   let parsedLimits: ReturnType<typeof ImageValidationLimitsOverrideSchema.safeParse>;
   try {
