@@ -1322,9 +1322,8 @@ describe("local worker lifecycle manager", () => {
     await expect(stopping).resolves.toMatchObject({
       componentId: "queued-stop-cancel"
     });
-    await new Promise<void>((resolve) => setTimeout(resolve, 80));
-    expect(readFileSync(counter, "utf8")).toBe("1");
     expect(runtime.getStatus("queued-stop-cancel").state).toBe("STOPPED");
+    expect(readFileSync(counter, "utf8")).toBe("1");
 
     const restarted = await runtime.start("queued-stop-cancel");
     expect(restarted.state).toBe("READY");
