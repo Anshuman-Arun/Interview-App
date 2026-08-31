@@ -6,12 +6,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   LocalRuntimeError,
   LocalRuntimeManager,
+  buildLocalEnvironment,
   type LocalComponentDefinition
 } from "../packages/local-runtime/src/index.js";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/local-runtime-worker.mjs", import.meta.url));
 const temporaryRoots: string[] = [];
 const managers: LocalRuntimeManager[] = [];
+const fixturePids: number[] = [];
 
 afterEach(async () => {
   for (const manager of managers.splice(0)) {
@@ -19,6 +21,13 @@ afterEach(async () => {
       await manager.stopAll();
     } catch {
       // Cleanup continues so one failed stop does not leak other fixture workers.
+    }
+  }
+  for (const pid of fixturePids.splice(0)) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Already exited.
     }
   }
   for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -264,4 +273,315 @@ describe("local worker lifecycle manager", () => {
     expect(runtime.markDegraded("health", "probe missed one interval").state).toBe("DEGRADED");
     expect(runtime.markReady("health").state).toBe("READY");
   });
+
+
+  it("supports stable-process, stdout-line, custom, and loopback HTTP readiness", async () => {
+    const runtime = manager({
+      fetch: (() => {
+        let attempt = 0;
+        return (_input: string | URL | Request, _init?: RequestInit) => {
+          attempt += 1;
+          return Promise.resolve(new Response("probe", { status: attempt < 2 ? 503 : 200 }));
+        };
+      })()
+    });
+
+    runtime.register(definition("stable", "ready", {
+      readiness: { kind: "STABLE_PROCESS", stableMs: 20 }
+    }));
+    await expect(runtime.start("stable")).resolves.toMatchObject({ state: "READY" });
+
+    runtime.register(definition("line", "early-line-ready", {
+      readiness: {
+        kind: "STDOUT_LINE",
+        evaluate: (line) => line === "READY-LINE"
+      },
+      output: { maxLines: 8, maxBytes: 1_024, maxLineBytes: 1_024 }
+    }));
+    const lineStatus = await runtime.start("line");
+    expect(lineStatus.state).toBe("READY");
+    expect(lineStatus.stdout.truncated).toBe(true);
+
+    let probeCount = 0;
+    const runtimeSecret = "custom-detail-private-4821";
+    runtime.register(definition("custom", "ready", {
+      environment: { secrets: { RUNTIME_ONLY_SECRET: runtimeSecret } },
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        intervalMs: 5,
+        probe: () => {
+          probeCount += 1;
+          return probeCount < 2
+            ? false
+            : { ready: true, detail: `ready ${runtimeSecret}` };
+        }
+      }
+    }));
+    const customStatus = await runtime.start("custom");
+    expect(customStatus.readiness.detail).toContain("[REDACTED]");
+    expect(JSON.stringify(customStatus)).not.toContain(runtimeSecret);
+    const degraded = runtime.markDegraded("custom", `degraded ${runtimeSecret}`);
+    expect(JSON.stringify(degraded)).not.toContain(runtimeSecret);
+
+    runtime.register(definition("http", "ready", {
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        intervalMs: 5
+      }
+    }));
+    await expect(runtime.start("http")).resolves.toMatchObject({ state: "READY" });
+  });
+
+  it("cancels startup externally and cleans up the spawned process", async () => {
+    const runtime = manager();
+    runtime.register(definition("cancelled", "delayed-ready", {
+      startupTimeoutMs: 1_000,
+      terminationTimeoutMs: 300
+    }, ["500"]));
+    const controller = new AbortController();
+    const starting = runtime.start("cancelled", { signal: controller.signal });
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    controller.abort();
+
+    await expect(starting).rejects.toMatchObject({ code: "START_CANCELLED" });
+    expect(runtime.getStatus("cancelled")).toMatchObject({
+      state: "STOPPED",
+      readiness: { ready: false }
+    });
+    expect(runtime.getStatus("cancelled")).not.toHaveProperty("pid");
+  });
+
+  it("lets stop own graceful cleanup when cancellation happens during STARTING", async () => {
+    const runtime = manager();
+    runtime.register(definition("starting-stop", "delayed-stdin-shutdown", {
+      startupTimeoutMs: 1_000,
+      shutdownTimeoutMs: 300,
+      terminationTimeoutMs: 300,
+      gracefulShutdown: (control) => control.writeStdin("shutdown-now\n")
+    }, ["500"]));
+
+    const starting = runtime.start("starting-stop");
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    const stopping = runtime.stop("starting-stop");
+
+    await expect(starting).rejects.toMatchObject({ code: "START_CANCELLED" });
+    await expect(stopping).resolves.toMatchObject({ disposition: "GRACEFUL" });
+    expect(runtime.getStatus("starting-stop").lastExit).toMatchObject({
+      code: 0,
+      signal: null,
+      unexpected: false
+    });
+  });
+
+  it("does not let a never-resolving graceful hook hang stop", async () => {
+    const runtime = manager();
+    runtime.register(definition("hung-hook", "ready", {
+      shutdownTimeoutMs: 40,
+      terminationTimeoutMs: 300,
+      gracefulShutdown: () => new Promise<void>(() => undefined)
+    }));
+    await runtime.start("hung-hook");
+
+    const stopped = await runtime.stop("hung-hook");
+    expect(stopped.disposition).toBe("TERMINATED");
+    expect(runtime.getStatus("hung-hook").state).toBe("STOPPED");
+  });
+
+  it("fails a version mismatch and proves the rejected process is gone", async () => {
+    const runtime = manager();
+    runtime.register(definition("bad-version", "ready", {
+      expectedHandshake: { protocolVersion: 2 },
+      terminationTimeoutMs: 300
+    }));
+
+    await expect(runtime.start("bad-version")).rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
+    const status = runtime.getStatus("bad-version");
+    expect(status.state).toBe("FAILED");
+    expect(status).not.toHaveProperty("pid");
+  });
+
+  it("copies process definitions at registration so caller mutation cannot change execution", async () => {
+    const runtime = manager();
+    const args = [FIXTURE, "ready"];
+    const mutableDefinition: LocalComponentDefinition = {
+      id: "immutable",
+      executable: process.execPath,
+      args,
+      startupTimeoutMs: 1_000,
+      shutdownTimeoutMs: 200,
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => readyDecision(message)
+      }
+    };
+    runtime.register(mutableDefinition);
+    args[1] = "crash";
+
+    await expect(runtime.start("immutable")).resolves.toMatchObject({ state: "READY" });
+  });
+
+  it("rejects timer overflow and malformed runtime definitions before spawning", () => {
+    const runtime = manager();
+    expect(() => runtime.register(definition("too-long", "ready", {
+      startupTimeoutMs: 2_147_483_648
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register({
+      ...definition("bad-args", "ready"),
+      args: [42] as unknown as string[]
+    })).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register({
+      ...definition("bad-readiness", "ready"),
+      readiness: { kind: "UNKNOWN" } as unknown as LocalComponentDefinition["readiness"]
+    })).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register({
+      ...definition("bad-restart", "ready"),
+      restartPolicy: {
+        mode: "ON_FAILURE",
+        maxRetries: 1,
+        backoffMs: 2_147_483_648
+      }
+    })).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+  });
+
+  it("drops oversized stdout frames without blocking a later valid readiness message", async () => {
+    const runtime = manager();
+    runtime.register(definition("oversized-output", "oversized-then-ready", {
+      output: { maxLines: 4, maxBytes: 256, maxLineBytes: 128 }
+    }, ["4096"]));
+
+    const status = await runtime.start("oversized-output");
+    expect(status.state).toBe("READY");
+    expect(status.stdout.lines).toContain("[MALFORMED_OUTPUT]");
+    expect(status.stdout.lines.length).toBeLessThanOrEqual(4);
+    const retainedBytes = status.stdout.lines.reduce(
+      (total, line) => total + Buffer.byteLength(line, "utf8"),
+      0
+    );
+    expect(retainedBytes).toBeLessThanOrEqual(256);
+  });
+
+  it("keeps crash stderr tails isolated to the process attempt that actually exited", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-crash-tail-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
+    const runtime = manager();
+    runtime.register(definition("crash-tail", "ready-crash-counter", {
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 1, backoffMs: 5 },
+      terminationTimeoutMs: 300
+    }, [counter, "40"]));
+    await runtime.start("crash-tail");
+
+    await waitForStatus(runtime, "crash-tail", (status) =>
+      status.state === "FAILED" && status.restartCount === 1 && status.lastExit?.code === 14
+    );
+    const status = runtime.getStatus("crash-tail");
+    expect(status.lastExit?.stderrTail.join(" ")).toContain("crash-attempt-2");
+    expect(status.lastExit?.stderrTail.join(" ")).not.toContain("crash-attempt-1");
+  });
+
+  it("uses platform-specific default inheritance and explicit inherited variables", async () => {
+    const posix = buildLocalEnvironment(
+      { inherit: ["SAFE_PARENT"] },
+      { PATH: "safe-path", Path: "wrong-case-path", SAFE_PARENT: "allowed" },
+      "linux"
+    );
+    expect(posix.environment).toMatchObject({ PATH: "safe-path", SAFE_PARENT: "allowed" });
+    expect(posix.environment).not.toHaveProperty("Path");
+
+    const windows = buildLocalEnvironment(
+      undefined,
+      { Path: "windows-path", SYSTEMROOT: "windows-root", TMPDIR: "posix-only" },
+      "win32"
+    );
+    expect(windows.environment).toMatchObject({ Path: "windows-path", SYSTEMROOT: "windows-root" });
+    expect(windows.environment).not.toHaveProperty("TMPDIR");
+
+    const runtime = manager({
+      parentEnvironment: {
+        PATH: process.env.PATH,
+        SAFE_PARENT: "inherited-safe-value"
+      }
+    });
+    let observed: Record<string, unknown> | undefined;
+    runtime.register(definition("inherited", "output-env", {
+      environment: { inherit: ["SAFE_PARENT"] },
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => {
+          if (typeof message === "object" && message !== null && (message as Record<string, unknown>).type === "READY") {
+            observed = message as Record<string, unknown>;
+            return readyDecision(message);
+          }
+          return false;
+        }
+      }
+    }));
+    await runtime.start("inherited");
+    expect(observed).toMatchObject({ inheritedValue: "inherited-safe-value" });
+  });
+
+  it("terminates an owned descendant tree during escalation", async () => {
+    const runtime = manager();
+    let childPid: number | undefined;
+    runtime.register(definition("tree", "tree-parent-ignore", {
+      shutdownTimeoutMs: 50,
+      terminationTimeoutMs: 500,
+      gracefulShutdown: () => undefined,
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => {
+          if (typeof message !== "object" || message === null) return false;
+          const value = message as Record<string, unknown>;
+          if (typeof value.childPid === "number") {
+            childPid = value.childPid;
+            fixturePids.push(value.childPid);
+          }
+          return readyDecision(message);
+        }
+      }
+    }));
+    await runtime.start("tree");
+    expect(childPid).toBeTypeOf("number");
+
+    const result = await runtime.stop("tree");
+    expect(result.disposition).not.toBe("GRACEFUL");
+    if (childPid !== undefined) {
+      await waitForPidExit(childPid);
+      expect(isPidAlive(childPid)).toBe(false);
+    }
+  });
 });
+
+
+async function waitForStatus(
+  runtime: LocalRuntimeManager,
+  componentId: string,
+  predicate: (status: ReturnType<LocalRuntimeManager["getStatus"]>) => boolean
+): Promise<void> {
+  const deadline = Date.now() + 3_000;
+  while (Date.now() < deadline) {
+    if (predicate(runtime.getStatus(componentId))) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
+  expect(predicate(runtime.getStatus(componentId))).toBe(true);
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForPidExit(pid: number): Promise<void> {
+  const deadline = Date.now() + 2_000;
+  while (isPidAlive(pid) && Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
+}
