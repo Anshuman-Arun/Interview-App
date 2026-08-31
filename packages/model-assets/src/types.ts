@@ -78,7 +78,7 @@ export const PortableAssetFilenameSchema = z.string()
 export const Sha256DigestSchema = z.string().regex(/^[0-9a-f]{64}$/u);
 export type Sha256Digest = z.infer<typeof Sha256DigestSchema>;
 
-const HttpSourceUrlSchema = z.string().max(2048).url().refine((value) => {
+const HttpSourceUrlSchema = z.url().max(2048).refine((value) => {
   try {
     const url = new URL(value);
     return (url.protocol === "http:" || url.protocol === "https:")
