@@ -178,8 +178,20 @@ describe("vision snapshot validation and hashing", () => {
   });
 
   it("accepts bounded valid transparency and gamma metadata", () => {
+    const grayscaleWithTransparency = makeMinimalPng(0, [127], { transparency: [0, 127] });
+    const transparencyTypeOffset = grayscaleWithTransparency.indexOf(Buffer.from("tRNS", "ascii"));
+    if (transparencyTypeOffset < 4) throw new Error("Generated PNG unexpectedly lacks tRNS");
+    const transparencyChunkStart = transparencyTypeOffset - 4;
+    const transparencyChunkLength = grayscaleWithTransparency.readUInt32BE(transparencyChunkStart);
+    const transparencyChunkEnd = transparencyChunkStart + 12 + transparencyChunkLength;
+    const transparencyThenGamma = Buffer.concat([
+      grayscaleWithTransparency.subarray(0, transparencyChunkEnd),
+      makePngChunk("gAMA", Buffer.from([0, 0, 0xb1, 0x8f])),
+      grayscaleWithTransparency.subarray(transparencyChunkEnd)
+    ]);
+
     const valid = [
-      makeMinimalPng(0, [127], { transparency: [0, 127] }),
+      grayscaleWithTransparency,
       makeMinimalPng(2, [10, 20, 30], {
         transparency: [0, 10, 0, 20, 0, 30]
       }),
@@ -190,7 +202,8 @@ describe("vision snapshot validation and hashing", () => {
       insertAfterIhdr(
         makePng(1, 1),
         makePngChunk("gAMA", Buffer.from([0, 0, 0xb1, 0x8f]))
-      )
+      ),
+      transparencyThenGamma
     ];
 
     for (const bytes of valid) {
