@@ -103,6 +103,7 @@ interface SharedCacheState {
   pendingGateUsers: number;
   reservedBytes: number;
   readonly activeStagingDirectories: Set<string>;
+  readonly stagingReservations: Map<string, number>;
   readonly activeInstallationCounts: Map<string, number>;
   readonly activeCacheLimitCounts: Map<number, number>;
 }
@@ -132,6 +133,7 @@ function sharedCacheStateFor(paths: CachePaths): SharedCacheState {
     pendingGateUsers: 0,
     reservedBytes: 0,
     activeStagingDirectories: new Set<string>(),
+    stagingReservations: new Map<string, number>(),
     activeInstallationCounts: new Map<string, number>(),
     activeCacheLimitCounts: new Map<number, number>()
   };
@@ -143,6 +145,7 @@ function pruneSharedCacheState(shared: SharedCacheState): void {
   if (shared.pendingGateUsers !== 0
       || shared.reservedBytes !== 0
       || shared.activeStagingDirectories.size !== 0
+      || shared.stagingReservations.size !== 0
       || shared.activeInstallationCounts.size !== 0
       || shared.activeCacheLimitCounts.size !== 0) {
     return;
@@ -1205,7 +1208,7 @@ export class ModelAssetManager {
       paths.temporary,
       key + "-" + randomUUID()
     );
-    await this.reserveCapacity(paths, reservationBytes, signal);
+    await this.reserveCapacity(paths, stagingDirectory, reservationBytes, signal);
     const shared = sharedCacheStateFor(paths);
     shared.activeStagingDirectories.add(stagingDirectory);
     let published = false;
@@ -1364,7 +1367,7 @@ export class ModelAssetManager {
         await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
       }
       if (reservationHeld) {
-        await this.releaseCapacity(paths, reservationBytes);
+        await this.releaseCapacity(paths, stagingDirectory, reservationBytes);
       }
     }
     } finally {
@@ -1582,10 +1585,11 @@ export class ModelAssetManager {
             "Artifact installation was cancelled before publication."
           );
         }
-        if (reservationBytes > shared.reservedBytes) {
+        if (shared.stagingReservations.get(stagingDirectory) !== reservationBytes
+            || reservationBytes > shared.reservedBytes) {
           throw new ModelAssetError(
             "IO_ERROR",
-            "Cache reservation accounting underflowed before atomic publication."
+            "Cache reservation accounting lost staging identity before atomic publication."
           );
         }
 
@@ -1597,11 +1601,8 @@ export class ModelAssetManager {
         }
         if (effectiveMaxCacheBytes !== undefined) {
           const usedBytes = await this.managedCacheBytes(paths);
-          const activeStagingBytes = await this.activeStagingBytes(paths);
-          const projectedBytes = usedBytes + Math.max(
-            activeStagingBytes,
-            shared.reservedBytes
-          );
+          const stagingCommitment = await this.stagingCommitmentBytes(shared);
+          const projectedBytes = usedBytes + stagingCommitment.committedBytes;
           if (!Number.isSafeInteger(projectedBytes)
               || projectedBytes > effectiveMaxCacheBytes) {
             throw new ModelAssetError(
@@ -1630,27 +1631,38 @@ export class ModelAssetManager {
         );
         await validateCachePaths(paths);
 
+        shared.stagingReservations.delete(stagingDirectory);
         shared.reservedBytes -= reservationBytes;
       });
     });
   }
 
-  private async activeStagingBytes(paths: CachePaths): Promise<number> {
-    let total = 0;
-    for (const stagingDirectory of sharedCacheStateFor(paths).activeStagingDirectories) {
-      total += await sumManagedCacheBytes(stagingDirectory, MANAGED_DIRECTORY_ENTRY_LIMIT);
-      if (!Number.isSafeInteger(total)) {
+  private async stagingCommitmentBytes(
+    shared: SharedCacheState
+  ): Promise<{ readonly committedBytes: number; readonly outstandingBytes: number }> {
+    let committedBytes = 0;
+    let outstandingBytes = 0;
+    for (const [stagingDirectory, reservedBytes] of shared.stagingReservations) {
+      const actualBytes = await sumManagedCacheBytes(
+        stagingDirectory,
+        MANAGED_DIRECTORY_ENTRY_LIMIT
+      );
+      committedBytes += Math.max(actualBytes, reservedBytes);
+      outstandingBytes += Math.max(0, reservedBytes - actualBytes);
+      if (!Number.isSafeInteger(committedBytes)
+          || !Number.isSafeInteger(outstandingBytes)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
-          "Active staging usage exceeds safe integer accounting limits."
+          "Active staging commitments exceed safe integer accounting limits."
         );
       }
     }
-    return total;
+    return { committedBytes, outstandingBytes };
   }
 
   private async reserveCapacity(
     paths: CachePaths,
+    stagingDirectory: string,
     requestedBytes: number,
     signal: AbortSignal
   ): Promise<void> {
@@ -1662,6 +1674,12 @@ export class ModelAssetManager {
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
+      if (shared.stagingReservations.has(stagingDirectory)) {
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Duplicate staging reservation identity detected."
+        );
+      }
       const reservedProjection = shared.reservedBytes + requestedBytes;
       if (!Number.isSafeInteger(reservedProjection)) {
         throw new ModelAssetError(
@@ -1670,12 +1688,10 @@ export class ModelAssetManager {
         );
       }
 
-      const activeStagingBytes = await this.activeStagingBytes(paths);
+      const existingCommitment = await this.stagingCommitmentBytes(shared);
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
-      const alreadyMaterialized = Math.min(activeStagingBytes, shared.reservedBytes);
-      const unreservedMaterializedBytes = activeStagingBytes - alreadyMaterialized;
 
       let effectiveMaxCacheBytes: number | undefined;
       for (const activeLimit of shared.activeCacheLimitCounts.keys()) {
@@ -1688,7 +1704,7 @@ export class ModelAssetManager {
         if (signal.aborted) {
           throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
         }
-        const projected = usedBytes + reservedProjection + unreservedMaterializedBytes;
+        const projected = usedBytes + existingCommitment.committedBytes + requestedBytes;
         if (!Number.isSafeInteger(projected) || projected > effectiveMaxCacheBytes) {
           throw new ModelAssetError(
             "CACHE_LIMIT_EXCEEDED",
@@ -1697,7 +1713,13 @@ export class ModelAssetManager {
         }
       }
 
-      const outstandingReservation = reservedProjection - alreadyMaterialized;
+      const outstandingReservation = existingCommitment.outstandingBytes + requestedBytes;
+      if (!Number.isSafeInteger(outstandingReservation)) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Outstanding staging reservations exceed safe integer accounting limits."
+        );
+      }
       const available = await availableDiskBytes(paths.temporary);
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
@@ -1713,17 +1735,24 @@ export class ModelAssetManager {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
       shared.reservedBytes = reservedProjection;
+      shared.stagingReservations.set(stagingDirectory, requestedBytes);
     });
   }
 
-  private async releaseCapacity(paths: CachePaths, bytes: number): Promise<void> {
+  private async releaseCapacity(
+    paths: CachePaths,
+    stagingDirectory: string,
+    bytes: number
+  ): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
-      if (bytes > shared.reservedBytes) {
+      if (shared.stagingReservations.get(stagingDirectory) !== bytes
+          || bytes > shared.reservedBytes) {
         throw new ModelAssetError(
           "IO_ERROR",
-          "Cache reservation accounting underflowed during release."
+          "Cache reservation accounting underflowed or lost staging identity during release."
         );
       }
+      shared.stagingReservations.delete(stagingDirectory);
       shared.reservedBytes -= bytes;
     });
   }
