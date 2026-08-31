@@ -987,7 +987,7 @@ export class ModelAssetManager {
       // count any bytes still present there before the reservation is released.
       setStagingDirectory(undefined);
       if (reservationHeld) {
-        await this.releaseCapacity(reservationBytes);
+        await this.releaseCapacity(paths, reservationBytes);
       }
       if (!published) {
         await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
@@ -1058,11 +1058,7 @@ export class ModelAssetManager {
   }
 
   private async managedCacheBytes(paths: CachePaths): Promise<number> {
-    const activeStagingDirectories = new Set(
-      [...this.inFlight.values()]
-        .map((entry) => entry.stagingDirectory)
-        .filter((directory): directory is string => directory !== undefined)
-    );
+    const activeStagingDirectories = sharedCacheStateFor(paths).activeStagingDirectories;
 
     let total = 0;
     const artifacts = await this.openCacheDirectory(
@@ -1128,7 +1124,7 @@ export class ModelAssetManager {
     signal: AbortSignal,
     stagingIdentity: { readonly device: number; readonly inode: number }
   ): Promise<void> {
-    await this.withCapacityGate(async () => {
+    await this.withCapacityGate(paths, async (shared) => {
       if (signal.aborted) {
         throw new ModelAssetError(
           "CANCELLED",
@@ -1143,15 +1139,14 @@ export class ModelAssetManager {
         );
       }
       await atomicRenameDirectory(stagingDirectory, installationDirectory);
-      this.reservedBytes = Math.max(0, this.reservedBytes - reservationBytes);
+      shared.reservedBytes = Math.max(0, shared.reservedBytes - reservationBytes);
     });
   }
 
-  private async activeStagingBytes(): Promise<number> {
+  private async activeStagingBytes(paths: CachePaths): Promise<number> {
     let total = 0;
-    for (const entry of this.inFlight.values()) {
-      if (entry.stagingDirectory === undefined) continue;
-      total += await sumManagedCacheBytes(entry.stagingDirectory);
+    for (const stagingDirectory of sharedCacheStateFor(paths).activeStagingDirectories) {
+      total += await sumManagedCacheBytes(stagingDirectory);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -1167,7 +1162,7 @@ export class ModelAssetManager {
     requestedBytes: number,
     signal: AbortSignal
   ): Promise<void> {
-    await this.withCapacityGate(async () => {
+    await this.withCapacityGate(paths, async (shared) => {
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
@@ -1175,7 +1170,7 @@ export class ModelAssetManager {
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
-      const reservedProjection = this.reservedBytes + requestedBytes;
+      const reservedProjection = shared.reservedBytes + requestedBytes;
       if (!Number.isSafeInteger(reservedProjection)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -1197,11 +1192,11 @@ export class ModelAssetManager {
         }
       }
 
-      const activeStagingBytes = await this.activeStagingBytes();
+      const activeStagingBytes = await this.activeStagingBytes(paths);
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
-      const alreadyMaterialized = Math.min(activeStagingBytes, this.reservedBytes);
+      const alreadyMaterialized = Math.min(activeStagingBytes, shared.reservedBytes);
       const outstandingReservation = reservedProjection - alreadyMaterialized;
       const available = await availableDiskBytes(paths.temporary);
       if (signal.aborted) {
@@ -1213,26 +1208,30 @@ export class ModelAssetManager {
           "Insufficient free disk space for verified atomic installation."
         );
       }
-      this.reservedBytes = reservedProjection;
+      shared.reservedBytes = reservedProjection;
     });
   }
 
-  private async releaseCapacity(bytes: number): Promise<void> {
-    await this.withCapacityGate(async () => {
-      this.reservedBytes = Math.max(0, this.reservedBytes - bytes);
+  private async releaseCapacity(paths: CachePaths, bytes: number): Promise<void> {
+    await this.withCapacityGate(paths, async (shared) => {
+      shared.reservedBytes = Math.max(0, shared.reservedBytes - bytes);
     });
   }
 
-  private async withCapacityGate<T>(operation: () => Promise<T>): Promise<T> {
+  private async withCapacityGate<T>(
+    paths: CachePaths,
+    operation: (shared: SharedCacheState) => Promise<T>
+  ): Promise<T> {
+    const shared = sharedCacheStateFor(paths);
     let release: (() => void) | undefined;
     const turn = new Promise<void>((resolvePromise) => {
       release = resolvePromise;
     });
-    const previous = this.capacityGate;
-    this.capacityGate = previous.then(() => turn);
+    const previous = shared.capacityGate;
+    shared.capacityGate = previous.then(() => turn);
     await previous;
     try {
-      return await operation();
+      return await operation(shared);
     } finally {
       release?.();
     }
