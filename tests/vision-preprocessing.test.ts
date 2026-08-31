@@ -19,6 +19,7 @@ import {
   expandRect,
   imageBounds,
   intersectRects,
+  isCropOrTileArtifact,
   normalizeRect,
   planDirtyRegions,
   planDownscale,
@@ -26,6 +27,9 @@ import {
   prepareVisionBatch,
   prepareVisionImageRequest,
   rectArea,
+  rectContains,
+  rectsOverlap,
+  rasterizeDirtyRegion,
   requestPayloadIsSafeReference,
   revisionImageProcessingKey,
   sameRevisionAndImage,
@@ -672,6 +676,21 @@ describe("vision geometry", () => {
     expect(rectArea({ x: 0, y: 0, width: 4, height: 7 })).toBe(28);
   });
 
+  it("treats edge-touching rectangles as non-overlapping and containment as inclusive", () => {
+    const outer = { x: 0, y: 0, width: 10, height: 10 };
+    expect(rectContains(outer, { x: 0, y: 0, width: 10, height: 10 })).toBe(true);
+    expect(rectContains(outer, { x: 9, y: 9, width: 1, height: 1 })).toBe(true);
+    expect(rectContains(outer, { x: 10, y: 9, width: 1, height: 1 })).toBe(false);
+    expect(rectsOverlap(
+      { x: 0, y: 0, width: 2, height: 2 },
+      { x: 2, y: 0, width: 2, height: 2 }
+    )).toBe(false);
+    expect(rectsOverlap(
+      { x: 0, y: 0, width: 2, height: 2 },
+      { x: 1, y: 1, width: 2, height: 2 }
+    )).toBe(true);
+  });
+
   it("rejects zero/negative dimensions and explicit out-of-bounds crops", () => {
     expect(() => validateImageRect({ x: 0, y: 0, width: 0, height: 2 })).toThrowError(VisionPreprocessingError);
     expect(() => validateImageRect({ x: 0, y: 0, width: -1, height: 2 })).toThrowError(VisionPreprocessingError);
@@ -725,6 +744,13 @@ describe("dirty-region planning", () => {
     if (plan.mode === "REGIONS") {
       expect(plan.regions).toEqual([{ x: 9, y: 9, width: 24, height: 12 }]);
     }
+  });
+
+  it("directly rasterizes fractional and zero-size dirty hints outward deterministically", () => {
+    expect(rasterizeDirtyRegion({ x: 1.25, y: 2.75, width: 0, height: 0 }))
+      .toEqual({ x: 1, y: 2, width: 1, height: 1 });
+    expect(rasterizeDirtyRegion({ x: -1.25, y: -2.75, width: 2.5, height: 3.5 }))
+      .toEqual({ x: -2, y: -3, width: 4, height: 4 });
   });
 
   it("rasterizes fractional and zero-size dirty hints without weakening crop rectangles", () => {
@@ -1319,6 +1345,26 @@ describe("provider-neutral request preparation and budgeting", () => {
       }
     });
     expect(requestPayloadIsSafeReference(hostile)).toBe(false);
+  });
+
+  it("recognizes only validated crop/tile artifacts in the public artifact guard", async () => {
+    const source = snapshot(makePng(4, 4));
+    const crop = (await cropImage(source, { x: 0, y: 0, width: 2, height: 2 })).artifact;
+    const resize = await downscaleImage(source, { maxWidth: 2, maxHeight: 2, maxPixels: 4 });
+    const tiled = await tileImage(source, {
+      tileWidth: 2,
+      tileHeight: 2,
+      overlap: 0,
+      maxTileCount: 4
+    });
+    const firstTile = tiled.tiles[0]?.artifact;
+    if (firstTile === undefined) throw new Error("Expected a generated tile");
+
+    expect(isCropOrTileArtifact(source)).toBe(false);
+    expect(isCropOrTileArtifact(crop)).toBe(true);
+    expect(isCropOrTileArtifact(resize.image)).toBe(false);
+    expect(isCropOrTileArtifact(firstTile)).toBe(true);
+    expect(isCropOrTileArtifact({ metadata: { kind: "CROP" } })).toBe(false);
   });
 
   it("accepts maximum-length and heavily escaped snapshot IDs with fixed bounded raster identities", () => {
