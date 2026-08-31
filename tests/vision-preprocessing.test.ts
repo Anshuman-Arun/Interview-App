@@ -1121,6 +1121,27 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
   });
 
+  it("rejects nonzero output ceilings that cannot structurally contain a PNG", async () => {
+    const source = snapshot(makePng(4, 4));
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      { maxOutputEncodedBytes: 57 }
+    )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+
+    await expect(downscaleImage(
+      source,
+      { maxWidth: 2, maxHeight: 2, maxPixels: 4 },
+      { maxOutputEncodedBytes: 57 }
+    )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+
+    await expect(tileImage(
+      source,
+      { tileWidth: 2, tileHeight: 2, overlap: 0, maxTileCount: 4 },
+      { maxOutputEncodedBytes: 57 }
+    )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+  });
+
   it("plans deterministic overlapping tiles with exact original-coordinate mappings", async () => {
     const source = snapshot(makePng(10, 6), { revision: 12 });
     const plan = planImageTiles({ width: 10, height: 6 }, {
