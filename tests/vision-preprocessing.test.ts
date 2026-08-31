@@ -847,6 +847,16 @@ describe("provider-neutral request preparation and budgeting", () => {
       .toBe(prepareVisionImageRequest(source, "context").requestId);
   });
 
+  it("rejects prototype-forged raster instances that never ran a validating constructor", () => {
+    const real = snapshot(makePng(2, 2));
+    const forged = Object.create(ImageSnapshot.prototype) as Record<string, unknown>;
+    Object.defineProperty(forged, "metadata", { value: real.metadata, enumerable: true });
+    Object.defineProperty(forged, "readBytes", { value: () => real.readBytes() });
+
+    expect(() => prepareVisionImageRequest(forged as unknown as ImageSnapshot, "analysis"))
+      .toThrowError(VisionPreprocessingError);
+  });
+
   it("rejects structurally similar but non-validated raster objects at runtime", async () => {
     const real = snapshot(makePng(2, 2));
     const fake = {
