@@ -899,6 +899,24 @@ describe("vision geometry", () => {
     expect(() => unionRects(inherited)).toThrowError(VisionPreprocessingError);
   });
 
+  it("fails closed on hostile rectangle, corner, and dimension objects", () => {
+    const hostile = new Proxy({}, {
+      get() {
+        throw new Error("hostile geometry getter");
+      }
+    });
+
+    expect(() => validateImageRect(
+      hostile as unknown as Parameters<typeof validateImageRect>[0]
+    )).toThrowError(VisionPreprocessingError);
+    expect(() => normalizeRect(
+      hostile as unknown as Parameters<typeof normalizeRect>[0]
+    )).toThrowError(VisionPreprocessingError);
+    expect(() => imageBounds(
+      hostile as unknown as Parameters<typeof imageBounds>[0]
+    )).toThrowError(VisionPreprocessingError);
+  });
+
   it("fails closed on revoked or hostile geometry collections", () => {
     const revoked = Proxy.revocable([] as Array<{ x: number; y: number; width: number; height: number }>, {});
     revoked.revoke();
@@ -1075,6 +1093,23 @@ describe("dirty-region planning", () => {
       maxRegionCount: 1
     });
     expect(plan).toEqual({ mode: "NONE", regions: [], analyzedArea: 0 });
+  });
+
+  it("fails closed on hostile dirty-frame dimensions", () => {
+    const hostile = new Proxy({}, {
+      get() {
+        throw new Error("hostile dirty dimensions");
+      }
+    });
+    try {
+      planDirtyRegions(
+        [{ x: 0, y: 0, width: 1, height: 1 }],
+        hostile as unknown as Parameters<typeof planDirtyRegions>[1]
+      );
+      throw new Error("Expected hostile dirty dimensions rejection");
+    } catch (error) {
+      expectCode(error, "INVALID_RECTANGLE");
+    }
   });
 
   it("fails closed on hostile dirty-region objects and revoked planner config", () => {
@@ -1341,6 +1376,23 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(rgbaAt(resized.image.readBytes(), 0, 0)).toEqual([255, 255, 255, 128]);
   });
 
+  it("fails closed on hostile downscale dimension and envelope objects", () => {
+    const hostile = new Proxy({}, {
+      get() {
+        throw new Error("hostile downscale getter");
+      }
+    });
+
+    expect(() => planDownscale(
+      hostile as unknown as Parameters<typeof planDownscale>[0],
+      { maxWidth: 1, maxHeight: 1, maxPixels: 1 }
+    )).toThrowError(RangeError);
+    expect(() => planDownscale(
+      { width: 2, height: 2 },
+      hostile as unknown as Parameters<typeof planDownscale>[1]
+    )).toThrowError(RangeError);
+  });
+
   it("bounds extreme standalone downscale planning without a linear correction loop", () => {
     const plan = planDownscale(
       { width: Number.MAX_SAFE_INTEGER, height: 1 },
@@ -1360,6 +1412,23 @@ describe("crop, resize, tiling, and cancellation", () => {
       { maxWidth: 32, maxHeight: 32, maxPixels: 1024 },
       { maxOutputEncodedBytes: source.metadata.byteSize - 1 }
     )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+  });
+
+  it("fails closed on hostile tile dimension and configuration objects", () => {
+    const hostile = new Proxy({}, {
+      get() {
+        throw new Error("hostile tile getter");
+      }
+    });
+
+    expect(() => planImageTiles(
+      hostile as unknown as Parameters<typeof planImageTiles>[0],
+      { tileWidth: 1, tileHeight: 1, overlap: 0, maxTileCount: 1 }
+    )).toThrowError(RangeError);
+    expect(() => planImageTiles(
+      { width: 2, height: 2 },
+      hostile as unknown as Parameters<typeof planImageTiles>[1]
+    )).toThrowError(RangeError);
   });
 
   it("allows maxTileCount zero as an explicit prohibition and fails before tile allocation", () => {
