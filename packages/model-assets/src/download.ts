@@ -7,6 +7,7 @@ import { ModelAssetError } from "./types.js";
 
 export const MAX_DOWNLOAD_TIMEOUT_MS = 2_147_483_647;
 export const MAX_DOWNLOAD_REDIRECTS = 20;
+const MAX_ARTIFACT_URL_LENGTH = 2_048;
 
 export interface ArtifactDownloadOptions {
   readonly maxBytes: number;
@@ -50,6 +51,12 @@ function classifyTransferError(error: unknown): ModelAssetError {
 }
 
 function parseUrl(value: string): URL {
+  if (value.length > MAX_ARTIFACT_URL_LENGTH) {
+    throw new ModelAssetError(
+      "UNSAFE_REDIRECT",
+      "Artifact URL exceeds the package URL-length safety limit."
+    );
+  }
   let parsed: URL;
   try {
     parsed = new URL(value);
