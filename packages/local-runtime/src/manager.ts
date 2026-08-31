@@ -1106,12 +1106,20 @@ function inspectDefinition(definition: LocalComponentDefinition): LocalComponent
   }) as unknown as LocalComponentDefinition;
 }
 
+function safelyIsArray(value: unknown, label: string): boolean {
+  try {
+    return Array.isArray(value);
+  } catch {
+    invalid(`${label} could not be inspected`);
+  }
+}
+
 function inspectKnownDataObject(
   value: unknown,
   label: string,
   allowedKeys: ReadonlySet<string>
 ): Readonly<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null || safelyIsArray(value, label)) {
     invalid(`${label} must be an object`);
   }
 
@@ -1135,7 +1143,7 @@ function inspectKnownDataObject(
 }
 
 function inspectDefinitionArguments(value: unknown): readonly string[] {
-  if (!Array.isArray(value)) invalid("args must be an array");
+  if (!safelyIsArray(value, "args")) invalid("args must be an array");
 
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
