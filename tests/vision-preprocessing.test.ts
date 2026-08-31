@@ -853,6 +853,37 @@ describe("crop, resize, tiling, and cancellation", () => {
     await expect(cropImage(source, { x: 3, y: 3, width: 2, height: 2 })).rejects.toMatchObject({ code: "OUT_OF_BOUNDS" });
   });
 
+  it("preserves accepted PNG gamma metadata through crop, resize, and tile re-encoding", async () => {
+    const withGamma = insertAfterIhdr(
+      makePng(4, 4),
+      makePngChunk("gAMA", Buffer.from([0, 0, 0xb1, 0x8f]))
+    );
+    const source = snapshot(withGamma);
+
+    const crop = await cropImage(source, { x: 0, y: 0, width: 2, height: 2 });
+    const resized = await downscaleImage(source, {
+      maxWidth: 2,
+      maxHeight: 2,
+      maxPixels: 4
+    });
+    const tiled = await tileImage(source, {
+      tileWidth: 2,
+      tileHeight: 2,
+      overlap: 0,
+      maxTileCount: 4
+    });
+
+    const outputs = [
+      crop.artifact.readBytes(),
+      resized.image.readBytes(),
+      tiled.tiles[0]?.artifact.readBytes()
+    ];
+    for (const bytes of outputs) {
+      if (bytes === undefined) throw new Error("Expected processed PNG output");
+      expect(PNG.sync.read(Buffer.from(bytes)).gamma).toBeCloseTo(0.45455, 5);
+    }
+  });
+
   it("produces byte-identical deterministic crops and safe diagnostics", async () => {
     const source = snapshot(makePng(8, 8));
     const times = [10, 15];
