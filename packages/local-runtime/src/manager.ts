@@ -393,7 +393,6 @@ export class LocalRuntimeManager {
     }> | undefined;
 
     try {
-      this.attachChild(record, child, stdout, stderr, limits.maxLineBytes);
       unlinkAttempt = linkAbortSignal(signal, attemptController);
       const initialRemainingMs = remainingStartupTimeout(
         record.definition.startupTimeoutMs,
@@ -408,6 +407,10 @@ export class LocalRuntimeManager {
           )
         : undefined;
       if (earlyReadiness !== undefined) void earlyReadiness.catch(() => undefined);
+
+      // Arm stdout readiness before installing the stream data handler so a worker
+      // cannot emit its only READY line into a listener-registration gap.
+      this.attachChild(record, child, stdout, stderr, limits.maxLineBytes);
 
       await waitForSpawn(
         child,
