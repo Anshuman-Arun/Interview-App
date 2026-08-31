@@ -4,6 +4,7 @@ import { IntermediateRationalInputSchema, RationalInputSchema } from "./rational
 import { MAX_COMBINATORIAL_N, MAX_PROBABILITY_OUTCOMES } from "./limits.js";
 import {
   BoundedMathError,
+  addRationals,
   compareRationals,
   divideRationals,
   equalRationals,
