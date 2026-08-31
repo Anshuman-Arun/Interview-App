@@ -78,18 +78,18 @@ export interface PreparedVisionBatch {
 }
 
 function sourceTransform(source: VisionRasterSource): CoordinateTransform {
-  if (source instanceof ImageSnapshot) {
+  if (ImageSnapshot.isValidatedInstance(source)) {
     return Object.freeze({ offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 });
   }
   return source.metadata.coordinateTransform;
 }
 
 function sourceSnapshotId(source: VisionRasterSource): string {
-  return source instanceof ImageSnapshot ? source.metadata.snapshotId : source.metadata.sourceSnapshotId;
+  return ImageSnapshot.isValidatedInstance(source) ? source.metadata.snapshotId : source.metadata.sourceSnapshotId;
 }
 
 function sourceKind(source: VisionRasterSource): PreparedVisionImageRequest["imageKind"] {
-  return source instanceof ImageSnapshot ? "SNAPSHOT" : source.metadata.kind;
+  return ImageSnapshot.isValidatedInstance(source) ? "SNAPSHOT" : source.metadata.kind;
 }
 
 function deterministicRequestId(
@@ -243,9 +243,10 @@ export function prepareVisionBatch(
 }
 
 export function requestPayloadIsSafeReference(request: PreparedVisionImageRequest): request is PreparedVisionImageRequest & { readonly payload: ImagePayloadReference } {
-  return request.payload instanceof ImagePayloadReference;
+  return ImagePayloadReference.isValidatedInstance(request.payload);
 }
 
 export function isCropOrTileArtifact(source: VisionRasterSource): source is VisionImageArtifact {
-  return source instanceof VisionImageArtifact && (source.metadata.kind === "CROP" || source.metadata.kind === "TILE");
+  return VisionImageArtifact.isValidatedInstance(source)
+    && (source.metadata.kind === "CROP" || source.metadata.kind === "TILE");
 }
