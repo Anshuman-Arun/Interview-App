@@ -673,6 +673,22 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(JSON.stringify(first.diagnostics)).not.toContain("encodedBytes");
   });
 
+  it("snapshots processing option getters once to prevent validation/use races", async () => {
+    const source = snapshot(makePng(4, 4));
+    let reads = 0;
+    const options = Object.defineProperty({}, "maxOutputEncodedBytes", {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return reads === 1 ? 1_000_000 : 0;
+      }
+    }) as Parameters<typeof cropImage>[2];
+
+    const result = await cropImage(source, { x: 0, y: 0, width: 2, height: 2 }, options);
+    expect(result.artifact.metadata.width).toBe(2);
+    expect(reads).toBe(1);
+  });
+
   it("rejects unknown or malformed processing options before image work", async () => {
     const source = snapshot(makePng(4, 4));
     await expect(cropImage(
