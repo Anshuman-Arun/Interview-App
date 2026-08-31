@@ -32,10 +32,7 @@ export function buildLocalEnvironment(
   parent: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): BuiltLocalEnvironment {
-  if (typeof parent !== "object" || parent === null || Array.isArray(parent)) {
-    throw new Error("Parent environment must be an object");
-  }
-  if (utilTypes.isProxy(parent)) throw new Error("Parent environment could not be inspected");
+  validateParentEnvironmentRecord(parent);
   const inspectedDefinition = inspectEnvironmentDefinition(definition);
   const environment = Object.create(null) as NodeJS.ProcessEnv;
   const secretValues = new Set<string>();
@@ -100,6 +97,47 @@ export function buildLocalEnvironment(
     environment: Object.freeze(environment),
     secretValues: Object.freeze([...secretValues].sort((left, right) => right.length - left.length))
   });
+}
+
+export function snapshotParentEnvironmentRecord(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const descriptors = validateParentEnvironmentRecord(parent);
+  const snapshot = Object.create(null) as NodeJS.ProcessEnv;
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (descriptor.enumerable !== true || !("value" in descriptor) || descriptor.value === undefined) continue;
+    snapshot[key] = descriptor.value as string;
+  }
+  return Object.freeze(snapshot);
+}
+
+function validateParentEnvironmentRecord(
+  parent: NodeJS.ProcessEnv
+): Readonly<Record<string, PropertyDescriptor>> {
+  if (typeof parent !== "object" || parent === null || Array.isArray(parent)) {
+    throw new Error("Parent environment must be an object");
+  }
+  if (utilTypes.isProxy(parent)) throw new Error("Parent environment could not be inspected");
+
+  let prototype: unknown;
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    prototype = Object.getPrototypeOf(parent);
+    descriptors = Object.getOwnPropertyDescriptors(parent);
+  } catch {
+    throw new Error("Parent environment could not be inspected");
+  }
+
+  if (parent !== process.env && prototype !== Object.prototype && prototype !== null) {
+    throw new Error("Parent environment must be a plain data object or process.env");
+  }
+
+  for (const descriptor of Object.values(descriptors)) {
+    if (descriptor.enumerable !== true) continue;
+    if (!("value" in descriptor)) throw new Error("Parent environment may not contain accessors");
+    if (descriptor.value !== undefined && typeof descriptor.value !== "string") {
+      throw new Error("Parent environment values must be strings or undefined");
+    }
+  }
+  return descriptors;
 }
 
 function addSecretRedactionVariants(target: Set<string>, value: string): void {
