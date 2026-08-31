@@ -180,6 +180,34 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "authorized vision constructor module exporting a dynamic import of the construction capability",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "export const leak = import(\"./internal-artifact-construction.js\");\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module exporting a CommonJS require of the construction capability",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "export const leak = require(\"./internal-artifact-construction.js\");\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module re-exporting an import-equals construction capability",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import secret = require(\"./internal-artifact-construction.js\");\nexport { secret };\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module exporting a property of a required construction module",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "export const leak = require(\"./internal-artifact-construction.js\").INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION;\n"
+      }
+    },
+    {
       name: "authorized vision constructor module exposing capability through an exported class",
       expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
       files: {
