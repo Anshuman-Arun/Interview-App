@@ -346,6 +346,9 @@ export async function verifyArtifactFile(
   if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
     throw new ModelAssetError("UNSAFE_PATH", "Artifact verification requires a regular non-symlink file.");
   }
+  if (signal?.aborted === true) {
+    throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
+  }
   if (fileStat.size > maximum) {
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact exceeds the configured verification byte limit.");
   }
@@ -382,10 +385,13 @@ export async function verifyArtifactFile(
     signal?.removeEventListener("abort", abortListener);
   }
 
+  if (signal?.aborted === true) {
+    throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
+  }
   if (bytes !== expectedSize) {
     return { ok: false, reason: "SIZE_MISMATCH", actualBytes: bytes };
   }
-  const actualSha256 = hash.digest("hex") as Sha256Digest;
+  const actualSha256: Sha256Digest = hash.digest("hex");
   if (actualSha256 !== digest.data) {
     return { ok: false, reason: "DIGEST_MISMATCH", actualBytes: bytes, actualSha256 };
   }
