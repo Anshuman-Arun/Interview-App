@@ -2215,6 +2215,27 @@ export async function evaluateProviderReadiness(input: {
   }
 
   const reference = resolved.configuration.credentialRef;
+  let secretResolver: ProviderSecretResolver | undefined;
+  try {
+    const secretResolverProperty = readOwnDataProperty(
+      input,
+      "secretResolver",
+      "INVALID_FACTORY_INPUT",
+      "Provider readiness credential resolver is malformed"
+    );
+    secretResolver = normalizeFactorySecretResolver(
+      secretResolverProperty.present ? secretResolverProperty.value : undefined,
+      resolved
+    );
+  } catch {
+    return freezeNullPrototype({
+      state: "UNKNOWN",
+      providerId: resolved.provider.id,
+      modelId: resolved.model.id,
+      reason: "CREDENTIAL_STATUS_UNKNOWN"
+    });
+  }
+
   if (reference === undefined) {
     if (resolved.provider.credentialRequirement === "REQUIRED") {
       return freezeNullPrototype({
@@ -2224,42 +2245,10 @@ export async function evaluateProviderReadiness(input: {
       });
     }
   } else {
-    let resolver: object | undefined;
-    let hasSecret: unknown;
-    let resolveSecret: unknown;
-    try {
-      const secretResolverProperty = readOwnDataProperty(
-        input,
-        "secretResolver",
-        "INVALID_FACTORY_INPUT",
-        "Provider readiness credential resolver is malformed"
-      );
-      const candidate = secretResolverProperty.present
-        ? secretResolverProperty.value
-        : undefined;
-      if (candidate !== undefined) {
-        if (typeof candidate !== "object" || candidate === null) {
-          throw new ProviderControlPlaneError(
-            "INVALID_FACTORY_INPUT",
-            "Provider readiness credential resolver is malformed"
-          );
-        }
-        resolver = candidate;
-        hasSecret = readResolverMethodWithoutAccessors(resolver, "hasSecret");
-        resolveSecret = readResolverMethodWithoutAccessors(resolver, "resolveSecret");
-      }
-    } catch {
-      return freezeNullPrototype({
-        state: "UNKNOWN",
-        providerId: resolved.provider.id,
-        modelId: resolved.model.id,
-        reason: "CREDENTIAL_STATUS_UNKNOWN"
-      });
-    }
+    const hasSecret = secretResolver?.hasSecret;
     if (
       typeof hasSecret !== "function"
-      || typeof resolveSecret !== "function"
-      || resolver === undefined
+      || typeof secretResolver?.resolveSecret !== "function"
     ) {
       return freezeNullPrototype({
         state: "UNKNOWN",
@@ -2270,7 +2259,7 @@ export async function evaluateProviderReadiness(input: {
     }
     let available: unknown;
     try {
-      available = await Reflect.apply(hasSecret, resolver, [freezeNullPrototype({
+      available = await Reflect.apply(hasSecret, secretResolver, [freezeNullPrototype({
         providerId: resolved.provider.id,
         reference
       })]);

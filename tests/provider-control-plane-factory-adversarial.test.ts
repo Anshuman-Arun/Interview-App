@@ -536,6 +536,71 @@ describe("registry provenance and batch input hardening", () => {
 });
 
 describe("credential readiness edge cases", () => {
+  it("validates discarded resolver shapes consistently with factory creation", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "optional-readiness-provider",
+      adapterVersion: "1.0.0",
+      credentialRequirement: "OPTIONAL",
+      credentialPurposes: ["API_KEY"],
+      adapterFactory: {
+        id: "optional-readiness-factory",
+        createAdapter() {
+          return new MockModelAdapter({ proposal: PROPOSAL });
+        }
+      }
+    }));
+    const configuration = {
+      version: 1,
+      providerId: "optional-readiness-provider",
+      modelId: "test-model",
+      enabled: true
+    };
+
+    const malformedInput = { registry, configuration };
+    Reflect.set(malformedInput, "secretResolver", 42);
+    await expect(evaluateProviderReadiness(malformedInput)).resolves.toEqual({
+      state: "UNKNOWN",
+      providerId: "optional-readiness-provider",
+      modelId: "test-model",
+      reason: "CREDENTIAL_STATUS_UNKNOWN"
+    });
+
+    let getterCalls = 0;
+    const accessorResolver = Object.defineProperty({}, "resolveSecret", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error("must not execute");
+      }
+    });
+    const accessorInput = { registry, configuration };
+    Reflect.set(accessorInput, "secretResolver", accessorResolver);
+    await expect(evaluateProviderReadiness(accessorInput)).resolves.toEqual({
+      state: "UNKNOWN",
+      providerId: "optional-readiness-provider",
+      modelId: "test-model",
+      reason: "CREDENTIAL_STATUS_UNKNOWN"
+    });
+    expect(getterCalls).toBe(0);
+
+    const validResolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        return "unused-secret";
+      }
+    };
+    await expect(evaluateProviderReadiness({
+      registry,
+      configuration,
+      secretResolver: validResolver
+    })).resolves.toEqual({
+      state: "AVAILABLE",
+      providerId: "optional-readiness-provider",
+      modelId: "test-model"
+    });
+  });
+
+
   it("does not inherit a polluted readiness reason on AVAILABLE results", async () => {
     Object.defineProperty(Object.prototype, "reason", {
       configurable: true,
