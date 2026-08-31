@@ -1,16 +1,18 @@
+import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const [mode = "ready", ...args] = process.argv.slice(2);
+const ignoresShutdown = mode === "ignore-shutdown" || mode === "tree-parent-ignore";
 let keepAlive = setInterval(() => {}, 1_000);
 process.stdin.resume();
 process.stdin.on("end", () => {
-  if (mode !== "ignore-shutdown") process.exit(0);
+  if (!ignoresShutdown) process.exit(0);
 });
 process.on("SIGTERM", () => {
-  if (mode !== "ignore-shutdown") process.exit(0);
+  if (!ignoresShutdown) process.exit(0);
 });
 process.on("SIGINT", () => {
-  if (mode !== "ignore-shutdown") process.exit(0);
+  if (!ignoresShutdown) process.exit(0);
 });
 
 function ready(extra = {}) {
@@ -41,6 +43,24 @@ switch (mode) {
     break;
   case "delayed-ready":
     setTimeout(() => ready(), Number(args[0] ?? 250));
+    break;
+  case "delayed-stdin-shutdown":
+    setTimeout(() => ready(), Number(args[0] ?? 500));
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      if (chunk.includes("shutdown-now")) process.exit(0);
+    });
+    break;
+  case "line-ready":
+    console.log("READY-LINE");
+    break;
+  case "early-line-ready":
+    console.log("READY-LINE");
+    for (let index = 0; index < 256; index += 1) console.log(`startup-chatter-${index}`);
+    break;
+  case "oversized-then-ready":
+    console.log("x".repeat(Number(args[0] ?? 10_000)));
+    ready();
     break;
   case "never-ready":
     console.log("not-ready");
@@ -84,6 +104,18 @@ switch (mode) {
       process.exit(13);
     }, Number(args[0] ?? 80));
     break;
+  case "ready-crash-counter": {
+    const path = args[0];
+    if (!path) throw new Error("counter path required");
+    const attempt = bumpCounter(path);
+    ready({ attempt });
+    setTimeout(() => {
+      console.error(`crash-attempt-${attempt}`);
+      clearInterval(keepAlive);
+      process.exit(14);
+    }, Number(args[1] ?? 50));
+    break;
+  }
   case "output-env": {
     const secret = process.env.RUNTIME_ONLY_SECRET ?? null;
     for (let index = 0; index < 12; index += 1) console.log(`output-${index}`);
@@ -92,13 +124,23 @@ switch (mode) {
     ready({
       publicValue: process.env.EXPLICIT_PUBLIC ?? null,
       secretValue: secret,
-      forbiddenValue: process.env.FORBIDDEN_PARENT ?? null
+      forbiddenValue: process.env.FORBIDDEN_PARENT ?? null,
+      inheritedValue: process.env.SAFE_PARENT ?? null
     });
     break;
   }
   case "ignore-shutdown":
     ready();
     break;
+  case "tree-parent-ignore": {
+    const child = spawn(process.execPath, [import.meta.filename, "ignore-shutdown"], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    if (child.pid === undefined) throw new Error("fixture child did not receive a pid");
+    ready({ childPid: child.pid });
+    break;
+  }
   case "stdin-shutdown":
     ready();
     process.stdin.setEncoding("utf8");
