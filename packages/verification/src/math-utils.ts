@@ -246,7 +246,14 @@ export function compareRationals(left: ExactRational, right: ExactRational): -1 
   return difference < 0n ? -1 : difference > 0n ? 1 : 0;
 }
 
+function assertFiniteContainerLength(length: number): void {
+  if (length > MAX_FINITE_CONTAINER_ITEMS) {
+    throw new BoundedMathError("CONTAINER_LIMIT_EXCEEDED", "Finite container exceeds the configured item limit");
+  }
+}
+
 export function sumIntegers(values: readonly bigint[]): bigint {
+  assertFiniteContainerLength(values.length);
   let total = 0n;
   for (const value of values) {
     assertIntermediateIntegerBound(value);
@@ -256,6 +263,7 @@ export function sumIntegers(values: readonly bigint[]): bigint {
 }
 
 export function productIntegers(values: readonly bigint[]): bigint {
+  assertFiniteContainerLength(values.length);
   let product = 1n;
   for (const value of values) {
     assertIntermediateIntegerBound(value);
@@ -265,10 +273,12 @@ export function productIntegers(values: readonly bigint[]): bigint {
 }
 
 export function sumRationals(values: readonly ExactRational[]): ExactRational {
+  assertFiniteContainerLength(values.length);
   return values.reduce(addRationals, rational(0n, 1n));
 }
 
 export function productRationals(values: readonly ExactRational[]): ExactRational {
+  assertFiniteContainerLength(values.length);
   return values.reduce(multiplyRationals, rational(1n, 1n));
 }
 
@@ -331,9 +341,7 @@ export function combinationsWithRepetition(types: number, selections: number): b
 }
 
 function assertContainerBound(values: readonly string[]): void {
-  if (values.length > MAX_FINITE_CONTAINER_ITEMS) {
-    throw new BoundedMathError("CONTAINER_LIMIT_EXCEEDED", "Finite container exceeds the configured item limit");
-  }
+  assertFiniteContainerLength(values.length);
 }
 
 export function sameFiniteSet(left: readonly string[], right: readonly string[]): boolean {
