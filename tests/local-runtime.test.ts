@@ -715,6 +715,129 @@ describe("local worker lifecycle manager", () => {
     const status = await runtime.start("invalid-clock");
     expect(() => new Date(status.startedAt ?? "").toISOString()).not.toThrow();
   });
+
+
+  it("rejects accessor-backed and oversized environment configuration without invoking getters", () => {
+    let topLevelGetterCalls = 0;
+    const topLevel = Object.defineProperty({}, "values", {
+      enumerable: true,
+      get: () => {
+        topLevelGetterCalls += 1;
+        return { SAFE_VALUE: "unexpected" };
+      }
+    });
+    expect(() => buildLocalEnvironment(
+      topLevel as Parameters<typeof buildLocalEnvironment>[0],
+      {}
+    )).toThrow(/accessor/u);
+    expect(topLevelGetterCalls).toBe(0);
+
+    let nestedGetterCalls = 0;
+    const nestedValues = Object.defineProperty({}, "SAFE_VALUE", {
+      enumerable: true,
+      get: () => {
+        nestedGetterCalls += 1;
+        return "unexpected";
+      }
+    });
+    expect(() => buildLocalEnvironment({
+      values: nestedValues as Readonly<Record<string, string>>
+    }, {})).toThrow(/accessor/u);
+    expect(nestedGetterCalls).toBe(0);
+
+    let parentGetterCalls = 0;
+    const parent = Object.defineProperty({}, "PATH", {
+      enumerable: true,
+      get: () => {
+        parentGetterCalls += 1;
+        return "untrusted-path";
+      }
+    });
+    const inherited = buildLocalEnvironment(
+      undefined,
+      parent as NodeJS.ProcessEnv,
+      process.platform
+    );
+    expect(parentGetterCalls).toBe(0);
+    expect(inherited.environment).not.toHaveProperty("PATH");
+
+    expect(() => buildLocalEnvironment(
+      { unexpected: "value" } as unknown as Parameters<typeof buildLocalEnvironment>[0],
+      {}
+    )).toThrow(/unknown environment definition field/iu);
+
+    const tooManyValues = Object.fromEntries(
+      Array.from({ length: 257 }, (_, index) => [`VALUE_${String(index)}`, "x"])
+    );
+    expect(() => buildLocalEnvironment({ values: tooManyValues }, {}))
+      .toThrow(/at most 256/iu);
+  });
+
+  it("treats explicit secret-looking environment values as diagnostic secrets", () => {
+    const secret = "explicit-api-key-private-314159";
+    const built = buildLocalEnvironment({
+      values: {
+        SAFE_VALUE: "visible",
+        MODEL_API_KEY: secret
+      }
+    }, {});
+
+    expect(built.environment.SAFE_VALUE).toBe("visible");
+    expect(built.environment.MODEL_API_KEY).toBe(secret);
+    expect(built.secretValues).toContain(secret);
+  });
+
+  it("recovers framing after invalid UTF-8 and accepts CRLF readiness lines", async () => {
+    const runtime = manager();
+    runtime.register(definition("invalid-utf8", "invalid-utf8-then-ready"));
+    const invalidUtf8 = await runtime.start("invalid-utf8");
+    expect(invalidUtf8.state).toBe("READY");
+    expect(invalidUtf8.stdout.lines).toContain("[MALFORMED_OUTPUT]");
+
+    runtime.register(definition("crlf", "crlf-line-ready", {
+      readiness: {
+        kind: "STDOUT_LINE",
+        evaluate: (line) => line === "READY-LINE"
+      }
+    }));
+    await expect(runtime.start("crlf")).resolves.toMatchObject({ state: "READY" });
+  });
+
+  it("does not expose direct process signaling through graceful shutdown controls", async () => {
+    const runtime = manager();
+    let signalExposed = true;
+    runtime.register(definition("graceful-control", "stdin-shutdown", {
+      gracefulShutdown: (control) => {
+        signalExposed = Object.hasOwn(control, "signal");
+        return control.writeStdin("shutdown-now\n");
+      }
+    }));
+
+    await runtime.start("graceful-control");
+    await runtime.stop("graceful-control");
+    expect(signalExposed).toBe(false);
+  });
+
+  it("rejects contradictory output bounds and effectively unbounded retry counts", () => {
+    const runtime = manager();
+
+    expect(() => runtime.register(definition("contradictory-output", "ready", {
+      output: { maxBytes: 128, maxLineBytes: 129 }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register(definition("too-many-retries", "ready", {
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 101 }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register(definition("bounded-retries", "ready", {
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 100 },
+      output: { maxBytes: 128 }
+    }))).not.toThrow();
+
+    expect(() => runtime.register(definition("oversized-expected-version", "ready", {
+      expectedHandshake: { componentVersion: "x".repeat(2_001) }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+  });
 });
 
 
