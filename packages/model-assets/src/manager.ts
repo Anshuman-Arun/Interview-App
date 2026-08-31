@@ -152,6 +152,12 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function ownValue(record: Record<string, unknown>, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(record, key)
+    ? record[key]
+    : undefined;
+}
+
 function isAbortSignal(value: unknown): value is AbortSignal {
   if (!isUnknownRecord(value)) return false;
   return typeof value["aborted"] === "boolean"
@@ -210,12 +216,14 @@ export class ModelAssetManager {
         );
       }
     }
-    const rootDir = optionRecord["rootDir"];
-    if (typeof rootDir !== "string" || !path.isAbsolute(rootDir)) {
+    const rootDir = ownValue(optionRecord, "rootDir");
+    if (typeof rootDir !== "string"
+        || rootDir.includes("\0")
+        || !path.isAbsolute(rootDir)) {
       throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must be an absolute path.");
     }
 
-    const rawCrossOriginRedirects = optionRecord["allowCrossOriginRedirects"];
+    const rawCrossOriginRedirects = ownValue(optionRecord, "allowCrossOriginRedirects");
     if (rawCrossOriginRedirects !== undefined && typeof rawCrossOriginRedirects !== "boolean") {
       throw new ModelAssetError(
         "INVALID_CONFIGURATION",
@@ -224,16 +232,16 @@ export class ModelAssetManager {
     }
 
     this.maxArtifactBytes = positiveSafeInteger(
-      optionRecord["maxArtifactBytes"],
+      ownValue(optionRecord, "maxArtifactBytes"),
       0,
       "maxArtifactBytes"
     );
-    const rawMaxCacheBytes = optionRecord["maxCacheBytes"];
+    const rawMaxCacheBytes = ownValue(optionRecord, "maxCacheBytes");
     this.maxCacheBytes = rawMaxCacheBytes === undefined
       ? undefined
       : positiveSafeInteger(rawMaxCacheBytes, 0, "maxCacheBytes");
     this.downloadTimeoutMs = positiveSafeInteger(
-      optionRecord["downloadTimeoutMs"],
+      ownValue(optionRecord, "downloadTimeoutMs"),
       DEFAULT_DOWNLOAD_TIMEOUT_MS,
       "downloadTimeoutMs"
     );
@@ -244,7 +252,7 @@ export class ModelAssetManager {
       );
     }
     this.maxRedirects = nonnegativeSafeInteger(
-      optionRecord["maxRedirects"],
+      ownValue(optionRecord, "maxRedirects"),
       DEFAULT_MAX_REDIRECTS,
       "maxRedirects"
     );
@@ -256,7 +264,7 @@ export class ModelAssetManager {
     }
     this.allowCrossOriginRedirects = rawCrossOriginRedirects ?? false;
     this.maxListEntries = positiveSafeInteger(
-      optionRecord["maxListEntries"],
+      ownValue(optionRecord, "maxListEntries"),
       DEFAULT_MAX_LIST_ENTRIES,
       "maxListEntries"
     );
