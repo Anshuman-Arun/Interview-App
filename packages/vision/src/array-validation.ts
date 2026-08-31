@@ -31,6 +31,7 @@ export function readArrayEntry<T>(value: readonly T[], index: number, label: str
     throw new RangeError("Array index must be a nonnegative safe integer");
   }
   try {
+    if (!Object.prototype.hasOwnProperty.call(value, index)) return undefined;
     return value[index];
   } catch {
     throw new TypeError(`${label} entry ${String(index)} could not be read safely`);
