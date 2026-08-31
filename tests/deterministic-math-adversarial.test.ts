@@ -834,6 +834,46 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
+  it("accumulates non-pairwise cancelling expectation terms before enforcing the final bound", async () => {
+    const specs: readonly (readonly [bigint, bigint])[] = [
+      [2n, 756n], [3n, 468n], [5n, 324n], [7n, 270n], [11n, 216n],
+      [13n, 198n], [17n, 180n], [23n, 162n], [29n, 162n], [31n, 144n],
+      [37n, 144n], [41n, 144n], [43n, 144n], [47n, 126n], [53n, 126n],
+      [59n, 126n], [61n, 126n], [67n, 126n], [71n, 126n]
+    ];
+    const groups = specs.map(([base, exponent]) => {
+      const q = base ** exponent;
+      const denominator = 57n * q;
+      const negativeValueDenominator = 3n * q - 2n;
+      expect(denominator.toString().length).toBeLessThanOrEqual(MAX_INTEGER_DECIMAL_DIGITS);
+      expect(negativeValueDenominator.toString().length).toBeLessThanOrEqual(MAX_INTEGER_DECIMAL_DIGITS);
+      return {
+        positives: [
+          { probability: fraction("1", denominator.toString()), value: fraction("1") },
+          { probability: fraction("1", denominator.toString()), value: fraction("1") }
+        ],
+        negative: {
+          probability: fraction(negativeValueDenominator.toString(), denominator.toString()),
+          value: fraction("-2", negativeValueDenominator.toString())
+        }
+      };
+    });
+
+    const result = await verifyJson(new ProbabilityArithmeticVerifier(), {
+      protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+      protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "FINITE_EXPECTATION",
+        outcomes: [
+          ...groups.flatMap((group) => group.positives),
+          ...groups.map((group) => group.negative)
+        ],
+        claimedExpectation: fraction("0")
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
+  });
+
   it("validates a finite distribution before performing potentially expensive expectation arithmetic", async () => {
     const primes = [
       2, 3, 5, 7, 11, 13, 17, 19, 23, 29,
