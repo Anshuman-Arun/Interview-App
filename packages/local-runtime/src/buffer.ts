@@ -285,7 +285,14 @@ function fitUtf8(value: string, maxBytes: number): string {
 
 function utf8Prefix(bytes: Buffer, maxBytes: number): string {
   if (maxBytes <= 0) return "";
-  let prefix = bytes.subarray(0, maxBytes).toString("utf8");
-  while (prefix.endsWith("\uFFFD")) prefix = prefix.slice(0, -1);
-  return prefix;
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let end = Math.min(maxBytes, bytes.length);
+  while (end > 0) {
+    try {
+      return decoder.decode(bytes.subarray(0, end));
+    } catch {
+      end -= 1;
+    }
+  }
+  return "";
 }
