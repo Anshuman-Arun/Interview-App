@@ -229,8 +229,11 @@ function validateEnvironmentEntry(key: string, value: string): void {
 }
 
 function validateEnvironmentKey(key: unknown): asserts key is string {
-  if (typeof key !== "string" || !ENVIRONMENT_KEY.test(key)) {
-    throw new Error(`Invalid environment key: ${String(key)}`);
+  if (typeof key !== "string") {
+    throw new Error("Invalid environment key: expected a string");
+  }
+  if (!ENVIRONMENT_KEY.test(key)) {
+    throw new Error(`Invalid environment key: ${key}`);
   }
 }
 
