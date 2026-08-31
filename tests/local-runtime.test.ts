@@ -1412,6 +1412,39 @@ describe("local worker lifecycle manager", () => {
     expect(serialized).toContain("[REDACTED]");
   });
 
+  it("does not report graceful stop for a root that already crashed", async () => {
+    if (process.platform === "win32") return;
+
+    const runtime = manager();
+    let childPid: number | undefined;
+    runtime.register(definition("dead-root-stop", "exit-with-stubborn-pipe-child", {
+      terminationTimeoutMs: 80,
+      restartPolicy: { mode: "NEVER" },
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => {
+          if (typeof message !== "object" || message === null) return false;
+          const value = message as Record<string, unknown>;
+          if (typeof value.childPid === "number") {
+            childPid = value.childPid;
+            fixturePids.push(value.childPid);
+          }
+          return readyDecision(message);
+        }
+      }
+    }, ["20"]));
+
+    await runtime.start("dead-root-stop");
+    await waitForStatus(runtime, "dead-root-stop", (status) =>
+      status.state === "FAILED" && status.lastExit?.code === 18
+    );
+
+    const stopped = await runtime.stop("dead-root-stop");
+    expect(stopped.disposition).not.toBe("GRACEFUL");
+    expect(runtime.getStatus("dead-root-stop").state).toBe("STOPPED");
+    if (childPid !== undefined) await waitForPidExit(childPid);
+  });
+
   it("observes parent process exit even while a descendant keeps inherited pipes open", async () => {
     const runtime = manager();
     let childPid: number | undefined;
