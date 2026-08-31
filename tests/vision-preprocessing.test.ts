@@ -107,6 +107,15 @@ describe("vision snapshot validation and hashing", () => {
     expect(sha256ImageBytes(value.readBytes())).toBe(originalDigest);
   });
 
+  it("rejects artifact metadata whose deterministic ID is stale after provenance changes", async () => {
+    const source = snapshot(makePng(4, 4));
+    const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
+    expect(() => new VisionImageArtifact({
+      ...crop.metadata,
+      sourceRevision: BoardRevisionSchema.parse(crop.metadata.sourceRevision + 1)
+    }, crop.readBytes())).toThrowError(RangeError);
+  });
+
   it("rejects impossible artifact kind/source-bound combinations", async () => {
     const source = snapshot(makePng(4, 4));
     const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
