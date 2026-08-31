@@ -1,3 +1,7 @@
+import { isProxy } from "node:util/types";
+
+const MAX_SNAPSHOTTED_OBJECT_FIELDS = 64;
+
 export function snapshotOwnEnumerableRecord(
   value: unknown,
   label: string
@@ -6,23 +10,45 @@ export function snapshotOwnEnumerableRecord(
     throw new TypeError(`${label} must be an object`);
   }
 
-  let isArray: boolean;
+  if (isProxy(value)) {
+    throw new TypeError(`${label} must not be a Proxy object`);
+  }
+
+  if (Array.isArray(value)) {
+    throw new TypeError(`${label} must be an object`);
+  }
+
+  let keys: string[];
   try {
-    isArray = Array.isArray(value);
+    keys = Object.keys(value);
   } catch {
     throw new TypeError(`${label} could not be inspected safely`);
   }
-  if (isArray) throw new TypeError(`${label} must be an object`);
-
-  let entries: [string, unknown][];
-  try {
-    entries = Object.entries(value);
-  } catch {
-    throw new TypeError(`${label} could not be read safely`);
+  if (keys.length > MAX_SNAPSHOTTED_OBJECT_FIELDS) {
+    throw new RangeError(
+      `${label} contains too many own enumerable fields for bounded validation`
+    );
   }
 
-  const snapshot: Record<string, unknown> = {};
-  Object.setPrototypeOf(snapshot, null);
-  for (const [key, entryValue] of entries) snapshot[key] = entryValue;
+  const snapshot: Record<string, unknown> = Object.create(null);
+  for (const key of keys) {
+    let isOwn: boolean;
+    try {
+      isOwn = Object.prototype.hasOwnProperty.call(value, key);
+    } catch {
+      throw new TypeError(`${label} changed while being snapshotted`);
+    }
+    if (!isOwn) {
+      throw new TypeError(`${label} changed while being snapshotted`);
+    }
+
+    let entryValue: unknown;
+    try {
+      entryValue = Reflect.get(value, key);
+    } catch {
+      throw new TypeError(`${label} field ${key} could not be read safely`);
+    }
+    snapshot[key] = entryValue;
+  }
   return Object.freeze(snapshot);
 }
