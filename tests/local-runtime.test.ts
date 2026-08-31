@@ -369,7 +369,7 @@ describe("local worker lifecycle manager", () => {
     const controller = new AbortController();
 
     runtime.register(definition("retry-cancel", "always-crash-counter", {
-      restartPolicy: { mode: "ON_FAILURE", maxRetries: 3, backoffMs: 500, maxBackoffMs: 500 }
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 3, backoffMs: 30, maxBackoffMs: 30 }
     }, [counter]));
 
     const start = runtime.start("retry-cancel", { signal: controller.signal });
@@ -380,7 +380,7 @@ describe("local worker lifecycle manager", () => {
 
     await expect(start).rejects.toMatchObject({ code: "START_CANCELLED" });
     expect(runtime.getStatus("retry-cancel").state).toBe("STOPPED");
-    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
     expect(readFileSync(counter, "utf8")).toBe("1");
   });
 
