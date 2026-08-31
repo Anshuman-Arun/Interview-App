@@ -557,6 +557,19 @@ describe("local model asset manager", () => {
     expect(await readFile(foreign, "utf8")).toBe("keep-me");
   });
 
+  it("allows cache and per-artifact limits to be configured independently", async () => {
+    const payload = Buffer.from("1234");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root, { maxArtifactBytes: 10, maxCacheBytes: 5 });
+    const manifest = manifestFor(payload, "https://example.test/independent-limits.bin");
+
+    const installed = await manager.importLocal(manifest, source);
+    expect(await readFile(installed)).toEqual(payload);
+  });
+
   it("enforces the configured aggregate artifact cache-size limit", async () => {
     const one = Buffer.from("123456");
     const two = Buffer.from("abcdef");
