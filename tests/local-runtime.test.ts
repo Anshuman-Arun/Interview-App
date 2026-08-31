@@ -1728,6 +1728,8 @@ describe("local worker lifecycle manager", () => {
       status.state === "FAILED" && status.lastExit?.code === 15
     );
     expect(childPid).toBeTypeOf("number");
+    await runtime.stop("pipe-exit");
+    if (childPid !== undefined) await waitForPidExit(childPid);
   });
 
   it("rejects impossible and excessively large output/readiness configurations", () => {
