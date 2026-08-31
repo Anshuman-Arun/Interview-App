@@ -263,14 +263,15 @@ export class ImagePayloadReference {
   }
 }
 
-export interface ImageSnapshotInput {
-  readonly snapshotId: string;
-  readonly sourceType: ImageSourceType;
-  readonly sourceRevision: BoardRevision;
-  readonly capturedAtMs: number;
-  readonly captureSequence?: number;
-  readonly mimeType: string;
-  readonly declaredWidth?: number;
-  readonly declaredHeight?: number;
-  readonly encodedBytes: Uint8Array;
-}
+export const ImageSnapshotInputSchema = z.object({
+  snapshotId: z.string().min(1).max(128),
+  sourceType: ImageSourceTypeSchema,
+  sourceRevision: BoardRevisionSchema,
+  capturedAtMs: z.number().finite().nonnegative(),
+  captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  mimeType: z.string().min(1).max(128),
+  declaredWidth: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  declaredHeight: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  encodedBytes: z.instanceof(Uint8Array)
+}).strict();
+export type ImageSnapshotInput = z.infer<typeof ImageSnapshotInputSchema>;
