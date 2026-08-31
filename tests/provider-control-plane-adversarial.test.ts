@@ -1013,6 +1013,87 @@ describe("provider definition and capability hostile values", () => {
     })).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
   });
 
+  it("does not let a monkey-patched Array.includes bypass admission checks", () => {
+    const credentialRegistry = new ProviderRegistry();
+    credentialRegistry.register({
+      ...createSettingsProviderInput(),
+      id: "credential-provider",
+      credentialRequirement: "REQUIRED",
+      credentialPurposes: ["API_KEY"],
+      models: [{
+        id: "credential-model",
+        displayName: "Credential Model",
+        capabilities: createCapabilities()
+      }]
+    });
+
+    const reasoningRegistry = new ProviderRegistry();
+    reasoningRegistry.register({
+      ...createSettingsProviderInput(),
+      id: "reasoning-provider",
+      models: [{
+        id: "reasoning-model",
+        displayName: "Reasoning Model",
+        capabilities: createCapabilities({
+          reasoningControls: "SUPPORTED",
+          reasoningLevels: ["high"]
+        })
+      }]
+    });
+
+    const originalIncludes = Object.getOwnPropertyDescriptor(Array.prototype, "includes");
+    let credentialError: unknown;
+    let reasoningError: unknown;
+    try {
+      Object.defineProperty(Array.prototype, "includes", {
+        configurable: true,
+        writable: true,
+        value: () => true
+      });
+      try {
+        resolveProviderConfiguration({
+          registry: credentialRegistry,
+          configuration: {
+            version: 1,
+            providerId: "credential-provider",
+            modelId: "credential-model",
+            enabled: true,
+            credentialRef: {
+              id: "credential-token",
+              purpose: "TOKEN"
+            }
+          }
+        });
+      } catch (error) {
+        credentialError = error;
+      }
+
+      try {
+        resolveProviderConfiguration({
+          registry: reasoningRegistry,
+          configuration: {
+            version: 1,
+            providerId: "reasoning-provider",
+            modelId: "reasoning-model",
+            enabled: true,
+            reasoning: { level: "medium" }
+          }
+        });
+      } catch (error) {
+        reasoningError = error;
+      }
+    } finally {
+      if (originalIncludes === undefined) {
+        Reflect.deleteProperty(Array.prototype, "includes");
+      } else {
+        Object.defineProperty(Array.prototype, "includes", originalIncludes);
+      }
+    }
+
+    expect(credentialError).toMatchObject({ code: "MALFORMED_CONFIGURATION" });
+    expect(reasoningError).toMatchObject({ code: "INCOMPATIBLE_CAPABILITY" });
+  });
+
   it("rejects duplicate and contradictory reasoning-level declarations", () => {
     expect(() => defineProvider({
       ...createSettingsProviderInput(),

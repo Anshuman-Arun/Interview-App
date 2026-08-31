@@ -1541,6 +1541,16 @@ function validateProviderSettings(
   return parsed.data;
 }
 
+function readonlyStringArrayContains(
+  values: readonly string[],
+  target: string
+): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === target) return true;
+  }
+  return false;
+}
+
 function validateCredentialReference(
   provider: ProviderDefinition,
   reference: ProviderSecretReference | undefined
@@ -1554,7 +1564,10 @@ function validateCredentialReference(
     }
     return;
   }
-  if (reference !== undefined && !provider.credentialPurposes.includes(reference.purpose)) {
+  if (
+    reference !== undefined
+    && !readonlyStringArrayContains(provider.credentialPurposes, reference.purpose)
+  ) {
     throw new ProviderControlPlaneError(
       "MALFORMED_CONFIGURATION",
       "Provider configuration uses an unsupported credential purpose"
@@ -1586,7 +1599,7 @@ function validateReasoningConfiguration(
       "Configured model reasoning levels are unknown"
     );
   }
-  if (!levels.includes(reasoning.level)) {
+  if (!readonlyStringArrayContains(levels, reasoning.level)) {
     throw new ProviderControlPlaneError(
       "INCOMPATIBLE_CAPABILITY",
       "Configured model does not support the requested reasoning level"
