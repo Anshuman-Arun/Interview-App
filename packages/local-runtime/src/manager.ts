@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { join, win32 as win32Path } from "node:path";
+import { win32 as win32Path } from "node:path";
 import { performance } from "node:perf_hooks";
 import { types as utilTypes } from "node:util";
 import { DIAGNOSTIC_SANITIZATION_LIMITS, sanitizeDiagnosticRecord, sanitizeDiagnosticText } from "../../diagnostics/src/index.js";
@@ -1973,7 +1973,7 @@ function runTaskkill(
       resolve(false);
       return;
     }
-    const executable = join(systemRoot, "System32", "taskkill.exe");
+    const executable = win32Path.join(systemRoot, "System32", "taskkill.exe");
     let task: ReturnType<typeof spawn>;
     try {
       task = spawn(executable, [
