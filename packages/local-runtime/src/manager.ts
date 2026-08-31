@@ -26,6 +26,7 @@ const DEFAULT_OUTPUT_MAX_LINES = 200;
 const DEFAULT_OUTPUT_MAX_BYTES = 64 * 1024;
 const DEFAULT_OUTPUT_MAX_LINE_BYTES = 64 * 1024;
 const DEFAULT_POLL_INTERVAL_MS = 50;
+const DEFAULT_RESTART_BACKOFF_MS = 100;
 const MAX_TIMER_MS = 2_147_483_647;
 const PROCESS_TREE_POLL_INTERVAL_MS = 10;
 const MAX_CAPABILITIES = 128;
@@ -1571,8 +1572,9 @@ function validateRestartPolicy(policy: LocalRestartPolicy): void {
   }
   if (policy.backoffMs !== undefined) nonnegativeTimer(policy.backoffMs, "restartPolicy.backoffMs");
   if (policy.maxBackoffMs !== undefined) nonnegativeTimer(policy.maxBackoffMs, "restartPolicy.maxBackoffMs");
-  if (policy.backoffMs !== undefined && policy.maxBackoffMs !== undefined && policy.maxBackoffMs < policy.backoffMs) {
-    invalid("restartPolicy.maxBackoffMs must be at least restartPolicy.backoffMs");
+  const effectiveBackoffMs = policy.backoffMs ?? DEFAULT_RESTART_BACKOFF_MS;
+  if (policy.maxBackoffMs !== undefined && policy.maxBackoffMs < effectiveBackoffMs) {
+    invalid("restartPolicy.maxBackoffMs must be at least the effective restartPolicy.backoffMs");
   }
 }
 
@@ -1949,7 +1951,7 @@ function validateExpectedHandshake(
 
 function restartBackoff(policy: LocalRestartPolicy, retryNumber: number): number {
   if (policy.mode === "NEVER") return 0;
-  const base = policy.backoffMs ?? 100;
+  const base = policy.backoffMs ?? DEFAULT_RESTART_BACKOFF_MS;
   const maximum = policy.maxBackoffMs ?? Math.max(base, 5_000);
   if (base === 0) return 0;
   const exponent = Math.max(0, retryNumber - 1);
