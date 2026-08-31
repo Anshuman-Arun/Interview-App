@@ -11,8 +11,8 @@ Readiness strategies are pluggable and bounded by `startupTimeoutMs`:
 - `STABLE_PROCESS`: the child must remain alive for a configured interval;
 - `STDOUT_LINE`: trusted application code evaluates bounded, untrusted stdout lines;
 - `STDOUT_JSON`: the manager parses a bounded line as JSON and passes `unknown` to the evaluator; malformed JSON is ignored rather than trusted;
-- `HTTP_LOOPBACK`: polling is restricted to `http://localhost`, `127.0.0.1`, or `::1` and redirects are rejected;
-- `CUSTOM_LOCAL`: a trusted local callback/probe can report readiness without giving the browser process access to spawning.
+- `HTTP_LOOPBACK`: polling is restricted to loopback HTTP, `localhost` is canonicalized to literal `127.0.0.1`, and redirects are rejected;
+- `CUSTOM_LOCAL`: a trusted backend callback/probe can report readiness without giving the browser process access to spawning; callers remain responsible for keeping custom probe behavior local.
 
 Readiness decisions may also carry a version handshake containing component, protocol, model/hash, and capability metadata. Definitions can require expected component/protocol versions; mismatches fail startup.
 
@@ -22,23 +22,23 @@ Readiness decisions may also carry a version handshake containing component, pro
 
 Commands are always represented as an executable plus argument array and are spawned with `shell: false`. The API has no arbitrary shell-string surface and is not exported to renderer/browser code.
 
-The child environment is built from a small cross-platform inheritance allowlist plus caller-selected inherited names, explicit non-secret values, and runtime-only secret values. The parent environment is never blindly copied. Environment definitions are never returned in status snapshots.
+The child environment is built from a platform-specific safe inheritance allowlist plus caller-selected inherited names, explicit non-secret values, and runtime-only secret values. Definitions and environment records are inspected as data-only structures and snapshotted at registration, so later caller mutation or accessor-backed configuration cannot change execution. The parent environment is never blindly copied, and environment definitions are never returned in status snapshots.
 
-Runtime-only secret values are actively removed from captured output and handshake/status metadata in addition to the repository diagnostics sanitizer. Status snapshots therefore expose no raw environment map or secret values.
+Runtime-only secret values are actively removed from captured output, readiness/failure details, and handshake metadata (including metadata keys) in addition to the repository diagnostics sanitizer. Status snapshots therefore expose no raw environment map or secret values.
 
 ## Output and crash records
 
-Stdout/stderr are framed as bounded UTF-8 lines. Oversized or invalid lines become diagnostic markers instead of causing unbounded accumulation. Recent output is limited by both line count and byte count and carries a `[TRUNCATED]` marker after eviction.
+Stdout/stderr are framed as bounded UTF-8 lines using a fixed per-line buffer, so hostile fragmentation cannot create unbounded allocation growth or repeated whole-line copying. Oversized or invalid lines become diagnostic markers instead of causing unbounded accumulation. Recent output is limited by both line count and byte count and carries a `[TRUNCATED]` marker after eviction.
 
 Unexpected exits record exit code, signal where available, timestamp, previous lifecycle state, and a sanitized bounded stderr tail. Output is observational diagnostics only.
 
 ## Restart policy
 
-The default policy is `NEVER`. `ON_FAILURE` requires an explicit finite `maxRetries` and supports bounded exponential backoff. The retry budget is shared across startup failures and later crashes until an explicit new `start()`/`restart()` operation resets it, preventing a process that repeatedly becomes ready and crashes from restarting forever.
+The default policy is `NEVER`. `ON_FAILURE` requires an explicit finite retry budget (capped at 100 retries) and supports bounded exponential backoff. The retry budget is shared across startup failures and later crashes until an explicit new `start()`/`restart()` operation resets it, preventing a process that repeatedly becomes ready and crashes from restarting forever. Deterministic version mismatches are not automatically retried.
 
 ## Shutdown
 
-`stop()` is idempotent. It requests graceful shutdown (EOF by default or a trusted local callback), waits `shutdownTimeoutMs`, escalates to termination, and then force-kills when necessary. On POSIX, managed children are placed in their own process group so escalation can target the tree. On Windows, normal termination uses Node process semantics and final forced tree cleanup uses `taskkill /T /F` without a shell.
+`stop()` is idempotent. It requests graceful shutdown (EOF by default or a trusted local callback), waits `shutdownTimeoutMs`, escalates to termination, and then force-kills when necessary. A never-resolving asynchronous graceful hook cannot block escalation. On POSIX, managed children are placed in their own process group so escalation can target the tree. On Windows, bounded tree termination uses the absolute System32 `taskkill.exe` path with `/T`, adding `/F` for final force, and never enables Node's shell option.
 
 `stopAll()` stops components sequentially in reverse registration order and waits for each managed child to terminate. It continues attempting to stop the remaining components if one fails, then reports an aggregate failure rather than returning success while a known managed child is still alive.
 
