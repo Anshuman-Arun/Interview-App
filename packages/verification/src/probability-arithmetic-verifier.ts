@@ -12,6 +12,7 @@ import {
   parseIntermediateRationalInput,
   parseRationalInput,
   rational,
+  subtractRationals,
   type ExactRational
 } from "./math-utils.js";
 import { booleanClaimResult, mathFailure, prepareStructuredStatement } from "./verifier-common.js";
@@ -155,7 +156,15 @@ function evaluateProbabilityClaim(
       if (evidence.numerator === 0n) {
         throw new BoundedMathError("INVALID_PROBABILITY", "Evidence probability must be positive");
       }
-      const posterior = divideRationals(multiplyRationals(prior, likelihood), evidence);
+      const joint = multiplyRationals(prior, likelihood);
+      const maximumEvidence = addRationals(joint, subtractRationals(rational(1n, 1n), prior));
+      if (compareRationals(evidence, joint) < 0 || compareRationals(evidence, maximumEvidence) > 0) {
+        throw new BoundedMathError(
+          "INVALID_PROBABILITY",
+          "Bayes inputs are inconsistent with any probability assigned to the complementary hypothesis"
+        );
+      }
+      const posterior = divideRationals(joint, evidence);
       assertProbability(posterior, "Computed posterior probability");
       return { actual: posterior, claimed: parseIntermediateRationalInput(claim.claimedPosterior) };
     }
