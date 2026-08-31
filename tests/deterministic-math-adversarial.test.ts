@@ -690,6 +690,12 @@ describe("adversarial deterministic math verification", () => {
         claimedExpectation: fraction("-1", "2")
       },
       {
+        kind: "CONDITIONAL_FROM_COUNTS",
+        jointCount: 3,
+        conditionCount: 2,
+        claimedProbability: fraction("3", "2")
+      },
+      {
         kind: "CONDITIONAL_FROM_PROBABILITIES",
         jointProbability: fraction("0"),
         conditionProbability: fraction("0"),
