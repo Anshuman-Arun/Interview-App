@@ -812,8 +812,40 @@ export class ModelAssetManager {
   private async assertArtifactDirectoryShape(
     directoryPath: string,
     manifest: AssetManifest,
-    errorCode: "CORRUPT_INSTALLATION" | "UNSAFE_PATH"
+    errorCode: "CORRUPT_INSTALLATION" | "UNSAFE_PATH",
+    expectedIdentity?: { readonly device: bigint; readonly inode: bigint }
   ): Promise<void> {
+    let directoryStat: BigIntStats;
+    try {
+      directoryStat = await lstat(directoryPath, { bigint: true });
+    } catch (error) {
+      if (typeof error === "object"
+          && error !== null
+          && "code" in error
+          && error.code === "ENOENT") {
+        throw new ModelAssetError(
+          errorCode,
+          "Artifact directory disappeared during structural inspection.",
+          { cause: error }
+        );
+      }
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to inspect artifact directory structure.",
+        { cause: error }
+      );
+    }
+    if (directoryStat.isSymbolicLink()
+        || !directoryStat.isDirectory()
+        || (expectedIdentity !== undefined
+          && (directoryStat.dev !== expectedIdentity.device
+            || directoryStat.ino !== expectedIdentity.inode))) {
+      throw new ModelAssetError(
+        errorCode,
+        "Artifact directory changed to a different or unsafe filesystem entry."
+      );
+    }
+
     const expectedNames = new Set(["manifest.json", manifest.filename]);
     const directory = await this.openCacheDirectory(
       directoryPath,
@@ -864,6 +896,20 @@ export class ModelAssetManager {
           "Artifact directory required entries must be regular non-symlink files."
         );
       }
+    }
+
+    const finalDirectoryStat = await lstat(directoryPath, { bigint: true });
+    if (finalDirectoryStat.isSymbolicLink()
+        || !finalDirectoryStat.isDirectory()
+        || finalDirectoryStat.dev !== directoryStat.dev
+        || finalDirectoryStat.ino !== directoryStat.ino
+        || (expectedIdentity !== undefined
+          && (finalDirectoryStat.dev !== expectedIdentity.device
+            || finalDirectoryStat.ino !== expectedIdentity.inode))) {
+      throw new ModelAssetError(
+        errorCode,
+        "Artifact directory was replaced during structural inspection."
+      );
     }
   }
 
@@ -987,7 +1033,12 @@ export class ModelAssetManager {
         path.join(stagingDirectory, "manifest.json"),
         serializedManifest
       );
-      await this.assertArtifactDirectoryShape(stagingDirectory, manifest, "UNSAFE_PATH");
+      await this.assertArtifactDirectoryShape(
+        stagingDirectory,
+        manifest,
+        "UNSAFE_PATH",
+        stagingIdentity
+      );
       if (signal.aborted) {
         throw new ModelAssetError(
           "CANCELLED",
@@ -1027,7 +1078,12 @@ export class ModelAssetManager {
       }
 
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
-      await this.assertArtifactDirectoryShape(stagingDirectory, manifest, "UNSAFE_PATH");
+      await this.assertArtifactDirectoryShape(
+        stagingDirectory,
+        manifest,
+        "UNSAFE_PATH",
+        stagingIdentity
+      );
       try {
         await this.publishReservedArtifact(
           paths,
@@ -1102,7 +1158,12 @@ export class ModelAssetManager {
     }
 
     try {
-      await this.assertArtifactDirectoryShape(directory, manifest, "CORRUPT_INSTALLATION");
+      await this.assertArtifactDirectoryShape(
+        directory,
+        manifest,
+        "CORRUPT_INSTALLATION",
+        { device: directoryStat.dev, inode: directoryStat.ino }
+      );
       const storedValue = await readStoredManifest(path.join(directory, "manifest.json"));
       const stored = AssetManifestSchema.safeParse(storedValue);
       if (!stored.success || artifactInstallationKey(stored.data) !== key) {
@@ -1129,7 +1190,12 @@ export class ModelAssetManager {
           || finalDirectoryStat.ino !== directoryStat.ino) {
         return { status: "CORRUPT", errorCode: "CORRUPT_INSTALLATION" };
       }
-      await this.assertArtifactDirectoryShape(directory, manifest, "CORRUPT_INSTALLATION");
+      await this.assertArtifactDirectoryShape(
+        directory,
+        manifest,
+        "CORRUPT_INSTALLATION",
+        { device: directoryStat.dev, inode: directoryStat.ino }
+      );
       return { status: "INSTALLED", path: payload };
     } catch (error) {
       if (error instanceof ModelAssetError && error.code === "CANCELLED") throw error;
