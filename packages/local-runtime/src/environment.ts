@@ -1,15 +1,19 @@
 import type { LocalEnvironmentDefinition } from "./types.js";
 
-export const DEFAULT_INHERITED_ENVIRONMENT_KEYS = Object.freeze([
+export const DEFAULT_POSIX_INHERITED_ENVIRONMENT_KEYS = Object.freeze([
   "PATH",
-  "Path",
-  "PATHEXT",
-  "SYSTEMROOT",
-  "SystemRoot",
-  "WINDIR",
   "TEMP",
   "TMP",
   "TMPDIR"
+] as const);
+
+export const DEFAULT_WINDOWS_INHERITED_ENVIRONMENT_KEYS = Object.freeze([
+  "PATH",
+  "PATHEXT",
+  "SYSTEMROOT",
+  "WINDIR",
+  "TEMP",
+  "TMP"
 ] as const);
 
 const ENVIRONMENT_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/u;
@@ -27,7 +31,10 @@ export function buildLocalEnvironment(
 ): BuiltLocalEnvironment {
   const environment: NodeJS.ProcessEnv = {};
   const secretValues = new Set<string>();
-  const inherited = [...DEFAULT_INHERITED_ENVIRONMENT_KEYS, ...(definition?.inherit ?? [])];
+  const defaults = platform === "win32"
+    ? DEFAULT_WINDOWS_INHERITED_ENVIRONMENT_KEYS
+    : DEFAULT_POSIX_INHERITED_ENVIRONMENT_KEYS;
+  const inherited = [...defaults, ...(definition?.inherit ?? [])];
   const inheritedNames = new Set<string>();
 
   for (const key of inherited) {
