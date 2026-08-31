@@ -939,6 +939,21 @@ describe("local worker lifecycle manager", () => {
     await expect(runtime.start("crlf")).resolves.toMatchObject({ state: "READY" });
   });
 
+  it("rejects revoked proxy definitions and environment objects predictably", () => {
+    const runtime = manager();
+    const definitionProxy = Proxy.revocable(definition("revoked-definition", "ready"), {});
+    definitionProxy.revoke();
+    expect(() => runtime.register(definitionProxy.proxy))
+      .toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    const environmentProxy = Proxy.revocable({ values: { SAFE_VALUE: "x" } }, {});
+    environmentProxy.revoke();
+    expect(() => buildLocalEnvironment(
+      environmentProxy.proxy as Parameters<typeof buildLocalEnvironment>[0],
+      {}
+    )).toThrow(/could not be inspected/iu);
+  });
+
   it("never executes accessors while inspecting process definitions", () => {
     const runtime = manager();
     let getterCalls = 0;
