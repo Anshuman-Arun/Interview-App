@@ -959,7 +959,7 @@ export class LocalRuntimeManager {
     } catch (error) {
       if (record.child === child) {
         record.failure = this.failure(
-          "TERMINATION_FAILED",
+          "GRACEFUL_SHUTDOWN_FAILED",
           `Graceful shutdown hook failed: ${safeErrorMessage(error, record.environment.secretValues)}`,
           record.environment.secretValues
         );
