@@ -584,6 +584,23 @@ describe("credential readiness edge cases", () => {
     });
     expect(getterCalls).toBe(0);
 
+    const requiredRegistry = registerBuiltInProviders();
+    const requiredInput = {
+      registry: requiredRegistry,
+      configuration: {
+        version: 1,
+        providerId: "gemini-api",
+        modelId: "gemini-2.5-flash",
+        enabled: true
+      }
+    };
+    Reflect.set(requiredInput, "secretResolver", 42);
+    await expect(evaluateProviderReadiness(requiredInput)).resolves.toEqual({
+      state: "CREDENTIALS_REQUIRED",
+      providerId: "gemini-api",
+      modelId: "gemini-2.5-flash"
+    });
+
     const validResolver: ProviderSecretResolver = {
       async resolveSecret() {
         return "unused-secret";

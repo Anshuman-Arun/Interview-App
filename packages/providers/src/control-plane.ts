@@ -2215,6 +2215,17 @@ export async function evaluateProviderReadiness(input: {
   }
 
   const reference = resolved.configuration.credentialRef;
+  if (
+    reference === undefined
+    && resolved.provider.credentialRequirement === "REQUIRED"
+  ) {
+    return freezeNullPrototype({
+      state: "CREDENTIALS_REQUIRED",
+      providerId: resolved.provider.id,
+      modelId: resolved.model.id
+    });
+  }
+
   let secretResolver: ProviderSecretResolver | undefined;
   try {
     const secretResolverProperty = readOwnDataProperty(
@@ -2236,15 +2247,7 @@ export async function evaluateProviderReadiness(input: {
     });
   }
 
-  if (reference === undefined) {
-    if (resolved.provider.credentialRequirement === "REQUIRED") {
-      return freezeNullPrototype({
-        state: "CREDENTIALS_REQUIRED",
-        providerId: resolved.provider.id,
-        modelId: resolved.model.id
-      });
-    }
-  } else {
+  if (reference !== undefined) {
     const hasSecret = secretResolver?.hasSecret;
     if (
       typeof hasSecret !== "function"
