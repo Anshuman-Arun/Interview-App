@@ -13,7 +13,7 @@ import {
   pathEntryExists,
   readStoredManifest,
   removeEntryInsideRoot,
-  sumArtifactPayloadBytes,
+  sumManagedCacheBytes,
   validateCachePaths,
   verifyArtifactFile,
   writeStoredManifest,
@@ -627,7 +627,14 @@ export class ModelAssetManager {
       await this.removeManagedEntry(paths, installationDirectory);
     }
 
-    const reservationBytes = manifest.sizeBytes;
+    const serializedManifest = serializeAssetManifest(manifest);
+    const reservationBytes = manifest.sizeBytes + Buffer.byteLength(serializedManifest, "utf8");
+    if (!Number.isSafeInteger(reservationBytes)) {
+      throw new ModelAssetError(
+        "CACHE_LIMIT_EXCEEDED",
+        "Artifact payload and metadata exceed safe integer accounting limits."
+      );
+    }
     await this.reserveCapacity(paths, reservationBytes);
     const stagingDirectory = path.join(
       paths.temporary,
@@ -663,7 +670,7 @@ export class ModelAssetManager {
       await this.assertSafeStagingDirectory(paths, stagingDirectory);
       await writeStoredManifest(
         path.join(stagingDirectory, "manifest.json"),
-        serializeAssetManifest(manifest)
+        serializedManifest
       );
       if (signal.aborted) {
         throw new ModelAssetError(
@@ -763,7 +770,7 @@ export class ModelAssetManager {
     }
   }
 
-  private async managedCachePayloadBytes(paths: CachePaths): Promise<number> {
+  private async managedCacheBytes(paths: CachePaths): Promise<number> {
     const activeStagingDirectories = new Set(
       [...this.inFlight.values()]
         .map((entry) => entry.stagingDirectory)
@@ -782,11 +789,11 @@ export class ModelAssetManager {
         );
       }
       if (!INSTALLATION_KEY_PATTERN.test(entry.name)) continue;
-      total += await sumArtifactPayloadBytes(path.join(paths.artifacts, entry.name));
+      total += await sumManagedCacheBytes(path.join(paths.artifacts, entry.name));
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
-          "Managed artifact cache usage exceeds safe integer accounting limits."
+          "Managed cache usage exceeds safe integer accounting limits."
         );
       }
     }
@@ -804,7 +811,7 @@ export class ModelAssetManager {
       if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
       const candidate = path.join(paths.temporary, entry.name);
       if (activeStagingDirectories.has(candidate)) continue;
-      total += await sumArtifactPayloadBytes(candidate);
+      total += await sumManagedCacheBytes(candidate);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -815,11 +822,11 @@ export class ModelAssetManager {
     return total;
   }
 
-  private async activeStagingPayloadBytes(): Promise<number> {
+  private async activeStagingBytes(): Promise<number> {
     let total = 0;
     for (const entry of this.inFlight.values()) {
       if (entry.stagingDirectory === undefined) continue;
-      total += await sumArtifactPayloadBytes(entry.stagingDirectory);
+      total += await sumManagedCacheBytes(entry.stagingDirectory);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -841,7 +848,7 @@ export class ModelAssetManager {
       }
 
       if (this.maxCacheBytes !== undefined) {
-        const usedBytes = await this.managedCachePayloadBytes(paths);
+        const usedBytes = await this.managedCacheBytes(paths);
         const projected = usedBytes + reservedProjection;
         if (!Number.isSafeInteger(projected) || projected > this.maxCacheBytes) {
           throw new ModelAssetError(
@@ -851,7 +858,7 @@ export class ModelAssetManager {
         }
       }
 
-      const activeStagingBytes = await this.activeStagingPayloadBytes();
+      const activeStagingBytes = await this.activeStagingBytes();
       const alreadyMaterialized = Math.min(activeStagingBytes, this.reservedBytes);
       const outstandingReservation = reservedProjection - alreadyMaterialized;
       const available = await availableDiskBytes(paths.root);
