@@ -358,13 +358,45 @@ describe("vision snapshot validation and hashing", () => {
     } as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrowError(RangeError);
   });
 
-  it("bounds the public image hashing utility without allocating a huge fixture", () => {
-    class OversizedView extends Uint8Array {
+  it("uses intrinsic typed-array length instead of spoofable subclass byteLength accessors", () => {
+    class OverreportingView extends Uint8Array {
       public override get byteLength(): number {
         return 64 * 1024 * 1024 + 1;
       }
     }
-    expect(() => sha256ImageBytes(new OversizedView(1))).toThrowError(RangeError);
+    const overreported = new OverreportingView([7]);
+    expect(sha256ImageBytes(overreported)).toBe(sha256ImageBytes(new Uint8Array([7])));
+
+    class UnderreportingView extends Uint8Array {
+      public override get byteLength(): number {
+        return 1;
+      }
+    }
+    const underreported = new UnderreportingView(100);
+    expect(() => createValidatedImageSnapshot({
+      snapshotId: "underreported-bytes",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: underreported
+    }, {
+      maxEncodedBytes: 50
+    })).toThrowError(VisionPreprocessingError);
+    try {
+      createValidatedImageSnapshot({
+        snapshotId: "underreported-bytes",
+        sourceType: "WHITEBOARD_SNAPSHOT",
+        sourceRevision: BoardRevisionSchema.parse(1),
+        capturedAtMs: 1,
+        mimeType: "image/png",
+        encodedBytes: underreported
+      }, {
+        maxEncodedBytes: 50
+      });
+    } catch (error) {
+      expectCode(error, "IMAGE_TOO_LARGE_BYTES");
+    }
   });
 
   it("identifies exact image payloads and repeated processing identities", () => {
