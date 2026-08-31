@@ -1454,6 +1454,26 @@ describe("local worker lifecycle manager", () => {
       .rejects.toMatchObject({ code: "READINESS_TIMEOUT" });
     expect(httpEvaluateCalls).toBeGreaterThan(1);
     expect(http.getStatus("spoofed-http-error").state).toBe("FAILED");
+
+    let fetchCalls = 0;
+    const fetchSpoof = manager({
+      fetch: (() => {
+        fetchCalls += 1;
+        return Promise.reject(new LocalRuntimeError("READINESS_FAILED", "spoofed fetch failure"));
+      }) as typeof globalThis.fetch
+    });
+    fetchSpoof.register(definition("spoofed-fetch-error", "ready", {
+      startupTimeoutMs: 120,
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        intervalMs: 5
+      }
+    }));
+
+    await expect(fetchSpoof.start("spoofed-fetch-error"))
+      .rejects.toMatchObject({ code: "READINESS_TIMEOUT" });
+    expect(fetchCalls).toBeGreaterThan(1);
   });
 
   it("rejects malformed reported handshake metadata", async () => {
