@@ -1,4 +1,4 @@
-import { boundedArrayLength } from "./array-validation.js";
+import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
 import {
   ImageSnapshot,
   VisionImageArtifact,
@@ -56,7 +56,7 @@ export function deduplicateExactImagePayloads<T extends VisionRasterSource>(imag
   const unique: T[] = [];
 
   for (let index = 0; index < imageCount; index += 1) {
-    const image = images[index];
+    const image = readArrayEntry(images, index, "Image collection");
     if (image === undefined) throw new TypeError("Image collection must not contain missing entries");
     assertVisionRasterSource(image);
     const key = `${String(image.metadata.byteSize)}:${image.metadata.contentDigest}`;
