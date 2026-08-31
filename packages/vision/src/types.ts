@@ -257,7 +257,10 @@ export class ImageSnapshot {
   public readonly metadata: ImageSnapshotMetadata;
 
   public static isValidatedInstance(value: unknown): value is ImageSnapshot {
-    return typeof value === "object" && value !== null && #bytes in value;
+    return typeof value === "object"
+      && value !== null
+      && #bytes in value
+      && Object.getPrototypeOf(value) === ImageSnapshot.prototype;
   }
 
   public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array);
@@ -289,12 +292,17 @@ export class ImageSnapshot {
   }
 }
 
+Object.freeze(ImageSnapshot.prototype);
+
 export class VisionImageArtifact {
   readonly #bytes: Buffer;
   public readonly metadata: VisionImageArtifactMetadata;
 
   public static isValidatedInstance(value: unknown): value is VisionImageArtifact {
-    return typeof value === "object" && value !== null && #bytes in value;
+    return typeof value === "object"
+      && value !== null
+      && #bytes in value
+      && Object.getPrototypeOf(value) === VisionImageArtifact.prototype;
   }
 
   public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array);
@@ -344,6 +352,8 @@ export class VisionImageArtifact {
   }
 }
 
+Object.freeze(VisionImageArtifact.prototype);
+
 export type VisionRasterSource = ImageSnapshot | VisionImageArtifact;
 
 export function assertVisionRasterSource(value: unknown): asserts value is VisionRasterSource {
@@ -380,7 +390,10 @@ export class ImagePayloadReference {
   public readonly metadata: ImagePayloadReferenceMetadata;
 
   public static isValidatedInstance(value: unknown): value is ImagePayloadReference {
-    return typeof value === "object" && value !== null && #source in value;
+    return typeof value === "object"
+      && value !== null
+      && #source in value
+      && Object.getPrototypeOf(value) === ImagePayloadReference.prototype;
   }
 
   public constructor(sourceInput: VisionRasterSource) {
@@ -405,6 +418,8 @@ export class ImagePayloadReference {
     return this.metadata;
   }
 }
+
+Object.freeze(ImagePayloadReference.prototype);
 
 export const ImageSnapshotInputSchema = z.object({
   snapshotId: z.string().min(1).max(128),
