@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { PNG } from "pngjs";
+import { computeVisionArtifactId } from "./artifact-identity.js";
 import { assertSupportedPngHeaderParameters } from "./png-validation.js";
 import { BoardRevisionSchema, type BoardRevision } from "../../domain/src/index.js";
 
@@ -299,6 +300,20 @@ export class VisionImageArtifact {
   public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array);
   public constructor(metadata: VisionImageArtifactMetadata, bytes: unknown) {
     const parsed = VisionImageArtifactMetadataSchema.parse(metadata);
+    const expectedArtifactId = computeVisionArtifactId({
+      kind: parsed.kind,
+      sourceSnapshotId: parsed.sourceSnapshotId,
+      sourceRevision: parsed.sourceRevision,
+      parentArtifactId: parsed.parentArtifactId,
+      width: parsed.width,
+      height: parsed.height,
+      sourceBounds: parsed.sourceBounds,
+      coordinateTransform: parsed.coordinateTransform,
+      contentDigest: parsed.contentDigest
+    });
+    if (parsed.artifactId !== expectedArtifactId) {
+      throw new RangeError("Vision artifact ID does not match deterministic metadata identity");
+    }
     if (!(bytes instanceof Uint8Array)) throw new RangeError("Image payload must be a Uint8Array");
     if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
       throw new RangeError("Image payload exceeds the package hard encoded-byte cap");
