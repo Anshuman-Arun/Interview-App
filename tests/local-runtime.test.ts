@@ -118,6 +118,38 @@ describe("local worker lifecycle manager", () => {
       signal: {} as AbortSignal
     })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
 
+    let signalProxyTraps = 0;
+    const proxiedSignal = new Proxy(new AbortController().signal, {
+      get: (target, key, receiver) => {
+        signalProxyTraps += 1;
+        return Reflect.get(target, key, receiver);
+      },
+      getPrototypeOf: (target) => {
+        signalProxyTraps += 1;
+        return Reflect.getPrototypeOf(target);
+      }
+    });
+    expect(() => runtime.start("invalid-start-options", {
+      signal: proxiedSignal
+    })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(signalProxyTraps).toBe(0);
+
+    let clockProxyTraps = 0;
+    const proxiedDate = new Proxy(new Date(), {
+      get: (target, key, receiver) => {
+        clockProxyTraps += 1;
+        return Reflect.get(target, key, receiver);
+      },
+      getPrototypeOf: (target) => {
+        clockProxyTraps += 1;
+        return Reflect.getPrototypeOf(target);
+      }
+    });
+    const proxyClock = manager({ now: () => proxiedDate });
+    proxyClock.register(definition("proxy-clock", "ready"));
+    await expect(proxyClock.start("proxy-clock")).resolves.toMatchObject({ state: "READY" });
+    expect(clockProxyTraps).toBe(0);
+
     await expect(runtime.start("invalid-start-options"))
       .resolves.toMatchObject({ state: "READY" });
   });
@@ -985,6 +1017,41 @@ describe("local worker lifecycle manager", () => {
     await expect(runtime.start("bad-handshake-shape")).rejects.toMatchObject({ code: "READINESS_FAILED" });
   });
 
+  it("does not execute proxy traps in arbitrary handshake metadata", async () => {
+    let metadataProxyTraps = 0;
+    const metadata = new Proxy({ note: "should-not-be-read" }, {
+      ownKeys: (target) => {
+        metadataProxyTraps += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        metadataProxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      getPrototypeOf: (target) => {
+        metadataProxyTraps += 1;
+        return Reflect.getPrototypeOf(target);
+      }
+    });
+    const runtime = manager();
+    runtime.register(definition("proxy-metadata", "ready", {
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: {
+            componentVersion: "fixture-1",
+            metadata
+          }
+        })
+      }
+    }));
+
+    const status = await runtime.start("proxy-metadata");
+    expect(status.handshake?.metadata).toEqual({});
+    expect(metadataProxyTraps).toBe(0);
+  });
+
   it("redacts runtime secrets used as handshake metadata keys", async () => {
     const secret = "q7V9m2L4z8P6";
     const runtime = manager();
@@ -1259,10 +1326,45 @@ describe("local worker lifecycle manager", () => {
 
   it("rejects revoked proxy definitions and environment objects predictably", () => {
     const runtime = manager();
+    let definitionProxyTraps = 0;
+    const liveDefinitionProxy = new Proxy(definition("live-proxy-definition", "ready"), {
+      ownKeys: (target) => {
+        definitionProxyTraps += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        definitionProxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      getPrototypeOf: (target) => {
+        definitionProxyTraps += 1;
+        return Reflect.getPrototypeOf(target);
+      }
+    });
+    expect(() => runtime.register(liveDefinitionProxy))
+      .toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(definitionProxyTraps).toBe(0);
+
     const definitionProxy = Proxy.revocable(definition("revoked-definition", "ready"), {});
     definitionProxy.revoke();
     expect(() => runtime.register(definitionProxy.proxy))
       .toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    let environmentProxyTraps = 0;
+    const liveEnvironmentValues = new Proxy({ SAFE_VALUE: "x" }, {
+      ownKeys: (target) => {
+        environmentProxyTraps += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        environmentProxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      }
+    });
+    expect(() => buildLocalEnvironment({
+      values: liveEnvironmentValues
+    }, {})).toThrow(/could not be inspected/iu);
+    expect(environmentProxyTraps).toBe(0);
 
     const environmentProxy = Proxy.revocable({ values: { SAFE_VALUE: "x" } }, {});
     environmentProxy.revoke();
