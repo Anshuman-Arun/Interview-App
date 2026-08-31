@@ -454,6 +454,9 @@ function checkVisionInternalConstruction(records, violations) {
           if (ts.isShorthandPropertyAssignment(property)) return taintedBindingNames.has(property.name.text);
           if (ts.isPropertyAssignment(property)) return expressionExposesInternalBinding(property.initializer);
           if (ts.isSpreadAssignment(property)) return expressionExposesInternalBinding(property.expression);
+          if (ts.isMethodDeclaration(property) || ts.isGetAccessorDeclaration(property)) {
+            return functionBodyExposesInternalBinding(property);
+          }
           return false;
         });
       }
@@ -463,19 +466,18 @@ function checkVisionInternalConstruction(records, violations) {
       }
       if (ts.isArrowFunction(expression)) {
         if (!ts.isBlock(expression.body)) return expressionExposesInternalBinding(expression.body);
-        let leaked = false;
-        function scanArrowReturn(current) {
-          if (leaked) return;
-          if (ts.isReturnStatement(current)
-              && current.expression !== undefined
-              && expressionExposesInternalBinding(current.expression)) {
-            leaked = true;
-            return;
-          }
-          ts.forEachChild(current, scanArrowReturn);
-        }
-        scanArrowReturn(expression.body);
-        return leaked;
+        return functionBodyExposesInternalBinding(expression);
+      }
+      if (ts.isFunctionExpression(expression)) {
+        return functionBodyExposesInternalBinding(expression);
+      }
+      if (ts.isBinaryExpression(expression)
+          && (expression.operatorToken.kind === ts.SyntaxKind.BarBarToken
+            || expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+            || expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+            || expression.operatorToken.kind === ts.SyntaxKind.CommaToken)) {
+        return expressionExposesInternalBinding(expression.left)
+          || expressionExposesInternalBinding(expression.right);
       }
       return false;
     }
@@ -516,6 +518,25 @@ function checkVisionInternalConstruction(records, violations) {
       return false;
     }
 
+    function collectBindingIdentifiers(name, output) {
+      if (ts.isIdentifier(name)) {
+        output.push(name.text);
+        return;
+      }
+      if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+        for (const element of name.elements) {
+          if (ts.isOmittedExpression(element)) continue;
+          collectBindingIdentifiers(element.name, output);
+        }
+      }
+    }
+
+    function addTaintedBindingName(name) {
+      if (taintedBindingNames.has(name)) return false;
+      taintedBindingNames.add(name);
+      return true;
+    }
+
     function propagateInternalAliases() {
       let changed = true;
       while (changed) {
@@ -523,14 +544,20 @@ function checkVisionInternalConstruction(records, violations) {
         for (const statement of record.sourceFile.statements) {
           if (ts.isVariableStatement(statement)) {
             for (const declaration of statement.declarationList.declarations) {
-              if (ts.isIdentifier(declaration.name)
-                  && declaration.initializer !== undefined
-                  && expressionExposesInternalBinding(declaration.initializer)
-                  && !taintedBindingNames.has(declaration.name.text)) {
-                taintedBindingNames.add(declaration.name.text);
-                changed = true;
+              if (declaration.initializer === undefined
+                  || !expressionExposesInternalBinding(declaration.initializer)) continue;
+              const names = [];
+              collectBindingIdentifiers(declaration.name, names);
+              for (const name of names) {
+                if (addTaintedBindingName(name)) changed = true;
               }
             }
+          } else if (ts.isExpressionStatement(statement)
+              && ts.isBinaryExpression(statement.expression)
+              && statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
+              && ts.isIdentifier(statement.expression.left)
+              && expressionExposesInternalBinding(statement.expression.right)) {
+            if (addTaintedBindingName(statement.expression.left.text)) changed = true;
           } else if (ts.isFunctionDeclaration(statement)
               && statement.name !== undefined
               && functionBodyExposesInternalBinding(statement)
