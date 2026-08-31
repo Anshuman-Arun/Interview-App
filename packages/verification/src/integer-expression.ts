@@ -11,7 +11,8 @@ import {
   BoundedMathError,
   assertIntermediateIntegerBound,
   parseBoundedInteger,
-  productIntegers
+  productIntegers,
+  sumIntegers
 } from "./math-utils.js";
 
 function boundedIntegerStringSchema(maximumDigits: number) {
@@ -134,11 +135,8 @@ function evaluateNode(expression: IntegerExpression, budget: EvaluationBudget, d
       return integerPower(evaluateNode(expression.base, budget, depth + 1), expression.exponent);
     case "SUM": {
       assertTermCount(expression.terms);
-      let result = 0n;
-      for (const term of expression.terms) {
-        result = assertIntermediateIntegerBound(result + evaluateNode(term, budget, depth + 1));
-      }
-      return result;
+      const values = expression.terms.map((term) => evaluateNode(term, budget, depth + 1));
+      return sumIntegers(values);
     }
     case "PRODUCT": {
       assertTermCount(expression.terms);

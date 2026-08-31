@@ -191,13 +191,17 @@ export function addRationals(left: ExactRational, right: ExactRational): ExactRa
   const commonFactor = gcd(normalizedLeft.denominator, normalizedRight.denominator);
   const leftScale = normalizedRight.denominator / commonFactor;
   const rightScale = normalizedLeft.denominator / commonFactor;
-  const leftTerm = assertIntermediateIntegerBound(normalizedLeft.numerator * leftScale);
-  const rightTerm = assertIntermediateIntegerBound(normalizedRight.numerator * rightScale);
+  // Cross-scaled terms are bounded implementation temporaries: each is the
+  // product of two already-bounded exact integers. Do not apply the semantic
+  // intermediate bound until after their cancellation, or a bounded reduced
+  // sum can spuriously fail only because the common-denominator expansion is
+  // larger than the exact result.
+  const leftTerm = normalizedLeft.numerator * leftScale;
+  const rightTerm = normalizedRight.numerator * rightScale;
 
   // After reducing denominator cross-factors, any remaining common factor
   // between the numerator sum and denominator must divide commonFactor.
-  // Cancel it before enforcing the final intermediate bound so an avoidable
-  // one-digit carry cannot cause an otherwise bounded exact result to abstain.
+  // Cancel it before enforcing the final intermediate bound.
   const numerator = leftTerm + rightTerm;
   const cancellation = gcdUnchecked(numerator, commonFactor);
   return rational(
@@ -319,12 +323,13 @@ function assertFiniteContainerLength(length: number): void {
 
 export function sumIntegers(values: readonly bigint[]): bigint {
   assertFiniteContainerLength(values.length);
-  let total = 0n;
-  for (const value of values) {
-    assertIntermediateIntegerBound(value);
-    total = assertIntermediateIntegerBound(total + value);
-  }
-  return total;
+  const boundedValues = values.map((value) => assertIntermediateIntegerBound(value));
+
+  // A finite sum is one exact operation. Partial sums are evaluation-order
+  // artifacts and can exceed the configured result bound by only a few digits
+  // under the container cap, even when cancellation leaves a bounded result.
+  const total = boundedValues.reduce((sum, value) => sum + value, 0n);
+  return assertIntermediateIntegerBound(total);
 }
 
 export function productIntegers(values: readonly bigint[]): bigint {

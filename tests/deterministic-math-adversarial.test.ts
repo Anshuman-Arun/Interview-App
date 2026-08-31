@@ -145,6 +145,18 @@ describe("adversarial deterministic math verification", () => {
     expect(addRationals(half, half)).toEqual(rational(maximumOdd, 1n));
   });
 
+  it("does not bound rational common-denominator expansion before cancellation", () => {
+    const scale = 10n ** 1999n;
+    const leftDenominator = scale + 7n;
+    const rightDenominator = scale + 9n;
+    const multiplier = scale + 11n;
+    const left = rational(leftDenominator * multiplier - 1n, leftDenominator);
+    const right = rational(1n - rightDenominator * multiplier, rightDenominator);
+    const expected = rational(leftDenominator - rightDenominator, leftDenominator * rightDenominator);
+
+    expect(addRationals(left, right)).toEqual(expected);
+  });
+
   it("cross-cancels exact rational multiplication before enforcing intermediate limits", () => {
     const scale = 10n ** 3000n;
     const leftValue = scale + 7n;
@@ -180,6 +192,8 @@ describe("adversarial deterministic math verification", () => {
   it("bounds exported finite aggregate helpers by the shared container limit", () => {
     expect(sumIntegers(Array.from({ length: MAX_FINITE_CONTAINER_ITEMS }, () => 1n)))
       .toBe(BigInt(MAX_FINITE_CONTAINER_ITEMS));
+    const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
+    expect(sumIntegers([maximum, maximum, -maximum])).toBe(maximum);
     expect(sumRationals(Array.from({ length: MAX_FINITE_CONTAINER_ITEMS }, () => rational(1n, 1n))))
       .toEqual(rational(BigInt(MAX_FINITE_CONTAINER_ITEMS), 1n));
 
@@ -189,6 +203,32 @@ describe("adversarial deterministic math verification", () => {
     expect(() => sumRationals(
       Array.from({ length: MAX_FINITE_CONTAINER_ITEMS + 1 }, () => rational(1n, 1n))
     )).toThrow(BoundedMathError);
+  });
+
+  it("keeps variadic integer sums exact across cancelling bounded terms", async () => {
+    const operand = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS);
+    const largeProduct = {
+      kind: "PRODUCT" as const,
+      terms: Array.from({ length: 16 }, () => integer(operand))
+    };
+    const result = await verifyJson(new ModularArithmeticVerifier(), {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "DIVISIBILITY",
+        divisor: "1",
+        dividend: {
+          kind: "SUM",
+          terms: [
+            largeProduct,
+            largeProduct,
+            { kind: "NEGATE", operand: largeProduct }
+          ]
+        }
+      }
+    });
+
+    expect(result.status).toBe("VERIFIED");
   });
 
   it("recognizes a zero product without overflowing earlier bounded factors", async () => {
