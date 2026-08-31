@@ -722,6 +722,93 @@ describe("adapter factory adversarial boundary", () => {
       .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
   });
 
+  it("rejects cross-provider factory use before raw factory or credential resolution", async () => {
+    let rawFactoryCalls = 0;
+    let secretResolverCalls = 0;
+    const registry = new ProviderRegistry();
+
+    registry.register(providerInput({
+      id: "factory-owner-a",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "a-model",
+        displayName: "A Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "factory-a",
+        async createAdapter(input) {
+          rawFactoryCalls += 1;
+          if (input.secretResolver !== undefined) {
+            await input.secretResolver.resolveSecret({
+              providerId: input.resolved.provider.id,
+              reference: input.resolved.configuration.credentialRef ?? ProviderSecretReferenceSchema.parse({
+                id: "unexpected",
+                purpose: "API_KEY"
+              })
+            });
+          }
+          return new MockModelAdapter({ proposal: PROPOSAL });
+        }
+      }
+    }));
+
+    registry.register(providerInput({
+      id: "factory-owner-b",
+      adapterVersion: "1.0.0",
+      credentialRequirement: "REQUIRED",
+      credentialPurposes: ["API_KEY"],
+      models: [{
+        id: "b-model",
+        displayName: "B Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "factory-b",
+        createAdapter() {
+          return new MockModelAdapter({ proposal: PROPOSAL });
+        }
+      }
+    }));
+
+    const resolvedA = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "factory-owner-a",
+        modelId: "a-model",
+        enabled: true
+      }
+    });
+    const resolvedB = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "factory-owner-b",
+        modelId: "b-model",
+        enabled: true,
+        credentialRef: {
+          id: "provider-b-credential",
+          purpose: "API_KEY"
+        }
+      }
+    });
+    const factoryA = resolveAdapterFactory(resolvedA);
+    const secretResolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        secretResolverCalls += 1;
+        return "provider-b-secret";
+      }
+    };
+
+    await expect(factoryA.createAdapter({
+      resolved: resolvedB,
+      secretResolver
+    })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(rawFactoryCalls).toBe(0);
+    expect(secretResolverCalls).toBe(0);
+  });
+
   it("rejects fabricated resolved objects", async () => {
     const registry = registerBuiltInProviders();
     const resolved = resolveProviderConfiguration({

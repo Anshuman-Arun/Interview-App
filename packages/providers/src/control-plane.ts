@@ -709,6 +709,12 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
     );
     const resolved = inspected.resolved;
     assertTrustedResolvedConfiguration(resolved);
+    if (resolved.provider.adapterFactory !== this) {
+      throw new ProviderControlPlaneError(
+        "INVALID_FACTORY_INPUT",
+        "Provider adapter factory does not belong to the resolved provider"
+      );
+    }
     const secretResolver = normalizeFactorySecretResolver(inspected.secretResolver, resolved);
     const normalizedInput = freezeNullPrototype({
       resolved,
