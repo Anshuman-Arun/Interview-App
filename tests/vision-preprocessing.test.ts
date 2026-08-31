@@ -986,6 +986,7 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(() => prepareVisionImageRequest(evil, "analysis"))
       .toThrowError(VisionPreprocessingError);
     expect(Object.isFrozen(ImageSnapshot.prototype)).toBe(true);
+    expect(Object.isFrozen(ImageSnapshot)).toBe(true);
   });
 
   it("rejects prototype-forged raster instances that never ran a validating constructor", () => {
