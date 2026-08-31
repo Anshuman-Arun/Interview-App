@@ -2055,6 +2055,14 @@ interface PreRedactionState {
   remainingNodes: number;
 }
 
+function safeArrayObject(value: object): boolean | undefined {
+  try {
+    return Array.isArray(value);
+  } catch {
+    return undefined;
+  }
+}
+
 function safeIsErrorObject(value: object): boolean {
   try {
     return value instanceof Error;
@@ -2086,7 +2094,9 @@ function preRedactDiagnosticValue(
     } catch {
       return "[UNINSPECTABLE_OBJECT]";
     }
-    if (Array.isArray(value)) {
+    const arrayValue = safeArrayObject(value);
+    if (arrayValue === undefined) return "[UNINSPECTABLE_OBJECT]";
+    if (arrayValue) {
       const rawLength = descriptors.length?.value;
       if (typeof rawLength !== "number" || !Number.isSafeInteger(rawLength) || rawLength < 0) {
         return "[UNINSPECTABLE_OBJECT]";
