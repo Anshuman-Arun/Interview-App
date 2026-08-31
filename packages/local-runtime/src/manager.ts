@@ -513,6 +513,7 @@ export class LocalRuntimeManager {
 
     if (!unexpected || previousState === "STARTING") return;
     record.residualProcess = child;
+    this.clearLiveReadiness(record);
     record.state = "FAILED";
     record.failure = this.failure(
       "PROCESS_EXITED",
@@ -879,6 +880,7 @@ export class LocalRuntimeManager {
         await terminateChildTree(residual, this.platform, "SIGTERM", timeoutMs);
         if (await waitForManagedTreeExit(record, residual, this.platform, timeoutMs)) {
           record.residualProcess = undefined;
+          this.clearLiveReadiness(record);
           record.state = "STOPPED";
           return Object.freeze({ componentId: record.definition.id, disposition: "TERMINATED" });
         }
@@ -896,10 +898,12 @@ export class LocalRuntimeManager {
           );
         }
         record.residualProcess = undefined;
+        this.clearLiveReadiness(record);
         record.state = "STOPPED";
         return Object.freeze({ componentId: record.definition.id, disposition: "FORCED" });
       }
       record.residualProcess = undefined;
+      this.clearLiveReadiness(record);
       record.state = "STOPPED";
       return Object.freeze({ componentId: record.definition.id, disposition: "ALREADY_STOPPED" });
     }
@@ -935,10 +939,15 @@ export class LocalRuntimeManager {
       }
     }
     record.residualProcess = undefined;
+    this.clearLiveReadiness(record);
     record.state = "STOPPED";
+    return Object.freeze({ componentId: record.definition.id, disposition });
+  }
+
+  private clearLiveReadiness(record: ComponentRecord): void {
     record.readyAt = undefined;
     record.readinessDetail = undefined;
-    return Object.freeze({ componentId: record.definition.id, disposition });
+    record.handshake = undefined;
   }
 
   private async requestGracefulShutdown(record: ComponentRecord, child: ChildProcessWithoutNullStreams): Promise<void> {
