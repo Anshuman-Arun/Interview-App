@@ -221,6 +221,21 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
+  it("bounds chunked downloads even when Content-Length is absent", async () => {
+    const expected = Buffer.from("12345");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.write("123");
+      response.end("456");
+    });
+    const root = await newRoot();
+    const manager = managerFor(root, { maxArtifactBytes: expected.byteLength });
+    const manifest = manifestFor(expected, fixture.baseUrl + "/artifact");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "ARTIFACT_TOO_LARGE" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
   it("cleans up an interrupted download without publishing a partial artifact", async () => {
     const payload = Buffer.from("interrupted-download-payload");
     const fixture = await startFixtureServer((_request, response) => {
@@ -261,6 +276,21 @@ describe("local model asset manager", () => {
     release.resolve();
     await eventually(async () => (await readdir(path.join(root, "tmp"))).length === 0);
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
+  it("does not start network work for an already-cancelled request", async () => {
+    const payload = Buffer.from("cancel-before-start");
+    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(manager.install(manifest, controller.signal)).rejects.toMatchObject({
+      code: "CANCELLED"
+    });
+    expect(fixture.requestCount()).toBe(0);
   });
 
   it("enforces an overall download timeout", async () => {
@@ -389,6 +419,61 @@ describe("local model asset manager", () => {
     expect(fixture.requestCount()).toBe(1);
   });
 
+  it("starts fresh after the last waiter cancels an in-flight install", async () => {
+    const payload = Buffer.from("retry-after-cancel");
+    const firstStarted = deferred<void>();
+    const releaseFirstHandler = deferred<void>();
+    let requestNumber = 0;
+    const fixture = await startFixtureServer(async (_request, response) => {
+      requestNumber += 1;
+      if (requestNumber === 1) {
+        response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+        response.write(payload.subarray(0, 2));
+        firstStarted.resolve();
+        await releaseFirstHandler.promise;
+        response.end(payload.subarray(2));
+        return;
+      }
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.end(payload);
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+    const controller = new AbortController();
+
+    const first = manager.install(manifest, controller.signal);
+    await firstStarted.promise;
+    controller.abort();
+    const second = manager.install(manifest);
+
+    await expect(first).rejects.toMatchObject({ code: "CANCELLED" });
+    const installed = await second;
+    releaseFirstHandler.resolve();
+
+    expect(await readFile(installed)).toEqual(payload);
+    expect(fixture.requestCount()).toBe(2);
+  });
+
+  it("rejects a symlink as a local import source", async () => {
+    if (process.platform === "win32") return;
+
+    const payload = Buffer.from("local-symlink");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const target = path.join(sourceRoot, "target.bin");
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(target, payload);
+    await symlink(target, source, "file");
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/local-symlink.bin");
+
+    await expect(manager.importLocal(manifest, source)).rejects.toMatchObject({
+      code: "UNSAFE_PATH"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
   it("detects corruption of a previously installed artifact", async () => {
     const payload = Buffer.from("good-bytes");
     const root = await newRoot();
@@ -424,18 +509,28 @@ describe("local model asset manager", () => {
     expect(await manager.listInstalledArtifacts()).toEqual([]);
   });
 
-  it("clears stale temporary entries without deleting outside the cache root", async () => {
+  it("clears only manager-owned stale temporary entries", async () => {
     const payload = Buffer.from("cleanup");
     const root = await newRoot();
     const manager = managerFor(root);
     const manifest = manifestFor(payload, "https://example.test/cleanup.bin");
     await manager.inspect(manifest);
 
-    const stale = path.join(root, "tmp", "stale");
-    await mkdir(stale);
-    await writeFile(path.join(stale, "partial.bin"), "partial");
+    const owned = path.join(
+      root,
+      "tmp",
+      `${"a".repeat(64)}-00000000-0000-4000-8000-000000000000`
+    );
+    const foreign = path.join(root, "tmp", "foreign");
+    await mkdir(owned);
+    await mkdir(foreign);
+    await writeFile(path.join(owned, "partial.bin"), "partial");
+    await writeFile(path.join(foreign, "sentinel.txt"), "keep-me");
+
     await manager.cleanupTemporary();
-    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+
+    expect(await readdir(path.join(root, "tmp"))).toEqual(["foreign"]);
+    expect(await readFile(path.join(foreign, "sentinel.txt"), "utf8")).toBe("keep-me");
   });
 
   it("deterministically clears unused installed artifacts", async () => {
@@ -453,10 +548,13 @@ describe("local model asset manager", () => {
     const second = manifestFor(secondPayload, "https://example.test/second.bin", { artifactId: "second" });
     await manager.importLocal(first, firstSource);
     await manager.importLocal(second, secondSource);
+    const foreign = path.join(root, "artifacts", "foreign.txt");
+    await writeFile(foreign, "keep-me");
 
     expect(await manager.clearUnused([first])).toBe(1);
     expect(await manager.verifyInstalledArtifact(first)).toBe(true);
     expect(await manager.verifyInstalledArtifact(second)).toBe(false);
+    expect(await readFile(foreign, "utf8")).toBe("keep-me");
   });
 
   it("enforces the configured aggregate artifact cache-size limit", async () => {
@@ -477,6 +575,29 @@ describe("local model asset manager", () => {
       code: "CACHE_LIMIT_EXCEEDED"
     });
     expect(await manager.verifyInstalledArtifact(first)).toBe(true);
+  });
+
+  it("counts stale manager-owned staging bytes against the cache limit", async () => {
+    const payload = Buffer.from("12345");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root, { maxArtifactBytes: 10, maxCacheBytes: 10 });
+    const manifest = manifestFor(payload, "https://example.test/stale-capacity.bin");
+    await manager.inspect(manifest);
+
+    const stale = path.join(
+      root,
+      "tmp",
+      `${"b".repeat(64)}-00000000-0000-4000-8000-000000000000`
+    );
+    await mkdir(stale);
+    await writeFile(path.join(stale, "partial.bin"), "123456");
+
+    await expect(manager.importLocal(manifest, source)).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
   });
 
   it("provides standalone bounded file verification", async () => {
@@ -520,12 +641,58 @@ describe("local model asset manager", () => {
     expect(path.basename(installed)).toBe("portable-file_1.bin");
   });
 
+  it("rejects timeout values that overflow Node.js timers", async () => {
+    const root = await newRoot();
+    expect(() => managerFor(root, {
+      downloadTimeoutMs: 2_147_483_648
+    })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
+  });
+
   it("rejects a relative cache root before performing filesystem writes", async () => {
-    const payload = Buffer.from("root");
     expect(() => new ModelAssetManager({
       rootDir: "relative-model-cache",
       maxArtifactBytes: 1024
     })).toThrow(expect.objectContaining({ code: "INVALID_CACHE_ROOT" }));
+  });
+
+  it("refuses removal if the artifacts parent is replaced by a symlink", async () => {
+    if (process.platform === "win32") return;
+
+    const payload = Buffer.from("parent-symlink");
+    const root = await newRoot();
+    const outside = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/parent-symlink.bin");
+    await manager.inspect(manifest);
+
+    const outsideInstallation = path.join(outside, artifactInstallationKey(manifest));
+    await mkdir(outsideInstallation);
+    const sentinel = path.join(outsideInstallation, "sentinel.txt");
+    await writeFile(sentinel, "keep-me");
+    await rm(path.join(root, "artifacts"), { recursive: true, force: true });
+    await symlink(outside, path.join(root, "artifacts"), "dir");
+
+    await expect(manager.remove(manifest)).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+    expect(await readFile(sentinel, "utf8")).toBe("keep-me");
+  });
+
+  it("refuses temporary cleanup if the tmp parent is replaced by a symlink", async () => {
+    if (process.platform === "win32") return;
+
+    const payload = Buffer.from("tmp-parent-symlink");
+    const root = await newRoot();
+    const outside = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/tmp-parent-symlink.bin");
+    await manager.inspect(manifest);
+
+    const sentinel = path.join(outside, "sentinel.txt");
+    await writeFile(sentinel, "keep-me");
+    await rm(path.join(root, "tmp"), { recursive: true, force: true });
+    await symlink(outside, path.join(root, "tmp"), "dir");
+
+    await expect(manager.cleanupTemporary()).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+    expect(await readFile(sentinel, "utf8")).toBe("keep-me");
   });
 
   it("does not follow a hostile symlink while removing a cache entry", async () => {
