@@ -4,7 +4,12 @@ export function boundedArrayLength(value: unknown, maximum: number, label: strin
     throw new RangeError("Array maximum must be a nonnegative safe integer");
   }
 
-  const rawLength: unknown = Reflect.get(value, "length");
+  let rawLength: unknown;
+  try {
+    rawLength = Reflect.get(value, "length");
+  } catch {
+    throw new TypeError(`${label} length could not be read safely`);
+  }
   if (typeof rawLength !== "number" || !Number.isSafeInteger(rawLength) || rawLength < 0) {
     throw new TypeError(`${label} length must be a nonnegative safe integer`);
   }
