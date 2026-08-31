@@ -439,6 +439,7 @@ function checkVisionInternalConstruction(records, violations) {
       let found = false;
       function scan(current) {
         if (found) return;
+        if (ts.isTypeNode(current)) return;
         if (ts.isIdentifier(current) && taintedBindingNames.has(current.text)) {
           found = true;
           return;
