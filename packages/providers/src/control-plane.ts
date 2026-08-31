@@ -207,7 +207,7 @@ function deepFreezeSafeValue(value: SafeProviderConfigurationValue): SafeProvide
     return Object.freeze(frozen);
   }
   if (typeof value === "object" && value !== null) {
-    const source = value as SafeProviderConfigurationRecord;
+    const source = value;
     const frozen: Record<string, SafeProviderConfigurationValue> = {};
     for (const key of Object.keys(source).sort(compareCodeUnits)) {
       const item = source[key];
