@@ -10,18 +10,17 @@ import {
 import {
   BoundedMathError,
   assertIntermediateIntegerBound,
+  isCanonicalIntegerString,
   parseBoundedInteger,
   productIntegers,
   sumIntegers
 } from "./math-utils.js";
 
-const CANONICAL_INTEGER_PATTERN = /^(?:0|-?[1-9]\d*)$/u;
-
 function boundedIntegerStringSchema(maximumDigits: number) {
   return z.string()
     .min(1)
     .superRefine((value, context) => {
-      if (!CANONICAL_INTEGER_PATTERN.test(value)) {
+      if (!isCanonicalIntegerString(value)) {
         context.addIssue({
           code: "custom",
           message: "Integer must use canonical base-10 digits"
