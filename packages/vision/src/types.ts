@@ -146,10 +146,10 @@ export const PixelDimensionsSchema = z.object({
 export type PixelDimensions = z.infer<typeof PixelDimensionsSchema>;
 
 export const CoordinateTransformSchema = z.object({
-  offsetX: z.number().finite(),
-  offsetY: z.number().finite(),
-  scaleX: z.number().finite().positive(),
-  scaleY: z.number().finite().positive()
+  offsetX: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+  offsetY: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+  scaleX: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER),
+  scaleY: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER)
 }).strict();
 export type CoordinateTransform = z.infer<typeof CoordinateTransformSchema>;
 
@@ -157,7 +157,7 @@ export const ImageSnapshotMetadataSchema = z.object({
   snapshotId: z.string().min(1).max(128),
   sourceType: ImageSourceTypeSchema,
   sourceRevision: BoardRevisionSchema,
-  capturedAtMs: z.number().finite().nonnegative(),
+  capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -171,6 +171,14 @@ export type ImageSnapshotMetadata = z.infer<typeof ImageSnapshotMetadataSchema>;
 export const VisionImageArtifactKindSchema = z.enum(["CROP", "RESIZED", "TILE"]);
 export type VisionImageArtifactKind = z.infer<typeof VisionImageArtifactKindSchema>;
 
+export const ArtifactSourceBoundsSchema = z.object({
+  x: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  y: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+}).strict();
+export type ArtifactSourceBounds = z.infer<typeof ArtifactSourceBoundsSchema>;
+
 export const VisionImageArtifactMetadataSchema = z.object({
   artifactId: z.string().min(1).max(96),
   kind: VisionImageArtifactKindSchema,
@@ -183,6 +191,7 @@ export const VisionImageArtifactMetadataSchema = z.object({
   encoding: ImageEncodingSchema,
   byteSize: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   contentDigest: Sha256DigestSchema,
+  sourceBounds: ArtifactSourceBoundsSchema,
   coordinateTransform: CoordinateTransformSchema
 }).strict();
 export type VisionImageArtifactMetadata = z.infer<typeof VisionImageArtifactMetadataSchema>;
@@ -276,6 +285,7 @@ export class VisionImageArtifact {
     assertPayloadIntegrity(parsed, copiedBytes);
     this.metadata = Object.freeze({
       ...parsed,
+      sourceBounds: Object.freeze({ ...parsed.sourceBounds }),
       coordinateTransform: Object.freeze({ ...parsed.coordinateTransform })
     });
     this.#bytes = copiedBytes;
@@ -340,7 +350,7 @@ export const ImageSnapshotInputSchema = z.object({
   snapshotId: z.string().min(1).max(128),
   sourceType: ImageSourceTypeSchema,
   sourceRevision: BoardRevisionSchema,
-  capturedAtMs: z.number().finite().nonnegative(),
+  capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   mimeType: z.string().min(1).max(128),
   declaredWidth: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
