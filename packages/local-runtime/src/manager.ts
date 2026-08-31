@@ -828,7 +828,7 @@ export class LocalRuntimeManager {
   ): Promise<{ readonly detail?: string; readonly handshake?: LocalComponentHandshake }> {
     const strategy = record.definition.readiness;
     if (strategy.kind !== "HTTP_LOOPBACK") throw new LocalRuntimeError("READINESS_FAILED", "Invalid HTTP readiness strategy");
-    const url = parseLoopbackUrl(strategy.url);
+    const url = parseLoopbackUrl(strategy.url).href;
     const intervalMs = strategy.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     for (;;) {
       ensureProcessAlive(record, child);
