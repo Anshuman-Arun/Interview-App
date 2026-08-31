@@ -328,6 +328,33 @@ describe("local worker lifecycle manager", () => {
     expect(serialized).not.toContain("must-not-cross");
   });
 
+  it("redacts multiline runtime secrets after framing and JSON escaping", async () => {
+    const secret = "multiline-private-alpha\nmultiline-private-omega";
+    const runtime = manager();
+    runtime.register(definition("multiline-secret", "output-env", {
+      environment: {
+        secrets: { RUNTIME_ONLY_SECRET: secret }
+      },
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => readyDecision(message)
+      }
+    }));
+
+    const status = await runtime.start("multiline-secret");
+    const serialized = JSON.stringify(status);
+    expect(serialized).not.toContain("multiline-private-alpha");
+    expect(serialized).not.toContain("multiline-private-omega");
+    expect(serialized).toContain("[REDACTED]");
+
+    const built = buildLocalEnvironment({
+      secrets: { MULTILINE_SECRET: secret }
+    }, {});
+    expect(built.secretValues).toContain("multiline-private-alpha");
+    expect(built.secretValues).toContain("multiline-private-omega");
+    expect(built.secretValues).toContain("multiline-private-alpha\\nmultiline-private-omega");
+  });
+
   it("does not reprocess runtime redaction markers as later secrets", async () => {
     const runtime = manager();
     runtime.register(definition("overlap-redaction", "output-env", {
