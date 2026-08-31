@@ -42,6 +42,23 @@ function cloneOwnDataRecord(value: Record<string, unknown>): Record<string, unkn
 const PlainDataRecordSchema = z.custom<Record<string, unknown>>(isPlainDataRecord)
   .transform(cloneOwnDataRecord);
 
+function clonePlainDataArray(value: unknown): readonly unknown[] | undefined {
+  if (!Array.isArray(value) || isProxy(value)) return undefined;
+  try {
+    const prototype: unknown = Object.getPrototypeOf(value);
+    if (prototype !== Array.prototype) return undefined;
+    const clone: unknown[] = new Array<unknown>(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (descriptor === undefined || !("value" in descriptor)) return undefined;
+      clone[index] = descriptor.value;
+    }
+    return clone;
+  } catch {
+    return undefined;
+  }
+}
+
 export const AssetPlatformSchema = z.enum([
   "aix",
   "android",
@@ -225,11 +242,13 @@ export function resolveAssetManifest(
   manifests: readonly unknown[],
   requestValue: unknown
 ): AssetManifest {
-  const rawManifests: unknown = manifests;
-  if (!Array.isArray(rawManifests)) {
-    throw new ModelAssetError("INVALID_MANIFEST", "Asset manifest collection must be an array.");
+  const manifestValues = clonePlainDataArray(manifests);
+  if (manifestValues === undefined) {
+    throw new ModelAssetError(
+      "INVALID_MANIFEST",
+      "Asset manifest collection must be a plain dense data array."
+    );
   }
-  const manifestValues: readonly unknown[] = rawManifests;
   const requestResult = AssetResolutionRequestSchema.safeParse(requestValue);
   if (!requestResult.success) {
     throw new ModelAssetError("INVALID_MANIFEST", "Asset resolution request validation failed.");
