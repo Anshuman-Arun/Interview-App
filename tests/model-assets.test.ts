@@ -237,6 +237,35 @@ describe("local model asset manager", () => {
     expect(fixture.requestCount()).toBe(1);
   });
 
+  it("does not delete a corrupt installation when replacement download fails", async () => {
+    const payload = Buffer.from("failed-repair");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(503);
+      response.end("unavailable");
+    });
+    const manager = managerFor(root);
+    const imported = manifestFor(payload, "https://example.test/original.bin");
+    const installed = await manager.importLocal(imported, source);
+    await writeFile(installed, Buffer.from("corrupt-data!"));
+
+    const remote = { ...imported, sourceUrl: fixture.baseUrl + "/artifact" };
+    await expect(manager.install(remote)).rejects.toMatchObject({ code: "HTTP_STATUS" });
+
+    expect(await manager.inspect(imported)).toMatchObject({
+      status: "CORRUPT"
+    });
+    const installation = path.join(root, "artifacts", artifactInstallationKey(imported));
+    expect((await readdir(installation)).sort()).toEqual([
+      imported.filename,
+      "manifest.json"
+    ].sort());
+  });
+
   it("treats malformed cached manifest metadata as corruption and repairs it", async () => {
     const payload = Buffer.from("repair-metadata");
     const root = await newRoot();
