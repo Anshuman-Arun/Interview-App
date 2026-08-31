@@ -327,8 +327,9 @@ describe("provider configuration and secret boundary", () => {
 
     const persistable = toPersistableProviderConfiguration(first);
     expect(persistable).not.toHaveProperty("credentialRef");
-    expect(persistable).toMatchObject({ credentialPurpose: "API_KEY" });
+    expect(persistable).not.toHaveProperty("credentialPurpose");
     expect(JSON.stringify(persistable)).not.toContain("gemini-primary");
+    expect(ProviderConfigurationSchema.parse(persistable)).toEqual(persistable);
     expect(createProviderConfigurationFingerprintMaterial(first))
       .toBe(createProviderConfigurationFingerprintMaterial(second));
     expect(createProviderConfigurationFingerprintMaterial(first))
@@ -339,7 +340,7 @@ describe("provider configuration and secret boundary", () => {
       credentialRef: { id: "gemini-token", purpose: "TOKEN" as const }
     };
     expect(toPersistableProviderConfiguration(tokenCredential))
-      .toMatchObject({ credentialPurpose: "TOKEN" });
+      .not.toHaveProperty("credentialPurpose");
     expect(createProviderConfigurationFingerprintMaterial(first))
       .not.toBe(createProviderConfigurationFingerprintMaterial(tokenCredential));
   });

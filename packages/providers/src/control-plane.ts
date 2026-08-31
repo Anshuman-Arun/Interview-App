@@ -247,7 +247,6 @@ export interface PersistableProviderConfiguration {
   readonly providerId: ProviderId;
   readonly modelId: ProviderModelId;
   readonly enabled: boolean;
-  readonly credentialPurpose?: ProviderCredentialPurpose;
   readonly reasoning?: {
     readonly level: string;
   };
@@ -1919,9 +1918,6 @@ export function toPersistableProviderConfiguration(
     providerId: parsed.providerId,
     modelId: parsed.modelId,
     enabled: parsed.enabled,
-    ...(parsed.credentialRef === undefined
-      ? {}
-      : { credentialPurpose: parsed.credentialRef.purpose }),
     ...(parsed.reasoning === undefined
       ? {}
       : { reasoning: freezeNullPrototype({ ...parsed.reasoning }) }),
@@ -1953,15 +1949,16 @@ function canonicalizeSafeValue(value: SafeProviderConfigurationValue): string {
 }
 
 export function createProviderConfigurationFingerprintMaterial(value: unknown): string {
-  const persistable = toPersistableProviderConfiguration(value);
+  const parsed = parseConfiguration(value);
+  const persistable = toPersistableProviderConfiguration(parsed);
   const material: SafeProviderConfigurationRecord = {
     version: persistable.version,
     providerId: persistable.providerId,
     modelId: persistable.modelId,
     enabled: persistable.enabled,
-    ...(persistable.credentialPurpose === undefined
+    ...(parsed.credentialRef === undefined
       ? {}
-      : { credentialPurpose: persistable.credentialPurpose }),
+      : { credentialPurpose: parsed.credentialRef.purpose }),
     ...(persistable.reasoning === undefined ? {} : { reasoning: persistable.reasoning }),
     ...(persistable.settings === undefined ? {} : { settings: persistable.settings })
   };

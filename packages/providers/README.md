@@ -38,12 +38,12 @@ prototype-bearing/special-key objects, cycles, sparse or side-property arrays, n
 oversized structures, credential-like keys, and common credential payloads. Provider-specific
 validators are required to return data that passes the same validation again. Sanitized control-plane records use null prototypes so absent optional fields cannot be reintroduced through inherited prototype pollution.
 
-Use `toPersistableProviderConfiguration` before export/persistence when secret reference
-IDs should be excluded. The non-secret credential purpose is retained so API-key/token modes
-remain distinguishable without exposing which credential is selected.
-`createProviderConfigurationFingerprintMaterial` is deterministic and is derived from that
-reference-ID-free form. It is canonical fingerprint *material*, not a digest; diagnostics callers
-should hash it rather than log the material itself.
+Use `toPersistableProviderConfiguration` before export/persistence when secret references
+should be excluded; the result remains valid provider-configuration data with the reference
+removed. `createProviderConfigurationFingerprintMaterial` is deterministic and additionally
+retains only the non-secret credential purpose so API-key/token modes remain distinguishable
+without exposing which credential is selected. It is canonical fingerprint *material*, not a
+digest; diagnostics callers should hash it rather than log the material itself.
 
 Raw credentials are obtained only at runtime through `ProviderSecretResolver`. Factories receive a frozen resolver facade scoped to the exact credential reference selected by the resolved configuration.
 
