@@ -273,9 +273,75 @@ export class VisionImageArtifact {
       && Object.getPrototypeOf(value) === VisionImageArtifact.prototype;
   }
 
-  public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array);
-  public constructor(metadata: VisionImageArtifactMetadata, bytes: unknown) {
+  public constructor(
+    source: ImageSnapshot | VisionImageArtifact,
+    metadata: VisionImageArtifactMetadata,
+    bytes: Uint8Array
+  );
+  public constructor(
+    source: unknown,
+    metadata: VisionImageArtifactMetadata,
+    bytes: unknown
+  ) {
+    if (!ImageSnapshot.isValidatedInstance(source) && !VisionImageArtifact.isValidatedInstance(source)) {
+      throw new RangeError("Vision artifact source must be a validated image snapshot or artifact");
+    }
+
     const parsed = VisionImageArtifactMetadataSchema.parse(metadata);
+    const expectedSourceSnapshotId = ImageSnapshot.isValidatedInstance(source)
+      ? source.metadata.snapshotId
+      : source.metadata.sourceSnapshotId;
+    const expectedSourceRevision = source.metadata.sourceRevision;
+    const expectedSourceImageIdentity = visionRasterIdentity(source);
+    const expectedParentArtifactId = VisionImageArtifact.isValidatedInstance(source)
+      ? source.metadata.artifactId
+      : undefined;
+
+    if (parsed.sourceSnapshotId !== expectedSourceSnapshotId
+        || parsed.sourceRevision !== expectedSourceRevision
+        || parsed.sourceImageIdentity !== expectedSourceImageIdentity
+        || parsed.parentArtifactId !== expectedParentArtifactId) {
+      throw new RangeError("Vision artifact provenance does not match its immediate source raster");
+    }
+
+    const right = parsed.sourceBounds.x + parsed.sourceBounds.width;
+    const bottom = parsed.sourceBounds.y + parsed.sourceBounds.height;
+    if (!Number.isSafeInteger(right)
+        || !Number.isSafeInteger(bottom)
+        || right > source.metadata.width
+        || bottom > source.metadata.height) {
+      throw new RangeError("Vision artifact source bounds exceed its immediate source raster");
+    }
+
+    const parentTransform = ImageSnapshot.isValidatedInstance(source)
+      ? { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 }
+      : source.metadata.coordinateTransform;
+    const expectedTransform = parsed.kind === "RESIZED"
+      ? {
+          offsetX: parentTransform.offsetX,
+          offsetY: parentTransform.offsetY,
+          scaleX: parentTransform.scaleX * source.metadata.width / parsed.width,
+          scaleY: parentTransform.scaleY * source.metadata.height / parsed.height
+        }
+      : {
+          offsetX: parentTransform.offsetX + parsed.sourceBounds.x * parentTransform.scaleX,
+          offsetY: parentTransform.offsetY + parsed.sourceBounds.y * parentTransform.scaleY,
+          scaleX: parentTransform.scaleX,
+          scaleY: parentTransform.scaleY
+        };
+
+    if (parsed.kind === "RESIZED"
+        && (parsed.sourceBounds.width !== source.metadata.width
+          || parsed.sourceBounds.height !== source.metadata.height)) {
+      throw new RangeError("Resize artifact source bounds must equal the complete immediate source raster");
+    }
+    if (parsed.coordinateTransform.offsetX !== expectedTransform.offsetX
+        || parsed.coordinateTransform.offsetY !== expectedTransform.offsetY
+        || parsed.coordinateTransform.scaleX !== expectedTransform.scaleX
+        || parsed.coordinateTransform.scaleY !== expectedTransform.scaleY) {
+      throw new RangeError("Vision artifact coordinate transform does not match its immediate source raster");
+    }
+
     const expectedArtifactId = computeVisionArtifactId({
       kind: parsed.kind,
       sourceSnapshotId: parsed.sourceSnapshotId,
