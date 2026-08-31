@@ -764,6 +764,12 @@ export class LocalRuntimeManager {
       try {
         const response = await this.fetchImpl(url, { method: "GET", redirect: "error", signal });
         try {
+          if (response.redirected || (response.status >= 300 && response.status < 400)) {
+            throw new LocalRuntimeError(
+              "READINESS_FAILED",
+              `HTTP readiness redirect rejected for ${record.definition.id}`
+            );
+          }
           const decision = strategy.evaluate === undefined
             ? response.ok
             : await awaitWithAbort(
