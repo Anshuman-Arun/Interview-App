@@ -48,6 +48,20 @@ describe("repository architecture boundary checker", () => {
     expect(result.status).toBe(0);
   });
 
+  it("allows type-only references to the internal vision construction capability", () => {
+    const root = createFixture({
+      "packages/vision/src/internal-artifact-construction.ts":
+        "export const INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION = Symbol(\"snapshot\");\n",
+      "packages/vision/src/types.ts":
+        "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\n"
+        + "export type ConstructionToken = typeof secret;\n"
+        + "export class Example { constructor(_token: typeof secret) {} }\n"
+    });
+    const result = runChecker(root);
+    expect(checkerOutput(result)).toContain("Architecture boundary checks passed");
+    expect(result.status).toBe(0);
+  });
+
   const prohibitedCases: readonly {
     readonly name: string;
     readonly expectedCode: string;
