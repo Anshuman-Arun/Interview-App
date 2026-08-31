@@ -103,8 +103,7 @@ describe("provider control plane registry", () => {
   });
 
   it("rejects duplicate model IDs inside a provider definition", () => {
-    const model = MOCK_PROVIDER_DEFINITION.models[0];
-    expect(model).toBeDefined();
+    const model = firstModel(MOCK_PROVIDER_DEFINITION);
     expect(() => defineProvider({
       id: "duplicate-model-provider",
       displayName: "Duplicate Model Provider",
