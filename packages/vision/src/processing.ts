@@ -51,7 +51,7 @@ const TileConfigSchema = z.object({
   tileWidth: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   tileHeight: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   overlap: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  maxTileCount: z.number().int().positive().max(512)
+  maxTileCount: z.number().int().nonnegative().max(512)
 }).strict();
 
 export interface TileConfig {
@@ -382,7 +382,10 @@ export async function cropImage(
   const startedAt = now(options);
   throwIfAborted(options.signal);
   assertVisionRasterSource(source);
-  maxOutputBytes(options);
+  const maximumOutputBytes = maxOutputBytes(options);
+  if (maximumOutputBytes === 0) {
+    throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG output");
+  }
   const rect = assertRectWithinImage(validateImageRect(bounds), {
     width: source.metadata.width,
     height: source.metadata.height
@@ -536,6 +539,9 @@ export async function downscaleImage(
   throwIfAborted(options.signal);
   assertVisionRasterSource(source);
   const maximumOutputBytes = maxOutputBytes(options);
+  if (maximumOutputBytes === 0) {
+    throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG output");
+  }
   const plan = planDownscale({ width: source.metadata.width, height: source.metadata.height }, envelope);
 
   if (!plan.resized) {
@@ -668,8 +674,11 @@ export async function tileImage(
   const startedAt = now(options);
   throwIfAborted(options.signal);
   assertVisionRasterSource(source);
-  maxOutputBytes(options);
+  const maximumOutputBytes = maxOutputBytes(options);
   const maximumTotalOutputBytes = maxTotalOutputBytes(options);
+  if (maximumOutputBytes === 0 || maximumTotalOutputBytes === 0) {
+    throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG tile output");
+  }
   const plan = planImageTiles({ width: source.metadata.width, height: source.metadata.height }, config);
   const decoded = decodeSource(source, options.signal);
   const descriptor = sourceDescriptor(source);
