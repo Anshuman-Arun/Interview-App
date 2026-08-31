@@ -72,8 +72,25 @@ const BEARER_AUTH_PATTERN = /\bbearer\s+[a-z0-9._~+/-]{16,}/iu;
 const BASIC_AUTH_CANDIDATE_PATTERN =
   /\bbasic\s+([A-Za-z0-9+/]+={0,2})(?=$|[\s,;])/iu;
 const COMMON_API_KEY_PATTERN = /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,})\b/iu;
-const SECRET_ASSIGNMENT_PATTERN =
-  /\b(?:authorization|api[-_]?key|access[-_]?token|client[-_]?token|token|secret|password|passphrase|private[-_]?key|credential)\b\s*[:=]\s*["']?([^\s"'&]{12,})["']?/iu;
+const HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN =
+  /\b(?:authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|client[-_]?token|session[-_]?token|auth[-_]?token|bearer[-_]?token|password|passwd|passphrase|private[-_]?key|credential|cookie|set[-_]?cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))/iu;
+const GENERIC_SECRET_ASSIGNMENT_PATTERN =
+  /\b(?:token|secret)\b\s*[:=]\s*["']?([^\s"'&]{12,})["']?/iu;
+const NON_SECRET_ASSIGNMENT_VALUES = new Set([
+  "",
+  "none",
+  "null",
+  "unset",
+  "disabled",
+  "placeholder",
+  "required",
+  "redacted",
+  "[redacted]",
+  "n/a",
+  "na",
+  "bearer",
+  "basic"
+]);
 const URL_USERINFO_PATTERN =
   /\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/iu;
 const PRIVATE_KEY_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/iu;
@@ -238,15 +255,25 @@ function containsBasicAuthCredential(value: string): boolean {
   return candidate !== undefined && base64ContainsColon(candidate);
 }
 
+function containsExplicitCredentialAssignment(value: string): boolean {
+  const highConfidence = HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN.exec(value);
+  if (highConfidence !== null) {
+    const assignedValue = highConfidence[1] ?? highConfidence[2] ?? highConfidence[3] ?? "";
+    if (!NON_SECRET_ASSIGNMENT_VALUES.has(assignedValue.trim().toLowerCase())) {
+      return true;
+    }
+  }
+  return GENERIC_SECRET_ASSIGNMENT_PATTERN.test(value);
+}
+
 export function containsSecretLikeConfigurationText(value: string): boolean {
   const normalized = value.normalize("NFKC");
-  const assignedValue = SECRET_ASSIGNMENT_PATTERN.exec(normalized)?.[1];
   return BEARER_AUTH_PATTERN.test(normalized)
     || containsBasicAuthCredential(normalized)
     || COMMON_API_KEY_PATTERN.test(normalized)
     || URL_USERINFO_PATTERN.test(normalized)
     || PRIVATE_KEY_PATTERN.test(normalized)
-    || assignedValue !== undefined;
+    || containsExplicitCredentialAssignment(normalized);
 }
 
 function consumeConfigurationNode(state: ConfigurationInspectionState): void {
