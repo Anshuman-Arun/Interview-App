@@ -453,6 +453,18 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(unchanged.image).toBe(source);
   });
 
+  it("bounds extreme standalone downscale planning without a linear correction loop", () => {
+    const plan = planDownscale(
+      { width: Number.MAX_SAFE_INTEGER, height: 1 },
+      { maxWidth: Number.MAX_SAFE_INTEGER, maxHeight: 1, maxPixels: 1 }
+    );
+    expect(plan).toMatchObject({
+      resized: true,
+      resultWidth: 1,
+      resultHeight: 1
+    });
+  });
+
   it("does not return an unchanged image that violates the configured output-byte ceiling", async () => {
     const source = snapshot(makePng(16, 16));
     await expect(downscaleImage(
