@@ -2344,6 +2344,24 @@ describe("provider-neutral request preparation and budgeting", () => {
     ]);
   });
 
+  it("rejects inherited or accessor-backed payload references in the exported guard", () => {
+    const source = snapshot(makePng(1, 1));
+    const prepared = prepareVisionImageRequest(source, "guard");
+
+    const inherited = Object.create({ payload: prepared.payload });
+    expect(requestPayloadIsSafeReference(inherited)).toBe(false);
+
+    const accessor = Object.defineProperty({}, "payload", {
+      enumerable: true,
+      get() {
+        return prepared.payload;
+      }
+    });
+    expect(requestPayloadIsSafeReference(accessor)).toBe(false);
+
+    expect(requestPayloadIsSafeReference({ payload: prepared.payload })).toBe(true);
+  });
+
   it("fails closed instead of throwing through hostile payload proxy traps", () => {
     const hostile = new Proxy({}, {
       has() {
