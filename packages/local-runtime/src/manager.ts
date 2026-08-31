@@ -1339,10 +1339,9 @@ function validateOutputLimits(output: LocalComponentDefinition["output"]): void 
       invalid(`output.maxLineBytes may not exceed ${String(MAX_OUTPUT_LINE_BYTES)}`);
     }
   }
-  if (output.maxLineBytes !== undefined
-      && output.maxBytes !== undefined
-      && output.maxLineBytes > output.maxBytes) {
-    invalid("output.maxLineBytes may not exceed output.maxBytes");
+  const effectiveMaxBytes = output.maxBytes ?? DEFAULT_OUTPUT_MAX_BYTES;
+  if (output.maxLineBytes !== undefined && output.maxLineBytes > effectiveMaxBytes) {
+    invalid("output.maxLineBytes may not exceed the effective output.maxBytes");
   }
 }
 
