@@ -361,6 +361,28 @@ function isInternalVisionConstructionSpecifier(specifier) {
 function checkVisionInternalConstruction(records, violations) {
   for (const record of records) {
     const outsideVision = record.location.kind !== "package" || record.location.name !== "vision";
+    const internalBindingNames = new Set();
+
+    function recordInternalImportBindings(node) {
+      if (!ts.isImportDeclaration(node)
+          || !ts.isStringLiteralLike(node.moduleSpecifier)
+          || !isInternalVisionConstructionSpecifier(node.moduleSpecifier.text)
+          || node.importClause === undefined) return;
+
+      if (node.importClause.name !== undefined) internalBindingNames.add(node.importClause.name.text);
+      const bindings = node.importClause.namedBindings;
+      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+        internalBindingNames.add(bindings.name.text);
+      } else if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) internalBindingNames.add(element.name.text);
+      }
+    }
+
+    function collect(node) {
+      recordInternalImportBindings(node);
+      ts.forEachChild(node, collect);
+    }
+    collect(record.sourceFile);
 
     for (const specifier of extractModuleSpecifiers(record.sourceFile)) {
       if (outsideVision
@@ -375,19 +397,44 @@ function checkVisionInternalConstruction(records, violations) {
       }
     }
 
+    function exportedNodeReferencesInternalBinding(node) {
+      let found = false;
+      function scan(current) {
+        if (found) return;
+        if (ts.isIdentifier(current) && internalBindingNames.has(current.text)) {
+          found = true;
+          return;
+        }
+        ts.forEachChild(current, scan);
+      }
+      scan(node);
+      return found;
+    }
+
     function visit(node) {
-      if (ts.isExportDeclaration(node)
-          && node.moduleSpecifier !== undefined
-          && ts.isStringLiteralLike(node.moduleSpecifier)
-          && record.location.kind === "package"
-          && record.location.name === "vision"
-          && isInternalVisionConstructionSpecifier(node.moduleSpecifier.text)) {
-        addViolation(
-          violations,
-          "VISION_INTERNAL_CONSTRUCTION_EXPORT",
-          record.relativePath,
-          "Vision snapshot/artifact construction capability may not be re-exported."
-        );
+      if (ts.isExportDeclaration(node)) {
+        if (node.moduleSpecifier !== undefined
+            && ts.isStringLiteralLike(node.moduleSpecifier)
+            && record.location.kind === "package"
+            && record.location.name === "vision"
+            && isInternalVisionConstructionSpecifier(node.moduleSpecifier.text)) {
+          addViolation(
+            violations,
+            "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+            record.relativePath,
+            "Vision snapshot/artifact construction capability may not be re-exported."
+          );
+        } else if (record.location.kind === "package"
+            && record.location.name === "vision"
+            && node.moduleSpecifier === undefined
+            && exportedNodeReferencesInternalBinding(node)) {
+          addViolation(
+            violations,
+            "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+            record.relativePath,
+            "Vision snapshot/artifact construction capability may not be indirectly re-exported."
+          );
+        }
       }
       ts.forEachChild(node, visit);
     }
