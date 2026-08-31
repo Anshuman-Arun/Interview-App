@@ -217,7 +217,7 @@ describe("vision snapshot validation and hashing", () => {
   });
 
   it("rejects unsafe board revisions before they can enter deterministic image identity", () => {
-    const unsafeRevision = BoardRevisionSchema.parse(Number.MAX_SAFE_INTEGER + 1);
+    const unsafeRevision = (Number.MAX_SAFE_INTEGER + 1) as ReturnType<typeof BoardRevisionSchema.parse>;
     expect(() => createValidatedImageSnapshot({
       snapshotId: "unsafe-revision",
       sourceType: "WHITEBOARD_SNAPSHOT",
