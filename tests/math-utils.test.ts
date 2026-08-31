@@ -23,10 +23,12 @@ import {
   permutations,
   rational,
   productIntegers,
+  productRationals,
   sameFiniteMultiset,
   sameFiniteSet,
   serializeRational,
-  sumIntegers
+  sumIntegers,
+  sumRationals
 } from "../packages/verification/src/index.js";
 
 describe("deterministic math utilities", () => {
@@ -132,6 +134,42 @@ describe("deterministic math utilities", () => {
               ));
             }
           }
+        }
+      }
+    }
+  });
+
+  it("matches exact three-term rational aggregates independent of order", () => {
+    const inputs: readonly (readonly [bigint, bigint])[] = [
+      [-2n, 3n],
+      [-1n, 2n],
+      [0n, 1n],
+      [1n, 3n],
+      [2n, 1n]
+    ];
+
+    for (const left of inputs) {
+      for (const middle of inputs) {
+        for (const right of inputs) {
+          const values = [left, middle, right].map(([numerator, denominator]) =>
+            rational(numerator, denominator)
+          );
+          const commonDenominator = left[1] * middle[1] * right[1];
+          const expectedSum = rational(
+            left[0] * middle[1] * right[1]
+              + middle[0] * left[1] * right[1]
+              + right[0] * left[1] * middle[1],
+            commonDenominator
+          );
+          const expectedProduct = rational(
+            left[0] * middle[0] * right[0],
+            commonDenominator
+          );
+
+          expect(sumRationals(values)).toEqual(expectedSum);
+          expect(sumRationals([...values].reverse())).toEqual(expectedSum);
+          expect(productRationals(values)).toEqual(expectedProduct);
+          expect(productRationals([...values].reverse())).toEqual(expectedProduct);
         }
       }
     }
