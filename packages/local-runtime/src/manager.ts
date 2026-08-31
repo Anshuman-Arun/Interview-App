@@ -1950,7 +1950,14 @@ function preRedactDiagnosticValue(
       .slice(0, DIAGNOSTIC_SANITIZATION_LIMITS.maxObjectEntries);
     for (const [key, descriptor] of entries) {
       if (key === "__proto__" || key === "prototype" || key === "constructor") continue;
-      output[key] = "value" in descriptor
+      const requestedKey = redactKnownSecrets(key, secretValues);
+      let outputKey = requestedKey;
+      let suffix = 2;
+      while (Object.hasOwn(output, outputKey)) {
+        outputKey = `${requestedKey}#${String(suffix)}`;
+        suffix += 1;
+      }
+      output[outputKey] = "value" in descriptor
         ? preRedactDiagnosticValue(descriptor.value, secretValues, state, depth + 1)
         : "[ACCESSOR_OMITTED]";
     }
