@@ -197,6 +197,20 @@ describe("local worker lifecycle manager", () => {
       .resolves.toMatchObject({ state: "READY" });
   });
 
+  it("rejects duplicate registration and unknown component lookups predictably", () => {
+    const runtime = manager();
+    runtime.register(definition("registered-once", "ready"));
+
+    expect(() => runtime.register(definition("registered-once", "ready")))
+      .toThrow(expect.objectContaining({ code: "DUPLICATE_COMPONENT" }));
+    expect(() => runtime.getStatus("missing-component"))
+      .toThrow(expect.objectContaining({ code: "UNKNOWN_COMPONENT" }));
+    expect(() => runtime.stop("missing-component"))
+      .toThrow(expect.objectContaining({ code: "UNKNOWN_COMPONENT" }));
+    expect(() => runtime.start("missing component"))
+      .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+  });
+
   it("starts one process, coalesces duplicate starts, records readiness, and handshakes versions", async () => {
     const runtime = manager();
     runtime.register(definition("worker", "ready", {
