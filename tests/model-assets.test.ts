@@ -1667,6 +1667,27 @@ describe("local model asset manager", () => {
       code: "INVALID_CONFIGURATION"
     });
     expect(reads).toBe(0);
+
+    const prototypeOnlySignal = Object.create(AbortSignal.prototype) as unknown;
+    await expect(UnsafeInstall(manifest, prototypeOnlySignal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+
+    let proxyReads = 0;
+    const realSignal = new AbortController().signal;
+    const proxiedSignal = new Proxy(realSignal, {
+      get(target, property, receiver) {
+        if (property === "aborted") {
+          proxyReads += 1;
+          throw new Error("proxy signal getter should not run");
+        }
+        return Reflect.get(target, property, receiver);
+      }
+    });
+    await expect(UnsafeInstall(manifest, proxiedSignal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    expect(proxyReads).toBe(0);
   });
 
   it("rejects malformed runtime redirect security configuration", async () => {
