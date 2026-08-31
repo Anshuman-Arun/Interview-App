@@ -149,7 +149,8 @@ export const ProviderModelCapabilitiesSchema = ProviderModelCapabilitiesEnvelope
     if (!isCapabilityDeclarationConsistent(capabilities)) {
       context.addIssue({ code: "custom", message: "MALFORMED_CAPABILITIES" });
     }
-  });
+  })
+  .transform((capabilities) => freezeCapabilities(capabilities));
 
 export const ProviderCapabilityKeySchema = z.enum([
   "TEXT_GENERATION",
@@ -191,7 +192,8 @@ const ProviderSecretReferenceEnvelopeSchema = z.unknown().transform((value, cont
 });
 
 export const ProviderSecretReferenceSchema = ProviderSecretReferenceEnvelopeSchema
-  .pipe(ProviderSecretReferenceObjectSchema);
+  .pipe(ProviderSecretReferenceObjectSchema)
+  .transform((reference) => freezeNullPrototype({ ...reference }));
 export type ProviderSecretReference = z.infer<typeof ProviderSecretReferenceSchema>;
 
 const RawProviderConfigurationSchema = z.object({
@@ -217,15 +219,23 @@ const ProviderConfigurationEnvelopeSchema = z.unknown().transform((value, contex
 
 export const ProviderConfigurationSchema = ProviderConfigurationEnvelopeSchema
   .pipe(RawProviderConfigurationSchema)
-  .transform((configuration) => Object.freeze({
-    ...configuration,
-    ...(configuration.reasoning === undefined
-      ? {}
-      : { reasoning: Object.freeze({ ...configuration.reasoning }) }),
-    ...(configuration.credentialRef === undefined
-      ? {}
-      : { credentialRef: Object.freeze({ ...configuration.credentialRef }) })
-  }));
+  .transform((configuration) => {
+    const reasoning = Object.hasOwn(configuration, "reasoning")
+      ? configuration.reasoning
+      : undefined;
+    const credentialRef = Object.hasOwn(configuration, "credentialRef")
+      ? configuration.credentialRef
+      : undefined;
+    return freezeNullPrototype({
+      ...configuration,
+      ...(reasoning === undefined
+        ? {}
+        : { reasoning: freezeNullPrototype({ ...reasoning }) }),
+      ...(credentialRef === undefined
+        ? {}
+        : { credentialRef: freezeNullPrototype({ ...credentialRef }) })
+    });
+  });
 export type ProviderConfiguration = z.infer<typeof ProviderConfigurationSchema>;
 
 export interface PersistableProviderConfiguration {
@@ -257,7 +267,11 @@ const ProviderModelDefinitionEnvelopeSchema = z.unknown().transform((value, cont
 });
 
 export const ProviderModelDefinitionSchema = ProviderModelDefinitionEnvelopeSchema
-  .pipe(ProviderModelDefinitionObjectSchema);
+  .pipe(ProviderModelDefinitionObjectSchema)
+  .transform((model) => freezeNullPrototype({
+    ...model,
+    capabilities: model.capabilities
+  }));
 export type ProviderModelDefinition = z.infer<typeof ProviderModelDefinitionSchema>;
 
 export interface ProviderSecretResolverRequest {
@@ -280,14 +294,23 @@ export interface ResolvedProviderConfiguration {
   readonly model: ProviderModelDefinition;
 }
 
+const RESOLUTION_CONSTRUCTION_TOKEN = Symbol("provider-resolution-construction");
+
 class ResolvedProviderConfigurationValue implements ResolvedProviderConfiguration {
   readonly #resolutionBrand = true;
 
   public constructor(
+    token: typeof RESOLUTION_CONSTRUCTION_TOKEN,
     public readonly configuration: ProviderConfiguration,
     public readonly provider: ProviderDefinition,
     public readonly model: ProviderModelDefinition
   ) {
+    if (token !== RESOLUTION_CONSTRUCTION_TOKEN) {
+      throw new ProviderControlPlaneError(
+        "INVALID_FACTORY_INPUT",
+        "Provider resolution construction is not permitted"
+      );
+    }
     Object.freeze(this);
   }
 
@@ -374,6 +397,11 @@ const ProviderDefinitionMetadataSchema = z.object({
 
 function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function freezeNullPrototype<T extends object>(value: T): T {
+  Object.setPrototypeOf(value, null);
+  return Object.freeze(value);
 }
 
 const PROVIDER_DEFINITION_INPUT_KEYS = new Set([
@@ -467,7 +495,7 @@ function normalizeFactorySecretResolver(
     );
   }
 
-  const expectedRequest = Object.freeze({
+  const expectedRequest = freezeNullPrototype({
     providerId: resolved.provider.id,
     reference: expectedReference
   }) satisfies ProviderSecretResolverRequest;
@@ -534,7 +562,7 @@ function normalizeFactorySecretResolver(
   };
 
   if (hasSecretCandidate === undefined) {
-    return Object.freeze({ resolveSecret });
+    return freezeNullPrototype({ resolveSecret });
   }
   const hasSecret = async (
     request: ProviderSecretResolverRequest
@@ -557,17 +585,26 @@ function normalizeFactorySecretResolver(
     }
     return result;
   };
-  return Object.freeze({ resolveSecret, hasSecret });
+  return freezeNullPrototype({ resolveSecret, hasSecret });
 }
+
+const REGISTERED_FACTORY_CONSTRUCTION_TOKEN = Symbol("provider-factory-construction");
 
 class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
   readonly #createAdapterImpl: ProviderAdapterFactoryDefinition["createAdapter"];
   public readonly createAdapter: ProviderAdapterFactory["createAdapter"];
 
   public constructor(
+    token: typeof REGISTERED_FACTORY_CONSTRUCTION_TOKEN,
     public readonly id: ProviderAdapterFactoryId,
     createAdapterImpl: ProviderAdapterFactoryDefinition["createAdapter"]
   ) {
+    if (token !== REGISTERED_FACTORY_CONSTRUCTION_TOKEN) {
+      throw new ProviderControlPlaneError(
+        "INVALID_ADAPTER_FACTORY",
+        "Registered provider factory construction is not permitted"
+      );
+    }
     this.#createAdapterImpl = createAdapterImpl;
     this.createAdapter = (input) => this.#createAdapter(input);
     Object.freeze(this);
@@ -597,7 +634,7 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
     const resolved = inspected.resolved;
     assertTrustedResolvedConfiguration(resolved);
     const secretResolver = normalizeFactorySecretResolver(inspected.secretResolver, resolved);
-    const normalizedInput = Object.freeze({
+    const normalizedInput = freezeNullPrototype({
       resolved,
       ...(secretResolver === undefined ? {} : { secretResolver }),
       ...(Object.hasOwn(inspected, "runtime")
@@ -658,7 +695,11 @@ function normalizeFactory(factory: unknown): ProviderAdapterFactory | undefined 
       "Provider adapter factory is malformed"
     );
   }
-  return new RegisteredProviderAdapterFactory(id.data, createAdapter);
+  return new RegisteredProviderAdapterFactory(
+    REGISTERED_FACTORY_CONSTRUCTION_TOKEN,
+    id.data,
+    createAdapter
+  );
 }
 
 function supportMatchesBoolean(
@@ -796,11 +837,11 @@ function freezeCapabilities(
     capabilities.reasoningLevels === "UNKNOWN"
       ? "UNKNOWN"
       : Object.freeze([...capabilities.reasoningLevels].sort(compareCodeUnits));
-  return Object.freeze({ ...capabilities, reasoningLevels });
+  return freezeNullPrototype({ ...capabilities, reasoningLevels });
 }
 
 function freezeModel(model: ProviderModelDefinition): ProviderModelDefinition {
-  return Object.freeze({
+  return freezeNullPrototype({
     ...model,
     capabilities: freezeCapabilities(model.capabilities)
   });
@@ -855,7 +896,10 @@ function defineProviderValue(input: unknown): ProviderDefinition {
     );
   }
 
-  if ((adapterFactory === undefined) !== (metadataResult.data.adapterVersion === undefined)) {
+  const adapterVersion = Object.hasOwn(metadataResult.data, "adapterVersion")
+    ? metadataResult.data.adapterVersion
+    : undefined;
+  if ((adapterFactory === undefined) !== (adapterVersion === undefined)) {
     throw new ProviderControlPlaneError(
       "MALFORMED_DEFINITION",
       "Executable provider definitions must pair an adapter factory with an adapter version"
@@ -912,7 +956,7 @@ function defineProviderValue(input: unknown): ProviderDefinition {
     .map((model) => freezeModel(model))
     .sort((left, right) => compareCodeUnits(left.id, right.id));
 
-  return Object.freeze({
+  return freezeNullPrototype({
     ...metadataResult.data,
     credentialPurposes: Object.freeze([...credentialPurposes].sort(compareCodeUnits)),
     models: Object.freeze(models),
@@ -999,7 +1043,7 @@ export class ProviderRegistry {
 
   public register(input: ProviderDefinitionInput): ProviderDefinition {
     const definition = defineProvider(input);
-    this.assertProviderIdAvailable(definition.id);
+    this.#assertProviderIdAvailable(definition.id);
     this.#providers.set(definition.id, definition);
     return definition;
   }
@@ -1016,7 +1060,7 @@ export class ProviderRegistry {
         );
       }
       candidateIds.add(definition.id);
-      this.assertProviderIdAvailable(definition.id);
+      this.#assertProviderIdAvailable(definition.id);
     }
     for (const definition of definitions) this.#providers.set(definition.id, definition);
     return Object.freeze(definitions);
@@ -1029,7 +1073,7 @@ export class ProviderRegistry {
   }
 
   public enumerateModels(providerId: string): readonly ProviderModelDefinition[] {
-    return this.getProvider(providerId).models;
+    return this.#getProvider(providerId).models;
   }
 
   public getProvider(providerId: string): ProviderDefinition {
@@ -1064,7 +1108,7 @@ export class ProviderRegistry {
     return model;
   }
 
-  private assertProviderIdAvailable(providerId: ProviderId): void {
+  #assertProviderIdAvailable(providerId: ProviderId): void {
     if (this.#providers.has(providerId)) {
       throw new ProviderControlPlaneError(
         "DUPLICATE_PROVIDER",
@@ -1094,7 +1138,7 @@ function resolveRegistrySelection(
   try {
     const provider = providerRegistryGetProvider.call(registry, providerId);
     const model = providerRegistryGetModel.call(registry, providerId, modelId);
-    return Object.freeze({ provider, model });
+    return freezeNullPrototype({ provider, model });
   } catch (error) {
     if (error instanceof ProviderControlPlaneError) throw error;
     throw new ProviderControlPlaneError(
@@ -1187,7 +1231,7 @@ export function matchCapabilityRequirements(
     if (support === "UNSUPPORTED") unsupported.push(requirement);
     if (support === "UNKNOWN") unknown.push(requirement);
   }
-  return Object.freeze({
+  return freezeNullPrototype({
     compatible: unsupported.length === 0 && unknown.length === 0,
     unsupported: Object.freeze(unsupported),
     unknown: Object.freeze(unknown)
@@ -1326,7 +1370,7 @@ function resolveParsedProviderConfiguration(input: {
   const settings = validateProviderSettings(provider, input.configuration.settings);
   const configuration = settings === input.configuration.settings
     ? input.configuration
-    : Object.freeze({ ...input.configuration, ...(settings === undefined ? {} : { settings }) });
+    : freezeNullPrototype({ ...input.configuration, ...(settings === undefined ? {} : { settings }) });
 
   validateCredentialReference(provider, configuration.credentialRef);
   validateReasoningConfiguration(model, configuration.reasoning);
@@ -1343,7 +1387,12 @@ function resolveParsedProviderConfiguration(input: {
       "Configured model required capabilities are unknown"
     );
   }
-  return new ResolvedProviderConfigurationValue(configuration, provider, model);
+  return new ResolvedProviderConfigurationValue(
+    RESOLUTION_CONSTRUCTION_TOKEN,
+    configuration,
+    provider,
+    model
+  );
 }
 
 export function resolveProviderConfiguration(input: {
@@ -1412,7 +1461,7 @@ export async function evaluateProviderReadiness(input: {
   try {
     parsed = parseConfiguration(input.configuration);
   } catch (error) {
-    return Object.freeze({
+    return freezeNullPrototype({
       state: "MISCONFIGURED",
       reason: error instanceof ProviderControlPlaneError
         ? error.code
@@ -1424,7 +1473,7 @@ export async function evaluateProviderReadiness(input: {
   try {
     requirements = input.requirements;
   } catch {
-    return Object.freeze({
+    return freezeNullPrototype({
       state: "MISCONFIGURED",
       providerId: parsed.providerId,
       modelId: parsed.modelId,
@@ -1442,7 +1491,7 @@ export async function evaluateProviderReadiness(input: {
     const reason = error instanceof ProviderControlPlaneError
       ? error.code
       : "MALFORMED_CONFIGURATION";
-    return Object.freeze({
+    return freezeNullPrototype({
       state: reason === "CAPABILITY_STATUS_UNKNOWN" ? "UNKNOWN" : "MISCONFIGURED",
       providerId: parsed.providerId,
       modelId: parsed.modelId,
@@ -1455,7 +1504,7 @@ export async function evaluateProviderReadiness(input: {
     try {
       match = matchCapabilityRequirements(resolved.model.capabilities, requirements);
     } catch (error) {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "MISCONFIGURED",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
@@ -1465,7 +1514,7 @@ export async function evaluateProviderReadiness(input: {
       });
     }
     if (match.unsupported.length > 0) {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "MISCONFIGURED",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
@@ -1473,7 +1522,7 @@ export async function evaluateProviderReadiness(input: {
       });
     }
     if (match.unknown.length > 0) {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "UNKNOWN",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
@@ -1483,7 +1532,7 @@ export async function evaluateProviderReadiness(input: {
   }
 
   if (!resolved.configuration.enabled) {
-    return Object.freeze({
+    return freezeNullPrototype({
       state: "DISABLED",
       providerId: resolved.provider.id,
       modelId: resolved.model.id
@@ -1491,7 +1540,7 @@ export async function evaluateProviderReadiness(input: {
   }
 
   if (resolved.provider.adapterFactory === undefined) {
-    return Object.freeze({
+    return freezeNullPrototype({
       state: "UNAVAILABLE",
       providerId: resolved.provider.id,
       modelId: resolved.model.id,
@@ -1502,7 +1551,7 @@ export async function evaluateProviderReadiness(input: {
   const reference = resolved.configuration.credentialRef;
   if (reference === undefined) {
     if (resolved.provider.credentialRequirement === "REQUIRED") {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "CREDENTIALS_REQUIRED",
         providerId: resolved.provider.id,
         modelId: resolved.model.id
@@ -1517,7 +1566,7 @@ export async function evaluateProviderReadiness(input: {
       hasSecret = resolver?.hasSecret;
       resolveSecret = resolver?.resolveSecret;
     } catch {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "UNKNOWN",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
@@ -1529,7 +1578,7 @@ export async function evaluateProviderReadiness(input: {
       || typeof resolveSecret !== "function"
       || resolver === undefined
     ) {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "UNKNOWN",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
@@ -1538,12 +1587,12 @@ export async function evaluateProviderReadiness(input: {
     }
     let available: unknown;
     try {
-      available = await hasSecret.call(resolver, Object.freeze({
+      available = await hasSecret.call(resolver, freezeNullPrototype({
         providerId: resolved.provider.id,
         reference
       }));
     } catch {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "UNKNOWN",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
@@ -1551,7 +1600,7 @@ export async function evaluateProviderReadiness(input: {
       });
     }
     if (typeof available !== "boolean") {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "UNKNOWN",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
@@ -1559,7 +1608,7 @@ export async function evaluateProviderReadiness(input: {
       });
     }
     if (!available) {
-      return Object.freeze({
+      return freezeNullPrototype({
         state: "CREDENTIALS_REQUIRED",
         providerId: resolved.provider.id,
         modelId: resolved.model.id
@@ -1567,7 +1616,7 @@ export async function evaluateProviderReadiness(input: {
     }
   }
 
-  return Object.freeze({
+  return freezeNullPrototype({
     state: "AVAILABLE",
     providerId: resolved.provider.id,
     modelId: resolved.model.id
@@ -1578,14 +1627,14 @@ export function toPersistableProviderConfiguration(
   value: unknown
 ): PersistableProviderConfiguration {
   const parsed = parseConfiguration(value);
-  return Object.freeze({
+  return freezeNullPrototype({
     version: 1,
     providerId: parsed.providerId,
     modelId: parsed.modelId,
     enabled: parsed.enabled,
     ...(parsed.reasoning === undefined
       ? {}
-      : { reasoning: Object.freeze({ ...parsed.reasoning }) }),
+      : { reasoning: freezeNullPrototype({ ...parsed.reasoning }) }),
     ...(parsed.settings === undefined ? {} : { settings: parsed.settings })
   });
 }
@@ -1638,7 +1687,7 @@ export function toProviderDiagnosticMetadata(
   resolved: ResolvedProviderConfiguration
 ): ProviderDiagnosticMetadata {
   assertTrustedResolvedConfiguration(resolved);
-  return Object.freeze({
+  return freezeNullPrototype({
     providerId: resolved.provider.id,
     modelId: resolved.model.id,
     providerDefinitionVersion: resolved.provider.definitionVersion,

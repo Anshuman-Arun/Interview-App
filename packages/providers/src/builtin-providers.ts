@@ -11,6 +11,8 @@ import {
   type ProviderDefinitionInput
 } from "./control-plane.js";
 
+const registerProviderDefinitions = ProviderRegistry.prototype.registerMany;
+
 const MockProviderFactoryRuntimeSchema = z.object({
   proposal: InterviewerProposalSchema
 }).strict();
@@ -162,6 +164,17 @@ export const GEMINI_API_PROVIDER_DEFINITION: ProviderDefinition = defineProvider
 export function registerBuiltInProviders(
   registry: ProviderRegistry = new ProviderRegistry()
 ): ProviderRegistry {
-  registry.registerMany([MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT]);
+  try {
+    registerProviderDefinitions.call(
+      registry,
+      [MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT]
+    );
+  } catch (error) {
+    if (error instanceof ProviderControlPlaneError) throw error;
+    throw new ProviderControlPlaneError(
+      "INVALID_REGISTRY",
+      "Provider registry is invalid"
+    );
+  }
   return registry;
 }

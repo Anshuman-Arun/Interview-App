@@ -7,7 +7,7 @@ This package separates provider description/configuration from provider executio
 The control plane provides:
 
 - stable provider/model identities and immutable registered definitions;
-- tri-state capability declarations, with unknown support kept explicit;
+- tri-state capability declarations, with unknown support kept explicit and distinct from known incompatibility;
 - deterministic provider/model enumeration and lookup;
 - validated, export-safe provider configuration;
 - opaque runtime secret references and a credential resolver boundary;
@@ -36,14 +36,14 @@ application.
 Provider-specific `settings` are bounded, plain JSON data. Validation rejects accessors,
 prototype-bearing/special-key objects, cycles, sparse or side-property arrays, non-finite values,
 oversized structures, credential-like keys, and common credential payloads. Provider-specific
-validators are required to return data that passes the same validation again.
+validators are required to return data that passes the same validation again. Sanitized control-plane records use null prototypes so absent optional fields cannot be reintroduced through inherited prototype pollution.
 
 Use `toPersistableProviderConfiguration` before export/persistence when secret references
 should be excluded. `createProviderConfigurationFingerprintMaterial` is deterministic and
 is derived from that secret-reference-free form. It is canonical fingerprint *material*, not a
 digest; diagnostics callers should hash it rather than log the material itself.
 
-Raw credentials are obtained only at runtime through `ProviderSecretResolver`.
+Raw credentials are obtained only at runtime through `ProviderSecretResolver`. Factories receive a frozen resolver facade scoped to the exact credential reference selected by the resolved configuration.
 
 ## Built-ins
 

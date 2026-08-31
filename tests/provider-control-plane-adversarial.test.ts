@@ -3,6 +3,7 @@ import {
   PROVIDER_CONFIGURATION_LIMITS,
   ProviderConfigurationSchema,
   ProviderModelCapabilitiesSchema,
+  ProviderModelDefinitionSchema,
   ProviderRegistry,
   SafeProviderConfigurationRecordSchema,
   createProviderConfigurationFingerprintMaterial,
@@ -86,6 +87,43 @@ describe("provider configuration secret exclusion", () => {
     }
   });
 
+  it("does not inherit polluted optional configuration fields after validation", () => {
+    Object.defineProperties(Object.prototype, {
+      settings: {
+        configurable: true,
+        enumerable: false,
+        value: { injected: true }
+      },
+      reasoning: {
+        configurable: true,
+        enumerable: false,
+        value: { level: "polluted" }
+      },
+      credentialRef: {
+        configurable: true,
+        enumerable: false,
+        value: { id: "polluted", purpose: "API_KEY" }
+      }
+    });
+
+    try {
+      const parsed = ProviderConfigurationSchema.parse({
+        version: 1,
+        providerId: "settings-provider",
+        modelId: "settings-model",
+        enabled: true
+      });
+      expect(Object.getPrototypeOf(parsed)).toBeNull();
+      expect(parsed.settings).toBeUndefined();
+      expect(parsed.reasoning).toBeUndefined();
+      expect(parsed.credentialRef).toBeUndefined();
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "settings");
+      Reflect.deleteProperty(Object.prototype, "reasoning");
+      Reflect.deleteProperty(Object.prototype, "credentialRef");
+    }
+  });
+
   it("returns an immutable validated object from the exported configuration schema", () => {
     const parsed = ProviderConfigurationSchema.parse(settingsConfiguration({
       nested: { retries: 2 }
@@ -103,9 +141,11 @@ describe("provider configuration secret exclusion", () => {
       "Basic Zm9vOmJhcg==",
       "Basic dXNlcjpwYXNz",
       "AIza123456789012345678901234567890",
-      "sk_abcdefghijklmno",
+      "sk_abcdefghijklmnopqrstuvwxyz",
       "token=raw-private-token",
       "token=abcdefghijklmnopqrst",
+      "secret=P@ssword-123456",
+      "postgres://user:p%40ssw0rd@example.com/database",
       "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----"
     ]) {
       expect(() => validateProviderConfiguration(settingsConfiguration({ endpoint: value })))
@@ -120,19 +160,35 @@ describe("provider configuration secret exclusion", () => {
     for (const mode of [
       "Basic mode",
       "Basic configuration",
+      "Basic Configuration",
+      "Basic Mathematics",
       "Basic abcdefgh",
       "Bearer strategy",
       "Use basic defaults",
       "token: bucket",
       "secret: sauce",
       "authorization: required",
-      "api_key = placeholder"
+      "api_key = placeholder",
+      "https://api.example.com/v1/models"
     ]) {
       expect(() => resolveProviderConfiguration({
         registry,
         configuration: settingsConfiguration({ mode })
       })).not.toThrow();
     }
+  });
+
+  it("allows short sk-prefixed opaque reference aliases without treating them as raw keys", () => {
+    expect(() => validateProviderConfiguration({
+      version: 1,
+      providerId: "settings-provider",
+      modelId: "settings-model",
+      enabled: true,
+      credentialRef: {
+        id: "sk-prod-primary",
+        purpose: "API_KEY"
+      }
+    })).not.toThrow();
   });
 
   it("rejects plural and header-shaped credential fields at any settings depth", () => {
@@ -157,7 +213,9 @@ describe("provider configuration secret exclusion", () => {
       registry,
       configuration: settingsConfiguration({
         authMode: "none",
-        keyRotationInterval: 30
+        keyRotationInterval: 30,
+        maxTokens: 2_048,
+        outputTokens: 512
       })
     })).not.toThrow();
   });
@@ -166,14 +224,14 @@ describe("provider configuration secret exclusion", () => {
     for (const configuration of [
       {
         version: 1,
-        providerId: "sk-abcdefghijk",
+        providerId: "sk-abcdefghijklmnopqrstuvwxyz",
         modelId: "settings-model",
         enabled: true
       },
       {
         version: 1,
         providerId: "settings-provider",
-        modelId: "sk-abcdefghijk",
+        modelId: "sk-abcdefghijklmnopqrstuvwxyz",
         enabled: true
       },
       {
@@ -189,7 +247,7 @@ describe("provider configuration secret exclusion", () => {
         modelId: "settings-model",
         enabled: true,
         credentialRef: {
-          id: "sk-abcdefghijk",
+          id: "sk-abcdefghijklmnopqrstuvwxyz",
           purpose: "API_KEY"
         }
       }
@@ -451,6 +509,67 @@ describe("provider readiness hostile configurations", () => {
       reason: "MALFORMED_CONFIGURATION"
     });
     expect(Object.hasOwn(Object.prototype, "polluted")).toBe(false);
+  });
+});
+
+describe("exported provider schema output isolation", () => {
+  it("returns null-prototype capability and model-definition records", () => {
+    const capabilities = ProviderModelCapabilitiesSchema.parse(createCapabilities());
+    expect(Object.getPrototypeOf(capabilities)).toBeNull();
+    expect(Object.isFrozen(capabilities)).toBe(true);
+
+    Object.defineProperty(Object.prototype, "metadataVersion", {
+      configurable: true,
+      enumerable: false,
+      value: "polluted-version"
+    });
+    try {
+      const model = ProviderModelDefinitionSchema.parse({
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: createCapabilities()
+      });
+      expect(Object.getPrototypeOf(model)).toBeNull();
+      expect(model.metadataVersion).toBeUndefined();
+      expect(Object.isFrozen(model)).toBe(true);
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "metadataVersion");
+    }
+  });
+
+  it("does not let polluted adapterFactory appear on a definition that registered none", async () => {
+    Object.defineProperty(Object.prototype, "adapterFactory", {
+      configurable: true,
+      enumerable: false,
+      value: {
+        id: "polluted-factory",
+        createAdapter() {
+          throw new Error("polluted factory must never be reachable");
+        }
+      }
+    });
+    try {
+      const registry = new ProviderRegistry();
+      registry.register(createSettingsProviderInput());
+      const definition = registry.getProvider("settings-provider");
+      expect(Object.getPrototypeOf(definition)).toBeNull();
+      expect(definition.adapterFactory).toBeUndefined();
+
+      await expect(evaluateProviderReadiness({
+        registry,
+        configuration: {
+          version: 1,
+          providerId: "settings-provider",
+          modelId: "settings-model",
+          enabled: true
+        }
+      })).resolves.toMatchObject({
+        state: "UNAVAILABLE",
+        reason: "ADAPTER_FACTORY_UNAVAILABLE"
+      });
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "adapterFactory");
+    }
   });
 });
 

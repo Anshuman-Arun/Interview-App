@@ -47,10 +47,12 @@ const SECRET_CONFIGURATION_KEYS = new Set([
 ]);
 const BEARER_AUTH_PATTERN = /\bbearer\s+[a-z0-9._~+/-]{16,}/iu;
 const BASIC_AUTH_CANDIDATE_PATTERN =
-  /\b[Bb][Aa][Ss][Ii][Cc]\s+([A-Za-z0-9+/]+={0,2})/u;
-const COMMON_API_KEY_PATTERN = /\b(?:sk[-_][a-z0-9_-]{8,}|AIza[a-z0-9_-]{20,})\b/iu;
+  /\bbasic\s+([A-Za-z0-9+/]+={0,2})(?=$|[\s,;])/iu;
+const COMMON_API_KEY_PATTERN = /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,})\b/iu;
 const SECRET_ASSIGNMENT_PATTERN =
-  /\b(?:authorization|api[-_]?key|access[-_]?token|client[-_]?token|token|secret|password|passphrase|private[-_]?key|credential)\b\s*[:=]\s*["']?([a-z0-9._~+/=-]{12,})["']?/iu;
+  /\b(?:authorization|api[-_]?key|access[-_]?token|client[-_]?token|token|secret|password|passphrase|private[-_]?key|credential)\b\s*[:=]\s*["']?([^\s"'&]{12,})["']?/iu;
+const URL_USERINFO_PATTERN =
+  /\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/iu;
 const PRIVATE_KEY_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/iu;
 
 export const PROVIDER_CONFIGURATION_LIMITS = Object.freeze({
@@ -108,8 +110,24 @@ function normalizeConfigurationKey(key: string): string {
 function isSecretConfigurationKey(key: string): boolean {
   const normalized = normalizeConfigurationKey(key);
   if (SECRET_CONFIGURATION_KEYS.has(normalized)) return true;
-  return normalized.endsWith("token")
-    || normalized.endsWith("tokens")
+  return normalized.endsWith("accesstoken")
+    || normalized.endsWith("accesstokens")
+    || normalized.endsWith("refreshtoken")
+    || normalized.endsWith("refreshtokens")
+    || normalized.endsWith("clienttoken")
+    || normalized.endsWith("clienttokens")
+    || normalized.endsWith("sessiontoken")
+    || normalized.endsWith("sessiontokens")
+    || normalized.endsWith("authtoken")
+    || normalized.endsWith("authtokens")
+    || normalized.endsWith("bearertoken")
+    || normalized.endsWith("bearertokens")
+    || normalized.endsWith("apitoken")
+    || normalized.endsWith("apitokens")
+    || normalized.endsWith("oauthtoken")
+    || normalized.endsWith("oauthtokens")
+    || normalized.endsWith("csrftoken")
+    || normalized.endsWith("csrftokens")
     || normalized.endsWith("apikey")
     || normalized.endsWith("apikeys")
     || normalized.endsWith("secret")
@@ -124,19 +142,25 @@ function isSecretConfigurationKey(key: string): boolean {
     || normalized.endsWith("passwords")
     || normalized.endsWith("passphrase")
     || normalized.endsWith("passphrases")
-    || normalized.endsWith("cookie")
-    || normalized.endsWith("cookies")
+    || normalized === "cookie"
+    || normalized === "cookies"
     || normalized.endsWith("authorizationheader")
     || normalized.endsWith("authheader");
 }
 
 function containsBasicAuthCredential(value: string): boolean {
   const candidate = BASIC_AUTH_CANDIDATE_PATTERN.exec(value)?.[1];
-  if (candidate === undefined || candidate.length < 8) return false;
-  return (
-    (/[A-Z]/u.test(candidate) && /[a-z]/u.test(candidate))
-    || /[0-9+/=]/u.test(candidate)
-  );
+  if (candidate === undefined || candidate.length < 8 || candidate.length % 4 === 1) {
+    return false;
+  }
+  if (typeof globalThis.atob !== "function") return false;
+  try {
+    const padded = candidate + "=".repeat((4 - (candidate.length % 4)) % 4);
+    const decoded = globalThis.atob(padded);
+    return /^[\x20-\x7e]*:[\x20-\x7e]*$/u.test(decoded);
+  } catch {
+    return false;
+  }
 }
 
 export function containsSecretLikeConfigurationText(value: string): boolean {
@@ -145,6 +169,7 @@ export function containsSecretLikeConfigurationText(value: string): boolean {
   return BEARER_AUTH_PATTERN.test(normalized)
     || containsBasicAuthCredential(normalized)
     || COMMON_API_KEY_PATTERN.test(normalized)
+    || URL_USERINFO_PATTERN.test(normalized)
     || PRIVATE_KEY_PATTERN.test(normalized)
     || assignedValue !== undefined;
 }

@@ -323,6 +323,34 @@ describe("registry provenance and batch input hardening", () => {
       registry,
       configuration: MOCK_CONFIGURATION
     })).toThrow(expect.objectContaining({ code: "UNKNOWN_PROVIDER" }));
+    expect(() => registry.enumerateModels("mock-model"))
+      .toThrow(expect.objectContaining({ code: "UNKNOWN_PROVIDER" }));
+  });
+
+  it("ignores instance shadowing of the internal duplicate check", () => {
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({ id: "duplicate-provider" }));
+    Reflect.set(registry, "assertProviderIdAvailable", () => undefined);
+
+    expect(() => registry.register(providerInput({ id: "duplicate-provider" })))
+      .toThrow(expect.objectContaining({ code: "DUPLICATE_PROVIDER" }));
+  });
+
+  it("normalizes non-registry built-in registration failures", () => {
+    expect(() => Reflect.apply(registerBuiltInProviders, undefined, [{}]))
+      .toThrow(expect.objectContaining({ code: "INVALID_REGISTRY" }));
+  });
+
+  it("registers built-ins with the captured base method even when a subclass overrides registerMany", () => {
+    class HostileRegistry extends ProviderRegistry {
+      public override registerMany(): readonly ProviderDefinition[] {
+        return [];
+      }
+    }
+
+    const registry = registerBuiltInProviders(new HostileRegistry());
+    expect(registry.enumerateProviders().map((provider) => provider.id))
+      .toEqual(["gemini-api", "mock-model"]);
   });
 
   it("rejects accessor-backed registration batches without invoking accessors", () => {
@@ -365,6 +393,25 @@ describe("registry provenance and batch input hardening", () => {
 });
 
 describe("credential readiness edge cases", () => {
+  it("does not inherit a polluted readiness reason on AVAILABLE results", async () => {
+    Object.defineProperty(Object.prototype, "reason", {
+      configurable: true,
+      enumerable: false,
+      value: "INCOMPATIBLE_CAPABILITY"
+    });
+    try {
+      const result = await evaluateProviderReadiness({
+        registry: registerBuiltInProviders(),
+        configuration: MOCK_CONFIGURATION
+      });
+      expect(result.state).toBe("AVAILABLE");
+      expect(Object.getPrototypeOf(result)).toBeNull();
+      expect(result.reason).toBeUndefined();
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "reason");
+    }
+  });
+
   it("checks an optional credential reference when one is configured", async () => {
     const registry = new ProviderRegistry();
     registry.register(providerInput({
@@ -596,6 +643,49 @@ describe("adapter factory adversarial boundary", () => {
       .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
   });
 
+  it("rejects direct construction through the reachable resolution constructor", () => {
+    const resolved = resolveProviderConfiguration({
+      registry: registerBuiltInProviders(),
+      configuration: MOCK_CONFIGURATION
+    });
+    const prototype: unknown = Object.getPrototypeOf(resolved);
+    if (typeof prototype !== "object" || prototype === null) {
+      throw new Error("Resolved configuration prototype is unavailable");
+    }
+    const constructorValue: unknown = Reflect.get(prototype, "constructor");
+    if (typeof constructorValue !== "function") {
+      throw new Error("Resolved configuration constructor is unavailable");
+    }
+
+    expect(() => Reflect.construct(constructorValue, [
+      undefined,
+      resolved.configuration,
+      resolved.provider,
+      resolved.model
+    ])).toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
+  });
+
+  it("rejects direct construction through the reachable registered-factory constructor", () => {
+    const factory = MOCK_PROVIDER_DEFINITION.adapterFactory;
+    if (factory === undefined) {
+      throw new Error("Mock provider factory is unavailable");
+    }
+    const prototype: unknown = Object.getPrototypeOf(factory);
+    if (typeof prototype !== "object" || prototype === null) {
+      throw new Error("Registered factory prototype is unavailable");
+    }
+    const constructorValue: unknown = Reflect.get(prototype, "constructor");
+    if (typeof constructorValue !== "function") {
+      throw new Error("Registered factory constructor is unavailable");
+    }
+
+    expect(() => Reflect.construct(constructorValue, [
+      undefined,
+      "forged-factory",
+      () => new MockModelAdapter({ proposal: PROPOSAL })
+    ])).toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
+  });
+
   it("rejects prototype-forged resolutions that would pass plain instanceof checks", () => {
     const registry = registerBuiltInProviders();
     const resolved = resolveProviderConfiguration({
@@ -665,6 +755,49 @@ describe("adapter factory adversarial boundary", () => {
       }))).toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
     } finally {
       Reflect.set(constructorValue, "isRegistered", originalChecker);
+    }
+  });
+
+  it("does not expose inherited runtime fields to the registered factory", async () => {
+    let observedRuntime: unknown = "not-called";
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "mock-model",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "runtime-model",
+        displayName: "Runtime Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "runtime-observer-factory",
+        createAdapter(input) {
+          observedRuntime = input.runtime;
+          return new MockModelAdapter({ proposal: PROPOSAL });
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "mock-model",
+        modelId: "runtime-model",
+        enabled: true
+      }
+    });
+
+    Object.defineProperty(Object.prototype, "runtime", {
+      configurable: true,
+      enumerable: false,
+      value: { polluted: true }
+    });
+    try {
+      const adapter = await resolveAdapterFactory(resolved).createAdapter({ resolved });
+      expect(adapter.name).toBe("mock-model");
+      expect(observedRuntime).toBeUndefined();
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "runtime");
     }
   });
 
