@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream, type Stats } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -136,7 +136,7 @@ export async function removeEntryInsideRoot(root: string, candidate: string): Pr
   if (path.resolve(candidate) === path.resolve(root)) {
     throw new ModelAssetError("PATH_ESCAPE", "Refusing to remove the configured cache root itself.");
   }
-  let entry;
+  let entry: Stats;
   try {
     entry = await lstat(candidate);
   } catch (error) {
@@ -188,7 +188,7 @@ export async function verifyArtifactFile(
   }
   if (signal?.aborted === true) throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
 
-  let fileStat;
+  let fileStat: Stats;
   try {
     fileStat = await lstat(filePath);
   } catch (error) {
@@ -250,7 +250,7 @@ export async function copyLocalArtifactBounded(
   signal: AbortSignal
 ): Promise<number> {
   if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.");
-  let sourceStat;
+  let sourceStat: Stats;
   try {
     sourceStat = await lstat(sourcePath);
   } catch (error) {
@@ -290,7 +290,7 @@ export async function copyLocalArtifactBounded(
 }
 
 export async function readStoredManifest(manifestPath: string): Promise<unknown> {
-  let entry;
+  let entry: Stats;
   try {
     entry = await lstat(manifestPath);
   } catch (error) {
@@ -326,7 +326,7 @@ export async function atomicRenameDirectory(source: string, destination: string)
 }
 
 export async function sumRegularFileBytes(root: string): Promise<number> {
-  let entry;
+  let entry: Stats;
   try {
     entry = await lstat(root);
   } catch (error) {
@@ -365,7 +365,7 @@ export function installedPayloadPath(installationDirectory: string, manifest: As
 }
 
 export async function sumArtifactPayloadBytes(root: string): Promise<number> {
-  let entry;
+  let entry: Stats;
   try {
     entry = await lstat(root);
   } catch (error) {
