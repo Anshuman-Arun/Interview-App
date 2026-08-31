@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
-import { snapshotOwnEnumerableRecord } from "./object-validation.js";
+import {
+  snapshotOwnEnumerableRecord,
+  snapshotOwnEnumerableRecordForSchema
+} from "./object-validation.js";
 import {
   MAX_GEOMETRY_RECTANGLES,
   clipRectToBounds,
@@ -14,12 +17,19 @@ import {
 import { VisionPreprocessingError } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
-export const DirtyRegionInputSchema = z.object({
-  x: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-  y: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-  width: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  height: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER)
-}).strict();
+export const DirtyRegionInputSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Dirty region schema input",
+    DIRTY_REGION_FIELDS
+  ),
+  z.object({
+    x: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    y: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    width: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    height: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER)
+  }).strict()
+);
 export type DirtyRegionInput = z.infer<typeof DirtyRegionInputSchema>;
 
 const DIRTY_REGION_CONFIG_FIELDS = new Set([
