@@ -87,7 +87,6 @@ export interface LocalShutdownControl {
   readonly pid: number;
   writeStdin(data: string): Promise<void>;
   endStdin(): void;
-  signal(signal?: NodeJS.Signals): boolean;
 }
 
 export interface LocalComponentDefinition {
