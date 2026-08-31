@@ -105,6 +105,18 @@ describe("vision snapshot validation and hashing", () => {
     expect(sha256ImageBytes(value.readBytes())).toBe(originalDigest);
   });
 
+  it("rejects forged metadata when public image containers are constructed directly", () => {
+    const value = snapshot(makePng(2, 2));
+    expect(() => new ImageSnapshot({
+      ...value.metadata,
+      contentDigest: "0".repeat(64)
+    }, value.readBytes())).toThrowError(RangeError);
+    expect(() => new ImageSnapshot({
+      ...value.metadata,
+      width: value.metadata.width + 1
+    }, value.readBytes())).toThrowError(RangeError);
+  });
+
   it("rejects malformed bytes and detectable MIME mismatch", () => {
     expect(() => snapshot(Buffer.from("not-a-png"))).toThrowError(VisionPreprocessingError);
     try {
@@ -484,6 +496,21 @@ describe("provider-neutral request preparation and budgeting", () => {
       maxTotalPixels: 1_000_000,
       maxCropsOrTiles: 0
     })).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects attempts to configure request budgets above package hard ceilings", () => {
+    expect(() => prepareVisionBatch([], "analysis", {
+      maxImages: 1,
+      maxTotalBytes: 128 * 1024 * 1024 + 1,
+      maxTotalPixels: 1,
+      maxCropsOrTiles: 0
+    })).toThrow();
+    expect(() => prepareVisionBatch([], "analysis", {
+      maxImages: 1,
+      maxTotalBytes: 1,
+      maxTotalPixels: 128 * 1024 * 1024 + 1,
+      maxCropsOrTiles: 0
+    })).toThrow();
   });
 
   it("can return an explicit bounded prefix and all deferred identities instead of silently over-batching", async () => {
