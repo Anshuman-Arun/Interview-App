@@ -191,6 +191,46 @@ describe("local worker lifecycle manager", () => {
     });
   });
 
+  it("returns deeply immutable observational status snapshots", async () => {
+    const runtime = manager();
+    runtime.register(definition("immutable-status", "ready", {
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          detail: "healthy",
+          handshake: {
+            componentVersion: "fixture-1",
+            capabilities: ["CAPABILITY_A"],
+            metadata: {
+              nested: { value: "x" },
+              items: ["y"]
+            }
+          }
+        })
+      }
+    }));
+
+    const status = await runtime.start("immutable-status");
+    const metadata = status.handshake?.metadata as
+      | { readonly nested?: Readonly<Record<string, unknown>>; readonly items?: readonly unknown[] }
+      | undefined;
+
+    expect(Object.isFrozen(status)).toBe(true);
+    expect(Object.isFrozen(status.readiness)).toBe(true);
+    expect(Object.isFrozen(status.stdout)).toBe(true);
+    expect(Object.isFrozen(status.stdout.lines)).toBe(true);
+    expect(Object.isFrozen(status.handshake)).toBe(true);
+    expect(Object.isFrozen(status.handshake?.capabilities)).toBe(true);
+    expect(Object.isFrozen(metadata)).toBe(true);
+    expect(Object.isFrozen(metadata?.nested)).toBe(true);
+    expect(Object.isFrozen(metadata?.items)).toBe(true);
+
+    const statuses = runtime.listStatuses();
+    expect(Object.isFrozen(statuses)).toBe(true);
+    expect(Object.isFrozen(statuses[0])).toBe(true);
+  });
+
   it("times out readiness and ignores malformed stdout as trusted protocol", async () => {
     const runtime = manager();
     runtime.register(definition("malformed", "malformed-ready", { startupTimeoutMs: 100 }));
