@@ -19,6 +19,7 @@ import {
   AssetManifestSchema,
   ModelAssetManager,
   artifactInstallationKey,
+  resolveAssetForCurrentPlatform,
   resolveAssetManifest,
   serializeAssetManifest,
   verifyArtifactFile,
@@ -133,6 +134,35 @@ describe("local model asset manager", () => {
     expect(() => UnsafeResolver([manifest], inheritedRequest)).toThrow(
       expect.objectContaining({ code: "INVALID_MANIFEST" })
     );
+  });
+
+  it("validates current-platform resolver requests before reading fields", () => {
+    const payload = Buffer.from("current-platform-resolver");
+    const manifest = manifestFor(payload, "https://example.test/current-platform.bin", {
+      platform: process.platform as AssetManifest["platform"],
+      architecture: process.arch as AssetManifest["architecture"]
+    });
+
+    let getterReads = 0;
+    const request: Record<string, unknown> = {
+      version: manifest.version
+    };
+    Object.defineProperty(request, "familyId", {
+      enumerable: true,
+      get() {
+        getterReads += 1;
+        throw new Error("resolver getter should not run");
+      }
+    });
+
+    const UnsafeResolver = resolveAssetForCurrentPlatform as unknown as (
+      manifests: readonly unknown[],
+      requestValue: unknown
+    ) => AssetManifest;
+    expect(() => UnsafeResolver([manifest], request)).toThrow(
+      expect.objectContaining({ code: "INVALID_MANIFEST" })
+    );
+    expect(getterReads).toBe(0);
   });
 
   it("resolves platform, architecture, and variant deterministically", () => {
