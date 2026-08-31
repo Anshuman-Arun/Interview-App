@@ -525,6 +525,16 @@ export class LocalRuntimeManager {
     void cleanup.then(
       () => {
         if (record.cleanupPromise === cleanup) record.cleanupPromise = undefined;
+        queueMicrotask(() => {
+          if (record.cleanupPromise !== undefined
+              || record.startPromise !== undefined
+              || record.state !== "FAILED"
+              || record.expectedStop
+              || this.stopAllPromise !== undefined) {
+            return;
+          }
+          if (this.reserveRestart(record)) this.beginAutomaticRestart(record);
+        });
       },
       (error: unknown) => {
         record.failure = this.failure(
@@ -586,9 +596,6 @@ export class LocalRuntimeManager {
       }
     }
     record.residualProcess = undefined;
-    if (!record.expectedStop && this.reserveRestart(record)) {
-      this.beginAutomaticRestart(record);
-    }
   }
 
   private beginAutomaticRestart(record: ComponentRecord): void {
