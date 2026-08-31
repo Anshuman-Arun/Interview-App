@@ -1200,7 +1200,7 @@ describe("local worker lifecycle manager", () => {
 
   it("redacts repeated and overlapping secret matches without cascading", () => {
     expect(redactKnownSecrets("aaaa", ["a", "["])).toBe("[REDACTED]");
-    expect(redactKnownSecrets("xaaab", ["x", "aa"])).toBe("[REDACTED]a[REDACTED]");
+    expect(redactKnownSecrets("xaaab", ["xa", "aa"])).toBe("[REDACTED]b");
     expect(redactKnownSecrets("[abcdef", ["abcdef", "abc", "["]))
       .toBe("[REDACTED]");
   });
