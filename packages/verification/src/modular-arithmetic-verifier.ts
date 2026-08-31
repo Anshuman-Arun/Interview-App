@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { DeterministicVerifier, VerificationResult } from "../../domain/src/index.js";
 import {
   IntegerExpressionSchema,
-  NonZeroIntegerStringSchema,
+  IntegerStringSchema,
   PositiveIntegerStringSchema,
   evaluateIntegerExpression
 } from "./integer-expression.js";
@@ -22,7 +22,7 @@ export const ModularArithmeticClaimSchema = z.discriminatedUnion("kind", [
   }).strict(),
   z.object({
     kind: z.literal("DIVISIBILITY"),
-    divisor: NonZeroIntegerStringSchema,
+    divisor: IntegerStringSchema,
     dividend: IntegerExpressionSchema
   }).strict()
 ]);
