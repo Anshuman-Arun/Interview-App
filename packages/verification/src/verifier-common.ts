@@ -42,12 +42,12 @@ interface JsonBudgetItem {
 
 function structuredInputWithinBounds(value: unknown): boolean {
   const pending: JsonBudgetItem[] = [{ value, depth: 1 }];
-  let visitedNodes: number = 0;
+  let visitedNodes = 0;
   while (pending.length > 0) {
     const item = pending.pop();
     if (item === undefined) break;
-    if (item.depth > MAX_STRUCTURED_INPUT_DEPTH || remainingNodes <= 0) return false;
-    remainingNodes -= 1;
+    visitedNodes += 1;
+    if (item.depth > MAX_STRUCTURED_INPUT_DEPTH || visitedNodes > MAX_STRUCTURED_INPUT_NODES) return false;
     if (Array.isArray(item.value)) {
       if (item.value.length > MAX_STRUCTURED_ARRAY_ITEMS) return false;
       for (const child of item.value) pending.push({ value: child, depth: item.depth + 1 });
