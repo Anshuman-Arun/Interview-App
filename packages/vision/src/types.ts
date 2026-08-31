@@ -6,7 +6,8 @@ import {
   INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION,
   INTERNAL_VISION_ARTIFACT_CONSTRUCTION
 } from "./internal-artifact-construction.js";
-import { actualUint8ArrayByteLength } from "./byte-validation.js";
+import { actualUint8ArrayByteLength, isDirectUint8Array } from "./byte-validation.js";
+import { snapshotOwnEnumerableRecordForSchema } from "./object-validation.js";
 import {
   assertStaticPngChunkStructure,
   assertSupportedPngHeaderParameters
@@ -105,21 +106,93 @@ export type ImageSourceType = z.infer<typeof ImageSourceTypeSchema>;
 export const Sha256DigestSchema = z.string().regex(/^[0-9a-f]{64}$/u);
 export type Sha256Digest = z.infer<typeof Sha256DigestSchema>;
 
-export const PixelDimensionsSchema = z.object({
-  width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
-}).strict();
+const PIXEL_DIMENSION_SCHEMA_FIELDS = new Set(["width", "height"]);
+const COORDINATE_TRANSFORM_SCHEMA_FIELDS = new Set(["offsetX", "offsetY", "scaleX", "scaleY"]);
+const SNAPSHOT_METADATA_SCHEMA_FIELDS = new Set([
+  "snapshotId",
+  "sourceType",
+  "sourceRevision",
+  "capturedAtMs",
+  "captureSequence",
+  "width",
+  "height",
+  "mimeType",
+  "encoding",
+  "byteSize",
+  "contentDigest"
+]);
+const ARTIFACT_SOURCE_BOUNDS_SCHEMA_FIELDS = new Set(["x", "y", "width", "height"]);
+const ARTIFACT_METADATA_SCHEMA_FIELDS = new Set([
+  "artifactId",
+  "kind",
+  "sourceSnapshotId",
+  "sourceRevision",
+  "sourceImageIdentity",
+  "parentArtifactId",
+  "width",
+  "height",
+  "mimeType",
+  "encoding",
+  "byteSize",
+  "contentDigest",
+  "sourceBounds",
+  "coordinateTransform"
+]);
+const PAYLOAD_REFERENCE_METADATA_SCHEMA_FIELDS = new Set([
+  "imageIdentity",
+  "mimeType",
+  "width",
+  "height",
+  "byteSize",
+  "contentDigest"
+]);
+const SNAPSHOT_INPUT_SCHEMA_FIELDS = new Set([
+  "snapshotId",
+  "sourceType",
+  "sourceRevision",
+  "capturedAtMs",
+  "captureSequence",
+  "mimeType",
+  "declaredWidth",
+  "declaredHeight",
+  "encodedBytes"
+]);
+
+export const PixelDimensionsSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Pixel dimensions schema input",
+    PIXEL_DIMENSION_SCHEMA_FIELDS
+  ),
+  z.object({
+    width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+  }).strict()
+);
 export type PixelDimensions = z.infer<typeof PixelDimensionsSchema>;
 
-export const CoordinateTransformSchema = z.object({
-  offsetX: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-  offsetY: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-  scaleX: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER),
-  scaleY: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER)
-}).strict();
+export const CoordinateTransformSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Coordinate transform schema input",
+    COORDINATE_TRANSFORM_SCHEMA_FIELDS
+  ),
+  z.object({
+    offsetX: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    offsetY: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    scaleX: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER),
+    scaleY: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER)
+  }).strict()
+);
 export type CoordinateTransform = z.infer<typeof CoordinateTransformSchema>;
 
-export const ImageSnapshotMetadataSchema = z.object({
+export const ImageSnapshotMetadataSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Image snapshot metadata schema input",
+    SNAPSHOT_METADATA_SCHEMA_FIELDS
+  ),
+  z.object({
   snapshotId: z.string().min(1).max(128),
   sourceType: ImageSourceTypeSchema,
   sourceRevision: SafeBoardRevisionSchema,
@@ -131,7 +204,8 @@ export const ImageSnapshotMetadataSchema = z.object({
   encoding: ImageEncodingSchema,
   byteSize: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes),
   contentDigest: Sha256DigestSchema
-}).strict().superRefine((metadata, context) => {
+  }).strict()
+).superRefine((metadata, context) => {
   const pixels = metadata.width * metadata.height;
   if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
     context.addIssue({ code: "custom", message: "Snapshot metadata exceeds the package hard pixel cap" });
@@ -148,12 +222,19 @@ export type VisionArtifactId = z.infer<typeof VisionArtifactIdSchema>;
 export const VisionRasterIdentitySchema = z.string().regex(/^raster_[0-9a-f]{64}$/u);
 export type VisionRasterIdentity = z.infer<typeof VisionRasterIdentitySchema>;
 
-export const ArtifactSourceBoundsSchema = z.object({
+export const ArtifactSourceBoundsSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Artifact source bounds schema input",
+    ARTIFACT_SOURCE_BOUNDS_SCHEMA_FIELDS
+  ),
+  z.object({
   x: z.number().int().nonnegative().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth - 1),
   y: z.number().int().nonnegative().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight - 1),
   width: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth),
   height: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight)
-}).strict().superRefine((bounds, context) => {
+  }).strict()
+).superRefine((bounds, context) => {
   const right = bounds.x + bounds.width;
   const bottom = bounds.y + bounds.height;
   if (!Number.isSafeInteger(right) || right > HARD_IMAGE_VALIDATION_LIMITS.maxWidth) {
@@ -169,7 +250,13 @@ export const ArtifactSourceBoundsSchema = z.object({
 });
 export type ArtifactSourceBounds = z.infer<typeof ArtifactSourceBoundsSchema>;
 
-export const VisionImageArtifactMetadataSchema = z.object({
+export const VisionImageArtifactMetadataSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Vision image artifact metadata schema input",
+    ARTIFACT_METADATA_SCHEMA_FIELDS
+  ),
+  z.object({
   artifactId: VisionArtifactIdSchema,
   kind: VisionImageArtifactKindSchema,
   sourceSnapshotId: z.string().min(1).max(128),
@@ -184,7 +271,8 @@ export const VisionImageArtifactMetadataSchema = z.object({
   contentDigest: Sha256DigestSchema,
   sourceBounds: ArtifactSourceBoundsSchema,
   coordinateTransform: CoordinateTransformSchema
-}).strict().superRefine((metadata, context) => {
+  }).strict()
+).superRefine((metadata, context) => {
   const pixels = metadata.width * metadata.height;
   if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
     context.addIssue({ code: "custom", message: "Artifact metadata exceeds the package hard pixel cap" });
@@ -485,14 +573,21 @@ export function visionRasterIdentity(source: VisionRasterSource): VisionRasterId
   );
 }
 
-export const ImagePayloadReferenceMetadataSchema = z.object({
+export const ImagePayloadReferenceMetadataSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Image payload reference metadata schema input",
+    PAYLOAD_REFERENCE_METADATA_SCHEMA_FIELDS
+  ),
+  z.object({
   imageIdentity: VisionRasterIdentitySchema,
   mimeType: ImageMimeTypeSchema,
   width: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth),
   height: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight),
   byteSize: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes),
   contentDigest: Sha256DigestSchema
-}).strict().superRefine((metadata, context) => {
+  }).strict()
+).superRefine((metadata, context) => {
   const pixels = metadata.width * metadata.height;
   if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
     context.addIssue({ code: "custom", message: "Payload reference metadata exceeds the package hard pixel cap" });
@@ -540,15 +635,22 @@ export class ImagePayloadReference {
 Object.freeze(ImagePayloadReference.prototype);
 Object.freeze(ImagePayloadReference);
 
-export const ImageSnapshotInputSchema = z.object({
-  snapshotId: z.string().min(1).max(128),
-  sourceType: ImageSourceTypeSchema,
-  sourceRevision: SafeBoardRevisionSchema,
-  capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-  mimeType: z.string().min(1).max(128),
-  declaredWidth: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth).optional(),
-  declaredHeight: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight).optional(),
-  encodedBytes: z.instanceof(Uint8Array)
-}).strict();
+export const ImageSnapshotInputSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Image snapshot input schema input",
+    SNAPSHOT_INPUT_SCHEMA_FIELDS
+  ),
+  z.object({
+    snapshotId: z.string().min(1).max(128),
+    sourceType: ImageSourceTypeSchema,
+    sourceRevision: SafeBoardRevisionSchema,
+    capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    mimeType: z.string().min(1).max(128),
+    declaredWidth: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth).optional(),
+    declaredHeight: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight).optional(),
+    encodedBytes: z.custom<Uint8Array>((value) => isDirectUint8Array(value))
+  }).strict()
+);
 export type ImageSnapshotInput = z.infer<typeof ImageSnapshotInputSchema>;
