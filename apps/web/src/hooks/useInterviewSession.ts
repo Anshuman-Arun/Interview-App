@@ -51,6 +51,7 @@ export interface UseInterviewSessionResult {
   readonly contextEpoch: number;
   readonly error: string | null;
   readonly baseUrl: string;
+  readonly isTransportManaged: boolean;
   readonly setBaseUrl: (url: string) => void;
   readonly fetchAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
@@ -652,6 +653,7 @@ export function useInterviewSession(
     contextEpoch,
     error,
     baseUrl,
+    isTransportManaged: desktopBootstrap !== undefined,
     setBaseUrl,
     fetchAvailableSessions,
     startSession,
