@@ -235,7 +235,7 @@ export class VisionPreprocessingError extends Error {
   public constructor(code: VisionPreprocessingErrorCode, message: string) {
     super(message);
     this.name = "VisionPreprocessingError";
-    this.code = code;
+    this.code = VisionPreprocessingErrorCodeSchema.parse(code);
   }
 }
 
