@@ -674,6 +674,41 @@ describe("local worker lifecycle manager", () => {
     expect(coercions).toBe(0);
   });
 
+  it("cancels late HTTP response bodies after startup has already timed out", async () => {
+    let resolveFetch: ((response: Response) => void) | undefined;
+    let cancelCalls = 0;
+    const deferred = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const runtime = manager({
+      fetch: (() => deferred) as typeof globalThis.fetch
+    });
+    runtime.register(definition("late-http-response", "ready", {
+      startupTimeoutMs: 80,
+      terminationTimeoutMs: 120,
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        intervalMs: 5
+      }
+    }));
+
+    await expect(runtime.start("late-http-response"))
+      .rejects.toMatchObject({ code: "READINESS_TIMEOUT" });
+
+    const body = new ReadableStream<Uint8Array>({
+      cancel: () => {
+        cancelCalls += 1;
+      }
+    });
+    expect(resolveFetch).toBeDefined();
+    resolveFetch?.(new Response(body, { status: 204 }));
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(cancelCalls).toBe(1);
+  });
+
   it("rejects malformed injected HTTP Response values without proxy observation", async () => {
     const plain = manager({
       fetch: (() => Promise.resolve({ ok: true })) as unknown as typeof globalThis.fetch
