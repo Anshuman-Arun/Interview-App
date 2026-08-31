@@ -154,11 +154,37 @@ export async function pathEntryExists(candidate: string): Promise<boolean> {
   }
 }
 
-export async function removeEntryInsideRoot(root: string, candidate: string): Promise<void> {
+export async function removeEntryInsideRoot(
+  root: string,
+  candidate: string,
+  maxEntries = 10_000
+): Promise<void> {
+  if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0) {
+    throw new ModelAssetError(
+      "INVALID_CONFIGURATION",
+      "Removal traversal limit must be a positive safe integer."
+    );
+  }
+  await removeEntryInsideRootBounded(root, candidate, { remaining: maxEntries });
+}
+
+async function removeEntryInsideRootBounded(
+  root: string,
+  candidate: string,
+  state: { remaining: number }
+): Promise<void> {
   assertPathInsideRoot(root, candidate);
   if (path.resolve(candidate) === path.resolve(root)) {
     throw new ModelAssetError("PATH_ESCAPE", "Refusing to remove the configured cache root itself.");
   }
+  if (state.remaining <= 0) {
+    throw new ModelAssetError(
+      "CACHE_LIMIT_EXCEEDED",
+      "Cache cleanup traversal exceeded its configured entry limit."
+    );
+  }
+  state.remaining -= 1;
+
   let entry: Stats;
   try {
     entry = await lstat(candidate);
@@ -180,7 +206,7 @@ export async function removeEntryInsideRoot(root: string, candidate: string): Pr
   try {
     const directory = await opendir(candidate);
     for await (const child of directory) {
-      await removeEntryInsideRoot(root, path.join(candidate, child.name));
+      await removeEntryInsideRootBounded(root, path.join(candidate, child.name), state);
     }
   } catch (error) {
     if (error instanceof ModelAssetError) throw error;
@@ -367,7 +393,31 @@ export function installedPayloadPath(installationDirectory: string, manifest: As
   return candidate;
 }
 
-export async function sumArtifactPayloadBytes(root: string): Promise<number> {
+export async function sumArtifactPayloadBytes(
+  root: string,
+  maxEntries = 10_000
+): Promise<number> {
+  if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0) {
+    throw new ModelAssetError(
+      "INVALID_CONFIGURATION",
+      "Cache accounting traversal limit must be a positive safe integer."
+    );
+  }
+  return await sumArtifactPayloadBytesBounded(root, { remaining: maxEntries });
+}
+
+async function sumArtifactPayloadBytesBounded(
+  root: string,
+  state: { remaining: number }
+): Promise<number> {
+  if (state.remaining <= 0) {
+    throw new ModelAssetError(
+      "CACHE_LIMIT_EXCEEDED",
+      "Cache accounting traversal exceeded its configured entry limit."
+    );
+  }
+  state.remaining -= 1;
+
   let entry: Stats;
   try {
     entry = await lstat(root);
@@ -378,13 +428,18 @@ export async function sumArtifactPayloadBytes(root: string): Promise<number> {
   if (entry.isSymbolicLink()) return 0;
   if (entry.isFile()) return path.basename(root).toLowerCase() === "manifest.json" ? 0 : entry.size;
   if (!entry.isDirectory()) return 0;
+
   let total = 0;
   const directory = await opendir(root);
   for await (const child of directory) {
-    total += await sumArtifactPayloadBytes(path.join(root, child.name));
+    total += await sumArtifactPayloadBytesBounded(path.join(root, child.name), state);
     if (!Number.isSafeInteger(total)) {
-      throw new ModelAssetError("CACHE_LIMIT_EXCEEDED", "Artifact payload usage exceeds safe integer limits.");
+      throw new ModelAssetError(
+        "CACHE_LIMIT_EXCEEDED",
+        "Artifact payload usage exceeds safe integer limits."
+      );
     }
   }
   return total;
 }
+
