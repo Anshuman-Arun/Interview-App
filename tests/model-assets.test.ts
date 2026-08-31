@@ -1166,8 +1166,8 @@ describe("local model asset manager", () => {
     expect(fixture.requestCount()).toBe(2);
 
     releaseFirst.resolve();
-    releaseSecond.resolve();
     await expect(firstInstall).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+    releaseSecond.resolve();
     await expect(secondInstall).resolves.toEqual(expect.any(String));
   });
 
