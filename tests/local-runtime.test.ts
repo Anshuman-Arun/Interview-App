@@ -143,6 +143,24 @@ describe("local worker lifecycle manager", () => {
     expect(runtime.getStatus("slow").state).toBe("STOPPED");
   });
 
+  it("restarts a ready component through the public restart API", async () => {
+    const runtime = manager();
+    runtime.register(definition("explicit-restart", "ready"));
+
+    const first = await runtime.start("explicit-restart");
+    const firstPid = first.pid;
+    expect(firstPid).toBeTypeOf("number");
+
+    const second = await runtime.restart("explicit-restart");
+    expect(second.state).toBe("READY");
+    expect(second.pid).toBeTypeOf("number");
+    expect(second.pid).not.toBe(firstPid);
+    if (firstPid !== undefined) {
+      await waitForPidExit(firstPid);
+      expect(isPidAlive(firstPid)).toBe(false);
+    }
+  });
+
   it("escalates shutdown when a process ignores graceful EOF", async () => {
     const runtime = manager();
     runtime.register(definition("stubborn", "ignore-shutdown", {
@@ -222,6 +240,25 @@ describe("local worker lifecycle manager", () => {
     expect(readFileSync(counter, "utf8")).toBe("3");
     await new Promise<void>((resolve) => setTimeout(resolve, 80));
     expect(readFileSync(counter, "utf8")).toBe("3");
+  });
+
+  it("resets the retry budget for an explicit new start after exhaustion", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-retry-reset-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
+    const runtime = manager();
+    runtime.register(definition("retry-reset", "crash-counter", {
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 1, backoffMs: 5 }
+    }, [counter, "2"]));
+
+    await expect(runtime.start("retry-reset")).rejects.toMatchObject({ code: "PROCESS_EXITED" });
+    expect(readFileSync(counter, "utf8")).toBe("2");
+    expect(runtime.getStatus("retry-reset").restartCount).toBe(1);
+
+    const recovered = await runtime.start("retry-reset");
+    expect(recovered.state).toBe("READY");
+    expect(readFileSync(counter, "utf8")).toBe("3");
+    expect(recovered.restartCount).toBe(1);
   });
 
   it("detects post-readiness crashes and spends the same bounded restart budget", async () => {
