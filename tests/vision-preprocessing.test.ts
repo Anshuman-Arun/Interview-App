@@ -1283,6 +1283,23 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).toThrowError(VisionPreprocessingError);
   });
 
+  it("reports unsafe standalone tile area arithmetic as a tile-limit failure", () => {
+    try {
+      planImageTiles(
+        { width: Number.MAX_SAFE_INTEGER, height: 2 },
+        {
+          tileWidth: Number.MAX_SAFE_INTEGER,
+          tileHeight: 2,
+          overlap: 0,
+          maxTileCount: 1
+        }
+      );
+      throw new Error("Expected unsafe tile area rejection");
+    } catch (error) {
+      expectCode(error, "TILE_LIMIT_EXCEEDED");
+    }
+  });
+
   it("rejects high-overlap tile plans whose duplicated raw pixel work exceeds the hard ceiling", () => {
     expect(() => planImageTiles(
       { width: 8192, height: 8192 },
