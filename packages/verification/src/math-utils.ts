@@ -33,6 +33,12 @@ function decimalDigitCount(value: bigint): number {
   return text.length;
 }
 
+const CANONICAL_INTEGER_PATTERN = /^(?:0|-?[1-9]\d*)$/u;
+
+export function isCanonicalIntegerString(value: string): boolean {
+  return CANONICAL_INTEGER_PATTERN.test(value);
+}
+
 function parseCanonicalInteger(
   value: unknown,
   maximumDigits: number,
@@ -41,12 +47,12 @@ function parseCanonicalInteger(
   if (typeof value !== "string") {
     throw new BoundedMathError("INVALID_INTEGER", "Integer must be supplied as a string");
   }
+  if (!isCanonicalIntegerString(value)) {
+    throw new BoundedMathError("INVALID_INTEGER", "Integer must use canonical base-10 digits");
+  }
   const digits = value.startsWith("-") ? value.length - 1 : value.length;
   if (digits > maximumDigits) {
     throw new BoundedMathError(limitCode, "Integer exceeds the configured decimal digit limit");
-  }
-  if (!/^(?:0|-?[1-9]\d*)$/u.test(value)) {
-    throw new BoundedMathError("INVALID_INTEGER", "Integer must use canonical base-10 digits");
   }
   return BigInt(value);
 }
