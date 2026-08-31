@@ -33,6 +33,10 @@ const DEFAULT_POLL_INTERVAL_MS = 50;
 const DEFAULT_RESTART_BACKOFF_MS = 100;
 const MAX_TIMER_MS = 2_147_483_647;
 const PROCESS_TREE_POLL_INTERVAL_MS = 10;
+const MAX_POSITIVE_DIAGNOSTIC_BIGINT =
+  10n ** BigInt(DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength - 1);
+const MAX_NEGATIVE_DIAGNOSTIC_BIGINT_MAGNITUDE =
+  10n ** BigInt(DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength - 2);
 const MAX_CAPABILITIES = 128;
 const MAX_STDERR_TAIL_LINES = 20;
 const MAX_OUTPUT_LINES = 10_000;
@@ -2556,7 +2560,13 @@ function preRedactDiagnosticValue(
     );
   }
   if (value === null || typeof value === "number" || typeof value === "boolean") return value;
-  if (typeof value === "bigint") return `${value.toString()}n`;
+  if (typeof value === "bigint") {
+    const magnitude = value < 0n ? -value : value;
+    const limit = value < 0n
+      ? MAX_NEGATIVE_DIAGNOSTIC_BIGINT_MAGNITUDE
+      : MAX_POSITIVE_DIAGNOSTIC_BIGINT;
+    return magnitude >= limit ? "[TRUNCATED]" : `${value.toString()}n`;
+  }
   if (typeof value !== "object") return undefined;
   if (utilTypes.isProxy(value)) return "[UNINSPECTABLE_OBJECT]";
   if (state.seen.has(value)) return "[CIRCULAR]";
