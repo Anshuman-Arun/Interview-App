@@ -600,6 +600,15 @@ export class ModelAssetManager {
     await removeEntryInsideRoot(paths.root, candidate);
   }
 
+  private rejectTransientInstallationFailure(check: InstallationCheck): void {
+    if (check.status === "CORRUPT" && check.errorCode === "IO_ERROR") {
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Existing artifact installation could not be inspected safely; refusing destructive repair."
+      );
+    }
+  }
+
   private async performInstallation(
     manifest: AssetManifest,
     signal: AbortSignal,
@@ -613,6 +622,7 @@ export class ModelAssetManager {
 
     const initial = await this.checkInstallation(manifest, signal);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
+    this.rejectTransientInstallationFailure(initial);
     if (await pathEntryExists(installationDirectory)) {
       await this.removeManagedEntry(paths, installationDirectory);
     }
@@ -669,6 +679,7 @@ export class ModelAssetManager {
           await this.removeManagedEntry(paths, stagingDirectory);
           return existing.path;
         }
+        this.rejectTransientInstallationFailure(existing);
         await this.removeManagedEntry(paths, installationDirectory);
       }
 
@@ -719,7 +730,7 @@ export class ModelAssetManager {
           && error.code === "ENOENT") {
         return { status: "NOT_PRESENT" };
       }
-      return { status: "CORRUPT", errorCode: "CORRUPT_INSTALLATION" };
+      return { status: "CORRUPT", errorCode: "IO_ERROR" };
     }
 
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
