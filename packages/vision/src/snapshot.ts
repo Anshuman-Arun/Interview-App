@@ -3,6 +3,7 @@ import {
   DEFAULT_IMAGE_VALIDATION_LIMITS,
   HARD_IMAGE_VALIDATION_LIMITS,
   ImageSnapshot,
+  ImageSnapshotInputSchema,
   ImageSnapshotMetadataSchema,
   ImageSourceTypeSchema,
   VisionPreprocessingError,
@@ -13,14 +14,6 @@ import {
 import { BoardRevisionSchema } from "../../domain/src/index.js";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-const ImageSnapshotCallerMetadataSchema = ImageSnapshotMetadataSchema.pick({
-  snapshotId: true,
-  sourceType: true,
-  sourceRevision: true,
-  capturedAtMs: true,
-  captureSequence: true
-});
 
 interface PngHeader {
   readonly width: number;
@@ -90,49 +83,40 @@ export function createValidatedImageSnapshot(
   input: ImageSnapshotInput,
   limits?: Partial<ImageValidationLimits>
 ): ImageSnapshot {
-  if (typeof input !== "object" || input === null) {
-    throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input must be an object");
+  const parsedInput = ImageSnapshotInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input failed strict schema validation");
   }
-  if (input.mimeType !== "image/png") {
+  const safeInput = parsedInput.data;
+  if (safeInput.mimeType !== "image/png") {
     throw new VisionPreprocessingError("UNSUPPORTED_IMAGE_TYPE", "Only image/png snapshots are supported");
   }
 
   const safeLimits = normalizeLimits(limits);
-  const callerMetadata = ImageSnapshotCallerMetadataSchema.parse({
-    snapshotId: input.snapshotId,
-    sourceType: input.sourceType,
-    sourceRevision: input.sourceRevision,
-    capturedAtMs: input.capturedAtMs,
-    ...(input.captureSequence === undefined ? {} : { captureSequence: input.captureSequence })
-  });
-
-  if (!(input.encodedBytes instanceof Uint8Array)) {
-    throw new VisionPreprocessingError("INVALID_IMAGE", "Encoded image payload must be a Uint8Array");
-  }
-  if (input.encodedBytes.byteLength === 0) {
+  if (safeInput.encodedBytes.byteLength === 0) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image input must not be empty");
   }
-  if (input.encodedBytes.byteLength > safeLimits.maxEncodedBytes) {
+  if (safeInput.encodedBytes.byteLength > safeLimits.maxEncodedBytes) {
     throw new VisionPreprocessingError("IMAGE_TOO_LARGE_BYTES", "Encoded image exceeds configured byte limit");
   }
-  const bytes = Buffer.from(input.encodedBytes);
+  const bytes = Buffer.from(safeInput.encodedBytes);
 
   const header = inspectPngHeader(bytes);
   checkDimensions(header, safeLimits);
 
-  if (input.declaredWidth !== undefined && input.declaredWidth !== header.width) {
+  if (safeInput.declaredWidth !== undefined && safeInput.declaredWidth !== header.width) {
     throw new VisionPreprocessingError("DIMENSION_MISMATCH", "Caller-declared width does not match encoded image width");
   }
-  if (input.declaredHeight !== undefined && input.declaredHeight !== header.height) {
+  if (safeInput.declaredHeight !== undefined && safeInput.declaredHeight !== header.height) {
     throw new VisionPreprocessingError("DIMENSION_MISMATCH", "Caller-declared height does not match encoded image height");
   }
 
   const metadata = ImageSnapshotMetadataSchema.parse({
-    snapshotId: callerMetadata.snapshotId,
-    sourceType: ImageSourceTypeSchema.parse(callerMetadata.sourceType),
-    sourceRevision: BoardRevisionSchema.parse(callerMetadata.sourceRevision),
-    capturedAtMs: callerMetadata.capturedAtMs,
-    ...(callerMetadata.captureSequence === undefined ? {} : { captureSequence: callerMetadata.captureSequence }),
+    snapshotId: safeInput.snapshotId,
+    sourceType: ImageSourceTypeSchema.parse(safeInput.sourceType),
+    sourceRevision: BoardRevisionSchema.parse(safeInput.sourceRevision),
+    capturedAtMs: safeInput.capturedAtMs,
+    ...(safeInput.captureSequence === undefined ? {} : { captureSequence: safeInput.captureSequence }),
     width: header.width,
     height: header.height,
     mimeType: "image/png",
