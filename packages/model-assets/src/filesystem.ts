@@ -592,39 +592,61 @@ export async function copyLocalArtifactBounded(
 }
 
 export async function readStoredManifest(manifestPath: string): Promise<unknown> {
-  let entry: Stats;
+  let openedManifest: { readonly handle: FileHandle; readonly stat: Stats };
   try {
-    entry = await lstat(manifestPath);
+    openedManifest = await openStableRegularFile(
+      manifestPath,
+      "Unable to inspect installed artifact manifest."
+    );
   } catch (error) {
-    if (errnoCode(error) === "ENOENT") {
+    if (error instanceof ModelAssetError
+        && error.code === "IO_ERROR"
+        && errnoCode(error.cause) === "ENOENT") {
       throw new ModelAssetError(
         "CORRUPT_INSTALLATION",
         "Installed artifact manifest is missing.",
         { cause: error }
       );
     }
-    throw new ModelAssetError(
-      "IO_ERROR",
-      "Unable to inspect installed artifact manifest.",
-      { cause: error }
-    );
+    if (error instanceof ModelAssetError && error.code === "UNSAFE_PATH") {
+      throw new ModelAssetError(
+        "CORRUPT_INSTALLATION",
+        "Installed artifact manifest is not a regular non-symlink file.",
+        { cause: error }
+      );
+    }
+    throw error;
   }
-  if (entry.isSymbolicLink() || !entry.isFile() || entry.size > MAX_STORED_MANIFEST_BYTES) {
-    throw new ModelAssetError("CORRUPT_INSTALLATION", "Installed artifact manifest is not a bounded regular file.");
+
+  const manifestStat = openedManifest.stat;
+  if (!Number.isSafeInteger(manifestStat.size)
+      || manifestStat.size < 0
+      || manifestStat.size > MAX_STORED_MANIFEST_BYTES) {
+    await openedManifest.handle.close().catch(() => undefined);
+    throw new ModelAssetError(
+      "CORRUPT_INSTALLATION",
+      "Installed artifact manifest exceeds the cache metadata byte limit."
+    );
   }
 
   const chunks: Buffer[] = [];
   let bytes = 0;
+  const stream = openedManifest.handle.createReadStream({
+    highWaterMark: 16 * 1024,
+    autoClose: false
+  });
   try {
-    for await (const chunk of createReadStream(manifestPath, { highWaterMark: 16 * 1024 })) {
+    for await (const chunk of stream) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      bytes += buffer.byteLength;
-      if (bytes > MAX_STORED_MANIFEST_BYTES) {
+      const nextBytes = bytes + buffer.byteLength;
+      if (!Number.isSafeInteger(nextBytes)
+          || nextBytes > MAX_STORED_MANIFEST_BYTES) {
         throw new ModelAssetError(
           "CORRUPT_INSTALLATION",
           "Installed artifact manifest exceeds the cache metadata byte limit."
         );
       }
+      bytes = nextBytes;
       chunks.push(buffer);
     }
   } catch (error) {
@@ -634,7 +656,10 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
       "Unable to read installed artifact manifest.",
       { cause: error }
     );
+  } finally {
+    await openedManifest.handle.close().catch(() => undefined);
   }
+
   let serialized: string;
   try {
     serialized = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks, bytes));
