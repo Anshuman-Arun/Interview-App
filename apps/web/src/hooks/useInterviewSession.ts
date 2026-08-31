@@ -31,6 +31,7 @@ import type { TranscriptItem } from "../components/TranscriptFeed.js";
 
 export interface UseInterviewSessionOptions {
   readonly baseUrl?: string;
+  readonly rendererStreamUrl?: string;
   readonly clientToken?: string;
   readonly initialSessionId?: SessionId;
   readonly whiteboardAdapter?: TldrawWhiteboardAdapter;
@@ -69,6 +70,152 @@ interface PendingSubmissionRecord {
   readonly text: string;
 }
 
+interface DesktopBootstrap {
+  readonly protocolVersion: 1;
+  readonly commandBaseUrl: string;
+  readonly rendererStreamUrl: string;
+  readonly authentication: {
+    readonly mode: "DESKTOP_MANAGED";
+    readonly headerValue: "desktop-managed-v1";
+  };
+  readonly appVersion: string;
+  readonly platform: string;
+}
+
+interface DesktopBridge {
+  readonly getBootstrap: () => unknown;
+}
+
+const DESKTOP_AUTH_HEADER_VALUE = "desktop-managed-v1";
+
+function readDesktopBootstrap(): DesktopBootstrap | undefined {
+  const bridge = (globalThis as typeof globalThis & {
+    readonly interviewDesktop?: DesktopBridge;
+  }).interviewDesktop;
+  if (bridge === undefined) return undefined;
+
+  const value = bridge.getBootstrap();
+  if (typeof value !== "object" || value === null) {
+    throw new Error("Desktop bootstrap data is malformed");
+  }
+  const record = value as Record<string, unknown>;
+  if (!hasExactKeys(record, [
+    "protocolVersion",
+    "commandBaseUrl",
+    "rendererStreamUrl",
+    "authentication",
+    "appVersion",
+    "platform"
+  ])) {
+    throw new Error("Desktop bootstrap data is malformed");
+  }
+
+  const authenticationValue = record["authentication"];
+  if (typeof authenticationValue !== "object" || authenticationValue === null) {
+    throw new Error("Desktop bootstrap data is malformed");
+  }
+  const authentication = authenticationValue as Record<string, unknown>;
+  if (
+    !hasExactKeys(authentication, ["mode", "headerValue"])
+    || record["protocolVersion"] !== 1
+    || typeof record["commandBaseUrl"] !== "string"
+    || typeof record["rendererStreamUrl"] !== "string"
+    || authentication["mode"] !== "DESKTOP_MANAGED"
+    || authentication["headerValue"] !== DESKTOP_AUTH_HEADER_VALUE
+    || typeof record["appVersion"] !== "string"
+    || record["appVersion"].trim().length === 0
+    || typeof record["platform"] !== "string"
+    || record["platform"].trim().length === 0
+  ) {
+    throw new Error("Desktop bootstrap data is malformed");
+  }
+
+  return {
+    protocolVersion: 1,
+    commandBaseUrl: exactDesktopLoopbackOrigin(record["commandBaseUrl"]),
+    rendererStreamUrl: exactDesktopRendererStreamUrl(record["rendererStreamUrl"]),
+    authentication: {
+      mode: "DESKTOP_MANAGED",
+      headerValue: DESKTOP_AUTH_HEADER_VALUE
+    },
+    appVersion: record["appVersion"],
+    platform: record["platform"]
+  };
+}
+
+function hasExactKeys(
+  record: Record<string, unknown>,
+  expectedKeys: readonly string[]
+): boolean {
+  const actual = Object.keys(record).sort();
+  const expected = [...expectedKeys].sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
+}
+
+function exactDesktopLoopbackOrigin(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Desktop bootstrap data is malformed");
+  }
+  if (
+    parsed.protocol !== "http:"
+    || (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "[::1]")
+    || parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.pathname !== "/"
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+  ) {
+    throw new Error("Desktop bootstrap data is malformed");
+  }
+  return parsed.origin;
+}
+
+function exactDesktopRendererStreamUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Desktop bootstrap data is malformed");
+  }
+  if (
+    parsed.protocol !== "http:"
+    || (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "[::1]")
+    || parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.pathname !== "/v1/renderer-stream"
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+  ) {
+    throw new Error("Desktop bootstrap data is malformed");
+  }
+  return parsed.toString();
+}
+
+export function deriveDefaultRendererStreamUrl(commandBaseUrl: string): string {
+  const parsed = new URL(commandBaseUrl);
+  if (
+    parsed.protocol !== "http:"
+    || (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "[::1]")
+    || parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.pathname !== "/"
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+  ) {
+    throw new Error("Command server base URL must be an exact HTTP loopback origin");
+  }
+  const port = parsed.port.length === 0 ? 80 : Number(parsed.port);
+  if (!Number.isSafeInteger(port) || port < 1 || port >= 65535) {
+    throw new Error("Command server port cannot derive a renderer stream port");
+  }
+  parsed.port = String(port + 1);
+  return `${parsed.origin}/v1/renderer-stream`;
+}
+
 const DEFAULT_BASE_URL = "http://127.0.0.1:43123";
 
 function getInitialBaseUrl(optionUrl?: string): string {
@@ -79,8 +226,31 @@ function getInitialBaseUrl(optionUrl?: string): string {
 export function useInterviewSession(
   options: UseInterviewSessionOptions = {}
 ): UseInterviewSessionResult {
-  const [baseUrl, setBaseUrl] = useState<string>(() => getInitialBaseUrl(options.baseUrl));
+  const [desktopBootstrap] = useState<DesktopBootstrap | undefined>(
+    () => readDesktopBootstrap()
+  );
+  if (
+    desktopBootstrap !== undefined
+    && (
+      options.clientToken !== undefined
+      || options.baseUrl !== undefined
+      || options.rendererStreamUrl !== undefined
+    )
+  ) {
+    throw new Error(
+      "Desktop-managed transport cannot be combined with endpoint overrides or browser-token authentication"
+    );
+  }
+
+  const [baseUrl, setBaseUrlState] = useState<string>(() =>
+    desktopBootstrap?.commandBaseUrl ?? getInitialBaseUrl(options.baseUrl)
+  );
   const clientTokenRef = useRef<string>(options.clientToken ?? "");
+  const rendererStreamUrl = desktopBootstrap?.rendererStreamUrl
+    ?? options.rendererStreamUrl
+    ?? deriveDefaultRendererStreamUrl(baseUrl);
+  const authenticationHeaderValue = desktopBootstrap?.authentication.headerValue
+    ?? clientTokenRef.current;
   const [sessionId, setSessionId] = useState<SessionId | null>(
     options.initialSessionId ?? null
   );
@@ -101,17 +271,26 @@ export function useInterviewSession(
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const authenticatedFetch = useCallback<typeof fetch>(async (input, init = {}) => {
     const headers = new Headers(init.headers);
-    headers.set("x-interview-client-token", clientTokenRef.current);
+    headers.set("x-interview-client-token", authenticationHeaderValue);
     return fetchImpl(input, { ...init, headers });
-  }, [fetchImpl]);
+  }, [authenticationHeaderValue, fetchImpl]);
+
+  const setBaseUrl = useCallback((url: string): void => {
+    if (desktopBootstrap !== undefined) {
+      throw new Error("Desktop-managed command endpoint cannot be changed by renderer state");
+    }
+    setBaseUrlState(url);
+  }, [desktopBootstrap]);
 
   const getCommandClient = useCallback((): BrowserCommandClient => {
     return new BrowserCommandClient({
       baseUrl,
-      clientToken: clientTokenRef.current,
+      ...(desktopBootstrap !== undefined
+        ? { externalAuthenticationHeaderValue: desktopBootstrap.authentication.headerValue }
+        : { clientToken: clientTokenRef.current }),
       fetchImpl
     });
-  }, [baseUrl, fetchImpl]);
+  }, [baseUrl, desktopBootstrap, fetchImpl]);
 
   const fetchAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
     try {
@@ -185,11 +364,9 @@ export function useInterviewSession(
       setIsStreaming(true);
       setIsConnected(true);
 
-      const streamUrl = `${baseUrl.replace(/:\d+$/, ":43124")}/v1/renderer-stream`;
-
       try {
         await consumeAuthenticatedRendererStream({
-          streamUrl,
+          streamUrl: rendererStreamUrl,
           sessionId: targetSessionId,
           authenticatedFetch,
           signal: controller.signal
@@ -207,7 +384,7 @@ export function useInterviewSession(
         }
       }
     },
-    [authenticatedFetch, baseUrl, options.whiteboardAdapter]
+    [authenticatedFetch, baseUrl, options.whiteboardAdapter, rendererStreamUrl]
   );
 
   const startSession = useCallback(
