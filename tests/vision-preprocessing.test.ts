@@ -1093,6 +1093,17 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(unchanged.image).toBe(source);
   });
 
+  it("produces byte-identical deterministic resize outputs for identical inputs", async () => {
+    const source = snapshot(makePng(9, 7));
+    const envelope = { maxWidth: 4, maxHeight: 4, maxPixels: 16 };
+    const first = await downscaleImage(source, envelope);
+    const second = await downscaleImage(source, envelope);
+
+    expect(first.plan).toEqual(second.plan);
+    expect(first.image.metadata.contentDigest).toBe(second.image.metadata.contentDigest);
+    expect(first.image.readBytes().equals(second.image.readBytes())).toBe(true);
+  });
+
   it("uses premultiplied-alpha interpolation so transparent edges do not acquire dark halos", async () => {
     const source = snapshot(makePng(2, 1, (x) => x === 0
       ? [255, 255, 255, 255]
@@ -1247,6 +1258,22 @@ describe("crop, resize, tiling, and cancellation", () => {
       overlap: 1,
       maxTileCount: 5
     })).toThrowError(VisionPreprocessingError);
+  });
+
+  it("produces byte-identical deterministic tile outputs for identical inputs", async () => {
+    const source = snapshot(makePng(9, 6));
+    const config = { tileWidth: 4, tileHeight: 3, overlap: 1, maxTileCount: 8 };
+    const first = await tileImage(source, config);
+    const second = await tileImage(source, config);
+
+    expect(first.tiles.map((tile) => tile.bounds))
+      .toEqual(second.tiles.map((tile) => tile.bounds));
+    expect(first.tiles.map((tile) => tile.artifact.metadata.artifactId))
+      .toEqual(second.tiles.map((tile) => tile.artifact.metadata.artifactId));
+    expect(first.tiles.every((tile, index) => {
+      const other = second.tiles[index];
+      return other !== undefined && tile.artifact.readBytes().equals(other.artifact.readBytes());
+    })).toBe(true);
   });
 
   it("rejects enormous standalone tile plans before materializing axis arrays", () => {
