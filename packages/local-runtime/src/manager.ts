@@ -1245,12 +1245,14 @@ function validateReadiness(definition: LocalComponentDefinition): void {
   }
   switch (readiness.kind) {
     case "STABLE_PROCESS":
+      validateOnlyFields(readiness, "readiness", new Set(["kind", "stableMs"]));
       positiveTimer(readiness.stableMs, "readiness.stableMs");
       if (readiness.stableMs > definition.startupTimeoutMs) {
         invalid("readiness.stableMs may not exceed startupTimeoutMs");
       }
       break;
     case "HTTP_LOOPBACK":
+      validateOnlyFields(readiness, "readiness", new Set(["kind", "url", "intervalMs", "evaluate"]));
       parseLoopbackUrl(readiness.url);
       if (readiness.intervalMs !== undefined) positiveTimer(readiness.intervalMs, "readiness.intervalMs");
       if (readiness.evaluate !== undefined && typeof readiness.evaluate !== "function") {
@@ -1258,11 +1260,13 @@ function validateReadiness(definition: LocalComponentDefinition): void {
       }
       break;
     case "CUSTOM_LOCAL":
+      validateOnlyFields(readiness, "readiness", new Set(["kind", "intervalMs", "probe"]));
       if (readiness.intervalMs !== undefined) positiveTimer(readiness.intervalMs, "readiness.intervalMs");
       if (typeof readiness.probe !== "function") invalid("Custom readiness probe must be a function");
       break;
     case "STDOUT_LINE":
     case "STDOUT_JSON":
+      validateOnlyFields(readiness, "readiness", new Set(["kind", "evaluate"]));
       if (typeof readiness.evaluate !== "function") invalid("Stdout readiness evaluate must be a function");
       break;
     default:
@@ -1274,8 +1278,12 @@ function validateRestartPolicy(policy: LocalRestartPolicy): void {
   if (typeof policy !== "object" || policy === null || Array.isArray(policy)) {
     invalid("restartPolicy must be an object");
   }
-  if (policy.mode === "NEVER") return;
+  if (policy.mode === "NEVER") {
+    validateOnlyFields(policy, "restartPolicy", new Set(["mode"]));
+    return;
+  }
   if (policy.mode !== "ON_FAILURE") invalid("Unsupported restart policy");
+  validateOnlyFields(policy, "restartPolicy", new Set(["mode", "maxRetries", "backoffMs", "maxBackoffMs"]));
   if (!Number.isSafeInteger(policy.maxRetries)
       || policy.maxRetries < 0
       || policy.maxRetries > MAX_RESTART_RETRIES) {
@@ -1328,6 +1336,16 @@ function validateOutputLimits(output: LocalComponentDefinition["output"]): void 
       && output.maxBytes !== undefined
       && output.maxLineBytes > output.maxBytes) {
     invalid("output.maxLineBytes may not exceed output.maxBytes");
+  }
+}
+
+function validateOnlyFields(
+  value: object,
+  label: string,
+  allowedKeys: ReadonlySet<string>
+): void {
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) invalid(`${label} field ${key} is not valid for the selected mode`);
   }
 }
 
