@@ -164,25 +164,10 @@ export async function removeEntryInsideRoot(
       "Removal traversal limit must be a positive safe integer."
     );
   }
-  await removeEntryInsideRootBounded(root, candidate, { remaining: maxEntries });
-}
-
-async function removeEntryInsideRootBounded(
-  root: string,
-  candidate: string,
-  state: { remaining: number }
-): Promise<void> {
   assertPathInsideRoot(root, candidate);
   if (path.resolve(candidate) === path.resolve(root)) {
     throw new ModelAssetError("PATH_ESCAPE", "Refusing to remove the configured cache root itself.");
   }
-  if (state.remaining <= 0) {
-    throw new ModelAssetError(
-      "CACHE_LIMIT_EXCEEDED",
-      "Cache cleanup traversal exceeded its configured entry limit."
-    );
-  }
-  state.remaining -= 1;
 
   let entry: Stats;
   try {
@@ -202,15 +187,49 @@ async function removeEntryInsideRootBounded(
     }
   }
 
-  try {
-    const directory = await opendir(candidate);
-    for await (const child of directory) {
-      await removeEntryInsideRootBounded(root, path.join(candidate, child.name), state);
+  const children: string[] = [];
+  const directory = await opendir(candidate);
+  for await (const child of directory) {
+    if (children.length >= maxEntries) {
+      throw new ModelAssetError(
+        "CACHE_LIMIT_EXCEEDED",
+        "Managed cache directory exceeds the configured direct-entry cleanup limit."
+      );
     }
-  } catch (error) {
-    if (error instanceof ModelAssetError) throw error;
-    if (errnoCode(error) === "ENOENT") return;
-    throw new ModelAssetError("IO_ERROR", "Unable to enumerate cache directory for removal.", { cause: error });
+    const childPath = path.join(candidate, child.name);
+    assertPathInsideRoot(root, childPath);
+    let childStat: Stats;
+    try {
+      childStat = await lstat(childPath);
+    } catch (error) {
+      if (errnoCode(error) === "ENOENT") continue;
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to inspect managed cache child during cleanup.",
+        { cause: error }
+      );
+    }
+    if (childStat.isDirectory() && !childStat.isSymbolicLink()) {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Managed cache entries must not contain nested directories."
+      );
+    }
+    children.push(child.name);
+  }
+
+  for (const child of children) {
+    const childPath = path.join(candidate, child);
+    try {
+      await unlink(childPath);
+    } catch (error) {
+      if (errnoCode(error) === "ENOENT") continue;
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to remove managed cache child.",
+        { cause: error }
+      );
+    }
   }
   try {
     await rmdir(candidate);
@@ -462,20 +481,6 @@ export async function sumArtifactPayloadBytes(
       "Cache accounting traversal limit must be a positive safe integer."
     );
   }
-  return await sumArtifactPayloadBytesBounded(root, { remaining: maxEntries });
-}
-
-async function sumArtifactPayloadBytesBounded(
-  root: string,
-  state: { remaining: number }
-): Promise<number> {
-  if (state.remaining <= 0) {
-    throw new ModelAssetError(
-      "CACHE_LIMIT_EXCEEDED",
-      "Cache accounting traversal exceeded its configured entry limit."
-    );
-  }
-  state.remaining -= 1;
 
   let entry: Stats;
   try {
@@ -489,9 +494,37 @@ async function sumArtifactPayloadBytesBounded(
   if (!entry.isDirectory()) return 0;
 
   let total = 0;
+  let inspectedEntries = 0;
   const directory = await opendir(root);
   for await (const child of directory) {
-    total += await sumArtifactPayloadBytesBounded(path.join(root, child.name), state);
+    inspectedEntries += 1;
+    if (inspectedEntries > maxEntries) {
+      throw new ModelAssetError(
+        "CACHE_LIMIT_EXCEEDED",
+        "Managed cache directory exceeds the configured direct-entry accounting limit."
+      );
+    }
+    const childPath = path.join(root, child.name);
+    let childStat: Stats;
+    try {
+      childStat = await lstat(childPath);
+    } catch (error) {
+      if (errnoCode(error) === "ENOENT") continue;
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to inspect managed cache child for accounting.",
+        { cause: error }
+      );
+    }
+    if (childStat.isSymbolicLink()) continue;
+    if (childStat.isDirectory()) {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Managed cache entries must not contain nested directories."
+      );
+    }
+    if (!childStat.isFile() || child.name.toLowerCase() === "manifest.json") continue;
+    total += childStat.size;
     if (!Number.isSafeInteger(total)) {
       throw new ModelAssetError(
         "CACHE_LIMIT_EXCEEDED",
