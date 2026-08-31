@@ -138,7 +138,7 @@ describe("deterministic arithmetic verifiers", () => {
         kind: "CONDITIONAL_FROM_COUNTS",
         jointCount: 2,
         conditionCount: 5,
-        claimedProbability: rational("2", "5")
+        claimedProbability: rational("4", "10")
       }
     });
     expect(countConditional.status).toBe("VERIFIED");
@@ -150,7 +150,7 @@ describe("deterministic arithmetic verifiers", () => {
         kind: "CONDITIONAL_FROM_PROBABILITIES",
         jointProbability: rational("1", "4"),
         conditionProbability: rational("1", "2"),
-        claimedProbability: rational("1", "2")
+        claimedProbability: rational("-1", "-2")
       }
     });
     expect(probabilityConditional.status).toBe("VERIFIED");
@@ -163,7 +163,7 @@ describe("deterministic arithmetic verifiers", () => {
         prior: rational("1", "4"),
         likelihoodGivenHypothesis: rational("1", "2"),
         evidenceProbability: rational("1", "4"),
-        claimedPosterior: rational("1", "2")
+        claimedPosterior: rational("2", "4")
       }
     });
     expect(bayes).toMatchObject({ status: "VERIFIED", verifier: PROBABILITY_ARITHMETIC_VERIFIER_NAME });
