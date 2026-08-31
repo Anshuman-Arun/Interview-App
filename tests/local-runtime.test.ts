@@ -314,6 +314,30 @@ describe("local worker lifecycle manager", () => {
       .rejects.toMatchObject({ code: "PROCESS_EXITED" });
   });
 
+  it("passes shell metacharacters as literal process arguments", async () => {
+    const runtime = manager();
+    const literalArgument = process.platform === "win32"
+      ? "& echo SHOULD_NOT_EXECUTE > ignored.txt"
+      : "; printf SHOULD_NOT_EXECUTE > ignored.txt";
+    let observedArgument: unknown;
+
+    runtime.register(definition("literal-argument", "arg-ready", {
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => {
+          if (typeof message !== "object" || message === null) return false;
+          const value = message as Record<string, unknown>;
+          if (value.type !== "READY") return false;
+          observedArgument = value.argument;
+          return true;
+        }
+      }
+    }, [literalArgument]));
+
+    await runtime.start("literal-argument");
+    expect(observedArgument).toBe(literalArgument);
+  });
+
   it("detects immediate crashes and invalid executables", async () => {
     const runtime = manager();
     runtime.register(definition("crash", "crash"));
