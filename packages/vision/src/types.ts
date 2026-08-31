@@ -20,7 +20,7 @@ const SUPPORTED_PNG_BIT_DEPTHS = new Map<number, ReadonlySet<number>>([
   [6, new Set([8])]
 ]);
 
-function assertSupportedPngHeader(bytes: Buffer): void {
+export function assertSupportedPngHeader(bytes: Buffer): void {
   const bitDepth = bytes[24];
   const colorType = bytes[25];
   const compressionMethod = bytes[26];
