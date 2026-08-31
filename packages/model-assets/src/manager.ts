@@ -1,6 +1,7 @@
 import type { BigIntStats, Dir, Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lstat, opendir } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
 import {
   MAX_DOWNLOAD_REDIRECTS,
@@ -11,6 +12,7 @@ import {
   atomicRenameDirectory,
   availableDiskBytes,
   copyLocalArtifactBounded,
+  createStableStagingFile,
   ensureSafeDirectory,
   initializeCachePaths,
   installedPayloadPath,
@@ -1147,7 +1149,7 @@ export class ModelAssetManager {
     manifest: AssetManifest,
     signal: AbortSignal,
     setStage: (stage: "DOWNLOADING" | "VERIFYING") => void,
-    stagePayload: (destination: string) => Promise<void>
+    stagePayload: (destination: FileHandle) => Promise<void>
   ): Promise<string> {
     const paths = await this.getSafeCachePaths();
     const key = artifactInstallationKey(manifest);
@@ -1195,9 +1197,32 @@ export class ModelAssetManager {
         inode: createdStaging.ino
       };
       const stagedPayload = installedPayloadPath(stagingDirectory, manifest);
+      const stagedPayloadHandle = await createStableStagingFile(
+        stagingDirectory,
+        manifest.filename,
+        stagingIdentity
+      );
 
       setStage("DOWNLOADING");
-      await stagePayload(stagedPayload);
+      let transferFailed = false;
+      try {
+        await stagePayload(stagedPayloadHandle);
+      } catch (error) {
+        transferFailed = true;
+        throw error;
+      } finally {
+        try {
+          await stagedPayloadHandle.close();
+        } catch (error) {
+          if (!transferFailed) {
+            throw new ModelAssetError(
+              "IO_ERROR",
+              "Unable to close the staged artifact payload after transfer.",
+              { cause: error }
+            );
+          }
+        }
+      }
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
 
       setStage("VERIFYING");
