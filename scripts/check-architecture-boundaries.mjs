@@ -368,6 +368,15 @@ function checkBrowserProcessCapabilities(root, records, violations) {
         continue;
       }
       const target = projectTargetForSpecifier(root, record, specifier);
+      if (target?.kind === "app" && target.name === "server") {
+        addViolation(
+          violations,
+          "BROWSER_PROCESS_CAPABILITY",
+          record.relativePath,
+          "Browser code may not import server modules that can transitively expose Node process capabilities."
+        );
+        continue;
+      }
       if (target?.kind === "package" && target.name === "local-runtime") {
         addViolation(
           violations,
