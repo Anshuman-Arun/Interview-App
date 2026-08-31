@@ -13,6 +13,12 @@ import {
 } from "./types.js";
 import type { BoardRevision } from "../../domain/src/index.js";
 
+function assertArrayInput(value: unknown): void {
+  if (!Array.isArray(value)) {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must be an array");
+  }
+}
+
 export const VisionPurposeSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/u);
 export type VisionPurpose = z.infer<typeof VisionPurposeSchema>;
 
@@ -187,9 +193,7 @@ export function prepareVisionBatch(
   budgetInput: VisionRequestBudget = DEFAULT_VISION_REQUEST_BUDGET,
   strategyInput: VisionBudgetStrategy = "FAIL"
 ): PreparedVisionBatch {
-  if (!Array.isArray(sources)) {
-    throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must be an array");
-  }
+  assertArrayInput(sources);
   const budget = RequestBudgetSchema.parse(budgetInput);
   const strategy = VisionBudgetStrategySchema.parse(strategyInput);
   const validatedPurpose = VisionPurposeSchema.parse(purpose);
