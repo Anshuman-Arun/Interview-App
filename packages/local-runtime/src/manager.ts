@@ -1029,6 +1029,7 @@ export class LocalRuntimeManager {
         const timeoutMs = terminationTimeout(record.definition);
         const termination = await terminateManagedTree(record, residual, this.platform, timeoutMs);
         if (termination === "UNVERIFIED") {
+          record.residualTreeUnverified = true;
           record.state = "FAILED";
           record.failure = this.failure(
             "TERMINATION_FAILED",
