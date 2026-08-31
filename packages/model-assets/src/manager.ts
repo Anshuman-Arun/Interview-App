@@ -339,7 +339,7 @@ export class ModelAssetManager {
       );
     }
     const paths = await this.getSafeCachePaths();
-    await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, key), this.maxListEntries);
+    await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, key));
     this.lastFailures.delete(key);
   }
 
@@ -363,7 +363,7 @@ export class ModelAssetManager {
         );
       }
       if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry.name), this.maxListEntries);
+      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry.name));
     }
     this.lastFailures.clear();
   }
@@ -399,7 +399,7 @@ export class ModelAssetManager {
         );
       }
       if (!INSTALLATION_KEY_PATTERN.test(entry.name) || keepKeys.has(entry.name)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry.name), this.maxListEntries);
+      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry.name));
       this.lastFailures.delete(entry.name);
       removed += 1;
     }
@@ -579,7 +579,7 @@ export class ModelAssetManager {
     const initial = await this.checkInstallation(manifest);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
     if (await pathEntryExists(installationDirectory)) {
-      await removeEntryInsideRoot(paths.root, installationDirectory, this.maxListEntries);
+      await removeEntryInsideRoot(paths.root, installationDirectory);
     }
 
     const reservationBytes = manifest.sizeBytes;
@@ -628,10 +628,10 @@ export class ModelAssetManager {
       if (await pathEntryExists(installationDirectory)) {
         const existing = await this.checkInstallation(manifest);
         if (existing.status === "INSTALLED" && existing.path !== undefined) {
-          await removeEntryInsideRoot(paths.root, stagingDirectory, this.maxListEntries);
+          await removeEntryInsideRoot(paths.root, stagingDirectory);
           return existing.path;
         }
-        await removeEntryInsideRoot(paths.root, installationDirectory, this.maxListEntries);
+        await removeEntryInsideRoot(paths.root, installationDirectory);
       }
 
       if (signal.aborted) {
@@ -647,7 +647,7 @@ export class ModelAssetManager {
       } catch (error) {
         const raced = await this.checkInstallation(manifest);
         if (raced.status === "INSTALLED" && raced.path !== undefined) {
-          await removeEntryInsideRoot(paths.root, stagingDirectory, this.maxListEntries);
+          await removeEntryInsideRoot(paths.root, stagingDirectory);
           return raced.path;
         }
         throw error;
@@ -657,7 +657,7 @@ export class ModelAssetManager {
       setStagingDirectory(undefined);
       this.releaseCapacity(reservationBytes);
       if (!published) {
-        await removeEntryInsideRoot(paths.root, stagingDirectory, this.maxListEntries).catch(() => undefined);
+        await removeEntryInsideRoot(paths.root, stagingDirectory).catch(() => undefined);
       }
     }
   }
@@ -725,7 +725,7 @@ export class ModelAssetManager {
         );
       }
       if (!INSTALLATION_KEY_PATTERN.test(entry.name)) continue;
-      total += await sumArtifactPayloadBytes(path.join(paths.artifacts, entry.name), this.maxListEntries);
+      total += await sumArtifactPayloadBytes(path.join(paths.artifacts, entry.name));
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -747,7 +747,7 @@ export class ModelAssetManager {
       if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
       const candidate = path.join(paths.temporary, entry.name);
       if (activeStagingDirectories.has(candidate)) continue;
-      total += await sumArtifactPayloadBytes(candidate, this.maxListEntries);
+      total += await sumArtifactPayloadBytes(candidate);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
