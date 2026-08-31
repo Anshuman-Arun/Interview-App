@@ -1363,7 +1363,8 @@ export async function sumManagedCacheBytes(
   if (finalEntry.isSymbolicLink()
       || !finalEntry.isDirectory()
       || finalEntry.dev !== entry.dev
-      || finalEntry.ino !== entry.ino) {
+      || finalEntry.ino !== entry.ino
+      || finalEntry.ctimeNs !== entry.ctimeNs) {
     throw new ModelAssetError(
       "UNSAFE_PATH",
       "Managed cache directory was replaced during accounting."
