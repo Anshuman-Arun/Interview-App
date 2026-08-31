@@ -1170,6 +1170,10 @@ describe("local worker lifecycle manager", () => {
       output: { maxBytes: 128, maxLineBytes: 129 }
     }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
 
+    expect(() => runtime.register(definition("line-over-default-budget", "ready", {
+      output: { maxLineBytes: 128 * 1024 }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
     expect(() => runtime.register(definition("too-many-retries", "ready", {
       restartPolicy: { mode: "ON_FAILURE", maxRetries: 101 }
     }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
