@@ -705,15 +705,24 @@ describe("adversarial deterministic math verification", () => {
     expect(rationalRejected.reason).toContain("RESOURCE_LIMIT");
   });
 
-  it("enforces the expression depth boundary for direct utility calls", () => {
-    let atLimit: IntegerExpression = integer("1");
+  it("enforces the expression depth boundary for both direct evaluators", () => {
+    let integerAtLimit: IntegerExpression = integer("1");
     for (let depth = 1; depth < 24; depth += 1) {
-      atLimit = { kind: "NEGATE", operand: atLimit };
+      integerAtLimit = { kind: "NEGATE", operand: integerAtLimit };
     }
-    expect(evaluateIntegerExpression(atLimit)).toBe(-1n);
+    expect(evaluateIntegerExpression(integerAtLimit)).toBe(-1n);
 
-    const tooDeep: IntegerExpression = { kind: "NEGATE", operand: atLimit };
-    expect(() => evaluateIntegerExpression(tooDeep)).toThrow(BoundedMathError);
+    const integerTooDeep: IntegerExpression = { kind: "NEGATE", operand: integerAtLimit };
+    expect(() => evaluateIntegerExpression(integerTooDeep)).toThrow(BoundedMathError);
+
+    let rationalAtLimit = fractionExpression("1");
+    for (let depth = 1; depth < 24; depth += 1) {
+      rationalAtLimit = { kind: "NEGATE", operand: rationalAtLimit };
+    }
+    expect(evaluateRationalExpression(rationalAtLimit)).toEqual(rational(-1n, 1n));
+
+    const rationalTooDeep = { kind: "NEGATE" as const, operand: rationalAtLimit };
+    expect(() => evaluateRationalExpression(rationalTooDeep)).toThrow(BoundedMathError);
   });
 
   it("fails closed on runtime statement and confidence type violations", async () => {
