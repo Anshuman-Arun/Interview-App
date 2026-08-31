@@ -24,7 +24,7 @@ import {
   sumManagedCacheBytes,
   validateCachePaths,
   verifyArtifactFileWithIdentity,
-  writeStoredManifest,
+  writeStableStagedManifest,
   type CachePaths
 } from "./filesystem.js";
 import {
@@ -1229,9 +1229,10 @@ export class ModelAssetManager {
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
 
       setStage("VERIFYING");
-      await writeStoredManifest(
-        path.join(stagingDirectory, "manifest.json"),
-        serializedManifest
+      await writeStableStagedManifest(
+        stagingDirectory,
+        serializedManifest,
+        stagingIdentity
       );
       await this.assertArtifactDirectoryShape(
         stagingDirectory,
