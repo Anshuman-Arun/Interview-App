@@ -244,8 +244,7 @@ export function compareRationals(left: ExactRational, right: ExactRational): -1 
   const rightScaled = assertIntermediateIntegerBound(
     normalizedRight.numerator * (normalizedLeft.denominator / commonFactor)
   );
-  const difference = assertIntermediateIntegerBound(leftScaled - rightScaled);
-  return difference < 0n ? -1 : difference > 0n ? 1 : 0;
+  return leftScaled < rightScaled ? -1 : leftScaled > rightScaled ? 1 : 0;
 }
 
 function assertFiniteContainerLength(length: number): void {

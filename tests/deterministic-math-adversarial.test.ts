@@ -28,6 +28,7 @@ import {
   areCongruent,
   binomial,
   createDeterministicMathVerifier,
+  compareRationals,
   divideRationals,
   equalRationals,
   evaluateIntegerExpression,
@@ -123,6 +124,14 @@ describe("adversarial deterministic math verification", () => {
   it("bounds direct bigint utility inputs rather than only parsed string inputs", () => {
     const oversized = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1));
     expect(() => gcd(oversized, 1n)).toThrow(BoundedMathError);
+  });
+
+  it("compares bounded rationals without constructing an avoidable over-limit difference", () => {
+    const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
+
+    expect(compareRationals(rational(maximum, 1n), rational(-maximum, 1n))).toBe(1);
+    expect(compareRationals(rational(-maximum, 1n), rational(maximum, 1n))).toBe(-1);
+    expect(compareRationals(rational(maximum, 1n), rational(maximum, 1n))).toBe(0);
   });
 
   it("bounds exported finite aggregate helpers by the shared container limit", () => {
