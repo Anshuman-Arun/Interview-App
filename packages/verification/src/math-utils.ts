@@ -34,7 +34,7 @@ function decimalDigitCount(value: bigint): number {
 }
 
 function parseCanonicalInteger(
-  value: string,
+  value: unknown,
   maximumDigits: number,
   limitCode: "INTEGER_LIMIT_EXCEEDED" | "INTERMEDIATE_LIMIT_EXCEEDED"
 ): bigint {
