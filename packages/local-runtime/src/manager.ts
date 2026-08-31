@@ -67,6 +67,7 @@ interface ComponentRecord {
   readonly exitListeners: Set<(exit: InternalExitRecord) => void>;
   state: LocalComponentState;
   child: ChildProcessWithoutNullStreams | undefined;
+  residualProcess: ChildProcessWithoutNullStreams | undefined;
   stdoutFramer?: BoundedLineFramer;
   stderrFramer?: BoundedLineFramer;
   startedAt?: string;
@@ -128,6 +129,7 @@ export class LocalRuntimeManager {
       exitListeners: new Set(),
       state: "STOPPED",
       child: undefined,
+      residualProcess: undefined,
       readyAt: undefined,
       readinessDetail: undefined,
       handshake: undefined,
@@ -155,6 +157,15 @@ export class LocalRuntimeManager {
     }
     if (record.startPromise !== undefined) return record.startPromise;
     if (record.state === "READY" || record.state === "DEGRADED") return Promise.resolve(this.snapshot(record));
+    if (record.residualProcess !== undefined) {
+      if (isOwnedProcessTreeAlive(record.residualProcess, this.platform)) {
+        return Promise.reject(new LocalRuntimeError(
+          "INVALID_STATE",
+          `Cannot start ${componentId} while a residual managed process tree is still alive`
+        ));
+      }
+      record.residualProcess = undefined;
+    }
     if (record.child !== undefined && isChildAlive(record.child)) {
       return Promise.reject(new LocalRuntimeError(
         "INVALID_STATE",
@@ -361,13 +372,13 @@ export class LocalRuntimeManager {
     record.stderrFramer = stderrFramer;
 
     child.stdin.on("error", () => {
-      record.stderr.push("Managed component stdin stream error");
+      if (record.child === child) record.stderr.push("Managed component stdin stream error");
     });
     child.stdout.on("error", () => {
-      record.stderr.push("Managed component stdout stream error");
+      if (record.child === child) record.stderr.push("Managed component stdout stream error");
     });
     child.stderr.on("error", () => {
-      record.stderr.push("Managed component stderr stream error");
+      if (record.child === child) record.stderr.push("Managed component stderr stream error");
     });
     child.stdout.on("data", (chunk: Buffer) => stdoutFramer.append(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderrFramer.append(chunk));
@@ -407,6 +418,7 @@ export class LocalRuntimeManager {
     for (const listener of [...record.exitListeners]) listener(exit);
 
     if (!unexpected || previousState === "STARTING") return;
+    record.residualProcess = child;
     record.state = "FAILED";
     record.failure = this.failure(
       "PROCESS_EXITED",
@@ -445,7 +457,8 @@ export class LocalRuntimeManager {
         );
       }
     }
-    if (!record.expectedStop && record.startPromise === undefined && this.reserveRestart(record)) {
+    record.residualProcess = undefined;
+    if (!record.expectedStop && this.reserveRestart(record)) {
       this.beginAutomaticRestart(record);
     }
   }
@@ -658,6 +671,7 @@ export class LocalRuntimeManager {
 
   private async cleanupFailedAttempt(record: ComponentRecord, child: ChildProcessWithoutNullStreams): Promise<void> {
     if (record.child !== child && !isOwnedProcessTreeAlive(child, this.platform)) return;
+    record.residualProcess = child;
     const previousExpectedStop = record.expectedStop;
     record.expectedStop = true;
     const timeoutMs = terminationTimeout(record.definition);
@@ -678,6 +692,7 @@ export class LocalRuntimeManager {
           );
         }
       }
+      record.residualProcess = undefined;
     } finally {
       record.expectedStop = previousExpectedStop;
     }
@@ -706,10 +721,39 @@ export class LocalRuntimeManager {
       if (survivingChild !== undefined && isOwnedProcessTreeAlive(survivingChild, this.platform)) {
         return this.runStop(record);
       }
+      const residual = record.residualProcess;
+      if (residual !== undefined && isOwnedProcessTreeAlive(residual, this.platform)) {
+        record.state = "STOPPING";
+        const timeoutMs = terminationTimeout(record.definition);
+        await terminateChildTree(residual, this.platform, "SIGTERM");
+        if (await waitForManagedTreeExit(record, residual, this.platform, timeoutMs)) {
+          record.residualProcess = undefined;
+          record.state = "STOPPED";
+          return Object.freeze({ componentId: record.definition.id, disposition: "TERMINATED" });
+        }
+        await forceKillChildTree(residual, this.platform);
+        if (!(await waitForManagedTreeExit(record, residual, this.platform, timeoutMs))) {
+          record.state = "FAILED";
+          record.failure = this.failure(
+            "TERMINATION_FAILED",
+            `Could not terminate residual managed process tree for ${record.definition.id}`,
+            record.environment.secretValues
+          );
+          throw new LocalRuntimeError(
+            "TERMINATION_FAILED",
+            `Could not terminate residual managed process tree for ${record.definition.id}`
+          );
+        }
+        record.residualProcess = undefined;
+        record.state = "STOPPED";
+        return Object.freeze({ componentId: record.definition.id, disposition: "FORCED" });
+      }
+      record.residualProcess = undefined;
       record.state = "STOPPED";
       return Object.freeze({ componentId: record.definition.id, disposition: "ALREADY_STOPPED" });
     }
 
+    record.residualProcess = child;
     record.state = "STOPPING";
     let disposition: LocalStopResult["disposition"] = "GRACEFUL";
     void this.requestGracefulShutdown(record, child);
@@ -739,6 +783,7 @@ export class LocalRuntimeManager {
         // Expected if stop interrupted STARTING or retry backoff.
       }
     }
+    record.residualProcess = undefined;
     record.state = "STOPPED";
     record.readyAt = undefined;
     record.readinessDetail = undefined;
@@ -762,11 +807,13 @@ export class LocalRuntimeManager {
     try {
       await record.definition.gracefulShutdown(control);
     } catch (error) {
-      record.failure = this.failure(
-        "TERMINATION_FAILED",
-        `Graceful shutdown hook failed: ${safeErrorMessage(error)}`,
-        record.environment.secretValues
-      );
+      if (record.child === child) {
+        record.failure = this.failure(
+          "TERMINATION_FAILED",
+          `Graceful shutdown hook failed: ${safeErrorMessage(error)}`,
+          record.environment.secretValues
+        );
+      }
     }
   }
 
@@ -1281,8 +1328,12 @@ function awaitWithAbort<T>(
 }
 
 function disposeResponseBody(response: Response): void {
-  const cancellation = response.body?.cancel();
-  if (cancellation !== undefined) void cancellation.catch(() => undefined);
+  try {
+    const cancellation = response.body?.cancel();
+    if (cancellation !== undefined) void cancellation.catch(() => undefined);
+  } catch {
+    // Readiness body disposal is best-effort and must not affect lifecycle state.
+  }
 }
 
 function throwIfAborted(signal: AbortSignal, componentId: string): void {
