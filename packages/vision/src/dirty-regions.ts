@@ -75,6 +75,9 @@ function compareRects(left: ImageRect, right: ImageRect): number {
 }
 
 function normalizeConfig(config: DirtyRegionPlannerConfig | undefined) {
+  if (config !== undefined && (typeof config !== "object" || config === null || Array.isArray(config))) {
+    throw new RangeError("Dirty-region planner configuration must be an object");
+  }
   const parsed = DirtyRegionConfigSchema.parse({
     ...DEFAULT_DIRTY_REGION_PLANNER_CONFIG,
     ...config
