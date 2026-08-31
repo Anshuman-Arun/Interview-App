@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { lstat, opendir } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
+import { isProxy } from "node:util/types";
 import {
   MAX_DOWNLOAD_REDIRECTS,
   MAX_DOWNLOAD_TIMEOUT_MS,
@@ -190,9 +191,14 @@ function ownValue(record: Record<string, unknown>, key: string): unknown {
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  if (typeof value !== "object" || value === null) return false;
+  if (typeof value !== "object" || value === null || isProxy(value)) return false;
   try {
-    return value instanceof AbortSignal;
+    const abortedGetter = Object.getOwnPropertyDescriptor(
+      AbortSignal.prototype,
+      "aborted"
+    )?.get;
+    if (abortedGetter === undefined) return false;
+    return typeof abortedGetter.call(value) === "boolean";
   } catch {
     return false;
   }
