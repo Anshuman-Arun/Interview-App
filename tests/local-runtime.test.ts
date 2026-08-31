@@ -951,6 +951,8 @@ describe("local worker lifecycle manager", () => {
       await expect(runtime.stop("unverified-windows-tree"))
         .rejects.toMatchObject({ code: "TERMINATION_FAILED" });
       expect(runtime.getStatus("unverified-windows-tree").state).toBe("FAILED");
+      await expect(runtime.start("unverified-windows-tree"))
+        .rejects.toMatchObject({ code: "INVALID_STATE" });
     } finally {
       if (originalSystemRoot === undefined) delete process.env.SystemRoot;
       else process.env.SystemRoot = originalSystemRoot;
