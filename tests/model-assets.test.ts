@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -13,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { createStableStagingFile } from "../packages/model-assets/src/filesystem.js";
 import {
   AssetManifestSchema,
   ModelAssetManager,
@@ -500,6 +502,28 @@ describe("local model asset manager", () => {
     await expect(installation).rejects.toMatchObject({ code: "UNSAFE_PATH" });
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
     await rm(detached, { recursive: true, force: true });
+  });
+
+  it("refuses a replaced staging directory before creating payload bytes", async () => {
+    if (process.platform === "win32") return;
+
+    const root = await newRoot();
+    const outside = await newRoot();
+    const staging = path.join(root, "staging");
+    const detached = path.join(root, "staging-original");
+    await mkdir(staging);
+    const identity = await lstat(staging, { bigint: true });
+
+    await rename(staging, detached);
+    await symlink(outside, staging, "dir");
+
+    await expect(createStableStagingFile(
+      staging,
+      "payload.bin",
+      { device: identity.dev, inode: identity.ino }
+    )).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+
+    expect(await readdir(outside)).toEqual([]);
   });
 
   it("does not start network work for an already-cancelled request", async () => {
