@@ -398,6 +398,26 @@ describe("vision snapshot validation and hashing", () => {
     expect(Object.isFrozen(value.metadata)).toBe(true);
   });
 
+  it("rejects detached typed-array image payloads cleanly", () => {
+    const bytes = new Uint8Array(makePng(1, 1));
+    structuredClone(bytes.buffer, { transfer: [bytes.buffer] });
+    expect(bytes.byteLength).toBe(0);
+
+    try {
+      createValidatedImageSnapshot({
+        snapshotId: "detached-bytes",
+        sourceType: "WHITEBOARD_SNAPSHOT",
+        sourceRevision: BoardRevisionSchema.parse(1),
+        capturedAtMs: 1,
+        mimeType: "image/png",
+        encodedBytes: bytes
+      });
+      throw new Error("Expected detached byte rejection");
+    } catch (error) {
+      expectCode(error, "INVALID_IMAGE");
+    }
+  });
+
   it("rejects non-byte payloads at the runtime boundary", () => {
     expect(() => createValidatedImageSnapshot({
       snapshotId: "runtime-bad-bytes",
