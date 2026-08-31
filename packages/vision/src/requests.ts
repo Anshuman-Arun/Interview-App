@@ -10,6 +10,8 @@ import {
   VisionImageArtifact,
   VisionPreprocessingError,
   type CoordinateTransform,
+  type Sha256Digest,
+  type VisionRasterIdentity,
   type VisionRasterSource
 } from "./types.js";
 import type { BoardRevision } from "../../domain/src/index.js";
@@ -48,12 +50,12 @@ export interface PreparedVisionImageRequest {
   readonly purpose: VisionPurpose;
   readonly sourceRevision: BoardRevision;
   readonly sourceSnapshotId: string;
-  readonly imageIdentity: string;
+  readonly imageIdentity: VisionRasterIdentity;
   readonly imageKind: "SNAPSHOT" | "CROP" | "RESIZED" | "TILE";
   readonly width: number;
   readonly height: number;
   readonly byteSize: number;
-  readonly contentDigest: string;
+  readonly contentDigest: Sha256Digest;
   readonly coordinateTransform: CoordinateTransform;
   readonly payload: ImagePayloadReference;
 }
@@ -67,7 +69,7 @@ export interface VisionRequestBudgetTotals {
 
 export interface PreparedVisionBatch {
   readonly requests: readonly PreparedVisionImageRequest[];
-  readonly deferredImageIdentities: readonly string[];
+  readonly deferredImageIdentities: readonly VisionRasterIdentity[];
   readonly truncated: boolean;
   readonly totals: VisionRequestBudgetTotals;
 }
@@ -221,7 +223,7 @@ export function prepareVisionBatch(
   Object.freeze(candidates);
 
   const accepted: PreparedVisionImageRequest[] = [];
-  const deferred: string[] = [];
+  const deferred: VisionRasterIdentity[] = [];
   let totals: VisionRequestBudgetTotals = Object.freeze({ images: 0, totalBytes: 0, totalPixels: 0, cropsOrTiles: 0 });
 
   for (let index = 0; index < candidates.length; index += 1) {
