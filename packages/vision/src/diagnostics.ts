@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { snapshotOwnEnumerableRecord } from "./object-validation.js";
 import { HARD_IMAGE_VALIDATION_LIMITS, PixelDimensionsSchema } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
@@ -79,7 +80,13 @@ export interface VisionDiagnosticsInput {
 }
 
 export function createVisionProcessingDiagnostics(input: VisionDiagnosticsInput): VisionProcessingDiagnostics {
-  const parsed = VisionProcessingDiagnosticsSchema.parse(input);
+  let ownInput: Readonly<Record<string, unknown>>;
+  try {
+    ownInput = snapshotOwnEnumerableRecord(input, "Vision processing diagnostics");
+  } catch {
+    throw new TypeError("Vision processing diagnostics could not be read safely");
+  }
+  const parsed = VisionProcessingDiagnosticsSchema.parse(ownInput);
   return Object.freeze({
     ...parsed,
     sourceDimensions: Object.freeze({ ...parsed.sourceDimensions }),
