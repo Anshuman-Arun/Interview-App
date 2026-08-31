@@ -313,11 +313,15 @@ function findParentEntry(
   }
 
   const wanted = requested.toUpperCase();
+  let match: { readonly key: string; readonly value: string } | undefined;
   for (const [key, descriptor] of Object.entries(descriptors)) {
     if (key.toUpperCase() !== wanted || !("value" in descriptor) || typeof descriptor.value !== "string") continue;
-    return { key, value: descriptor.value };
+    if (match !== undefined) {
+      throw new Error(`Ambiguous case-insensitive parent environment key: ${requested}`);
+    }
+    match = { key, value: descriptor.value };
   }
-  return undefined;
+  return match;
 }
 
 function removeEquivalentKey(environment: NodeJS.ProcessEnv, key: string, platform: NodeJS.Platform): void {
