@@ -10,6 +10,10 @@ const SAFE_POSITIVE_INTEGER_SCHEMA = z.number().int().positive().max(Number.MAX_
 
 export const MAX_GEOMETRY_RECTANGLES = 2048;
 
+const PIXEL_DIMENSION_FIELDS = new Set(["width", "height"]);
+const IMAGE_RECT_FIELDS = new Set(["x", "y", "width", "height"]);
+const RECT_CORNER_FIELDS = new Set(["x1", "y1", "x2", "y2"]);
+
 export const ImageRectSchema = z.object({
   x: SAFE_INTEGER_SCHEMA,
   y: SAFE_INTEGER_SCHEMA,
@@ -33,7 +37,7 @@ function invalidRect(message: string): never {
 function parsePixelDimensions(input: PixelDimensions): PixelDimensions {
   let ownInput: Readonly<Record<string, unknown>>;
   try {
-    ownInput = snapshotOwnEnumerableRecord(input, "Image dimensions");
+    ownInput = snapshotOwnEnumerableRecord(input, "Image dimensions", PIXEL_DIMENSION_FIELDS);
   } catch {
     invalidRect("Image dimensions could not be read safely");
   }
@@ -51,7 +55,7 @@ function safeAdd(left: number, right: number, label: string): number {
 export function validateImageRect(input: ImageRect): ImageRect {
   let ownInput: Readonly<Record<string, unknown>>;
   try {
-    ownInput = snapshotOwnEnumerableRecord(input, "Rectangle");
+    ownInput = snapshotOwnEnumerableRecord(input, "Rectangle", IMAGE_RECT_FIELDS);
   } catch {
     invalidRect("Rectangle coordinates could not be read safely");
   }
@@ -70,7 +74,7 @@ export function imageBounds(dimensions: PixelDimensions): ImageRect {
 export function normalizeRect(corners: RectCorners): ImageRect {
   let ownCorners: Readonly<Record<string, unknown>>;
   try {
-    ownCorners = snapshotOwnEnumerableRecord(corners, "Rectangle corners");
+    ownCorners = snapshotOwnEnumerableRecord(corners, "Rectangle corners", RECT_CORNER_FIELDS);
   } catch {
     invalidRect("Rectangle corners could not be read safely");
   }
