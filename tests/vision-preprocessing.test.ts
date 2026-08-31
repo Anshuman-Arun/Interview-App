@@ -1300,6 +1300,20 @@ describe("crop, resize, tiling, and cancellation", () => {
     })).rejects.toThrowError(RangeError);
   });
 
+  it("observes queued cancellation even when resize would otherwise be a no-op", async () => {
+    const source = snapshot(makePng(2, 2));
+    const controller = new AbortController();
+    setImmediate(() => {
+      controller.abort();
+    });
+
+    await expect(downscaleImage(
+      source,
+      { maxWidth: 4, maxHeight: 4, maxPixels: 16 },
+      { signal: controller.signal }
+    )).rejects.toMatchObject({ code: "CANCELLED" });
+  });
+
   it("observes an abort already queued while a synchronous codec boundary is running", async () => {
     const source = snapshot(makePng(4, 4));
     const controller = new AbortController();
