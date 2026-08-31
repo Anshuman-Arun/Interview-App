@@ -54,22 +54,26 @@ export interface CachePaths {
   readonly rootInode: number;
 }
 
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAbortSignal(value: unknown): value is AbortSignal {
+  if (!isUnknownRecord(value)) return false;
+  return typeof value["aborted"] === "boolean"
+    && typeof value["addEventListener"] === "function"
+    && typeof value["removeEventListener"] === "function";
+}
+
 function validateOptionalAbortSignal(value: unknown): AbortSignal | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== "object"
-      || value === null
-      || !("aborted" in value)
-      || typeof value.aborted !== "boolean"
-      || !("addEventListener" in value)
-      || typeof value.addEventListener !== "function"
-      || !("removeEventListener" in value)
-      || typeof value.removeEventListener !== "function") {
+  if (!isAbortSignal(value)) {
     throw new ModelAssetError(
       "INVALID_CONFIGURATION",
       "Cancellation signal must be an AbortSignal when provided."
     );
   }
-  return value as AbortSignal;
+  return value;
 }
 
 function errnoCode(error: unknown): string | undefined {
@@ -428,13 +432,13 @@ export async function verifyArtifactFile(
   }
 
   const rawExpectations: unknown = expectations;
-  if (typeof rawExpectations !== "object" || rawExpectations === null) {
+  if (!isUnknownRecord(rawExpectations)) {
     throw new ModelAssetError(
       "INVALID_CONFIGURATION",
       "Artifact verification expectations must be an object."
     );
   }
-  const expectationRecord = rawExpectations as Record<string, unknown>;
+  const expectationRecord = rawExpectations;
   const expectedSize = expectationRecord["sizeBytes"];
   if (typeof expectedSize !== "number"
       || !Number.isSafeInteger(expectedSize)
