@@ -124,6 +124,21 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "external code importing vision's internal construction capability",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION",
+      files: {
+        "apps/server/src/bad.ts": "import \"../../../packages/vision/src/internal-artifact-construction.js\";\n"
+      }
+    },
+    {
+      name: "vision publicly re-exporting its internal construction capability",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/index.ts": "export * from \"./internal-artifact-construction.js\";\n"
+      }
+    },
+
+    {
       name: "an unmapped new project package",
       expectedCode: "UNMAPPED_PACKAGE",
       files: {
