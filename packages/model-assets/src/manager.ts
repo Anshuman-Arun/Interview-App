@@ -740,7 +740,7 @@ export class ModelAssetManager {
       paths.temporary,
       key + "-" + randomUUID()
     );
-    await this.reserveCapacity(paths, reservationBytes);
+    await this.reserveCapacity(paths, reservationBytes, signal);
     let published = false;
     let reservationHeld = true;
 
@@ -1014,9 +1014,19 @@ export class ModelAssetManager {
     return total;
   }
 
-  private async reserveCapacity(paths: CachePaths, requestedBytes: number): Promise<void> {
+  private async reserveCapacity(
+    paths: CachePaths,
+    requestedBytes: number,
+    signal: AbortSignal
+  ): Promise<void> {
     await this.withCapacityGate(async () => {
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+      }
       await validateCachePaths(paths);
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+      }
       const reservedProjection = this.reservedBytes + requestedBytes;
       if (!Number.isSafeInteger(reservedProjection)) {
         throw new ModelAssetError(
@@ -1027,6 +1037,9 @@ export class ModelAssetManager {
 
       if (this.maxCacheBytes !== undefined) {
         const usedBytes = await this.managedCacheBytes(paths);
+        if (signal.aborted) {
+          throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+        }
         const projected = usedBytes + reservedProjection;
         if (!Number.isSafeInteger(projected) || projected > this.maxCacheBytes) {
           throw new ModelAssetError(
@@ -1037,9 +1050,15 @@ export class ModelAssetManager {
       }
 
       const activeStagingBytes = await this.activeStagingBytes();
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+      }
       const alreadyMaterialized = Math.min(activeStagingBytes, this.reservedBytes);
       const outstandingReservation = reservedProjection - alreadyMaterialized;
       const available = await availableDiskBytes(paths.root);
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+      }
       if (available !== undefined && available < BigInt(outstandingReservation)) {
         throw new ModelAssetError(
           "INSUFFICIENT_DISK_SPACE",
