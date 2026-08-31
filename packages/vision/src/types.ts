@@ -652,7 +652,7 @@ export const ImageSnapshotInputSchema = z.preprocess(
     sourceRevision: SafeBoardRevisionSchema,
     capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
     captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-    mimeType: z.string().min(1).max(128),
+    mimeType: ImageMimeTypeSchema,
     declaredWidth: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth).optional(),
     declaredHeight: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight).optional(),
     encodedBytes: z.custom<Uint8Array>((value) => {
