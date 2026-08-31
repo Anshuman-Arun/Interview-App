@@ -59,8 +59,12 @@ function normalizeLimits(limits: unknown): Readonly<ImageValidationLimits> {
 }
 
 function inspectPngHeader(bytes: Buffer): PngHeader {
-  if (bytes.length < 29 || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+  if (bytes.length < PNG_SIGNATURE.length
+      || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
     throw new VisionPreprocessingError("MIME_MISMATCH", "Image bytes do not match the declared PNG MIME type");
+  }
+  if (bytes.length < 29) {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "PNG header is truncated");
   }
 
   const ihdrLength = bytes.readUInt32BE(8);
