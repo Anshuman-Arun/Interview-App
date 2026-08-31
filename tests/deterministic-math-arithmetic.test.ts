@@ -50,6 +50,20 @@ describe("deterministic arithmetic verifiers", () => {
       claim: { kind: "DIVISIBILITY", divisor: "4", dividend: integer("10") }
     });
     expect(divisibility.status).toBe("CONTRADICTED");
+
+    const zeroDividesZero = await verifyJson(verifier, {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: { kind: "DIVISIBILITY", divisor: "0", dividend: integer("0") }
+    });
+    expect(zeroDividesZero.status).toBe("VERIFIED");
+
+    const zeroDividesNonzero = await verifyJson(verifier, {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: { kind: "DIVISIBILITY", divisor: "0", dividend: integer("1") }
+    });
+    expect(zeroDividesNonzero.status).toBe("CONTRADICTED");
   });
 
   it("abstains on invalid modular input and unsupported prose", async () => {
