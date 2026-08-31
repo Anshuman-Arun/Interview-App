@@ -1795,6 +1795,23 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).rejects.toMatchObject({ code: "CANCELLED" });
   });
 
+  it("does not invoke caller timing callbacks for work already cancelled", async () => {
+    const source = snapshot(makePng(2, 2));
+    const controller = new AbortController();
+    controller.abort();
+    let clockCalls = 0;
+
+    await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
+      signal: controller.signal,
+      now: () => {
+        clockCalls += 1;
+        return 1;
+      }
+    })).rejects.toMatchObject({ code: "CANCELLED" });
+
+    expect(clockCalls).toBe(0);
+  });
+
   it("honors cancellation before work and during longer pixel loops", async () => {
     const source = snapshot(makePng(256, 256));
     const alreadyCancelled = new AbortController();
