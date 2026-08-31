@@ -84,6 +84,30 @@ export async function initializeCachePaths(rootInput: string): Promise<CachePath
   }
 }
 
+export async function validateCachePaths(paths: CachePaths): Promise<void> {
+  let rootStat: Stats;
+  try {
+    rootStat = await lstat(paths.root);
+  } catch (error) {
+    throw new ModelAssetError(
+      "INVALID_CACHE_ROOT",
+      "Configured asset cache root is no longer available.",
+      { cause: error }
+    );
+  }
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+    throw new ModelAssetError(
+      "INVALID_CACHE_ROOT",
+      "Configured asset cache root is no longer a regular directory."
+    );
+  }
+
+  assertPathInsideRoot(paths.root, paths.artifacts);
+  assertPathInsideRoot(paths.root, paths.temporary);
+  await ensureSafeDirectory(paths.root, paths.artifacts);
+  await ensureSafeDirectory(paths.root, paths.temporary);
+}
+
 export async function ensureSafeDirectory(root: string, directory: string): Promise<void> {
   assertPathInsideRoot(root, directory);
   const relative = path.relative(root, directory);
@@ -148,6 +172,7 @@ export async function removeEntryInsideRoot(root: string, candidate: string): Pr
       await unlink(candidate);
       return;
     } catch (error) {
+      if (errnoCode(error) === "ENOENT") return;
       throw new ModelAssetError("IO_ERROR", "Unable to remove cache file entry.", { cause: error });
     }
   }
@@ -159,6 +184,7 @@ export async function removeEntryInsideRoot(root: string, candidate: string): Pr
     }
   } catch (error) {
     if (error instanceof ModelAssetError) throw error;
+    if (errnoCode(error) === "ENOENT") return;
     throw new ModelAssetError("IO_ERROR", "Unable to enumerate cache directory for removal.", { cause: error });
   }
   try {
