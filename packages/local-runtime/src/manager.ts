@@ -1,5 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { sanitizeDiagnosticRecord, sanitizeDiagnosticText } from "../../diagnostics/src/index.js";
+import { join } from "node:path";
+import { performance } from "node:perf_hooks";
+import { DIAGNOSTIC_SANITIZATION_LIMITS, sanitizeDiagnosticRecord, sanitizeDiagnosticText } from "../../diagnostics/src/index.js";
 import { BoundedLineBuffer, BoundedLineFramer } from "./buffer.js";
 import { buildLocalEnvironment, type BuiltLocalEnvironment } from "./environment.js";
 import type {
@@ -27,6 +29,9 @@ const MAX_TIMER_MS = 2_147_483_647;
 const PROCESS_TREE_POLL_INTERVAL_MS = 10;
 const MAX_CAPABILITIES = 128;
 const MAX_STDERR_TAIL_LINES = 20;
+const MAX_OUTPUT_LINES = 10_000;
+const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_OUTPUT_LINE_BYTES = 256 * 1024;
 const COMPONENT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
 export type LocalRuntimeErrorCode =
@@ -61,20 +66,19 @@ interface ComponentRecord {
   readonly definition: LocalComponentDefinition;
   readonly environment: BuiltLocalEnvironment;
   readonly registrationIndex: number;
-  readonly stdout: BoundedLineBuffer;
-  readonly stderr: BoundedLineBuffer;
+  stdout: BoundedLineBuffer;
+  stderr: BoundedLineBuffer;
   readonly stdoutListeners: Set<(line: string) => void>;
   readonly exitListeners: Set<(exit: InternalExitRecord) => void>;
   state: LocalComponentState;
   child: ChildProcessWithoutNullStreams | undefined;
   residualProcess: ChildProcessWithoutNullStreams | undefined;
-  stdoutFramer?: BoundedLineFramer;
-  stderrFramer?: BoundedLineFramer;
-  startedAt?: string;
+  startedAt: string | undefined;
   readyAt: string | undefined;
   readinessDetail: string | undefined;
   handshake: LocalComponentHandshake | undefined;
-  lastExit?: InternalExitRecord;
+  lastExit: InternalExitRecord | undefined;
+  lastExitProcess: ChildProcessWithoutNullStreams | undefined;
   failure: LocalFailureSnapshot | undefined;
   restartCount: number;
   restartBudgetUsed: number;
@@ -92,12 +96,14 @@ export class LocalRuntimeManager {
   private readonly now: () => Date;
   private readonly fetchImpl: typeof globalThis.fetch;
   private readonly platform: NodeJS.Platform;
+  private stopAllPromise: Promise<readonly LocalStopResult[]> | undefined;
 
   public constructor(options: LocalRuntimeManagerOptions = {}) {
     this.parentEnvironment = options.parentEnvironment ?? process.env;
     this.now = options.now ?? (() => new Date());
     this.fetchImpl = options.fetch ?? globalThis.fetch;
     this.platform = process.platform;
+    this.stopAllPromise = undefined;
   }
 
   public register(definition: LocalComponentDefinition): LocalComponentStatus {
@@ -130,9 +136,12 @@ export class LocalRuntimeManager {
       state: "STOPPED",
       child: undefined,
       residualProcess: undefined,
+      startedAt: undefined,
       readyAt: undefined,
       readinessDetail: undefined,
       handshake: undefined,
+      lastExit: undefined,
+      lastExitProcess: undefined,
       failure: undefined,
       operationAbort: undefined,
       startPromise: undefined,
@@ -190,16 +199,20 @@ export class LocalRuntimeManager {
     return promise;
   }
 
-  public async stop(componentId: string): Promise<LocalStopResult> {
+  public stop(componentId: string): Promise<LocalStopResult> {
     const record = this.requireRecord(componentId);
     if (record.stopPromise !== undefined) return record.stopPromise;
-    const promise = this.runStop(record);
+    const promise = Promise.resolve().then(() => this.runStop(record));
     record.stopPromise = promise;
-    try {
-      return await promise;
-    } finally {
-      if (record.stopPromise === promise) record.stopPromise = undefined;
-    }
+    void promise.then(
+      () => {
+        if (record.stopPromise === promise) record.stopPromise = undefined;
+      },
+      () => {
+        if (record.stopPromise === promise) record.stopPromise = undefined;
+      }
+    );
+    return promise;
   }
 
   public async restart(componentId: string): Promise<LocalComponentStatus> {
@@ -241,7 +254,22 @@ export class LocalRuntimeManager {
     return this.snapshot(record);
   }
 
-  public async stopAll(): Promise<readonly LocalStopResult[]> {
+  public stopAll(): Promise<readonly LocalStopResult[]> {
+    if (this.stopAllPromise !== undefined) return this.stopAllPromise;
+    const promise = Promise.resolve().then(() => this.runStopAll());
+    this.stopAllPromise = promise;
+    void promise.then(
+      () => {
+        if (this.stopAllPromise === promise) this.stopAllPromise = undefined;
+      },
+      () => {
+        if (this.stopAllPromise === promise) this.stopAllPromise = undefined;
+      }
+    );
+    return promise;
+  }
+
+  private async runStopAll(): Promise<readonly LocalStopResult[]> {
     const records = [...this.components.values()].sort((left, right) => right.registrationIndex - left.registrationIndex);
     const results: LocalStopResult[] = [];
     const failures: unknown[] = [];
