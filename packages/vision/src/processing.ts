@@ -557,16 +557,47 @@ export function planDownscale(dimensions: PixelDimensions, envelope: DownscaleEn
     });
   }
 
-  let resultWidth = Math.min(limits.maxWidth, Math.max(1, Math.floor(source.width * scale)));
-  let resultHeight = Math.min(limits.maxHeight, Math.max(1, Math.floor(source.height * scale)));
+  let resultWidth = Math.min(limits.maxWidth, Math.max(1, Math.round(source.width * scale)));
+  let resultHeight = Math.min(limits.maxHeight, Math.max(1, Math.round(source.height * scale)));
   const plannedPixels = resultWidth * resultHeight;
   if (!Number.isSafeInteger(plannedPixels)) throw new RangeError("Planned pixel count exceeds safe integer range");
   if (plannedPixels > limits.maxPixels) {
-    if (resultWidth >= resultHeight) {
-      resultWidth = Math.max(1, Math.floor(limits.maxPixels / resultHeight));
-    } else {
-      resultHeight = Math.max(1, Math.floor(limits.maxPixels / resultWidth));
+    const candidates: Array<readonly [number, number]> = [];
+    const widthForCurrentHeight = Math.floor(limits.maxPixels / resultHeight);
+    if (widthForCurrentHeight >= 1) {
+      candidates.push([Math.min(resultWidth, widthForCurrentHeight), resultHeight]);
     }
+    const heightForCurrentWidth = Math.floor(limits.maxPixels / resultWidth);
+    if (heightForCurrentWidth >= 1) {
+      candidates.push([resultWidth, Math.min(resultHeight, heightForCurrentWidth)]);
+    }
+    candidates.push([Math.min(resultWidth, limits.maxPixels), 1]);
+    candidates.push([1, Math.min(resultHeight, limits.maxPixels)]);
+
+    const validCandidates = candidates.filter(([width, height]) =>
+      width >= 1
+      && height >= 1
+      && width <= limits.maxWidth
+      && height <= limits.maxHeight
+      && Number.isSafeInteger(width * height)
+      && width * height <= limits.maxPixels
+    );
+    if (validCandidates.length === 0) {
+      throw new RangeError("Downscale plan cannot satisfy the requested pixel envelope");
+    }
+
+    validCandidates.sort((left, right) => {
+      const leftError = Math.abs(left[0] / source.width - left[1] / source.height);
+      const rightError = Math.abs(right[0] / source.width - right[1] / source.height);
+      if (leftError !== rightError) return leftError - rightError;
+      const leftPixels = left[0] * left[1];
+      const rightPixels = right[0] * right[1];
+      if (leftPixels !== rightPixels) return rightPixels - leftPixels;
+      return right[0] - left[0] || right[1] - left[1];
+    });
+    const best = validCandidates[0];
+    if (best === undefined) throw new RangeError("Downscale plan candidate selection failed");
+    [resultWidth, resultHeight] = best;
   }
 
   const finalPixels = resultWidth * resultHeight;
