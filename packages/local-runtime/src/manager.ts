@@ -1039,9 +1039,13 @@ function inspectManagerOptions(options: unknown): LocalRuntimeManagerOptions {
   );
   const parentEnvironment = runtimeOptionValue(descriptors, "parentEnvironment");
   if (parentEnvironment !== undefined) {
-    if (typeof parentEnvironment !== "object"
-        || parentEnvironment === null
-        || safeRuntimeArrayCheck(parentEnvironment)) {
+    if (typeof parentEnvironment !== "object" || parentEnvironment === null) {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment must be an object");
+    }
+    if (utilTypes.isProxy(parentEnvironment)) {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment could not be inspected");
+    }
+    if (safeRuntimeArrayCheck(parentEnvironment)) {
       throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment must be an object");
     }
   }
