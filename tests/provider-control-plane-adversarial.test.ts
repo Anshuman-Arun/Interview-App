@@ -368,16 +368,16 @@ describe("provider configuration secret exclusion", () => {
     expect(firstMaterial).not.toContain("credential-two");
   });
 
-  it("keeps negative zero distinct from positive zero in fingerprint material", () => {
+  it("normalizes negative zero for JSON-safe persistence and fingerprinting", () => {
     const positive = settingsConfiguration({ threshold: 0 });
     const negative = settingsConfiguration({ threshold: -0 });
+    const parsedNegative = validateProviderConfiguration(negative);
 
-    expect(Object.is(
-      validateProviderConfiguration(positive).settings?.threshold,
-      validateProviderConfiguration(negative).settings?.threshold
-    )).toBe(false);
+    expect(Object.is(parsedNegative.settings?.threshold, -0)).toBe(false);
+    expect(parsedNegative.settings?.threshold).toBe(0);
+    expect(JSON.parse(JSON.stringify(parsedNegative.settings))).toEqual({ threshold: 0 });
     expect(createProviderConfigurationFingerprintMaterial(positive))
-      .not.toBe(createProviderConfigurationFingerprintMaterial(negative));
+      .toBe(createProviderConfigurationFingerprintMaterial(negative));
   });
 });
 

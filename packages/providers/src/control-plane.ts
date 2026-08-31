@@ -1942,10 +1942,7 @@ function isSafeProviderConfigurationArray(
 }
 
 function canonicalizeSafeValue(value: SafeProviderConfigurationValue): string {
-  if (typeof value === "number") {
-    return Object.is(value, -0) ? "-0" : JSON.stringify(value);
-  }
-  if (value === null || typeof value === "boolean") {
+  if (value === null || typeof value === "boolean" || typeof value === "number") {
     return JSON.stringify(value);
   }
   if (typeof value === "string") return JSON.stringify(value);

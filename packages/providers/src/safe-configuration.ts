@@ -396,7 +396,7 @@ function inspectConfigurationValue(
   if (value === null || typeof value === "boolean") return value;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) failMalformedConfiguration();
-    return value;
+    return Object.is(value, -0) ? 0 : value;
   }
   if (typeof value === "string") {
     if (value.length > PROVIDER_CONFIGURATION_LIMITS.maxStringLength) {
