@@ -1,3 +1,4 @@
+import { DIAGNOSTIC_SANITIZATION_LIMITS } from "../../diagnostics/src/index.js";
 import type { LocalEnvironmentDefinition } from "./types.js";
 
 export const DEFAULT_POSIX_INHERITED_ENVIRONMENT_KEYS = Object.freeze([
@@ -91,24 +92,41 @@ function addSecretRedactionVariants(target: Set<string>, value: string): void {
   if (value.length === 0) return;
 
   const candidates = new Set<string>([value]);
-  for (const fragment of value.split(/\r\n|\r|\n/gu)) {
+  let start = 0;
+  let physicalLines = 1;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code !== 0x0a && code !== 0x0d) continue;
+    const fragment = value.slice(start, index);
     if (fragment.length > 0) candidates.add(fragment);
+    if (code === 0x0d && value.charCodeAt(index + 1) === 0x0a) index += 1;
+    start = index + 1;
+    physicalLines += 1;
+    if (physicalLines > DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems) {
+      throw new Error(
+        `Secret environment values may contain at most ${String(DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems)} physical lines`
+      );
+    }
   }
+  const tail = value.slice(start);
+  if (tail.length > 0) candidates.add(tail);
 
   for (const candidate of [...candidates]) {
-    try {
-      const encoded = JSON.stringify(candidate);
-      if (typeof encoded === "string" && encoded.length >= 2) {
-        const inner = encoded.slice(1, -1);
-        if (inner.length > 0) candidates.add(inner);
-      }
-    } catch {
-      // Strings are JSON-serializable; this is defensive only.
+    const encoded = JSON.stringify(candidate);
+    if (encoded.length >= 2) {
+      const inner = encoded.slice(1, -1);
+      if (inner.length > 0) candidates.add(inner);
     }
   }
 
   for (const candidate of candidates) {
-    if (candidate.length > 0) target.add(candidate);
+    if (candidate.length === 0 || target.has(candidate)) continue;
+    if (target.size >= DIAGNOSTIC_SANITIZATION_LIMITS.maxNodes) {
+      throw new Error(
+        `Runtime secret redaction may contain at most ${String(DIAGNOSTIC_SANITIZATION_LIMITS.maxNodes)} patterns`
+      );
+    }
+    target.add(candidate);
   }
 }
 
