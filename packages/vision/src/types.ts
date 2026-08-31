@@ -1,5 +1,30 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { BoardRevisionSchema, type BoardRevision } from "../../domain/src/index.js";
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+interface PayloadIntegrityMetadata {
+  readonly width: number;
+  readonly height: number;
+  readonly byteSize: number;
+  readonly contentDigest: string;
+}
+
+function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffer): void {
+  if (bytes.length !== metadata.byteSize) throw new RangeError("Image payload byte size does not match metadata");
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (digest !== metadata.contentDigest) throw new RangeError("Image payload digest does not match metadata");
+  if (bytes.length < 24 || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    throw new RangeError("Image payload is not a PNG");
+  }
+  if (bytes.readUInt32BE(8) !== 13 || bytes.toString("ascii", 12, 16) !== "IHDR") {
+    throw new RangeError("Image payload has an invalid PNG header");
+  }
+  if (bytes.readUInt32BE(16) !== metadata.width || bytes.readUInt32BE(20) !== metadata.height) {
+    throw new RangeError("Image payload dimensions do not match metadata");
+  }
+}
 
 export const ImageMimeTypeSchema = z.literal("image/png");
 export type ImageMimeType = z.infer<typeof ImageMimeTypeSchema>;
@@ -112,8 +137,11 @@ export class ImageSnapshot {
   public readonly metadata: ImageSnapshotMetadata;
 
   public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array) {
-    this.metadata = Object.freeze(ImageSnapshotMetadataSchema.parse(metadata));
-    this.#bytes = Buffer.from(bytes);
+    const parsed = ImageSnapshotMetadataSchema.parse(metadata);
+    const copiedBytes = Buffer.from(bytes);
+    assertPayloadIntegrity(parsed, copiedBytes);
+    this.metadata = Object.freeze(parsed);
+    this.#bytes = copiedBytes;
   }
 
   public readBytes(): Uint8Array {
@@ -131,11 +159,13 @@ export class VisionImageArtifact {
 
   public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array) {
     const parsed = VisionImageArtifactMetadataSchema.parse(metadata);
+    const copiedBytes = Buffer.from(bytes);
+    assertPayloadIntegrity(parsed, copiedBytes);
     this.metadata = Object.freeze({
       ...parsed,
       coordinateTransform: Object.freeze({ ...parsed.coordinateTransform })
     });
-    this.#bytes = Buffer.from(bytes);
+    this.#bytes = copiedBytes;
   }
 
   public readBytes(): Uint8Array {
@@ -164,8 +194,11 @@ export class ImagePayloadReference {
   public readonly metadata: ImagePayloadReferenceMetadata;
 
   public constructor(metadata: ImagePayloadReferenceMetadata, bytes: Uint8Array) {
-    this.metadata = Object.freeze(ImagePayloadReferenceMetadataSchema.parse(metadata));
-    this.#bytes = Buffer.from(bytes);
+    const parsed = ImagePayloadReferenceMetadataSchema.parse(metadata);
+    const copiedBytes = Buffer.from(bytes);
+    assertPayloadIntegrity(parsed, copiedBytes);
+    this.metadata = Object.freeze(parsed);
+    this.#bytes = copiedBytes;
   }
 
   public readBytes(): Uint8Array {
