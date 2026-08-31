@@ -106,7 +106,11 @@ function sharedCacheStateFor(paths: CachePaths): SharedCacheState {
   const identity = [
     paths.root,
     String(paths.rootDevice),
-    String(paths.rootInode)
+    String(paths.rootInode),
+    String(paths.artifactsDevice),
+    String(paths.artifactsInode),
+    String(paths.temporaryDevice),
+    String(paths.temporaryInode)
   ].join("\0");
   const existing = sharedCacheStates.get(identity);
   if (existing !== undefined) return existing;
