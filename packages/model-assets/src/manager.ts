@@ -1485,10 +1485,12 @@ export class ModelAssetManager {
       const alreadyMaterialized = Math.min(activeStagingBytes, shared.reservedBytes);
       const unreservedMaterializedBytes = activeStagingBytes - alreadyMaterialized;
 
-      const activeFiniteLimits = [...shared.activeCacheLimitCounts.keys()];
-      const effectiveMaxCacheBytes = activeFiniteLimits.length === 0
-        ? undefined
-        : Math.min(...activeFiniteLimits);
+      let effectiveMaxCacheBytes: number | undefined;
+      for (const activeLimit of shared.activeCacheLimitCounts.keys()) {
+        if (effectiveMaxCacheBytes === undefined || activeLimit < effectiveMaxCacheBytes) {
+          effectiveMaxCacheBytes = activeLimit;
+        }
+      }
       if (effectiveMaxCacheBytes !== undefined) {
         const usedBytes = await this.managedCacheBytes(paths);
         if (signal.aborted) {
