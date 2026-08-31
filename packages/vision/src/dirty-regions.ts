@@ -22,6 +22,15 @@ export const DirtyRegionInputSchema = z.object({
 }).strict();
 export type DirtyRegionInput = z.infer<typeof DirtyRegionInputSchema>;
 
+const DIRTY_REGION_CONFIG_FIELDS = new Set([
+  "paddingPixels",
+  "maxInputRegions",
+  "maxRegionCount",
+  "maxTotalAnalyzedArea",
+  "fullFrameFallbackAreaRatio"
+]);
+const DIRTY_REGION_FIELDS = new Set(["x", "y", "width", "height"]);
+
 const DirtyRegionConfigSchema = z.object({
   paddingPixels: z.number().int().nonnegative().max(100_000),
   maxInputRegions: z.number().int().positive().max(2048),
@@ -91,7 +100,7 @@ function normalizeConfig(config: unknown) {
     ownConfig = Object.freeze({});
   } else {
     try {
-      ownConfig = snapshotOwnEnumerableRecord(config, "Dirty-region planner configuration");
+      ownConfig = snapshotOwnEnumerableRecord(config, "Dirty-region planner configuration", DIRTY_REGION_CONFIG_FIELDS);
     } catch {
       throw new RangeError("Dirty-region planner configuration could not be read safely");
     }
@@ -136,7 +145,7 @@ function fullFrameFallback(
 export function rasterizeDirtyRegion(regionInput: DirtyRegionInput): ImageRect {
   let ownRegion: Readonly<Record<string, unknown>>;
   try {
-    ownRegion = snapshotOwnEnumerableRecord(regionInput, "Dirty region");
+    ownRegion = snapshotOwnEnumerableRecord(regionInput, "Dirty region", DIRTY_REGION_FIELDS);
   } catch {
     throw new VisionPreprocessingError(
       "INVALID_RECTANGLE",
