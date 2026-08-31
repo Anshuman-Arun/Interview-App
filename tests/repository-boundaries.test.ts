@@ -82,6 +82,20 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "browser importing the local runtime process manager",
+      expectedCode: "BROWSER_PROCESS_CAPABILITY",
+      files: {
+        "apps/web/src/bad.ts": "import \"../../../packages/local-runtime/src/index.js\";\n"
+      }
+    },
+    {
+      name: "browser importing child process directly",
+      expectedCode: "BROWSER_PROCESS_CAPABILITY",
+      files: {
+        "apps/web/src/bad.ts": "import { spawn } from \"node:child_process\";\nspawn(\"echo\");\n"
+      }
+    },
+    {
       name: "provider code gaining process-backed tool execution",
       expectedCode: "PROVIDER_TOOL_CAPABILITY",
       files: {
