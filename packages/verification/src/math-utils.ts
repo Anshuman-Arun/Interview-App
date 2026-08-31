@@ -35,8 +35,8 @@ function decimalDigitCount(value: bigint): number {
 
 const CANONICAL_INTEGER_PATTERN = /^(?:0|-?[1-9]\d*)$/u;
 
-export function isCanonicalIntegerString(value: string): boolean {
-  return CANONICAL_INTEGER_PATTERN.test(value);
+export function isCanonicalIntegerString(value: unknown): value is string {
+  return typeof value === "string" && CANONICAL_INTEGER_PATTERN.test(value);
 }
 
 function parseCanonicalInteger(
