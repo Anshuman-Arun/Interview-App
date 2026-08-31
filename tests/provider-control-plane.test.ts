@@ -327,11 +327,21 @@ describe("provider configuration and secret boundary", () => {
 
     const persistable = toPersistableProviderConfiguration(first);
     expect(persistable).not.toHaveProperty("credentialRef");
+    expect(persistable).toMatchObject({ credentialPurpose: "API_KEY" });
     expect(JSON.stringify(persistable)).not.toContain("gemini-primary");
     expect(createProviderConfigurationFingerprintMaterial(first))
       .toBe(createProviderConfigurationFingerprintMaterial(second));
     expect(createProviderConfigurationFingerprintMaterial(first))
       .not.toContain("gemini-primary");
+
+    const tokenCredential = {
+      ...GEMINI_CONFIGURATION,
+      credentialRef: { id: "gemini-token", purpose: "TOKEN" as const }
+    };
+    expect(toPersistableProviderConfiguration(tokenCredential))
+      .toMatchObject({ credentialPurpose: "TOKEN" });
+    expect(createProviderConfigurationFingerprintMaterial(first))
+      .not.toBe(createProviderConfigurationFingerprintMaterial(tokenCredential));
   });
 
   it("rejects disabled configurations deterministically", () => {
