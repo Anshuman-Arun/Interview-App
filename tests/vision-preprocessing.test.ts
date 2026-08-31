@@ -701,6 +701,30 @@ describe("vision snapshot validation and hashing", () => {
     )).toThrowError(RangeError);
   });
 
+  it("rejects unknown snapshot fields before invoking their getters", () => {
+    let getterCalls = 0;
+    const input: Record<string, unknown> = {
+      snapshotId: "unknown-getter",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: makePng(1, 1)
+    };
+    Object.defineProperty(input, "unexpected", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error("unexpected getter must not run");
+      }
+    });
+
+    expect(() => createValidatedImageSnapshot(
+      input as Parameters<typeof createValidatedImageSnapshot>[0]
+    )).toThrowError(VisionPreprocessingError);
+    expect(getterCalls).toBe(0);
+  });
+
   it("rejects null image limit overrides rather than silently using defaults", () => {
     expect(() => createValidatedImageSnapshot({
       snapshotId: "null-limits",
@@ -1843,6 +1867,16 @@ describe("vision runtime schema boundaries", () => {
     })).toThrow(TypeError);
   });
 
+  it("bounds generic object-field enumeration before validation", () => {
+    const diagnostics: Record<string, unknown> = {};
+    for (let index = 0; index < 65; index += 1) {
+      diagnostics[`extra${String(index)}`] = index;
+    }
+    expect(() => createVisionProcessingDiagnostics(
+      diagnostics as Parameters<typeof createVisionProcessingDiagnostics>[0]
+    )).toThrow();
+  });
+
   it("rejects invalid preprocessing error codes at runtime", () => {
     expect(() => new VisionPreprocessingError(
       "NOT_A_REAL_VISION_ERROR" as never,
@@ -1852,6 +1886,33 @@ describe("vision runtime schema boundaries", () => {
 });
 
 describe("vision diagnostics validation", () => {
+  it("rejects unknown diagnostic getters without executing them", () => {
+    let getterCalls = 0;
+    const diagnostic: Record<string, unknown> = {
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS"
+    };
+    Object.defineProperty(diagnostic, "rawImage", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return Buffer.alloc(1);
+      }
+    });
+
+    expect(() => createVisionProcessingDiagnostics(
+      diagnostic as Parameters<typeof createVisionProcessingDiagnostics>[0]
+    )).toThrow();
+    expect(getterCalls).toBe(0);
+  });
+
   it("rejects unknown fields and unsafe durations instead of silently dropping them", () => {
     expect(() => createVisionProcessingDiagnostics({
       operation: "CROP",
