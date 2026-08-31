@@ -8,6 +8,7 @@ import { ModelAssetError } from "./types.js";
 export const MAX_DOWNLOAD_TIMEOUT_MS = 2_147_483_647;
 export const MAX_DOWNLOAD_REDIRECTS = 20;
 const MAX_ARTIFACT_URL_LENGTH = 2_048;
+const MAX_RESPONSE_HEADER_BYTES = 16 * 1024;
 
 export interface ArtifactDownloadOptions {
   readonly maxBytes: number;
@@ -119,7 +120,8 @@ async function downloadResponseToFile(
         "accept-encoding": "identity",
         "user-agent": "interview-app-model-assets/1"
       },
-      signal: options.signal
+      signal: options.signal,
+      maxHeaderSize: MAX_RESPONSE_HEADER_BYTES
     }, (response) => {
       void (async () => {
         try {
