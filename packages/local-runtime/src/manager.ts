@@ -1898,9 +1898,13 @@ function isOwnedProcessTreeAlive(
 }
 
 function isProcessMissingError(error: unknown): boolean {
-  return error instanceof Error
-    && "code" in error
-    && (error as NodeJS.ErrnoException).code === "ESRCH";
+  if (typeof error !== "object" || error === null) return false;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(error, "code");
+    return descriptor !== undefined && "value" in descriptor && descriptor.value === "ESRCH";
+  } catch {
+    return false;
+  }
 }
 
 function terminationTimeout(definition: LocalComponentDefinition): number {
@@ -2043,6 +2047,14 @@ interface PreRedactionState {
   remainingNodes: number;
 }
 
+function safeIsErrorObject(value: object): boolean {
+  try {
+    return value instanceof Error;
+  } catch {
+    return false;
+  }
+}
+
 function preRedactDiagnosticValue(
   value: unknown,
   secretValues: readonly string[],
@@ -2093,13 +2105,14 @@ function preRedactDiagnosticValue(
     } catch {
       return "[UNINSPECTABLE_OBJECT]";
     }
-    if (prototype !== Object.prototype && prototype !== null && !(value instanceof Error)) {
+    const errorObject = safeIsErrorObject(value);
+    if (prototype !== Object.prototype && prototype !== null && !errorObject) {
       return "[UNSUPPORTED_OBJECT]";
     }
 
     const output: Record<string, unknown> = {};
     const entries = Object.entries(descriptors)
-      .filter(([, descriptor]) => descriptor.enumerable === true || value instanceof Error)
+      .filter(([, descriptor]) => descriptor.enumerable === true || errorObject)
       .slice(0, DIAGNOSTIC_SANITIZATION_LIMITS.maxObjectEntries);
     for (const [key, descriptor] of entries) {
       if (key === "__proto__" || key === "prototype" || key === "constructor") continue;
