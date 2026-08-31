@@ -177,12 +177,19 @@ export function mathFailure(
   if (error instanceof BoundedMathError) {
     const resource = error.code === "INTEGER_LIMIT_EXCEEDED"
       || error.code === "INTERMEDIATE_LIMIT_EXCEEDED"
+      || error.code === "COMBINATORIAL_LIMIT_EXCEEDED"
       || error.code === "CONTAINER_LIMIT_EXCEEDED";
+    const malformed = error.code === "INVALID_INTEGER"
+      || error.code === "INVALID_MODULUS"
+      || error.code === "INVALID_DIVISOR"
+      || error.code === "INVALID_COMBINATORIAL_ARGUMENT"
+      || error.code === "INVALID_PROBABILITY"
+      || error.code === "INVALID_EXPRESSION";
     return result(
       "UNRESOLVED",
       interpretationConfidence,
       verifier,
-      resource ? "RESOURCE_LIMIT" : "ARITHMETIC_UNDEFINED",
+      resource ? "RESOURCE_LIMIT" : malformed ? "MALFORMED_INTERPRETATION" : "ARITHMETIC_UNDEFINED",
       error.message
     );
   }
