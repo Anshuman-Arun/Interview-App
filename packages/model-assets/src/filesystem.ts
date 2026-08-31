@@ -122,6 +122,15 @@ export async function validateCachePaths(paths: CachePaths): Promise<void> {
       { cause: error }
     );
   }
+  if (artifactsStat.isSymbolicLink()
+      || temporaryStat.isSymbolicLink()
+      || !artifactsStat.isDirectory()
+      || !temporaryStat.isDirectory()) {
+    throw new ModelAssetError(
+      "UNSAFE_PATH",
+      "Cache parent directories changed to unsafe filesystem entries."
+    );
+  }
   if (artifactsStat.dev !== temporaryStat.dev) {
     throw new ModelAssetError(
       "INVALID_CACHE_ROOT",
