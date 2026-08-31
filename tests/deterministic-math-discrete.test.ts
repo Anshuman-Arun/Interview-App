@@ -55,6 +55,7 @@ describe("finite recurrence verifier", () => {
       claim: { kind: "VALUE_AT_INDEX", index: 3, value: rational("2") }
     });
     expect(malformed.status).toBe("UNRESOLVED");
+    expect(malformed.reason).toContain("MALFORMED_INTERPRETATION");
   });
 });
 
@@ -82,6 +83,22 @@ describe("combinatorial counting verifier", () => {
       claim: { kind: "BINOMIAL", n: 10, k: 3, claimed: "121" }
     });
     expect(wrong.status).toBe("CONTRADICTED");
+  });
+
+  it("abstains on impossible two-set inclusion/exclusion inputs", async () => {
+    const result = await verifyJson(new CombinatorialCountingVerifier(), {
+      protocol: COMBINATORIAL_COUNTING_PROTOCOL,
+      protocolVersion: COMBINATORIAL_COUNTING_PROTOCOL_VERSION,
+      claim: {
+        kind: "INCLUSION_EXCLUSION_TWO",
+        leftCount: 2,
+        rightCount: 5,
+        intersectionCount: 3,
+        claimedUnionCount: "4"
+      }
+    });
+    expect(result.status).toBe("UNRESOLVED");
+    expect(result.reason).toContain("MALFORMED_INTERPRETATION");
   });
 
   it("abstains rather than treating unsupported counting operations as false", async () => {
