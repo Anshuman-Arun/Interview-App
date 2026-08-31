@@ -428,6 +428,18 @@ describe("vision snapshot validation and hashing", () => {
     expect(sameRevisionAndImage(left, right)).toBe(false);
   });
 
+  it("does not trust a caller-supplied array iterator to enforce deduplication bounds", () => {
+    const source = snapshot(makePng(1, 1));
+    class IteratorTrap extends Array<ImageSnapshot> {
+      public override *[Symbol.iterator](): ArrayIterator<ImageSnapshot> {
+        throw new Error("caller iterator must not run");
+      }
+    }
+    const images = new IteratorTrap();
+    images.push(source, source);
+    expect(deduplicateExactImagePayloads(images)).toEqual([source]);
+  });
+
   it("bounds public exact-dedup candidate collections", () => {
     const source = snapshot(makePng(1, 1));
     expect(() => deduplicateExactImagePayloads(Array.from({ length: 2049 }, () => source)))
