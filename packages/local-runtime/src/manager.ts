@@ -1197,10 +1197,28 @@ export class LocalRuntimeManager {
 }
 
 function snapshotParentEnvironment(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const descriptors = Object.getOwnPropertyDescriptors(parent);
+  let prototype: unknown;
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    prototype = Object.getPrototypeOf(parent);
+    descriptors = Object.getOwnPropertyDescriptors(parent);
+  } catch {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment could not be inspected");
+  }
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment must be a plain data object");
+  }
+
   const snapshot = Object.create(null) as NodeJS.ProcessEnv;
   for (const [key, descriptor] of Object.entries(descriptors)) {
-    if (!("value" in descriptor) || typeof descriptor.value !== "string") continue;
+    if (descriptor.enumerable !== true) continue;
+    if (!("value" in descriptor)) {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment may not contain accessors");
+    }
+    if (descriptor.value === undefined) continue;
+    if (typeof descriptor.value !== "string") {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment values must be strings or undefined");
+    }
     snapshot[key] = descriptor.value;
   }
   return Object.freeze(snapshot);
