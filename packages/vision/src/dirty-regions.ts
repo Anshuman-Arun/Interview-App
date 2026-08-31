@@ -79,7 +79,7 @@ function compareRects(left: ImageRect, right: ImageRect): number {
     || compareNumber(left.width, right.width);
 }
 
-function normalizeConfig(config: DirtyRegionPlannerConfig | undefined) {
+function normalizeConfig(config: unknown) {
   if (config !== undefined && (typeof config !== "object" || config === null || Array.isArray(config))) {
     throw new RangeError("Dirty-region planner configuration must be an object");
   }
