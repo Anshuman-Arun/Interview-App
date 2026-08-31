@@ -125,8 +125,18 @@ describe("local model asset manager", () => {
         configurable: true,
         value: "polluted-variant"
       });
-      const parsed = AssetManifestSchema.parse(manifest);
+      const parsed = AssetManifestSchema.parse({
+        ...manifest,
+        license: { name: "MIT" },
+        sourceMetadata: { publisher: "fixture-publisher" }
+      });
       expect(parsed.variant).toBeUndefined();
+      expect(Object.getPrototypeOf(parsed)).toBeNull();
+      if (parsed.license === undefined || parsed.sourceMetadata === undefined) {
+        throw new Error("Expected parsed nested metadata.");
+      }
+      expect(Object.getPrototypeOf(parsed.license)).toBeNull();
+      expect(Object.getPrototypeOf(parsed.sourceMetadata)).toBeNull();
     } finally {
       if (previousVariant === undefined) {
         Reflect.deleteProperty(Object.prototype, "variant");
