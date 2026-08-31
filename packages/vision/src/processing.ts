@@ -335,7 +335,9 @@ export async function cropImage(
 export function planDownscale(dimensions: PixelDimensions, envelope: DownscaleEnvelope): DownscalePlan {
   const source = PixelDimensionsSchema.parse(dimensions);
   const limits = DownscaleEnvelopeSchema.parse(envelope);
-  const pixelScale = Math.sqrt(limits.maxPixels / (source.width * source.height));
+  const sourcePixels = source.width * source.height;
+  if (!Number.isSafeInteger(sourcePixels)) throw new RangeError("Source pixel count exceeds safe integer range");
+  const pixelScale = Math.sqrt(limits.maxPixels / sourcePixels);
   const scale = Math.min(1, limits.maxWidth / source.width, limits.maxHeight / source.height, pixelScale);
 
   if (scale >= 1) {
@@ -467,19 +469,22 @@ export async function downscaleImage(
   });
 }
 
-function axisPositions(length: number, tileSize: number, overlap: number): readonly number[] {
-  if (length <= tileSize) return Object.freeze([0]);
+function axisTileCount(length: number, tileSize: number, overlap: number): number {
+  if (length <= tileSize) return 1;
   const step = tileSize - overlap;
   if (step <= 0) throw new RangeError("Tile overlap must be smaller than both tile dimensions");
+  const count = 1 + Math.ceil((length - tileSize) / step);
+  if (!Number.isSafeInteger(count) || count <= 0) throw new RangeError("Tile axis count exceeds safe integer range");
+  return count;
+}
 
+function axisPositions(length: number, tileSize: number, overlap: number, count: number): readonly number[] {
+  if (count === 1) return Object.freeze([0]);
+  const step = tileSize - overlap;
+  const lastPosition = length - tileSize;
   const positions: number[] = [];
-  let position = 0;
-  while (true) {
-    positions.push(position);
-    if (position + tileSize >= length) break;
-    const next = Math.min(position + step, length - tileSize);
-    if (next <= position) break;
-    position = next;
+  for (let index = 0; index < count; index += 1) {
+    positions.push(index === count - 1 ? lastPosition : Math.min(index * step, lastPosition));
   }
   return Object.freeze(positions);
 }
@@ -491,12 +496,14 @@ export function planImageTiles(dimensions: PixelDimensions, config: TileConfig):
     throw new RangeError("Tile overlap must be smaller than tile width and tile height");
   }
 
-  const xPositions = axisPositions(source.width, safeConfig.tileWidth, safeConfig.overlap);
-  const yPositions = axisPositions(source.height, safeConfig.tileHeight, safeConfig.overlap);
-  const tileCount = xPositions.length * yPositions.length;
+  const xCount = axisTileCount(source.width, safeConfig.tileWidth, safeConfig.overlap);
+  const yCount = axisTileCount(source.height, safeConfig.tileHeight, safeConfig.overlap);
+  const tileCount = xCount * yCount;
   if (!Number.isSafeInteger(tileCount) || tileCount > safeConfig.maxTileCount) {
     throw new VisionPreprocessingError("TILE_LIMIT_EXCEEDED", "Tiling would exceed the configured maximum tile count");
   }
+  const xPositions = axisPositions(source.width, safeConfig.tileWidth, safeConfig.overlap, xCount);
+  const yPositions = axisPositions(source.height, safeConfig.tileHeight, safeConfig.overlap, yCount);
 
   const tiles: TilePlanItem[] = [];
   for (let row = 0; row < yPositions.length; row += 1) {
