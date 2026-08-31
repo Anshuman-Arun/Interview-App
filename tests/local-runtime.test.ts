@@ -285,6 +285,35 @@ describe("local worker lifecycle manager", () => {
     expect(runtime.getStatus("malformed").stdout.lines.join(" ")).toContain("{not-json");
   });
 
+  it("fails hanging readiness probes immediately when the child exits", async () => {
+    const custom = manager();
+    custom.register(definition("custom-exit-race", "crash", {
+      startupTimeoutMs: 500,
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => new Promise<never>(() => undefined)
+      }
+    }));
+
+    await expect(custom.start("custom-exit-race"))
+      .rejects.toMatchObject({ code: "PROCESS_EXITED" });
+
+    const http = manager({
+      fetch: (() => new Promise<Response>(() => undefined)) as typeof globalThis.fetch
+    });
+    http.register(definition("http-exit-race", "crash", {
+      startupTimeoutMs: 500,
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        intervalMs: 5
+      }
+    }));
+
+    await expect(http.start("http-exit-race"))
+      .rejects.toMatchObject({ code: "PROCESS_EXITED" });
+  });
+
   it("detects immediate crashes and invalid executables", async () => {
     const runtime = manager();
     runtime.register(definition("crash", "crash"));
