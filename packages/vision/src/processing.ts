@@ -19,6 +19,8 @@ import {
 
 const DEFAULT_MAX_OUTPUT_ENCODED_BYTES = 16 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 64 * 1024 * 1024;
+const HARD_MAX_OUTPUT_ENCODED_BYTES = 64 * 1024 * 1024;
+const HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 128 * 1024 * 1024;
 const COOPERATIVE_YIELD_ROWS = 16;
 
 const DownscaleEnvelopeSchema = z.object({
@@ -133,14 +135,20 @@ async function cooperativeYield(signal: AbortSignal | undefined, row: number): P
 }
 
 function maxOutputBytes(options: VisionProcessingOptions): number {
-  return positiveSafeInteger(options.maxOutputEncodedBytes ?? DEFAULT_MAX_OUTPUT_ENCODED_BYTES, "maxOutputEncodedBytes");
+  const value = positiveSafeInteger(options.maxOutputEncodedBytes ?? DEFAULT_MAX_OUTPUT_ENCODED_BYTES, "maxOutputEncodedBytes");
+  if (value > HARD_MAX_OUTPUT_ENCODED_BYTES) throw new RangeError("maxOutputEncodedBytes exceeds the package hard cap");
+  return value;
 }
 
 function maxTotalOutputBytes(options: VisionProcessingOptions): number {
-  return positiveSafeInteger(
+  const value = positiveSafeInteger(
     options.maxTotalOutputEncodedBytes ?? DEFAULT_MAX_TOTAL_OUTPUT_ENCODED_BYTES,
     "maxTotalOutputEncodedBytes"
   );
+  if (value > HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES) {
+    throw new RangeError("maxTotalOutputEncodedBytes exceeds the package hard cap");
+  }
+  return value;
 }
 
 function sourceDescriptor(source: VisionRasterSource): SourceDescriptor {
