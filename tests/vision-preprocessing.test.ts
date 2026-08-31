@@ -1,3 +1,4 @@
+import { crc32 } from "node:zlib";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { BoardRevisionSchema } from "../packages/domain/src/index.js";
@@ -51,6 +52,27 @@ function makePng(
     }
   }
   return PNG.sync.write({ width, height, data }, { colorType: 6, inputColorType: 6, bitDepth: 8 });
+}
+
+function makePngChunk(type: string, data: Uint8Array = new Uint8Array()): Buffer {
+  if (!/^[A-Za-z]{4}$/u.test(type)) throw new Error("PNG chunk type must contain four ASCII letters");
+  const typeBytes = Buffer.from(type, "ascii");
+  const payload = Buffer.from(data);
+  const chunk = Buffer.alloc(12 + payload.length);
+  chunk.writeUInt32BE(payload.length, 0);
+  typeBytes.copy(chunk, 4);
+  payload.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(Buffer.concat([typeBytes, payload])) >>> 0, 8 + payload.length);
+  return chunk;
+}
+
+function insertAfterIhdr(base: Buffer, ...chunks: readonly Buffer[]): Buffer {
+  const ihdrEnd = 8 + 12 + 13;
+  return Buffer.concat([
+    base.subarray(0, ihdrEnd),
+    ...chunks,
+    base.subarray(ihdrEnd)
+  ]);
 }
 
 function snapshot(
@@ -237,18 +259,11 @@ describe("vision snapshot validation and hashing", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
-  it("bounds static PNG chunk walking against tiny-chunk CPU amplification", () => {
+  it("bounds static PNG chunk walking against checksum-valid tiny-chunk CPU amplification", () => {
     const base = makePng(1, 1);
-    const ihdrEnd = 8 + 12 + 13;
-    const emptyChunk = Buffer.alloc(12);
-    emptyChunk.writeUInt32BE(0, 0);
-    emptyChunk.write("tEXt", 4, "ascii");
+    const emptyChunk = makePngChunk("tEXt");
     const manyChunks = Array.from({ length: 4096 }, () => emptyChunk);
-    const adversarial = Buffer.concat([
-      base.subarray(0, ihdrEnd),
-      ...manyChunks,
-      base.subarray(ihdrEnd)
-    ]);
+    const adversarial = insertAfterIhdr(base, ...manyChunks);
 
     expect(() => snapshot(adversarial)).toThrowError(VisionPreprocessingError);
   });
@@ -264,21 +279,88 @@ describe("vision snapshot validation and hashing", () => {
     }
   });
 
-  it("rejects trailing bytes after IEND and APNG control chunks", () => {
+  it("rejects trailing bytes after IEND and checksum-valid APNG control chunks", () => {
     const trailing = Buffer.concat([makePng(2, 2), Buffer.from([0xde, 0xad])]);
     expect(() => snapshot(trailing)).toThrowError(VisionPreprocessingError);
 
-    const base = makePng(2, 2);
-    const ihdrEnd = 8 + 12 + 13;
-    const apngChunk = Buffer.alloc(20);
-    apngChunk.writeUInt32BE(8, 0);
-    apngChunk.write("acTL", 4, "ascii");
-    const animated = Buffer.concat([
-      base.subarray(0, ihdrEnd),
-      apngChunk,
-      base.subarray(ihdrEnd)
-    ]);
+    const animated = insertAfterIhdr(
+      makePng(2, 2),
+      makePngChunk("acTL", Buffer.alloc(8))
+    );
     expect(() => snapshot(animated)).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects oversized, repeated, or forbidden palette chunks before pngjs allocation", () => {
+    const rgba = makePng(1, 1);
+    expect(() => snapshot(insertAfterIhdr(
+      rgba,
+      makePngChunk("PLTE", Buffer.alloc(771))
+    ))).toThrowError(VisionPreprocessingError);
+
+    const palette = makePngChunk("PLTE", Buffer.from([0, 0, 0]));
+    expect(() => snapshot(insertAfterIhdr(
+      rgba,
+      palette,
+      palette
+    ))).toThrowError(VisionPreprocessingError);
+
+    const grayscale = Buffer.from(makePng(1, 1));
+    grayscale[25] = 0;
+    const ihdrTypeAndData = grayscale.subarray(12, 29);
+    grayscale.writeUInt32BE(crc32(ihdrTypeAndData) >>> 0, 29);
+    expect(() => snapshot(insertAfterIhdr(
+      grayscale,
+      palette
+    ))).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects malformed transparency and gamma chunk structure with valid CRCs", () => {
+    const rgba = makePng(1, 1);
+    expect(() => snapshot(insertAfterIhdr(
+      rgba,
+      makePngChunk("tRNS", Buffer.alloc(1))
+    ))).toThrowError(VisionPreprocessingError);
+
+    expect(() => snapshot(insertAfterIhdr(
+      rgba,
+      makePngChunk("gAMA", Buffer.alloc(3))
+    ))).toThrowError(VisionPreprocessingError);
+
+    expect(() => snapshot(insertAfterIhdr(
+      rgba,
+      makePngChunk("gAMA", Buffer.alloc(4)),
+      makePngChunk("gAMA", Buffer.alloc(4))
+    ))).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects nonconsecutive IDAT and unsupported critical chunks with valid CRCs", () => {
+    const base = makePng(2, 2);
+    const firstIdat = base.indexOf(Buffer.from("IDAT", "ascii")) - 4;
+    if (firstIdat < 0) throw new Error("Generated PNG has no IDAT chunk");
+    const idatLength = base.readUInt32BE(firstIdat);
+    const idatEnd = firstIdat + 12 + idatLength;
+    const split = Buffer.concat([
+      base.subarray(0, idatEnd),
+      makePngChunk("tEXt"),
+      makePngChunk("IDAT"),
+      base.subarray(idatEnd)
+    ]);
+    expect(() => snapshot(split)).toThrowError(VisionPreprocessingError);
+
+    expect(() => snapshot(insertAfterIhdr(
+      base,
+      makePngChunk("ABCD")
+    ))).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects ancillary CRC corruption before decoder-specific handling", () => {
+    const ancillary = makePngChunk("tEXt", Buffer.from("safe"));
+    const crcOffset = ancillary.length - 1;
+    const last = ancillary[crcOffset];
+    if (last === undefined) throw new Error("Ancillary chunk unexpectedly empty");
+    ancillary[crcOffset] = last ^ 0xff;
+    expect(() => snapshot(insertAfterIhdr(makePng(1, 1), ancillary)))
+      .toThrowError(VisionPreprocessingError);
   });
 
   it("rejects caller dimension mismatches", () => {
