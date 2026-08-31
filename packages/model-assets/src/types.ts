@@ -183,6 +183,9 @@ export function resolveAssetManifest(
   manifests: readonly unknown[],
   requestValue: unknown
 ): AssetManifest {
+  if (!Array.isArray(manifests)) {
+    throw new ModelAssetError("INVALID_MANIFEST", "Asset manifest collection must be an array.");
+  }
   const requestResult = AssetResolutionRequestSchema.safeParse(requestValue);
   if (!requestResult.success) {
     throw new ModelAssetError("INVALID_MANIFEST", "Asset resolution request validation failed.");
