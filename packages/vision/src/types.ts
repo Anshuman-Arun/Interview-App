@@ -254,7 +254,7 @@ export class ImageSnapshot {
   }
 
   public constructor(
-    token: typeof INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION,
+    token: symbol,
     metadata: ImageSnapshotMetadata,
     bytes: Uint8Array
   );
@@ -315,7 +315,7 @@ export class VisionImageArtifact {
   }
 
   public constructor(
-    token: typeof INTERNAL_VISION_ARTIFACT_CONSTRUCTION,
+    token: symbol,
     source: ImageSnapshot | VisionImageArtifact,
     metadata: VisionImageArtifactMetadata,
     bytes: Uint8Array
