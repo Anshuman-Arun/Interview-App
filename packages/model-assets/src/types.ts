@@ -9,7 +9,7 @@ const WINDOWS_DEVICE_NAME_PATTERN = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.
 function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   try {
-    const prototype = Object.getPrototypeOf(value);
+    const prototype: unknown = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return false;
     for (const key of Reflect.ownKeys(value)) {
       if (typeof key !== "string") return false;
@@ -27,7 +27,8 @@ function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function cloneOwnDataRecord(value: Record<string, unknown>): Record<string, unknown> {
-  const clone = Object.create(null) as Record<string, unknown>;
+  const clone: Record<string, unknown> = {};
+  Object.setPrototypeOf(clone, null);
   for (const key of Object.keys(value)) {
     clone[key] = value[key];
   }
