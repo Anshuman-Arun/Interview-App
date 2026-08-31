@@ -808,9 +808,13 @@ export class ModelAssetManager {
     return entry;
   }
 
+  private managedDirectoryTraversalLimit(): number {
+    return Math.max(MANAGED_DIRECTORY_ENTRY_LIMIT, this.maxListEntries);
+  }
+
   private async removeManagedEntry(paths: CachePaths, candidate: string): Promise<void> {
     await validateCachePaths(paths);
-    await removeEntryInsideRoot(paths.root, candidate, MANAGED_DIRECTORY_ENTRY_LIMIT);
+    await removeEntryInsideRoot(paths.root, candidate, this.managedDirectoryTraversalLimit());
   }
 
   private async assertArtifactDirectoryShape(
@@ -1172,7 +1176,7 @@ export class ModelAssetManager {
           && !REMOVAL_TOMBSTONE_PATTERN.test(entry.name)) {
         continue;
       }
-      total += await sumManagedCacheBytes(path.join(paths.artifacts, entry.name), MANAGED_DIRECTORY_ENTRY_LIMIT);
+      total += await sumManagedCacheBytes(path.join(paths.artifacts, entry.name), this.managedDirectoryTraversalLimit());
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -1199,7 +1203,7 @@ export class ModelAssetManager {
       if (!stagingEntry && !tombstoneEntry) continue;
       const candidate = path.join(paths.temporary, entry.name);
       if (stagingEntry && activeStagingDirectories.has(candidate)) continue;
-      total += await sumManagedCacheBytes(candidate, MANAGED_DIRECTORY_ENTRY_LIMIT);
+      total += await sumManagedCacheBytes(candidate, this.managedDirectoryTraversalLimit());
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -1242,7 +1246,7 @@ export class ModelAssetManager {
   private async activeStagingBytes(paths: CachePaths): Promise<number> {
     let total = 0;
     for (const stagingDirectory of sharedCacheStateFor(paths).activeStagingDirectories) {
-      total += await sumManagedCacheBytes(stagingDirectory, MANAGED_DIRECTORY_ENTRY_LIMIT);
+      total += await sumManagedCacheBytes(stagingDirectory, this.managedDirectoryTraversalLimit());
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
