@@ -339,7 +339,7 @@ export class ModelAssetManager {
       );
     }
     const paths = await this.getSafeCachePaths();
-    await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, key));
+    await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, key), this.maxListEntries);
     this.lastFailures.delete(key);
   }
 
@@ -353,9 +353,17 @@ export class ModelAssetManager {
 
     const paths = await this.getSafeCachePaths();
     const directoryHandle = await opendir(paths.temporary);
+    let inspectedEntries = 0;
     for await (const entry of directoryHandle) {
+      inspectedEntries += 1;
+      if (inspectedEntries > this.maxListEntries) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Temporary cache entry count exceeds the configured cleanup limit."
+        );
+      }
       if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry.name));
+      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry.name), this.maxListEntries);
     }
     this.lastFailures.clear();
   }
@@ -368,16 +376,30 @@ export class ModelAssetManager {
       );
     }
 
+    if (keepManifestValues.length > this.maxListEntries) {
+      throw new ModelAssetError(
+        "CACHE_LIMIT_EXCEEDED",
+        "Keep-manifest count exceeds the configured cleanup limit."
+      );
+    }
     const keepKeys = new Set(
       keepManifestValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
     );
     const paths = await this.getSafeCachePaths();
     const directoryHandle = await opendir(paths.artifacts);
     let removed = 0;
+    let inspectedEntries = 0;
 
     for await (const entry of directoryHandle) {
+      inspectedEntries += 1;
+      if (inspectedEntries > this.maxListEntries) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Artifact cache entry count exceeds the configured cleanup limit."
+        );
+      }
       if (!INSTALLATION_KEY_PATTERN.test(entry.name) || keepKeys.has(entry.name)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry.name));
+      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry.name), this.maxListEntries);
       this.lastFailures.delete(entry.name);
       removed += 1;
     }
@@ -557,7 +579,7 @@ export class ModelAssetManager {
     const initial = await this.checkInstallation(manifest);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
     if (await pathEntryExists(installationDirectory)) {
-      await removeEntryInsideRoot(paths.root, installationDirectory);
+      await removeEntryInsideRoot(paths.root, installationDirectory, this.maxListEntries);
     }
 
     const reservationBytes = manifest.sizeBytes;
@@ -606,10 +628,10 @@ export class ModelAssetManager {
       if (await pathEntryExists(installationDirectory)) {
         const existing = await this.checkInstallation(manifest);
         if (existing.status === "INSTALLED" && existing.path !== undefined) {
-          await removeEntryInsideRoot(paths.root, stagingDirectory);
+          await removeEntryInsideRoot(paths.root, stagingDirectory, this.maxListEntries);
           return existing.path;
         }
-        await removeEntryInsideRoot(paths.root, installationDirectory);
+        await removeEntryInsideRoot(paths.root, installationDirectory, this.maxListEntries);
       }
 
       if (signal.aborted) {
@@ -625,7 +647,7 @@ export class ModelAssetManager {
       } catch (error) {
         const raced = await this.checkInstallation(manifest);
         if (raced.status === "INSTALLED" && raced.path !== undefined) {
-          await removeEntryInsideRoot(paths.root, stagingDirectory);
+          await removeEntryInsideRoot(paths.root, stagingDirectory, this.maxListEntries);
           return raced.path;
         }
         throw error;
@@ -635,7 +657,7 @@ export class ModelAssetManager {
       setStagingDirectory(undefined);
       this.releaseCapacity(reservationBytes);
       if (!published) {
-        await removeEntryInsideRoot(paths.root, stagingDirectory).catch(() => undefined);
+        await removeEntryInsideRoot(paths.root, stagingDirectory, this.maxListEntries).catch(() => undefined);
       }
     }
   }
@@ -693,9 +715,17 @@ export class ModelAssetManager {
 
     let total = 0;
     const artifacts = await opendir(paths.artifacts);
+    let artifactEntries = 0;
     for await (const entry of artifacts) {
+      artifactEntries += 1;
+      if (artifactEntries > this.maxListEntries) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Artifact cache entry count exceeds the configured accounting limit."
+        );
+      }
       if (!INSTALLATION_KEY_PATTERN.test(entry.name)) continue;
-      total += await sumArtifactPayloadBytes(path.join(paths.artifacts, entry.name));
+      total += await sumArtifactPayloadBytes(path.join(paths.artifacts, entry.name), this.maxListEntries);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
@@ -705,11 +735,19 @@ export class ModelAssetManager {
     }
 
     const temporary = await opendir(paths.temporary);
+    let temporaryEntries = 0;
     for await (const entry of temporary) {
+      temporaryEntries += 1;
+      if (temporaryEntries > this.maxListEntries) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Temporary cache entry count exceeds the configured accounting limit."
+        );
+      }
       if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
       const candidate = path.join(paths.temporary, entry.name);
       if (activeStagingDirectories.has(candidate)) continue;
-      total += await sumArtifactPayloadBytes(candidate);
+      total += await sumArtifactPayloadBytes(candidate, this.maxListEntries);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
           "CACHE_LIMIT_EXCEEDED",
