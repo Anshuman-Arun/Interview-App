@@ -4,6 +4,7 @@ export interface VisionArtifactIdentityInput {
   readonly kind: string;
   readonly sourceSnapshotId: string;
   readonly sourceRevision: number;
+  readonly sourceImageIdentity: string;
   readonly parentArtifactId: string | undefined;
   readonly width: number;
   readonly height: number;
@@ -28,6 +29,7 @@ export function computeVisionArtifactId(input: VisionArtifactIdentityInput): str
     input.kind,
     input.sourceSnapshotId,
     input.sourceRevision,
+    input.sourceImageIdentity,
     input.parentArtifactId ?? null,
     input.width,
     input.height,
