@@ -143,7 +143,15 @@ function validatedRectsOverlap(left: ImageRect, right: ImageRect): boolean {
 export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): readonly ImageRect[] {
   if (!Array.isArray(rectangles)) throw new TypeError("Rectangle collection must be an array");
   if (rectangles.length > 2048) throw new RangeError("At most 2048 regions may be coalesced at once");
-  const input = rectangles.map((rect) => validateImageRect(rect)).sort(compareRects);
+  const input: ImageRect[] = [];
+  for (let index = 0; index < rectangles.length; index += 1) {
+    const rect = rectangles[index];
+    if (rect === undefined) {
+      throw new VisionPreprocessingError("INVALID_RECTANGLE", "Rectangle collection must not contain missing entries");
+    }
+    input.push(validateImageRect(rect));
+  }
+  input.sort(compareRects);
   const merged: ImageRect[] = [];
 
   for (const rect of input) {
