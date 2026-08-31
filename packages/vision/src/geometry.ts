@@ -6,6 +6,8 @@ const SAFE_INTEGER_SCHEMA = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Nu
 const SAFE_NONNEGATIVE_INTEGER_SCHEMA = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const SAFE_POSITIVE_INTEGER_SCHEMA = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
+export const MAX_GEOMETRY_RECTANGLES = 2048;
+
 export const ImageRectSchema = z.object({
   x: SAFE_INTEGER_SCHEMA,
   y: SAFE_INTEGER_SCHEMA,
@@ -86,6 +88,9 @@ export function rectsOverlap(left: ImageRect, right: ImageRect): boolean {
 
 export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefined {
   if (!Array.isArray(rectangles)) throw new TypeError("Rectangle collection must be an array");
+  if (rectangles.length > MAX_GEOMETRY_RECTANGLES) {
+    throw new RangeError(`At most ${String(MAX_GEOMETRY_RECTANGLES)} rectangles may be unioned at once`);
+  }
   if (rectangles.length === 0) return undefined;
   const firstInput = rectangles[0];
   if (firstInput === undefined) invalidRect("Rectangle collection must not contain missing entries");
