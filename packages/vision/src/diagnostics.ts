@@ -20,7 +20,7 @@ export const VisionProcessingDiagnosticsSchema = z.object({
   outputBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   cropCount: z.number().int().nonnegative().max(10_000),
   tileCount: z.number().int().nonnegative().max(10_000),
-  durationMs: z.number().finite().nonnegative(),
+  durationMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   outcome: VisionProcessingOutcomeSchema
 }).strict();
 export type VisionProcessingDiagnostics = z.infer<typeof VisionProcessingDiagnosticsSchema>;
@@ -38,17 +38,7 @@ export interface VisionDiagnosticsInput {
 }
 
 export function createVisionProcessingDiagnostics(input: VisionDiagnosticsInput): VisionProcessingDiagnostics {
-  const parsed = VisionProcessingDiagnosticsSchema.parse({
-    operation: input.operation,
-    sourceDimensions: input.sourceDimensions,
-    ...(input.outputDimensions === undefined ? {} : { outputDimensions: input.outputDimensions }),
-    inputBytes: input.inputBytes,
-    outputBytes: input.outputBytes,
-    cropCount: input.cropCount,
-    tileCount: input.tileCount,
-    durationMs: input.durationMs,
-    outcome: input.outcome
-  });
+  const parsed = VisionProcessingDiagnosticsSchema.parse(input);
   return Object.freeze({
     ...parsed,
     sourceDimensions: Object.freeze({ ...parsed.sourceDimensions }),
