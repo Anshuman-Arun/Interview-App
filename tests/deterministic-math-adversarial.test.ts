@@ -235,7 +235,7 @@ describe("adversarial deterministic math verification", () => {
     expect(() => gcd(oversized, 1n)).toThrow(BoundedMathError);
   });
 
-  it("compares bounded rationals without oversized subtraction or cross-products", () => {
+  it("compares bounded rationals with wider comparison-only temporaries", () => {
     const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
 
     expect(compareRationals(rational(maximum, 1n), rational(-maximum, 1n))).toBe(1);
@@ -245,6 +245,8 @@ describe("adversarial deterministic math verification", () => {
     const denominator = 10n ** BigInt(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS - 1);
     const left = rational(denominator - 1n, denominator);
     const right = rational(denominator - 2n, denominator - 1n);
+    expect((left.numerator * right.denominator).toString().length)
+      .toBeGreaterThan(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS);
     expect(compareRationals(left, right)).toBe(1);
     expect(compareRationals(right, left)).toBe(-1);
   });
