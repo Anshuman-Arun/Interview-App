@@ -605,8 +605,12 @@ export class LocalRuntimeManager {
   private async waitForReadiness(
     record: ComponentRecord,
     child: ChildProcessWithoutNullStreams,
-    signal: AbortSignal
+    signal: AbortSignal,
+    timeoutMs: number
   ): Promise<{ readonly detail?: string; readonly handshake?: LocalComponentHandshake }> {
+    if (timeoutMs <= 0) {
+      throw new LocalRuntimeError("READINESS_TIMEOUT", `Readiness timed out for ${record.definition.id}`);
+    }
     const controller = new AbortController();
     const unlink = linkAbortSignal(signal, controller);
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -615,7 +619,7 @@ export class LocalRuntimeManager {
       timer = setTimeout(() => {
         reject(new LocalRuntimeError("READINESS_TIMEOUT", `Readiness timed out for ${record.definition.id}`));
         controller.abort();
-      }, record.definition.startupTimeoutMs);
+      }, timeoutMs);
     });
     try {
       return await Promise.race([readinessPromise, timeoutPromise]);
@@ -1237,13 +1241,19 @@ function waitForProcessStability(
   });
 }
 
-function waitForSpawn(child: ChildProcessWithoutNullStreams, signal: AbortSignal, componentId: string): Promise<void> {
+function waitForSpawn(
+  child: ChildProcessWithoutNullStreams,
+  signal: AbortSignal,
+  componentId: string,
+  timeoutMs: number
+): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const cleanup = (): void => {
       child.off("spawn", onSpawn);
       child.off("error", onError);
       signal.removeEventListener("abort", onAbort);
+      clearTimeout(timer);
     };
     const onSpawn = (): void => {
       if (settled) return;
@@ -1263,6 +1273,12 @@ function waitForSpawn(child: ChildProcessWithoutNullStreams, signal: AbortSignal
       cleanup();
       reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
     };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new LocalRuntimeError("READINESS_TIMEOUT", `Startup timed out for ${componentId}`));
+    }, timeoutMs);
     child.once("spawn", onSpawn);
     child.once("error", onError);
     signal.addEventListener("abort", onAbort, { once: true });
