@@ -786,6 +786,7 @@ export class LocalRuntimeManager {
     const previousExpectedStop = record.expectedStop;
     record.expectedStop = true;
     const timeoutMs = terminationTimeout(record.definition);
+    let cleaned = false;
     try {
       await terminateChildTree(child, this.platform, "SIGTERM", timeoutMs);
       if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
@@ -804,8 +805,9 @@ export class LocalRuntimeManager {
         }
       }
       record.residualProcess = undefined;
+      cleaned = true;
     } finally {
-      record.expectedStop = previousExpectedStop;
+      if (cleaned) record.expectedStop = previousExpectedStop;
     }
   }
 
@@ -867,7 +869,7 @@ export class LocalRuntimeManager {
     record.residualProcess = child;
     record.state = "STOPPING";
     let disposition: LocalStopResult["disposition"] = "GRACEFUL";
-    void this.requestGracefulShutdown(record, child);
+    void this.requestGracefulShutdown(record, child).catch(() => undefined);
     if (!(await waitForManagedTreeExit(record, child, this.platform, record.definition.shutdownTimeoutMs))) {
       disposition = "TERMINATED";
       const terminationTimeoutMs = terminationTimeout(record.definition);
@@ -904,23 +906,24 @@ export class LocalRuntimeManager {
   private async requestGracefulShutdown(record: ComponentRecord, child: ChildProcessWithoutNullStreams): Promise<void> {
     const pid = child.pid;
     if (pid === undefined) return;
-    if (record.definition.gracefulShutdown === undefined) {
-      child.stdin.end();
-      return;
-    }
-    const control: LocalShutdownControl = Object.freeze({
-      componentId: record.definition.id,
-      pid,
-      writeStdin: (data: string) => writeToStdin(child, data),
-      endStdin: () => child.stdin.end()
-    });
     try {
+      if (record.definition.gracefulShutdown === undefined) {
+        child.stdin.end();
+        return;
+      }
+      const control: LocalShutdownControl = Object.freeze({
+        componentId: record.definition.id,
+        pid,
+        writeStdin: (data: string) => writeToStdin(child, data),
+        endStdin: () => child.stdin.end(),
+        signal: (signal?: NodeJS.Signals) => child.kill(signal)
+      });
       await record.definition.gracefulShutdown(control);
     } catch (error) {
       if (record.child === child) {
         record.failure = this.failure(
           "TERMINATION_FAILED",
-          `Graceful shutdown hook failed: ${safeErrorMessage(error)}`,
+          `Graceful shutdown hook failed: ${safeErrorMessage(error, record.environment.secretValues)}`,
           record.environment.secretValues
         );
       }
@@ -974,7 +977,15 @@ export class LocalRuntimeManager {
   }
 
   private timestamp(): string {
-    return this.now().toISOString();
+    try {
+      const observed = this.now();
+      if (!(observed instanceof Date) || !Number.isFinite(observed.getTime())) {
+        throw new TypeError("Invalid diagnostic clock value");
+      }
+      return observed.toISOString();
+    } catch {
+      return new Date().toISOString();
+    }
   }
 }
 
