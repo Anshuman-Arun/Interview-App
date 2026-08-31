@@ -744,6 +744,17 @@ describe("local model asset manager", () => {
     expect(path.basename(installed)).toBe("portable-file_1.bin");
   });
 
+  it("rejects malformed runtime redirect security configuration", async () => {
+    const root = await newRoot();
+    const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
+
+    expect(() => new UnsafeManager({
+      rootDir: root,
+      maxArtifactBytes: 1024,
+      allowCrossOriginRedirects: "false"
+    })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
+  });
+
   it("rejects timeout values that overflow Node.js timers", async () => {
     const root = await newRoot();
     expect(() => managerFor(root, {
