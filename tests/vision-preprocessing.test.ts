@@ -2,7 +2,10 @@ import { crc32, deflateSync } from "node:zlib";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { BoardRevisionSchema } from "../packages/domain/src/index.js";
-import { INTERNAL_VISION_ARTIFACT_CONSTRUCTION } from "../packages/vision/src/internal-artifact-construction.js";
+import {
+  INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION,
+  INTERNAL_VISION_ARTIFACT_CONSTRUCTION
+} from "../packages/vision/src/internal-artifact-construction.js";
 import {
   ImageSnapshot,
   VisionImageArtifact,
@@ -281,13 +284,24 @@ describe("vision snapshot validation and hashing", () => {
     )).toThrowError(RangeError);
   });
 
+  it("rejects direct snapshot construction without the package admission capability", () => {
+    const admitted = snapshot(makePng(2, 2));
+    const invalidToken = Symbol("not-the-snapshot-token") as unknown as typeof INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION;
+
+    expect(() => new ImageSnapshot(
+      invalidToken,
+      admitted.metadata,
+      admitted.readBytes()
+    )).toThrowError(RangeError);
+  });
+
   it("rejects forged metadata when public image containers are constructed directly", () => {
     const value = snapshot(makePng(2, 2));
-    expect(() => new ImageSnapshot({
+    expect(() => new ImageSnapshot(INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION, {
       ...value.metadata,
       contentDigest: "0".repeat(64)
     }, value.readBytes())).toThrowError(RangeError);
-    expect(() => new ImageSnapshot({
+    expect(() => new ImageSnapshot(INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION, {
       ...value.metadata,
       width: value.metadata.width + 1
     }, value.readBytes())).toThrowError(RangeError);
@@ -296,7 +310,7 @@ describe("vision snapshot validation and hashing", () => {
   it("does not allow direct construction to bypass full PNG decoding", () => {
     const value = snapshot(makePng(2, 2));
     const truncated = value.readBytes().subarray(0, 29);
-    expect(() => new ImageSnapshot({
+    expect(() => new ImageSnapshot(INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION, {
       ...value.metadata,
       byteSize: truncated.byteLength,
       contentDigest: sha256ImageBytes(truncated)
@@ -1545,7 +1559,11 @@ describe("provider-neutral request preparation and budgeting", () => {
       }
     }
 
-    const evil = new EvilSnapshot(base.metadata, goodBytes);
+    const evil = new EvilSnapshot(
+      INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION,
+      base.metadata,
+      goodBytes
+    );
     expect(() => prepareVisionImageRequest(evil, "analysis"))
       .toThrowError(VisionPreprocessingError);
     expect(Object.isFrozen(ImageSnapshot.prototype)).toBe(true);
