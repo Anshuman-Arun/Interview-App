@@ -5,51 +5,48 @@ const TRUNCATED_MARKER = "[TRUNCATED]";
 const MALFORMED_MARKER = "[MALFORMED_OUTPUT]";
 const REDACTED_MARKER = "[REDACTED]";
 
-interface RedactionSegment {
-  readonly text: string;
-  readonly redacted: boolean;
-}
-
 export function redactKnownSecrets(value: string, secretValues: readonly string[]): string {
-  let segments: readonly RedactionSegment[] = [{ text: value, redacted: false }];
-  let changed = false;
+  let mask: Uint8Array | undefined;
 
   for (const secret of secretValues) {
-    if (secret.length === 0) continue;
-    const next: RedactionSegment[] = [];
-
-    for (const segment of segments) {
-      if (segment.redacted || segment.text.length === 0) {
-        next.push(segment);
-        continue;
-      }
-
-      let start = 0;
-      let match = segment.text.indexOf(secret, start);
-      if (match < 0) {
-        next.push(segment);
-        continue;
-      }
-
-      changed = true;
-      while (match >= 0) {
-        if (match > start) {
-          next.push({ text: segment.text.slice(start, match), redacted: false });
+    if (secret.length === 0 || secret.length > value.length) continue;
+    let searchFrom = 0;
+    for (;;) {
+      const match = value.indexOf(secret, searchFrom);
+      if (match < 0) break;
+      const matchEnd = match + secret.length;
+      let overlapsExistingRedaction = false;
+      if (mask !== undefined) {
+        for (let index = match; index < matchEnd; index += 1) {
+          if (mask[index] === 1) {
+            overlapsExistingRedaction = true;
+            break;
+          }
         }
-        next.push({ text: REDACTED_MARKER, redacted: true });
-        start = match + secret.length;
-        match = segment.text.indexOf(secret, start);
       }
-      if (start < segment.text.length) {
-        next.push({ text: segment.text.slice(start), redacted: false });
+      if (!overlapsExistingRedaction) {
+        mask ??= new Uint8Array(value.length);
+        mask.fill(1, match, matchEnd);
       }
+      searchFrom = matchEnd;
     }
-
-    segments = next;
   }
 
-  if (!changed) return value;
-  return segments.map((segment) => segment.text).join("");
+  if (mask === undefined) return value;
+
+  const output: string[] = [];
+  let index = 0;
+  while (index < value.length) {
+    if (mask[index] === 1) {
+      while (index < value.length && mask[index] === 1) index += 1;
+      output.push(REDACTED_MARKER);
+      continue;
+    }
+    const start = index;
+    while (index < value.length && mask[index] !== 1) index += 1;
+    output.push(value.slice(start, index));
+  }
+  return output.join("");
 }
 
 export class BoundedLineBuffer {
