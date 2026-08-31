@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  MAX_GEOMETRY_RECTANGLES,
   clipRectToBounds,
   expandRect,
   imageBounds,
@@ -145,7 +146,7 @@ function validatedRectsOverlap(left: ImageRect, right: ImageRect): boolean {
 
 export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): readonly ImageRect[] {
   if (!Array.isArray(rectangles)) throw new TypeError("Rectangle collection must be an array");
-  if (rectangles.length > 2048) throw new RangeError("At most 2048 regions may be coalesced at once");
+  if (rectangles.length > MAX_GEOMETRY_RECTANGLES) throw new RangeError(`At most ${String(MAX_GEOMETRY_RECTANGLES)} regions may be coalesced at once`);
   const input: ImageRect[] = [];
   for (let index = 0; index < rectangles.length; index += 1) {
     const rect = rectangles[index];
@@ -196,7 +197,7 @@ export function planDirtyRegions(
     return Object.freeze({ mode: "NONE" as const, regions, analyzedArea: 0 as const });
   }
 
-  if (dirtyRegions.length > 2048) {
+  if (dirtyRegions.length > MAX_GEOMETRY_RECTANGLES) {
     throw new VisionPreprocessingError(
       "DIRTY_PLAN_EXCEEDS_BUDGET",
       "Dirty-region input exceeds the package hard region-count limit"
