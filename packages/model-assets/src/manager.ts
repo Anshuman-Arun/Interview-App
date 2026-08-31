@@ -41,6 +41,15 @@ const DEFAULT_MAX_REDIRECTS = 5;
 const DEFAULT_MAX_LIST_ENTRIES = 10_000;
 const INSTALLATION_KEY_PATTERN = /^[0-9a-f]{64}$/u;
 const TEMPORARY_ENTRY_PATTERN = /^[0-9a-f]{64}-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const MANAGER_OPTION_KEYS = new Set([
+  "rootDir",
+  "maxArtifactBytes",
+  "maxCacheBytes",
+  "downloadTimeoutMs",
+  "maxRedirects",
+  "allowCrossOriginRedirects",
+  "maxListEntries"
+]);
 
 export interface ModelAssetManagerOptions {
   readonly rootDir: string;
@@ -188,6 +197,14 @@ export class ModelAssetManager {
       );
     }
     const optionRecord = rawOptions;
+    for (const key of Object.keys(optionRecord)) {
+      if (!MANAGER_OPTION_KEYS.has(key)) {
+        throw new ModelAssetError(
+          "INVALID_CONFIGURATION",
+          "Unknown model asset manager option: " + key + "."
+        );
+      }
+    }
     const rootDir = optionRecord["rootDir"];
     if (typeof rootDir !== "string" || !path.isAbsolute(rootDir)) {
       throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must be an absolute path.");
