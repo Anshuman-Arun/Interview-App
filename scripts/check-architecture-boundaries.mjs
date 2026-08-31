@@ -415,11 +415,59 @@ function checkVisionInternalConstruction(records, violations) {
       return node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
     }
 
+    function expressionExposesInternalBinding(expression) {
+      if (ts.isIdentifier(expression)) return internalBindingNames.has(expression.text);
+      if (ts.isParenthesizedExpression(expression)
+          || ts.isAsExpression(expression)
+          || ts.isTypeAssertionExpression(expression)
+          || ts.isNonNullExpression(expression)) {
+        return expressionExposesInternalBinding(expression.expression);
+      }
+      if (ts.isPropertyAccessExpression(expression)) {
+        return ts.isIdentifier(expression.expression)
+          && internalBindingNames.has(expression.expression.text);
+      }
+      if (ts.isArrayLiteralExpression(expression)) {
+        return expression.elements.some((element) =>
+          !ts.isOmittedExpression(element) && expressionExposesInternalBinding(element)
+        );
+      }
+      if (ts.isObjectLiteralExpression(expression)) {
+        return expression.properties.some((property) => {
+          if (ts.isShorthandPropertyAssignment(property)) return internalBindingNames.has(property.name.text);
+          if (ts.isPropertyAssignment(property)) return expressionExposesInternalBinding(property.initializer);
+          if (ts.isSpreadAssignment(property)) return expressionExposesInternalBinding(property.expression);
+          return false;
+        });
+      }
+      if (ts.isConditionalExpression(expression)) {
+        return expressionExposesInternalBinding(expression.whenTrue)
+          || expressionExposesInternalBinding(expression.whenFalse);
+      }
+      if (ts.isArrowFunction(expression)) {
+        if (!ts.isBlock(expression.body)) return expressionExposesInternalBinding(expression.body);
+        let leaked = false;
+        function scanArrowReturn(current) {
+          if (leaked) return;
+          if (ts.isReturnStatement(current)
+              && current.expression !== undefined
+              && expressionExposesInternalBinding(current.expression)) {
+            leaked = true;
+            return;
+          }
+          ts.forEachChild(current, scanArrowReturn);
+        }
+        scanArrowReturn(expression.body);
+        return leaked;
+      }
+      return false;
+    }
+
     function leaksInternalBindingThroughExportedDeclaration(node) {
       if (ts.isVariableStatement(node) && hasExportModifier(node)) {
         return node.declarationList.declarations.some((declaration) =>
           declaration.initializer !== undefined
-            && exportedNodeReferencesInternalBinding(declaration.initializer)
+            && expressionExposesInternalBinding(declaration.initializer)
         );
       }
       if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && hasExportModifier(node)) {
@@ -428,7 +476,7 @@ function checkVisionInternalConstruction(records, violations) {
           if (leaked) return;
           if (ts.isReturnStatement(current)
               && current.expression !== undefined
-              && exportedNodeReferencesInternalBinding(current.expression)) {
+              && expressionExposesInternalBinding(current.expression)) {
             leaked = true;
             return;
           }
@@ -467,7 +515,7 @@ function checkVisionInternalConstruction(records, violations) {
       } else if (record.location.kind === "package"
           && record.location.name === "vision"
           && ts.isExportAssignment(node)
-          && exportedNodeReferencesInternalBinding(node.expression)) {
+          && expressionExposesInternalBinding(node.expression)) {
         addViolation(
           violations,
           "VISION_INTERNAL_CONSTRUCTION_EXPORT",
