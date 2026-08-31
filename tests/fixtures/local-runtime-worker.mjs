@@ -91,6 +91,11 @@ switch (mode) {
     clearInterval(keepAlive);
     process.exit(7);
     break;
+  case "literal-truncated-crash":
+    console.error("[TRUNCATED]");
+    clearInterval(keepAlive);
+    process.exit(21);
+    break;
   case "crash-counter": {
     const path = args[0];
     const failures = Number(args[1] ?? 1);
