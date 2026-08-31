@@ -11,7 +11,6 @@ export type BoundedMathErrorCode =
   | "INTERMEDIATE_LIMIT_EXCEEDED"
   | "DIVISION_BY_ZERO"
   | "INVALID_MODULUS"
-  | "INVALID_DIVISOR"
   | "INVALID_COMBINATORIAL_ARGUMENT"
   | "COMBINATORIAL_LIMIT_EXCEEDED"
   | "INVALID_PROBABILITY"
@@ -116,9 +115,7 @@ export function areCongruent(left: bigint, right: bigint, modulus: bigint): bool
 export function isDivisibleBy(dividend: bigint, divisor: bigint): boolean {
   assertIntermediateIntegerBound(dividend);
   assertIntermediateIntegerBound(divisor);
-  if (divisor === 0n) {
-    throw new BoundedMathError("INVALID_DIVISOR", "Divisor must be nonzero");
-  }
+  if (divisor === 0n) return dividend === 0n;
   return dividend % divisor === 0n;
 }
 
