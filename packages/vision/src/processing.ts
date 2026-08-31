@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { PNG } from "pngjs";
-import { assertRectWithinImage, validateImageRect, type ImageRect } from "./geometry.js";
+import { assertRectWithinImage, rectArea, validateImageRect, type ImageRect } from "./geometry.js";
 import { createVisionProcessingDiagnostics, type VisionProcessingDiagnostics } from "./diagnostics.js";
 import { sha256ImageBytes } from "./snapshot.js";
 import {
   CoordinateTransformSchema,
   ImageSnapshot,
+  assertVisionRasterSource,
   PixelDimensionsSchema,
   VisionImageArtifact,
   VisionImageArtifactMetadataSchema,
@@ -21,6 +22,7 @@ const DEFAULT_MAX_OUTPUT_ENCODED_BYTES = 16 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 64 * 1024 * 1024;
 const HARD_MAX_OUTPUT_ENCODED_BYTES = 64 * 1024 * 1024;
 const HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 128 * 1024 * 1024;
+export const HARD_MAX_TOTAL_TILE_PIXELS = 128 * 1024 * 1024;
 const COOPERATIVE_YIELD_ROWS = 16;
 
 const DownscaleEnvelopeSchema = z.object({
@@ -152,6 +154,7 @@ function maxTotalOutputBytes(options: VisionProcessingOptions): number {
 }
 
 function sourceDescriptor(source: VisionRasterSource): SourceDescriptor {
+  assertVisionRasterSource(source);
   if (source instanceof ImageSnapshot) {
     return {
       sourceSnapshotId: source.metadata.snapshotId,
@@ -168,9 +171,10 @@ function sourceDescriptor(source: VisionRasterSource): SourceDescriptor {
 }
 
 function decodeSource(source: VisionRasterSource): DecodedRaster {
+  assertVisionRasterSource(source);
   let decoded: ReturnType<typeof PNG.sync.read>;
   try {
-    decoded = PNG.sync.read(Buffer.from(source.readBytes()), { checkCRC: true });
+    decoded = PNG.sync.read(source.readBytes(), { checkCRC: true });
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Previously validated image payload could not be decoded");
   }
@@ -215,20 +219,20 @@ function artifactId(
   transform: CoordinateTransform,
   digest: string
 ): string {
-  const canonical = [
+  const canonical = JSON.stringify([
     "vision-artifact-v1",
     kind,
     sourceSnapshotId,
-    String(sourceRevision),
-    parentArtifactId ?? "",
-    String(dimensions.width),
-    String(dimensions.height),
-    String(transform.offsetX),
-    String(transform.offsetY),
-    String(transform.scaleX),
-    String(transform.scaleY),
+    sourceRevision,
+    parentArtifactId ?? null,
+    dimensions.width,
+    dimensions.height,
+    transform.offsetX,
+    transform.offsetY,
+    transform.scaleX,
+    transform.scaleY,
     digest
-  ].join("\u0000");
+  ]);
   return `img_${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
 }
 
@@ -239,6 +243,7 @@ function encodeArtifact(
   transform: CoordinateTransform,
   options: VisionProcessingOptions
 ): VisionImageArtifact {
+  const maximumOutputBytes = maxOutputBytes(options);
   let encoded: Buffer;
   try {
     encoded = PNG.sync.write(
@@ -248,7 +253,7 @@ function encodeArtifact(
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "PNG encoding failed");
   }
-  if (encoded.length > maxOutputBytes(options)) {
+  if (encoded.length > maximumOutputBytes) {
     throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Processed image exceeds configured output byte limit");
   }
   throwIfAborted(options.signal);
@@ -305,6 +310,8 @@ export async function cropImage(
 ): Promise<CropResult> {
   const startedAt = now(options);
   throwIfAborted(options.signal);
+  assertVisionRasterSource(source);
+  maxOutputBytes(options);
   const rect = assertRectWithinImage(validateImageRect(bounds), {
     width: source.metadata.width,
     height: source.metadata.height
@@ -316,20 +323,19 @@ export async function cropImage(
   const artifact = encodeArtifact(source, "CROP", cropped, transform, options);
   throwIfAborted(options.signal);
 
-  return Object.freeze({
-    artifact,
-    diagnostics: createVisionProcessingDiagnostics({
-      operation: "CROP",
-      sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
-      outputDimensions: { width: artifact.metadata.width, height: artifact.metadata.height },
-      inputBytes: source.metadata.byteSize,
-      outputBytes: artifact.metadata.byteSize,
-      cropCount: 1,
-      tileCount: 0,
-      durationMs: elapsed(startedAt, options),
-      outcome: "SUCCESS"
-    })
+  const diagnostics = createVisionProcessingDiagnostics({
+    operation: "CROP",
+    sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
+    outputDimensions: { width: artifact.metadata.width, height: artifact.metadata.height },
+    inputBytes: source.metadata.byteSize,
+    outputBytes: artifact.metadata.byteSize,
+    cropCount: 1,
+    tileCount: 0,
+    durationMs: elapsed(startedAt, options),
+    outcome: "SUCCESS"
   });
+  throwIfAborted(options.signal);
+  return Object.freeze({ artifact, diagnostics });
 }
 
 export function planDownscale(dimensions: PixelDimensions, envelope: DownscaleEnvelope): DownscalePlan {
@@ -420,25 +426,25 @@ export async function downscaleImage(
 ): Promise<ResizeResult> {
   const startedAt = now(options);
   throwIfAborted(options.signal);
+  assertVisionRasterSource(source);
+  maxOutputBytes(options);
   const plan = planDownscale({ width: source.metadata.width, height: source.metadata.height }, envelope);
 
   if (!plan.resized) {
     throwIfAborted(options.signal);
-    return Object.freeze({
-      image: source,
-      plan,
-      diagnostics: createVisionProcessingDiagnostics({
-        operation: "RESIZE",
-        sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
-        outputDimensions: { width: source.metadata.width, height: source.metadata.height },
-        inputBytes: source.metadata.byteSize,
-        outputBytes: source.metadata.byteSize,
-        cropCount: 0,
-        tileCount: 0,
-        durationMs: elapsed(startedAt, options),
-        outcome: "SUCCESS"
-      })
+    const diagnostics = createVisionProcessingDiagnostics({
+      operation: "RESIZE",
+      sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
+      outputDimensions: { width: source.metadata.width, height: source.metadata.height },
+      inputBytes: source.metadata.byteSize,
+      outputBytes: source.metadata.byteSize,
+      cropCount: 0,
+      tileCount: 0,
+      durationMs: elapsed(startedAt, options),
+      outcome: "SUCCESS"
     });
+    throwIfAborted(options.signal);
+    return Object.freeze({ image: source, plan, diagnostics });
   }
 
   const decoded = decodeSource(source);
@@ -452,21 +458,19 @@ export async function downscaleImage(
   const artifact = encodeArtifact(source, "RESIZED", resized, transform, options);
   throwIfAborted(options.signal);
 
-  return Object.freeze({
-    image: artifact,
-    plan,
-    diagnostics: createVisionProcessingDiagnostics({
-      operation: "RESIZE",
-      sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
-      outputDimensions: { width: artifact.metadata.width, height: artifact.metadata.height },
-      inputBytes: source.metadata.byteSize,
-      outputBytes: artifact.metadata.byteSize,
-      cropCount: 0,
-      tileCount: 0,
-      durationMs: elapsed(startedAt, options),
-      outcome: "SUCCESS"
-    })
+  const diagnostics = createVisionProcessingDiagnostics({
+    operation: "RESIZE",
+    sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
+    outputDimensions: { width: artifact.metadata.width, height: artifact.metadata.height },
+    inputBytes: source.metadata.byteSize,
+    outputBytes: artifact.metadata.byteSize,
+    cropCount: 0,
+    tileCount: 0,
+    durationMs: elapsed(startedAt, options),
+    outcome: "SUCCESS"
   });
+  throwIfAborted(options.signal);
+  return Object.freeze({ image: artifact, plan, diagnostics });
 }
 
 function axisTileCount(length: number, tileSize: number, overlap: number): number {
@@ -506,6 +510,7 @@ export function planImageTiles(dimensions: PixelDimensions, config: TileConfig):
   const yPositions = axisPositions(source.height, safeConfig.tileHeight, safeConfig.overlap, yCount);
 
   const tiles: TilePlanItem[] = [];
+  let totalTilePixels = 0;
   for (let row = 0; row < yPositions.length; row += 1) {
     const y = yPositions[row];
     if (y === undefined) continue;
@@ -518,6 +523,13 @@ export function planImageTiles(dimensions: PixelDimensions, config: TileConfig):
         width: Math.min(safeConfig.tileWidth, source.width - x),
         height: Math.min(safeConfig.tileHeight, source.height - y)
       });
+      totalTilePixels += rectArea(bounds);
+      if (!Number.isSafeInteger(totalTilePixels) || totalTilePixels > HARD_MAX_TOTAL_TILE_PIXELS) {
+        throw new VisionPreprocessingError(
+          "TILE_LIMIT_EXCEEDED",
+          "Tiling would exceed the package hard total-tile-pixel limit"
+        );
+      }
       tiles.push(Object.freeze({ index: tiles.length, row, column, bounds }));
     }
   }
@@ -531,12 +543,14 @@ export async function tileImage(
 ): Promise<TileResult> {
   const startedAt = now(options);
   throwIfAborted(options.signal);
+  assertVisionRasterSource(source);
+  maxOutputBytes(options);
+  const maximumTotalOutputBytes = maxTotalOutputBytes(options);
   const plan = planImageTiles({ width: source.metadata.width, height: source.metadata.height }, config);
   const decoded = decodeSource(source);
   const descriptor = sourceDescriptor(source);
   const tiles: ImageTile[] = [];
   let totalOutputBytes = 0;
-  const maximumTotalOutputBytes = maxTotalOutputBytes(options);
 
   for (const item of plan) {
     throwIfAborted(options.signal);
@@ -551,20 +565,20 @@ export async function tileImage(
       );
     }
     tiles.push(Object.freeze({ ...item, artifact }));
+    await cooperativeYield(options.signal, item.index + 1);
   }
   throwIfAborted(options.signal);
 
-  return Object.freeze({
-    tiles: Object.freeze(tiles),
-    diagnostics: createVisionProcessingDiagnostics({
-      operation: "TILE",
-      sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
-      inputBytes: source.metadata.byteSize,
-      outputBytes: totalOutputBytes,
-      cropCount: 0,
-      tileCount: tiles.length,
-      durationMs: elapsed(startedAt, options),
-      outcome: "SUCCESS"
-    })
+  const diagnostics = createVisionProcessingDiagnostics({
+    operation: "TILE",
+    sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
+    inputBytes: source.metadata.byteSize,
+    outputBytes: totalOutputBytes,
+    cropCount: 0,
+    tileCount: tiles.length,
+    durationMs: elapsed(startedAt, options),
+    outcome: "SUCCESS"
   });
+  throwIfAborted(options.signal);
+  return Object.freeze({ tiles: Object.freeze(tiles), diagnostics });
 }
