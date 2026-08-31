@@ -802,9 +802,11 @@ export class ModelAssetManager {
       await this.assertSafeStagingDirectory(paths, stagingDirectory);
       try {
         await this.publishReservedArtifact(
+          paths,
           stagingDirectory,
           installationDirectory,
-          reservationBytes
+          reservationBytes,
+          signal
         );
         reservationHeld = false;
         published = true;
@@ -952,11 +954,26 @@ export class ModelAssetManager {
   }
 
   private async publishReservedArtifact(
+    paths: CachePaths,
     stagingDirectory: string,
     installationDirectory: string,
-    reservationBytes: number
+    reservationBytes: number,
+    signal: AbortSignal
   ): Promise<void> {
     await this.withCapacityGate(async () => {
+      if (signal.aborted) {
+        throw new ModelAssetError(
+          "CANCELLED",
+          "Artifact installation was cancelled before publication."
+        );
+      }
+      await this.assertSafeStagingDirectory(paths, stagingDirectory);
+      if (signal.aborted) {
+        throw new ModelAssetError(
+          "CANCELLED",
+          "Artifact installation was cancelled before publication."
+        );
+      }
       await atomicRenameDirectory(stagingDirectory, installationDirectory);
       this.reservedBytes = Math.max(0, this.reservedBytes - reservationBytes);
     });
