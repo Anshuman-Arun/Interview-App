@@ -797,23 +797,21 @@ export class LocalRuntimeManager {
       ensureProcessAlive(record, child);
       throwIfAborted(signal, record.definition.id);
 
-      let response: Response;
+      let candidate: unknown;
       try {
-        const candidate = await awaitWithAbort(
+        candidate = await awaitWithAbort(
           Promise.resolve().then(() => this.fetchImpl(url, { method: "GET", redirect: "error", signal })),
           signal,
           record.definition.id
         );
-        response = validateFetchResponse(candidate, record.definition.id);
-      } catch (error) {
-        const runtimeError = localRuntimeErrorOrUndefined(error);
-        if (runtimeError?.code === "READINESS_FAILED") throw runtimeError;
+      } catch {
         if (signal.aborted) {
           throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
         }
         await abortableDelay(intervalMs, signal, record.definition.id);
         continue;
       }
+      const response = validateFetchResponse(candidate, record.definition.id);
 
       try {
         if (response.redirected || (response.status >= 300 && response.status < 400)) {
