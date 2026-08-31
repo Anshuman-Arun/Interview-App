@@ -156,13 +156,18 @@ function checkedAdd(left: number, right: number, label: string): number {
 
 function wouldExceed(
   totals: VisionRequestBudgetTotals,
-  request: PreparedVisionImageRequest,
+  source: VisionRasterSource,
   budget: VisionRequestBudget
 ): boolean {
   const nextImages = totals.images + 1;
-  const nextBytes = checkedAdd(totals.totalBytes, request.byteSize, "Request byte total");
-  const nextPixels = checkedAdd(totals.totalPixels, checkedPixels(request), "Request pixel total");
-  const nextCropsOrTiles = totals.cropsOrTiles + (request.imageKind === "CROP" || request.imageKind === "TILE" ? 1 : 0);
+  const nextBytes = checkedAdd(totals.totalBytes, source.metadata.byteSize, "Request byte total");
+  const sourcePixels = source.metadata.width * source.metadata.height;
+  if (!Number.isSafeInteger(sourcePixels)) {
+    throw new VisionPreprocessingError("REQUEST_BUDGET_EXCEEDED", "Request pixel count exceeds safe integer range");
+  }
+  const nextPixels = checkedAdd(totals.totalPixels, sourcePixels, "Request pixel total");
+  const kind = sourceKind(source);
+  const nextCropsOrTiles = totals.cropsOrTiles + (kind === "CROP" || kind === "TILE" ? 1 : 0);
   return nextImages > budget.maxImages
     || nextBytes > budget.maxTotalBytes
     || nextPixels > budget.maxTotalPixels
@@ -189,6 +194,7 @@ export function prepareVisionBatch(
 ): PreparedVisionBatch {
   const budget = RequestBudgetSchema.parse(budgetInput);
   const strategy = VisionBudgetStrategySchema.parse(strategyInput);
+  const validatedPurpose = VisionPurposeSchema.parse(purpose);
   if (sources.length > MAX_VISION_REQUEST_CANDIDATES) {
     throw new VisionPreprocessingError(
       "REQUEST_BUDGET_EXCEEDED",
@@ -203,8 +209,7 @@ export function prepareVisionBatch(
   for (let index = 0; index < sources.length; index += 1) {
     const source = sources[index];
     if (source === undefined) continue;
-    const request = prepareVisionImageRequest(source, purpose);
-    if (wouldExceed(totals, request, budget)) {
+    if (wouldExceed(totals, source, budget)) {
       if (strategy === "FAIL") {
         throw new VisionPreprocessingError(
           "REQUEST_BUDGET_EXCEEDED",
@@ -217,6 +222,7 @@ export function prepareVisionBatch(
       }
       break;
     }
+    const request = prepareVisionImageRequest(source, validatedPurpose);
     accepted.push(request);
     totals = addTotals(totals, request);
   }
