@@ -1,6 +1,10 @@
-const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+const rawTypedArrayPrototype: unknown = Object.getPrototypeOf(Uint8Array.prototype);
+if (typeof rawTypedArrayPrototype !== "object" || rawTypedArrayPrototype === null) {
+  throw new Error("TypedArray prototype is unavailable");
+}
+
 const typedArrayByteLengthGetter = Object.getOwnPropertyDescriptor(
-  typedArrayPrototype,
+  rawTypedArrayPrototype,
   "byteLength"
 )?.get;
 
@@ -9,5 +13,9 @@ if (typedArrayByteLengthGetter === undefined) {
 }
 
 export function actualUint8ArrayByteLength(value: Uint8Array): number {
-  return Reflect.apply(typedArrayByteLengthGetter, value, []) as number;
+  const result: unknown = Reflect.apply(typedArrayByteLengthGetter, value, []);
+  if (typeof result !== "number" || !Number.isSafeInteger(result) || result < 0) {
+    throw new TypeError("TypedArray intrinsic returned an invalid byte length");
+  }
+  return result;
 }
