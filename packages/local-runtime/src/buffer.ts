@@ -70,29 +70,29 @@ function redactionMatchers(secretValues: readonly string[]): readonly RedactionM
   const cached = redactionMatcherCache.get(secretValues);
   if (cached !== undefined) return cached;
 
+  const orderedSecrets = [...secretValues]
+    .filter((secret) => secret.length > 0)
+    .sort((left, right) => right.length - left.length);
+
   const matchers: RedactionMatcher[] = [];
-  let batch: string[] = [];
+  let batch: { readonly original: string; readonly escaped: string }[] = [];
   let batchSourceLength = 0;
 
   const flushBatch = (): void => {
     if (batch.length === 0) return;
-    const source = `(?=(${batch.join("|")}))`;
+    const source = `(?=(${batch.map((entry) => entry.escaped).join("|")}))`;
     try {
       matchers.push(Object.freeze({ kind: "REGEX", regex: new RegExp(source, "g") }));
     } catch {
-      for (const escaped of batch) {
-        // Escaped literals only reach this fallback if the runtime refuses the
-        // bounded regex source. Decode from the original batch below instead.
-        const original = unescapeRegexLiteral(escaped);
-        matchers.push(Object.freeze({ kind: "LITERAL", literal: original }));
+      for (const entry of batch) {
+        matchers.push(Object.freeze({ kind: "LITERAL", literal: entry.original }));
       }
     }
     batch = [];
     batchSourceLength = 0;
   };
 
-  for (const secret of secretValues) {
-    if (secret.length === 0) continue;
+  for (const secret of orderedSecrets) {
     const escaped = escapeRegexLiteral(secret);
     const nextSourceLength = batchSourceLength + escaped.length + (batch.length === 0 ? 0 : 1);
     if (batch.length > 0
@@ -104,7 +104,7 @@ function redactionMatchers(secretValues: readonly string[]): readonly RedactionM
       matchers.push(Object.freeze({ kind: "LITERAL", literal: secret }));
       continue;
     }
-    batch.push(escaped);
+    batch.push(Object.freeze({ original: secret, escaped }));
     batchSourceLength += escaped.length + (batch.length === 1 ? 0 : 1);
   }
   flushBatch();
@@ -116,10 +116,6 @@ function redactionMatchers(secretValues: readonly string[]): readonly RedactionM
 
 function escapeRegexLiteral(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/gu, "\\$&");
-}
-
-function unescapeRegexLiteral(value: string): string {
-  return value.replace(/\\([\\^$.*+?()[\]{}|])/gu, "$1");
 }
 
 export class BoundedLineBuffer {
