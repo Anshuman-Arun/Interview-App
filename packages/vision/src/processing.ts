@@ -427,10 +427,16 @@ export async function downscaleImage(
   const startedAt = now(options);
   throwIfAborted(options.signal);
   assertVisionRasterSource(source);
-  maxOutputBytes(options);
+  const maximumOutputBytes = maxOutputBytes(options);
   const plan = planDownscale({ width: source.metadata.width, height: source.metadata.height }, envelope);
 
   if (!plan.resized) {
+    if (source.metadata.byteSize > maximumOutputBytes) {
+      throw new VisionPreprocessingError(
+        "OUTPUT_TOO_LARGE_BYTES",
+        "Unchanged image exceeds the configured output byte limit"
+      );
+    }
     throwIfAborted(options.signal);
     const diagnostics = createVisionProcessingDiagnostics({
       operation: "RESIZE",
