@@ -807,7 +807,7 @@ export class ModelAssetManager {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled.");
       }
       await ensureSafeDirectory(paths.root, stagingDirectory);
-      const createdStaging = await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
+      const createdStaging = await this.assertSafeStagingDirectory(paths, stagingDirectory);
       const stagingIdentity = {
         device: createdStaging.dev,
         inode: createdStaging.ino
