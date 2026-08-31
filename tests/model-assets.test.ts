@@ -474,6 +474,65 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
+  it("keeps different artifacts independent under concurrent cache reservations", async () => {
+    const remotePayload = Buffer.from("12345");
+    const localPayload = Buffer.from("abcde");
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const fixture = await startFixtureServer(async (_request, response) => {
+      response.writeHead(200, { "Content-Length": String(remotePayload.byteLength) });
+      response.write(remotePayload.subarray(0, 2));
+      started.resolve();
+      await release.promise;
+      response.end(remotePayload.subarray(2));
+    });
+
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const localSource = path.join(sourceRoot, "local.bin");
+    await writeFile(localSource, localPayload);
+    const manager = managerFor(root, { maxArtifactBytes: 5, maxCacheBytes: 10 });
+    const remote = manifestFor(remotePayload, fixture.baseUrl + "/remote", {
+      artifactId: "remote"
+    });
+    const local = manifestFor(localPayload, "https://example.test/local.bin", {
+      artifactId: "local"
+    });
+
+    const remoteInstall = manager.install(remote);
+    await started.promise;
+    const localInstalled = await manager.importLocal(local, localSource);
+    expect(await readFile(localInstalled)).toEqual(localPayload);
+
+    release.resolve();
+    const remoteInstalled = await remoteInstall;
+    expect(await readFile(remoteInstalled)).toEqual(remotePayload);
+    expect(await manager.listInstalledArtifacts()).toHaveLength(2);
+  });
+
+  it("refuses removal while the same artifact is installing", async () => {
+    const payload = Buffer.from("busy-remove");
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const fixture = await startFixtureServer(async (_request, response) => {
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.write(payload.subarray(0, 2));
+      started.resolve();
+      await release.promise;
+      response.end(payload.subarray(2));
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    const installation = manager.install(manifest);
+    await started.promise;
+    await expect(manager.remove(manifest)).rejects.toMatchObject({ code: "ASSET_BUSY" });
+    release.resolve();
+    await installation;
+    expect(await manager.verifyInstalledArtifact(manifest)).toBe(true);
+  });
+
   it("detects corruption of a previously installed artifact", async () => {
     const payload = Buffer.from("good-bytes");
     const root = await newRoot();
