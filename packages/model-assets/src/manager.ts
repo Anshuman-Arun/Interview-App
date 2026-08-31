@@ -227,6 +227,7 @@ function isAbortSignal(value: unknown): value is AbortSignal {
   try {
     if (Object.getPrototypeOf(value) !== AbortSignal.prototype
         || Object.hasOwn(value, "aborted")
+        || Object.hasOwn(value, "reason")
         || Object.hasOwn(value, "addEventListener")
         || Object.hasOwn(value, "removeEventListener")) {
       return false;
