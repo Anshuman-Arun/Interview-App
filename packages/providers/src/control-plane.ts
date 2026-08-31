@@ -478,7 +478,13 @@ export function resolveProviderConfiguration(input: {
     ? parsed
     : Object.freeze({ ...parsed, ...(settings === undefined ? {} : { settings }) });
 
-  const implicitRequirements: ProviderCapabilityKey[] = parsed.reasoning === undefined\n    ? []\n    : ["REASONING_CONTROLS"];\n  const match = matchCapabilityRequirements(\n    model.capabilities,\n    [...(input.requirements ?? []), ...implicitRequirements]\n  );
+  const implicitRequirements: ProviderCapabilityKey[] = parsed.reasoning === undefined
+    ? []
+    : ["REASONING_CONTROLS"];
+  const match = matchCapabilityRequirements(
+    model.capabilities,
+    [...(input.requirements ?? []), ...implicitRequirements]
+  );
   if (!match.compatible) {
     const failed = [...match.unsupported, ...match.unknown].sort(compareCodeUnits);
     throw new ProviderControlPlaneError(
