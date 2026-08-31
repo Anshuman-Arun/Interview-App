@@ -1857,6 +1857,27 @@ describe("local worker lifecycle manager", () => {
       {}
     )).toThrow(/unknown environment definition field/iu);
 
+    expect(() => buildLocalEnvironment(
+      new Date() as unknown as Parameters<typeof buildLocalEnvironment>[0],
+      {}
+    )).toThrow(/plain data object/iu);
+    expect(() => buildLocalEnvironment({
+      values: new Map() as unknown as Readonly<Record<string, string>>
+    }, {})).toThrow(/plain data object/iu);
+    expect(() => buildLocalEnvironment({
+      secrets: new Date() as unknown as Readonly<Record<string, string>>
+    }, {})).toThrow(/plain data object/iu);
+
+    const hiddenParent = Object.defineProperty({}, "SAFE_PARENT", {
+      enumerable: false,
+      value: "hidden-parent-value"
+    });
+    const hiddenInherited = buildLocalEnvironment(
+      { inherit: ["SAFE_PARENT"] },
+      hiddenParent as NodeJS.ProcessEnv
+    );
+    expect(hiddenInherited.environment).not.toHaveProperty("SAFE_PARENT");
+
     const tooManyValues = Object.fromEntries(
       Array.from({ length: 257 }, (_, index) => [`VALUE_${String(index)}`, "x"])
     );
