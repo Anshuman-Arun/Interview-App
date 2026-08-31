@@ -10,8 +10,8 @@ const WINDOWS_DEVICE_NAME_PATTERN = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.
 function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== "object"
       || value === null
-      || Array.isArray(value)
-      || isProxy(value)) return false;
+      || isProxy(value)
+      || Array.isArray(value)) return false;
   try {
     const prototype: unknown = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return false;
@@ -43,7 +43,9 @@ const PlainDataRecordSchema = z.custom<Record<string, unknown>>(isPlainDataRecor
   .transform(cloneOwnDataRecord);
 
 function clonePlainDataArray(value: unknown): readonly unknown[] | undefined {
-  if (!Array.isArray(value) || isProxy(value)) return undefined;
+  if (typeof value !== "object" || value === null || isProxy(value) || !Array.isArray(value)) {
+    return undefined;
+  }
   try {
     const prototype: unknown = Object.getPrototypeOf(value);
     if (prototype !== Array.prototype) return undefined;
