@@ -770,22 +770,44 @@ export class LocalRuntimeManager {
     for (;;) {
       ensureProcessAlive(record, child);
       throwIfAborted(signal, record.definition.id);
+
+      let response: Response;
       try {
-        const response = await this.fetchImpl(url, { method: "GET", redirect: "error", signal });
-        try {
-          if (response.redirected || (response.status >= 300 && response.status < 400)) {
-            throw new LocalRuntimeError(
-              "READINESS_FAILED",
-              `HTTP readiness redirect rejected for ${record.definition.id}`
+        response = await this.fetchImpl(url, { method: "GET", redirect: "error", signal });
+      } catch {
+        if (signal.aborted) {
+          throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
+        }
+        await abortableDelay(intervalMs, signal, record.definition.id);
+        continue;
+      }
+
+      try {
+        if (response.redirected || (response.status >= 300 && response.status < 400)) {
+          throw new LocalRuntimeError(
+            "READINESS_FAILED",
+            `HTTP readiness redirect rejected for ${record.definition.id}`
+          );
+        }
+
+        let decision: LocalReadinessDecision = response.ok;
+        let evaluatorFailed = false;
+        if (strategy.evaluate !== undefined) {
+          try {
+            decision = await awaitWithAbort(
+              Promise.resolve().then(() => strategy.evaluate?.(response) ?? false),
+              signal,
+              record.definition.id
             );
+          } catch {
+            if (signal.aborted) {
+              throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
+            }
+            evaluatorFailed = true;
           }
-          const decision = strategy.evaluate === undefined
-            ? response.ok
-            : await awaitWithAbort(
-                Promise.resolve().then(() => strategy.evaluate?.(response) ?? false),
-                signal,
-                record.definition.id
-              );
+        }
+
+        if (!evaluatorFailed) {
           const normalized = normalizeReadinessDecision(
             decision,
             record.definition.id,
@@ -794,14 +816,11 @@ export class LocalRuntimeManager {
           if (normalized.ready) {
             return sanitizeReadyResult(normalized, record.environment.secretValues);
           }
-        } finally {
-          disposeResponseBody(response);
         }
-      } catch (error) {
-        if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
-        const runtimeError = localRuntimeErrorOrUndefined(error);
-        if (runtimeError !== undefined) throw runtimeError;
+      } finally {
+        disposeResponseBody(response);
       }
+
       await abortableDelay(intervalMs, signal, record.definition.id);
     }
   }
@@ -822,24 +841,28 @@ export class LocalRuntimeManager {
         pid: child.pid as number,
         signal
       });
+      let decision: LocalReadinessDecision;
       try {
-        const decision = await awaitWithAbort(
+        decision = await awaitWithAbort(
           Promise.resolve().then(() => strategy.probe(context)),
           signal,
           record.definition.id
         );
-        const normalized = normalizeReadinessDecision(
-          decision,
-          record.definition.id,
-          record.environment.secretValues
-        );
-        if (normalized.ready) {
-          return sanitizeReadyResult(normalized, record.environment.secretValues);
+      } catch {
+        if (signal.aborted) {
+          throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
         }
-      } catch (error) {
-        if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
-        const runtimeError = localRuntimeErrorOrUndefined(error);
-        if (runtimeError !== undefined) throw runtimeError;
+        await abortableDelay(intervalMs, signal, record.definition.id);
+        continue;
+      }
+
+      const normalized = normalizeReadinessDecision(
+        decision,
+        record.definition.id,
+        record.environment.secretValues
+      );
+      if (normalized.ready) {
+        return sanitizeReadyResult(normalized, record.environment.secretValues);
       }
       await abortableDelay(intervalMs, signal, record.definition.id);
     }
