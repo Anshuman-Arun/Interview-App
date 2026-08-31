@@ -531,6 +531,34 @@ describe("credential readiness edge cases", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("ignores an inherited secretResolver operation field", async () => {
+    Object.defineProperty(Object.prototype, "secretResolver", {
+      configurable: true,
+      enumerable: false,
+      value: {
+        async resolveSecret() {
+          return "polluted-secret";
+        },
+        async hasSecret() {
+          return true;
+        }
+      }
+    });
+    try {
+      await expect(evaluateProviderReadiness({
+        registry: registerBuiltInProviders(),
+        configuration: GEMINI_CONFIGURATION
+      })).resolves.toEqual({
+        state: "UNKNOWN",
+        providerId: "gemini-api",
+        modelId: "gemini-2.5-flash",
+        reason: "CREDENTIAL_STATUS_UNKNOWN"
+      });
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "secretResolver");
+    }
+  });
+
   it("does not accept credential resolver methods inherited only from Object.prototype", async () => {
     Object.defineProperties(Object.prototype, {
       resolveSecret: {

@@ -685,7 +685,7 @@ describe("provider definition and capability hostile values", () => {
       .toThrow(expect.objectContaining({ code: "MALFORMED_CAPABILITIES" }));
   });
 
-  it("snapshots capability requirements once instead of allowing getter-based requirement changes", async () => {
+  it("rejects capability-requirement accessors without invoking them", async () => {
     const registry = new ProviderRegistry();
     registry.register(createSettingsProviderInput());
     const configuration = settingsConfiguration({ mode: "safe" });
@@ -696,12 +696,12 @@ describe("provider definition and capability hostile values", () => {
       enumerable: true,
       get() {
         resolutionReads += 1;
-        return resolutionReads === 1 ? ["IMAGE_INPUT"] : [];
+        return ["IMAGE_INPUT"];
       }
     });
     expect(() => resolveProviderConfiguration(resolutionInput))
-      .toThrow(expect.objectContaining({ code: "INCOMPATIBLE_CAPABILITY" }));
-    expect(resolutionReads).toBe(1);
+      .toThrow(expect.objectContaining({ code: "MALFORMED_REQUIREMENTS" }));
+    expect(resolutionReads).toBe(0);
 
     let readinessReads = 0;
     const readinessInput = { registry, configuration };
@@ -709,42 +709,83 @@ describe("provider definition and capability hostile values", () => {
       enumerable: true,
       get() {
         readinessReads += 1;
-        return readinessReads === 1 ? ["IMAGE_INPUT"] : [];
-      }
-    });
-    await expect(evaluateProviderReadiness(readinessInput)).resolves.toMatchObject({
-      state: "MISCONFIGURED",
-      reason: "INCOMPATIBLE_CAPABILITY"
-    });
-    expect(readinessReads).toBe(1);
-  });
-
-  it("converts throwing capability-requirement accessors to typed failures", async () => {
-    const registry = new ProviderRegistry();
-    registry.register(createSettingsProviderInput());
-    const configuration = settingsConfiguration({ mode: "safe" });
-
-    const resolutionInput = { registry, configuration };
-    Object.defineProperty(resolutionInput, "requirements", {
-      enumerable: true,
-      get() {
-        throw new Error("requirements getter must not escape");
-      }
-    });
-    expect(() => resolveProviderConfiguration(resolutionInput))
-      .toThrow(expect.objectContaining({ code: "MALFORMED_REQUIREMENTS" }));
-
-    const readinessInput = { registry, configuration };
-    Object.defineProperty(readinessInput, "requirements", {
-      enumerable: true,
-      get() {
-        throw new Error("requirements getter must not escape");
+        return ["IMAGE_INPUT"];
       }
     });
     await expect(evaluateProviderReadiness(readinessInput)).resolves.toMatchObject({
       state: "MISCONFIGURED",
       reason: "MALFORMED_REQUIREMENTS"
     });
+    expect(readinessReads).toBe(0);
+  });
+
+  it("does not invoke throwing configuration or registry accessors on operation envelopes", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const configuration = settingsConfiguration({ mode: "safe" });
+    let configurationReads = 0;
+    const badConfigurationInput = { registry, configuration };
+    Object.defineProperty(badConfigurationInput, "configuration", {
+      enumerable: true,
+      get() {
+        configurationReads += 1;
+        throw new Error("configuration getter must not run");
+      }
+    });
+    expect(() => resolveProviderConfiguration(badConfigurationInput))
+      .toThrow(expect.objectContaining({ code: "MALFORMED_CONFIGURATION" }));
+    expect(configurationReads).toBe(0);
+
+    let registryReads = 0;
+    const badRegistryInput = { registry, configuration };
+    Object.defineProperty(badRegistryInput, "registry", {
+      enumerable: true,
+      get() {
+        registryReads += 1;
+        throw new Error("registry getter must not run");
+      }
+    });
+    await expect(evaluateProviderReadiness(badRegistryInput)).resolves.toMatchObject({
+      state: "MISCONFIGURED",
+      reason: "INVALID_REGISTRY"
+    });
+    expect(registryReads).toBe(0);
+  });
+
+  it("ignores inherited optional operation fields", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const configuration = settingsConfiguration({ mode: "safe" });
+
+    Object.defineProperties(Object.prototype, {
+      requirements: {
+        configurable: true,
+        enumerable: false,
+        value: ["IMAGE_INPUT"]
+      },
+      secretResolver: {
+        configurable: true,
+        enumerable: false,
+        value: {
+          async resolveSecret() {
+            return "polluted-secret";
+          },
+          async hasSecret() {
+            return true;
+          }
+        }
+      }
+    });
+    try {
+      expect(() => resolveProviderConfiguration({ registry, configuration })).not.toThrow();
+      await expect(evaluateProviderReadiness({ registry, configuration })).resolves.toMatchObject({
+        state: "UNAVAILABLE",
+        reason: "ADAPTER_FACTORY_UNAVAILABLE"
+      });
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "requirements");
+      Reflect.deleteProperty(Object.prototype, "secretResolver");
+    }
   });
 
   it("rejects null capability requirements instead of treating them as an empty set", async () => {

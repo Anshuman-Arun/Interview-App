@@ -425,6 +425,37 @@ const PROVIDER_ADAPTER_FACTORY_INPUT_KEYS = new Set([
   "runtime"
 ]);
 
+function readOwnDataProperty(
+  value: unknown,
+  key: string,
+  errorCode:
+    | "MALFORMED_CONFIGURATION"
+    | "MALFORMED_REQUIREMENTS"
+    | "INVALID_REGISTRY"
+    | "INVALID_FACTORY_INPUT",
+  message: string
+): {
+  readonly present: boolean;
+  readonly value: unknown;
+} {
+  if (typeof value !== "object" || value === null) {
+    throw new ProviderControlPlaneError(errorCode, message);
+  }
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(value, key);
+  } catch {
+    throw new ProviderControlPlaneError(errorCode, message);
+  }
+  if (descriptor === undefined) {
+    return freezeNullPrototype({ present: false, value: undefined });
+  }
+  if (!("value" in descriptor)) {
+    throw new ProviderControlPlaneError(errorCode, message);
+  }
+  return freezeNullPrototype({ present: true, value: descriptor.value });
+}
+
 function inspectPlainDataObjectProperties(
   value: object,
   allowedKeys: ReadonlySet<string>,
@@ -1407,7 +1438,7 @@ function assertTrustedResolvedConfiguration(
 }
 
 function resolveParsedProviderConfiguration(input: {
-  readonly registry: ProviderRegistry;
+  readonly registry: unknown;
   readonly configuration: ProviderConfiguration;
   readonly requirements?: unknown;
 }): ResolvedProviderConfiguration {
@@ -1452,23 +1483,35 @@ export function resolveProviderConfiguration(input: {
   readonly configuration: unknown;
   readonly requirements?: readonly ProviderCapabilityKey[];
 }): ResolvedProviderConfiguration {
-  const parsed = parseConfiguration(input.configuration);
+  const configurationProperty = readOwnDataProperty(
+    input,
+    "configuration",
+    "MALFORMED_CONFIGURATION",
+    "Provider resolution input is malformed"
+  );
+  const parsed = parseConfiguration(configurationProperty.value);
   if (!parsed.enabled) {
     throw new ProviderControlPlaneError("DISABLED", "Configured provider is disabled");
   }
-  let requirements: unknown;
-  try {
-    requirements = input.requirements;
-  } catch {
-    throw new ProviderControlPlaneError(
-      "MALFORMED_REQUIREMENTS",
-      "Provider capability requirements are malformed"
-    );
-  }
+
+  const registryProperty = readOwnDataProperty(
+    input,
+    "registry",
+    "INVALID_REGISTRY",
+    "Provider registry is invalid"
+  );
+  const requirementsProperty = readOwnDataProperty(
+    input,
+    "requirements",
+    "MALFORMED_REQUIREMENTS",
+    "Provider capability requirements are malformed"
+  );
   return resolveParsedProviderConfiguration({
-    registry: input.registry,
+    registry: registryProperty.value,
     configuration: parsed,
-    ...(requirements === undefined ? {} : { requirements })
+    ...(requirementsProperty.present
+      ? { requirements: requirementsProperty.value }
+      : {})
   });
 }
 
@@ -1511,7 +1554,13 @@ export async function evaluateProviderReadiness(input: {
 }): Promise<ProviderReadiness> {
   let parsed: ProviderConfiguration;
   try {
-    parsed = parseConfiguration(input.configuration);
+    const configurationProperty = readOwnDataProperty(
+      input,
+      "configuration",
+      "MALFORMED_CONFIGURATION",
+      "Provider readiness input is malformed"
+    );
+    parsed = parseConfiguration(configurationProperty.value);
   } catch (error) {
     return freezeNullPrototype({
       state: "MISCONFIGURED",
@@ -1521,9 +1570,36 @@ export async function evaluateProviderReadiness(input: {
     });
   }
 
+  let registry: unknown;
+  try {
+    registry = readOwnDataProperty(
+      input,
+      "registry",
+      "INVALID_REGISTRY",
+      "Provider registry is invalid"
+    ).value;
+  } catch (error) {
+    return freezeNullPrototype({
+      state: "MISCONFIGURED",
+      providerId: parsed.providerId,
+      modelId: parsed.modelId,
+      reason: error instanceof ProviderControlPlaneError
+        ? error.code
+        : "INVALID_REGISTRY"
+    });
+  }
+
   let requirements: unknown;
   try {
-    requirements = input.requirements;
+    const requirementsProperty = readOwnDataProperty(
+      input,
+      "requirements",
+      "MALFORMED_REQUIREMENTS",
+      "Provider capability requirements are malformed"
+    );
+    requirements = requirementsProperty.present
+      ? requirementsProperty.value
+      : undefined;
   } catch {
     return freezeNullPrototype({
       state: "MISCONFIGURED",
@@ -1536,7 +1612,7 @@ export async function evaluateProviderReadiness(input: {
   let resolved: ResolvedProviderConfiguration;
   try {
     resolved = resolveParsedProviderConfiguration({
-      registry: input.registry,
+      registry,
       configuration: parsed
     });
   } catch (error) {
@@ -1610,12 +1686,27 @@ export async function evaluateProviderReadiness(input: {
       });
     }
   } else {
-    let resolver: ProviderSecretResolver | undefined;
+    let resolver: object | undefined;
     let hasSecret: unknown;
     let resolveSecret: unknown;
     try {
-      resolver = input.secretResolver;
-      if (resolver !== undefined) {
+      const secretResolverProperty = readOwnDataProperty(
+        input,
+        "secretResolver",
+        "INVALID_FACTORY_INPUT",
+        "Provider readiness credential resolver is malformed"
+      );
+      const candidate = secretResolverProperty.present
+        ? secretResolverProperty.value
+        : undefined;
+      if (candidate !== undefined) {
+        if (typeof candidate !== "object" || candidate === null) {
+          throw new ProviderControlPlaneError(
+            "INVALID_FACTORY_INPUT",
+            "Provider readiness credential resolver is malformed"
+          );
+        }
+        resolver = candidate;
         hasSecret = readResolverMethodWithoutAccessors(resolver, "hasSecret");
         resolveSecret = readResolverMethodWithoutAccessors(resolver, "resolveSecret");
       }
