@@ -435,6 +435,17 @@ describe("dirty-region planning", () => {
       .toEqual(planDirtyRegions(input, { width: 20, height: 20 }, config));
   });
 
+  it("does not let out-of-frame dirty hints force configured full-frame fallback", () => {
+    const plan = planDirtyRegions([
+      { x: 100, y: 100, width: 1, height: 1 },
+      { x: 200, y: 200, width: 1, height: 1 }
+    ], { width: 20, height: 20 }, {
+      maxInputRegions: 1,
+      maxRegionCount: 1
+    });
+    expect(plan).toEqual({ mode: "NONE", regions: [], analyzedArea: 0 });
+  });
+
   it("validates dirty rectangles before configured over-count fallback", () => {
     expect(() => planDirtyRegions([
       { x: 0, y: 0, width: 2, height: 2 },
