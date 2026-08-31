@@ -18,8 +18,14 @@ import {
   MODULAR_ARITHMETIC_PROTOCOL_VERSION,
   MODULAR_ARITHMETIC_VERIFIER_NAME,
   ModularArithmeticVerifier,
+  PROBABILITY_ARITHMETIC_PROTOCOL,
+  PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
   PROBABILITY_ARITHMETIC_VERIFIER_NAME,
+  ProbabilityArithmeticVerifier,
+  RATIONAL_ARITHMETIC_PROTOCOL,
+  RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
   RATIONAL_ARITHMETIC_VERIFIER_NAME,
+  RationalArithmeticVerifier,
   createDeterministicMathVerifier
 } from "../packages/verification/src/index.js";
 
@@ -43,6 +49,73 @@ describe("deterministic math verifier invariants", () => {
       const result = await verifier.verify(valid, confidence);
       expect(VerificationResultSchema.parse(result)).toEqual(result);
       expect(result.status).toBe("UNRESOLVED");
+    }
+  });
+
+  it("abstains on unsupported protocol versions across every math verifier", async () => {
+    const cases = [
+      {
+        verifier: new ModularArithmeticVerifier(),
+        statement: {
+          protocol: MODULAR_ARITHMETIC_PROTOCOL,
+          protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION + 1,
+          claim: { kind: "DIVISIBILITY", divisor: "2", dividend: integer("4") }
+        }
+      },
+      {
+        verifier: new RationalArithmeticVerifier(),
+        statement: {
+          protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+          protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION + 1,
+          claim: {
+            kind: "EQUALITY",
+            left: { kind: "RATIONAL", value: rational("1") },
+            right: { kind: "RATIONAL", value: rational("1") }
+          }
+        }
+      },
+      {
+        verifier: new FiniteRecurrenceVerifier(),
+        statement: {
+          protocol: FINITE_RECURRENCE_PROTOCOL,
+          protocolVersion: FINITE_RECURRENCE_PROTOCOL_VERSION + 1,
+          initial: [rational("0")],
+          recurrence: {
+            kind: "LINEAR_PREVIOUS_TERMS",
+            coefficients: [rational("1")],
+            constant: rational("0")
+          },
+          claim: { kind: "VALUE_AT_INDEX", index: 0, value: rational("0") }
+        }
+      },
+      {
+        verifier: new CombinatorialCountingVerifier(),
+        statement: {
+          protocol: COMBINATORIAL_COUNTING_PROTOCOL,
+          protocolVersion: COMBINATORIAL_COUNTING_PROTOCOL_VERSION + 1,
+          claim: { kind: "BINOMIAL", n: 1, k: 1, claimed: "1" }
+        }
+      },
+      {
+        verifier: new ProbabilityArithmeticVerifier(),
+        statement: {
+          protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+          protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION + 1,
+          claim: {
+            kind: "CONDITIONAL_FROM_COUNTS",
+            jointCount: 1,
+            conditionCount: 2,
+            claimedProbability: rational("1", "2")
+          }
+        }
+      }
+    ];
+
+    for (const { verifier, statement } of cases) {
+      const result = await verifier.verify(JSON.stringify(statement), 1);
+      expect(VerificationResultSchema.parse(result)).toEqual(result);
+      expect(result.status).toBe("UNRESOLVED");
+      expect(result.reason).toContain("MALFORMED_INTERPRETATION");
     }
   });
 
