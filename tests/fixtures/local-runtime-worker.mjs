@@ -58,6 +58,12 @@ switch (mode) {
   case "line-ready":
     console.log("READY-LINE");
     break;
+  case "unterminated-ready-crash":
+    process.stdout.write("READY-LINE", () => {
+      clearInterval(keepAlive);
+      process.exit(20);
+    });
+    break;
   case "early-line-ready":
     console.log("READY-LINE");
     for (let index = 0; index < 256; index += 1) console.log(`startup-chatter-${index}`);
