@@ -1593,6 +1593,55 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "tmp"))).toEqual([]);
   });
 
+  it("rejects getter-backed fake cancellation signals without invoking them", async () => {
+    const payload = Buffer.from("fake-signal-getter");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/fake-signal.bin");
+
+    let reads = 0;
+    const fakeSignal: Record<string, unknown> = {};
+    Object.defineProperty(fakeSignal, "aborted", {
+      enumerable: true,
+      get() {
+        reads += 1;
+        throw new Error("fake signal getter should not run");
+      }
+    });
+
+    const UnsafeInstall = manager.install.bind(manager) as unknown as (
+      manifestValue: unknown,
+      signal: unknown
+    ) => Promise<string>;
+    const UnsafeImport = manager.importLocal.bind(manager) as unknown as (
+      manifestValue: unknown,
+      sourcePath: string,
+      signal: unknown
+    ) => Promise<string>;
+    const UnsafeVerifier = verifyArtifactFile as unknown as (
+      filePath: string,
+      expectations: unknown,
+      signal: unknown
+    ) => Promise<unknown>;
+
+    await expect(UnsafeInstall(manifest, fakeSignal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    await expect(UnsafeImport(manifest, source, fakeSignal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    await expect(UnsafeVerifier(source, {
+      sizeBytes: payload.byteLength,
+      sha256: sha256(payload)
+    }, fakeSignal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    expect(reads).toBe(0);
+  });
+
   it("rejects malformed runtime redirect security configuration", async () => {
     const root = await newRoot();
     const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
