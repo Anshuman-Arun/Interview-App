@@ -107,6 +107,27 @@ export async function validateCachePaths(paths: CachePaths): Promise<void> {
   assertPathInsideRoot(paths.root, paths.temporary);
   await ensureSafeDirectory(paths.root, paths.artifacts);
   await ensureSafeDirectory(paths.root, paths.temporary);
+
+  let artifactsStat: Stats;
+  let temporaryStat: Stats;
+  try {
+    [artifactsStat, temporaryStat] = await Promise.all([
+      lstat(paths.artifacts),
+      lstat(paths.temporary)
+    ]);
+  } catch (error) {
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to inspect cache directories for atomic publication compatibility.",
+      { cause: error }
+    );
+  }
+  if (artifactsStat.dev !== temporaryStat.dev) {
+    throw new ModelAssetError(
+      "INVALID_CACHE_ROOT",
+      "Temporary and installed artifact directories must be on the same filesystem."
+    );
+  }
 }
 
 export async function ensureSafeDirectory(root: string, directory: string): Promise<void> {
