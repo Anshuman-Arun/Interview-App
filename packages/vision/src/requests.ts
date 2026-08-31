@@ -204,14 +204,25 @@ export function prepareVisionBatch(
     );
   }
 
-  const accepted: PreparedVisionImageRequest[] = [];
-  const deferred: string[] = [];
-  let totals: VisionRequestBudgetTotals = Object.freeze({ images: 0, totalBytes: 0, totalPixels: 0, cropsOrTiles: 0 });
-
+  const candidates: VisionRasterSource[] = [];
   for (let index = 0; index < sources.length; index += 1) {
     const source = sources[index];
     if (source === undefined) {
       throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
+    }
+    assertVisionRasterSource(source);
+    candidates.push(source);
+  }
+  Object.freeze(candidates);
+
+  const accepted: PreparedVisionImageRequest[] = [];
+  const deferred: string[] = [];
+  let totals: VisionRequestBudgetTotals = Object.freeze({ images: 0, totalBytes: 0, totalPixels: 0, cropsOrTiles: 0 });
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const source = candidates[index];
+    if (source === undefined) {
+      throw new VisionPreprocessingError("INVALID_IMAGE", "Internal vision candidate snapshot is sparse");
     }
     if (wouldExceed(totals, source, budget)) {
       if (strategy === "FAIL") {
@@ -220,8 +231,8 @@ export function prepareVisionBatch(
           `Vision request at index ${String(index)} exceeds the configured batch budget`
         );
       }
-      for (let deferredIndex = index; deferredIndex < sources.length; deferredIndex += 1) {
-        const deferredSource = sources[deferredIndex];
+      for (let deferredIndex = index; deferredIndex < candidates.length; deferredIndex += 1) {
+        const deferredSource = candidates[deferredIndex];
         if (deferredSource === undefined) {
           throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
         }
