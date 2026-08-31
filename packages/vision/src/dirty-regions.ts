@@ -29,7 +29,20 @@ export const DirtyRegionInputSchema = z.preprocess(
     width: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
     height: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER)
   }).strict()
-);
+).superRefine((region, context) => {
+  const right = region.x + region.width;
+  const bottom = region.y + region.height;
+  if (!Number.isFinite(right)
+      || right < Number.MIN_SAFE_INTEGER
+      || right > Number.MAX_SAFE_INTEGER) {
+    context.addIssue({ code: "custom", message: "Dirty region right edge exceeds safe numeric range" });
+  }
+  if (!Number.isFinite(bottom)
+      || bottom < Number.MIN_SAFE_INTEGER
+      || bottom > Number.MAX_SAFE_INTEGER) {
+    context.addIssue({ code: "custom", message: "Dirty region bottom edge exceeds safe numeric range" });
+  }
+});
 export type DirtyRegionInput = z.infer<typeof DirtyRegionInputSchema>;
 
 const DIRTY_REGION_CONFIG_FIELDS = new Set([
