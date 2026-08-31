@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BoundedMathError,
   MAX_COMBINATORIAL_N,
+  MAX_FINITE_CONTAINER_ITEMS,
   MAX_INTEGER_DECIMAL_DIGITS,
   addRationals,
   areCongruent,
@@ -187,6 +188,17 @@ describe("deterministic math utilities", () => {
       }
     }
     expect(combinationsWithRepetition(MAX_COMBINATORIAL_N, 2)).toBe(500500n);
+  });
+
+  it("enforces finite set and multiset helper item boundaries", () => {
+    const atLimit = Array.from({ length: MAX_FINITE_CONTAINER_ITEMS }, (_, index) => `v-${String(index)}`);
+    expect(sameFiniteSet(atLimit, [...atLimit].reverse())).toBe(true);
+    expect(sameFiniteMultiset(atLimit, [...atLimit].reverse())).toBe(true);
+
+    const overLimit = [...atLimit, "overflow"];
+    expect(() => sameFiniteSet(overLimit, overLimit)).toThrow(BoundedMathError);
+    expect(() => sameFiniteMultiset(overLimit, overLimit)).toThrow(BoundedMathError);
+    expect(() => isPermutationOf(overLimit, overLimit)).toThrow(BoundedMathError);
   });
 
   it("checks sets, multisets, and permutations without conflating multiplicity", () => {
