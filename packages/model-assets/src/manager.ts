@@ -650,9 +650,10 @@ export class ModelAssetManager {
       );
     }
 
-    const keepKeys = new Set(
-      keepValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
-    );
+    const keepKeys = new Set<string>();
+    for (let index = 0; index < keepValues.length; index += 1) {
+      keepKeys.add(artifactInstallationKey(parseAssetManifest(keepValues[index])));
+    }
     const paths = await this.getSafeCachePaths();
     return await this.withMutationGate(paths, async (shared) => {
       if (shared.activeInstallationCounts.size > 0) {
