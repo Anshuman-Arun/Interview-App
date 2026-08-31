@@ -186,6 +186,34 @@ describe("repository architecture boundary checker", () => {
         "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport class Leak { static token = secret; }\n"
       }
     },
+    {
+      name: "authorized vision constructor module re-exporting a destructured capability alias",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nconst { token: alias } = { token: secret };\nexport { alias };\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module re-exporting an assigned capability alias",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nlet alias;\nalias = secret;\nexport { alias };\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module exposing capability through an object getter",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport const leak = { get token() { return secret; } };\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module exposing capability through a function expression",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport const leak = function () { return secret; };\n"
+      }
+    },
 
     {
       name: "an unmapped new project package",
