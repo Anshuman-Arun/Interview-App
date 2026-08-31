@@ -138,6 +138,8 @@ describe("vision snapshot validation and hashing", () => {
 
   it("rejects caller dimension mismatches", () => {
     const bytes = makePng(3, 2);
+    expect(() => snapshot(bytes, { declaredWidth: 4 }))
+      .toThrowError(VisionPreprocessingError);
     try {
       snapshot(bytes, { declaredWidth: 4 });
     } catch (error) {
@@ -156,25 +158,19 @@ describe("vision snapshot validation and hashing", () => {
       encodedBytes: bytes
     };
 
+    expect(() => createValidatedImageSnapshot(base, { maxEncodedBytes: bytes.length - 1 }))
+      .toThrowError(VisionPreprocessingError);
+    expect(() => createValidatedImageSnapshot(base, { maxWidth: 7 }))
+      .toThrowError(VisionPreprocessingError);
+    expect(() => createValidatedImageSnapshot(base, { maxHeight: 5 }))
+      .toThrowError(VisionPreprocessingError);
+    expect(() => createValidatedImageSnapshot(base, { maxPixels: 47 }))
+      .toThrowError(VisionPreprocessingError);
+
     try {
       createValidatedImageSnapshot(base, { maxEncodedBytes: bytes.length - 1 });
     } catch (error) {
       expectCode(error, "IMAGE_TOO_LARGE_BYTES");
-    }
-    try {
-      createValidatedImageSnapshot(base, { maxWidth: 7 });
-    } catch (error) {
-      expectCode(error, "IMAGE_DIMENSIONS_EXCEEDED");
-    }
-    try {
-      createValidatedImageSnapshot(base, { maxHeight: 5 });
-    } catch (error) {
-      expectCode(error, "IMAGE_DIMENSIONS_EXCEEDED");
-    }
-    try {
-      createValidatedImageSnapshot(base, { maxPixels: 47 });
-    } catch (error) {
-      expectCode(error, "IMAGE_PIXELS_EXCEEDED");
     }
   });
 
@@ -404,6 +400,13 @@ describe("crop, resize, tiling, and cancellation", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects enormous standalone tile plans before materializing axis arrays", () => {
+    expect(() => planImageTiles(
+      { width: Number.MAX_SAFE_INTEGER, height: 1 },
+      { tileWidth: 1, tileHeight: 1, overlap: 0, maxTileCount: 1 }
+    )).toThrowError(VisionPreprocessingError);
+  });
+
   it("composes crop and tile coordinate transforms back to the original snapshot", async () => {
     const source = snapshot(makePng(12, 8));
     const crop = await cropImage(source, { x: 2, y: 1, width: 8, height: 6 });
@@ -458,10 +461,22 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(JSON.stringify(request.payload)).not.toContain(Buffer.from(crop.artifact.readBytes()).toString("base64"));
   });
 
+  it("accepts maximum-length snapshot IDs without overflowing prepared payload identity metadata", () => {
+    const source = snapshot(makePng(2, 2), { id: "s".repeat(128), revision: 6 });
+    const request = prepareVisionImageRequest(source, "context");
+    expect(request.imageIdentity.length).toBeGreaterThan(160);
+    expect(request.payload.metadata.imageIdentity).toBe(request.imageIdentity);
+  });
+
   it("creates stable request identities for repeatable preparation", () => {
     const source = snapshot(makePng(3, 3), { revision: 6 });
     expect(prepareVisionImageRequest(source, "context").requestId)
       .toBe(prepareVisionImageRequest(source, "context").requestId);
+  });
+
+  it("validates batch purpose even when the candidate list is empty", () => {
+    expect(() => prepareVisionBatch([], "invalid purpose with spaces"))
+      .toThrow();
   });
 
   it("fails closed when a batch exceeds image/byte/pixel/crop budgets", async () => {
