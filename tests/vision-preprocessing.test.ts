@@ -1281,6 +1281,15 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(JSON.stringify(request.payload)).not.toContain(Buffer.from(crop.artifact.readBytes()).toString("base64"));
   });
 
+  it("fails closed instead of throwing through hostile payload proxy traps", () => {
+    const hostile = new Proxy({}, {
+      has() {
+        throw new Error("hostile has trap");
+      }
+    });
+    expect(requestPayloadIsSafeReference(hostile)).toBe(false);
+  });
+
   it("accepts maximum-length and heavily escaped snapshot IDs with fixed bounded raster identities", () => {
     for (const id of ["s".repeat(128), "\u0000".repeat(128)]) {
       const source = snapshot(makePng(2, 2), { id, revision: 6 });
@@ -1432,6 +1441,21 @@ describe("provider-neutral request preparation and budgeting", () => {
       maxTotalPixels: 1_000_000,
       maxCropsOrTiles: 0
     })).toThrowError(VisionPreprocessingError);
+  });
+
+  it("maps hostile candidate length access to a clean invalid-image failure", () => {
+    const hostile = new Proxy([] as ImageSnapshot[], {
+      get(target, property, receiver) {
+        if (property === "length") throw new Error("hostile length trap");
+        return Reflect.get(target, property, receiver);
+      }
+    });
+    try {
+      prepareVisionBatch(hostile, "analysis");
+      throw new Error("Expected hostile candidate rejection");
+    } catch (error) {
+      expectCode(error, "INVALID_IMAGE");
+    }
   });
 
   it("rejects oversized candidate lists before budgeting or payload preparation", () => {
