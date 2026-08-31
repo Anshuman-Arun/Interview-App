@@ -970,6 +970,33 @@ describe("local worker lifecycle manager", () => {
     expect(signalExposed).toBe(false);
   });
 
+  it("rejects fields that are invalid for a selected lifecycle mode", () => {
+    const runtime = manager();
+
+    expect(() => runtime.register(definition("stable-with-url", "ready", {
+      readiness: {
+        kind: "STABLE_PROCESS",
+        stableMs: 20,
+        url: "http://127.0.0.1:43199/health"
+      } as unknown as LocalComponentDefinition["readiness"]
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register(definition("stdout-with-interval", "ready", {
+      readiness: {
+        kind: "STDOUT_LINE",
+        evaluate: () => true,
+        intervalMs: 10
+      } as unknown as LocalComponentDefinition["readiness"]
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register(definition("never-with-retries", "ready", {
+      restartPolicy: {
+        mode: "NEVER",
+        maxRetries: 1
+      } as unknown as LocalComponentDefinition["restartPolicy"]
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+  });
+
   it("rejects contradictory output bounds and effectively unbounded retry counts", () => {
     const runtime = manager();
 
