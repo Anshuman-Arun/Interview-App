@@ -1,4 +1,4 @@
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { sanitizeDiagnosticRecord, sanitizeDiagnosticText } from "../../diagnostics/src/index.js";
 import { BoundedLineBuffer, BoundedLineFramer } from "./buffer.js";
 import { buildLocalEnvironment, type BuiltLocalEnvironment } from "./environment.js";
@@ -1225,12 +1225,7 @@ async function terminateChildTree(
   const pid = child.pid;
   if (pid === undefined) return;
   if (platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(pid), "/t"], {
-      shell: false,
-      windowsHide: true,
-      stdio: "ignore",
-      timeout: commandTimeoutMs
-    });
+    await runTaskkill(pid, false, commandTimeoutMs);
     return;
   }
   try {
@@ -1248,13 +1243,8 @@ async function forceKillChildTree(
   const pid = child.pid;
   if (pid === undefined) return;
   if (platform === "win32") {
-    const result = spawnSync("taskkill", ["/pid", String(pid), "/t", "/f"], {
-      shell: false,
-      windowsHide: true,
-      stdio: "ignore",
-      timeout: commandTimeoutMs
-    });
-    if ((result.error !== undefined || result.status !== 0) && isChildAlive(child)) child.kill("SIGKILL");
+    const treeKilled = await runTaskkill(pid, true, commandTimeoutMs);
+    if (!treeKilled && isChildAlive(child)) child.kill("SIGKILL");
     return;
   }
   try {
@@ -1262,6 +1252,47 @@ async function forceKillChildTree(
   } catch {
     child.kill("SIGKILL");
   }
+}
+
+function runTaskkill(
+  pid: number,
+  force: boolean,
+  timeoutMs: number
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    let task: ReturnType<typeof spawn>;
+    try {
+      task = spawn("taskkill", [
+        "/pid",
+        String(pid),
+        "/t",
+        ...(force ? ["/f"] : [])
+      ], {
+        shell: false,
+        windowsHide: true,
+        stdio: "ignore"
+      });
+    } catch {
+      resolve(false);
+      return;
+    }
+
+    let settled = false;
+    const finish = (success: boolean): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      task.removeAllListeners("error");
+      task.removeAllListeners("close");
+      resolve(success);
+    };
+    const timer = setTimeout(() => {
+      task.kill();
+      finish(false);
+    }, timeoutMs);
+    task.once("error", () => finish(false));
+    task.once("close", (code) => finish(code === 0));
+  });
 }
 
 function isOwnedProcessTreeAlive(
