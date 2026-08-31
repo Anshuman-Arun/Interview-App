@@ -400,9 +400,7 @@ export class LocalRuntimeManager {
       if (child.exitCode !== null || child.signalCode !== null || record.child !== child) {
         throw new LocalRuntimeError("PROCESS_EXITED", `Component ${record.definition.id} exited during startup`);
       }
-      const reportedHandshake = readiness.handshake === undefined
-        ? undefined
-        : normalizeReportedHandshake(readiness.handshake, record.definition.id);
+      const reportedHandshake = readiness.handshake;
       validateExpectedHandshake(record.definition.expectedHandshake, reportedHandshake, record.definition.id);
       record.handshake = reportedHandshake === undefined
         ? undefined
@@ -705,7 +703,11 @@ export class LocalRuntimeManager {
         signal.removeEventListener("abort", onAbort);
       };
       const finish = (decision: LocalReadinessDecision): void => {
-        const normalized = normalizeReadinessDecision(decision);
+        const normalized = normalizeReadinessDecision(
+          decision,
+          record.definition.id,
+          record.environment.secretValues
+        );
         if (!normalized.ready || settled) return;
         settled = true;
         cleanup();
@@ -777,7 +779,11 @@ export class LocalRuntimeManager {
                 signal,
                 record.definition.id
               );
-          const normalized = normalizeReadinessDecision(decision);
+          const normalized = normalizeReadinessDecision(
+            decision,
+            record.definition.id,
+            record.environment.secretValues
+          );
           if (normalized.ready) {
             return sanitizeReadyResult(normalized, record.environment.secretValues);
           }
@@ -815,7 +821,11 @@ export class LocalRuntimeManager {
           signal,
           record.definition.id
         );
-        const normalized = normalizeReadinessDecision(decision);
+        const normalized = normalizeReadinessDecision(
+          decision,
+          record.definition.id,
+          record.environment.secretValues
+        );
         if (normalized.ready) {
           return sanitizeReadyResult(normalized, record.environment.secretValues);
         }
@@ -1553,7 +1563,11 @@ function parseLoopbackUrl(raw: unknown): URL {
   return url;
 }
 
-function normalizeReadinessDecision(decision: unknown): {
+function normalizeReadinessDecision(
+  decision: unknown,
+  componentId: string,
+  secretValues: readonly string[]
+): {
   readonly ready: boolean;
   readonly detail?: string;
   readonly handshake?: LocalComponentHandshake;
@@ -1573,11 +1587,14 @@ function normalizeReadinessDecision(decision: unknown): {
   if (detail !== undefined && typeof detail !== "string") {
     throw new LocalRuntimeError("READINESS_FAILED", "Readiness detail must be a string");
   }
-  const handshake = dataDescriptorValue(descriptors, "handshake");
+  const rawHandshake = dataDescriptorValue(descriptors, "handshake");
+  const handshake = rawHandshake === undefined
+    ? undefined
+    : normalizeReportedHandshake(rawHandshake, componentId, secretValues);
   return Object.freeze({
     ready,
     ...(detail === undefined ? {} : { detail }),
-    ...(handshake === undefined ? {} : { handshake: handshake as LocalComponentHandshake })
+    ...(handshake === undefined ? {} : { handshake })
   });
 }
 
@@ -1643,7 +1660,8 @@ function validateVersionValue(
 
 function normalizeReportedHandshake(
   handshake: unknown,
-  componentId: string
+  componentId: string,
+  secretValues: readonly string[]
 ): LocalComponentHandshake {
   const fail = (message: string): never => {
     throw new LocalRuntimeError(
@@ -1686,11 +1704,16 @@ function normalizeReportedHandshake(
     ? undefined
     : inspectHandshakeCapabilities(rawCapabilities, fail);
 
-  const metadata = dataDescriptorValue(descriptors, "metadata", fail);
-  if (metadata !== undefined) {
-    if (typeof metadata !== "object" || metadata === null || safeArrayCheck(metadata, fail)) {
+  const rawMetadata = dataDescriptorValue(descriptors, "metadata", fail);
+  let metadata: Readonly<Record<string, unknown>> | undefined;
+  if (rawMetadata !== undefined) {
+    if (typeof rawMetadata !== "object" || rawMetadata === null || safeArrayCheck(rawMetadata, fail)) {
       fail("metadata must be an object");
     }
+    metadata = sanitizeHandshakeMetadata(
+      rawMetadata as Readonly<Record<string, unknown>>,
+      secretValues
+    );
   }
 
   return Object.freeze({
