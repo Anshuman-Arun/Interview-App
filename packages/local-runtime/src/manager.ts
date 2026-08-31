@@ -840,12 +840,22 @@ export class LocalRuntimeManager {
       throwIfAborted(signal, record.definition.id);
 
       let candidate: unknown;
+      let fetchClaimed = false;
+      const fetchPromise = Promise.resolve()
+        .then(() => this.fetchImpl(url, { method: "GET", redirect: "error", signal }));
+      void fetchPromise.then(
+        (lateCandidate) => {
+          if (!fetchClaimed && signal.aborted) disposeLateFetchCandidate(lateCandidate);
+        },
+        () => undefined
+      );
       try {
         candidate = await awaitWithAbort(
-          Promise.resolve().then(() => this.fetchImpl(url, { method: "GET", redirect: "error", signal })),
+          fetchPromise,
           signal,
           record.definition.id
         );
+        fetchClaimed = true;
       } catch {
         if (signal.aborted) {
           throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
@@ -2371,6 +2381,11 @@ function awaitWithAbort<T>(
       }
     );
   });
+}
+
+function disposeLateFetchCandidate(value: unknown): void {
+  if (typeof value !== "object" || value === null || utilTypes.isProxy(value)) return;
+  disposeResponseBody(value as Response);
 }
 
 function validateFetchResponse(value: unknown, componentId: string): Response {
