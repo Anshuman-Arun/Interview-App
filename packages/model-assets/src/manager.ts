@@ -267,6 +267,13 @@ export class ModelAssetManager {
         || !path.isAbsolute(rootDir)) {
       throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must be an absolute path.");
     }
+    const normalizedRoot = path.resolve(rootDir);
+    if (normalizedRoot === path.parse(normalizedRoot).root) {
+      throw new ModelAssetError(
+        "INVALID_CACHE_ROOT",
+        "Asset cache root may not be a filesystem or share root."
+      );
+    }
 
     const rawCrossOriginRedirects = ownValue(optionRecord, "allowCrossOriginRedirects");
     if (rawCrossOriginRedirects !== undefined && typeof rawCrossOriginRedirects !== "boolean") {
