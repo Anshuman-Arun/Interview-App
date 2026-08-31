@@ -460,6 +460,58 @@ function inspectPlainDataObjectProperties(
   return Object.freeze(inspected);
 }
 
+function readResolverMethodWithoutAccessors(
+  value: object,
+  key: "resolveSecret" | "hasSecret"
+): unknown {
+  const seen = new Set<object>();
+  let current: object | null = value;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (seen.has(current)) {
+      throw new ProviderControlPlaneError(
+        "INVALID_FACTORY_INPUT",
+        "Provider secret resolver prototype chain is malformed"
+      );
+    }
+    seen.add(current);
+
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      throw new ProviderControlPlaneError(
+        "INVALID_FACTORY_INPUT",
+        "Provider secret resolver is malformed"
+      );
+    }
+    if (descriptor !== undefined) {
+      if (!("value" in descriptor)) {
+        throw new ProviderControlPlaneError(
+          "INVALID_FACTORY_INPUT",
+          "Provider secret resolver methods must not be accessors"
+        );
+      }
+      return descriptor.value;
+    }
+
+    try {
+      current = Object.getPrototypeOf(current);
+    } catch {
+      throw new ProviderControlPlaneError(
+        "INVALID_FACTORY_INPUT",
+        "Provider secret resolver prototype chain is malformed"
+      );
+    }
+  }
+  if (current !== null) {
+    throw new ProviderControlPlaneError(
+      "INVALID_FACTORY_INPUT",
+      "Provider secret resolver prototype chain is too deep"
+    );
+  }
+  return undefined;
+}
+
 function normalizeFactorySecretResolver(
   value: unknown,
   resolved: ResolvedProviderConfigurationValue
@@ -474,17 +526,8 @@ function normalizeFactorySecretResolver(
     );
   }
 
-  let resolveSecretCandidate: unknown;
-  let hasSecretCandidate: unknown;
-  try {
-    resolveSecretCandidate = Reflect.get(value, "resolveSecret");
-    hasSecretCandidate = Reflect.get(value, "hasSecret");
-  } catch {
-    throw new ProviderControlPlaneError(
-      "INVALID_FACTORY_INPUT",
-      "Provider secret resolver is malformed"
-    );
-  }
+  const resolveSecretCandidate = readResolverMethodWithoutAccessors(value, "resolveSecret");
+  const hasSecretCandidate = readResolverMethodWithoutAccessors(value, "hasSecret");
   if (
     typeof resolveSecretCandidate !== "function"
     || (hasSecretCandidate !== undefined && typeof hasSecretCandidate !== "function")
@@ -1559,12 +1602,14 @@ export async function evaluateProviderReadiness(input: {
     }
   } else {
     let resolver: ProviderSecretResolver | undefined;
-    let hasSecret: ProviderSecretResolver["hasSecret"];
-    let resolveSecret: ProviderSecretResolver["resolveSecret"] | undefined;
+    let hasSecret: unknown;
+    let resolveSecret: unknown;
     try {
       resolver = input.secretResolver;
-      hasSecret = resolver?.hasSecret;
-      resolveSecret = resolver?.resolveSecret;
+      if (resolver !== undefined) {
+        hasSecret = readResolverMethodWithoutAccessors(resolver, "hasSecret");
+        resolveSecret = readResolverMethodWithoutAccessors(resolver, "resolveSecret");
+      }
     } catch {
       return freezeNullPrototype({
         state: "UNKNOWN",

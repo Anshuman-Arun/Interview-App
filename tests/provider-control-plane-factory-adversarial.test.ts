@@ -481,7 +481,8 @@ describe("credential readiness edge cases", () => {
     });
   });
 
-  it("treats a throwing hasSecret accessor as UNKNOWN instead of escaping readiness", async () => {
+  it("treats accessor-backed resolver methods as UNKNOWN without invoking them", async () => {
+    let getterCalls = 0;
     const resolver = Object.defineProperty({
       async resolveSecret() {
         return "runtime-only-key";
@@ -489,6 +490,7 @@ describe("credential readiness edge cases", () => {
     }, "hasSecret", {
       enumerable: true,
       get() {
+        getterCalls += 1;
         throw new Error("Authorization: Bearer accessor-secret");
       }
     });
@@ -502,6 +504,29 @@ describe("credential readiness edge cases", () => {
       providerId: "gemini-api",
       modelId: "gemini-2.5-flash",
       reason: "CREDENTIAL_STATUS_UNKNOWN"
+    });
+    expect(getterCalls).toBe(0);
+  });
+
+  it("accepts class-based resolver methods without invoking property accessors", async () => {
+    class ClassResolver implements ProviderSecretResolver {
+      public async resolveSecret(): Promise<string | undefined> {
+        return "runtime-only-key";
+      }
+
+      public async hasSecret(): Promise<boolean> {
+        return true;
+      }
+    }
+
+    await expect(evaluateProviderReadiness({
+      registry: registerBuiltInProviders(),
+      configuration: GEMINI_CONFIGURATION,
+      secretResolver: new ClassResolver()
+    })).resolves.toEqual({
+      state: "AVAILABLE",
+      providerId: "gemini-api",
+      modelId: "gemini-2.5-flash"
     });
   });
 
@@ -1085,6 +1110,29 @@ describe("adapter factory adversarial boundary", () => {
     });
     expect(adapter.name).toBe("mock-model");
     expect(resolverVisibleToFactory).toBe(false);
+  });
+
+  it("rejects accessor-backed resolveSecret methods before provider factory execution", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: GEMINI_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    let getterCalls = 0;
+    const resolver = Object.defineProperty({}, "resolveSecret", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error("must not execute");
+      }
+    });
+
+    await expect(factory.createAdapter({
+      resolved,
+      secretResolver: resolver
+    })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(getterCalls).toBe(0);
   });
 
   it("normalizes Gemini resolver failures and rejects non-string resolver results", async () => {
