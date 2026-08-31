@@ -705,6 +705,88 @@ describe("adapter factory adversarial boundary", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("rejects accessor-backed mock runtime proposal fields without invoking them", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: MOCK_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    let getterCalls = 0;
+    const runtime = Object.defineProperty({}, "proposal", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return PROPOSAL;
+      }
+    });
+
+    await expect(factory.createAdapter({ resolved, runtime }))
+      .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects nested accessor-backed mock proposal fields without invoking them", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: MOCK_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    let getterCalls = 0;
+    const proposal = { ...PROPOSAL };
+    Object.defineProperty(proposal, "speechText", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return PROPOSAL.speechText;
+      }
+    });
+
+    await expect(factory.createAdapter({
+      resolved,
+      runtime: { proposal }
+    })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects accessor-backed mock board-action array entries without invoking them", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: MOCK_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    let getterCalls = 0;
+    const boardAction = {
+      operation: "write_text",
+      layer: "AI_ANNOTATION",
+      content: "x",
+      annotationPurpose: "test"
+    };
+    const boardActions = [boardAction];
+    Object.defineProperty(boardActions, "0", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return boardAction;
+      }
+    });
+
+    await expect(factory.createAdapter({
+      resolved,
+      runtime: {
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          boardActions
+        }
+      }
+    })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(getterCalls).toBe(0);
+  });
+
   it("rejects extra factory-input fields rather than silently ignoring them", async () => {
     const registry = registerBuiltInProviders();
     const resolved = resolveProviderConfiguration({

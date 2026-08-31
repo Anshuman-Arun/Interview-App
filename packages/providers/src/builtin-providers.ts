@@ -13,6 +13,159 @@ import {
 
 const registerProviderDefinitions = ProviderRegistry.prototype.registerMany;
 
+const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
+const PROPOSAL_KEYS = new Set([
+  "realizedAction",
+  "claimedDisclosureLevel",
+  "claimedDisclosureIds",
+  "speechText",
+  "boardActions"
+]);
+const BOARD_ACTION_KEYS = new Set([
+  "operation",
+  "layer",
+  "content",
+  "targetShapeId",
+  "expectedShapeRevision",
+  "annotationPurpose"
+]);
+
+function invalidMockRuntime(): never {
+  throw new ProviderControlPlaneError(
+    "INVALID_FACTORY_INPUT",
+    "Mock provider factory runtime is malformed"
+  );
+}
+
+function readMockRuntimeMemberWithoutAccessors(
+  value: object,
+  key: string
+): unknown {
+  const seen = new Set<object>();
+  let current: object | null = value;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) return undefined;
+    if (seen.has(current)) return invalidMockRuntime();
+    seen.add(current);
+
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      return invalidMockRuntime();
+    }
+    if (descriptor !== undefined) {
+      if (!("value" in descriptor)) return invalidMockRuntime();
+      return descriptor.value;
+    }
+    try {
+      current = Object.getPrototypeOf(current);
+    } catch {
+      return invalidMockRuntime();
+    }
+  }
+  if (current !== null) return invalidMockRuntime();
+  return undefined;
+}
+
+function assertNoUnknownEnumerableMockFields(
+  value: object,
+  allowedKeys: ReadonlySet<string>
+): void {
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    return invalidMockRuntime();
+  }
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (descriptor.enumerable === true && !allowedKeys.has(key)) {
+      invalidMockRuntime();
+    }
+  }
+}
+
+function snapshotMockArray(
+  value: unknown,
+  mapItem: (item: unknown) => unknown
+): readonly unknown[] {
+  if (!Array.isArray(value)) return invalidMockRuntime();
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    return invalidMockRuntime();
+  }
+  const rawLength: unknown = descriptors.length?.value;
+  if (
+    typeof rawLength !== "number"
+    || !Number.isSafeInteger(rawLength)
+    || rawLength < 0
+  ) {
+    return invalidMockRuntime();
+  }
+
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (descriptor === undefined || !("value" in descriptor)) {
+      return invalidMockRuntime();
+    }
+    snapshot.push(mapItem(descriptor.value));
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotBoardAction(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return invalidMockRuntime();
+  }
+  assertNoUnknownEnumerableMockFields(value, BOARD_ACTION_KEYS);
+  const snapshot: Record<string, unknown> = {};
+  Object.setPrototypeOf(snapshot, null);
+  for (const key of BOARD_ACTION_KEYS) {
+    const item = readMockRuntimeMemberWithoutAccessors(value, key);
+    if (item !== undefined) snapshot[key] = item;
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotInterviewerProposal(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return invalidMockRuntime();
+  }
+  assertNoUnknownEnumerableMockFields(value, PROPOSAL_KEYS);
+
+  const snapshot: Record<string, unknown> = {};
+  Object.setPrototypeOf(snapshot, null);
+  for (const key of PROPOSAL_KEYS) {
+    const item = readMockRuntimeMemberWithoutAccessors(value, key);
+    if (item === undefined) continue;
+    if (key === "claimedDisclosureIds") {
+      snapshot[key] = snapshotMockArray(item, (entry) => entry);
+    } else if (key === "boardActions") {
+      snapshot[key] = snapshotMockArray(item, snapshotBoardAction);
+    } else {
+      snapshot[key] = item;
+    }
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotMockFactoryRuntime(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return invalidMockRuntime();
+  }
+  assertNoUnknownEnumerableMockFields(value, MOCK_RUNTIME_KEYS);
+  const proposal = readMockRuntimeMemberWithoutAccessors(value, "proposal");
+  const snapshot: Record<string, unknown> = {};
+  Object.setPrototypeOf(snapshot, null);
+  if (proposal !== undefined) {
+    snapshot.proposal = snapshotInterviewerProposal(proposal);
+  }
+  return Object.freeze(snapshot);
+}
+
 const MockProviderFactoryRuntimeSchema = z.object({
   proposal: InterviewerProposalSchema
 }).strict();
@@ -21,13 +174,14 @@ export type MockProviderFactoryRuntime = z.infer<typeof MockProviderFactoryRunti
 const mockFactory: ProviderAdapterFactoryDefinition = {
   id: "mock-model-adapter-factory",
   createAdapter(input) {
-    const runtime = MockProviderFactoryRuntimeSchema.safeParse(input.runtime);
-    if (!runtime.success) {
-      throw new ProviderControlPlaneError(
-        "INVALID_FACTORY_INPUT",
-        "Mock provider factory runtime is malformed"
-      );
+    let runtimeCandidate: unknown;
+    try {
+      runtimeCandidate = snapshotMockFactoryRuntime(input.runtime);
+    } catch {
+      return invalidMockRuntime();
     }
+    const runtime = MockProviderFactoryRuntimeSchema.safeParse(runtimeCandidate);
+    if (!runtime.success) return invalidMockRuntime();
     return new MockModelAdapter({ proposal: runtime.data.proposal });
   }
 };
