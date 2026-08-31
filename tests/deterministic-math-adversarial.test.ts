@@ -512,16 +512,28 @@ describe("adversarial deterministic math verification", () => {
     });
     expect(withinBudget.status).toBe("VERIFIED");
 
-    const formerlyOrderSensitive = await verifyJson(new RationalArithmeticVerifier(), {
-      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
-      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
-      claim: {
-        kind: "EQUALITY",
-        left: { kind: "SUM", terms: cancellationTerms(36) },
-        right: fractionExpression("0")
-      }
-    });
-    expect(formerlyOrderSensitive.status).toBe("VERIFIED");
+    const separatedTerms = [
+      ...denominators.slice(0, 36).flatMap((denominator) => [
+        fractionExpression("1", denominator.toString()),
+        fractionExpression("1", denominator.toString())
+      ]),
+      ...denominators.slice(0, 36).map((denominator) =>
+        fractionExpression("-2", denominator.toString())
+      )
+    ];
+
+    for (const terms of [cancellationTerms(36), separatedTerms]) {
+      const result = await verifyJson(new RationalArithmeticVerifier(), {
+        protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+        protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+        claim: {
+          kind: "EQUALITY",
+          left: { kind: "SUM", terms },
+          right: fractionExpression("0")
+        }
+      });
+      expect(result.status).toBe("VERIFIED");
+    }
 
     expect(() => sumRationals(
       denominators.slice(0, 36).map((denominator) => rational(1n, denominator))
