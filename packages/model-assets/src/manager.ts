@@ -12,7 +12,7 @@ import {
   pathEntryExists,
   readStoredManifest,
   removeEntryInsideRoot,
-  sumRegularFileBytes,
+  sumArtifactPayloadBytes,
   verifyArtifactFile,
   writeStoredManifest,
   type CachePaths
