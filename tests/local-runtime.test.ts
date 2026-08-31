@@ -988,6 +988,24 @@ describe("local worker lifecycle manager", () => {
     expect(observed).toMatchObject({ inheritedValue: "snapshot-parent-value" });
   });
 
+  it("rejects inherited parent values containing NUL before spawning", () => {
+    expect(() => buildLocalEnvironment(
+      { inherit: ["SAFE_PARENT"] },
+      { SAFE_PARENT: "invalid\0parent-value" },
+      "linux"
+    )).toThrow(/contains a NUL byte/iu);
+
+    const runtime = manager({
+      parentEnvironment: {
+        PATH: process.env.PATH,
+        SAFE_PARENT: "invalid\0parent-value"
+      }
+    });
+    expect(() => runtime.register(definition("invalid-inherited-value", "ready", {
+      environment: { inherit: ["SAFE_PARENT"] }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+  });
+
   it("uses platform-specific default inheritance and explicit inherited variables", async () => {
     const posix = buildLocalEnvironment(
       { inherit: ["SAFE_PARENT"] },
