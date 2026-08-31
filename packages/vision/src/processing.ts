@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PNG } from "pngjs";
+import { snapshotOwnEnumerableRecord } from "./object-validation.js";
 import { computeVisionArtifactId } from "./artifact-identity.js";
 import { INTERNAL_VISION_ARTIFACT_CONSTRUCTION } from "./internal-artifact-construction.js";
 import { assertRectWithinImage, rectArea, validateImageRect, type ImageRect } from "./geometry.js";
@@ -103,47 +104,24 @@ function isAbortSignal(value: unknown): value is AbortSignal {
 }
 
 function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOptions> {
-  let isArray: boolean;
-  try {
-    isArray = Array.isArray(input);
-  } catch {
-    throw new TypeError("Vision processing options could not be inspected safely");
-  }
-  if (typeof input !== "object" || input === null || isArray) {
-    throw new TypeError("Vision processing options must be an object");
-  }
-  const options = input;
-  let optionKeys: string[];
-  try {
-    optionKeys = Object.keys(options);
-  } catch {
-    throw new TypeError("Vision processing options could not be inspected safely");
-  }
-  for (const key of optionKeys) {
+  const options = snapshotOwnEnumerableRecord(input, "Vision processing options");
+  for (const key of Object.keys(options)) {
     if (!PROCESSING_OPTION_KEYS.has(key)) {
       throw new RangeError(`Unknown vision processing option: ${key}`);
     }
   }
 
-  function safeOption(name: string): unknown {
-    try {
-      return Reflect.get(options, name);
-    } catch {
-      throw new TypeError(`Vision processing option ${name} could not be read safely`);
-    }
-  }
-
-  const signal: unknown = safeOption("signal");
+  const signal = options["signal"];
   if (signal !== undefined && !isAbortSignal(signal)) {
     throw new TypeError("signal must be an AbortSignal");
   }
 
-  const clock: unknown = safeOption("now");
+  const clock = options["now"];
   if (clock !== undefined && !isProcessingClock(clock)) {
     throw new TypeError("now must be a function");
   }
 
-  const outputBytes: unknown = safeOption("maxOutputEncodedBytes");
+  const outputBytes = options["maxOutputEncodedBytes"];
   let normalizedOutputBytes: number | undefined;
   if (outputBytes !== undefined) {
     if (typeof outputBytes !== "number") throw new RangeError("maxOutputEncodedBytes must be numeric");
@@ -153,7 +131,7 @@ function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOp
     }
   }
 
-  const totalOutputBytes: unknown = safeOption("maxTotalOutputEncodedBytes");
+  const totalOutputBytes = options["maxTotalOutputEncodedBytes"];
   let normalizedTotalOutputBytes: number | undefined;
   if (totalOutputBytes !== undefined) {
     if (typeof totalOutputBytes !== "number") throw new RangeError("maxTotalOutputEncodedBytes must be numeric");
