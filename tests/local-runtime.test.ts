@@ -231,6 +231,24 @@ describe("local worker lifecycle manager", () => {
     expect(Object.isFrozen(statuses[0])).toBe(true);
   });
 
+  it("lets a joining start caller cancel its own wait without cancelling the shared start", async () => {
+    const runtime = manager();
+    runtime.register(definition("joined-cancel", "delayed-ready", {
+      startupTimeoutMs: 1_000
+    }, ["120"]));
+
+    const owner = runtime.start("joined-cancel");
+    await waitForStatus(runtime, "joined-cancel", (status) => status.state === "STARTING");
+
+    const controller = new AbortController();
+    const joined = runtime.start("joined-cancel", { signal: controller.signal });
+    controller.abort();
+
+    await expect(joined).rejects.toMatchObject({ code: "START_CANCELLED" });
+    await expect(owner).resolves.toMatchObject({ state: "READY" });
+    expect(runtime.getStatus("joined-cancel").state).toBe("READY");
+  });
+
   it("times out readiness and ignores malformed stdout as trusted protocol", async () => {
     const runtime = manager();
     runtime.register(definition("malformed", "malformed-ready", { startupTimeoutMs: 100 }));
