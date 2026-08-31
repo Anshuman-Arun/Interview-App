@@ -552,6 +552,104 @@ describe("adversarial deterministic math verification", () => {
     }
   });
 
+  it("enforces the exact expression-node boundary in both grammars", async () => {
+    const integerFourNode = () => ({
+      kind: "NEGATE" as const,
+      operand: {
+        kind: "ADD" as const,
+        left: integer("1"),
+        right: integer("1")
+      }
+    });
+    const integerThreeNode = {
+      kind: "ADD" as const,
+      left: integer("1"),
+      right: integer("1")
+    };
+    const integerAtLimit = {
+      kind: "SUM" as const,
+      terms: [
+        ...Array.from({ length: 127 }, integerFourNode),
+        integerThreeNode
+      ]
+    };
+    const integerOverLimit = {
+      kind: "SUM" as const,
+      terms: Array.from({ length: 128 }, integerFourNode)
+    };
+
+    const integerAccepted = await verifyJson(new ModularArithmeticVerifier(), {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "DIVISIBILITY",
+        divisor: "1",
+        dividend: integerAtLimit
+      }
+    });
+    expect(integerAccepted.status).toBe("VERIFIED");
+
+    const integerRejected = await verifyJson(new ModularArithmeticVerifier(), {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "DIVISIBILITY",
+        divisor: "1",
+        dividend: integerOverLimit
+      }
+    });
+    expect(integerRejected.status).toBe("UNRESOLVED");
+    expect(integerRejected.reason).toContain("RESOURCE_LIMIT");
+
+    const rationalFourNode = () => ({
+      kind: "NEGATE" as const,
+      operand: {
+        kind: "ADD" as const,
+        left: fractionExpression("1"),
+        right: fractionExpression("1")
+      }
+    });
+    const rationalThreeNode = {
+      kind: "ADD" as const,
+      left: fractionExpression("1"),
+      right: fractionExpression("1")
+    };
+    const rationalAtLimit = {
+      kind: "SUM" as const,
+      terms: [
+        ...Array.from({ length: 127 }, rationalFourNode),
+        rationalThreeNode
+      ]
+    };
+    const rationalOverLimit = {
+      kind: "SUM" as const,
+      terms: Array.from({ length: 128 }, rationalFourNode)
+    };
+
+    const rationalAccepted = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: rationalAtLimit,
+        right: fractionExpression("-252")
+      }
+    });
+    expect(rationalAccepted.status).toBe("VERIFIED");
+
+    const rationalRejected = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: rationalOverLimit,
+        right: fractionExpression("0")
+      }
+    });
+    expect(rationalRejected.status).toBe("UNRESOLVED");
+    expect(rationalRejected.reason).toContain("RESOURCE_LIMIT");
+  });
+
   it("enforces the expression depth boundary for direct utility calls", () => {
     let atLimit: IntegerExpression = integer("1");
     for (let depth = 1; depth < 24; depth += 1) {
