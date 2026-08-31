@@ -29,6 +29,17 @@ function invalidRect(message: string): never {
   throw new VisionPreprocessingError("INVALID_RECTANGLE", message);
 }
 
+function parsePixelDimensions(input: PixelDimensions): PixelDimensions {
+  let parsed: ReturnType<typeof PixelDimensionsSchema.safeParse>;
+  try {
+    parsed = PixelDimensionsSchema.safeParse(input);
+  } catch {
+    invalidRect("Image dimensions could not be read safely");
+  }
+  if (!parsed.success) invalidRect("Image dimensions must be positive safe integers");
+  return parsed.data;
+}
+
 function safeAdd(left: number, right: number, label: string): number {
   const result = left + right;
   if (!Number.isSafeInteger(result)) invalidRect(`${label} exceeds safe integer range`);
@@ -36,7 +47,12 @@ function safeAdd(left: number, right: number, label: string): number {
 }
 
 export function validateImageRect(input: ImageRect): ImageRect {
-  const parsed = ImageRectSchema.safeParse(input);
+  let parsed: ReturnType<typeof ImageRectSchema.safeParse>;
+  try {
+    parsed = ImageRectSchema.safeParse(input);
+  } catch {
+    invalidRect("Rectangle coordinates could not be read safely");
+  }
   if (!parsed.success) invalidRect("Rectangle coordinates must be safe integers with positive width and height");
   safeAdd(parsed.data.x, parsed.data.width, "Rectangle right edge");
   safeAdd(parsed.data.y, parsed.data.height, "Rectangle bottom edge");
@@ -44,12 +60,17 @@ export function validateImageRect(input: ImageRect): ImageRect {
 }
 
 export function imageBounds(dimensions: PixelDimensions): ImageRect {
-  const parsed = PixelDimensionsSchema.parse(dimensions);
+  const parsed = parsePixelDimensions(dimensions);
   return Object.freeze({ x: 0, y: 0, width: parsed.width, height: parsed.height });
 }
 
 export function normalizeRect(corners: RectCorners): ImageRect {
-  const parsed = RectCornersSchema.safeParse(corners);
+  let parsed: ReturnType<typeof RectCornersSchema.safeParse>;
+  try {
+    parsed = RectCornersSchema.safeParse(corners);
+  } catch {
+    invalidRect("Rectangle corners could not be read safely");
+  }
   if (!parsed.success) invalidRect("Rectangle corners must be safe integers");
 
   const x = Math.min(parsed.data.x1, parsed.data.x2);
