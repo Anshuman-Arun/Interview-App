@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { actualUint8ArrayByteLength } from "./byte-validation.js";
+import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION } from "./internal-artifact-construction.js";
 import { assertSupportedPngHeaderParameters } from "./png-validation.js";
 import {
   DEFAULT_IMAGE_VALIDATION_LIMITS,
@@ -157,7 +158,7 @@ export function createValidatedImageSnapshot(
   });
 
   try {
-    return new ImageSnapshot(metadata, bytes);
+    return new ImageSnapshot(INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION, metadata, bytes);
   } catch (error) {
     if (error instanceof RangeError) {
       throw new VisionPreprocessingError("INVALID_IMAGE", "PNG decoding failed validation");
