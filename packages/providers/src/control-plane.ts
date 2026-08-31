@@ -91,27 +91,22 @@ export const CapabilitySupportSchema = z.enum(["SUPPORTED", "UNSUPPORTED", "UNKN
 export type CapabilitySupport = z.infer<typeof CapabilitySupportSchema>;
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
-const NonBlankTextSchema = z.string()
-  .refine((value) => !CONTROL_CHARACTER_PATTERN.test(value), {
-    message: "CONTROL_CHARACTERS_NOT_ALLOWED"
-  })
-  .transform((value) => value.trim())
-  .refine((value) => value.length > 0, {
-    message: "TEXT_MUST_NOT_BE_BLANK"
-  });
+
 function nonSecretTextSchema(maxLength: number) {
-  return NonBlankTextSchema.max(maxLength).refine(
-    (value) => !containsSecretLikeConfigurationText(value),
-    { message: "SECRET_IN_CONFIGURATION" }
-  );
+  return z.string()
+    .refine((value) => !CONTROL_CHARACTER_PATTERN.test(value), {
+      message: "CONTROL_CHARACTERS_NOT_ALLOWED"
+    })
+    .transform((value) => value.trim())
+    .pipe(z.string().min(1).max(maxLength))
+    .refine((value) => !containsSecretLikeConfigurationText(value), {
+      message: "SECRET_IN_CONFIGURATION"
+    });
 }
+
 const BoundedDisplayTextSchema = nonSecretTextSchema(160);
 const BoundedVersionTextSchema = nonSecretTextSchema(64);
-const ReasoningLevelSchema = NonBlankTextSchema
-  .max(64)
-  .refine((value) => !containsSecretLikeConfigurationText(value), {
-    message: "SECRET_IN_CONFIGURATION"
-  });
+const ReasoningLevelSchema = nonSecretTextSchema(64);
 const PositiveSafeIntegerSchema = z.number().int().positive().refine(
   Number.isSafeInteger,
   "Expected a positive safe integer"

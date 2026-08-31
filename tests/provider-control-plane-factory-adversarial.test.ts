@@ -192,6 +192,18 @@ describe("provider registration snapshot semantics", () => {
     expect(registry.enumerateProviders()).toEqual([]);
   });
 
+  it("preserves ordinary surrounding-space normalization in provider metadata", () => {
+    const definition = defineProvider(providerInput({
+      displayName: "  Test Provider  ",
+      definitionVersion: "  1  ",
+      capabilityVersion: "  cap-1  "
+    }));
+
+    expect(definition.displayName).toBe("Test Provider");
+    expect(definition.definitionVersion).toBe("1");
+    expect(definition.capabilityVersion).toBe("cap-1");
+  });
+
   it("rejects control characters in diagnostic-facing provider metadata", () => {
     for (const overrides of [
       { displayName: "Test\nProvider" },
