@@ -1245,6 +1245,49 @@ describe("local worker lifecycle manager", () => {
     });
   });
 
+  it("does not let readiness callback exceptions spoof lifecycle error codes", async () => {
+    const custom = manager();
+    let customProbeCalls = 0;
+    custom.register(definition("spoofed-custom-error", "ready", {
+      startupTimeoutMs: 120,
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        intervalMs: 5,
+        probe: () => {
+          customProbeCalls += 1;
+          throw new LocalRuntimeError("START_CANCELLED", "spoofed cancellation");
+        }
+      }
+    }));
+
+    await expect(custom.start("spoofed-custom-error"))
+      .rejects.toMatchObject({ code: "READINESS_TIMEOUT" });
+    expect(customProbeCalls).toBeGreaterThan(1);
+    expect(custom.getStatus("spoofed-custom-error").state).toBe("FAILED");
+
+    let httpEvaluateCalls = 0;
+    const http = manager({
+      fetch: () => Promise.resolve(new Response(null, { status: 204 }))
+    });
+    http.register(definition("spoofed-http-error", "ready", {
+      startupTimeoutMs: 120,
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        intervalMs: 5,
+        evaluate: () => {
+          httpEvaluateCalls += 1;
+          throw new LocalRuntimeError("HANDSHAKE_MISMATCH", "spoofed mismatch");
+        }
+      }
+    }));
+
+    await expect(http.start("spoofed-http-error"))
+      .rejects.toMatchObject({ code: "READINESS_TIMEOUT" });
+    expect(httpEvaluateCalls).toBeGreaterThan(1);
+    expect(http.getStatus("spoofed-http-error").state).toBe("FAILED");
+  });
+
   it("rejects malformed reported handshake metadata", async () => {
     const runtime = manager();
     runtime.register(definition("bad-handshake-shape", "ready", {
