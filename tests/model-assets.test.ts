@@ -104,6 +104,22 @@ describe("local model asset manager", () => {
     };
     expect(AssetManifestSchema.safeParse(inheritedLicense).success).toBe(false);
 
+    const previousVariant = Object.getOwnPropertyDescriptor(Object.prototype, "variant");
+    try {
+      Object.defineProperty(Object.prototype, "variant", {
+        configurable: true,
+        value: "polluted-variant"
+      });
+      const parsed = AssetManifestSchema.parse(manifest);
+      expect(parsed.variant).toBeUndefined();
+    } finally {
+      if (previousVariant === undefined) {
+        Reflect.deleteProperty(Object.prototype, "variant");
+      } else {
+        Object.defineProperty(Object.prototype, "variant", previousVariant);
+      }
+    }
+
     const inheritedRequest = Object.create({
       familyId: manifest.familyId,
       version: manifest.version,
