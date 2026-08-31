@@ -224,10 +224,13 @@ export class ImageSnapshot {
   public readonly metadata: ImageSnapshotMetadata;
 
   public static isValidatedInstance(value: unknown): value is ImageSnapshot {
-    return typeof value === "object"
-      && value !== null
-      && #bytes in value
-      && Object.getPrototypeOf(value) === ImageSnapshot.prototype;
+    if (typeof value !== "object" || value === null) return false;
+    try {
+      return #bytes in value
+        && Object.getPrototypeOf(value) === ImageSnapshot.prototype;
+    } catch {
+      return false;
+    }
   }
 
   public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array);
@@ -267,10 +270,13 @@ export class VisionImageArtifact {
   public readonly metadata: VisionImageArtifactMetadata;
 
   public static isValidatedInstance(value: unknown): value is VisionImageArtifact {
-    return typeof value === "object"
-      && value !== null
-      && #bytes in value
-      && Object.getPrototypeOf(value) === VisionImageArtifact.prototype;
+    if (typeof value !== "object" || value === null) return false;
+    try {
+      return #bytes in value
+        && Object.getPrototypeOf(value) === VisionImageArtifact.prototype;
+    } catch {
+      return false;
+    }
   }
 
   public constructor(
@@ -434,10 +440,13 @@ export class ImagePayloadReference {
   public readonly metadata: ImagePayloadReferenceMetadata;
 
   public static isValidatedInstance(value: unknown): value is ImagePayloadReference {
-    return typeof value === "object"
-      && value !== null
-      && #source in value
-      && Object.getPrototypeOf(value) === ImagePayloadReference.prototype;
+    if (typeof value !== "object" || value === null) return false;
+    try {
+      return #source in value
+        && Object.getPrototypeOf(value) === ImagePayloadReference.prototype;
+    } catch {
+      return false;
+    }
   }
 
   public constructor(sourceInput: VisionRasterSource) {
