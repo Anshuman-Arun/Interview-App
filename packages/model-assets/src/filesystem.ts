@@ -1105,6 +1105,52 @@ export async function readStoredManifestWithIdentity(
   };
 }
 
+export async function writeStableStagedManifest(
+  stagingDirectory: string,
+  serializedManifest: string,
+  expectedDirectoryIdentity: { readonly device: bigint; readonly inode: bigint }
+): Promise<void> {
+  if (Buffer.byteLength(serializedManifest, "utf8") > MAX_STORED_MANIFEST_BYTES) {
+    throw new ModelAssetError("INVALID_MANIFEST", "Serialized asset manifest exceeds the cache metadata limit.");
+  }
+
+  const handle = await createStableStagingFile(
+    stagingDirectory,
+    "manifest.json",
+    expectedDirectoryIdentity
+  );
+  let writeFailed = false;
+  try {
+    await handle.writeFile(serializedManifest, { encoding: "utf8" });
+  } catch (error) {
+    writeFailed = true;
+    if (isDiskSpaceError(error)) {
+      throw new ModelAssetError(
+        "INSUFFICIENT_DISK_SPACE",
+        "Unable to write staged asset metadata because the destination filesystem is full.",
+        { cause: error }
+      );
+    }
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to write staged asset manifest.",
+      { cause: error }
+    );
+  } finally {
+    try {
+      await handle.close();
+    } catch (error) {
+      if (!writeFailed) {
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to close the staged asset manifest after writing.",
+          { cause: error }
+        );
+      }
+    }
+  }
+}
+
 export async function writeStoredManifest(manifestPath: string, serializedManifest: string): Promise<void> {
   if (Buffer.byteLength(serializedManifest, "utf8") > MAX_STORED_MANIFEST_BYTES) {
     throw new ModelAssetError("INVALID_MANIFEST", "Serialized asset manifest exceeds the cache metadata limit.");
