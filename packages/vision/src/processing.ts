@@ -394,7 +394,7 @@ function encodeArtifact(
     sourceBounds,
     coordinateTransform: transform
   });
-  return new VisionImageArtifact(metadata, encoded);
+  return new VisionImageArtifact(source, metadata, encoded);
 }
 
 async function cropDecodedRaster(
