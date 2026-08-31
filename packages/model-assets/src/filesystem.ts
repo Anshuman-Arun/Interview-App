@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, type Stats } from "node:fs";
 import {
   lstat,
@@ -169,73 +169,127 @@ export async function removeEntryInsideRoot(
     throw new ModelAssetError("PATH_ESCAPE", "Refusing to remove the configured cache root itself.");
   }
 
-  let entry: Stats;
-  try {
-    entry = await lstat(candidate);
-  } catch (error) {
-    if (errnoCode(error) === "ENOENT") return;
-    throw new ModelAssetError("IO_ERROR", "Unable to inspect cache entry for removal.", { cause: error });
+  const parent = path.dirname(candidate);
+  assertPathInsideRoot(root, parent);
+  let detached: string | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const candidateDetached = path.join(parent, `.model-assets-delete-${randomUUID()}`);
+    assertPathInsideRoot(root, candidateDetached);
+    try {
+      await rename(candidate, candidateDetached);
+      detached = candidateDetached;
+      break;
+    } catch (error) {
+      const code = errnoCode(error);
+      if (code === "ENOENT") return;
+      if (code === "EEXIST") continue;
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to atomically detach cache entry for safe removal.",
+        { cause: error }
+      );
+    }
+  }
+  if (detached === undefined) {
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to allocate a unique cache-removal tombstone."
+    );
   }
 
-  if (entry.isSymbolicLink() || !entry.isDirectory()) {
+  let validationComplete = false;
+  try {
+    let entry: Stats;
     try {
-      await unlink(candidate);
-      return;
+      entry = await lstat(detached);
     } catch (error) {
       if (errnoCode(error) === "ENOENT") return;
-      throw new ModelAssetError("IO_ERROR", "Unable to remove cache file entry.", { cause: error });
-    }
-  }
-
-  const children: string[] = [];
-  const directory = await opendir(candidate);
-  for await (const child of directory) {
-    if (children.length >= maxEntries) {
-      throw new ModelAssetError(
-        "CACHE_LIMIT_EXCEEDED",
-        "Managed cache directory exceeds the configured direct-entry cleanup limit."
-      );
-    }
-    const childPath = path.join(candidate, child.name);
-    assertPathInsideRoot(root, childPath);
-    let childStat: Stats;
-    try {
-      childStat = await lstat(childPath);
-    } catch (error) {
-      if (errnoCode(error) === "ENOENT") continue;
       throw new ModelAssetError(
         "IO_ERROR",
-        "Unable to inspect managed cache child during cleanup.",
+        "Unable to inspect detached cache entry for removal.",
         { cause: error }
       );
     }
-    if (childStat.isDirectory() && !childStat.isSymbolicLink()) {
-      throw new ModelAssetError(
-        "UNSAFE_PATH",
-        "Managed cache entries must not contain nested directories."
-      );
-    }
-    children.push(child.name);
-  }
 
-  for (const child of children) {
-    const childPath = path.join(candidate, child);
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      validationComplete = true;
+      try {
+        await unlink(detached);
+        return;
+      } catch (error) {
+        if (errnoCode(error) === "ENOENT") return;
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to remove detached cache file entry.",
+          { cause: error }
+        );
+      }
+    }
+
+    const children: string[] = [];
+    const directory = await opendir(detached);
+    for await (const child of directory) {
+      if (children.length >= maxEntries) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Managed cache directory exceeds the configured direct-entry cleanup limit."
+        );
+      }
+      const childPath = path.join(detached, child.name);
+      assertPathInsideRoot(root, childPath);
+      let childStat: Stats;
+      try {
+        childStat = await lstat(childPath);
+      } catch (error) {
+        if (errnoCode(error) === "ENOENT") continue;
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to inspect detached cache child during cleanup.",
+          { cause: error }
+        );
+      }
+      if (childStat.isDirectory() && !childStat.isSymbolicLink()) {
+        throw new ModelAssetError(
+          "UNSAFE_PATH",
+          "Managed cache entries must not contain nested directories."
+        );
+      }
+      children.push(child.name);
+    }
+
+    validationComplete = true;
+    for (const child of children) {
+      const childPath = path.join(detached, child);
+      try {
+        await unlink(childPath);
+      } catch (error) {
+        if (errnoCode(error) === "ENOENT") continue;
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to remove detached managed cache child.",
+          { cause: error }
+        );
+      }
+    }
     try {
-      await unlink(childPath);
+      await rmdir(detached);
     } catch (error) {
-      if (errnoCode(error) === "ENOENT") continue;
+      if (errnoCode(error) === "ENOENT") return;
       throw new ModelAssetError(
         "IO_ERROR",
-        "Unable to remove managed cache child.",
+        "Unable to remove detached cache directory.",
         { cause: error }
       );
     }
-  }
-  try {
-    await rmdir(candidate);
   } catch (error) {
-    if (errnoCode(error) === "ENOENT") return;
-    throw new ModelAssetError("IO_ERROR", "Unable to remove cache directory.", { cause: error });
+    if (!validationComplete) {
+      try {
+        await rename(detached, candidate);
+      } catch {
+        // Leave the tombstone inside the cache root if restoration races or fails.
+      }
+    }
+    throw error;
   }
 }
 
