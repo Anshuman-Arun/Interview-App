@@ -108,15 +108,31 @@ function evaluateProbabilityClaim(
 ): { readonly actual: ExactRational; readonly claimed: ExactRational } {
   switch (claim.kind) {
     case "FINITE_EXPECTATION": {
+      const outcomes = claim.outcomes.map((outcome) => ({
+        probability: assertProbability(parseRationalInput(outcome.probability), "Outcome probability"),
+        value: outcome.value
+      }));
+      const one = rational(1n, 1n);
       let totalProbability = rational(0n, 1n);
-      let expectation = rational(0n, 1n);
-      for (const outcome of claim.outcomes) {
-        const probability = assertProbability(parseRationalInput(outcome.probability), "Outcome probability");
-        totalProbability = addRationals(totalProbability, probability);
-        expectation = addRationals(expectation, multiplyRationals(probability, parseRationalInput(outcome.value)));
+      for (const outcome of outcomes) {
+        totalProbability = addRationals(totalProbability, outcome.probability);
+        if (compareRationals(totalProbability, one) > 0) {
+          throw new BoundedMathError(
+            "INVALID_PROBABILITY",
+            "Finite expectation probabilities cannot sum to more than 1"
+          );
+        }
       }
-      if (!equalRationals(totalProbability, rational(1n, 1n))) {
+      if (!equalRationals(totalProbability, one)) {
         throw new BoundedMathError("INVALID_PROBABILITY", "Finite expectation probabilities must sum exactly to 1");
+      }
+
+      let expectation = rational(0n, 1n);
+      for (const outcome of outcomes) {
+        expectation = addRationals(
+          expectation,
+          multiplyRationals(outcome.probability, parseRationalInput(outcome.value))
+        );
       }
       return { actual: expectation, claimed: parseIntermediateRationalInput(claim.claimedExpectation) };
     }
