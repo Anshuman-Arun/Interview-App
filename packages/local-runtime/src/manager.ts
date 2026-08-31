@@ -107,6 +107,9 @@ export class LocalRuntimeManager {
   }
 
   public register(definition: LocalComponentDefinition): LocalComponentStatus {
+    if (this.stopAllPromise !== undefined) {
+      throw new LocalRuntimeError("INVALID_STATE", "Cannot register a component while stopAll() is in progress");
+    }
     validateDefinition(definition);
     if (this.components.has(definition.id)) {
       throw new LocalRuntimeError("DUPLICATE_COMPONENT", `Component ${definition.id} is already registered`);
@@ -158,6 +161,12 @@ export class LocalRuntimeManager {
 
   public start(componentId: string, options: { readonly signal?: AbortSignal } = {}): Promise<LocalComponentStatus> {
     const record = this.requireRecord(componentId);
+    if (this.stopAllPromise !== undefined) {
+      return Promise.reject(new LocalRuntimeError(
+        "INVALID_STATE",
+        "Cannot start a component while stopAll() is in progress"
+      ));
+    }
     if (record.stopPromise !== undefined) {
       return record.stopPromise.then(() => this.start(componentId, options));
     }
@@ -298,18 +307,27 @@ export class LocalRuntimeManager {
         await this.spawnAndAwaitReadiness(record, signal);
         return this.snapshot(record);
       } catch (error) {
-        if (isCancellation(error) || record.expectedStop || signal.aborted) {
+        const runtimeError = normalizeRuntimeError(error, record.definition.id);
+        if (runtimeError.code === "TERMINATION_FAILED") {
+          record.state = "FAILED";
+          record.failure = this.failure(
+            runtimeError.code,
+            runtimeError.message,
+            record.environment.secretValues
+          );
+          throw runtimeError;
+        }
+        if (isCancellation(runtimeError) || record.expectedStop || signal.aborted) {
           if (record.state !== "STOPPING") record.state = "STOPPED";
           throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
         }
-        const runtimeError = normalizeRuntimeError(error, record.definition.id);
         record.state = "FAILED";
         record.failure = this.failure(
           runtimeError.code,
           runtimeError.message,
           record.environment.secretValues
         );
-        if (runtimeError.code === "TERMINATION_FAILED" || !this.reserveRestart(record)) throw runtimeError;
+        if (!isRetryableStartFailure(runtimeError) || !this.reserveRestart(record)) throw runtimeError;
         delayMs = restartBackoff(record.definition.restartPolicy ?? DEFAULT_RESTART_POLICY, record.restartBudgetUsed);
       }
     }
@@ -547,7 +565,7 @@ export class LocalRuntimeManager {
 
   private reserveRestart(record: ComponentRecord): boolean {
     const policy = record.definition.restartPolicy ?? DEFAULT_RESTART_POLICY;
-    if (policy.mode !== "ON_FAILURE" || record.expectedStop) return false;
+    if (policy.mode !== "ON_FAILURE" || record.expectedStop || this.stopAllPromise !== undefined) return false;
     if (record.restartBudgetUsed >= policy.maxRetries) return false;
     record.restartBudgetUsed += 1;
     record.restartCount += 1;
