@@ -158,5 +158,4 @@ export interface LocalRuntimeManagerOptions {
   readonly parentEnvironment?: NodeJS.ProcessEnv;
   readonly now?: () => Date;
   readonly fetch?: typeof globalThis.fetch;
-  readonly platform?: NodeJS.Platform;
 }
