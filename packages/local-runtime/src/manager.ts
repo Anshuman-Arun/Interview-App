@@ -707,9 +707,8 @@ export class LocalRuntimeManager {
           if (settled) return;
           settled = true;
           cleanup();
-          reject(error instanceof LocalRuntimeError
-            ? error
-            : new LocalRuntimeError("READINESS_FAILED", "Readiness callback returned an invalid decision"));
+          reject(localRuntimeErrorOrUndefined(error)
+            ?? new LocalRuntimeError("READINESS_FAILED", "Readiness callback returned an invalid decision"));
         }
       };
       const onExit = (): void => {
@@ -763,7 +762,8 @@ export class LocalRuntimeManager {
         }
       } catch (error) {
         if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
-        if (error instanceof LocalRuntimeError) throw error;
+        const runtimeError = localRuntimeErrorOrUndefined(error);
+        if (runtimeError !== undefined) throw runtimeError;
       }
       await abortableDelay(intervalMs, signal, record.definition.id);
     }
@@ -797,7 +797,8 @@ export class LocalRuntimeManager {
         }
       } catch (error) {
         if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
-        if (error instanceof LocalRuntimeError) throw error;
+        const runtimeError = localRuntimeErrorOrUndefined(error);
+        if (runtimeError !== undefined) throw runtimeError;
       }
       await abortableDelay(intervalMs, signal, record.definition.id);
     }
@@ -1839,7 +1840,7 @@ function awaitWithAbort<T>(
         if (settled) return;
         settled = true;
         cleanup();
-        reject(error instanceof Error ? error : new Error("Local readiness callback failed"));
+        reject(error);
       }
     );
   });
@@ -1865,13 +1866,21 @@ function linkAbortSignal(source: AbortSignal | undefined, target: AbortControlle
   return () => source.removeEventListener("abort", onAbort);
 }
 
+function localRuntimeErrorOrUndefined(error: unknown): LocalRuntimeError | undefined {
+  try {
+    return error instanceof LocalRuntimeError ? error : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function isCancellation(error: unknown): boolean {
-  return error instanceof LocalRuntimeError && error.code === "START_CANCELLED";
+  return localRuntimeErrorOrUndefined(error)?.code === "START_CANCELLED";
 }
 
 function normalizeRuntimeError(error: unknown, componentId: string): LocalRuntimeError {
-  if (error instanceof LocalRuntimeError) return error;
-  return new LocalRuntimeError("READINESS_FAILED", `Readiness failed for ${componentId}`);
+  return localRuntimeErrorOrUndefined(error)
+    ?? new LocalRuntimeError("READINESS_FAILED", `Readiness failed for ${componentId}`);
 }
 
 function sanitizeStatusText(value: string, secretValues: readonly string[]): string {
