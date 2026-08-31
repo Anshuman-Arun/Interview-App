@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { actualUint8ArrayByteLength } from "./byte-validation.js";
 import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION } from "./internal-artifact-construction.js";
+import { snapshotOwnEnumerableRecord } from "./object-validation.js";
 import { assertSupportedPngHeaderParameters } from "./png-validation.js";
 import {
   DEFAULT_IMAGE_VALIDATION_LIMITS,
@@ -35,23 +36,18 @@ function asSafePositiveInteger(value: number, name: string): number {
 }
 
 function normalizeLimits(limits: unknown): Readonly<ImageValidationLimits> {
-  if (limits !== undefined) {
-    let isArray: boolean;
+  let ownLimits: Readonly<Record<string, unknown>>;
+  if (limits === undefined) {
+    ownLimits = Object.freeze({});
+  } else {
     try {
-      isArray = Array.isArray(limits);
+      ownLimits = snapshotOwnEnumerableRecord(limits, "Image validation limits");
     } catch {
-      throw new RangeError("Image validation limits could not be inspected safely");
-    }
-    if (typeof limits !== "object" || limits === null || isArray) {
-      throw new RangeError("Image validation limits must be an object");
+      throw new RangeError("Image validation limits could not be read safely");
     }
   }
-  let parsedLimits: ReturnType<typeof ImageValidationLimitsOverrideSchema.safeParse>;
-  try {
-    parsedLimits = ImageValidationLimitsOverrideSchema.safeParse(limits ?? {});
-  } catch {
-    throw new RangeError("Image validation limits could not be read safely");
-  }
+
+  const parsedLimits = ImageValidationLimitsOverrideSchema.safeParse(ownLimits);
   if (!parsedLimits.success) throw new RangeError("Image validation limits are invalid or contain unknown keys");
   const merged = {
     ...DEFAULT_IMAGE_VALIDATION_LIMITS,
@@ -127,12 +123,13 @@ export function createValidatedImageSnapshot(
   input: ImageSnapshotInput,
   limits?: Partial<ImageValidationLimits>
 ): ImageSnapshot {
-  let parsedInput: ReturnType<typeof ImageSnapshotInputSchema.safeParse>;
+  let ownInput: Readonly<Record<string, unknown>>;
   try {
-    parsedInput = ImageSnapshotInputSchema.safeParse(input);
+    ownInput = snapshotOwnEnumerableRecord(input, "Image snapshot input");
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input could not be read safely");
   }
+  const parsedInput = ImageSnapshotInputSchema.safeParse(ownInput);
   if (!parsedInput.success) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input failed strict schema validation");
   }
