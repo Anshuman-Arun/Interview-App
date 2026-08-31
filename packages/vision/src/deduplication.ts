@@ -4,6 +4,7 @@ import {
   VisionImageArtifact,
   assertVisionRasterSource,
   visionRasterIdentity,
+  type VisionRasterIdentity,
   type VisionRasterSource
 } from "./types.js";
 
@@ -74,6 +75,6 @@ export function sourceSnapshotId(source: VisionRasterSource): string {
   return ImageSnapshot.isValidatedInstance(source) ? source.metadata.snapshotId : source.metadata.sourceSnapshotId;
 }
 
-export function imageIdentity(source: VisionRasterSource): string {
+export function imageIdentity(source: VisionRasterSource): VisionRasterIdentity {
   return visionRasterIdentity(source);
 }
