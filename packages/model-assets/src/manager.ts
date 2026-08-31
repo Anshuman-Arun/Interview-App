@@ -454,7 +454,7 @@ export class ModelAssetManager {
       }
       names.push(entry.name);
     }
-    return names;
+    return names.sort();
   }
 
   private recordFailure(key: string, error: unknown): void {
