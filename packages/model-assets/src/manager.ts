@@ -742,6 +742,7 @@ export class ModelAssetManager {
     );
     await this.reserveCapacity(paths, reservationBytes);
     let published = false;
+    let reservationHeld = true;
 
     try {
       setStagingDirectory(stagingDirectory);
@@ -800,7 +801,12 @@ export class ModelAssetManager {
 
       await this.assertSafeStagingDirectory(paths, stagingDirectory);
       try {
-        await atomicRenameDirectory(stagingDirectory, installationDirectory);
+        await this.publishReservedArtifact(
+          stagingDirectory,
+          installationDirectory,
+          reservationBytes
+        );
+        reservationHeld = false;
         published = true;
       } catch (error) {
         const raced = await this.checkInstallation(manifest, signal);
@@ -812,7 +818,9 @@ export class ModelAssetManager {
       }
       return installedPayloadPath(installationDirectory, manifest);
     } finally {
-      await this.releaseCapacity(reservationBytes);
+      if (reservationHeld) {
+        await this.releaseCapacity(reservationBytes);
+      }
       setStagingDirectory(undefined);
       if (!published) {
         await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
@@ -941,6 +949,17 @@ export class ModelAssetManager {
       }
     }
     return total;
+  }
+
+  private async publishReservedArtifact(
+    stagingDirectory: string,
+    installationDirectory: string,
+    reservationBytes: number
+  ): Promise<void> {
+    await this.withCapacityGate(async () => {
+      await atomicRenameDirectory(stagingDirectory, installationDirectory);
+      this.reservedBytes = Math.max(0, this.reservedBytes - reservationBytes);
+    });
   }
 
   private async activeStagingBytes(): Promise<number> {
