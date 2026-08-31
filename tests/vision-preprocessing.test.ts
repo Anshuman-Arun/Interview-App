@@ -305,6 +305,27 @@ describe("dirty-region planning", () => {
     }
   });
 
+  it("rasterizes fractional and zero-size dirty hints without weakening crop rectangles", () => {
+    const plan = planDirtyRegions([
+      { x: 1.25, y: 2.75, width: 0, height: 0 },
+      { x: 5.2, y: 5.2, width: 1.1, height: 1.1 }
+    ], { width: 20, height: 20 }, {
+      paddingPixels: 0,
+      maxRegionCount: 4,
+      maxTotalAnalyzedArea: 400,
+      fullFrameFallbackAreaRatio: 1
+    });
+    expect(plan.mode).toBe("REGIONS");
+    if (plan.mode === "REGIONS") {
+      expect(plan.regions).toEqual([
+        { x: 1, y: 2, width: 1, height: 1 },
+        { x: 5, y: 5, width: 2, height: 2 }
+      ]);
+    }
+    expect(() => validateImageRect({ x: 1, y: 2, width: 0, height: 1 }))
+      .toThrowError(VisionPreprocessingError);
+  });
+
   it("falls back to full frame when fragmentation exceeds the region count", () => {
     const plan = planDirtyRegions([
       { x: 0, y: 0, width: 5, height: 5 },
@@ -358,7 +379,7 @@ describe("dirty-region planning", () => {
   it("validates dirty rectangles before configured over-count fallback", () => {
     expect(() => planDirtyRegions([
       { x: 0, y: 0, width: 2, height: 2 },
-      { x: 5, y: 5, width: 0, height: 2 }
+      { x: 5, y: 5, width: -1, height: 2 }
     ], { width: 20, height: 20 }, {
       maxInputRegions: 1,
       maxRegionCount: 1
