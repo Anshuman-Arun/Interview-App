@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { boundedArrayLength } from "./array-validation.js";
+import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
 import { z } from "zod";
 import { imageIdentity } from "./deduplication.js";
 import {
@@ -213,7 +213,7 @@ export function prepareVisionBatch(
 
   const candidates: VisionRasterSource[] = [];
   for (let index = 0; index < sourceCount; index += 1) {
-    const source = sources[index];
+    const source = readArrayEntry(sources, index, "Vision batch candidates");
     if (source === undefined) {
       throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
     }
@@ -227,7 +227,7 @@ export function prepareVisionBatch(
   let totals: VisionRequestBudgetTotals = Object.freeze({ images: 0, totalBytes: 0, totalPixels: 0, cropsOrTiles: 0 });
 
   for (let index = 0; index < candidates.length; index += 1) {
-    const source = candidates[index];
+    const source = readArrayEntry(candidates, index, "Internal vision candidate snapshot");
     if (source === undefined) {
       throw new VisionPreprocessingError("INVALID_IMAGE", "Internal vision candidate snapshot is sparse");
     }
@@ -239,7 +239,7 @@ export function prepareVisionBatch(
         );
       }
       for (let deferredIndex = index; deferredIndex < candidates.length; deferredIndex += 1) {
-        const deferredSource = candidates[deferredIndex];
+        const deferredSource = readArrayEntry(candidates, deferredIndex, "Internal vision candidate snapshot");
         if (deferredSource === undefined) {
           throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
         }
