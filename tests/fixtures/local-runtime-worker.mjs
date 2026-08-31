@@ -87,6 +87,13 @@ switch (mode) {
     ready({ attempt });
     break;
   }
+  case "ready-counter": {
+    const path = args[0];
+    if (!path) throw new Error("counter path required");
+    const attempt = bumpCounter(path);
+    ready({ attempt });
+    break;
+  }
   case "always-crash-counter": {
     const path = args[0];
     if (!path) throw new Error("counter path required");
@@ -139,6 +146,26 @@ switch (mode) {
     });
     if (child.pid === undefined) throw new Error("fixture child did not receive a pid");
     ready({ childPid: child.pid });
+    break;
+  }
+  case "delayed-pipe-child":
+    setTimeout(() => {
+      console.error("delayed-pipe-child-exit");
+      clearInterval(keepAlive);
+      process.exit(0);
+    }, Number(args[0] ?? 250));
+    break;
+  case "exit-with-pipe-child": {
+    const child = spawn(process.execPath, [import.meta.filename, "delayed-pipe-child", args[0] ?? "250"], {
+      stdio: ["ignore", "inherit", "inherit"],
+      windowsHide: true
+    });
+    if (child.pid === undefined) throw new Error("fixture child did not receive a pid");
+    ready({ childPid: child.pid });
+    setTimeout(() => {
+      clearInterval(keepAlive);
+      process.exit(15);
+    }, 20);
     break;
   }
   case "stdin-shutdown":
