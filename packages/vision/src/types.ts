@@ -354,7 +354,7 @@ export function visionRasterIdentity(source: VisionRasterSource): string {
 }
 
 export const ImagePayloadReferenceMetadataSchema = z.object({
-  imageIdentity: z.string().min(1).max(256),
+  imageIdentity: VisionRasterIdentitySchema,
   mimeType: ImageMimeTypeSchema,
   width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
