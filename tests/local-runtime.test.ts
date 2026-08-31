@@ -1475,6 +1475,24 @@ describe("local worker lifecycle manager", () => {
     expect(lines).toEqual([first, "READY-LINE"]);
   });
 
+  it("accepts a max-sized CRLF line when the terminator is fragmented", () => {
+    const lines: string[] = [];
+    let malformed = 0;
+    const framer = new BoundedLineFramer(
+      4,
+      (line) => lines.push(line),
+      () => {
+        malformed += 1;
+      }
+    );
+
+    framer.append(Buffer.from("abcd\r", "utf8"));
+    framer.append(Buffer.from("\n", "utf8"));
+
+    expect(lines).toEqual(["abcd"]);
+    expect(malformed).toBe(0);
+  });
+
   it("recovers framing after invalid UTF-8 and accepts CRLF readiness lines", async () => {
     const runtime = manager();
     runtime.register(definition("invalid-utf8", "invalid-utf8-then-ready", {
