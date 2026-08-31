@@ -90,6 +90,9 @@ const PROCESSING_OPTION_KEYS = new Set([
   "maxOutputEncodedBytes",
   "maxTotalOutputEncodedBytes"
 ]);
+const PLANNING_DIMENSION_FIELDS = new Set(["width", "height"]);
+const DOWNSCALE_ENVELOPE_FIELDS = new Set(["maxWidth", "maxHeight", "maxPixels"]);
+const TILE_CONFIG_FIELDS = new Set(["tileWidth", "tileHeight", "overlap", "maxTileCount"]);
 
 function isProcessingClock(value: unknown): value is () => number {
   return typeof value === "function";
@@ -104,7 +107,7 @@ function isAbortSignal(value: unknown): value is AbortSignal {
 }
 
 function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOptions> {
-  const options = snapshotOwnEnumerableRecord(input, "Vision processing options");
+  const options = snapshotOwnEnumerableRecord(input, "Vision processing options", PROCESSING_OPTION_KEYS);
   for (const key of Object.keys(options)) {
     if (!PROCESSING_OPTION_KEYS.has(key)) {
       throw new RangeError(`Unknown vision processing option: ${key}`);
@@ -195,7 +198,7 @@ function nonnegativeSafeInteger(value: number, name: string): number {
 function parsePlanningDimensions(input: PixelDimensions): PixelDimensions {
   let ownInput: Readonly<Record<string, unknown>>;
   try {
-    ownInput = snapshotOwnEnumerableRecord(input, "Planning dimensions");
+    ownInput = snapshotOwnEnumerableRecord(input, "Planning dimensions", PLANNING_DIMENSION_FIELDS);
   } catch {
     throw new RangeError("Planning dimensions could not be read safely");
   }
@@ -207,7 +210,7 @@ function parsePlanningDimensions(input: PixelDimensions): PixelDimensions {
 function parseDownscaleEnvelope(input: DownscaleEnvelope): DownscaleEnvelope {
   let ownInput: Readonly<Record<string, unknown>>;
   try {
-    ownInput = snapshotOwnEnumerableRecord(input, "Downscale envelope");
+    ownInput = snapshotOwnEnumerableRecord(input, "Downscale envelope", DOWNSCALE_ENVELOPE_FIELDS);
   } catch {
     throw new RangeError("Downscale envelope could not be read safely");
   }
@@ -219,7 +222,7 @@ function parseDownscaleEnvelope(input: DownscaleEnvelope): DownscaleEnvelope {
 function parseTileConfig(input: TileConfig): TileConfig {
   let ownInput: Readonly<Record<string, unknown>>;
   try {
-    ownInput = snapshotOwnEnumerableRecord(input, "Tile configuration");
+    ownInput = snapshotOwnEnumerableRecord(input, "Tile configuration", TILE_CONFIG_FIELDS);
   } catch {
     throw new RangeError("Tile configuration could not be read safely");
   }
