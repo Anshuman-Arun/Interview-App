@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { PNG } from "pngjs";
 import { BoardRevisionSchema, type BoardRevision } from "../../domain/src/index.js";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -13,18 +14,16 @@ interface PayloadIntegrityMetadata {
 
 function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffer): void {
   if (bytes.length !== metadata.byteSize) throw new RangeError("Image payload byte size does not match metadata");
-  if (bytes.length > 64 * 1024 * 1024
-      || metadata.width > 16_384
-      || metadata.height > 16_384) {
+  if (bytes.length > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes
+      || metadata.width > HARD_IMAGE_VALIDATION_LIMITS.maxWidth
+      || metadata.height > HARD_IMAGE_VALIDATION_LIMITS.maxHeight) {
     throw new RangeError("Image payload exceeds package hard size or dimension caps");
   }
   const pixels = metadata.width * metadata.height;
-  if (!Number.isSafeInteger(pixels) || pixels > 64 * 1024 * 1024) {
+  if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
     throw new RangeError("Image payload exceeds the package hard pixel cap");
   }
-  const digest = createHash("sha256").update(bytes).digest("hex");
-  if (digest !== metadata.contentDigest) throw new RangeError("Image payload digest does not match metadata");
-  if (bytes.length < 24 || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+  if (bytes.length < 29 || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
     throw new RangeError("Image payload is not a PNG");
   }
   if (bytes.readUInt32BE(8) !== 13 || bytes.toString("ascii", 12, 16) !== "IHDR") {
@@ -32,6 +31,22 @@ function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffe
   }
   if (bytes.readUInt32BE(16) !== metadata.width || bytes.readUInt32BE(20) !== metadata.height) {
     throw new RangeError("Image payload dimensions do not match metadata");
+  }
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (digest !== metadata.contentDigest) throw new RangeError("Image payload digest does not match metadata");
+
+  let decoded: ReturnType<typeof PNG.sync.read>;
+  try {
+    decoded = PNG.sync.read(bytes, { checkCRC: true });
+  } catch {
+    throw new RangeError("Image payload is not a valid decodable PNG");
+  }
+  const decodedBytes = metadata.width * metadata.height * 4;
+  if (decoded.width !== metadata.width
+      || decoded.height !== metadata.height
+      || !Number.isSafeInteger(decodedBytes)
+      || decoded.data.length !== decodedBytes) {
+    throw new RangeError("Decoded PNG raster does not match image payload metadata");
   }
 }
 
@@ -154,14 +169,18 @@ export class ImageSnapshot {
 
   public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array) {
     const parsed = ImageSnapshotMetadataSchema.parse(metadata);
+    if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
+      throw new RangeError("Image payload exceeds the package hard encoded-byte cap");
+    }
     const copiedBytes = Buffer.from(bytes);
     assertPayloadIntegrity(parsed, copiedBytes);
     this.metadata = Object.freeze(parsed);
     this.#bytes = copiedBytes;
+    Object.freeze(this);
   }
 
-  public readBytes(): Uint8Array {
-    return Uint8Array.from(this.#bytes);
+  public readBytes(): Buffer {
+    return Buffer.from(this.#bytes);
   }
 
   public toJSON(): ImageSnapshotMetadata {
@@ -175,6 +194,9 @@ export class VisionImageArtifact {
 
   public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array) {
     const parsed = VisionImageArtifactMetadataSchema.parse(metadata);
+    if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
+      throw new RangeError("Image payload exceeds the package hard encoded-byte cap");
+    }
     const copiedBytes = Buffer.from(bytes);
     assertPayloadIntegrity(parsed, copiedBytes);
     this.metadata = Object.freeze({
@@ -182,10 +204,11 @@ export class VisionImageArtifact {
       coordinateTransform: Object.freeze({ ...parsed.coordinateTransform })
     });
     this.#bytes = copiedBytes;
+    Object.freeze(this);
   }
 
-  public readBytes(): Uint8Array {
-    return Uint8Array.from(this.#bytes);
+  public readBytes(): Buffer {
+    return Buffer.from(this.#bytes);
   }
 
   public toJSON(): VisionImageArtifactMetadata {
@@ -194,6 +217,12 @@ export class VisionImageArtifact {
 }
 
 export type VisionRasterSource = ImageSnapshot | VisionImageArtifact;
+
+export function assertVisionRasterSource(value: unknown): asserts value is VisionRasterSource {
+  if (!(value instanceof ImageSnapshot) && !(value instanceof VisionImageArtifact)) {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Vision raster source must be a validated image snapshot or artifact");
+  }
+}
 
 export const ImagePayloadReferenceMetadataSchema = z.object({
   imageIdentity: z.string().min(1).max(256),
@@ -206,19 +235,25 @@ export const ImagePayloadReferenceMetadataSchema = z.object({
 export type ImagePayloadReferenceMetadata = z.infer<typeof ImagePayloadReferenceMetadataSchema>;
 
 export class ImagePayloadReference {
-  readonly #bytes: Buffer;
+  readonly #source: VisionRasterSource;
   public readonly metadata: ImagePayloadReferenceMetadata;
 
-  public constructor(metadata: ImagePayloadReferenceMetadata, bytes: Uint8Array) {
-    const parsed = ImagePayloadReferenceMetadataSchema.parse(metadata);
-    const copiedBytes = Buffer.from(bytes);
-    assertPayloadIntegrity(parsed, copiedBytes);
-    this.metadata = Object.freeze(parsed);
-    this.#bytes = copiedBytes;
+  public constructor(imageIdentity: string, sourceInput: VisionRasterSource) {
+    assertVisionRasterSource(sourceInput);
+    this.metadata = Object.freeze(ImagePayloadReferenceMetadataSchema.parse({
+      imageIdentity,
+      mimeType: sourceInput.metadata.mimeType,
+      width: sourceInput.metadata.width,
+      height: sourceInput.metadata.height,
+      byteSize: sourceInput.metadata.byteSize,
+      contentDigest: sourceInput.metadata.contentDigest
+    }));
+    this.#source = sourceInput;
+    Object.freeze(this);
   }
 
-  public readBytes(): Uint8Array {
-    return Uint8Array.from(this.#bytes);
+  public readBytes(): Buffer {
+    return this.#source.readBytes();
   }
 
   public toJSON(): ImagePayloadReferenceMetadata {
