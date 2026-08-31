@@ -891,10 +891,12 @@ const REGISTERED_FACTORY_CONSTRUCTION_TOKEN = Symbol("provider-factory-construct
 
 class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
   readonly #createAdapterImpl: ProviderAdapterFactoryDefinition["createAdapter"];
+  readonly #ownerProviderId: ProviderId | undefined;
   public readonly createAdapter: ProviderAdapterFactory["createAdapter"];
 
   public constructor(
     token: typeof REGISTERED_FACTORY_CONSTRUCTION_TOKEN,
+    ownerProviderId: ProviderId | undefined,
     public readonly id: ProviderAdapterFactoryId,
     createAdapterImpl: ProviderAdapterFactoryDefinition["createAdapter"]
   ) {
@@ -904,6 +906,7 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
         "Registered provider factory construction is not permitted"
       );
     }
+    this.#ownerProviderId = ownerProviderId;
     this.#createAdapterImpl = createAdapterImpl;
     this.createAdapter = (input) => this.#createAdapter(input);
     Object.freeze(this);
@@ -913,6 +916,17 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
     if (typeof value !== "object" || value === null) return false;
     try {
       return #createAdapterImpl in value;
+    } catch {
+      return false;
+    }
+  }
+
+  public static belongsToProvider(
+    value: RegisteredProviderAdapterFactory,
+    providerId: ProviderId
+  ): boolean {
+    try {
+      return value.#ownerProviderId === providerId;
     } catch {
       return false;
     }
@@ -935,7 +949,10 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
     );
     const resolved = inspected.resolved;
     assertTrustedResolvedConfiguration(resolved);
-    if (resolved.provider.adapterFactory !== this) {
+    if (
+      resolved.provider.adapterFactory !== this
+      || this.#ownerProviderId !== resolved.provider.id
+    ) {
       throw new ProviderControlPlaneError(
         "INVALID_FACTORY_INPUT",
         "Provider adapter factory does not belong to the resolved provider"
@@ -998,10 +1015,26 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
 }
 
 const isRegisteredProviderAdapterFactory = RegisteredProviderAdapterFactory.isRegistered;
+const registeredProviderAdapterFactoryBelongsTo =
+  RegisteredProviderAdapterFactory.belongsToProvider;
 
-function normalizeFactory(factory: unknown): ProviderAdapterFactory | undefined {
+function normalizeFactory(
+  factory: unknown,
+  ownerProviderId: ProviderId | undefined
+): ProviderAdapterFactory | undefined {
   if (factory === undefined) return undefined;
-  if (isRegisteredProviderAdapterFactory(factory)) return factory;
+  if (isRegisteredProviderAdapterFactory(factory)) {
+    if (
+      ownerProviderId !== undefined
+      && !registeredProviderAdapterFactoryBelongsTo(factory, ownerProviderId)
+    ) {
+      throw new ProviderControlPlaneError(
+        "INVALID_ADAPTER_FACTORY",
+        "Registered provider adapter factory belongs to a different provider"
+      );
+    }
+    return factory;
+  }
   if (typeof factory !== "object" || factory === null) {
     throw new ProviderControlPlaneError(
       "INVALID_ADAPTER_FACTORY",
@@ -1024,6 +1057,7 @@ function normalizeFactory(factory: unknown): ProviderAdapterFactory | undefined 
   }
   return new RegisteredProviderAdapterFactory(
     REGISTERED_FACTORY_CONSTRUCTION_TOKEN,
+    ownerProviderId,
     id.data,
     createAdapter
   );
@@ -1361,7 +1395,11 @@ function defineProviderValue(input: unknown): ProviderDefinition {
     "MALFORMED_DEFINITION",
     "Provider definition is malformed"
   );
-  const adapterFactory = normalizeFactory(inspected.adapterFactory);
+  const ownerProviderIdResult = ProviderIdSchema.safeParse(inspected.id);
+  const adapterFactory = normalizeFactory(
+    inspected.adapterFactory,
+    ownerProviderIdResult.success ? ownerProviderIdResult.data : undefined
+  );
   const validateSettings = inspected.validateSettings;
   if (validateSettings !== undefined && typeof validateSettings !== "function") {
     throw new ProviderControlPlaneError(

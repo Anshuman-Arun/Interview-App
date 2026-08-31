@@ -1126,6 +1126,34 @@ describe("adapter factory adversarial boundary", () => {
     expect(caught).toMatchObject({ code: "INVALID_FACTORY_INPUT" });
   });
 
+  it("rejects adopting an already-normalized factory under a different provider identity", () => {
+    let rawFactoryCalls = 0;
+    const ownerDefinition = defineProvider(providerInput({
+      id: "normalized-factory-owner",
+      adapterVersion: "1.0.0",
+      adapterFactory: {
+        id: "normalized-owner-factory",
+        createAdapter() {
+          rawFactoryCalls += 1;
+          return new MockModelAdapter({ proposal: PROPOSAL });
+        }
+      }
+    }));
+    const normalizedFactory = ownerDefinition.adapterFactory;
+    if (normalizedFactory === undefined) {
+      throw new Error("Normalized provider factory is unavailable");
+    }
+
+    expect(() => defineProvider(providerInput({
+      id: "normalized-factory-adopter",
+      adapterVersion: "1.0.0",
+      adapterFactory: normalizedFactory
+    }))).toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
+
+    expect(() => defineProvider(ownerDefinition)).not.toThrow();
+    expect(rawFactoryCalls).toBe(0);
+  });
+
   it("rejects cross-provider factory use before raw factory or credential resolution", async () => {
     let rawFactoryCalls = 0;
     let secretResolverCalls = 0;
