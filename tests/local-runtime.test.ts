@@ -137,6 +137,10 @@ describe("local worker lifecycle manager", () => {
       }
     })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
 
+    expect(() => new LocalRuntimeManager({
+      parentEnvironment: process.env
+    })).not.toThrow();
+
     const runtime = manager();
     runtime.register(definition("invalid-start-options", "ready"));
     let signalGetterCalls = 0;
@@ -1841,13 +1845,12 @@ describe("local worker lifecycle manager", () => {
         return "untrusted-path";
       }
     });
-    const inherited = buildLocalEnvironment(
+    expect(() => buildLocalEnvironment(
       undefined,
       parent as NodeJS.ProcessEnv,
       process.platform
-    );
+    )).toThrow(/may not contain accessors/iu);
     expect(parentGetterCalls).toBe(0);
-    expect(inherited.environment).not.toHaveProperty("PATH");
 
     expect(() => buildLocalEnvironment(
       { unexpected: "value" } as unknown as Parameters<typeof buildLocalEnvironment>[0],
