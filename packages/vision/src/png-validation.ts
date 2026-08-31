@@ -8,7 +8,11 @@ const UNSUPPORTED_RENDERING_METADATA_CHUNKS = new Set([
   "iCCP",
   "sRGB",
   "sBIT",
-  "bKGD"
+  "bKGD",
+  "eXIf",
+  "cICP",
+  "mDCv",
+  "cLLi"
 ]);
 const KNOWN_CRITICAL_CHUNKS = new Set(["IHDR", "PLTE", "IDAT", "IEND"]);
 
