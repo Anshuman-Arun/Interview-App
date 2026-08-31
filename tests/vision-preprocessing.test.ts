@@ -216,6 +216,34 @@ describe("vision snapshot validation and hashing", () => {
     }
   });
 
+  it("rejects unknown snapshot fields and misspelled validation limit keys", () => {
+    const bytes = makePng(2, 2);
+    expect(() => createValidatedImageSnapshot({
+      snapshotId: "strict-input",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: bytes,
+      unexpectedField: true
+    } as unknown as Parameters<typeof createValidatedImageSnapshot>[0])).toThrowError(VisionPreprocessingError);
+
+    expect(() => createValidatedImageSnapshot({
+      snapshotId: "strict-limit",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: bytes
+    }, {
+      maxEncodedBytes: bytes.length,
+      maxWidth: 10,
+      maxHeight: 10,
+      maxPixels: 100,
+      maxPixles: 1
+    } as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrowError(RangeError);
+  });
+
   it("identifies exact image payloads and repeated processing identities", () => {
     const bytes = makePng(3, 3);
     const first = snapshot(bytes, { id: "a", revision: 9 });
