@@ -5,6 +5,8 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { ModelAssetError } from "./types.js";
 
+export const MAX_DOWNLOAD_TIMEOUT_MS = 2_147_483_647;
+
 export interface ArtifactDownloadOptions {
   readonly maxBytes: number;
   readonly expectedBytes: number;
@@ -172,6 +174,7 @@ export async function downloadHttpArtifact(
   if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes <= 0
       || !Number.isSafeInteger(options.expectedBytes) || options.expectedBytes <= 0
       || !Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0
+      || options.timeoutMs > MAX_DOWNLOAD_TIMEOUT_MS
       || !Number.isSafeInteger(options.maxRedirects) || options.maxRedirects < 0) {
     throw new ModelAssetError("INVALID_CONFIGURATION", "Artifact download limits are invalid.");
   }
