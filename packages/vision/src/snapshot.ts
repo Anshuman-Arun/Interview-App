@@ -38,7 +38,12 @@ function normalizeLimits(limits: unknown): Readonly<ImageValidationLimits> {
   if (limits !== undefined && (typeof limits !== "object" || limits === null || Array.isArray(limits))) {
     throw new RangeError("Image validation limits must be an object");
   }
-  const parsedLimits = ImageValidationLimitsOverrideSchema.safeParse(limits ?? {});
+  let parsedLimits: ReturnType<typeof ImageValidationLimitsOverrideSchema.safeParse>;
+  try {
+    parsedLimits = ImageValidationLimitsOverrideSchema.safeParse(limits ?? {});
+  } catch {
+    throw new RangeError("Image validation limits could not be read safely");
+  }
   if (!parsedLimits.success) throw new RangeError("Image validation limits are invalid or contain unknown keys");
   const merged = {
     ...DEFAULT_IMAGE_VALIDATION_LIMITS,
@@ -114,7 +119,12 @@ export function createValidatedImageSnapshot(
   input: ImageSnapshotInput,
   limits?: Partial<ImageValidationLimits>
 ): ImageSnapshot {
-  const parsedInput = ImageSnapshotInputSchema.safeParse(input);
+  let parsedInput: ReturnType<typeof ImageSnapshotInputSchema.safeParse>;
+  try {
+    parsedInput = ImageSnapshotInputSchema.safeParse(input);
+  } catch {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input could not be read safely");
+  }
   if (!parsedInput.success) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input failed strict schema validation");
   }
