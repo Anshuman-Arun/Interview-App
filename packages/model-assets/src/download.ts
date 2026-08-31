@@ -64,6 +64,12 @@ function parseUrl(value: string): URL {
   } catch (error) {
     throw new ModelAssetError("INVALID_MANIFEST", "Artifact source URL is invalid.", { cause: error });
   }
+  if (parsed.href.length > MAX_ARTIFACT_URL_LENGTH) {
+    throw new ModelAssetError(
+      "UNSAFE_REDIRECT",
+      "Canonical artifact URL exceeds the package URL-length safety limit."
+    );
+  }
   if ((parsed.protocol !== "http:" && parsed.protocol !== "https:")
       || parsed.username.length > 0
       || parsed.password.length > 0) {
