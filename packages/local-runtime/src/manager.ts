@@ -1018,10 +1018,9 @@ export class LocalRuntimeManager {
   private timestamp(): string {
     try {
       const observed = this.now();
-      if (!(observed instanceof Date) || !Number.isFinite(observed.getTime())) {
-        throw new TypeError("Invalid diagnostic clock value");
-      }
-      return observed.toISOString();
+      const observedTime = Date.prototype.getTime.call(observed);
+      if (!Number.isFinite(observedTime)) throw new TypeError("Invalid diagnostic clock value");
+      return Date.prototype.toISOString.call(observed);
     } catch {
       return new Date().toISOString();
     }
@@ -1116,8 +1115,10 @@ function safeRuntimeArrayCheck(value: object): boolean {
 
 function safeIsAbortSignal(value: unknown): value is AbortSignal {
   if (typeof value !== "object" || value === null) return false;
+  const abortedGetter = Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
+  if (abortedGetter === undefined) return false;
   try {
-    return value instanceof AbortSignal;
+    return typeof abortedGetter.call(value) === "boolean";
   } catch {
     return false;
   }
