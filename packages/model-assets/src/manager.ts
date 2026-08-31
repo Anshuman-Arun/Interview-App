@@ -1223,6 +1223,9 @@ export class ModelAssetManager {
           }
         }
       }
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled after transfer.");
+      }
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
 
       setStage("VERIFYING");
