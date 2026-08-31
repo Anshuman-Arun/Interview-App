@@ -31,6 +31,11 @@ const AUTHORIZED_WRITER = "packages/interview-engine/src/session-writer.ts";
 const AUTHORIZED_PROVIDER_SESSION_FACTORY = "packages/providers/src/execution.ts";
 const AUTHORIZED_PROVIDER_PROPOSAL_ADMISSION = "packages/interview-engine/src/provider-coordinator.ts";
 const PERSISTENCE_PREFIX = "packages/persistence/";
+const AUTHORIZED_VISION_INTERNAL_CONSTRUCTION_USERS = new Set([
+  "packages/vision/src/types.ts",
+  "packages/vision/src/snapshot.ts",
+  "packages/vision/src/processing.ts"
+]);
 
 const PACKAGE_RULES = new Map([
   ["domain", new Set()],
@@ -385,14 +390,24 @@ function checkVisionInternalConstruction(records, violations) {
     collect(record.sourceFile);
 
     for (const specifier of extractModuleSpecifiers(record.sourceFile)) {
+      const internalConstructionImport = isInternalVisionConstructionSpecifier(specifier);
       if (outsideVision
           && specifier.includes("/vision/")
-          && isInternalVisionConstructionSpecifier(specifier)) {
+          && internalConstructionImport) {
         addViolation(
           violations,
           "VISION_INTERNAL_CONSTRUCTION",
           record.relativePath,
           "Vision snapshot/artifact construction capability may only be imported inside packages/vision."
+        );
+      } else if (!outsideVision
+          && internalConstructionImport
+          && !AUTHORIZED_VISION_INTERNAL_CONSTRUCTION_USERS.has(record.relativePath)) {
+        addViolation(
+          violations,
+          "VISION_INTERNAL_CONSTRUCTION",
+          record.relativePath,
+          "Only the frozen vision snapshot/artifact constructors may import the internal construction capability."
         );
       }
     }
