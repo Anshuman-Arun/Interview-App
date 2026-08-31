@@ -1175,6 +1175,38 @@ describe("provider-neutral request preparation and budgeting", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects oversized candidate lists before budgeting or payload preparation", () => {
+    const source = snapshot(makePng(1, 1));
+    expect(() => prepareVisionBatch(
+      Array.from({ length: 1025 }, () => source),
+      "analysis"
+    )).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects hard image/crop budget overconfiguration and unknown budget keys", () => {
+    expect(() => prepareVisionBatch([], "analysis", {
+      maxImages: 257,
+      maxTotalBytes: 1,
+      maxTotalPixels: 1,
+      maxCropsOrTiles: 0
+    })).toThrow();
+
+    expect(() => prepareVisionBatch([], "analysis", {
+      maxImages: 1,
+      maxTotalBytes: 1,
+      maxTotalPixels: 1,
+      maxCropsOrTiles: 257
+    })).toThrow();
+
+    expect(() => prepareVisionBatch([], "analysis", {
+      maxImages: 1,
+      maxTotalBytes: 1,
+      maxTotalPixels: 1,
+      maxCropsOrTiles: 0,
+      maxImagez: 1
+    } as unknown as Parameters<typeof prepareVisionBatch>[2])).toThrow();
+  });
+
   it("rejects attempts to configure request budgets above package hard ceilings", () => {
     expect(() => prepareVisionBatch([], "analysis", {
       maxImages: 1,
