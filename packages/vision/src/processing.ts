@@ -12,6 +12,7 @@ import {
   VisionImageArtifact,
   VisionImageArtifactMetadataSchema,
   VisionPreprocessingError,
+  visionRasterIdentity,
   type ArtifactSourceBounds,
   type CoordinateTransform,
   type PixelDimensions,
@@ -167,6 +168,7 @@ interface DecodedRaster {
 interface SourceDescriptor {
   readonly sourceSnapshotId: string;
   readonly sourceRevision: number;
+  readonly sourceImageIdentity: string;
   readonly parentArtifactId?: string;
   readonly transform: CoordinateTransform;
 }
@@ -255,12 +257,14 @@ function sourceDescriptor(source: VisionRasterSource): SourceDescriptor {
     return {
       sourceSnapshotId: source.metadata.snapshotId,
       sourceRevision: source.metadata.sourceRevision,
+      sourceImageIdentity: visionRasterIdentity(source),
       transform: Object.freeze({ offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 })
     };
   }
   return {
     sourceSnapshotId: source.metadata.sourceSnapshotId,
     sourceRevision: source.metadata.sourceRevision,
+    sourceImageIdentity: visionRasterIdentity(source),
     parentArtifactId: source.metadata.artifactId,
     transform: source.metadata.coordinateTransform
   };
@@ -358,6 +362,7 @@ function encodeArtifact(
       kind,
       sourceSnapshotId: descriptor.sourceSnapshotId,
       sourceRevision: descriptor.sourceRevision,
+      sourceImageIdentity: descriptor.sourceImageIdentity,
       parentArtifactId: descriptor.parentArtifactId,
       width: dimensions.width,
       height: dimensions.height,
@@ -368,6 +373,7 @@ function encodeArtifact(
     kind,
     sourceSnapshotId: descriptor.sourceSnapshotId,
     sourceRevision: descriptor.sourceRevision,
+    sourceImageIdentity: descriptor.sourceImageIdentity,
     ...(descriptor.parentArtifactId === undefined ? {} : { parentArtifactId: descriptor.parentArtifactId }),
     width: raster.width,
     height: raster.height,
