@@ -1682,7 +1682,7 @@ describe("vision diagnostics validation", () => {
 
   it("rejects diagnostics that exceed package byte or image dimension caps", () => {
     expect(() => createVisionProcessingDiagnostics({
-      operation: "FAILURE" as never,
+      operation: "CROP",
       sourceDimensions: {
         width: HARD_IMAGE_VALIDATION_LIMITS.maxWidth + 1,
         height: 1
@@ -1693,7 +1693,7 @@ describe("vision diagnostics validation", () => {
       tileCount: 0,
       durationMs: 1,
       outcome: "FAILURE"
-    } as unknown as Parameters<typeof createVisionProcessingDiagnostics>[0])).toThrow();
+    })).toThrow();
 
     expect(() => createVisionProcessingDiagnostics({
       operation: "CROP",
