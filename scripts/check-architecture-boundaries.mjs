@@ -41,6 +41,7 @@ const PACKAGE_RULES = new Map([
   ["problems", new Set(["domain"])],
   ["verification", new Set(["domain"])],
   ["whiteboard", new Set(["domain"])],
+  ["vision", new Set(["domain"])],
   ["local-compute", new Set(["domain"])],
   ["delivery", new Set(["domain", "events"])],
   ["interview-engine", new Set([
