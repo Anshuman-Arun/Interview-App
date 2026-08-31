@@ -333,7 +333,7 @@ export class ModelAssetManager {
       );
     }
     const paths = await this.getSafeCachePaths();
-    await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, key));
+    await this.removeManagedEntry(paths, path.join(paths.artifacts, key));
     this.lastFailures.delete(key);
   }
 
@@ -352,7 +352,7 @@ export class ModelAssetManager {
     );
     for (const entry of entries) {
       if (!TEMPORARY_ENTRY_PATTERN.test(entry)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry));
+      await this.removeManagedEntry(paths, path.join(paths.temporary, entry));
     }
     this.lastFailures.clear();
   }
@@ -383,7 +383,7 @@ export class ModelAssetManager {
 
     for (const entry of entries) {
       if (!INSTALLATION_KEY_PATTERN.test(entry) || keepKeys.has(entry)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry));
+      await this.removeManagedEntry(paths, path.join(paths.artifacts, entry));
       this.lastFailures.delete(entry);
       removed += 1;
     }
@@ -564,6 +564,34 @@ export class ModelAssetManager {
     return paths;
   }
 
+  private async assertSafeStagingDirectory(
+    paths: CachePaths,
+    stagingDirectory: string
+  ): Promise<void> {
+    await validateCachePaths(paths);
+    let entry: Stats;
+    try {
+      entry = await lstat(stagingDirectory);
+    } catch (error) {
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Artifact staging directory disappeared during installation.",
+        { cause: error }
+      );
+    }
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Artifact staging directory changed to an unsafe filesystem entry."
+      );
+    }
+  }
+
+  private async removeManagedEntry(paths: CachePaths, candidate: string): Promise<void> {
+    await validateCachePaths(paths);
+    await removeEntryInsideRoot(paths.root, candidate);
+  }
+
   private async performInstallation(
     manifest: AssetManifest,
     signal: AbortSignal,
@@ -578,7 +606,7 @@ export class ModelAssetManager {
     const initial = await this.checkInstallation(manifest, signal);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
     if (await pathEntryExists(installationDirectory)) {
-      await removeEntryInsideRoot(paths.root, installationDirectory);
+      await this.removeManagedEntry(paths, installationDirectory);
     }
 
     const reservationBytes = manifest.sizeBytes;
@@ -599,6 +627,7 @@ export class ModelAssetManager {
 
       setStage("DOWNLOADING");
       await stagePayload(stagedPayload);
+      await this.assertSafeStagingDirectory(paths, stagingDirectory);
 
       setStage("VERIFYING");
       const verification = await verifyArtifactFile(stagedPayload, {
@@ -613,6 +642,7 @@ export class ModelAssetManager {
         );
       }
 
+      await this.assertSafeStagingDirectory(paths, stagingDirectory);
       await writeStoredManifest(
         path.join(stagingDirectory, "manifest.json"),
         serializeAssetManifest(manifest)
@@ -624,13 +654,14 @@ export class ModelAssetManager {
         );
       }
 
+      await this.assertSafeStagingDirectory(paths, stagingDirectory);
       if (await pathEntryExists(installationDirectory)) {
         const existing = await this.checkInstallation(manifest, signal);
         if (existing.status === "INSTALLED" && existing.path !== undefined) {
-          await removeEntryInsideRoot(paths.root, stagingDirectory);
+          await this.removeManagedEntry(paths, stagingDirectory);
           return existing.path;
         }
-        await removeEntryInsideRoot(paths.root, installationDirectory);
+        await this.removeManagedEntry(paths, installationDirectory);
       }
 
       if (signal.aborted) {
@@ -640,13 +671,14 @@ export class ModelAssetManager {
         );
       }
 
+      await this.assertSafeStagingDirectory(paths, stagingDirectory);
       try {
         await atomicRenameDirectory(stagingDirectory, installationDirectory);
         published = true;
       } catch (error) {
         const raced = await this.checkInstallation(manifest, signal);
         if (raced.status === "INSTALLED" && raced.path !== undefined) {
-          await removeEntryInsideRoot(paths.root, stagingDirectory);
+          await this.removeManagedEntry(paths, stagingDirectory);
           return raced.path;
         }
         throw error;
@@ -656,7 +688,7 @@ export class ModelAssetManager {
       setStagingDirectory(undefined);
       this.releaseCapacity(reservationBytes);
       if (!published) {
-        await removeEntryInsideRoot(paths.root, stagingDirectory).catch(() => undefined);
+        await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
       }
     }
   }
