@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { PNG } from "pngjs";
 import { computeVisionArtifactId } from "./artifact-identity.js";
+import { actualUint8ArrayByteLength } from "./byte-validation.js";
 import { assertSupportedPngHeaderParameters } from "./png-validation.js";
 import { BoardRevisionSchema } from "../../domain/src/index.js";
 
@@ -267,7 +268,7 @@ export class ImageSnapshot {
   public constructor(metadata: ImageSnapshotMetadata, bytes: unknown) {
     const parsed = ImageSnapshotMetadataSchema.parse(metadata);
     if (!(bytes instanceof Uint8Array)) throw new RangeError("Image payload must be a Uint8Array");
-    if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
+    if (actualUint8ArrayByteLength(bytes) > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
       throw new RangeError("Image payload exceeds the package hard encoded-byte cap");
     }
     const copiedBytes = Buffer.from(bytes);
@@ -283,7 +284,7 @@ export class ImageSnapshot {
 
   public matchesEncodedBytes(candidate: unknown): boolean {
     return candidate instanceof Uint8Array
-      && candidate.byteLength === this.#bytes.length
+      && actualUint8ArrayByteLength(candidate) === this.#bytes.length
       && this.#bytes.equals(candidate);
   }
 
