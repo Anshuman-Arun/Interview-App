@@ -43,16 +43,6 @@ function isPositiveProbabilityInput(value: z.infer<typeof RationalInputSchema>):
   }
 }
 
-function isProbabilityResult(value: z.infer<typeof IntermediateRationalInputSchema>): boolean {
-  try {
-    const parsed = parseIntermediateRationalInput(value);
-    return compareRationals(parsed, rational(0n, 1n)) >= 0
-      && compareRationals(parsed, rational(1n, 1n)) <= 0;
-  } catch {
-    return false;
-  }
-}
-
 export const ProbabilityInputSchema = RationalInputSchema.refine(
   isProbabilityInput,
   "Probability must lie between 0 and 1 inclusive"
@@ -63,10 +53,7 @@ export const PositiveProbabilityInputSchema = RationalInputSchema.refine(
   "Probability must be greater than 0 and at most 1"
 );
 
-export const ProbabilityResultSchema = IntermediateRationalInputSchema.refine(
-  isProbabilityResult,
-  "Probability result must lie between 0 and 1 inclusive"
-);
+export const ProbabilityResultSchema = IntermediateRationalInputSchema;
 
 export const ProbabilityArithmeticClaimSchema = z.discriminatedUnion("kind", [
   z.object({
