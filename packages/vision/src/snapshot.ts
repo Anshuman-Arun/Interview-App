@@ -98,6 +98,9 @@ function checkDimensions(header: PngHeader, limits: ImageValidationLimits): void
 export function sha256ImageBytes(bytes: Uint8Array): Sha256Digest;
 export function sha256ImageBytes(bytes: unknown): Sha256Digest {
   if (!(bytes instanceof Uint8Array)) throw new TypeError("Image digest input must be a Uint8Array");
+  if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
+    throw new RangeError("Image digest input exceeds the package hard encoded-byte cap");
+  }
   return createHash("sha256").update(bytes).digest("hex");
 }
 
