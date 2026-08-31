@@ -113,7 +113,7 @@ function addSecretRedactionVariants(target: Set<string>, value: string): void {
 
   for (const candidate of [...candidates]) {
     const encoded = JSON.stringify(candidate);
-    if (encoded.length >= 2) {
+    if (typeof encoded === "string" && encoded.length >= 2) {
       const inner = encoded.slice(1, -1);
       if (inner.length > 0) candidates.add(inner);
     }
