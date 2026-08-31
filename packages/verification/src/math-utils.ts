@@ -3,6 +3,7 @@ import {
   MAX_FINITE_CONTAINER_ITEMS,
   MAX_INTEGER_DECIMAL_DIGITS,
   MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
+  MAX_MATH_STATEMENT_CHARACTERS,
   MAX_VARIADIC_EXPRESSION_TERMS
 } from "./limits.js";
 
@@ -369,6 +370,38 @@ function rationalCounts(values: readonly ExactRational[]): Map<string, { value: 
   return counts;
 }
 
+interface WideRationalSum {
+  readonly numerator: bigint;
+  readonly denominator: bigint;
+}
+
+function addWideRational(
+  left: WideRationalSum,
+  right: ExactRational
+): WideRationalSum {
+  const commonFactor = gcdUnchecked(left.denominator, right.denominator);
+  const leftScale = right.denominator / commonFactor;
+  const rightScale = left.denominator / commonFactor;
+  const numerator = left.numerator * leftScale + right.numerator * rightScale;
+  const denominator = left.denominator * leftScale;
+  const cancellation = gcdUnchecked(numerator, denominator);
+  return {
+    numerator: numerator / cancellation,
+    denominator: denominator / cancellation
+  };
+}
+
+function canUseWideRationalSum(values: readonly ExactRational[]): boolean {
+  if (values.length > MAX_VARIADIC_EXPRESSION_TERMS) return false;
+
+  let denominatorDigits = 0;
+  for (const value of values) {
+    denominatorDigits += decimalDigitCount(value.denominator);
+    if (denominatorDigits > MAX_MATH_STATEMENT_CHARACTERS) return false;
+  }
+  return true;
+}
+
 function boundedCommonDenominator(values: readonly ExactRational[]): bigint | undefined {
   let commonDenominator = 1n;
   for (const value of values) {
@@ -401,6 +434,16 @@ function sumWithCommonDenominator(
 export function sumRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
   const normalizedValues = values.map(normalizeRational);
+
+  if (canUseWideRationalSum(normalizedValues)) {
+    let total: WideRationalSum = { numerator: 0n, denominator: 1n };
+    for (const value of normalizedValues) total = addWideRational(total, value);
+    return rational(
+      assertIntermediateIntegerBound(total.numerator),
+      assertIntermediateIntegerBound(total.denominator)
+    );
+  }
+
   const commonDenominator = boundedCommonDenominator(normalizedValues);
   if (commonDenominator !== undefined) {
     return sumWithCommonDenominator(normalizedValues, commonDenominator);
