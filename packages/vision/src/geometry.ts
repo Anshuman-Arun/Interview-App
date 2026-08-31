@@ -14,12 +14,13 @@ export const ImageRectSchema = z.object({
 }).strict();
 export type ImageRect = z.infer<typeof ImageRectSchema>;
 
-export interface RectCorners {
-  readonly x1: number;
-  readonly y1: number;
-  readonly x2: number;
-  readonly y2: number;
-}
+export const RectCornersSchema = z.object({
+  x1: SAFE_INTEGER_SCHEMA,
+  y1: SAFE_INTEGER_SCHEMA,
+  x2: SAFE_INTEGER_SCHEMA,
+  y2: SAFE_INTEGER_SCHEMA
+}).strict();
+export type RectCorners = z.infer<typeof RectCornersSchema>;
 
 function invalidRect(message: string): never {
   throw new VisionPreprocessingError("INVALID_RECTANGLE", message);
@@ -45,13 +46,13 @@ export function imageBounds(dimensions: PixelDimensions): ImageRect {
 }
 
 export function normalizeRect(corners: RectCorners): ImageRect {
-  const values = [corners.x1, corners.y1, corners.x2, corners.y2];
-  if (!values.every(Number.isSafeInteger)) invalidRect("Rectangle corners must be safe integers");
+  const parsed = RectCornersSchema.safeParse(corners);
+  if (!parsed.success) invalidRect("Rectangle corners must be safe integers");
 
-  const x = Math.min(corners.x1, corners.x2);
-  const y = Math.min(corners.y1, corners.y2);
-  const width = Math.abs(corners.x2 - corners.x1);
-  const height = Math.abs(corners.y2 - corners.y1);
+  const x = Math.min(parsed.data.x1, parsed.data.x2);
+  const y = Math.min(parsed.data.y1, parsed.data.y2);
+  const width = Math.abs(parsed.data.x2 - parsed.data.x1);
+  const height = Math.abs(parsed.data.y2 - parsed.data.y1);
   if (width === 0 || height === 0) invalidRect("Rectangle must have non-zero area");
   return validateImageRect({ x, y, width, height });
 }
@@ -84,9 +85,10 @@ export function rectsOverlap(left: ImageRect, right: ImageRect): boolean {
 }
 
 export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefined {
+  if (!Array.isArray(rectangles)) throw new TypeError("Rectangle collection must be an array");
   if (rectangles.length === 0) return undefined;
   const firstInput = rectangles[0];
-  if (firstInput === undefined) return undefined;
+  if (firstInput === undefined) invalidRect("Rectangle collection must not contain missing entries");
   const first = validateImageRect(firstInput);
   let minX = first.x;
   let minY = first.y;
@@ -95,7 +97,7 @@ export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefi
 
   for (let index = 1; index < rectangles.length; index += 1) {
     const input = rectangles[index];
-    if (input === undefined) continue;
+    if (input === undefined) invalidRect("Rectangle collection must not contain missing entries");
     const rect = validateImageRect(input);
     minX = Math.min(minX, rect.x);
     minY = Math.min(minY, rect.y);
