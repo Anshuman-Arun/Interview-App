@@ -113,7 +113,6 @@ async function downloadResponseToFile(
       },
       signal: options.signal
     }, (response) => {
-      request.removeListener("error", settleReject);
       void (async () => {
         try {
           if (redirectStatus(response.statusCode)) {
