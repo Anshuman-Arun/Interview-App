@@ -404,6 +404,72 @@ describe("registry provenance and batch input hardening", () => {
       .toThrow(expect.objectContaining({ code: "UNKNOWN_PROVIDER" }));
   });
 
+  it("does not dispatch captured registry methods through mutable call properties", () => {
+    const getProviderMethod = ProviderRegistry.prototype.getProvider;
+    const getModelMethod = ProviderRegistry.prototype.getModel;
+    const registerManyMethod = ProviderRegistry.prototype.registerMany;
+    const originalGetProviderCall = Object.getOwnPropertyDescriptor(getProviderMethod, "call");
+    const originalGetModelCall = Object.getOwnPropertyDescriptor(getModelMethod, "call");
+    const originalRegisterManyCall = Object.getOwnPropertyDescriptor(registerManyMethod, "call");
+    let getProviderCallRuns = 0;
+    let getModelCallRuns = 0;
+    let registerManyCallRuns = 0;
+
+    try {
+      Object.defineProperty(getProviderMethod, "call", {
+        configurable: true,
+        value() {
+          getProviderCallRuns += 1;
+          return MOCK_PROVIDER_DEFINITION;
+        }
+      });
+      Object.defineProperty(getModelMethod, "call", {
+        configurable: true,
+        value() {
+          getModelCallRuns += 1;
+          return firstModel(MOCK_PROVIDER_DEFINITION);
+        }
+      });
+      Object.defineProperty(registerManyMethod, "call", {
+        configurable: true,
+        value() {
+          registerManyCallRuns += 1;
+          return [];
+        }
+      });
+
+      const emptyRegistry = new ProviderRegistry();
+      expect(() => resolveProviderConfiguration({
+        registry: emptyRegistry,
+        configuration: MOCK_CONFIGURATION
+      })).toThrow(expect.objectContaining({ code: "UNKNOWN_PROVIDER" }));
+
+      const builtInRegistry = registerBuiltInProviders(new ProviderRegistry());
+      expect(builtInRegistry.enumerateProviders().map((provider) => provider.id))
+        .toEqual(["gemini-api", "mock-model"]);
+    } finally {
+      if (originalGetProviderCall === undefined) {
+        Reflect.deleteProperty(getProviderMethod, "call");
+      } else {
+        Object.defineProperty(getProviderMethod, "call", originalGetProviderCall);
+      }
+      if (originalGetModelCall === undefined) {
+        Reflect.deleteProperty(getModelMethod, "call");
+      } else {
+        Object.defineProperty(getModelMethod, "call", originalGetModelCall);
+      }
+      if (originalRegisterManyCall === undefined) {
+        Reflect.deleteProperty(registerManyMethod, "call");
+      } else {
+        Object.defineProperty(registerManyMethod, "call", originalRegisterManyCall);
+      }
+    }
+
+    expect(getProviderCallRuns).toBe(0);
+    expect(getModelCallRuns).toBe(0);
+    expect(registerManyCallRuns).toBe(0);
+  });
+
   it("ignores instance shadowing of the internal duplicate check", () => {
     const registry = new ProviderRegistry();
     registry.register(providerInput({ id: "duplicate-provider" }));

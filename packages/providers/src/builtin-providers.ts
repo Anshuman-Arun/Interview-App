@@ -322,9 +322,10 @@ export function registerBuiltInProviders(
   registry: ProviderRegistry = new ProviderRegistry()
 ): ProviderRegistry {
   try {
-    registerProviderDefinitions.call(
+    Reflect.apply(
+      registerProviderDefinitions,
       registry,
-      [MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT]
+      [[MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT]]
     );
   } catch (error) {
     if (isProviderControlPlaneError(error)) throw error;

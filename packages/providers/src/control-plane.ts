@@ -1355,8 +1355,8 @@ function resolveRegistrySelection(
     );
   }
   try {
-    const provider = providerRegistryGetProvider.call(registry, providerId);
-    const model = providerRegistryGetModel.call(registry, providerId, modelId);
+    const provider = Reflect.apply(providerRegistryGetProvider, registry, [providerId]);
+    const model = Reflect.apply(providerRegistryGetModel, registry, [providerId, modelId]);
     return freezeNullPrototype({ provider, model });
   } catch (error) {
     if (isProviderControlPlaneError(error)) throw error;
