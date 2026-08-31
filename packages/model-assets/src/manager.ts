@@ -620,6 +620,7 @@ export class ModelAssetManager {
     const key = artifactInstallationKey(manifest);
     const installationDirectory = path.join(paths.artifacts, key);
 
+    setStage("VERIFYING");
     const initial = await this.checkInstallation(manifest, signal);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
     this.rejectTransientInstallationFailure(initial);
