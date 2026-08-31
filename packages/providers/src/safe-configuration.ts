@@ -296,8 +296,7 @@ function normalizeConfigurationKey(key: string): string {
   return output;
 }
 
-function isSecretConfigurationKey(key: string): boolean {
-  const normalized = normalizeConfigurationKey(key);
+function isSecretNormalizedConfigurationKey(normalized: string): boolean {
   if (setHas(SECRET_CONFIGURATION_KEYS, normalized)) return true;
   return stringEndsWith(normalized, "accesstoken")
     || stringEndsWith(normalized, "accesstokens")
@@ -368,6 +367,118 @@ function isSecretConfigurationKey(key: string): boolean {
     || stringEndsWith(normalized, "sharedaccesssignatures");
 }
 
+function isSecretConfigurationKey(key: string): boolean {
+  return isSecretNormalizedConfigurationKey(normalizeConfigurationKey(key));
+}
+
+function isAssignmentWhitespace(value: string, index: number): boolean {
+  const code = stringCharCodeAt(value, index);
+  return code === 0x09
+    || code === 0x0a
+    || code === 0x0b
+    || code === 0x0c
+    || code === 0x0d
+    || code === 0x20;
+}
+
+function isSimpleAssignmentKeyCharacter(value: string, index: number): boolean {
+  const code = stringCharCodeAt(value, index);
+  return (code >= 0x30 && code <= 0x39)
+    || (code >= 0x41 && code <= 0x5a)
+    || (code >= 0x61 && code <= 0x7a)
+    || code === 0x2e
+    || code === 0x2d
+    || code === 0x5f;
+}
+
+function copyStringRange(value: string, start: number, end: number): string {
+  let output = "";
+  for (let index = start; index < end; index += 1) {
+    output += value[index] ?? "";
+  }
+  return output;
+}
+
+function readSimpleSerializedAssignment(
+  value: string,
+  operatorIndex: number
+): readonly [string, string] | null {
+  let cursor = operatorIndex - 1;
+  while (cursor >= 0 && isAssignmentWhitespace(value, cursor)) cursor -= 1;
+  if (cursor < 0) return null;
+
+  let keyStart: number;
+  let keyEnd: number;
+  const closingQuote = value[cursor];
+  if (closingQuote === "\"" || closingQuote === "'") {
+    keyEnd = cursor;
+    cursor -= 1;
+    while (cursor >= 0 && value[cursor] !== closingQuote) cursor -= 1;
+    if (cursor < 0) return null;
+    keyStart = cursor + 1;
+  } else {
+    keyEnd = cursor + 1;
+    while (cursor >= 0 && isSimpleAssignmentKeyCharacter(value, cursor)) {
+      cursor -= 1;
+    }
+    keyStart = cursor + 1;
+  }
+  if (keyStart >= keyEnd) return null;
+
+  cursor = operatorIndex + 1;
+  while (cursor < value.length && isAssignmentWhitespace(value, cursor)) cursor += 1;
+  const key = copyStringRange(value, keyStart, keyEnd);
+  if (cursor >= value.length) return Object.freeze([key, ""]);
+
+  const openingQuote = value[cursor];
+  if (openingQuote === "\"" || openingQuote === "'") {
+    cursor += 1;
+    const valueStart = cursor;
+    while (cursor < value.length && value[cursor] !== openingQuote) cursor += 1;
+    return Object.freeze([key, copyStringRange(value, valueStart, cursor)]);
+  }
+
+  const valueStart = cursor;
+  while (
+    cursor < value.length
+    && !isAssignmentWhitespace(value, cursor)
+    && value[cursor] !== ","
+    && value[cursor] !== ";"
+    && value[cursor] !== "&"
+  ) {
+    cursor += 1;
+  }
+  return Object.freeze([key, copyStringRange(value, valueStart, cursor)]);
+}
+
+function isAuthorizationConfigurationKey(key: string): boolean {
+  return key === "auth"
+    || key === "authorization"
+    || key === "authorizationheader"
+    || key === "httpauthorization"
+    || key === "authheader";
+}
+
+function containsStructuredSecretAssignment(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character !== "=" && character !== ":") continue;
+    const assignment = readSimpleSerializedAssignment(value, index);
+    if (assignment === null) continue;
+
+    const normalizedKey = normalizeConfigurationKey(assignment[0]);
+    if (!isSecretNormalizedConfigurationKey(normalizedKey)) continue;
+    if (normalizedKey === "token" || normalizedKey === "secret") continue;
+
+    const normalizedValue = lowerCaseString(trimString(assignment[1]));
+    const allowedValues = isAuthorizationConfigurationKey(normalizedKey)
+      ? AUTHORIZATION_NON_SECRET_ASSIGNMENT_VALUES
+      : GENERIC_NON_SECRET_ASSIGNMENT_VALUES;
+    if (!setHas(allowedValues, normalizedValue)) return true;
+  }
+  return false;
+}
+
 function base64Value(character: string): number {
   const code = stringCharCodeAt(character, 0);
   if (code >= 0x41 && code <= 0x5a) return code - 0x41;
@@ -425,6 +536,7 @@ function containsBasicAuthCredential(value: string): boolean {
 
 function containsExplicitCredentialAssignment(value: string): boolean {
   if (regexpExec(AUTHORIZATION_SCHEME_VALUE_PATTERN, value) !== null) return true;
+  if (containsStructuredSecretAssignment(value)) return true;
 
   const highConfidence = regexpExec(HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN, value);
   if (highConfidence !== null) {
@@ -439,10 +551,7 @@ function containsExplicitCredentialAssignment(value: string): boolean {
       : "";
     const normalizedValue = lowerCaseString(trimString(assignedValue));
     const allowedValues = (
-      key === "authorization"
-      || key === "authorizationheader"
-      || key === "httpauthorization"
-      || key === "authheader"
+      isAuthorizationConfigurationKey(key)
     )
       ? AUTHORIZATION_NON_SECRET_ASSIGNMENT_VALUES
       : GENERIC_NON_SECRET_ASSIGNMENT_VALUES;
