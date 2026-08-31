@@ -111,14 +111,15 @@ export class LocalRuntimeManager {
     if (this.stopAllPromise !== undefined) {
       throw new LocalRuntimeError("INVALID_STATE", "Cannot register a component while stopAll() is in progress");
     }
-    validateDefinition(definition);
-    if (this.components.has(definition.id)) {
-      throw new LocalRuntimeError("DUPLICATE_COMPONENT", `Component ${definition.id} is already registered`);
+    const inspectedDefinition = inspectDefinition(definition);
+    validateDefinition(inspectedDefinition);
+    if (this.components.has(inspectedDefinition.id)) {
+      throw new LocalRuntimeError("DUPLICATE_COMPONENT", `Component ${inspectedDefinition.id} is already registered`);
     }
 
     let environment: BuiltLocalEnvironment;
     try {
-      environment = buildLocalEnvironment(definition.environment, this.parentEnvironment, this.platform);
+      environment = buildLocalEnvironment(inspectedDefinition.environment, this.parentEnvironment, this.platform);
     } catch (error) {
       throw new LocalRuntimeError(
         "INVALID_DEFINITION",
@@ -126,7 +127,7 @@ export class LocalRuntimeManager {
       );
     }
 
-    const normalizedDefinition = freezeDefinition(definition);
+    const normalizedDefinition = freezeDefinition(inspectedDefinition);
     const maxLines = normalizedDefinition.output?.maxLines ?? DEFAULT_OUTPUT_MAX_LINES;
     const maxBytes = normalizedDefinition.output?.maxBytes ?? DEFAULT_OUTPUT_MAX_BYTES;
     const record: ComponentRecord = {
@@ -1020,6 +1021,141 @@ function isRetryableStartFailure(error: LocalRuntimeError): boolean {
     || error.code === "READINESS_TIMEOUT"
     || error.code === "READINESS_FAILED"
     || error.code === "PROCESS_EXITED";
+}
+
+function inspectDefinition(definition: LocalComponentDefinition): LocalComponentDefinition {
+  const top = inspectKnownDataObject(definition, "Component definition", new Set([
+    "id",
+    "executable",
+    "args",
+    "cwd",
+    "environment",
+    "startupTimeoutMs",
+    "shutdownTimeoutMs",
+    "terminationTimeoutMs",
+    "readiness",
+    "restartPolicy",
+    "expectedHandshake",
+    "output",
+    "gracefulShutdown"
+  ]));
+
+  const args = top.args === undefined
+    ? undefined
+    : inspectDefinitionArguments(top.args);
+  const readiness = top.readiness === undefined
+    ? undefined
+    : inspectKnownDataObject(top.readiness, "readiness", new Set([
+        "kind",
+        "stableMs",
+        "evaluate",
+        "url",
+        "intervalMs",
+        "probe"
+      ]));
+  const restartPolicy = top.restartPolicy === undefined
+    ? undefined
+    : inspectKnownDataObject(top.restartPolicy, "restartPolicy", new Set([
+        "mode",
+        "maxRetries",
+        "backoffMs",
+        "maxBackoffMs"
+      ]));
+  const expectedHandshake = top.expectedHandshake === undefined
+    ? undefined
+    : inspectKnownDataObject(top.expectedHandshake, "expectedHandshake", new Set([
+        "componentVersion",
+        "protocolVersion"
+      ]));
+  const output = top.output === undefined
+    ? undefined
+    : inspectKnownDataObject(top.output, "output", new Set([
+        "maxLines",
+        "maxBytes",
+        "maxLineBytes"
+      ]));
+
+  return Object.freeze({
+    ...(top.id === undefined ? {} : { id: top.id }),
+    ...(top.executable === undefined ? {} : { executable: top.executable }),
+    ...(args === undefined ? {} : { args }),
+    ...(top.cwd === undefined ? {} : { cwd: top.cwd }),
+    ...(top.environment === undefined ? {} : { environment: top.environment }),
+    ...(top.startupTimeoutMs === undefined ? {} : { startupTimeoutMs: top.startupTimeoutMs }),
+    ...(top.shutdownTimeoutMs === undefined ? {} : { shutdownTimeoutMs: top.shutdownTimeoutMs }),
+    ...(top.terminationTimeoutMs === undefined ? {} : { terminationTimeoutMs: top.terminationTimeoutMs }),
+    ...(readiness === undefined ? {} : { readiness }),
+    ...(restartPolicy === undefined ? {} : { restartPolicy }),
+    ...(expectedHandshake === undefined ? {} : { expectedHandshake }),
+    ...(output === undefined ? {} : { output }),
+    ...(top.gracefulShutdown === undefined ? {} : { gracefulShutdown: top.gracefulShutdown })
+  }) as unknown as LocalComponentDefinition;
+}
+
+function inspectKnownDataObject(
+  value: unknown,
+  label: string,
+  allowedKeys: ReadonlySet<string>
+): Readonly<Record<string, unknown>> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    invalid(`${label} must be an object`);
+  }
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    invalid(`${label} could not be inspected`);
+  }
+
+  const copy: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!allowedKeys.has(key)) {
+      if (descriptor.enumerable === true) invalid(`${label} contains unsupported field ${key}`);
+      continue;
+    }
+    if (!("value" in descriptor)) invalid(`${label} field ${key} may not be an accessor`);
+    copy[key] = descriptor.value;
+  }
+  return Object.freeze(copy);
+}
+
+function inspectDefinitionArguments(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) invalid("args must be an array");
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    invalid("args could not be inspected");
+  }
+
+  const rawLength = descriptors.length?.value as unknown;
+  if (typeof rawLength !== "number" || !Number.isSafeInteger(rawLength) || rawLength < 0) {
+    invalid("args has an invalid length");
+  }
+
+  const indexed: { readonly index: number; readonly value: string }[] = [];
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (key === "length" || descriptor.enumerable !== true) continue;
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(key)) {
+      invalid("args may not contain extra enumerable properties");
+    }
+    if (!("value" in descriptor)) invalid("args may not contain accessors");
+    const index = Number(key);
+    if (!Number.isSafeInteger(index) || index < 0 || index >= rawLength) {
+      invalid("args contains an invalid array index");
+    }
+    validateCommandPart(descriptor.value as string, "argument");
+    indexed.push({ index, value: descriptor.value as string });
+  }
+
+  if (indexed.length !== rawLength) invalid("args must be a dense data-only array");
+  indexed.sort((left, right) => left.index - right.index);
+  for (let index = 0; index < indexed.length; index += 1) {
+    if (indexed[index]?.index !== index) invalid("args must be a dense data-only array");
+  }
+  return Object.freeze(indexed.map((entry) => entry.value));
 }
 
 function freezeDefinition(definition: LocalComponentDefinition): LocalComponentDefinition {
