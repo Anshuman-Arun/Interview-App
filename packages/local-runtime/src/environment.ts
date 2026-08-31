@@ -1,3 +1,4 @@
+import { types as utilTypes } from "node:util";
 import { DIAGNOSTIC_SANITIZATION_LIMITS } from "../../diagnostics/src/index.js";
 import type { LocalEnvironmentDefinition } from "./types.js";
 
@@ -131,6 +132,9 @@ function addSecretRedactionVariants(target: Set<string>, value: string): void {
 }
 
 function safelyIsEnvironmentArray(value: unknown, label: string): boolean {
+  if (typeof value === "object" && value !== null && utilTypes.isProxy(value)) {
+    throw new Error(`${label} could not be inspected`);
+  }
   try {
     return Array.isArray(value);
   } catch {
@@ -289,6 +293,7 @@ function findParentEntry(
   requested: string,
   platform: NodeJS.Platform
 ): { readonly key: string; readonly value: string } | undefined {
+  if (utilTypes.isProxy(parent)) return undefined;
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
     descriptors = Object.getOwnPropertyDescriptors(parent);
