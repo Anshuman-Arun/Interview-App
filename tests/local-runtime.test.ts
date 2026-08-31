@@ -820,6 +820,20 @@ describe("local worker lifecycle manager", () => {
     }, {})).toThrow(/accessor/u);
     expect(nestedGetterCalls).toBe(0);
 
+    let inheritGetterCalls = 0;
+    const inheritedKeys = ["PATH"];
+    Object.defineProperty(inheritedKeys, "0", {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        inheritGetterCalls += 1;
+        return "PATH";
+      }
+    });
+    expect(() => buildLocalEnvironment({ inherit: inheritedKeys }, { PATH: "safe" }))
+      .toThrow(/data-only array/iu);
+    expect(inheritGetterCalls).toBe(0);
+
     let parentGetterCalls = 0;
     const parent = Object.defineProperty({}, "PATH", {
       enumerable: true,
@@ -846,6 +860,11 @@ describe("local worker lifecycle manager", () => {
     );
     expect(() => buildLocalEnvironment({ values: tooManyValues }, {}))
       .toThrow(/at most 256/iu);
+
+    const mutableValues = { SNAPSHOT_VALUE: "snapshot-source" };
+    const snapshotted = buildLocalEnvironment({ values: mutableValues }, {});
+    mutableValues.SNAPSHOT_VALUE = "mutated-after-validation";
+    expect(snapshotted.environment.SNAPSHOT_VALUE).toBe("snapshot-source");
   });
 
   it("treats explicit secret-looking environment values as diagnostic secrets", () => {
