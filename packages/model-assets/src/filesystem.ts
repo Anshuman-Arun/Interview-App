@@ -94,10 +94,12 @@ function ownValue(record: Record<string, unknown>, key: string): unknown {
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  if (!isUnknownRecord(value)) return false;
-  return typeof value["aborted"] === "boolean"
-    && typeof value["addEventListener"] === "function"
-    && typeof value["removeEventListener"] === "function";
+  if (typeof value !== "object" || value === null) return false;
+  try {
+    return value instanceof AbortSignal;
+  } catch {
+    return false;
+  }
 }
 
 function validateOptionalAbortSignal(value: unknown): AbortSignal | undefined {
