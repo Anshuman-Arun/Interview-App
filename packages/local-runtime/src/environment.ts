@@ -102,6 +102,6 @@ function findParentEntry(
 function removeEquivalentKey(environment: NodeJS.ProcessEnv, key: string, platform: NodeJS.Platform): void {
   const identity = normalizeKey(key, platform);
   for (const existing of Object.keys(environment)) {
-    if (normalizeKey(existing, platform) === identity) delete environment[existing];
+    if (normalizeKey(existing, platform) === identity) Reflect.deleteProperty(environment, existing);
   }
 }
