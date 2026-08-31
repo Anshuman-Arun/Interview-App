@@ -29,7 +29,14 @@ export const ImageRectSchema = z.preprocess(
     width: SAFE_POSITIVE_INTEGER_SCHEMA,
     height: SAFE_POSITIVE_INTEGER_SCHEMA
   }).strict()
-);
+).superRefine((rect, context) => {
+  if (!Number.isSafeInteger(rect.x + rect.width)) {
+    context.addIssue({ code: "custom", message: "Rectangle right edge exceeds safe integer range" });
+  }
+  if (!Number.isSafeInteger(rect.y + rect.height)) {
+    context.addIssue({ code: "custom", message: "Rectangle bottom edge exceeds safe integer range" });
+  }
+});
 export type ImageRect = z.infer<typeof ImageRectSchema>;
 
 export const RectCornersSchema = z.preprocess(
