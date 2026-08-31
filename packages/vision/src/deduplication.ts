@@ -6,6 +6,10 @@ import {
   type VisionRasterSource
 } from "./types.js";
 
+function assertArrayInput(value: unknown): void {
+  if (!Array.isArray(value)) throw new TypeError("Image collection must be an array");
+}
+
 function imageDigest(source: VisionRasterSource): string {
   return source.metadata.contentDigest;
 }
@@ -48,7 +52,7 @@ export function sameRevisionAndImage(left: VisionRasterSource, right: VisionRast
 export const MAX_DEDUPLICATION_CANDIDATES = 2048;
 
 export function deduplicateExactImagePayloads<T extends VisionRasterSource>(images: readonly T[]): readonly T[] {
-  if (!Array.isArray(images)) throw new TypeError("Image collection must be an array");
+  assertArrayInput(images);
   if (images.length > MAX_DEDUPLICATION_CANDIDATES) {
     throw new RangeError(`At most ${String(MAX_DEDUPLICATION_CANDIDATES)} images may be deduplicated at once`);
   }
