@@ -668,7 +668,7 @@ describe("adversarial deterministic math verification", () => {
   });
 
   it("supports combinations with repetition across the full bounded input domain", async () => {
-    const result = await verifyJson(new CombinatorialCountingVerifier(), {
+    const simple = await verifyJson(new CombinatorialCountingVerifier(), {
       protocol: COMBINATORIAL_COUNTING_PROTOCOL,
       protocolVersion: COMBINATORIAL_COUNTING_PROTOCOL_VERSION,
       claim: {
@@ -678,7 +678,19 @@ describe("adversarial deterministic math verification", () => {
         claimed: "500500"
       }
     });
-    expect(result.status).toBe("VERIFIED");
+    expect(simple.status).toBe("VERIFIED");
+
+    const corner = await verifyJson(new CombinatorialCountingVerifier(), {
+      protocol: COMBINATORIAL_COUNTING_PROTOCOL,
+      protocolVersion: COMBINATORIAL_COUNTING_PROTOCOL_VERSION,
+      claim: {
+        kind: "COMBINATIONS_WITH_REPETITION",
+        types: 1000,
+        selections: 1000,
+        claimed: "1024075813494744857167581251490412522198212443990698516910191318835874093101041877914466497091305103100732383159999011846207740899002262396009023774884630789281506448317160323574255761976258256138842943057697731280739536893342320772222668088068850369278369072948150356532552279797572399443731031843592572759142755865831381268318865423414661276945248719297407158775153918982221854050425818624137313957085083099418824204217707154088929735188732825942377573403748473374619015165509093616490048342837292801262749550590567626767329443970983326837452255653055048155953135171251146577955554488366981995574560"
+      }
+    });
+    expect(corner.status).toBe("VERIFIED");
   });
 
   it("rejects semantically invalid probability values at the structured boundary", async () => {
