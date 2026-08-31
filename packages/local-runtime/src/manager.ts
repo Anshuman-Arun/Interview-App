@@ -2233,15 +2233,25 @@ function runTaskkill(
     }
 
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (success: boolean): void => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer !== undefined) clearTimeout(timer);
       // Keep the once-listeners attached until the helper actually emits them so a
       // late kill/spawn error cannot become an unhandled EventEmitter "error".
       resolve(success);
     };
-    const timer = setTimeout(() => {
+
+    task.once("error", () => finish(false));
+    task.once("close", (code) => finish(code === 0));
+
+    if (task.exitCode !== null || task.signalCode !== null) {
+      finish(task.exitCode === 0);
+      return;
+    }
+
+    timer = setTimeout(() => {
       try {
         task.kill();
       } catch {
@@ -2250,8 +2260,6 @@ function runTaskkill(
       task.unref();
       finish(false);
     }, timeoutMs);
-    task.once("error", () => finish(false));
-    task.once("close", (code) => finish(code === 0));
   });
 }
 
