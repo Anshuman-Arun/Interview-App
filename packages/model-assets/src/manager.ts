@@ -12,6 +12,7 @@ import {
   installedPayloadPath,
   pathEntryExists,
   readStoredManifest,
+  REMOVAL_TOMBSTONE_PATTERN,
   removeEntryInsideRoot,
   sumManagedCacheBytes,
   validateCachePaths,
@@ -379,7 +380,10 @@ export class ModelAssetManager {
       "Temporary cache entry count exceeds the configured cleanup limit."
     );
     for (const entry of entries) {
-      if (!TEMPORARY_ENTRY_PATTERN.test(entry)) continue;
+      if (!TEMPORARY_ENTRY_PATTERN.test(entry)
+          && !REMOVAL_TOMBSTONE_PATTERN.test(entry)) {
+        continue;
+      }
       await this.removeManagedEntry(paths, path.join(paths.temporary, entry));
     }
     this.lastFailures.clear();
@@ -410,7 +414,10 @@ export class ModelAssetManager {
     let removed = 0;
 
     for (const entry of entries) {
-      if (!INSTALLATION_KEY_PATTERN.test(entry) || keepKeys.has(entry)) continue;
+      const installationEntry = INSTALLATION_KEY_PATTERN.test(entry);
+      const tombstoneEntry = REMOVAL_TOMBSTONE_PATTERN.test(entry);
+      if (!installationEntry && !tombstoneEntry) continue;
+      if (installationEntry && keepKeys.has(entry)) continue;
       await this.removeManagedEntry(paths, path.join(paths.artifacts, entry));
       this.lastFailures.delete(entry);
       removed += 1;
@@ -809,7 +816,10 @@ export class ModelAssetManager {
           "Artifact cache entry count exceeds the configured accounting limit."
         );
       }
-      if (!INSTALLATION_KEY_PATTERN.test(entry.name)) continue;
+      if (!INSTALLATION_KEY_PATTERN.test(entry.name)
+          && !REMOVAL_TOMBSTONE_PATTERN.test(entry.name)) {
+        continue;
+      }
       total += await sumManagedCacheBytes(path.join(paths.artifacts, entry.name));
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
@@ -829,9 +839,11 @@ export class ModelAssetManager {
           "Temporary cache entry count exceeds the configured accounting limit."
         );
       }
-      if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
+      const stagingEntry = TEMPORARY_ENTRY_PATTERN.test(entry.name);
+      const tombstoneEntry = REMOVAL_TOMBSTONE_PATTERN.test(entry.name);
+      if (!stagingEntry && !tombstoneEntry) continue;
       const candidate = path.join(paths.temporary, entry.name);
-      if (activeStagingDirectories.has(candidate)) continue;
+      if (stagingEntry && activeStagingDirectories.has(candidate)) continue;
       total += await sumManagedCacheBytes(candidate);
       if (!Number.isSafeInteger(total)) {
         throw new ModelAssetError(
