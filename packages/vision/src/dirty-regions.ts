@@ -208,14 +208,22 @@ export function planDirtyRegions(
     }
     rasterRegions.push(rasterizeDirtyRegion(region));
   }
-  if (rasterRegions.length > safeConfig.maxInputRegions) {
+  const clippedRegions: ImageRect[] = [];
+  for (const rawRegion of rasterRegions) {
+    const clipped = clipRectToBounds(rawRegion, frame);
+    if (clipped !== undefined) clippedRegions.push(clipped);
+  }
+
+  if (clippedRegions.length === 0) {
+    const regions: readonly [] = Object.freeze([]);
+    return Object.freeze({ mode: "NONE" as const, regions, analyzedArea: 0 as const });
+  }
+  if (clippedRegions.length > safeConfig.maxInputRegions) {
     return fullFrameFallback(frame, safeConfig.maxTotalAnalyzedArea, "TOO_MANY_INPUTS");
   }
 
   const padded: ImageRect[] = [];
-  for (const rawRegion of rasterRegions) {
-    const clipped = clipRectToBounds(rawRegion, frame);
-    if (clipped === undefined) continue;
+  for (const clipped of clippedRegions) {
     const expanded = expandRect(clipped, safeConfig.paddingPixels, frame);
     if (expanded !== undefined) padded.push(expanded);
   }
