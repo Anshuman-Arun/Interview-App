@@ -1,3 +1,4 @@
+import { boundedArrayLength } from "./array-validation.js";
 import {
   ImageSnapshot,
   VisionImageArtifact,
@@ -5,10 +6,6 @@ import {
   visionRasterIdentity,
   type VisionRasterSource
 } from "./types.js";
-
-function assertArrayInput(value: unknown): void {
-  if (!Array.isArray(value)) throw new TypeError("Image collection must be an array");
-}
 
 function imageDigest(source: VisionRasterSource): string {
   return source.metadata.contentDigest;
@@ -52,14 +49,11 @@ export function sameRevisionAndImage(left: VisionRasterSource, right: VisionRast
 export const MAX_DEDUPLICATION_CANDIDATES = 2048;
 
 export function deduplicateExactImagePayloads<T extends VisionRasterSource>(images: readonly T[]): readonly T[] {
-  assertArrayInput(images);
-  if (images.length > MAX_DEDUPLICATION_CANDIDATES) {
-    throw new RangeError(`At most ${String(MAX_DEDUPLICATION_CANDIDATES)} images may be deduplicated at once`);
-  }
+  const imageCount = boundedArrayLength(images, MAX_DEDUPLICATION_CANDIDATES, "Image collection");
   const buckets = new Map<string, T[]>();
   const unique: T[] = [];
 
-  for (let index = 0; index < images.length; index += 1) {
+  for (let index = 0; index < imageCount; index += 1) {
     const image = images[index];
     if (image === undefined) throw new TypeError("Image collection must not contain missing entries");
     assertVisionRasterSource(image);
