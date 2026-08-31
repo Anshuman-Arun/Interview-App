@@ -48,6 +48,23 @@ describe("repository architecture boundary checker", () => {
     expect(result.status).toBe(0);
   });
 
+  it("allows the frozen snapshot constructor to consume the capability without exporting it", () => {
+    const root = createFixture({
+      "packages/vision/src/internal-artifact-construction.ts":
+        "export const INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION = Symbol(\"snapshot\");\n",
+      "packages/vision/src/types.ts":
+        "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\n"
+        + "export class ImageSnapshot { constructor(token: typeof secret) { if (token !== secret) throw new Error(\"bad\"); } }\n",
+      "packages/vision/src/snapshot.ts":
+        "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\n"
+        + "import { ImageSnapshot } from \"./types.js\";\n"
+        + "export function create() { return new ImageSnapshot(secret); }\n"
+    });
+    const result = runChecker(root);
+    expect(checkerOutput(result)).toContain("Architecture boundary checks passed");
+    expect(result.status).toBe(0);
+  });
+
   it("allows type-only references to the internal vision construction capability", () => {
     const root = createFixture({
       "packages/vision/src/internal-artifact-construction.ts":
@@ -254,6 +271,20 @@ describe("repository architecture boundary checker", () => {
       expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
       files: {
         "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport class Leak { static token = secret; }\n"
+      }
+    },
+    {
+      name: "exported vision container storing its sensitive constructor token on the instance",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/types.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport class ImageSnapshot { constructor(token: typeof secret) { if (token !== secret) throw new Error(\"bad\"); this.leak = token; } }\n"
+      }
+    },
+    {
+      name: "snapshot module using a same-named local wrapper instead of the real container import",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/snapshot.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nclass ImageSnapshot { constructor(readonly leak: unknown) {} }\nexport const leaked = new ImageSnapshot(secret);\n"
       }
     },
     {
