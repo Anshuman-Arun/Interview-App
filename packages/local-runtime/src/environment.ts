@@ -18,6 +18,7 @@ export const DEFAULT_WINDOWS_INHERITED_ENVIRONMENT_KEYS = Object.freeze([
 
 const ENVIRONMENT_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const SECRET_KEY = /(?:TOKEN|SECRET|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIAL|AUTHORIZATION)/iu;
+const MAX_CONFIGURED_ENVIRONMENT_KEYS = 256;
 
 export interface BuiltLocalEnvironment {
   readonly environment: NodeJS.ProcessEnv;
@@ -29,13 +30,13 @@ export function buildLocalEnvironment(
   parent: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): BuiltLocalEnvironment {
-  validateEnvironmentDefinition(definition);
+  const inspectedDefinition = inspectEnvironmentDefinition(definition);
   const environment = Object.create(null) as NodeJS.ProcessEnv;
   const secretValues = new Set<string>();
   const defaults = platform === "win32"
     ? DEFAULT_WINDOWS_INHERITED_ENVIRONMENT_KEYS
     : DEFAULT_POSIX_INHERITED_ENVIRONMENT_KEYS;
-  const inherited = [...defaults, ...(definition?.inherit ?? [])];
+  const inherited = [...defaults, ...(inspectedDefinition?.inherit ?? [])];
   const inheritedNames = new Set<string>();
 
   for (const key of inherited) {
@@ -52,23 +53,29 @@ export function buildLocalEnvironment(
   }
 
   const explicitNames = new Set<string>();
-  for (const [key, value] of ownDataEntries(definition?.values, "environment.values")) {
+  for (const [key, value] of ownDataEntries(inspectedDefinition?.values, "environment.values")) {
     validateEnvironmentEntry(key, value);
     const identity = normalizeKey(key, platform);
     if (explicitNames.has(identity)) throw new Error(`Duplicate explicit environment key: ${key}`);
     explicitNames.add(identity);
+    if (explicitNames.size > MAX_CONFIGURED_ENVIRONMENT_KEYS) {
+      throw new Error(`Environment configuration may contain at most ${String(MAX_CONFIGURED_ENVIRONMENT_KEYS)} explicit keys`);
+    }
     removeEquivalentKey(environment, key, platform);
     environment[key] = value;
     if (SECRET_KEY.test(key) && value.length > 0) secretValues.add(value);
   }
 
-  for (const [key, value] of ownDataEntries(definition?.secrets, "environment.secrets")) {
+  for (const [key, value] of ownDataEntries(inspectedDefinition?.secrets, "environment.secrets")) {
     validateEnvironmentEntry(key, value);
     const identity = normalizeKey(key, platform);
     if (explicitNames.has(identity)) {
       throw new Error(`Environment key cannot be both public and secret: ${key}`);
     }
     explicitNames.add(identity);
+    if (explicitNames.size > MAX_CONFIGURED_ENVIRONMENT_KEYS) {
+      throw new Error(`Environment configuration may contain at most ${String(MAX_CONFIGURED_ENVIRONMENT_KEYS)} explicit keys`);
+    }
     removeEquivalentKey(environment, key, platform);
     environment[key] = value;
     if (value.length > 0) secretValues.add(value);
@@ -80,24 +87,76 @@ export function buildLocalEnvironment(
   });
 }
 
-function validateEnvironmentDefinition(definition: LocalEnvironmentDefinition | undefined): void {
-  if (definition === undefined) return;
+function inspectEnvironmentDefinition(
+  definition: LocalEnvironmentDefinition | undefined
+): LocalEnvironmentDefinition | undefined {
+  if (definition === undefined) return undefined;
   if (typeof definition !== "object" || definition === null || Array.isArray(definition)) {
     throw new Error("Environment definition must be an object");
   }
-  if (definition.inherit !== undefined) {
-    if (!Array.isArray(definition.inherit)) throw new Error("environment.inherit must be an array");
-    for (const key of definition.inherit) validateEnvironmentKey(key);
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(definition);
+  } catch {
+    throw new Error("Environment definition could not be inspected");
   }
-  if (definition.values !== undefined) validateStringRecord(definition.values, "environment.values");
-  if (definition.secrets !== undefined) validateStringRecord(definition.secrets, "environment.secrets");
+
+  const allowed = new Set(["inherit", "values", "secrets"]);
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!allowed.has(key) && descriptor.enumerable === true) {
+      throw new Error(`Unknown environment definition field: ${key}`);
+    }
+    if (allowed.has(key) && !("value" in descriptor)) {
+      throw new Error(`Environment definition field ${key} may not be an accessor`);
+    }
+  }
+
+  const inheritValue = descriptors.inherit?.value as unknown;
+  const valuesValue = descriptors.values?.value as unknown;
+  const secretsValue = descriptors.secrets?.value as unknown;
+
+  let inherit: readonly string[] | undefined;
+  if (inheritValue !== undefined) {
+    if (!Array.isArray(inheritValue)) throw new Error("environment.inherit must be an array");
+    if (inheritValue.length > MAX_CONFIGURED_ENVIRONMENT_KEYS) {
+      throw new Error(`environment.inherit may contain at most ${String(MAX_CONFIGURED_ENVIRONMENT_KEYS)} keys`);
+    }
+    const copy: string[] = [];
+    for (const key of inheritValue) {
+      validateEnvironmentKey(key);
+      copy.push(key);
+    }
+    inherit = Object.freeze(copy);
+  }
+
+  const values = valuesValue === undefined
+    ? undefined
+    : validateAndReturnStringRecord(valuesValue, "environment.values");
+  const secrets = secretsValue === undefined
+    ? undefined
+    : validateAndReturnStringRecord(secretsValue, "environment.secrets");
+
+  return Object.freeze({
+    ...(inherit === undefined ? {} : { inherit }),
+    ...(values === undefined ? {} : { values }),
+    ...(secrets === undefined ? {} : { secrets })
+  });
 }
 
-function validateStringRecord(value: Readonly<Record<string, string>>, label: string): void {
+function validateAndReturnStringRecord(
+  value: unknown,
+  label: string
+): Readonly<Record<string, string>> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
   }
-  void ownDataEntries(value, label);
+  const record = value as Readonly<Record<string, string>>;
+  const entries = ownDataEntries(record, label);
+  if (entries.length > MAX_CONFIGURED_ENVIRONMENT_KEYS) {
+    throw new Error(`${label} may contain at most ${String(MAX_CONFIGURED_ENVIRONMENT_KEYS)} keys`);
+  }
+  return record;
 }
 
 function ownDataEntries(
