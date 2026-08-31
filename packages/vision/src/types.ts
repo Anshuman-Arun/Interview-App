@@ -203,7 +203,27 @@ export const VisionImageArtifactMetadataSchema = z.object({
   contentDigest: Sha256DigestSchema,
   sourceBounds: ArtifactSourceBoundsSchema,
   coordinateTransform: CoordinateTransformSchema
-}).strict();
+}).strict().superRefine((metadata, context) => {
+  if (metadata.parentArtifactId === metadata.artifactId) {
+    context.addIssue({ code: "custom", message: "Artifact parent ID must differ from artifact ID" });
+  }
+  if (metadata.kind === "CROP" || metadata.kind === "TILE") {
+    if (metadata.width !== metadata.sourceBounds.width || metadata.height !== metadata.sourceBounds.height) {
+      context.addIssue({ code: "custom", message: "Crop/tile output dimensions must match source bounds" });
+    }
+  }
+  if (metadata.kind === "RESIZED") {
+    if (metadata.sourceBounds.x !== 0 || metadata.sourceBounds.y !== 0) {
+      context.addIssue({ code: "custom", message: "Resize source bounds must start at the source origin" });
+    }
+    if (metadata.width > metadata.sourceBounds.width || metadata.height > metadata.sourceBounds.height) {
+      context.addIssue({ code: "custom", message: "Resize artifacts may not upscale dimensions" });
+    }
+    if (metadata.width === metadata.sourceBounds.width && metadata.height === metadata.sourceBounds.height) {
+      context.addIssue({ code: "custom", message: "Resize artifacts must change at least one dimension" });
+    }
+  }
+});
 export type VisionImageArtifactMetadata = z.infer<typeof VisionImageArtifactMetadataSchema>;
 
 export const VisionPreprocessingErrorCodeSchema = z.enum([
