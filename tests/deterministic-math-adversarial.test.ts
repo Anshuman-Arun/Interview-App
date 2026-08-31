@@ -618,6 +618,43 @@ describe("adversarial deterministic math verification", () => {
     expect(result.reason).toContain("CLAIM_CONTRADICTED");
   });
 
+  it("normalizes valid probability mass independently of outcome order", async () => {
+    const denominatorSpecs: readonly (readonly [bigint, bigint])[] = [
+      [2n, 730n], [3n, 461n], [5n, 314n], [7n, 260n], [11n, 211n],
+      [13n, 197n], [17n, 178n], [23n, 161n], [29n, 150n], [31n, 147n],
+      [37n, 139n], [41n, 136n], [43n, 134n], [47n, 131n], [53n, 127n],
+      [59n, 124n], [61n, 123n], [67n, 120n], [71n, 118n]
+    ];
+    const parts = denominatorSpecs.map(([base, exponent]) => {
+      const scale = base ** exponent;
+      const denominator = 19n * scale;
+      return {
+        tiny: {
+          probability: fraction("1", denominator.toString()),
+          value: fraction("0")
+        },
+        complement: {
+          probability: fraction((scale - 1n).toString(), denominator.toString()),
+          value: fraction("0")
+        }
+      };
+    });
+
+    const result = await verifyJson(new ProbabilityArithmeticVerifier(), {
+      protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+      protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "FINITE_EXPECTATION",
+        outcomes: [
+          ...parts.map((part) => part.tiny),
+          ...parts.map((part) => part.complement)
+        ],
+        claimedExpectation: fraction("0")
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
+  });
+
   it("cancels exact expectation terms before aggregate denominator overflow", async () => {
     const denominatorSpecs: readonly (readonly [bigint, bigint])[] = [
       [2n, 764n], [3n, 482n], [5n, 329n], [7n, 272n], [11n, 220n],
