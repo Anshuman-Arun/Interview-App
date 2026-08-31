@@ -56,8 +56,15 @@ export type DirtyRegionPlan =
       readonly fallbackReason: DirtyRegionFallbackReason;
     };
 
+function compareNumber(left: number, right: number): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function compareRects(left: ImageRect, right: ImageRect): number {
-  return left.y - right.y || left.x - right.x || left.height - right.height || left.width - right.width;
+  return compareNumber(left.y, right.y)
+    || compareNumber(left.x, right.x)
+    || compareNumber(left.height, right.height)
+    || compareNumber(left.width, right.width);
 }
 
 function normalizeConfig(config: DirtyRegionPlannerConfig | undefined) {
@@ -133,12 +140,20 @@ export function planDirtyRegions(
     return Object.freeze({ mode: "NONE" as const, regions, analyzedArea: 0 as const });
   }
 
-  if (dirtyRegions.length > safeConfig.maxInputRegions) {
+  if (dirtyRegions.length > 2048) {
+    throw new VisionPreprocessingError(
+      "DIRTY_PLAN_EXCEEDS_BUDGET",
+      "Dirty-region input exceeds the package hard region-count limit"
+    );
+  }
+
+  const validatedRegions = dirtyRegions.map((region) => validateImageRect(region));
+  if (validatedRegions.length > safeConfig.maxInputRegions) {
     return fullFrameFallback(frame, safeConfig.maxTotalAnalyzedArea, "TOO_MANY_INPUTS");
   }
 
   const padded: ImageRect[] = [];
-  for (const rawRegion of dirtyRegions) {
+  for (const rawRegion of validatedRegions) {
     const clipped = clipRectToBounds(validateImageRect(rawRegion), frame);
     if (clipped === undefined) continue;
     const expanded = expandRect(clipped, safeConfig.paddingPixels, frame);
