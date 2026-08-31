@@ -3,8 +3,8 @@ import {
   MAX_FINITE_CONTAINER_ITEMS,
   MAX_INTEGER_DECIMAL_DIGITS,
   MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
-  MAX_MATH_STATEMENT_CHARACTERS,
-  MAX_VARIADIC_EXPRESSION_TERMS
+  MAX_VARIADIC_EXPRESSION_TERMS,
+  MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS
 } from "./limits.js";
 
 export type BoundedMathErrorCode =
@@ -348,29 +348,36 @@ interface WideRationalSum {
   readonly denominator: bigint;
 }
 
-function addWideRational(
-  left: WideRationalSum,
-  right: ExactRational
-): WideRationalSum {
-  const commonFactor = gcdUnchecked(left.denominator, right.denominator);
-  const leftScale = right.denominator / commonFactor;
-  const rightScale = left.denominator / commonFactor;
-  const numerator = left.numerator * leftScale + right.numerator * rightScale;
-  const denominator = left.denominator * leftScale;
-  const cancellation = gcdUnchecked(numerator, denominator);
-  return {
-    numerator: numerator / cancellation,
-    denominator: denominator / cancellation
-  };
+function wideWorkComponentWithinBound(value: bigint): boolean {
+  return decimalDigitCount(value) <= MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS;
 }
 
-function canUseWideRationalSum(values: readonly ExactRational[]): boolean {
-  let denominatorDigits = 0;
+function tryWideRationalSum(values: readonly ExactRational[]): ExactRational | undefined {
+  let total: WideRationalSum = { numerator: 0n, denominator: 1n };
+
   for (const value of values) {
-    denominatorDigits += decimalDigitCount(value.denominator);
-    if (denominatorDigits > MAX_MATH_STATEMENT_CHARACTERS) return false;
+    const commonFactor = gcdUnchecked(total.denominator, value.denominator);
+    const leftScale = value.denominator / commonFactor;
+    const rightScale = total.denominator / commonFactor;
+    const numerator = total.numerator * leftScale + value.numerator * rightScale;
+    const denominator = total.denominator * leftScale;
+
+    if (
+      !wideWorkComponentWithinBound(numerator)
+      || !wideWorkComponentWithinBound(denominator)
+    ) return undefined;
+
+    // Keep the exact LCM denominator but defer numerator/denominator reduction
+    // until the end. Re-running a large gcd after every term is adversarially
+    // expensive and is unnecessary for exact accumulation.
+    total = { numerator, denominator };
   }
-  return true;
+
+  const cancellation = gcdUnchecked(total.numerator, total.denominator);
+  return rational(
+    assertIntermediateIntegerBound(total.numerator / cancellation),
+    assertIntermediateIntegerBound(total.denominator / cancellation)
+  );
 }
 
 function boundedCommonDenominator(values: readonly ExactRational[]): bigint | undefined {
@@ -395,6 +402,13 @@ function sumWithCommonDenominator(
     numerator += value.numerator * (commonDenominator / value.denominator);
   }
 
+  if (!wideWorkComponentWithinBound(numerator)) {
+    throw new BoundedMathError(
+      "INTERMEDIATE_LIMIT_EXCEEDED",
+      "Finite rational sum exceeds the configured exact-work limit"
+    );
+  }
+
   const cancellation = gcdUnchecked(numerator, commonDenominator);
   return rational(
     assertIntermediateIntegerBound(numerator / cancellation),
@@ -406,14 +420,8 @@ export function sumRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
   const checkedValues = values.map(checkedRational);
 
-  if (canUseWideRationalSum(checkedValues)) {
-    let total: WideRationalSum = { numerator: 0n, denominator: 1n };
-    for (const value of checkedValues) total = addWideRational(total, value);
-    return rational(
-      assertIntermediateIntegerBound(total.numerator),
-      assertIntermediateIntegerBound(total.denominator)
-    );
-  }
+  const wideResult = tryWideRationalSum(checkedValues);
+  if (wideResult !== undefined) return wideResult;
 
   const commonDenominator = boundedCommonDenominator(checkedValues);
   if (commonDenominator !== undefined) {
@@ -442,40 +450,42 @@ export function sumRationals(values: readonly ExactRational[]): ExactRational {
     opposite.count -= cancelled;
   }
 
-  let result = rational(0n, 1n);
+  const remaining: ExactRational[] = [];
   for (const entry of counts.values()) {
     if (entry.value.numerator === 0n) continue;
-    for (let index = 0; index < entry.count; index += 1) {
-      result = addRationals(result, entry.value);
-    }
+    for (let index = 0; index < entry.count; index += 1) remaining.push(entry.value);
   }
-  return result;
+
+  const reducedCommonDenominator = boundedCommonDenominator(remaining);
+  if (reducedCommonDenominator !== undefined) {
+    return sumWithCommonDenominator(remaining, reducedCommonDenominator);
+  }
+
+  throw new BoundedMathError(
+    "INTERMEDIATE_LIMIT_EXCEEDED",
+    "Finite rational sum exceeds the configured exact-work limit"
+  );
 }
 
-function canUseWideRationalProduct(values: readonly ExactRational[]): boolean {
-  let factorDigits = 0;
-  for (const value of values) {
-    factorDigits += decimalDigitCount(value.numerator) + decimalDigitCount(value.denominator);
-    if (factorDigits > MAX_MATH_STATEMENT_CHARACTERS) return false;
-  }
-  return true;
-}
-
-function wideRationalProduct(values: readonly ExactRational[]): ExactRational {
+function tryWideRationalProduct(values: readonly ExactRational[]): ExactRational | undefined {
   let numerator = 1n;
   let denominator = 1n;
 
   for (const value of values) {
-    numerator *= value.numerator;
-    denominator *= value.denominator;
-    const cancellation = gcdUnchecked(numerator, denominator);
-    numerator /= cancellation;
-    denominator /= cancellation;
+    const nextNumerator = numerator * value.numerator;
+    const nextDenominator = denominator * value.denominator;
+    if (
+      !wideWorkComponentWithinBound(nextNumerator)
+      || !wideWorkComponentWithinBound(nextDenominator)
+    ) return undefined;
+    numerator = nextNumerator;
+    denominator = nextDenominator;
   }
 
+  const cancellation = gcdUnchecked(numerator, denominator);
   return rational(
-    assertIntermediateIntegerBound(numerator),
-    assertIntermediateIntegerBound(denominator)
+    assertIntermediateIntegerBound(numerator / cancellation),
+    assertIntermediateIntegerBound(denominator / cancellation)
   );
 }
 
@@ -513,7 +523,9 @@ export function productRationals(values: readonly ExactRational[]): ExactRationa
   assertFiniteContainerLength(values.length);
   const checkedValues = values.map(checkedRational);
   if (checkedValues.some((value) => value.numerator === 0n)) return rational(0n, 1n);
-  if (canUseWideRationalProduct(checkedValues)) return wideRationalProduct(checkedValues);
+
+  const wideResult = tryWideRationalProduct(checkedValues);
+  if (wideResult !== undefined) return wideResult;
 
   // Canonical gcd reduction is only needed by the conservative key-based
   // fallback. The bounded wide-product path above is exact on unreduced inputs.
@@ -554,11 +566,10 @@ export function productRationals(values: readonly ExactRational[]): ExactRationa
     return fullyCancelledRationalProduct(remaining);
   }
 
-  let result = rational(1n, 1n);
-  for (const value of remaining) {
-    result = multiplyRationals(result, value);
-  }
-  return result;
+  throw new BoundedMathError(
+    "INTERMEDIATE_LIMIT_EXCEEDED",
+    "Finite rational product exceeds the configured exact-work limit"
+  );
 }
 
 function assertCombinatorialInteger(value: number, label: string): void {
