@@ -724,7 +724,13 @@ export class ModelAssetManager {
     const initial = await this.checkInstallation(manifest, signal);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
     this.rejectTransientInstallationFailure(initial);
+    if (signal.aborted) {
+      throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+    }
     if (await pathEntryExists(installationDirectory)) {
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
+      }
       await this.removeManagedEntry(paths, installationDirectory);
     }
 
