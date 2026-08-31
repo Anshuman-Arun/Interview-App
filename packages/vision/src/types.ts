@@ -279,7 +279,8 @@ export class ImageSnapshot {
   readonly #bytes: Buffer;
   public readonly metadata: ImageSnapshotMetadata;
 
-  public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array) {
+  public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array);
+  public constructor(metadata: ImageSnapshotMetadata, bytes: unknown) {
     const parsed = ImageSnapshotMetadataSchema.parse(metadata);
     if (!(bytes instanceof Uint8Array)) throw new RangeError("Image payload must be a Uint8Array");
     if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
@@ -296,7 +297,7 @@ export class ImageSnapshot {
     return Buffer.from(this.#bytes);
   }
 
-  public matchesEncodedBytes(candidate: Uint8Array): boolean {
+  public matchesEncodedBytes(candidate: unknown): boolean {
     return candidate instanceof Uint8Array
       && candidate.byteLength === this.#bytes.length
       && this.#bytes.equals(candidate);
@@ -311,7 +312,8 @@ export class VisionImageArtifact {
   readonly #bytes: Buffer;
   public readonly metadata: VisionImageArtifactMetadata;
 
-  public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array) {
+  public constructor(metadata: VisionImageArtifactMetadata, bytes: Uint8Array);
+  public constructor(metadata: VisionImageArtifactMetadata, bytes: unknown) {
     const parsed = VisionImageArtifactMetadataSchema.parse(metadata);
     if (!(bytes instanceof Uint8Array)) throw new RangeError("Image payload must be a Uint8Array");
     if (bytes.byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
@@ -332,7 +334,7 @@ export class VisionImageArtifact {
     return Buffer.from(this.#bytes);
   }
 
-  public matchesEncodedBytes(candidate: Uint8Array): boolean {
+  public matchesEncodedBytes(candidate: unknown): boolean {
     return candidate instanceof Uint8Array
       && candidate.byteLength === this.#bytes.length
       && this.#bytes.equals(candidate);
