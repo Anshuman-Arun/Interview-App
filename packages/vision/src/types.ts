@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { PNG } from "pngjs";
 import { computeVisionArtifactId } from "./artifact-identity.js";
-import { INTERNAL_VISION_ARTIFACT_CONSTRUCTION } from "./internal-artifact-construction.js";
+import {
+  INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION,
+  INTERNAL_VISION_ARTIFACT_CONSTRUCTION
+} from "./internal-artifact-construction.js";
 import { actualUint8ArrayByteLength } from "./byte-validation.js";
 import {
   assertStaticPngChunkStructure,
@@ -234,8 +237,19 @@ export class ImageSnapshot {
     }
   }
 
-  public constructor(metadata: ImageSnapshotMetadata, bytes: Uint8Array);
-  public constructor(metadata: ImageSnapshotMetadata, bytes: unknown) {
+  public constructor(
+    token: typeof INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION,
+    metadata: ImageSnapshotMetadata,
+    bytes: Uint8Array
+  );
+  public constructor(
+    token: unknown,
+    metadata: ImageSnapshotMetadata,
+    bytes: unknown
+  ) {
+    if (token !== INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION) {
+      throw new RangeError("Image snapshots may only be constructed by the preprocessing package");
+    }
     const parsed = ImageSnapshotMetadataSchema.parse(metadata);
     if (!(bytes instanceof Uint8Array)) throw new RangeError("Image payload must be a Uint8Array");
     if (actualUint8ArrayByteLength(bytes) > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
