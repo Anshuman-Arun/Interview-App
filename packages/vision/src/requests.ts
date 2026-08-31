@@ -245,9 +245,8 @@ export function prepareVisionBatch(
 export function requestPayloadIsSafeReference(
   request: unknown
 ): request is PreparedVisionImageRequest & { readonly payload: ImagePayloadReference } {
-  if (typeof request !== "object" || request === null) return false;
-  const candidate = request as { readonly payload?: unknown };
-  return ImagePayloadReference.isValidatedInstance(candidate.payload);
+  if (typeof request !== "object" || request === null || !("payload" in request)) return false;
+  return ImagePayloadReference.isValidatedInstance(request.payload);
 }
 
 export function isCropOrTileArtifact(source: unknown): source is VisionImageArtifact {
