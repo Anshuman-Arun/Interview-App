@@ -1,6 +1,6 @@
-import { createWriteStream } from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import type { FileHandle } from "node:fs/promises";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { ModelAssetError } from "./types.js";
@@ -94,7 +94,7 @@ function parseContentLength(value: string | undefined): number | undefined {
 
 async function downloadResponseToFile(
   source: URL,
-  destinationPath: string,
+  destinationHandle: FileHandle,
   options: ArtifactDownloadOptions,
   redirectCount: number,
   originalOrigin: string
@@ -143,7 +143,7 @@ async function downloadResponseToFile(
             response.destroy();
             const result = await downloadResponseToFile(
               next,
-              destinationPath,
+              destinationHandle,
               options,
               redirectCount + 1,
               originalOrigin
@@ -196,7 +196,7 @@ async function downloadResponseToFile(
           await pipeline(
             response,
             limiter,
-            createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }),
+            destinationHandle.createWriteStream({ autoClose: false }),
             { signal: options.signal }
           );
           if (bytes !== options.expectedBytes) {
@@ -218,7 +218,7 @@ async function downloadResponseToFile(
 
 export async function downloadHttpArtifact(
   sourceUrl: string,
-  destinationPath: string,
+  destinationHandle: FileHandle,
   options: ArtifactDownloadOptions
 ): Promise<number> {
   if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes <= 0
@@ -249,7 +249,7 @@ export async function downloadHttpArtifact(
   timer.unref();
 
   try {
-    const bytes = await downloadResponseToFile(source, destinationPath, {
+    const bytes = await downloadResponseToFile(source, destinationHandle, {
       ...options,
       signal: controller.signal
     }, 0, source.origin);
