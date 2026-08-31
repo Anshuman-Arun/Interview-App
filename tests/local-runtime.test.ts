@@ -1926,4 +1926,7 @@ async function waitForPidExit(pid: number): Promise<void> {
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
   }
   expect(isPidAlive(pid)).toBe(false);
+  for (let index = fixturePids.length - 1; index >= 0; index -= 1) {
+    if (fixturePids[index] === pid) fixturePids.splice(index, 1);
+  }
 }
