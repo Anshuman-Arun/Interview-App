@@ -507,6 +507,40 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
+  it("allows an explicitly configured cross-origin redirect", async () => {
+    const payload = Buffer.from("allowed-cross-origin");
+    const target = await startFixtureServer((_request, response) => response.end(payload));
+    const redirect = await startFixtureServer((_request, response) => {
+      response.writeHead(302, { Location: target.baseUrl + "/artifact" });
+      response.end();
+    });
+    const root = await newRoot();
+    const manager = managerFor(root, { allowCrossOriginRedirects: true });
+    const manifest = manifestFor(payload, redirect.baseUrl + "/start");
+
+    const installed = await manager.install(manifest);
+    expect(await readFile(installed)).toEqual(payload);
+    expect(target.requestCount()).toBe(1);
+  });
+
+  it("rejects redirect URLs containing embedded credentials", async () => {
+    const payload = Buffer.from("credential-redirect");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(302, {
+        Location: "http://user:pass@127.0.0.1:1/artifact"
+      });
+      response.end();
+    });
+    const root = await newRoot();
+    const manager = managerFor(root, { allowCrossOriginRedirects: true });
+    const manifest = manifestFor(payload, fixture.baseUrl + "/start");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({
+      code: "UNSAFE_REDIRECT"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
   it("keeps partial bytes invisible until atomic publication", async () => {
     const payload = Buffer.from("atomic-publish");
     const started = deferred<void>();
