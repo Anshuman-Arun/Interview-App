@@ -419,6 +419,35 @@ describe("local worker lifecycle manager", () => {
     expect(recovered.restartCount).toBe(1);
   });
 
+  it("stops cleanly during automatic post-crash restart backoff", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-auto-backoff-stop-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
+    const runtime = manager();
+    runtime.register(definition("auto-backoff-stop", "ready-crash-counter", {
+      restartPolicy: {
+        mode: "ON_FAILURE",
+        maxRetries: 2,
+        backoffMs: 120,
+        maxBackoffMs: 120
+      },
+      terminationTimeoutMs: 200
+    }, [counter, "30"]));
+
+    await runtime.start("auto-backoff-stop");
+    await waitForStatus(runtime, "auto-backoff-stop", (status) =>
+      status.state === "FAILED"
+        && status.restartCount === 1
+        && readFileSync(counter, "utf8") === "1"
+    );
+
+    await runtime.stop("auto-backoff-stop");
+    expect(runtime.getStatus("auto-backoff-stop").state).toBe("STOPPED");
+    await new Promise<void>((resolve) => setTimeout(resolve, 180));
+    expect(readFileSync(counter, "utf8")).toBe("1");
+    expect(runtime.getStatus("auto-backoff-stop").state).toBe("STOPPED");
+  });
+
   it("detects post-readiness crashes and spends the same bounded restart budget", async () => {
     const root = mkdtempSync(join(tmpdir(), "local-runtime-late-crash-"));
     temporaryRoots.push(root);
