@@ -1035,6 +1035,17 @@ describe("dirty-region planning", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("returns NONE for purely out-of-frame hints even when standalone frame area is numerically huge", () => {
+    expect(planDirtyRegions(
+      [{ x: -10, y: -10, width: 1, height: 1 }],
+      { width: Number.MAX_SAFE_INTEGER, height: 2 }
+    )).toEqual({
+      mode: "NONE",
+      regions: [],
+      analyzedArea: 0
+    });
+  });
+
   it("rejects nonempty planning on a frame whose area exceeds safe numeric range", () => {
     expect(() => planDirtyRegions(
       [{ x: 0, y: 0, width: 1, height: 1 }],
