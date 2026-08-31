@@ -52,7 +52,8 @@ import {
   sumIntegers,
   sumRationals,
   type ExactRational,
-  type IntegerExpression
+  type IntegerExpression,
+  type RationalExpression
 } from "../packages/verification/src/index.js";
 
 const integer = (value: string) => ({ kind: "INTEGER" as const, value });
@@ -715,7 +716,7 @@ describe("adversarial deterministic math verification", () => {
     const integerTooDeep: IntegerExpression = { kind: "NEGATE", operand: integerAtLimit };
     expect(() => evaluateIntegerExpression(integerTooDeep)).toThrow(BoundedMathError);
 
-    let rationalAtLimit = fractionExpression("1");
+    let rationalAtLimit: RationalExpression = fractionExpression("1");
     for (let depth = 1; depth < 24; depth += 1) {
       rationalAtLimit = { kind: "NEGATE", operand: rationalAtLimit };
     }
