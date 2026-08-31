@@ -137,7 +137,7 @@ describe("local worker lifecycle manager", () => {
 
     runtime.register(definition("slow", "delayed-ready", { startupTimeoutMs: 1_000 }, ["500"]));
     const start = runtime.start("slow");
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await waitForStatus(runtime, "slow", (status) => status.state === "STARTING");
     await runtime.stop("slow");
     await expect(start).rejects.toMatchObject({ code: "START_CANCELLED" });
     expect(runtime.getStatus("slow").state).toBe("STOPPED");
@@ -476,7 +476,7 @@ describe("local worker lifecycle manager", () => {
     }, ["500"]));
     const controller = new AbortController();
     const starting = runtime.start("cancelled", { signal: controller.signal });
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await waitForStatus(runtime, "cancelled", (status) => status.state === "STARTING");
     controller.abort();
 
     await expect(starting).rejects.toMatchObject({ code: "START_CANCELLED" });
@@ -497,7 +497,7 @@ describe("local worker lifecycle manager", () => {
     }, ["500"]));
 
     const starting = runtime.start("starting-stop");
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await waitForStatus(runtime, "starting-stop", (status) => status.state === "STARTING");
     const stopping = runtime.stop("starting-stop");
 
     await expect(starting).rejects.toMatchObject({ code: "START_CANCELLED" });
