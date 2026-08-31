@@ -1160,6 +1160,19 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
   });
 
+  it("rejects a combined tile byte budget that cannot structurally fit the planned PNG count", async () => {
+    const source = snapshot(makePng(8, 4));
+    await expect(tileImage(source, {
+      tileWidth: 4,
+      tileHeight: 4,
+      overlap: 0,
+      maxTileCount: 2
+    }, {
+      maxOutputEncodedBytes: 1_000_000,
+      maxTotalOutputEncodedBytes: 115
+    })).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+  });
+
   it("plans deterministic overlapping tiles with exact original-coordinate mappings", async () => {
     const source = snapshot(makePng(10, 6), { revision: 12 });
     const plan = planImageTiles({ width: 10, height: 6 }, {
