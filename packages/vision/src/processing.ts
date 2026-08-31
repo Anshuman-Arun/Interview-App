@@ -210,7 +210,7 @@ function maxTotalOutputBytes(options: VisionProcessingOptions): number {
 
 function sourceDescriptor(source: VisionRasterSource): SourceDescriptor {
   assertVisionRasterSource(source);
-  if (source instanceof ImageSnapshot) {
+  if (ImageSnapshot.isValidatedInstance(source)) {
     return {
       sourceSnapshotId: source.metadata.snapshotId,
       sourceRevision: source.metadata.sourceRevision,
