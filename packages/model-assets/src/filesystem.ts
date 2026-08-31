@@ -9,8 +9,7 @@ import {
   rename,
   rmdir,
   statfs,
-  unlink,
-  writeFile
+  unlink
 } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
@@ -1148,24 +1147,6 @@ export async function writeStableStagedManifest(
         );
       }
     }
-  }
-}
-
-export async function writeStoredManifest(manifestPath: string, serializedManifest: string): Promise<void> {
-  if (Buffer.byteLength(serializedManifest, "utf8") > MAX_STORED_MANIFEST_BYTES) {
-    throw new ModelAssetError("INVALID_MANIFEST", "Serialized asset manifest exceeds the cache metadata limit.");
-  }
-  try {
-    await writeFile(manifestPath, serializedManifest, { encoding: "utf8", flag: "wx", mode: 0o600 });
-  } catch (error) {
-    if (isDiskSpaceError(error)) {
-      throw new ModelAssetError(
-        "INSUFFICIENT_DISK_SPACE",
-        "Unable to write staged asset metadata because the destination filesystem is full.",
-        { cause: error }
-      );
-    }
-    throw new ModelAssetError("IO_ERROR", "Unable to write staged asset manifest.", { cause: error });
   }
 }
 
