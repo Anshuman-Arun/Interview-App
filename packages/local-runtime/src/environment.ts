@@ -29,7 +29,8 @@ export function buildLocalEnvironment(
   parent: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): BuiltLocalEnvironment {
-  const environment: NodeJS.ProcessEnv = {};
+  validateEnvironmentDefinition(definition);
+  const environment = Object.create(null) as NodeJS.ProcessEnv;
   const secretValues = new Set<string>();
   const defaults = platform === "win32"
     ? DEFAULT_WINDOWS_INHERITED_ENVIRONMENT_KEYS
@@ -45,36 +46,82 @@ export function buildLocalEnvironment(
     const parentEntry = findParentEntry(parent, key, platform);
     if (parentEntry === undefined) continue;
     environment[parentEntry.key] = parentEntry.value;
-    if (SECRET_KEY.test(parentEntry.key) && parentEntry.value.length > 0) secretValues.add(parentEntry.value);
+    if (SECRET_KEY.test(parentEntry.key) && parentEntry.value.length > 0) {
+      secretValues.add(parentEntry.value);
+    }
   }
 
-  const values = definition?.values ?? {};
-  const secrets = definition?.secrets ?? {};
   const explicitNames = new Set<string>();
-
-  for (const [key, value] of Object.entries(values)) {
+  for (const [key, value] of ownDataEntries(definition?.values, "environment.values")) {
     validateEnvironmentEntry(key, value);
     const identity = normalizeKey(key, platform);
     if (explicitNames.has(identity)) throw new Error(`Duplicate explicit environment key: ${key}`);
     explicitNames.add(identity);
     removeEquivalentKey(environment, key, platform);
     environment[key] = value;
+    if (SECRET_KEY.test(key) && value.length > 0) secretValues.add(value);
   }
 
-  for (const [key, value] of Object.entries(secrets)) {
+  for (const [key, value] of ownDataEntries(definition?.secrets, "environment.secrets")) {
     validateEnvironmentEntry(key, value);
     const identity = normalizeKey(key, platform);
-    if (explicitNames.has(identity)) throw new Error(`Environment key cannot be both public and secret: ${key}`);
+    if (explicitNames.has(identity)) {
+      throw new Error(`Environment key cannot be both public and secret: ${key}`);
+    }
     explicitNames.add(identity);
     removeEquivalentKey(environment, key, platform);
     environment[key] = value;
     if (value.length > 0) secretValues.add(value);
   }
 
-  return {
-    environment,
+  return Object.freeze({
+    environment: Object.freeze(environment),
     secretValues: Object.freeze([...secretValues].sort((left, right) => right.length - left.length))
-  };
+  });
+}
+
+function validateEnvironmentDefinition(definition: LocalEnvironmentDefinition | undefined): void {
+  if (definition === undefined) return;
+  if (typeof definition !== "object" || definition === null || Array.isArray(definition)) {
+    throw new Error("Environment definition must be an object");
+  }
+  if (definition.inherit !== undefined) {
+    if (!Array.isArray(definition.inherit)) throw new Error("environment.inherit must be an array");
+    for (const key of definition.inherit) validateEnvironmentKey(key);
+  }
+  if (definition.values !== undefined) validateStringRecord(definition.values, "environment.values");
+  if (definition.secrets !== undefined) validateStringRecord(definition.secrets, "environment.secrets");
+}
+
+function validateStringRecord(value: Readonly<Record<string, string>>, label: string): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  void ownDataEntries(value, label);
+}
+
+function ownDataEntries(
+  value: Readonly<Record<string, string>> | undefined,
+  label: string
+): readonly (readonly [string, string])[] {
+  if (value === undefined) return [];
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    throw new Error(`${label} could not be inspected`);
+  }
+
+  const entries: (readonly [string, string])[] = [];
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (descriptor.enumerable !== true) continue;
+    if (!("value" in descriptor)) throw new Error(`${label} may not contain accessors`);
+    if (typeof descriptor.value !== "string") {
+      throw new Error(`${label} values must be strings`);
+    }
+    entries.push([key, descriptor.value]);
+  }
+  return entries;
 }
 
 function validateEnvironmentEntry(key: string, value: string): void {
@@ -82,8 +129,10 @@ function validateEnvironmentEntry(key: string, value: string): void {
   if (value.includes("\0")) throw new Error(`Environment value for ${key} contains a NUL byte`);
 }
 
-function validateEnvironmentKey(key: string): void {
-  if (!ENVIRONMENT_KEY.test(key)) throw new Error(`Invalid environment key: ${key}`);
+function validateEnvironmentKey(key: unknown): asserts key is string {
+  if (typeof key !== "string" || !ENVIRONMENT_KEY.test(key)) {
+    throw new Error(`Invalid environment key: ${String(key)}`);
+  }
 }
 
 function normalizeKey(key: string, platform: NodeJS.Platform): string {
@@ -95,13 +144,25 @@ function findParentEntry(
   requested: string,
   platform: NodeJS.Platform
 ): { readonly key: string; readonly value: string } | undefined {
-  if (platform !== "win32") {
-    const value = parent[requested];
-    return value === undefined ? undefined : { key: requested, value };
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(parent);
+  } catch {
+    return undefined;
   }
+
+  if (platform !== "win32") {
+    const descriptor = descriptors[requested];
+    if (descriptor === undefined || !("value" in descriptor) || typeof descriptor.value !== "string") {
+      return undefined;
+    }
+    return { key: requested, value: descriptor.value };
+  }
+
   const wanted = requested.toUpperCase();
-  for (const [key, value] of Object.entries(parent)) {
-    if (key.toUpperCase() === wanted && value !== undefined) return { key, value };
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (key.toUpperCase() !== wanted || !("value" in descriptor) || typeof descriptor.value !== "string") continue;
+    return { key, value: descriptor.value };
   }
   return undefined;
 }
