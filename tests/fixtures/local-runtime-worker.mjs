@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -61,6 +62,13 @@ switch (mode) {
   case "oversized-then-ready":
     console.log("x".repeat(Number(args[0] ?? 10_000)));
     ready();
+    break;
+  case "invalid-utf8-then-ready":
+    process.stdout.write(Buffer.from([0xff, 0x0a]));
+    ready();
+    break;
+  case "crlf-line-ready":
+    process.stdout.write("READY-LINE\r\n");
     break;
   case "never-ready":
     console.log("not-ready");
