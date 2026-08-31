@@ -671,6 +671,22 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
+  it("rejects an initial URL whose canonical encoding exceeds the URL limit", async () => {
+    const payload = Buffer.from("canonical-url-limit");
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const sourceUrl = "https://example.test/" + "é".repeat(700);
+    expect(sourceUrl.length).toBeLessThan(2_048);
+    expect(new URL(sourceUrl).href.length).toBeGreaterThan(2_048);
+    const manifest = manifestFor(payload, sourceUrl);
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({
+      code: "UNSAFE_REDIRECT"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
   it("rejects redirect targets above the URL-length safety limit", async () => {
     const payload = Buffer.from("redirect-too-long");
     const fixture = await startFixtureServer((_request, response) => {
