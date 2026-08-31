@@ -193,7 +193,6 @@ export function mathFailure(
       || error.code === "CONTAINER_LIMIT_EXCEEDED";
     const malformed = error.code === "INVALID_INTEGER"
       || error.code === "INVALID_MODULUS"
-      || error.code === "INVALID_DIVISOR"
       || error.code === "INVALID_COMBINATORIAL_ARGUMENT"
       || error.code === "INVALID_PROBABILITY"
       || error.code === "INVALID_EXPRESSION";
