@@ -1254,6 +1254,33 @@ describe("local model asset manager", () => {
     })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
   });
 
+  it("does not consume security-sensitive configuration through prototypes", async () => {
+    const root = await newRoot();
+    const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
+    const inheritedManagerOptions = Object.create({
+      maxArtifactBytes: 1024,
+      allowCrossOriginRedirects: true
+    }) as Record<string, unknown>;
+    inheritedManagerOptions["rootDir"] = root;
+
+    expect(() => new UnsafeManager(inheritedManagerOptions)).toThrow(
+      expect.objectContaining({ code: "INVALID_CONFIGURATION" })
+    );
+
+    const expectations = Object.create({
+      sizeBytes: 1,
+      sha256: "0".repeat(64)
+    }) as Record<string, unknown>;
+    const UnsafeVerifier = verifyArtifactFile as unknown as (
+      filePath: string,
+      expectations: unknown
+    ) => Promise<unknown>;
+
+    await expect(
+      UnsafeVerifier(path.join(root, "missing.bin"), expectations)
+    ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+  });
+
   it("rejects unknown manager option keys", async () => {
     const root = await newRoot();
     const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
