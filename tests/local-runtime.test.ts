@@ -556,6 +556,37 @@ describe("local worker lifecycle manager", () => {
     }
   });
 
+  it("cleans an owned descendant tree after an unexpected parent crash", async () => {
+    const runtime = manager();
+    let childPid: number | undefined;
+    runtime.register(definition("crashed-tree", "tree-parent-crash", {
+      terminationTimeoutMs: 500,
+      restartPolicy: { mode: "NEVER" },
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => {
+          if (typeof message !== "object" || message === null) return false;
+          const value = message as Record<string, unknown>;
+          if (typeof value.childPid === "number") {
+            childPid = value.childPid;
+            fixturePids.push(value.childPid);
+          }
+          return readyDecision(message);
+        }
+      }
+    }, ["40"]));
+
+    await runtime.start("crashed-tree");
+    expect(childPid).toBeTypeOf("number");
+    await waitForStatus(runtime, "crashed-tree", (status) =>
+      status.state === "FAILED" && status.lastExit?.code === 16
+    );
+    if (childPid !== undefined) {
+      await waitForPidExit(childPid);
+      expect(isPidAlive(childPid)).toBe(false);
+    }
+  });
+
   it("serializes reentrant start behind an in-progress stop", async () => {
     const runtime = manager();
     let restarted: Promise<ReturnType<LocalRuntimeManager["getStatus"]>> | undefined;
