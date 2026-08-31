@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { boundedArrayLength } from "./array-validation.js";
+import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
 import { PixelDimensionsSchema, VisionPreprocessingError } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
@@ -90,7 +90,7 @@ export function rectsOverlap(left: ImageRect, right: ImageRect): boolean {
 export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefined {
   const rectangleCount = boundedArrayLength(rectangles, MAX_GEOMETRY_RECTANGLES, "Rectangle collection");
   if (rectangleCount === 0) return undefined;
-  const firstInput = rectangles[0];
+  const firstInput = readArrayEntry(rectangles, 0, "Rectangle collection");
   if (firstInput === undefined) invalidRect("Rectangle collection must not contain missing entries");
   const first = validateImageRect(firstInput);
   let minX = first.x;
@@ -99,7 +99,7 @@ export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefi
   let maxY = safeAdd(first.y, first.height, "Rectangle edge");
 
   for (let index = 1; index < rectangleCount; index += 1) {
-    const input = rectangles[index];
+    const input = readArrayEntry(rectangles, index, "Rectangle collection");
     if (input === undefined) invalidRect("Rectangle collection must not contain missing entries");
     const rect = validateImageRect(input);
     minX = Math.min(minX, rect.x);
