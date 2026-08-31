@@ -2,7 +2,11 @@ import type { Dir, Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lstat, opendir } from "node:fs/promises";
 import path from "node:path";
-import { MAX_DOWNLOAD_TIMEOUT_MS, downloadHttpArtifact } from "./download.js";
+import {
+  MAX_DOWNLOAD_REDIRECTS,
+  MAX_DOWNLOAD_TIMEOUT_MS,
+  downloadHttpArtifact
+} from "./download.js";
 import {
   atomicRenameDirectory,
   availableDiskBytes,
@@ -173,6 +177,12 @@ export class ModelAssetManager {
       DEFAULT_MAX_REDIRECTS,
       "maxRedirects"
     );
+    if (this.maxRedirects > MAX_DOWNLOAD_REDIRECTS) {
+      throw new ModelAssetError(
+        "INVALID_CONFIGURATION",
+        "maxRedirects exceeds the package redirect-depth safety limit."
+      );
+    }
     this.allowCrossOriginRedirects = rawCrossOriginRedirects ?? false;
     this.maxListEntries = positiveSafeInteger(
       optionRecord["maxListEntries"],
