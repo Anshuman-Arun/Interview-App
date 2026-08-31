@@ -678,9 +678,9 @@ export class LocalRuntimeManager {
     const unlink = linkAbortSignal(signal, controller);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let exitSettled = false;
-    let exitListener: (() => void) | undefined;
+    let exitListener: ((exit: InternalExitRecord) => void) | undefined;
     const exitPromise = new Promise<never>((_resolve, reject) => {
-      exitListener = (): void => {
+      exitListener = (_exit: InternalExitRecord): void => {
         if (exitSettled) return;
         exitSettled = true;
         if (exitListener !== undefined) record.exitListeners.delete(exitListener);
@@ -691,7 +691,16 @@ export class LocalRuntimeManager {
         controller.abort();
       };
       record.exitListeners.add(exitListener);
-      if (record.child !== child || child.exitCode !== null || child.signalCode !== null) exitListener();
+      if (record.child !== child || child.exitCode !== null || child.signalCode !== null) {
+        exitListener({
+          code: child.exitCode,
+          signal: child.signalCode,
+          timestamp: this.timestamp(),
+          previousState: record.state,
+          unexpected: true,
+          stderrTail: Object.freeze([])
+        });
+      }
     });
     const readinessPromise = this.runReadinessStrategy(record, child, controller.signal);
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
