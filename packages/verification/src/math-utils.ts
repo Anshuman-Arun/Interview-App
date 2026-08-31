@@ -344,16 +344,89 @@ export function productIntegers(values: readonly bigint[]): bigint {
   return product;
 }
 
+function rationalKey(value: ExactRational): string {
+  return `${value.numerator.toString()}/${value.denominator.toString()}`;
+}
+
+function rationalCounts(values: readonly ExactRational[]): Map<string, { value: ExactRational; count: number }> {
+  const counts = new Map<string, { value: ExactRational; count: number }>();
+  for (const value of values) {
+    const key = rationalKey(value);
+    const existing = counts.get(key);
+    if (existing === undefined) counts.set(key, { value, count: 1 });
+    else existing.count += 1;
+  }
+  return counts;
+}
+
 export function sumRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
-  return values.reduce(addRationals, rational(0n, 1n));
+  const normalizedValues = values.map(normalizeRational);
+  const counts = rationalCounts(normalizedValues);
+
+  // Remove exact additive-inverse pairs before bounded accumulation. This is
+  // algebraically exact and prevents an implementation-order overflow such as
+  // [M, M, -M] when M itself is still within the configured rational bound.
+  for (const entry of counts.values()) {
+    if (entry.count === 0 || entry.value.numerator <= 0n) continue;
+    const oppositeKey = rationalKey({
+      numerator: -entry.value.numerator,
+      denominator: entry.value.denominator
+    });
+    const opposite = counts.get(oppositeKey);
+    if (opposite === undefined || opposite.count === 0) continue;
+    const cancelled = Math.min(entry.count, opposite.count);
+    entry.count -= cancelled;
+    opposite.count -= cancelled;
+  }
+
+  let result = rational(0n, 1n);
+  for (const entry of counts.values()) {
+    if (entry.value.numerator === 0n) continue;
+    for (let index = 0; index < entry.count; index += 1) {
+      result = addRationals(result, entry.value);
+    }
+  }
+  return result;
 }
 
 export function productRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
   const normalizedValues = values.map(normalizeRational);
   if (normalizedValues.some((value) => value.numerator === 0n)) return rational(0n, 1n);
-  return normalizedValues.reduce(multiplyRationals, rational(1n, 1n));
+
+  const counts = rationalCounts(normalizedValues);
+  const visited = new Set<string>();
+  for (const [key, entry] of counts) {
+    if (entry.count === 0 || visited.has(key)) continue;
+    const reciprocal = rational(entry.value.denominator, entry.value.numerator);
+    const reciprocalKey = rationalKey(reciprocal);
+    visited.add(key);
+    visited.add(reciprocalKey);
+
+    if (reciprocalKey === key) {
+      if (entry.value.numerator === entry.value.denominator) {
+        entry.count = 0;
+      } else {
+        entry.count %= 2;
+      }
+      continue;
+    }
+
+    const reciprocalEntry = counts.get(reciprocalKey);
+    if (reciprocalEntry === undefined || reciprocalEntry.count === 0) continue;
+    const cancelled = Math.min(entry.count, reciprocalEntry.count);
+    entry.count -= cancelled;
+    reciprocalEntry.count -= cancelled;
+  }
+
+  let result = rational(1n, 1n);
+  for (const entry of counts.values()) {
+    for (let index = 0; index < entry.count; index += 1) {
+      result = multiplyRationals(result, entry.value);
+    }
+  }
+  return result;
 }
 
 function assertCombinatorialInteger(value: number, label: string): void {
