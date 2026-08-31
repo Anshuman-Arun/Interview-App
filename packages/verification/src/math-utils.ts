@@ -255,25 +255,36 @@ export function negateRational(value: ExactRational): ExactRational {
   return { numerator: -normalized.numerator, denominator: normalized.denominator };
 }
 
+function rationalForComparison(value: ExactRational): ExactRational {
+  const numerator = assertIntermediateIntegerBound(value.numerator);
+  const denominator = assertIntermediateIntegerBound(value.denominator);
+  if (denominator === 0n) {
+    throw new BoundedMathError("DIVISION_BY_ZERO", "Rational denominator must be nonzero");
+  }
+  return denominator < 0n
+    ? { numerator: -numerator, denominator: -denominator }
+    : { numerator, denominator };
+}
+
 export function equalRationals(left: ExactRational, right: ExactRational): boolean {
-  const normalizedLeft = normalizeRational(left);
-  const normalizedRight = normalizeRational(right);
-  return normalizedLeft.numerator === normalizedRight.numerator
-    && normalizedLeft.denominator === normalizedRight.denominator;
+  const checkedLeft = rationalForComparison(left);
+  const checkedRight = rationalForComparison(right);
+  return checkedLeft.numerator * checkedRight.denominator
+    === checkedRight.numerator * checkedLeft.denominator;
 }
 
 export function compareRationals(left: ExactRational, right: ExactRational): -1 | 0 | 1 {
-  const normalizedLeft = normalizeRational(left);
-  const normalizedRight = normalizeRational(right);
+  const checkedLeft = rationalForComparison(left);
+  const checkedRight = rationalForComparison(right);
 
   // Comparison-only cross-products are bounded implementation temporaries:
   // each input component is already capped at 4,096 decimal digits, so each
-  // product is at most about 8,192 digits. Do not apply the reduced
-  // state/result bound to these temporaries. This avoids the pathological
-  // O(number-of-digits) Euclidean quotient loop for consecutive Fibonacci
-  // ratios while preserving exact integer comparison.
-  const leftScaled = normalizedLeft.numerator * normalizedRight.denominator;
-  const rightScaled = normalizedRight.numerator * normalizedLeft.denominator;
+  // product is at most about 8,192 digits. Reduction is unnecessary for exact
+  // ordering/equality, which avoids pathological gcd/continued-fraction work
+  // for Fibonacci-shaped inputs while remaining defensive for unreduced or
+  // negative-denominator direct utility callers.
+  const leftScaled = checkedLeft.numerator * checkedRight.denominator;
+  const rightScaled = checkedRight.numerator * checkedLeft.denominator;
   if (leftScaled === rightScaled) return 0;
   return leftScaled < rightScaled ? -1 : 1;
 }
