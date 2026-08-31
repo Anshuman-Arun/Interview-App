@@ -1638,6 +1638,19 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(Object.isFrozen(ImageSnapshot)).toBe(true);
   });
 
+  it("fails closed instead of throwing on hostile byte-match candidates", async () => {
+    const source = snapshot(makePng(2, 2));
+    const crop = (await cropImage(source, { x: 0, y: 0, width: 1, height: 1 })).artifact;
+    const proxiedBytes = new Proxy(new Uint8Array([1, 2, 3]), {});
+    const revoked = Proxy.revocable(new Uint8Array([1, 2, 3]), {});
+    revoked.revoke();
+
+    expect(source.matchesEncodedBytes(proxiedBytes)).toBe(false);
+    expect(source.matchesEncodedBytes(revoked.proxy)).toBe(false);
+    expect(crop.matchesEncodedBytes(proxiedBytes)).toBe(false);
+    expect(crop.matchesEncodedBytes(revoked.proxy)).toBe(false);
+  });
+
   it("maps revoked or hostile raster proxies to clean invalid-image failures", () => {
     const revocable = Proxy.revocable({}, {});
     revocable.revoke();
