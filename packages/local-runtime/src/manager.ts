@@ -46,7 +46,8 @@ export type LocalRuntimeErrorCode =
   | "PROCESS_EXITED"
   | "HANDSHAKE_MISMATCH"
   | "TERMINATION_FAILED"
-  | "INVALID_STATE";
+  | "INVALID_STATE"
+  | "INVALID_ARGUMENT";
 
 export class LocalRuntimeError extends Error {
   public constructor(public readonly code: LocalRuntimeErrorCode, message: string) {
@@ -245,6 +246,9 @@ export class LocalRuntimeManager {
 
   public markDegraded(componentId: string, detail: string): LocalComponentStatus {
     const record = this.requireRecord(componentId);
+    if (typeof detail !== "string") {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "Degradation detail must be a string");
+    }
     if (record.state !== "READY" && record.state !== "DEGRADED") {
       throw new LocalRuntimeError("INVALID_STATE", `Cannot mark ${componentId} degraded from ${record.state}`);
     }
@@ -255,6 +259,9 @@ export class LocalRuntimeManager {
 
   public markReady(componentId: string, detail?: string): LocalComponentStatus {
     const record = this.requireRecord(componentId);
+    if (detail !== undefined && typeof detail !== "string") {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "Readiness detail must be a string");
+    }
     if (record.state !== "READY" && record.state !== "DEGRADED") {
       throw new LocalRuntimeError("INVALID_STATE", `Cannot mark ${componentId} ready from ${record.state}`);
     }
@@ -978,6 +985,9 @@ export class LocalRuntimeManager {
   }
 
   private requireRecord(componentId: string): ComponentRecord {
+    if (typeof componentId !== "string") {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "Component id must be a string");
+    }
     const record = this.components.get(componentId);
     if (record === undefined) throw new LocalRuntimeError("UNKNOWN_COMPONENT", `Unknown local component ${componentId}`);
     return record;
