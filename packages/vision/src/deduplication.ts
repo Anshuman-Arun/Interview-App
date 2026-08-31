@@ -1,8 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
 import {
   ImageSnapshot,
   VisionImageArtifact,
   assertVisionRasterSource,
+  visionRasterIdentity,
   type VisionRasterSource
 } from "./types.js";
 
@@ -22,7 +22,7 @@ export function exactImagePayloadDuplicate(left: VisionRasterSource, right: Visi
   assertVisionRasterSource(left);
   assertVisionRasterSource(right);
   if (imageByteSize(left) !== imageByteSize(right) || imageDigest(left) !== imageDigest(right)) return false;
-  return timingSafeEqual(left.readBytes(), right.readBytes());
+  return left.matchesEncodedBytes(right.readBytes());
 }
 
 export function revisionImageProcessingKey(source: VisionRasterSource): string {
@@ -45,7 +45,13 @@ export function sameRevisionAndImage(left: VisionRasterSource, right: VisionRast
   return revisionImageProcessingKey(left) === revisionImageProcessingKey(right) && exactImagePayloadDuplicate(left, right);
 }
 
+export const MAX_DEDUPLICATION_CANDIDATES = 2048;
+
 export function deduplicateExactImagePayloads<T extends VisionRasterSource>(images: readonly T[]): readonly T[] {
+  if (!Array.isArray(images)) throw new TypeError("Image collection must be an array");
+  if (images.length > MAX_DEDUPLICATION_CANDIDATES) {
+    throw new RangeError(`At most ${String(MAX_DEDUPLICATION_CANDIDATES)} images may be deduplicated at once`);
+  }
   const buckets = new Map<string, T[]>();
   const unique: T[] = [];
 
@@ -68,9 +74,5 @@ export function sourceSnapshotId(source: VisionRasterSource): string {
 }
 
 export function imageIdentity(source: VisionRasterSource): string {
-  assertVisionRasterSource(source);
-  if (source instanceof ImageSnapshot) {
-    return `snapshot:${source.metadata.snapshotId}:${source.metadata.contentDigest}`;
-  }
-  return `artifact:${source.metadata.artifactId}:${source.metadata.contentDigest}`;
+  return visionRasterIdentity(source);
 }
