@@ -46,7 +46,8 @@ export type ProviderControlPlaneErrorCode =
   | "INVALID_ADAPTER_FACTORY"
   | "ADAPTER_FACTORY_FAILED"
   | "ADAPTER_DEFINITION_MISMATCH"
-  | "INVALID_FACTORY_INPUT";
+  | "INVALID_FACTORY_INPUT"
+  | "INVALID_REGISTRY";
 
 export class ProviderControlPlaneError extends Error {
   public constructor(
@@ -279,6 +280,8 @@ export interface ResolvedProviderConfiguration {
 }
 
 class ResolvedProviderConfigurationValue implements ResolvedProviderConfiguration {
+  readonly #resolutionBrand = true;
+
   public constructor(
     public readonly configuration: ProviderConfiguration,
     public readonly provider: ProviderDefinition,
@@ -286,7 +289,15 @@ class ResolvedProviderConfigurationValue implements ResolvedProviderConfiguratio
   ) {
     Object.freeze(this);
   }
+
+  public static isResolved(value: unknown): value is ResolvedProviderConfigurationValue {
+    return typeof value === "object"
+      && value !== null
+      && #resolutionBrand in value;
+  }
 }
+
+const isResolvedProviderConfiguration = ResolvedProviderConfigurationValue.isResolved;
 
 export interface ProviderAdapterFactoryInput {
   readonly resolved: ResolvedProviderConfiguration;
@@ -378,11 +389,16 @@ const PROVIDER_DEFINITION_INPUT_KEYS = new Set([
   "validateSettings"
 ]);
 const PROVIDER_FACTORY_INPUT_KEYS = new Set(["id", "createAdapter"]);
+const PROVIDER_ADAPTER_FACTORY_INPUT_KEYS = new Set([
+  "resolved",
+  "secretResolver",
+  "runtime"
+]);
 
 function inspectPlainDataObjectProperties(
   value: object,
   allowedKeys: ReadonlySet<string>,
-  errorCode: "MALFORMED_DEFINITION" | "INVALID_ADAPTER_FACTORY",
+  errorCode: "MALFORMED_DEFINITION" | "INVALID_ADAPTER_FACTORY" | "INVALID_FACTORY_INPUT",
   message: string
 ): Readonly<Record<string, unknown>> {
   let prototype: unknown;
@@ -408,36 +424,188 @@ function inspectPlainDataObjectProperties(
     ) {
       throw new ProviderControlPlaneError(errorCode, message);
     }
-    inspected[key] = descriptor.value;
+    const item: unknown = descriptor.value;
+    inspected[key] = item;
   }
   return Object.freeze(inspected);
 }
 
+function normalizeFactorySecretResolver(
+  value: unknown,
+  resolved: ResolvedProviderConfigurationValue
+): ProviderSecretResolver | undefined {
+  const expectedReference = resolved.configuration.credentialRef;
+  if (expectedReference === undefined) return undefined;
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null) {
+    throw new ProviderControlPlaneError(
+      "INVALID_FACTORY_INPUT",
+      "Provider secret resolver is malformed"
+    );
+  }
+
+  let resolveSecretCandidate: unknown;
+  let hasSecretCandidate: unknown;
+  try {
+    resolveSecretCandidate = Reflect.get(value, "resolveSecret");
+    hasSecretCandidate = Reflect.get(value, "hasSecret");
+  } catch {
+    throw new ProviderControlPlaneError(
+      "INVALID_FACTORY_INPUT",
+      "Provider secret resolver is malformed"
+    );
+  }
+  if (
+    typeof resolveSecretCandidate !== "function"
+    || (hasSecretCandidate !== undefined && typeof hasSecretCandidate !== "function")
+  ) {
+    throw new ProviderControlPlaneError(
+      "INVALID_FACTORY_INPUT",
+      "Provider secret resolver is malformed"
+    );
+  }
+
+  const expectedRequest = Object.freeze({
+    providerId: resolved.provider.id,
+    reference: expectedReference
+  }) satisfies ProviderSecretResolverRequest;
+
+  const assertRequestMatches = (
+    request: ProviderSecretResolverRequest
+  ): void => {
+    if (typeof request !== "object" || request === null) {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Provider credential request does not match the resolved configuration"
+      );
+    }
+    let inspected: Readonly<Record<string, unknown>>;
+    try {
+      inspected = inspectPlainDataObjectProperties(
+        request,
+        new Set(["providerId", "reference"]),
+        "INVALID_FACTORY_INPUT",
+        "Provider credential request is malformed"
+      );
+    } catch {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Provider credential request does not match the resolved configuration"
+      );
+    }
+    const providerId = ProviderIdSchema.safeParse(inspected.providerId);
+    const reference = ProviderSecretReferenceSchema.safeParse(inspected.reference);
+    if (
+      !providerId.success
+      || !reference.success
+      || providerId.data !== expectedRequest.providerId
+      || reference.data.id !== expectedRequest.reference.id
+      || reference.data.purpose !== expectedRequest.reference.purpose
+    ) {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Provider credential request does not match the resolved configuration"
+      );
+    }
+  };
+
+  const resolveSecret = async (
+    request: ProviderSecretResolverRequest
+  ): Promise<string | undefined> => {
+    assertRequestMatches(request);
+    let result: unknown;
+    try {
+      result = await Reflect.apply(resolveSecretCandidate, value, [expectedRequest]);
+    } catch {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Provider credential resolution failed"
+      );
+    }
+    if (result !== undefined && typeof result !== "string") {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Provider credential resolver returned an invalid value"
+      );
+    }
+    return result;
+  };
+
+  if (hasSecretCandidate === undefined) {
+    return Object.freeze({ resolveSecret });
+  }
+  const hasSecret = async (
+    request: ProviderSecretResolverRequest
+  ): Promise<boolean> => {
+    assertRequestMatches(request);
+    let result: unknown;
+    try {
+      result = await Reflect.apply(hasSecretCandidate, value, [expectedRequest]);
+    } catch {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Provider credential status check failed"
+      );
+    }
+    if (typeof result !== "boolean") {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Provider credential status resolver returned an invalid value"
+      );
+    }
+    return result;
+  };
+  return Object.freeze({ resolveSecret, hasSecret });
+}
+
 class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
+  readonly #createAdapterImpl: ProviderAdapterFactoryDefinition["createAdapter"];
+  public readonly createAdapter: ProviderAdapterFactory["createAdapter"];
+
   public constructor(
     public readonly id: ProviderAdapterFactoryId,
-    private readonly createAdapterImpl: ProviderAdapterFactoryDefinition["createAdapter"]
+    createAdapterImpl: ProviderAdapterFactoryDefinition["createAdapter"]
   ) {
+    this.#createAdapterImpl = createAdapterImpl;
+    this.createAdapter = (input) => this.#createAdapter(input);
     Object.freeze(this);
   }
 
-  public async createAdapter(
+  public static isRegistered(value: unknown): value is RegisteredProviderAdapterFactory {
+    return typeof value === "object"
+      && value !== null
+      && #createAdapterImpl in value;
+  }
+
+  async #createAdapter(
     input: ProviderAdapterFactoryInput
   ): Promise<ReasoningProvider> {
-    let resolved: ResolvedProviderConfiguration;
-    try {
-      resolved = input.resolved;
-    } catch {
+    if (typeof input !== "object" || input === null) {
       throw new ProviderControlPlaneError(
         "INVALID_FACTORY_INPUT",
-        "Provider adapter factory requires a control-plane resolution"
+        "Provider adapter factory input is malformed"
       );
     }
+    const inspected = inspectPlainDataObjectProperties(
+      input,
+      PROVIDER_ADAPTER_FACTORY_INPUT_KEYS,
+      "INVALID_FACTORY_INPUT",
+      "Provider adapter factory input is malformed"
+    );
+    const resolved = inspected.resolved;
     assertTrustedResolvedConfiguration(resolved);
+    const secretResolver = normalizeFactorySecretResolver(inspected.secretResolver, resolved);
+    const normalizedInput = Object.freeze({
+      resolved,
+      ...(secretResolver === undefined ? {} : { secretResolver }),
+      ...(Object.hasOwn(inspected, "runtime")
+        ? { runtime: inspected.runtime }
+        : {})
+    }) satisfies ProviderAdapterFactoryInput;
 
     let adapter: ReasoningProvider;
     try {
-      adapter = await this.createAdapterImpl(input);
+      adapter = await this.#createAdapterImpl(normalizedInput);
     } catch (error) {
       if (
         error instanceof ProviderControlPlaneError
@@ -463,9 +631,11 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
   }
 }
 
+const isRegisteredProviderAdapterFactory = RegisteredProviderAdapterFactory.isRegistered;
+
 function normalizeFactory(factory: unknown): ProviderAdapterFactory | undefined {
   if (factory === undefined) return undefined;
-  if (factory instanceof RegisteredProviderAdapterFactory) return factory;
+  if (isRegisteredProviderAdapterFactory(factory)) return factory;
   if (typeof factory !== "object" || factory === null) {
     throw new ProviderControlPlaneError(
       "INVALID_ADAPTER_FACTORY",
@@ -518,6 +688,8 @@ function assertAdapterMatchesResolvedDefinition(
       || adapter === null
       || adapter.name !== resolved.provider.id
       || adapter.adapterVersion !== resolved.provider.adapterVersion
+      || typeof adapter.verifyBillingSafety !== "function"
+      || typeof adapter.createSession !== "function"
     ) {
       throw adapterDefinitionMismatch();
     }
@@ -632,7 +804,7 @@ function freezeModel(model: ProviderModelDefinition): ProviderModelDefinition {
   });
 }
 
-export function defineProvider(input: ProviderDefinitionInput): ProviderDefinition {
+function defineProviderValue(input: unknown): ProviderDefinition {
   if (typeof input !== "object" || input === null) {
     throw new ProviderControlPlaneError(
       "MALFORMED_DEFINITION",
@@ -744,18 +916,90 @@ export function defineProvider(input: ProviderDefinitionInput): ProviderDefiniti
   });
 }
 
+export function defineProvider(input: ProviderDefinitionInput): ProviderDefinition {
+  return defineProviderValue(input);
+}
+
+function snapshotProviderDefinitionInputs(
+  inputs: readonly ProviderDefinitionInput[]
+): readonly unknown[] {
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  try {
+    if (!Array.isArray(inputs)) {
+      throw new ProviderControlPlaneError(
+        "MALFORMED_DEFINITION",
+        "Provider registration batch is malformed"
+      );
+    }
+    descriptors = Object.getOwnPropertyDescriptors(inputs);
+    symbols = Object.getOwnPropertySymbols(inputs);
+  } catch (error) {
+    if (error instanceof ProviderControlPlaneError) throw error;
+    throw new ProviderControlPlaneError(
+      "MALFORMED_DEFINITION",
+      "Provider registration batch is malformed"
+    );
+  }
+  if (symbols.length > 0) {
+    throw new ProviderControlPlaneError(
+      "MALFORMED_DEFINITION",
+      "Provider registration batch is malformed"
+    );
+  }
+  const rawLength: unknown = descriptors.length?.value;
+  if (
+    typeof rawLength !== "number"
+    || !Number.isSafeInteger(rawLength)
+    || rawLength < 0
+    || rawLength > 128
+  ) {
+    throw new ProviderControlPlaneError(
+      "MALFORMED_DEFINITION",
+      "Provider registration batch is malformed"
+    );
+  }
+  const allowedKeys = new Set<string>(["length"]);
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    const key = String(index);
+    allowedKeys.add(key);
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined
+      || descriptor.enumerable !== true
+      || !("value" in descriptor)
+    ) {
+      throw new ProviderControlPlaneError(
+        "MALFORMED_DEFINITION",
+        "Provider registration batch is malformed"
+      );
+    }
+    const item: unknown = descriptor.value;
+    snapshot.push(item);
+  }
+  if (Object.keys(descriptors).some((key) => !allowedKeys.has(key))) {
+    throw new ProviderControlPlaneError(
+      "MALFORMED_DEFINITION",
+      "Provider registration batch is malformed"
+    );
+  }
+  return Object.freeze(snapshot);
+}
+
 export class ProviderRegistry {
-  private readonly providers = new Map<ProviderId, ProviderDefinition>();
+  readonly #providers = new Map<ProviderId, ProviderDefinition>();
 
   public register(input: ProviderDefinitionInput): ProviderDefinition {
     const definition = defineProvider(input);
     this.assertProviderIdAvailable(definition.id);
-    this.providers.set(definition.id, definition);
+    this.#providers.set(definition.id, definition);
     return definition;
   }
 
   public registerMany(inputs: readonly ProviderDefinitionInput[]): readonly ProviderDefinition[] {
-    const definitions = inputs.map((input) => defineProvider(input));
+    const snapshot = snapshotProviderDefinitionInputs(inputs);
+    const definitions = snapshot.map((input) => defineProviderValue(input));
     const candidateIds = new Set<ProviderId>();
     for (const definition of definitions) {
       if (candidateIds.has(definition.id)) {
@@ -767,13 +1011,13 @@ export class ProviderRegistry {
       candidateIds.add(definition.id);
       this.assertProviderIdAvailable(definition.id);
     }
-    for (const definition of definitions) this.providers.set(definition.id, definition);
+    for (const definition of definitions) this.#providers.set(definition.id, definition);
     return Object.freeze(definitions);
   }
 
   public enumerateProviders(): readonly ProviderDefinition[] {
     return Object.freeze(
-      [...this.providers.values()].sort((left, right) => compareCodeUnits(left.id, right.id))
+      [...this.#providers.values()].sort((left, right) => compareCodeUnits(left.id, right.id))
     );
   }
 
@@ -782,19 +1026,26 @@ export class ProviderRegistry {
   }
 
   public getProvider(providerId: string): ProviderDefinition {
+    return this.#getProvider(providerId);
+  }
+
+  public getModel(providerId: string, modelId: string): ProviderModelDefinition {
+    return this.#getModel(this.#getProvider(providerId), modelId);
+  }
+
+  #getProvider(providerId: string): ProviderDefinition {
     const parsedId = ProviderIdSchema.safeParse(providerId);
     if (!parsedId.success) {
       throw new ProviderControlPlaneError("UNKNOWN_PROVIDER", "Provider is not registered");
     }
-    const provider = this.providers.get(parsedId.data);
+    const provider = this.#providers.get(parsedId.data);
     if (provider === undefined) {
       throw new ProviderControlPlaneError("UNKNOWN_PROVIDER", "Provider is not registered");
     }
     return provider;
   }
 
-  public getModel(providerId: string, modelId: string): ProviderModelDefinition {
-    const provider = this.getProvider(providerId);
+  #getModel(provider: ProviderDefinition, modelId: string): ProviderModelDefinition {
     const parsedModelId = ProviderModelIdSchema.safeParse(modelId);
     if (!parsedModelId.success) {
       throw new ProviderControlPlaneError("UNKNOWN_MODEL", "Model is not registered");
@@ -807,12 +1058,42 @@ export class ProviderRegistry {
   }
 
   private assertProviderIdAvailable(providerId: ProviderId): void {
-    if (this.providers.has(providerId)) {
+    if (this.#providers.has(providerId)) {
       throw new ProviderControlPlaneError(
         "DUPLICATE_PROVIDER",
         "Provider ID is already registered"
       );
     }
+  }
+}
+
+const providerRegistryGetProvider = ProviderRegistry.prototype.getProvider;
+const providerRegistryGetModel = ProviderRegistry.prototype.getModel;
+
+function resolveRegistrySelection(
+  registry: unknown,
+  providerId: string,
+  modelId: string
+): {
+  readonly provider: ProviderDefinition;
+  readonly model: ProviderModelDefinition;
+} {
+  if (typeof registry !== "object" || registry === null) {
+    throw new ProviderControlPlaneError(
+      "INVALID_REGISTRY",
+      "Provider registry is invalid"
+    );
+  }
+  try {
+    const provider = providerRegistryGetProvider.call(registry, providerId);
+    const model = providerRegistryGetModel.call(registry, providerId, modelId);
+    return Object.freeze({ provider, model });
+  } catch (error) {
+    if (error instanceof ProviderControlPlaneError) throw error;
+    throw new ProviderControlPlaneError(
+      "INVALID_REGISTRY",
+      "Provider registry is invalid"
+    );
   }
 }
 
@@ -1003,15 +1284,9 @@ function validateReasoningConfiguration(
 }
 
 function assertTrustedResolvedConfiguration(
-  resolved: ResolvedProviderConfiguration
-): void {
-  let trusted = false;
-  try {
-    trusted = resolved instanceof ResolvedProviderConfigurationValue;
-  } catch {
-    trusted = false;
-  }
-  if (!trusted) {
+  resolved: unknown
+): asserts resolved is ResolvedProviderConfigurationValue {
+  if (!isResolvedProviderConfiguration(resolved)) {
     throw new ProviderControlPlaneError(
       "INVALID_FACTORY_INPUT",
       "Provider adapter factory requires a control-plane resolution"
@@ -1022,10 +1297,13 @@ function assertTrustedResolvedConfiguration(
 function resolveParsedProviderConfiguration(input: {
   readonly registry: ProviderRegistry;
   readonly configuration: ProviderConfiguration;
-  readonly requirements?: readonly ProviderCapabilityKey[];
+  readonly requirements?: unknown;
 }): ResolvedProviderConfiguration {
-  const provider = input.registry.getProvider(input.configuration.providerId);
-  const model = input.registry.getModel(input.configuration.providerId, input.configuration.modelId);
+  const { provider, model } = resolveRegistrySelection(
+    input.registry,
+    input.configuration.providerId,
+    input.configuration.modelId
+  );
   const settings = validateProviderSettings(provider, input.configuration.settings);
   const configuration = settings === input.configuration.settings
     ? input.configuration
@@ -1052,10 +1330,19 @@ export function resolveProviderConfiguration(input: {
   if (!parsed.enabled) {
     throw new ProviderControlPlaneError("DISABLED", "Configured provider is disabled");
   }
+  let requirements: unknown;
+  try {
+    requirements = input.requirements;
+  } catch {
+    throw new ProviderControlPlaneError(
+      "MALFORMED_REQUIREMENTS",
+      "Provider capability requirements are malformed"
+    );
+  }
   return resolveParsedProviderConfiguration({
     registry: input.registry,
     configuration: parsed,
-    ...(input.requirements === undefined ? {} : { requirements: input.requirements })
+    ...(requirements === undefined ? {} : { requirements })
   });
 }
 
@@ -1108,6 +1395,18 @@ export async function evaluateProviderReadiness(input: {
     });
   }
 
+  let requirements: unknown;
+  try {
+    requirements = input.requirements;
+  } catch {
+    return Object.freeze({
+      state: "MISCONFIGURED",
+      providerId: parsed.providerId,
+      modelId: parsed.modelId,
+      reason: "MALFORMED_REQUIREMENTS"
+    });
+  }
+
   let resolved: ResolvedProviderConfiguration;
   try {
     resolved = resolveParsedProviderConfiguration({
@@ -1125,10 +1424,10 @@ export async function evaluateProviderReadiness(input: {
     });
   }
 
-  if (input.requirements !== undefined) {
+  if (requirements !== undefined) {
     let match: CapabilityMatchResult;
     try {
-      match = matchCapabilityRequirements(resolved.model.capabilities, input.requirements);
+      match = matchCapabilityRequirements(resolved.model.capabilities, requirements);
     } catch (error) {
       return Object.freeze({
         state: "MISCONFIGURED",
@@ -1176,10 +1475,13 @@ export async function evaluateProviderReadiness(input: {
       });
     }
   } else {
-    const resolver = input.secretResolver;
+    let resolver: ProviderSecretResolver | undefined;
     let hasSecret: ProviderSecretResolver["hasSecret"];
+    let resolveSecret: ProviderSecretResolver["resolveSecret"] | undefined;
     try {
+      resolver = input.secretResolver;
       hasSecret = resolver?.hasSecret;
+      resolveSecret = resolver?.resolveSecret;
     } catch {
       return Object.freeze({
         state: "UNKNOWN",
@@ -1188,7 +1490,11 @@ export async function evaluateProviderReadiness(input: {
         reason: "CREDENTIAL_STATUS_UNKNOWN"
       });
     }
-    if (typeof hasSecret !== "function" || resolver === undefined) {
+    if (
+      typeof hasSecret !== "function"
+      || typeof resolveSecret !== "function"
+      || resolver === undefined
+    ) {
       return Object.freeze({
         state: "UNKNOWN",
         providerId: resolved.provider.id,

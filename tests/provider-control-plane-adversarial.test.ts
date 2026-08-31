@@ -492,6 +492,68 @@ describe("provider definition and capability hostile values", () => {
       .toThrow(expect.objectContaining({ code: "MALFORMED_CAPABILITIES" }));
   });
 
+  it("snapshots capability requirements once instead of allowing getter-based requirement changes", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const configuration = settingsConfiguration({ mode: "safe" });
+
+    let resolutionReads = 0;
+    const resolutionInput = { registry, configuration };
+    Object.defineProperty(resolutionInput, "requirements", {
+      enumerable: true,
+      get() {
+        resolutionReads += 1;
+        return resolutionReads === 1 ? ["IMAGE_INPUT"] : [];
+      }
+    });
+    expect(() => resolveProviderConfiguration(resolutionInput))
+      .toThrow(expect.objectContaining({ code: "INCOMPATIBLE_CAPABILITY" }));
+    expect(resolutionReads).toBe(1);
+
+    let readinessReads = 0;
+    const readinessInput = { registry, configuration };
+    Object.defineProperty(readinessInput, "requirements", {
+      enumerable: true,
+      get() {
+        readinessReads += 1;
+        return readinessReads === 1 ? ["IMAGE_INPUT"] : [];
+      }
+    });
+    await expect(evaluateProviderReadiness(readinessInput)).resolves.toMatchObject({
+      state: "MISCONFIGURED",
+      reason: "INCOMPATIBLE_CAPABILITY"
+    });
+    expect(readinessReads).toBe(1);
+  });
+
+  it("converts throwing capability-requirement accessors to typed failures", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const configuration = settingsConfiguration({ mode: "safe" });
+
+    const resolutionInput = { registry, configuration };
+    Object.defineProperty(resolutionInput, "requirements", {
+      enumerable: true,
+      get() {
+        throw new Error("requirements getter must not escape");
+      }
+    });
+    expect(() => resolveProviderConfiguration(resolutionInput))
+      .toThrow(expect.objectContaining({ code: "MALFORMED_REQUIREMENTS" }));
+
+    const readinessInput = { registry, configuration };
+    Object.defineProperty(readinessInput, "requirements", {
+      enumerable: true,
+      get() {
+        throw new Error("requirements getter must not escape");
+      }
+    });
+    await expect(evaluateProviderReadiness(readinessInput)).resolves.toMatchObject({
+      state: "MISCONFIGURED",
+      reason: "MALFORMED_REQUIREMENTS"
+    });
+  });
+
   it("does not let DISABLED hide malformed capability requirements", async () => {
     const registry = new ProviderRegistry();
     registry.register(createSettingsProviderInput());

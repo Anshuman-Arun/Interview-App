@@ -258,14 +258,10 @@ export function inspectSafeProviderConfigurationValue(
   return inspectProviderConfigurationValue(value, true);
 }
 
-function reportSchemaError(error: unknown, context: z.RefinementCtx): typeof z.NEVER {
-  context.addIssue({
-    code: "custom",
-    message: error instanceof ProviderConfigurationSafetyError
-      ? error.code
-      : "MALFORMED_CONFIGURATION"
-  });
-  return z.NEVER;
+function schemaErrorMessage(error: unknown): ProviderConfigurationSafetyErrorCode {
+  return error instanceof ProviderConfigurationSafetyError
+    ? error.code
+    : "MALFORMED_CONFIGURATION";
 }
 
 export const SafeProviderConfigurationValueSchema: z.ZodType<SafeProviderConfigurationValue> =
@@ -273,7 +269,8 @@ export const SafeProviderConfigurationValueSchema: z.ZodType<SafeProviderConfigu
     try {
       return inspectSafeProviderConfigurationValue(value);
     } catch (error) {
-      return reportSchemaError(error, context);
+      context.addIssue({ code: "custom", message: schemaErrorMessage(error) });
+      return z.NEVER;
     }
   });
 
@@ -282,7 +279,8 @@ export const SafeProviderConfigurationRecordSchema: z.ZodType<SafeProviderConfig
     try {
       const inspected = inspectSafeProviderConfigurationValue(value);
       if (typeof inspected !== "object" || inspected === null || Array.isArray(inspected)) {
-        return reportSchemaError(undefined, context);
+        context.addIssue({ code: "custom", message: "MALFORMED_CONFIGURATION" });
+        return z.NEVER;
       }
       return inspected;
     } catch (error) {

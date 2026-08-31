@@ -267,6 +267,64 @@ describe("direct exported schema hardening", () => {
   });
 });
 
+describe("registry provenance and batch input hardening", () => {
+  it("ignores hostile registry method overrides and uses the registry's private storage", () => {
+    class HostileRegistry extends ProviderRegistry {
+      public override getProvider(): ProviderDefinition {
+        return MOCK_PROVIDER_DEFINITION;
+      }
+
+      public override getModel(): ReturnType<typeof firstModel> {
+        return firstModel(MOCK_PROVIDER_DEFINITION);
+      }
+    }
+
+    const registry = new HostileRegistry();
+    expect(() => resolveProviderConfiguration({
+      registry,
+      configuration: MOCK_CONFIGURATION
+    })).toThrow(expect.objectContaining({ code: "UNKNOWN_PROVIDER" }));
+  });
+
+  it("rejects accessor-backed registration batches without invoking accessors", () => {
+    const registry = new ProviderRegistry();
+    let getterCalls = 0;
+    const inputs = [providerInput()];
+    Object.defineProperty(inputs, "0", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return providerInput();
+      }
+    });
+
+    expect(() => registry.registerMany(inputs))
+      .toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+    expect(getterCalls).toBe(0);
+    expect(registry.enumerateProviders()).toEqual([]);
+  });
+
+  it("rejects oversized or side-property registration batches atomically", () => {
+    const registry = new ProviderRegistry();
+    const oversized = Array.from(
+      { length: 129 },
+      (_, index) => providerInput({ id: "provider-" + String(index) })
+    );
+    expect(() => registry.registerMany(oversized))
+      .toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+    expect(registry.enumerateProviders()).toEqual([]);
+
+    const withSideProperty = [providerInput()];
+    Object.defineProperty(withSideProperty, "extra", {
+      enumerable: true,
+      value: providerInput({ id: "extra-provider" })
+    });
+    expect(() => registry.registerMany(withSideProperty))
+      .toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+    expect(registry.enumerateProviders()).toEqual([]);
+  });
+});
+
 describe("credential readiness edge cases", () => {
   it("checks an optional credential reference when one is configured", async () => {
     const registry = new ProviderRegistry();
@@ -361,6 +419,29 @@ describe("credential readiness edge cases", () => {
     });
   });
 
+  it("does not report AVAILABLE when the runtime resolver cannot resolve secrets", async () => {
+    const resolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        return "runtime-only-key";
+      },
+      async hasSecret() {
+        return true;
+      }
+    };
+    Reflect.deleteProperty(resolver, "resolveSecret");
+
+    await expect(evaluateProviderReadiness({
+      registry: registerBuiltInProviders(),
+      configuration: GEMINI_CONFIGURATION,
+      secretResolver: resolver
+    })).resolves.toEqual({
+      state: "UNKNOWN",
+      providerId: "gemini-api",
+      modelId: "gemini-2.5-flash",
+      reason: "CREDENTIAL_STATUS_UNKNOWN"
+    });
+  });
+
   it("converts credential-probe exceptions to UNKNOWN without exposing error text", async () => {
     const resolver: ProviderSecretResolver = {
       async resolveSecret() {
@@ -387,7 +468,7 @@ describe("credential readiness edge cases", () => {
 });
 
 describe("adapter factory adversarial boundary", () => {
-  it("converts a throwing resolved accessor into INVALID_FACTORY_INPUT", async () => {
+  it("rejects accessor-backed factory inputs without invoking accessors", async () => {
     const registry = registerBuiltInProviders();
     const resolved = resolveProviderConfiguration({
       registry,
@@ -398,12 +479,32 @@ describe("adapter factory adversarial boundary", () => {
       resolved,
       runtime: { proposal: PROPOSAL }
     };
+    let getterCalls = 0;
     Object.defineProperty(input, "resolved", {
       enumerable: true,
       get() {
+        getterCalls += 1;
         throw new Error("Authorization: Bearer input-secret");
       }
     });
+
+    await expect(factory.createAdapter(input))
+      .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects extra factory-input fields rather than silently ignoring them", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: MOCK_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    const input = {
+      resolved,
+      runtime: { proposal: PROPOSAL },
+      extra: true
+    };
 
     await expect(factory.createAdapter(input))
       .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
@@ -454,6 +555,110 @@ describe("adapter factory adversarial boundary", () => {
 
     await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
       .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
+  });
+
+  it("rejects prototype-forged resolutions that would pass plain instanceof checks", () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: MOCK_CONFIGURATION
+    });
+    const forged = { ...resolved };
+    Object.setPrototypeOf(forged, Object.getPrototypeOf(resolved));
+
+    expect(() => resolveAdapterFactory(forged))
+      .toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
+  });
+
+  it("keeps resolution provenance checks stable if the reachable constructor is monkey-patched", () => {
+    const resolved = resolveProviderConfiguration({
+      registry: registerBuiltInProviders(),
+      configuration: MOCK_CONFIGURATION
+    });
+    const prototype: unknown = Object.getPrototypeOf(resolved);
+    if (typeof prototype !== "object" || prototype === null) {
+      throw new Error("Resolved configuration prototype is unavailable");
+    }
+    const constructorValue: unknown = Reflect.get(prototype, "constructor");
+    if (typeof constructorValue !== "function") {
+      throw new Error("Resolved configuration constructor is unavailable");
+    }
+    const originalChecker: unknown = Reflect.get(constructorValue, "isResolved");
+    const forged = { ...resolved };
+    Object.setPrototypeOf(forged, prototype);
+
+    try {
+      Reflect.set(constructorValue, "isResolved", () => true);
+      expect(() => resolveAdapterFactory(forged))
+        .toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
+    } finally {
+      Reflect.set(constructorValue, "isResolved", originalChecker);
+    }
+  });
+
+  it("keeps registered-factory brand checks stable if the reachable constructor is monkey-patched", () => {
+    const registeredFactory = MOCK_PROVIDER_DEFINITION.adapterFactory;
+    if (registeredFactory === undefined) {
+      throw new Error("Mock provider factory is unavailable");
+    }
+    const prototype: unknown = Object.getPrototypeOf(registeredFactory);
+    if (typeof prototype !== "object" || prototype === null) {
+      throw new Error("Registered factory prototype is unavailable");
+    }
+    const constructorValue: unknown = Reflect.get(prototype, "constructor");
+    if (typeof constructorValue !== "function") {
+      throw new Error("Registered factory constructor is unavailable");
+    }
+    const originalChecker: unknown = Reflect.get(constructorValue, "isRegistered");
+    const malformedFactory = {
+      id: "malformed-factory",
+      createAdapter() {
+        return new MockModelAdapter({ proposal: PROPOSAL });
+      }
+    };
+    Reflect.set(malformedFactory, "createAdapter", "not-a-function");
+
+    try {
+      Reflect.set(constructorValue, "isRegistered", () => true);
+      expect(() => defineProvider(providerInput({
+        adapterVersion: "1.0.0",
+        adapterFactory: malformedFactory
+      }))).toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
+    } finally {
+      Reflect.set(constructorValue, "isRegistered", originalChecker);
+    }
+  });
+
+  it("keeps the factory gate as a frozen own function even if its prototype is mutated", async () => {
+    const resolved = resolveProviderConfiguration({
+      registry: registerBuiltInProviders(),
+      configuration: MOCK_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    expect(Object.hasOwn(factory, "createAdapter")).toBe(true);
+    expect(Object.isFrozen(factory)).toBe(true);
+
+    const prototype: unknown = Object.getPrototypeOf(factory);
+    if (typeof prototype !== "object" || prototype === null) {
+      throw new Error("Registered factory prototype is unavailable");
+    }
+    const originalMethod: unknown = Reflect.get(prototype, "createAdapter");
+    try {
+      Reflect.set(prototype, "createAdapter", async () => {
+        throw new Error("prototype bypass must not execute");
+      });
+      const adapter = await factory.createAdapter({
+        resolved,
+        runtime: { proposal: PROPOSAL }
+      });
+      expect(adapter.name).toBe("mock-model");
+    } finally {
+      if (originalMethod === undefined) {
+        Reflect.deleteProperty(prototype, "createAdapter");
+      } else {
+        Reflect.set(prototype, "createAdapter", originalMethod);
+      }
+    }
   });
 
   it("captures factory behavior at registration rather than following later object mutation", async () => {
@@ -576,6 +781,140 @@ describe("adapter factory adversarial boundary", () => {
     }
   });
 
+  it("rejects adapters missing required ReasoningProvider methods", async () => {
+    for (const methodName of ["createSession", "verifyBillingSafety"] as const) {
+      const registry = new ProviderRegistry();
+      registry.register(providerInput({
+        id: "broken-provider",
+        adapterVersion: "1.0.0",
+        models: [{
+          id: "test-model",
+          displayName: "Test Model",
+          capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+        }],
+        adapterFactory: {
+          id: "broken-factory",
+          createAdapter() {
+            const adapter = new MockModelAdapter({ proposal: PROPOSAL });
+            Reflect.set(adapter, methodName, undefined);
+            return adapter;
+          }
+        }
+      }));
+      const resolved = resolveProviderConfiguration({
+        registry,
+        configuration: {
+          version: 1,
+          providerId: "broken-provider",
+          modelId: "test-model",
+          enabled: true
+        }
+      });
+
+      await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
+        .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
+    }
+  });
+
+  it("scopes provider factories to the exact configured credential reference", async () => {
+    let underlyingResolverCalls = 0;
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "scoped-provider",
+      adapterVersion: "1.0.0",
+      credentialRequirement: "REQUIRED",
+      credentialPurposes: ["API_KEY"],
+      adapterFactory: {
+        id: "scoped-factory",
+        async createAdapter(input) {
+          if (input.secretResolver === undefined) {
+            throw new ProviderControlPlaneError(
+              "CREDENTIALS_REQUIRED",
+              "Test resolver is required"
+            );
+          }
+          await input.secretResolver.resolveSecret({
+            providerId: input.resolved.provider.id,
+            reference: ProviderSecretReferenceSchema.parse({
+              id: "other-credential",
+              purpose: "API_KEY"
+            })
+          });
+          throw new Error("credential request should have failed");
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "scoped-provider",
+        modelId: "test-model",
+        enabled: true,
+        credentialRef: {
+          id: "configured-credential",
+          purpose: "API_KEY"
+        }
+      }
+    });
+    const resolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        underlyingResolverCalls += 1;
+        return "must-not-be-returned";
+      }
+    };
+
+    await expect(resolveAdapterFactory(resolved).createAdapter({
+      resolved,
+      secretResolver: resolver
+    })).rejects.toMatchObject({ code: "CREDENTIAL_RESOLUTION_FAILED" });
+    expect(underlyingResolverCalls).toBe(0);
+  });
+
+  it("does not expose a resolver capability when no credential reference is configured", async () => {
+    let resolverVisibleToFactory = true;
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "mock-model",
+      adapterVersion: "1.0.0",
+      credentialRequirement: "OPTIONAL",
+      credentialPurposes: ["API_KEY"],
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "optional-resolver-factory",
+        createAdapter(input) {
+          resolverVisibleToFactory = input.secretResolver !== undefined;
+          return new MockModelAdapter({ proposal: PROPOSAL });
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "mock-model",
+        modelId: "test-model",
+        enabled: true
+      }
+    });
+    const resolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        return "unused-secret";
+      }
+    };
+
+    const adapter = await resolveAdapterFactory(resolved).createAdapter({
+      resolved,
+      secretResolver: resolver
+    });
+    expect(adapter.name).toBe("mock-model");
+    expect(resolverVisibleToFactory).toBe(false);
+  });
+
   it("normalizes Gemini resolver failures and rejects non-string resolver results", async () => {
     const registry = registerBuiltInProviders();
     const resolved = resolveProviderConfiguration({
@@ -612,6 +951,48 @@ describe("adapter factory adversarial boundary", () => {
       resolved,
       secretResolver: wrongTypeResolver
     })).rejects.toMatchObject({ code: "CREDENTIAL_RESOLUTION_FAILED" });
+  });
+
+  it("snapshots resolver methods before provider factory execution", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: GEMINI_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    let originalCalls = 0;
+    let replacementCalls = 0;
+    const resolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        originalCalls += 1;
+        return "runtime-only-key";
+      }
+    };
+    const input: Parameters<typeof factory.createAdapter>[0] = {
+      resolved,
+      secretResolver: resolver
+    };
+    const original = resolver.resolveSecret;
+    Object.defineProperty(resolver, "resolveSecret", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        Object.defineProperty(resolver, "resolveSecret", {
+          configurable: true,
+          enumerable: true,
+          value: async () => {
+            replacementCalls += 1;
+            return "replacement-key";
+          }
+        });
+        return original;
+      }
+    });
+
+    const adapter = await factory.createAdapter(input);
+    expect(adapter.name).toBe("gemini-api");
+    expect(originalCalls).toBe(1);
+    expect(replacementCalls).toBe(0);
   });
 
   it("keeps built-in declarations synchronized with the execution metadata they expose", () => {
