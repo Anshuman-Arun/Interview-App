@@ -2214,8 +2214,8 @@ function runTaskkill(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      task.removeAllListeners("error");
-      task.removeAllListeners("close");
+      // Keep the once-listeners attached until the helper actually emits them so a
+      // late kill/spawn error cannot become an unhandled EventEmitter "error".
       resolve(success);
     };
     const timer = setTimeout(() => {
