@@ -177,6 +177,27 @@ describe("vision snapshot validation and hashing", () => {
     }
   });
 
+  it("accepts bounded valid transparency and gamma metadata", () => {
+    const valid = [
+      makeMinimalPng(0, [127], { transparency: [0, 127] }),
+      makeMinimalPng(2, [10, 20, 30], {
+        transparency: [0, 10, 0, 20, 0, 30]
+      }),
+      makeMinimalPng(3, [0], {
+        palette: [10, 20, 30],
+        transparency: [128]
+      }),
+      insertAfterIhdr(
+        makePng(1, 1),
+        makePngChunk("gAMA", Buffer.from([0, 0, 0xb1, 0x8f]))
+      )
+    ];
+
+    for (const bytes of valid) {
+      expect(snapshot(bytes).metadata.contentDigest).toBe(sha256ImageBytes(bytes));
+    }
+  });
+
   it("copies input bytes so caller mutation cannot invalidate the stored digest", () => {
     const bytes = makePng(2, 2);
     const originalDigest = sha256ImageBytes(bytes);
