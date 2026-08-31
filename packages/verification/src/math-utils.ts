@@ -255,7 +255,7 @@ export function negateRational(value: ExactRational): ExactRational {
   return { numerator: -normalized.numerator, denominator: normalized.denominator };
 }
 
-function rationalForComparison(value: ExactRational): ExactRational {
+function checkedRational(value: ExactRational): ExactRational {
   const numerator = assertIntermediateIntegerBound(value.numerator);
   const denominator = assertIntermediateIntegerBound(value.denominator);
   if (denominator === 0n) {
@@ -267,15 +267,15 @@ function rationalForComparison(value: ExactRational): ExactRational {
 }
 
 export function equalRationals(left: ExactRational, right: ExactRational): boolean {
-  const checkedLeft = rationalForComparison(left);
-  const checkedRight = rationalForComparison(right);
+  const checkedLeft = checkedRational(left);
+  const checkedRight = checkedRational(right);
   return checkedLeft.numerator * checkedRight.denominator
     === checkedRight.numerator * checkedLeft.denominator;
 }
 
 export function compareRationals(left: ExactRational, right: ExactRational): -1 | 0 | 1 {
-  const checkedLeft = rationalForComparison(left);
-  const checkedRight = rationalForComparison(right);
+  const checkedLeft = checkedRational(left);
+  const checkedRight = checkedRational(right);
 
   // Comparison-only cross-products are bounded implementation temporaries:
   // each input component is already capped at 4,096 decimal digits, so each
@@ -394,22 +394,26 @@ function sumWithCommonDenominator(
 
 export function sumRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
-  const normalizedValues = values.map(normalizeRational);
+  const checkedValues = values.map(checkedRational);
 
-  if (canUseWideRationalSum(normalizedValues)) {
+  if (canUseWideRationalSum(checkedValues)) {
     let total: WideRationalSum = { numerator: 0n, denominator: 1n };
-    for (const value of normalizedValues) total = addWideRational(total, value);
+    for (const value of checkedValues) total = addWideRational(total, value);
     return rational(
       assertIntermediateIntegerBound(total.numerator),
       assertIntermediateIntegerBound(total.denominator)
     );
   }
 
-  const commonDenominator = boundedCommonDenominator(normalizedValues);
+  const commonDenominator = boundedCommonDenominator(checkedValues);
   if (commonDenominator !== undefined) {
-    return sumWithCommonDenominator(normalizedValues, commonDenominator);
+    return sumWithCommonDenominator(checkedValues, commonDenominator);
   }
 
+  // Canonical gcd reduction is only needed by the conservative key-based
+  // fallback. The exact wide/common-denominator paths above work correctly on
+  // unreduced inputs and avoid repeating expensive gcd normalization.
+  const normalizedValues = checkedValues.map(normalizeRational);
   const counts = rationalCounts(normalizedValues);
 
   // Remove exact additive-inverse pairs before bounded accumulation. This is
@@ -497,10 +501,13 @@ function fullyCancelledRationalProduct(values: readonly ExactRational[]): ExactR
 
 export function productRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
-  const normalizedValues = values.map(normalizeRational);
-  if (normalizedValues.some((value) => value.numerator === 0n)) return rational(0n, 1n);
-  if (canUseWideRationalProduct(normalizedValues)) return wideRationalProduct(normalizedValues);
+  const checkedValues = values.map(checkedRational);
+  if (checkedValues.some((value) => value.numerator === 0n)) return rational(0n, 1n);
+  if (canUseWideRationalProduct(checkedValues)) return wideRationalProduct(checkedValues);
 
+  // Canonical gcd reduction is only needed by the conservative key-based
+  // fallback. The bounded wide-product path above is exact on unreduced inputs.
+  const normalizedValues = checkedValues.map(normalizeRational);
   const counts = rationalCounts(normalizedValues);
   const visited = new Set<string>();
   for (const [key, entry] of counts) {
