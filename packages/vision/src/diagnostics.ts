@@ -32,10 +32,16 @@ export const VisionProcessingDiagnosticsSchema = z.object({
   if (diagnostics.operation === "CROP") {
     if (diagnostics.cropCount !== 1 || diagnostics.tileCount !== 0 || diagnostics.outputDimensions === undefined) {
       context.addIssue({ code: "custom", message: "Successful crop diagnostics require one crop, no tiles, and output dimensions" });
+    } else if (diagnostics.outputDimensions.width > diagnostics.sourceDimensions.width
+        || diagnostics.outputDimensions.height > diagnostics.sourceDimensions.height) {
+      context.addIssue({ code: "custom", message: "Successful crop diagnostics may not exceed source dimensions" });
     }
   } else if (diagnostics.operation === "RESIZE") {
     if (diagnostics.cropCount !== 0 || diagnostics.tileCount !== 0 || diagnostics.outputDimensions === undefined) {
       context.addIssue({ code: "custom", message: "Successful resize diagnostics require no crops/tiles and output dimensions" });
+    } else if (diagnostics.outputDimensions.width > diagnostics.sourceDimensions.width
+        || diagnostics.outputDimensions.height > diagnostics.sourceDimensions.height) {
+      context.addIssue({ code: "custom", message: "Successful resize diagnostics may not report an upscale" });
     }
   } else if (diagnostics.cropCount !== 0 || diagnostics.tileCount <= 0 || diagnostics.outputDimensions !== undefined) {
     context.addIssue({ code: "custom", message: "Successful tile diagnostics require at least one tile and no singular output dimensions" });
