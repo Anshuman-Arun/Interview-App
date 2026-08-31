@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
 import {
   DEFAULT_IMAGE_VALIDATION_LIMITS,
+  HARD_IMAGE_VALIDATION_LIMITS,
   ImageSnapshot,
   ImageSnapshotMetadataSchema,
   ImageSourceTypeSchema,
@@ -13,11 +14,6 @@ import {
 import { BoardRevisionSchema } from "../../domain/src/index.js";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-const HARD_MAX_ENCODED_BYTES = 64 * 1024 * 1024;
-const HARD_MAX_WIDTH = 16_384;
-const HARD_MAX_HEIGHT = 16_384;
-const HARD_MAX_PIXELS = 64 * 1024 * 1024;
 
 interface PngHeader {
   readonly width: number;
@@ -40,10 +36,10 @@ function normalizeLimits(limits: Partial<ImageValidationLimits> | undefined): Re
     maxHeight: asSafePositiveInteger(merged.maxHeight, "maxHeight"),
     maxPixels: asSafePositiveInteger(merged.maxPixels, "maxPixels")
   };
-  if (normalized.maxEncodedBytes > HARD_MAX_ENCODED_BYTES
-      || normalized.maxWidth > HARD_MAX_WIDTH
-      || normalized.maxHeight > HARD_MAX_HEIGHT
-      || normalized.maxPixels > HARD_MAX_PIXELS) {
+  if (normalized.maxEncodedBytes > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes
+      || normalized.maxWidth > HARD_IMAGE_VALIDATION_LIMITS.maxWidth
+      || normalized.maxHeight > HARD_IMAGE_VALIDATION_LIMITS.maxHeight
+      || normalized.maxPixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
     throw new RangeError("Image validation limits may not exceed package hard safety caps");
   }
   return Object.freeze(normalized);
