@@ -578,7 +578,7 @@ export class ModelAssetManager {
       if (typeof error === "object"
           && error !== null
           && "code" in error
-          && Reflect.get(error, "code") === "ENOENT") {
+          && error.code === "ENOENT") {
         return { status: "NOT_PRESENT" };
       }
       return { status: "CORRUPT", errorCode: "CORRUPT_INSTALLATION" };
