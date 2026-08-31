@@ -265,6 +265,11 @@ describe("local worker lifecycle manager", () => {
     }));
     await runtime.start("graceful");
     await expect(runtime.stop("graceful")).resolves.toMatchObject({ disposition: "GRACEFUL" });
+    const stoppedGraceful = runtime.getStatus("graceful");
+    expect(stoppedGraceful.state).toBe("STOPPED");
+    expect(stoppedGraceful).not.toHaveProperty("handshake");
+    expect(stoppedGraceful).not.toHaveProperty("readyAt");
+    expect(stoppedGraceful.readiness).not.toHaveProperty("detail");
     await expect(runtime.stop("graceful")).resolves.toMatchObject({ disposition: "ALREADY_STOPPED" });
 
     runtime.register(definition("slow", "delayed-ready", { startupTimeoutMs: 1_000 }, ["500"]));
@@ -414,6 +419,9 @@ describe("local worker lifecycle manager", () => {
     const status = runtime.getStatus("late-crash");
     expect(status).toMatchObject({ state: "FAILED", restartCount: 1 });
     expect(status.lastExit?.unexpected).toBe(true);
+    expect(status).not.toHaveProperty("handshake");
+    expect(status).not.toHaveProperty("readyAt");
+    expect(status.readiness).not.toHaveProperty("detail");
     expect(readFileSync(counter, "utf8")).toBe("2");
   });
 
