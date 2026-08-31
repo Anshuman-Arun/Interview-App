@@ -1024,11 +1024,13 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(JSON.stringify(request.payload)).not.toContain(Buffer.from(crop.artifact.readBytes()).toString("base64"));
   });
 
-  it("accepts maximum-length snapshot IDs without overflowing prepared payload identity metadata", () => {
-    const source = snapshot(makePng(2, 2), { id: "s".repeat(128), revision: 6 });
-    const request = prepareVisionImageRequest(source, "context");
-    expect(request.imageIdentity.length).toBeGreaterThan(160);
-    expect(request.payload.metadata.imageIdentity).toBe(request.imageIdentity);
+  it("accepts maximum-length and heavily escaped snapshot IDs with fixed bounded raster identities", () => {
+    for (const id of ["s".repeat(128), "\u0000".repeat(128)]) {
+      const source = snapshot(makePng(2, 2), { id, revision: 6 });
+      const request = prepareVisionImageRequest(source, "context");
+      expect(request.imageIdentity).toMatch(/^raster_[0-9a-f]{64}$/u);
+      expect(request.payload.metadata.imageIdentity).toBe(request.imageIdentity);
+    }
   });
 
   it("keeps snapshot image identities distinct across source revisions even when ID and bytes are reused", () => {
