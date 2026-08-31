@@ -83,6 +83,35 @@ interface InstallationCheck {
   readonly errorCode?: ModelAssetErrorCode;
 }
 
+interface SharedCacheState {
+  capacityGate: Promise<void>;
+  mutationGate: Promise<void>;
+  reservedBytes: number;
+  readonly activeStagingDirectories: Set<string>;
+  readonly activeInstallationCounts: Map<string, number>;
+}
+
+const sharedCacheStates = new Map<string, SharedCacheState>();
+
+function sharedCacheStateFor(paths: CachePaths): SharedCacheState {
+  const identity = [
+    paths.root,
+    String(paths.rootDevice),
+    String(paths.rootInode)
+  ].join("\0");
+  const existing = sharedCacheStates.get(identity);
+  if (existing !== undefined) return existing;
+  const created: SharedCacheState = {
+    capacityGate: Promise.resolve(),
+    mutationGate: Promise.resolve(),
+    reservedBytes: 0,
+    activeStagingDirectories: new Set<string>(),
+    activeInstallationCounts: new Map<string, number>()
+  };
+  sharedCacheStates.set(identity, created);
+  return created;
+}
+
 function positiveSafeInteger(value: unknown, fallback: number, label: string): number {
   const resolved = value ?? fallback;
   if (typeof resolved !== "number" || !Number.isSafeInteger(resolved) || resolved <= 0) {
@@ -149,8 +178,6 @@ export class ModelAssetManager {
     string,
     { readonly status: "FAILED" | "CORRUPT"; readonly code: ModelAssetErrorCode }
   >();
-  private capacityGate: Promise<void> = Promise.resolve();
-  private reservedBytes = 0;
 
   public constructor(options: ModelAssetManagerOptions) {
     const rawOptions: unknown = options;
