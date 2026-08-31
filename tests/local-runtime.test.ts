@@ -1548,6 +1548,24 @@ describe("local worker lifecycle manager", () => {
     expect(built.secretValues).toContain(secret);
   });
 
+  it("does not spend redaction budget on inherited secrets that are overridden", () => {
+    const staleInheritedSecret = Array.from(
+      { length: 257 },
+      (_, index) => `stale-secret-line-${String(index)}`
+    ).join("\n");
+
+    const built = buildLocalEnvironment({
+      inherit: ["API_TOKEN"],
+      values: { API_TOKEN: "replacement-token-value" }
+    }, {
+      API_TOKEN: staleInheritedSecret
+    });
+
+    expect(built.environment.API_TOKEN).toBe("replacement-token-value");
+    expect(built.secretValues).toContain("replacement-token-value");
+    expect(built.secretValues.some((value) => value.includes("stale-secret-line"))).toBe(false);
+  });
+
   it("redacts repeated and overlapping secret matches without cascading", () => {
     expect(redactKnownSecrets("aaaa", ["a", "["])).toBe("[REDACTED]");
     expect(redactKnownSecrets("xaaab", ["xa", "aa"])).toBe("[REDACTED]b");
