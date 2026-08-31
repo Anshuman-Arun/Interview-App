@@ -7,6 +7,7 @@ import {
   ImageSnapshotInputSchema,
   ImageSnapshotMetadataSchema,
   VisionPreprocessingError,
+  assertSupportedPngHeader,
   type ImageSnapshotInput,
   type ImageValidationLimits,
   type Sha256Digest
@@ -18,16 +19,6 @@ interface PngHeader {
   readonly width: number;
   readonly height: number;
 }
-
-const SUPPORTED_PNG_BIT_DEPTHS = new Map<number, ReadonlySet<number>>([
-  [0, new Set([1, 2, 4, 8])],
-  [2, new Set([8])],
-  [3, new Set([1, 2, 4, 8])],
-  [4, new Set([8])],
-  [6, new Set([8])]
-]);
-
-
 
 const ImageValidationLimitsOverrideSchema = z.object({
   maxEncodedBytes: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes).optional(),
@@ -83,28 +74,12 @@ function inspectPngHeader(bytes: Buffer): PngHeader {
     throw new VisionPreprocessingError("INVALID_IMAGE", "PNG dimensions must be positive");
   }
 
-  const bitDepth = bytes[24];
-  const colorType = bytes[25];
-  const compressionMethod = bytes[26];
-  const filterMethod = bytes[27];
-  const interlaceMethod = bytes[28];
-  if (bitDepth === undefined
-      || colorType === undefined
-      || compressionMethod === undefined
-      || filterMethod === undefined
-      || interlaceMethod === undefined) {
-    throw new VisionPreprocessingError("INVALID_IMAGE", "PNG IHDR is truncated");
-  }
-  if (compressionMethod !== 0 || filterMethod !== 0 || interlaceMethod !== 0) {
+  try {
+    assertSupportedPngHeader(bytes);
+  } catch {
     throw new VisionPreprocessingError(
       "INVALID_IMAGE",
-      "PNG uses an unsupported compression, filter, or interlace method"
-    );
-  }
-  if (SUPPORTED_PNG_BIT_DEPTHS.get(colorType)?.has(bitDepth) !== true) {
-    throw new VisionPreprocessingError(
-      "INVALID_IMAGE",
-      "PNG color type or bit depth is unsupported for bounded preprocessing"
+      "PNG header uses unsupported bounded-preprocessing parameters"
     );
   }
   return { width, height };
