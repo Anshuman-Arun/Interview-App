@@ -1502,6 +1502,32 @@ describe("vision diagnostics validation", () => {
   });
 });
 
+  it("rejects successful crop/resize diagnostics that exceed source dimensions", () => {
+    const base = {
+      sourceDimensions: { width: 2, height: 2 },
+      inputBytes: 10,
+      outputBytes: 10,
+      durationMs: 1,
+      outcome: "SUCCESS" as const
+    };
+
+    expect(() => createVisionProcessingDiagnostics({
+      ...base,
+      operation: "CROP",
+      outputDimensions: { width: 3, height: 1 },
+      cropCount: 1,
+      tileCount: 0
+    })).toThrow();
+
+    expect(() => createVisionProcessingDiagnostics({
+      ...base,
+      operation: "RESIZE",
+      outputDimensions: { width: 2, height: 3 },
+      cropCount: 0,
+      tileCount: 0
+    })).toThrow();
+  });
+
   it("bounds diagnostics counts to work this package can actually perform", () => {
     expect(() => createVisionProcessingDiagnostics({
       operation: "TILE",
