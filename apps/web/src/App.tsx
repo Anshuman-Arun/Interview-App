@@ -1,12 +1,12 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { SessionIdSchema, type SessionId } from "../../../packages/domain/src/index.js";
 import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
 import { StudentInputArea } from "./components/StudentInputArea.js";
-import { createWhiteboardCanvasMount } from "./components/WhiteboardCanvas.js";
+import { WhiteboardCanvas } from "./components/WhiteboardCanvas.js";
 import {
   TldrawWhiteboardAdapter,
-  InMemoryTldrawEditor
+  type TldrawEditor
 } from "./tldraw-whiteboard-adapter.js";
 import { useInterviewSession } from "./hooks/useInterviewSession.js";
 import { MathText } from "./components/MathText.js";
@@ -19,14 +19,8 @@ export const App: React.FC = () => {
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [activeTab, setActiveTab] = useState<"whiteboard" | "formulation">("whiteboard");
 
-  // Create in-memory whiteboard adapter
-  const editorRef = useRef<InMemoryTldrawEditor | null>(null);
-  if (editorRef.current === null) {
-    editorRef.current = new InMemoryTldrawEditor();
-  }
-
   const whiteboardAdapter = useMemo(() => {
-    return new TldrawWhiteboardAdapter(editorRef.current);
+    return new TldrawWhiteboardAdapter();
   }, []);
 
   const session = useInterviewSession({
@@ -76,40 +70,21 @@ export const App: React.FC = () => {
     setShowSessionsModal(true);
   };
 
-  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const handleWhiteboardEditorMount = useCallback((editor: TldrawEditor): void => {
+    if (editor.getCurrentPageShapes().length > 0) return;
 
-  // Mount whiteboard canvas handle
-  useEffect(() => {
-    if (canvasRef.current !== null) {
-      const handle = createWhiteboardCanvasMount({
-        adapter: whiteboardAdapter,
-        className: "w-full h-full min-h-[380px]"
-      });
-      handle.mount(canvasRef.current);
-      return () => {
-        handle.unmount();
-      };
-    }
-    return undefined;
-  }, [whiteboardAdapter]);
-
-  // Seed sample initial whiteboard shape if empty
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (editor !== null && editor.getCurrentPageShapes().length === 0) {
-      whiteboardAdapter.createStudentShape({
-        type: "geo",
-        x: 80,
-        y: 80,
-        props: {
-          w: 220,
-          h: 120,
-          geo: "rectangle",
-          color: "blue",
-          text: "Let V = {v1, v2, v3, v4, v5, v6}\nComplete graph K6"
-        }
-      });
-    }
+    whiteboardAdapter.createStudentShape({
+      type: "geo",
+      x: 80,
+      y: 80,
+      props: {
+        w: 220,
+        h: 120,
+        geo: "rectangle",
+        color: "blue",
+        text: "Let V = {v1, v2, v3, v4, v5, v6}\nComplete graph K6"
+      }
+    });
   }, [whiteboardAdapter]);
 
   const getStatusBadgeClass = (status: string) => {
@@ -454,7 +429,7 @@ export const App: React.FC = () => {
                 }`}
                 data-testid="tab-whiteboard"
               >
-                🎨 Visual Whiteboard (Layer-Isolated Harness)
+                🎨 Interactive tldraw Whiteboard
               </button>
               <button
                 type="button"
@@ -495,9 +470,9 @@ export const App: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex-1 relative bg-slate-100/50">
-                  <div
-                    ref={canvasRef}
-                    data-whiteboard-canvas="true"
+                  <WhiteboardCanvas
+                    adapter={whiteboardAdapter}
+                    onEditorMount={handleWhiteboardEditorMount}
                     className="w-full h-full min-h-[380px]"
                   />
                 </div>
