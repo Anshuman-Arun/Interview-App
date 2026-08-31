@@ -625,6 +625,25 @@ describe("vision snapshot validation and hashing", () => {
   });
 });
 
+  it("does not conflate identical crop bytes from distinct parent snapshots that reuse caller IDs", async () => {
+    const common = (x: number, y: number): readonly [number, number, number, number] =>
+      x < 2 && y < 2 ? [42, 42, 42, 255] : [0, 0, 0, 255];
+    const changed = (x: number, y: number): readonly [number, number, number, number] =>
+      x < 2 && y < 2 ? [42, 42, 42, 255] : [255, 255, 255, 255];
+
+    const firstSource = snapshot(makePng(4, 4, common), { id: "reused-snapshot-id", revision: 18 });
+    const secondSource = snapshot(makePng(4, 4, changed), { id: "reused-snapshot-id", revision: 18 });
+    const firstCrop = (await cropImage(firstSource, { x: 0, y: 0, width: 2, height: 2 })).artifact;
+    const secondCrop = (await cropImage(secondSource, { x: 0, y: 0, width: 2, height: 2 })).artifact;
+
+    expect(exactImagePayloadDuplicate(firstCrop, secondCrop)).toBe(true);
+    expect(firstCrop.metadata.sourceImageIdentity)
+      .not.toBe(secondCrop.metadata.sourceImageIdentity);
+    expect(firstCrop.metadata.artifactId).not.toBe(secondCrop.metadata.artifactId);
+    expect(revisionImageProcessingKey(firstCrop))
+      .not.toBe(revisionImageProcessingKey(secondCrop));
+  });
+
   it("does not conflate identical crop bytes from different coordinates in processing deduplication", async () => {
     const source = snapshot(makePng(6, 2, () => [42, 42, 42, 255]), { id: "same-board", revision: 14 });
     const left = (await cropImage(source, { x: 0, y: 0, width: 2, height: 2 })).artifact;
@@ -1190,6 +1209,8 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(crop.artifact.metadata.sourceSnapshotId).toBe(source.metadata.snapshotId);
     expect(crop.artifact.metadata.sourceRevision).toBe(source.metadata.sourceRevision);
     expect(crop.artifact.metadata.parentArtifactId).toBe(resized.image.metadata.artifactId);
+    expect(crop.artifact.metadata.sourceImageIdentity)
+      .toBe(prepareVisionImageRequest(resized.image, "provenance").imageIdentity);
   });
 
   it("composes crop and tile coordinate transforms back to the original snapshot", async () => {
