@@ -285,7 +285,7 @@ function decodeSource(source: VisionRasterSource, signal?: AbortSignal): Decoded
   throwIfAborted(signal);
   let decoded: ReturnType<typeof PNG.sync.read>;
   try {
-    decoded = PNG.sync.read(source.readBytes(), { checkCRC: true });
+    decoded = PNG.sync.read(source.readBytes(), { checkCRC: false });
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Previously validated image payload could not be decoded");
   }
