@@ -826,6 +826,21 @@ describe("dirty-region planning", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects nonempty planning on a frame whose area exceeds safe numeric range", () => {
+    expect(() => planDirtyRegions(
+      [{ x: 0, y: 0, width: 1, height: 1 }],
+      { width: Number.MAX_SAFE_INTEGER, height: 2 }
+    )).toThrowError(VisionPreprocessingError);
+    try {
+      planDirtyRegions(
+        [{ x: 0, y: 0, width: 1, height: 1 }],
+        { width: Number.MAX_SAFE_INTEGER, height: 2 }
+      );
+    } catch (error) {
+      expectCode(error, "DIRTY_PLAN_EXCEEDS_BUDGET");
+    }
+  });
+
   it("rejects dirty-region lists above the package hard count instead of triggering work", () => {
     const tooMany = Array.from({ length: 2049 }, () => ({ x: 0, y: 0, width: 1, height: 1 }));
     expect(() => planDirtyRegions(tooMany, { width: 20, height: 20 }))
