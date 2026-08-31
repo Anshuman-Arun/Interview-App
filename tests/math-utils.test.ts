@@ -144,6 +144,22 @@ describe("deterministic math utilities", () => {
     }
   });
 
+  it("handles unreduced aggregate inputs without requiring eager normalization", () => {
+    const halfUnreduced = { numerator: 2n, denominator: 4n };
+    const negativeHalf = { numerator: 1n, denominator: -2n };
+    expect(sumRationals([halfUnreduced, negativeHalf])).toEqual(rational(0n, 1n));
+
+    const twoUnreduced = { numerator: 4n, denominator: 2n };
+    expect(productRationals([halfUnreduced, twoUnreduced])).toEqual(rational(1n, 1n));
+
+    expect(() => sumRationals([
+      { numerator: 0n, denominator: 0n }
+    ])).toThrow(BoundedMathError);
+    expect(() => productRationals([
+      { numerator: 0n, denominator: 0n }
+    ])).toThrow(BoundedMathError);
+  });
+
   it("matches exact three-term rational aggregates independent of order", () => {
     const inputs: readonly (readonly [bigint, bigint])[] = [
       [-2n, 3n],
