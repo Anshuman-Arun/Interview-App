@@ -22,7 +22,25 @@ export const VisionProcessingDiagnosticsSchema = z.object({
   tileCount: z.number().int().nonnegative().max(10_000),
   durationMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   outcome: VisionProcessingOutcomeSchema
-}).strict();
+}).strict().superRefine((diagnostics, context) => {
+  if (diagnostics.outcome !== "SUCCESS") return;
+
+  if (diagnostics.inputBytes <= 0 || diagnostics.outputBytes <= 0) {
+    context.addIssue({ code: "custom", message: "Successful processing diagnostics require nonzero image bytes" });
+  }
+
+  if (diagnostics.operation === "CROP") {
+    if (diagnostics.cropCount !== 1 || diagnostics.tileCount !== 0 || diagnostics.outputDimensions === undefined) {
+      context.addIssue({ code: "custom", message: "Successful crop diagnostics require one crop, no tiles, and output dimensions" });
+    }
+  } else if (diagnostics.operation === "RESIZE") {
+    if (diagnostics.cropCount !== 0 || diagnostics.tileCount !== 0 || diagnostics.outputDimensions === undefined) {
+      context.addIssue({ code: "custom", message: "Successful resize diagnostics require no crops/tiles and output dimensions" });
+    }
+  } else if (diagnostics.cropCount !== 0 || diagnostics.tileCount <= 0 || diagnostics.outputDimensions !== undefined) {
+    context.addIssue({ code: "custom", message: "Successful tile diagnostics require at least one tile and no singular output dimensions" });
+  }
+});
 export type VisionProcessingDiagnostics = z.infer<typeof VisionProcessingDiagnosticsSchema>;
 
 export interface VisionDiagnosticsInput {
