@@ -13,6 +13,15 @@ interface PayloadIntegrityMetadata {
 
 function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffer): void {
   if (bytes.length !== metadata.byteSize) throw new RangeError("Image payload byte size does not match metadata");
+  if (bytes.length > 64 * 1024 * 1024
+      || metadata.width > 16_384
+      || metadata.height > 16_384) {
+    throw new RangeError("Image payload exceeds package hard size or dimension caps");
+  }
+  const pixels = metadata.width * metadata.height;
+  if (!Number.isSafeInteger(pixels) || pixels > 64 * 1024 * 1024) {
+    throw new RangeError("Image payload exceeds the package hard pixel cap");
+  }
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (digest !== metadata.contentDigest) throw new RangeError("Image payload digest does not match metadata");
   if (bytes.length < 24 || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
@@ -132,6 +141,13 @@ export const DEFAULT_IMAGE_VALIDATION_LIMITS: Readonly<ImageValidationLimits> = 
   maxPixels: 32 * 1024 * 1024
 });
 
+export const HARD_IMAGE_VALIDATION_LIMITS: Readonly<ImageValidationLimits> = Object.freeze({
+  maxEncodedBytes: 64 * 1024 * 1024,
+  maxWidth: 16_384,
+  maxHeight: 16_384,
+  maxPixels: 64 * 1024 * 1024
+});
+
 export class ImageSnapshot {
   readonly #bytes: Buffer;
   public readonly metadata: ImageSnapshotMetadata;
@@ -180,7 +196,7 @@ export class VisionImageArtifact {
 export type VisionRasterSource = ImageSnapshot | VisionImageArtifact;
 
 export const ImagePayloadReferenceMetadataSchema = z.object({
-  imageIdentity: z.string().min(1).max(160),
+  imageIdentity: z.string().min(1).max(256),
   mimeType: ImageMimeTypeSchema,
   width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
