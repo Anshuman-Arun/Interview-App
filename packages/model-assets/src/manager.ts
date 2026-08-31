@@ -1065,7 +1065,7 @@ export class ModelAssetManager {
   private rejectTransientInstallationFailure(check: InstallationCheck): void {
     if (check.status === "FAILED") {
       throw new ModelAssetError(
-        "IO_ERROR",
+        check.errorCode ?? "IO_ERROR",
         "Existing artifact installation could not be inspected safely; refusing destructive repair."
       );
     }
