@@ -78,6 +78,42 @@ export interface VisionProcessingOptions {
   readonly maxTotalOutputEncodedBytes?: number;
 }
 
+const PROCESSING_OPTION_KEYS = new Set([
+  "signal",
+  "now",
+  "maxOutputEncodedBytes",
+  "maxTotalOutputEncodedBytes"
+]);
+
+function validateProcessingOptions(options: VisionProcessingOptions): void {
+  if (typeof options !== "object" || options === null || Array.isArray(options)) {
+    throw new TypeError("Vision processing options must be an object");
+  }
+  for (const key of Object.keys(options)) {
+    if (!PROCESSING_OPTION_KEYS.has(key)) {
+      throw new RangeError(`Unknown vision processing option: ${key}`);
+    }
+  }
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
+    throw new TypeError("signal must be an AbortSignal");
+  }
+  if (options.now !== undefined && typeof options.now !== "function") {
+    throw new TypeError("now must be a function");
+  }
+  if (options.maxOutputEncodedBytes !== undefined) {
+    const value = positiveSafeInteger(options.maxOutputEncodedBytes, "maxOutputEncodedBytes");
+    if (value > HARD_MAX_OUTPUT_ENCODED_BYTES) {
+      throw new RangeError("maxOutputEncodedBytes exceeds the package hard cap");
+    }
+  }
+  if (options.maxTotalOutputEncodedBytes !== undefined) {
+    const value = positiveSafeInteger(options.maxTotalOutputEncodedBytes, "maxTotalOutputEncodedBytes");
+    if (value > HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES) {
+      throw new RangeError("maxTotalOutputEncodedBytes exceeds the package hard cap");
+    }
+  }
+}
+
 export interface CropResult {
   readonly artifact: VisionImageArtifact;
   readonly diagnostics: VisionProcessingDiagnostics;
@@ -308,6 +344,7 @@ export async function cropImage(
   bounds: ImageRect,
   options: VisionProcessingOptions = {}
 ): Promise<CropResult> {
+  validateProcessingOptions(options);
   const startedAt = now(options);
   throwIfAborted(options.signal);
   assertVisionRasterSource(source);
@@ -367,6 +404,11 @@ export function planDownscale(dimensions: PixelDimensions, envelope: DownscaleEn
     } else {
       resultHeight = Math.max(1, Math.floor(limits.maxPixels / resultWidth));
     }
+  }
+
+  const finalPixels = resultWidth * resultHeight;
+  if (!Number.isSafeInteger(finalPixels) || finalPixels > limits.maxPixels) {
+    throw new RangeError("Downscale plan exceeds the requested pixel envelope");
   }
 
   return Object.freeze({
@@ -455,6 +497,7 @@ export async function downscaleImage(
   envelope: DownscaleEnvelope,
   options: VisionProcessingOptions = {}
 ): Promise<ResizeResult> {
+  validateProcessingOptions(options);
   const startedAt = now(options);
   throwIfAborted(options.signal);
   assertVisionRasterSource(source);
@@ -578,6 +621,7 @@ export async function tileImage(
   config: TileConfig,
   options: VisionProcessingOptions = {}
 ): Promise<TileResult> {
+  validateProcessingOptions(options);
   const startedAt = now(options);
   throwIfAborted(options.signal);
   assertVisionRasterSource(source);
