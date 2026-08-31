@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { DeterministicVerifier, VerificationResult } from "../packages/domain/src/index.js";
 import {
   BoundedMathError,
   COMBINATORIAL_COUNTING_PROTOCOL,
@@ -34,15 +35,8 @@ import {
 const integer = (value: string) => ({ kind: "INTEGER" as const, value });
 const fraction = (numerator: string, denominator = "1") => ({ numerator, denominator });
 
-async function verifyJson(
-  verifier: { verify(statement: string, interpretationConfidence: number): Promise<unknown> },
-  value: unknown
-) {
-  return verifier.verify(JSON.stringify(value), 1) as Promise<{
-    status: "VERIFIED" | "CONTRADICTED" | "UNRESOLVED";
-    verifier: string;
-    reason: string;
-  }>;
+async function verifyJson(verifier: DeterministicVerifier, value: unknown): Promise<VerificationResult> {
+  return verifier.verify(JSON.stringify(value), 1);
 }
 
 describe("adversarial deterministic math verification", () => {
@@ -107,6 +101,24 @@ describe("adversarial deterministic math verification", () => {
 
     const tooDeep: IntegerExpression = { kind: "NEGATE", operand: atLimit };
     expect(() => evaluateIntegerExpression(tooDeep)).toThrow(BoundedMathError);
+  });
+
+  it("fails closed on runtime statement and confidence type violations", async () => {
+    const verifier = new ModularArithmeticVerifier() as unknown as {
+      verify(statement: unknown, interpretationConfidence: unknown): Promise<VerificationResult>;
+    };
+
+    for (const statement of [null, undefined, 17, {}, []]) {
+      const result = await verifier.verify(statement, 1);
+      expect(result.status).toBe("UNRESOLVED");
+      expect(result.reason).toContain("MALFORMED_INTERPRETATION");
+    }
+
+    for (const confidence of ["1", null, {}, 1n]) {
+      const result = await verifier.verify("{}", confidence);
+      expect(result.status).toBe("UNRESOLVED");
+      expect(result.reason).toContain("INVALID_INTERPRETATION_CONFIDENCE");
+    }
   });
 
   it("abstains on zero-to-zero rather than verifying an ambiguous arithmetic convention", async () => {
