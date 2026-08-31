@@ -105,6 +105,24 @@ function nonnegativeSafeInteger(value: unknown, fallback: number, label: string)
   return resolved;
 }
 
+function validateOptionalAbortSignal(value: unknown): AbortSignal | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object"
+      || value === null
+      || !("aborted" in value)
+      || typeof value.aborted !== "boolean"
+      || !("addEventListener" in value)
+      || typeof value.addEventListener !== "function"
+      || !("removeEventListener" in value)
+      || typeof value.removeEventListener !== "function") {
+    throw new ModelAssetError(
+      "INVALID_CONFIGURATION",
+      "Cancellation signal must be an AbortSignal when provided."
+    );
+  }
+  return value as AbortSignal;
+}
+
 function modelAssetErrorCode(error: unknown): ModelAssetErrorCode {
   return error instanceof ModelAssetError ? error.code : "IO_ERROR";
 }
@@ -194,10 +212,11 @@ export class ModelAssetManager {
   }
 
   public async install(manifestValue: unknown, signal?: AbortSignal): Promise<string> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
     const manifest = parseAssetManifest(manifestValue);
     return await this.joinOrStart(
       manifest,
-      signal,
+      validatedSignal,
       async (internalSignal, setStage, setStagingDirectory) => await this.performInstallation(
         manifest,
         internalSignal,
@@ -222,6 +241,7 @@ export class ModelAssetManager {
     sourcePath: string,
     signal?: AbortSignal
   ): Promise<string> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
     const rawSourcePath: unknown = sourcePath;
     if (typeof rawSourcePath !== "string"
         || rawSourcePath.length === 0
@@ -234,7 +254,7 @@ export class ModelAssetManager {
     const manifest = parseAssetManifest(manifestValue);
     return await this.joinOrStart(
       manifest,
-      signal,
+      validatedSignal,
       async (internalSignal, setStage, setStagingDirectory) => await this.performInstallation(
         manifest,
         internalSignal,
