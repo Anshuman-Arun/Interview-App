@@ -132,20 +132,21 @@ function checkDimensions(header: PngHeader, limits: ImageValidationLimits): void
 export function sha256ImageBytes(bytes: Uint8Array): Sha256Digest;
 export function sha256ImageBytes(bytes: unknown): Sha256Digest {
   if (!isDirectUint8Array(bytes)) throw new TypeError("Image digest input must be a direct readable Uint8Array");
-  const initialLength = actualUint8ArrayByteLength(bytes);
-  if (initialLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
+  const byteLength = actualUint8ArrayByteLength(bytes);
+  if (byteLength > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
     throw new RangeError("Image digest input exceeds the package hard encoded-byte cap");
   }
-  let digest: string;
+
+  let copied: Buffer;
   try {
-    digest = createHash("sha256").update(bytes).digest("hex");
+    copied = Buffer.from(bytes);
   } catch {
-    throw new TypeError("Image digest input changed or became unreadable during hashing");
+    throw new TypeError("Image digest input could not be copied safely");
   }
-  if (actualUint8ArrayByteLength(bytes) !== initialLength) {
-    throw new TypeError("Image digest input changed while being hashed");
+  if (copied.length !== byteLength) {
+    throw new TypeError("Image digest input changed while being copied");
   }
-  return digest;
+  return createHash("sha256").update(copied).digest("hex");
 }
 
 export function createValidatedImageSnapshot(
