@@ -1,4 +1,4 @@
-import { crc32 } from "node:zlib";
+import { crc32, deflateSync } from "node:zlib";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { BoardRevisionSchema } from "../packages/domain/src/index.js";
@@ -66,6 +66,40 @@ function makePngChunk(type: string, data: Uint8Array = new Uint8Array()): Buffer
   return chunk;
 }
 
+function makeMinimalPng(
+  colorType: 0 | 2 | 3 | 4 | 6,
+  pixelBytes: readonly number[],
+  options: {
+    readonly bitDepth?: 1 | 2 | 4 | 8;
+    readonly palette?: readonly number[];
+    readonly transparency?: readonly number[];
+  } = {}
+): Buffer {
+  const bitDepth = options.bitDepth ?? 8;
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(1, 0);
+  ihdr.writeUInt32BE(1, 4);
+  ihdr[8] = bitDepth;
+  ihdr[9] = colorType;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  const chunks: Buffer[] = [makePngChunk("IHDR", ihdr)];
+  if (options.palette !== undefined) {
+    chunks.push(makePngChunk("PLTE", Buffer.from(options.palette)));
+  }
+  if (options.transparency !== undefined) {
+    chunks.push(makePngChunk("tRNS", Buffer.from(options.transparency)));
+  }
+  chunks.push(makePngChunk("IDAT", deflateSync(Buffer.from([0, ...pixelBytes]))));
+  chunks.push(makePngChunk("IEND"));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    ...chunks
+  ]);
+}
+
 function insertAfterIhdr(base: Buffer, ...chunks: readonly Buffer[]): Buffer {
   const ihdrEnd = 8 + 12 + 13;
   return Buffer.concat([
@@ -118,6 +152,29 @@ describe("vision snapshot validation and hashing", () => {
     });
     expect(value.metadata.contentDigest).toBe(sha256ImageBytes(bytes));
     expect(JSON.stringify(value)).not.toContain(bytes.toString("base64"));
+  });
+
+  it("accepts every documented bounded PNG color type using generated fixtures", () => {
+    const fixtures = [
+      makeMinimalPng(0, [127]),
+      makeMinimalPng(2, [10, 20, 30]),
+      makeMinimalPng(3, [0], { palette: [10, 20, 30] }),
+      makeMinimalPng(4, [127, 200]),
+      makeMinimalPng(6, [10, 20, 30, 255]),
+      makeMinimalPng(0, [0], { bitDepth: 1 }),
+      makeMinimalPng(3, [0], { bitDepth: 1, palette: [10, 20, 30] })
+    ];
+
+    for (const bytes of fixtures) {
+      const value = snapshot(bytes);
+      expect(value.metadata).toMatchObject({
+        width: 1,
+        height: 1,
+        mimeType: "image/png",
+        encoding: "PNG"
+      });
+      expect(value.metadata.contentDigest).toBe(sha256ImageBytes(bytes));
+    }
   });
 
   it("copies input bytes so caller mutation cannot invalidate the stored digest", () => {
@@ -329,6 +386,23 @@ describe("vision snapshot validation and hashing", () => {
     expect(() => snapshot(insertAfterIhdr(
       rgba,
       makePngChunk("gAMA", Buffer.alloc(4)),
+      makePngChunk("gAMA", Buffer.alloc(4))
+    ))).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects transparency samples outside the declared bit depth and zero gamma", () => {
+    const grayscaleTrns = makeMinimalPng(0, [0], {
+      transparency: [0x01, 0x00]
+    });
+    expect(() => snapshot(grayscaleTrns)).toThrowError(VisionPreprocessingError);
+
+    const rgbTrns = makeMinimalPng(2, [0, 0, 0], {
+      transparency: [0, 0, 0, 0, 1, 0]
+    });
+    expect(() => snapshot(rgbTrns)).toThrowError(VisionPreprocessingError);
+
+    expect(() => snapshot(insertAfterIhdr(
+      makePng(1, 1),
       makePngChunk("gAMA", Buffer.alloc(4))
     ))).toThrowError(VisionPreprocessingError);
   });
