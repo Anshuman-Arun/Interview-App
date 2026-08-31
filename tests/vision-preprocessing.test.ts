@@ -453,6 +453,15 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(unchanged.image).toBe(source);
   });
 
+  it("does not return an unchanged image that violates the configured output-byte ceiling", async () => {
+    const source = snapshot(makePng(16, 16));
+    await expect(downscaleImage(
+      source,
+      { maxWidth: 32, maxHeight: 32, maxPixels: 1024 },
+      { maxOutputEncodedBytes: source.metadata.byteSize - 1 }
+    )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+  });
+
   it("plans deterministic overlapping tiles with exact original-coordinate mappings", async () => {
     const source = snapshot(makePng(10, 6), { revision: 12 });
     const plan = planImageTiles({ width: 10, height: 6 }, {
