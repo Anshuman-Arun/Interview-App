@@ -116,10 +116,7 @@ async function downloadResponseToFile(
             throw new ModelAssetError("HTTP_STATUS", "Artifact server returned a non-success status.");
           }
 
-          const contentLengthHeader = Array.isArray(response.headers["content-length"])
-            ? response.headers["content-length"][0]
-            : response.headers["content-length"];
-          const contentLength = parseContentLength(contentLengthHeader);
+          const contentLength = parseContentLength(response.headers["content-length"]);
           if (contentLength !== undefined && contentLength > options.maxBytes) {
             response.destroy();
             throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact response exceeds the configured size limit.");
@@ -191,7 +188,7 @@ export async function downloadHttpArtifact(
     timedOut = true;
     controller.abort(new Error("artifact download timeout"));
   }, options.timeoutMs);
-  timer.unref?.();
+  timer.unref();
 
   try {
     return await downloadResponseToFile(source, destinationPath, {
