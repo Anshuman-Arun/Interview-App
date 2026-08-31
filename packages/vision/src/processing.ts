@@ -17,6 +17,7 @@ import {
   type CoordinateTransform,
   type PixelDimensions,
   type VisionImageArtifactKind,
+  type VisionRasterIdentity,
   type VisionRasterSource
 } from "./types.js";
 
@@ -169,7 +170,7 @@ interface DecodedRaster {
 interface SourceDescriptor {
   readonly sourceSnapshotId: string;
   readonly sourceRevision: number;
-  readonly sourceImageIdentity: string;
+  readonly sourceImageIdentity: VisionRasterIdentity;
   readonly parentArtifactId?: string;
   readonly transform: CoordinateTransform;
 }
