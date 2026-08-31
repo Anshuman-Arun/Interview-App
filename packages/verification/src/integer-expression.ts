@@ -21,6 +21,10 @@ function boundedIntegerStringSchema(maximumDigits: number) {
     .min(1)
     .max(maximumDigits + 1)
     .superRefine((value, context) => {
+      // The preceding .max() records the resource issue. Avoid scanning an
+      // arbitrarily longer direct-schema input again in the lexical check.
+      if (value.length > maximumDigits + 1) return;
+
       if (!isCanonicalIntegerString(value)) {
         context.addIssue({
           code: "custom",
