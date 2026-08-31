@@ -189,6 +189,20 @@ describe("deterministic math verifier invariants", () => {
     expect(result.reason).toContain("RESOURCE_LIMIT");
   });
 
+  it("enforces the generic structured node budget independently of depth", async () => {
+    const result = await new ModularArithmeticVerifier().verify(JSON.stringify({
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: { kind: "DIVISIBILITY", divisor: "2", dividend: integer("4") },
+      extra: Array.from(
+        { length: 1_000 },
+        () => Array.from({ length: 9 }, () => 0)
+      )
+    }), 1);
+    expect(result.status).toBe("UNRESOLVED");
+    expect(result.reason).toContain("RESOURCE_LIMIT");
+  });
+
   it("is deterministic across repeated exact evaluation", async () => {
     const verifier = new CombinatorialCountingVerifier();
     const statement = JSON.stringify({
