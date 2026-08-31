@@ -550,6 +550,24 @@ describe("vision snapshot validation and hashing", () => {
     ))).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects rendering/orientation metadata the codec cannot preserve, but accepts innocuous metadata", () => {
+    const base = makePng(2, 2);
+    for (const chunkType of ["cHRM", "iCCP", "sRGB", "sBIT", "bKGD", "eXIf", "cICP", "mDCv", "cLLi"]) {
+      expect(() => snapshot(insertAfterIhdr(
+        base,
+        makePngChunk(chunkType, Buffer.alloc(chunkType === "sRGB" ? 1 : 4))
+      ))).toThrowError(VisionPreprocessingError);
+    }
+
+    for (const chunk of [
+      makePngChunk("tEXt", Buffer.from("note\u0000value")),
+      makePngChunk("pHYs", Buffer.alloc(9)),
+      makePngChunk("tIME", Buffer.alloc(7))
+    ]) {
+      expect(snapshot(insertAfterIhdr(base, chunk)).metadata.width).toBe(2);
+    }
+  });
+
   it("rejects malformed transparency and gamma chunk structure with valid CRCs", () => {
     const rgba = makePng(1, 1);
     expect(() => snapshot(insertAfterIhdr(
