@@ -317,8 +317,9 @@ export async function removeEntryInsideRoot(
       "Removal traversal limit must be a positive safe integer."
     );
   }
+  const relativeCandidate = path.relative(root, candidate);
   assertPathInsideRoot(root, candidate);
-  if (path.resolve(candidate) === path.resolve(root)) {
+  if (relativeCandidate === "" || relativeCandidate === ".") {
     throw new ModelAssetError("PATH_ESCAPE", "Refusing to remove the configured cache root itself.");
   }
 
@@ -868,7 +869,15 @@ export async function sumManagedCacheBytes(
     throw new ModelAssetError("IO_ERROR", "Unable to inspect artifact payload usage.", { cause: error });
   }
   if (entry.isSymbolicLink()) return 0;
-  if (entry.isFile()) return entry.size;
+  if (entry.isFile()) {
+    if (!Number.isSafeInteger(entry.size) || entry.size < 0) {
+      throw new ModelAssetError(
+        "CACHE_LIMIT_EXCEEDED",
+        "Managed cache file size exceeds safe integer accounting limits."
+      );
+    }
+    return entry.size;
+  }
   if (!entry.isDirectory()) return 0;
 
   let total = 0;
