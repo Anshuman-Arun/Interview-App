@@ -2,7 +2,8 @@ import {
   MAX_COMBINATORIAL_N,
   MAX_FINITE_CONTAINER_ITEMS,
   MAX_INTEGER_DECIMAL_DIGITS,
-  MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS
+  MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
+  MAX_VARIADIC_EXPRESSION_TERMS
 } from "./limits.js";
 
 export type BoundedMathErrorCode =
@@ -396,6 +397,36 @@ export function sumRationals(values: readonly ExactRational[]): ExactRational {
   return result;
 }
 
+function fullyCancelledRationalProduct(values: readonly ExactRational[]): ExactRational {
+  let negative = false;
+  const numerators = values.map((value) => {
+    if (value.numerator < 0n) negative = !negative;
+    return value.numerator < 0n ? -value.numerator : value.numerator;
+  });
+  const denominators = values.map((value) => value.denominator);
+
+  for (let numeratorIndex = 0; numeratorIndex < numerators.length; numeratorIndex += 1) {
+    let numerator = numerators[numeratorIndex];
+    if (numerator === undefined || numerator <= 1n) continue;
+
+    for (let denominatorIndex = 0; denominatorIndex < denominators.length; denominatorIndex += 1) {
+      const denominator = denominators[denominatorIndex];
+      if (denominator === undefined || denominator <= 1n) continue;
+      const factor = gcdUnchecked(numerator, denominator);
+      if (factor === 1n) continue;
+
+      numerator /= factor;
+      numerators[numeratorIndex] = numerator;
+      denominators[denominatorIndex] = denominator / factor;
+      if (numerator === 1n) break;
+    }
+  }
+
+  const numeratorProduct = productIntegers(numerators);
+  const denominatorProduct = productIntegers(denominators);
+  return rational(negative ? -numeratorProduct : numeratorProduct, denominatorProduct);
+}
+
 export function productRationals(values: readonly ExactRational[]): ExactRational {
   assertFiniteContainerLength(values.length);
   const normalizedValues = values.map(normalizeRational);
@@ -426,11 +457,20 @@ export function productRationals(values: readonly ExactRational[]): ExactRationa
     reciprocalEntry.count -= cancelled;
   }
 
-  let result = rational(1n, 1n);
+  const remaining: ExactRational[] = [];
   for (const entry of counts.values()) {
     for (let index = 0; index < entry.count; index += 1) {
-      result = multiplyRationals(result, entry.value);
+      remaining.push(entry.value);
     }
+  }
+
+  if (remaining.length <= MAX_VARIADIC_EXPRESSION_TERMS) {
+    return fullyCancelledRationalProduct(remaining);
+  }
+
+  let result = rational(1n, 1n);
+  for (const value of remaining) {
+    result = multiplyRationals(result, value);
   }
   return result;
 }
