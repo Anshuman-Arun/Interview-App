@@ -512,7 +512,7 @@ describe("adversarial deterministic math verification", () => {
     });
     expect(withinBudget.status).toBe("VERIFIED");
 
-    const overBudget = await verifyJson(new RationalArithmeticVerifier(), {
+    const formerlyOrderSensitive = await verifyJson(new RationalArithmeticVerifier(), {
       protocol: RATIONAL_ARITHMETIC_PROTOCOL,
       protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
       claim: {
@@ -521,8 +521,11 @@ describe("adversarial deterministic math verification", () => {
         right: fractionExpression("0")
       }
     });
-    expect(overBudget.status).toBe("UNRESOLVED");
-    expect(overBudget.reason).toContain("RESOURCE_LIMIT");
+    expect(formerlyOrderSensitive.status).toBe("VERIFIED");
+
+    expect(() => sumRationals(
+      denominators.slice(0, 36).map((denominator) => rational(1n, denominator))
+    )).toThrow(BoundedMathError);
   });
 
   it("cross-cancels rational product factors even without exact reciprocal pairs", async () => {
