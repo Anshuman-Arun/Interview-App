@@ -784,6 +784,7 @@ export async function verifyArtifactFileWithIdentity(
   if (validatedSignal?.aborted === true) {
     abortListener();
   }
+  let verificationReadFailed = false;
   try {
     for await (const chunk of stream) {
       if (validatedSignal?.aborted === true) {
@@ -804,6 +805,7 @@ export async function verifyArtifactFileWithIdentity(
       hash.update(buffer);
     }
   } catch (error) {
+    verificationReadFailed = true;
     if (error instanceof ModelAssetError) throw error;
     if (validatedSignal?.aborted === true) {
       throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.", { cause: error });
@@ -811,7 +813,17 @@ export async function verifyArtifactFileWithIdentity(
     throw new ModelAssetError("IO_ERROR", "Unable to read artifact for verification.", { cause: error });
   } finally {
     validatedSignal?.removeEventListener("abort", abortListener);
-    await openedFile.handle.close().catch(() => undefined);
+    try {
+      await openedFile.handle.close();
+    } catch (error) {
+      if (!verificationReadFailed) {
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to close artifact file after verification.",
+          { cause: error }
+        );
+      }
+    }
   }
 
   if (validatedSignal?.aborted === true) {
@@ -939,6 +951,7 @@ export async function copyLocalArtifactBounded(
       callback(null, chunk);
     }
   });
+  let localCopyFailed = false;
   try {
     const destinationStream = destinationHandle.createWriteStream({ autoClose: false });
     try {
@@ -956,6 +969,7 @@ export async function copyLocalArtifactBounded(
     }
     return bytes;
   } catch (error) {
+    localCopyFailed = true;
     if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.", { cause: error });
     if (error instanceof ModelAssetError) throw error;
     if (isDiskSpaceError(error)) {
@@ -967,7 +981,17 @@ export async function copyLocalArtifactBounded(
     }
     throw new ModelAssetError("IO_ERROR", "Unable to copy local artifact into the cache staging area.", { cause: error });
   } finally {
-    await openedSource.handle.close().catch(() => undefined);
+    try {
+      await openedSource.handle.close();
+    } catch (error) {
+      if (!localCopyFailed) {
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to close local import source after copying.",
+          { cause: error }
+        );
+      }
+    }
   }
 }
 
@@ -1036,6 +1060,7 @@ export async function readStoredManifestWithIdentity(
       { cause: error }
     );
   }
+  let manifestReadFailed = false;
   try {
     for await (const chunk of stream) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -1051,6 +1076,7 @@ export async function readStoredManifestWithIdentity(
       chunks.push(buffer);
     }
   } catch (error) {
+    manifestReadFailed = true;
     if (error instanceof ModelAssetError) throw error;
     throw new ModelAssetError(
       "IO_ERROR",
@@ -1058,7 +1084,17 @@ export async function readStoredManifestWithIdentity(
       { cause: error }
     );
   } finally {
-    await openedManifest.handle.close().catch(() => undefined);
+    try {
+      await openedManifest.handle.close();
+    } catch (error) {
+      if (!manifestReadFailed) {
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to close installed artifact manifest after reading.",
+          { cause: error }
+        );
+      }
+    }
   }
 
   if (bytes !== manifestSize) {
