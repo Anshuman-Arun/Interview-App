@@ -784,6 +784,7 @@ export async function verifyArtifactFileWithIdentity(
   if (validatedSignal?.aborted === true) {
     abortListener();
   }
+  let verificationCloseError: unknown;
   try {
     for await (const chunk of stream) {
       if (validatedSignal?.aborted === true) {
@@ -811,12 +812,11 @@ export async function verifyArtifactFileWithIdentity(
     throw new ModelAssetError("IO_ERROR", "Unable to read artifact for verification.", { cause: error });
   } finally {
     validatedSignal?.removeEventListener("abort", abortListener);
-  }
-  let verificationCloseError: unknown;
-  try {
-    await openedFile.handle.close();
-  } catch (error) {
-    verificationCloseError = error;
+    try {
+      await openedFile.handle.close();
+    } catch (error) {
+      verificationCloseError = error;
+    }
   }
   if (verificationCloseError !== undefined) {
     throw new ModelAssetError(
@@ -951,6 +951,7 @@ export async function copyLocalArtifactBounded(
       callback(null, chunk);
     }
   });
+  let localCopyCloseError: unknown;
   try {
     const destinationStream = destinationHandle.createWriteStream({ autoClose: false });
     try {
@@ -977,14 +978,18 @@ export async function copyLocalArtifactBounded(
       );
     }
     throw new ModelAssetError("IO_ERROR", "Unable to copy local artifact into the cache staging area.", { cause: error });
+  } finally {
+    try {
+      await openedSource.handle.close();
+    } catch (error) {
+      localCopyCloseError = error;
+    }
   }
-  try {
-    await openedSource.handle.close();
-  } catch (error) {
+  if (localCopyCloseError !== undefined) {
     throw new ModelAssetError(
       "IO_ERROR",
       "Unable to close local import source after copying.",
-      { cause: error }
+      { cause: localCopyCloseError }
     );
   }
   return bytes;
@@ -1055,6 +1060,7 @@ export async function readStoredManifestWithIdentity(
       { cause: error }
     );
   }
+  let manifestCloseError: unknown;
   try {
     for await (const chunk of stream) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -1076,14 +1082,18 @@ export async function readStoredManifestWithIdentity(
       "Unable to read installed artifact manifest.",
       { cause: error }
     );
+  } finally {
+    try {
+      await openedManifest.handle.close();
+    } catch (error) {
+      manifestCloseError = error;
+    }
   }
-  try {
-    await openedManifest.handle.close();
-  } catch (error) {
+  if (manifestCloseError !== undefined) {
     throw new ModelAssetError(
       "IO_ERROR",
       "Unable to close installed artifact manifest after reading.",
-      { cause: error }
+      { cause: manifestCloseError }
     );
   }
 
