@@ -1441,13 +1441,13 @@ export class ModelAssetManager {
             "Artifact installation was cancelled before publication."
           );
         }
-        await atomicRenameDirectory(stagingDirectory, installationDirectory);
         if (reservationBytes > shared.reservedBytes) {
           throw new ModelAssetError(
             "IO_ERROR",
-            "Cache reservation accounting underflowed during atomic publication."
+            "Cache reservation accounting underflowed before atomic publication."
           );
         }
+        await atomicRenameDirectory(stagingDirectory, installationDirectory);
         shared.reservedBytes -= reservationBytes;
       });
     });
