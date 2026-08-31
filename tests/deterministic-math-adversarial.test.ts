@@ -943,6 +943,56 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
+  it("reduces non-pairwise recurrence cancellation before enforcing the state bound", async () => {
+    const scale = 10n ** 120n;
+    const multiplier = 10n ** 16n;
+    const firstCoefficient = multiplier * scale;
+    const secondCoefficient = -(multiplier - 1n) * scale * scale;
+    const boundedExpected = scale ** 34n;
+
+    expect(firstCoefficient.toString().length).toBeLessThanOrEqual(MAX_INTEGER_DECIMAL_DIGITS);
+    expect((-secondCoefficient).toString().length).toBeLessThanOrEqual(MAX_INTEGER_DECIMAL_DIGITS);
+    expect(boundedExpected.toString().length).toBeLessThanOrEqual(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS);
+    expect((multiplier * boundedExpected).toString().length)
+      .toBeGreaterThan(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS);
+
+    const base = {
+      protocol: FINITE_RECURRENCE_PROTOCOL,
+      protocolVersion: FINITE_RECURRENCE_PROTOCOL_VERSION,
+      initial: [fraction("1"), fraction(scale.toString()), fraction((scale * scale).toString())],
+      recurrence: {
+        kind: "LINEAR_PREVIOUS_TERMS" as const,
+        coefficients: [
+          fraction(firstCoefficient.toString()),
+          fraction(secondCoefficient.toString()),
+          fraction("0")
+        ],
+        constant: fraction("0")
+      }
+    };
+
+    const bounded = await verifyJson(new FiniteRecurrenceVerifier(), {
+      ...base,
+      claim: {
+        kind: "VALUE_AT_INDEX",
+        index: 34,
+        value: fraction(boundedExpected.toString())
+      }
+    });
+    expect(bounded.status).toBe("VERIFIED");
+
+    const overLimit = await verifyJson(new FiniteRecurrenceVerifier(), {
+      ...base,
+      claim: {
+        kind: "VALUE_AT_INDEX",
+        index: 35,
+        value: fraction("0")
+      }
+    });
+    expect(overLimit.status).toBe("UNRESOLVED");
+    expect(overLimit.reason).toContain("RESOURCE_LIMIT");
+  });
+
   it("cancels exact oversized recurrence contributions before enforcing the state bound", async () => {
     const scale = 10n ** 120n;
     const scaleText = scale.toString();
