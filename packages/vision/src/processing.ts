@@ -94,6 +94,14 @@ function isProcessingClock(value: unknown): value is () => number {
   return typeof value === "function";
 }
 
+function isAbortSignal(value: unknown): value is AbortSignal {
+  try {
+    return value instanceof AbortSignal;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOptions> {
   let isArray: boolean;
   try {
@@ -126,7 +134,7 @@ function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOp
   }
 
   const signal: unknown = safeOption("signal");
-  if (signal !== undefined && !(signal instanceof AbortSignal)) {
+  if (signal !== undefined && !isAbortSignal(signal)) {
     throw new TypeError("signal must be an AbortSignal");
   }
 
