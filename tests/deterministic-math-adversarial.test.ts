@@ -25,6 +25,7 @@ import {
   PROBABILITY_ARITHMETIC_PROTOCOL,
   PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
   ProbabilityArithmeticVerifier,
+  addRationals,
   areCongruent,
   binomial,
   createDeterministicMathVerifier,
@@ -134,6 +135,13 @@ describe("adversarial deterministic math verification", () => {
     expect(equalRationals(forgedHalf, rational(1n, 2n))).toBe(true);
     expect(serializeRational(forgedNegativeDenominator)).toEqual({ numerator: "1", denominator: "2" });
     expect(() => serializeRational({ numerator: 1n, denominator: 0n })).toThrow(BoundedMathError);
+  });
+
+  it("cancels rational addition before rejecting an avoidable carry overflow", () => {
+    const maximumOdd = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
+    const half = rational(maximumOdd, 2n);
+
+    expect(addRationals(half, half)).toEqual(rational(maximumOdd, 1n));
   });
 
   it("cross-cancels exact rational multiplication before enforcing intermediate limits", () => {

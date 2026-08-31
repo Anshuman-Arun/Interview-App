@@ -80,17 +80,22 @@ export function assertIntermediateIntegerBound(value: unknown): bigint {
   return value;
 }
 
-export function gcd(left: bigint, right: bigint): bigint {
-  let a = assertIntermediateIntegerBound(left);
-  let b = assertIntermediateIntegerBound(right);
-  a = a < 0n ? -a : a;
-  b = b < 0n ? -b : b;
+function gcdUnchecked(left: bigint, right: bigint): bigint {
+  let a = left < 0n ? -left : left;
+  let b = right < 0n ? -right : right;
   while (b !== 0n) {
     const remainder = a % b;
     a = b;
     b = remainder;
   }
   return a;
+}
+
+export function gcd(left: bigint, right: bigint): bigint {
+  return gcdUnchecked(
+    assertIntermediateIntegerBound(left),
+    assertIntermediateIntegerBound(right)
+  );
 }
 
 export function lcm(left: bigint, right: bigint): bigint {
@@ -186,12 +191,20 @@ export function addRationals(left: ExactRational, right: ExactRational): ExactRa
   const commonFactor = gcd(normalizedLeft.denominator, normalizedRight.denominator);
   const leftScale = normalizedRight.denominator / commonFactor;
   const rightScale = normalizedLeft.denominator / commonFactor;
+  const leftTerm = assertIntermediateIntegerBound(normalizedLeft.numerator * leftScale);
+  const rightTerm = assertIntermediateIntegerBound(normalizedRight.numerator * rightScale);
+
+  // After reducing denominator cross-factors, any remaining common factor
+  // between the numerator sum and denominator must divide commonFactor.
+  // Cancel it before enforcing the final intermediate bound so an avoidable
+  // one-digit carry cannot cause an otherwise bounded exact result to abstain.
+  const numerator = leftTerm + rightTerm;
+  const cancellation = gcdUnchecked(numerator, commonFactor);
   return rational(
+    assertIntermediateIntegerBound(numerator / cancellation),
     assertIntermediateIntegerBound(
-      assertIntermediateIntegerBound(normalizedLeft.numerator * leftScale)
-      + assertIntermediateIntegerBound(normalizedRight.numerator * rightScale)
-    ),
-    assertIntermediateIntegerBound(normalizedLeft.denominator * leftScale)
+      (normalizedLeft.denominator / cancellation) * leftScale
+    )
   );
 }
 
