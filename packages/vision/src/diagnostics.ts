@@ -3,6 +3,19 @@ import { snapshotOwnEnumerableRecord } from "./object-validation.js";
 import { HARD_IMAGE_VALIDATION_LIMITS, PixelDimensionsSchema } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
+const VISION_DIAGNOSTIC_FIELDS = new Set([
+  "operation",
+  "sourceDimensions",
+  "outputDimensions",
+  "inputBytes",
+  "outputBytes",
+  "cropCount",
+  "tileCount",
+  "durationMs",
+  "outcome"
+]);
+const VISION_DIAGNOSTIC_DIMENSION_FIELDS = new Set(["width", "height"]);
+
 export const VisionProcessingOperationSchema = z.enum([
   "CROP",
   "RESIZE",
@@ -82,7 +95,7 @@ export interface VisionDiagnosticsInput {
 export function createVisionProcessingDiagnostics(input: VisionDiagnosticsInput): VisionProcessingDiagnostics {
   let ownInput: Readonly<Record<string, unknown>>;
   try {
-    ownInput = snapshotOwnEnumerableRecord(input, "Vision processing diagnostics");
+    ownInput = snapshotOwnEnumerableRecord(input, "Vision processing diagnostics", VISION_DIAGNOSTIC_FIELDS);
   } catch {
     throw new TypeError("Vision processing diagnostics could not be read safely");
   }
@@ -90,7 +103,8 @@ export function createVisionProcessingDiagnostics(input: VisionDiagnosticsInput)
   try {
     sourceDimensions = snapshotOwnEnumerableRecord(
       ownInput["sourceDimensions"],
-      "Vision diagnostics source dimensions"
+      "Vision diagnostics source dimensions",
+      VISION_DIAGNOSTIC_DIMENSION_FIELDS
     );
   } catch {
     throw new TypeError("Vision diagnostics source dimensions could not be read safely");
@@ -102,7 +116,8 @@ export function createVisionProcessingDiagnostics(input: VisionDiagnosticsInput)
     try {
       outputDimensions = snapshotOwnEnumerableRecord(
         rawOutputDimensions,
-        "Vision diagnostics output dimensions"
+        "Vision diagnostics output dimensions",
+        VISION_DIAGNOSTIC_DIMENSION_FIELDS
       );
     } catch {
       throw new TypeError("Vision diagnostics output dimensions could not be read safely");
