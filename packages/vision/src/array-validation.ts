@@ -1,5 +1,11 @@
 export function boundedArrayLength(value: unknown, maximum: number, label: string): number {
-  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
+  let isArray: boolean;
+  try {
+    isArray = Array.isArray(value);
+  } catch {
+    throw new TypeError(`${label} could not be inspected safely`);
+  }
+  if (!isArray) throw new TypeError(`${label} must be an array`);
   if (!Number.isSafeInteger(maximum) || maximum < 0) {
     throw new RangeError("Array maximum must be a nonnegative safe integer");
   }
