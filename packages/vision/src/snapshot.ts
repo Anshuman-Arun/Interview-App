@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { PNG } from "pngjs";
 import {
   DEFAULT_IMAGE_VALIDATION_LIMITS,
   HARD_IMAGE_VALIDATION_LIMITS,
@@ -14,6 +13,14 @@ import {
 import { BoardRevisionSchema } from "../../domain/src/index.js";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+const ImageSnapshotCallerMetadataSchema = ImageSnapshotMetadataSchema.pick({
+  snapshotId: true,
+  sourceType: true,
+  sourceRevision: true,
+  capturedAtMs: true,
+  captureSequence: true
+});
 
 interface PngHeader {
   readonly width: number;
@@ -87,13 +94,21 @@ export function createValidatedImageSnapshot(
   }
 
   const safeLimits = normalizeLimits(limits);
-  const bytes = Buffer.from(input.encodedBytes);
-  if (bytes.length === 0) {
+  const callerMetadata = ImageSnapshotCallerMetadataSchema.parse({
+    snapshotId: input.snapshotId,
+    sourceType: input.sourceType,
+    sourceRevision: input.sourceRevision,
+    capturedAtMs: input.capturedAtMs,
+    ...(input.captureSequence === undefined ? {} : { captureSequence: input.captureSequence })
+  });
+
+  if (input.encodedBytes.byteLength === 0) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image input must not be empty");
   }
-  if (bytes.length > safeLimits.maxEncodedBytes) {
+  if (input.encodedBytes.byteLength > safeLimits.maxEncodedBytes) {
     throw new VisionPreprocessingError("IMAGE_TOO_LARGE_BYTES", "Encoded image exceeds configured byte limit");
   }
+  const bytes = Buffer.from(input.encodedBytes);
 
   const header = inspectPngHeader(bytes);
   checkDimensions(header, safeLimits);
@@ -105,26 +120,12 @@ export function createValidatedImageSnapshot(
     throw new VisionPreprocessingError("DIMENSION_MISMATCH", "Caller-declared height does not match encoded image height");
   }
 
-  let decoded: ReturnType<typeof PNG.sync.read>;
-  try {
-    decoded = PNG.sync.read(bytes, { checkCRC: true });
-  } catch {
-    throw new VisionPreprocessingError("INVALID_IMAGE", "PNG decoding failed validation");
-  }
-  if (decoded.width !== header.width || decoded.height !== header.height) {
-    throw new VisionPreprocessingError("INVALID_IMAGE", "Decoded PNG dimensions do not match its header");
-  }
-  const decodedByteLength = header.width * header.height * 4;
-  if (!Number.isSafeInteger(decodedByteLength) || decoded.data.length !== decodedByteLength) {
-    throw new VisionPreprocessingError("INVALID_IMAGE", "Decoded PNG raster has an unexpected byte length");
-  }
-
   const metadata = ImageSnapshotMetadataSchema.parse({
-    snapshotId: input.snapshotId,
-    sourceType: ImageSourceTypeSchema.parse(input.sourceType),
-    sourceRevision: BoardRevisionSchema.parse(input.sourceRevision),
-    capturedAtMs: input.capturedAtMs,
-    ...(input.captureSequence === undefined ? {} : { captureSequence: input.captureSequence }),
+    snapshotId: callerMetadata.snapshotId,
+    sourceType: ImageSourceTypeSchema.parse(callerMetadata.sourceType),
+    sourceRevision: BoardRevisionSchema.parse(callerMetadata.sourceRevision),
+    capturedAtMs: callerMetadata.capturedAtMs,
+    ...(callerMetadata.captureSequence === undefined ? {} : { captureSequence: callerMetadata.captureSequence }),
     width: header.width,
     height: header.height,
     mimeType: "image/png",
@@ -133,5 +134,12 @@ export function createValidatedImageSnapshot(
     contentDigest: sha256ImageBytes(bytes)
   });
 
-  return new ImageSnapshot(metadata, bytes);
+  try {
+    return new ImageSnapshot(metadata, bytes);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw new VisionPreprocessingError("INVALID_IMAGE", "PNG decoding failed validation");
+    }
+    throw error;
+  }
 }
