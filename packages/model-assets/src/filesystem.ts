@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createWriteStream, type Dir, type Stats } from "node:fs";
+import { createWriteStream, type BigIntStats, type Dir, type Stats } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -50,8 +50,8 @@ export interface CachePaths {
   readonly root: string;
   readonly artifacts: string;
   readonly temporary: string;
-  readonly rootDevice: number;
-  readonly rootInode: number;
+  readonly rootDevice: bigint;
+  readonly rootInode: bigint;
 }
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
@@ -96,7 +96,7 @@ export async function initializeCachePaths(rootInput: string): Promise<CachePath
   try {
     await mkdir(rootInput, { recursive: true });
     const canonicalRoot = await realpath(rootInput);
-    const rootStat = await lstat(canonicalRoot);
+    const rootStat = await lstat(canonicalRoot, { bigint: true });
     if (!rootStat.isDirectory()) {
       throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must resolve to a directory.");
     }
@@ -118,9 +118,9 @@ export async function initializeCachePaths(rootInput: string): Promise<CachePath
 }
 
 export async function validateCachePaths(paths: CachePaths): Promise<void> {
-  let rootStat: Stats;
+  let rootStat: BigIntStats;
   try {
-    rootStat = await lstat(paths.root);
+    rootStat = await lstat(paths.root, { bigint: true });
   } catch (error) {
     throw new ModelAssetError(
       "INVALID_CACHE_ROOT",
@@ -146,12 +146,12 @@ export async function validateCachePaths(paths: CachePaths): Promise<void> {
   await ensureSafeDirectory(paths.root, paths.artifacts);
   await ensureSafeDirectory(paths.root, paths.temporary);
 
-  let artifactsStat: Stats;
-  let temporaryStat: Stats;
+  let artifactsStat: BigIntStats;
+  let temporaryStat: BigIntStats;
   try {
     [artifactsStat, temporaryStat] = await Promise.all([
-      lstat(paths.artifacts),
-      lstat(paths.temporary)
+      lstat(paths.artifacts, { bigint: true }),
+      lstat(paths.temporary, { bigint: true })
     ]);
   } catch (error) {
     throw new ModelAssetError(
@@ -216,10 +216,10 @@ export async function ensureSafeDirectory(root: string, directory: string): Prom
 async function openStableRegularFile(
   filePath: string,
   inspectMessage: string
-): Promise<{ readonly handle: FileHandle; readonly stat: Stats }> {
-  let beforeOpen: Stats;
+): Promise<{ readonly handle: FileHandle; readonly stat: BigIntStats }> {
+  let beforeOpen: BigIntStats;
   try {
-    beforeOpen = await lstat(filePath);
+    beforeOpen = await lstat(filePath, { bigint: true });
   } catch (error) {
     throw new ModelAssetError("IO_ERROR", inspectMessage, { cause: error });
   }
@@ -238,7 +238,7 @@ async function openStableRegularFile(
   }
 
   try {
-    const opened = await handle.stat();
+    const opened = await handle.stat({ bigint: true });
     if (!opened.isFile()
         || opened.dev !== beforeOpen.dev
         || opened.ino !== beforeOpen.ino) {
@@ -463,24 +463,25 @@ export async function verifyArtifactFile(
     "Unable to inspect artifact file."
   );
   const fileStat = openedFile.stat;
-  if (!Number.isSafeInteger(fileStat.size) || fileStat.size < 0) {
+  if (fileStat.size < 0n || fileStat.size > BigInt(Number.MAX_SAFE_INTEGER)) {
     await openedFile.handle.close().catch(() => undefined);
     throw new ModelAssetError(
       "ARTIFACT_TOO_LARGE",
       "Artifact file size exceeds safe integer byte accounting."
     );
   }
+  const fileSize = Number(fileStat.size);
   if (validatedSignal?.aborted === true) {
     await openedFile.handle.close().catch(() => undefined);
     throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
   }
-  if (fileStat.size > maximum) {
+  if (fileSize > maximum) {
     await openedFile.handle.close().catch(() => undefined);
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact exceeds the configured verification byte limit.");
   }
-  if (fileStat.size !== expectedSize) {
+  if (fileSize !== expectedSize) {
     await openedFile.handle.close().catch(() => undefined);
-    return { ok: false, reason: "SIZE_MISMATCH", actualBytes: fileStat.size };
+    return { ok: false, reason: "SIZE_MISMATCH", actualBytes: fileSize };
   }
 
   const hash = createHash("sha256");
@@ -572,18 +573,19 @@ export async function copyLocalArtifactBounded(
     "Unable to inspect local import source."
   );
   const sourceStat = openedSource.stat;
-  if (!Number.isSafeInteger(sourceStat.size) || sourceStat.size < 0) {
+  if (sourceStat.size < 0n || sourceStat.size > BigInt(Number.MAX_SAFE_INTEGER)) {
     await openedSource.handle.close().catch(() => undefined);
     throw new ModelAssetError(
       "ARTIFACT_TOO_LARGE",
       "Local import source exceeds safe integer byte accounting."
     );
   }
-  if (sourceStat.size > maxBytes) {
+  const sourceSize = Number(sourceStat.size);
+  if (sourceSize > maxBytes) {
     await openedSource.handle.close().catch(() => undefined);
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Local import exceeds the configured artifact-size limit.");
   }
-  if (sourceStat.size !== expectedBytes) {
+  if (sourceSize !== expectedBytes) {
     await openedSource.handle.close().catch(() => undefined);
     throw new ModelAssetError("SIZE_MISMATCH", "Local import size does not match the asset manifest.");
   }
@@ -639,7 +641,7 @@ export async function copyLocalArtifactBounded(
 }
 
 export async function readStoredManifest(manifestPath: string): Promise<unknown> {
-  let openedManifest: { readonly handle: FileHandle; readonly stat: Stats };
+  let openedManifest: { readonly handle: FileHandle; readonly stat: BigIntStats };
   try {
     openedManifest = await openStableRegularFile(
       manifestPath,
@@ -666,15 +668,15 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
   }
 
   const manifestStat = openedManifest.stat;
-  if (!Number.isSafeInteger(manifestStat.size)
-      || manifestStat.size < 0
-      || manifestStat.size > MAX_STORED_MANIFEST_BYTES) {
+  if (manifestStat.size < 0n
+      || manifestStat.size > BigInt(MAX_STORED_MANIFEST_BYTES)) {
     await openedManifest.handle.close().catch(() => undefined);
     throw new ModelAssetError(
       "CORRUPT_INSTALLATION",
       "Installed artifact manifest exceeds the cache metadata byte limit."
     );
   }
+  const manifestSize = Number(manifestStat.size);
 
   const chunks: Buffer[] = [];
   let bytes = 0;
@@ -717,7 +719,7 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
     await openedManifest.handle.close().catch(() => undefined);
   }
 
-  if (bytes !== manifestStat.size) {
+  if (bytes !== manifestSize) {
     throw new ModelAssetError(
       "CORRUPT_INSTALLATION",
       "Installed artifact manifest changed size while it was being read."
