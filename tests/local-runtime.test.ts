@@ -1398,6 +1398,30 @@ describe("local worker lifecycle manager", () => {
     expect(runtime.getStatus("version-no-retry").restartCount).toBe(0);
   });
 
+  it("rejects oversized readiness and health details before diagnostic processing", async () => {
+    const oversized = "x".repeat(2_001);
+
+    const custom = manager();
+    custom.register(definition("oversized-ready-detail", "ready", {
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({ ready: true, detail: oversized })
+      }
+    }));
+    await expect(custom.start("oversized-ready-detail"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+
+    const health = manager();
+    health.register(definition("oversized-health-detail", "ready"));
+    await health.start("oversized-health-detail");
+
+    expect(() => health.markDegraded("oversized-health-detail", oversized))
+      .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(() => health.markReady("oversized-health-detail", oversized))
+      .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(health.getStatus("oversized-health-detail").state).toBe("READY");
+  });
+
   it("fails immediately on malformed readiness decision shapes", async () => {
     const custom = manager();
     let probeCalls = 0;
