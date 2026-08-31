@@ -93,8 +93,10 @@ interface InstallationCheck {
 }
 
 interface SharedCacheState {
+  readonly identity: string;
   capacityGate: Promise<void>;
   mutationGate: Promise<void>;
+  pendingGateUsers: number;
   reservedBytes: number;
   readonly activeStagingDirectories: Set<string>;
   readonly activeInstallationCounts: Map<string, number>;
@@ -102,8 +104,8 @@ interface SharedCacheState {
 
 const sharedCacheStates = new Map<string, SharedCacheState>();
 
-function sharedCacheStateFor(paths: CachePaths): SharedCacheState {
-  const identity = [
+function sharedCacheIdentity(paths: CachePaths): string {
+  return [
     paths.root,
     String(paths.rootDevice),
     String(paths.rootInode),
@@ -112,17 +114,35 @@ function sharedCacheStateFor(paths: CachePaths): SharedCacheState {
     String(paths.temporaryDevice),
     String(paths.temporaryInode)
   ].join("\0");
+}
+
+function sharedCacheStateFor(paths: CachePaths): SharedCacheState {
+  const identity = sharedCacheIdentity(paths);
   const existing = sharedCacheStates.get(identity);
   if (existing !== undefined) return existing;
   const created: SharedCacheState = {
+    identity,
     capacityGate: Promise.resolve(),
     mutationGate: Promise.resolve(),
+    pendingGateUsers: 0,
     reservedBytes: 0,
     activeStagingDirectories: new Set<string>(),
     activeInstallationCounts: new Map<string, number>()
   };
   sharedCacheStates.set(identity, created);
   return created;
+}
+
+function pruneSharedCacheState(shared: SharedCacheState): void {
+  if (shared.pendingGateUsers !== 0
+      || shared.reservedBytes !== 0
+      || shared.activeStagingDirectories.size !== 0
+      || shared.activeInstallationCounts.size !== 0) {
+    return;
+  }
+  if (sharedCacheStates.get(shared.identity) === shared) {
+    sharedCacheStates.delete(shared.identity);
+  }
 }
 
 function positiveSafeInteger(value: unknown, fallback: number, label: string): number {
@@ -1407,6 +1427,7 @@ export class ModelAssetManager {
     operation: (shared: SharedCacheState) => Promise<T>
   ): Promise<T> {
     const shared = sharedCacheStateFor(paths);
+    shared.pendingGateUsers += 1;
     let release: (() => void) | undefined;
     const turn = new Promise<void>((resolvePromise) => {
       release = resolvePromise;
@@ -1418,6 +1439,8 @@ export class ModelAssetManager {
       return await operation(shared);
     } finally {
       release?.();
+      shared.pendingGateUsers -= 1;
+      pruneSharedCacheState(shared);
     }
   }
 
@@ -1426,6 +1449,7 @@ export class ModelAssetManager {
     operation: (shared: SharedCacheState) => Promise<T>
   ): Promise<T> {
     const shared = sharedCacheStateFor(paths);
+    shared.pendingGateUsers += 1;
     let release: (() => void) | undefined;
     const turn = new Promise<void>((resolvePromise) => {
       release = resolvePromise;
@@ -1437,6 +1461,8 @@ export class ModelAssetManager {
       return await operation(shared);
     } finally {
       release?.();
+      shared.pendingGateUsers -= 1;
+      pruneSharedCacheState(shared);
     }
   }
 }
