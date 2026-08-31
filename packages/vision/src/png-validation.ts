@@ -152,8 +152,8 @@ export function assertStaticPngChunkStructure(bytes: Buffer): void {
       }
       seenTransparency = true;
     } else if (chunkType === "gAMA") {
-      if (seenGamma || seenPalette || seenTransparency || seenImageData || chunkLength !== 4) {
-        throw new RangeError("PNG gamma chunk must appear once before palette/transparency/image data and contain four bytes");
+      if (seenGamma || seenPalette || seenImageData || chunkLength !== 4) {
+        throw new RangeError("PNG gamma chunk must appear once before palette/image data and contain four bytes");
       }
       if (bytes.readUInt32BE(dataStart) === 0) {
         throw new RangeError("PNG gamma value must be nonzero");
