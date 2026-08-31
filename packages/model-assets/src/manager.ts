@@ -66,6 +66,7 @@ export interface InstalledArtifactSummary {
 interface InFlightEntry {
   readonly controller: AbortController;
   stage: "DOWNLOADING" | "VERIFYING";
+  stagingDirectory?: string;
   waiters: number;
   settled: boolean;
   promise: Promise<string>;
@@ -173,10 +174,11 @@ export class ModelAssetManager {
     return await this.joinOrStart(
       manifest,
       signal,
-      async (internalSignal, setStage) => await this.performInstallation(
+      async (internalSignal, setStage, setStagingDirectory) => await this.performInstallation(
         manifest,
         internalSignal,
         setStage,
+        setStagingDirectory,
         async (destination) => {
           await downloadHttpArtifact(manifest.sourceUrl, destination, {
             maxBytes: this.maxArtifactBytes,
@@ -200,10 +202,11 @@ export class ModelAssetManager {
     return await this.joinOrStart(
       manifest,
       signal,
-      async (internalSignal, setStage) => await this.performInstallation(
+      async (internalSignal, setStage, setStagingDirectory) => await this.performInstallation(
         manifest,
         internalSignal,
         setStage,
+        setStagingDirectory,
         async (destination) => {
           await copyLocalArtifactBounded(
             sourcePath,
@@ -413,7 +416,8 @@ export class ModelAssetManager {
     signal: AbortSignal | undefined,
     operation: (
       signal: AbortSignal,
-      setStage: (stage: "DOWNLOADING" | "VERIFYING") => void
+      setStage: (stage: "DOWNLOADING" | "VERIFYING") => void,
+      setStagingDirectory: (directory: string | undefined) => void
     ) => Promise<string>
   ): Promise<string> {
     if (signal?.aborted === true) {
@@ -442,9 +446,15 @@ export class ModelAssetManager {
         promise: Promise.resolve("")
       };
       const current = entry;
-      current.promise = operation(controller.signal, (stage) => {
-        current.stage = stage;
-      }).then((installedPath) => {
+      current.promise = operation(
+        controller.signal,
+        (stage) => {
+          current.stage = stage;
+        },
+        (directory) => {
+          current.stagingDirectory = directory;
+        }
+      ).then((installedPath) => {
         this.lastFailures.delete(key);
         return installedPath;
       }).catch((error: unknown) => {
@@ -536,6 +546,7 @@ export class ModelAssetManager {
     manifest: AssetManifest,
     signal: AbortSignal,
     setStage: (stage: "DOWNLOADING" | "VERIFYING") => void,
+    setStagingDirectory: (directory: string | undefined) => void,
     stagePayload: (destination: string) => Promise<void>
   ): Promise<string> {
     const paths = await this.getSafeCachePaths();
@@ -554,6 +565,7 @@ export class ModelAssetManager {
       paths.temporary,
       key + "-" + randomUUID()
     );
+    setStagingDirectory(stagingDirectory);
     let published = false;
 
     try {
@@ -619,6 +631,7 @@ export class ModelAssetManager {
       }
       return installedPayloadPath(installationDirectory, manifest);
     } finally {
+      setStagingDirectory(undefined);
       this.releaseCapacity(reservationBytes);
       if (!published) {
         await removeEntryInsideRoot(paths.root, stagingDirectory).catch(() => undefined);
@@ -670,10 +683,46 @@ export class ModelAssetManager {
     }
   }
 
+  private async managedCachePayloadBytes(paths: CachePaths): Promise<number> {
+    const activeStagingDirectories = new Set(
+      [...this.inFlight.values()]
+        .map((entry) => entry.stagingDirectory)
+        .filter((directory): directory is string => directory !== undefined)
+    );
+
+    let total = 0;
+    const artifacts = await opendir(paths.artifacts);
+    for await (const entry of artifacts) {
+      if (!INSTALLATION_KEY_PATTERN.test(entry.name)) continue;
+      total += await sumArtifactPayloadBytes(path.join(paths.artifacts, entry.name));
+      if (!Number.isSafeInteger(total)) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Managed artifact cache usage exceeds safe integer accounting limits."
+        );
+      }
+    }
+
+    const temporary = await opendir(paths.temporary);
+    for await (const entry of temporary) {
+      if (!TEMPORARY_ENTRY_PATTERN.test(entry.name)) continue;
+      const candidate = path.join(paths.temporary, entry.name);
+      if (activeStagingDirectories.has(candidate)) continue;
+      total += await sumArtifactPayloadBytes(candidate);
+      if (!Number.isSafeInteger(total)) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Managed temporary cache usage exceeds safe integer accounting limits."
+        );
+      }
+    }
+    return total;
+  }
+
   private async reserveCapacity(paths: CachePaths, requestedBytes: number): Promise<void> {
     await this.withCapacityGate(async () => {
       if (this.maxCacheBytes !== undefined) {
-        const usedBytes = await sumArtifactPayloadBytes(paths.artifacts);
+        const usedBytes = await this.managedCachePayloadBytes(paths);
         const projected = usedBytes + this.reservedBytes + requestedBytes;
         if (!Number.isSafeInteger(projected) || projected > this.maxCacheBytes) {
           throw new ModelAssetError(
