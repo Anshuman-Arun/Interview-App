@@ -31,6 +31,7 @@ const AUTHORIZED_WRITER = "packages/interview-engine/src/session-writer.ts";
 const AUTHORIZED_PROVIDER_SESSION_FACTORY = "packages/providers/src/execution.ts";
 const AUTHORIZED_PROVIDER_PROPOSAL_ADMISSION = "packages/interview-engine/src/provider-coordinator.ts";
 const PERSISTENCE_PREFIX = "packages/persistence/";
+const VISION_INTERNAL_CONSTRUCTION_BASENAME = "internal-artifact-construction";
 
 const PACKAGE_RULES = new Map([
   ["domain", new Set()],
@@ -352,6 +353,44 @@ function checkDependencies(root, records, violations) {
   }
 
   checkDependencyCycles(graph, violations);
+}
+
+function isVisionInternalConstructionSpecifier(specifier) {
+  return specifier.includes("/vision/")
+    && /(?:^|\/)internal-artifact-construction(?:\.[cm]?[jt]s)?$/u.test(specifier);
+}
+
+function checkVisionInternalConstruction(records, violations) {
+  for (const record of records) {
+    const outsideVision = record.location.kind !== "package" || record.location.name !== "vision";
+
+    for (const specifier of extractModuleSpecifiers(record.sourceFile)) {
+      if (outsideVision && isVisionInternalConstructionSpecifier(specifier)) {
+        addViolation(
+          violations,
+          "VISION_INTERNAL_CONSTRUCTION",
+          record.relativePath,
+          "Vision snapshot/artifact construction capability may only be imported inside packages/vision."
+        );
+      }
+    }
+
+    function visit(node) {
+      if (ts.isExportDeclaration(node)
+          && node.moduleSpecifier !== undefined
+          && ts.isStringLiteralLike(node.moduleSpecifier)
+          && isVisionInternalConstructionSpecifier(node.moduleSpecifier.text)) {
+        addViolation(
+          violations,
+          "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+          record.relativePath,
+          "Vision snapshot/artifact construction capability may not be re-exported."
+        );
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(record.sourceFile);
+  }
 }
 
 function checkDependencyCycles(graph, violations) {
@@ -714,6 +753,7 @@ async function main() {
   const records = await loadRecords(root, files, violations);
 
   checkDependencies(root, records, violations);
+  checkVisionInternalConstruction(records, violations);
   checkAuthority(records, violations);
   checkProviders(records, violations);
   checkEventCredentials(root, records, violations);
