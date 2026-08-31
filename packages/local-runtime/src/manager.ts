@@ -101,9 +101,10 @@ export class LocalRuntimeManager {
   private stopAllPromise: Promise<readonly LocalStopResult[]> | undefined;
 
   public constructor(options: LocalRuntimeManagerOptions = {}) {
-    this.parentEnvironment = options.parentEnvironment ?? process.env;
-    this.now = options.now ?? (() => new Date());
-    this.fetchImpl = options.fetch ?? globalThis.fetch;
+    const inspectedOptions = inspectManagerOptions(options);
+    this.parentEnvironment = inspectedOptions.parentEnvironment ?? process.env;
+    this.now = inspectedOptions.now ?? (() => new Date());
+    this.fetchImpl = inspectedOptions.fetch ?? globalThis.fetch;
     this.platform = process.platform;
     this.stopAllPromise = undefined;
   }
@@ -164,6 +165,7 @@ export class LocalRuntimeManager {
 
   public start(componentId: string, options: { readonly signal?: AbortSignal } = {}): Promise<LocalComponentStatus> {
     const record = this.requireRecord(componentId);
+    const inspectedOptions = inspectStartOptions(options);
     if (this.stopAllPromise !== undefined) {
       return Promise.reject(new LocalRuntimeError(
         "INVALID_STATE",
@@ -171,10 +173,10 @@ export class LocalRuntimeManager {
       ));
     }
     if (record.stopPromise !== undefined) {
-      return record.stopPromise.then(() => this.start(componentId, options));
+      return record.stopPromise.then(() => this.start(componentId, inspectedOptions));
     }
     if (record.cleanupPromise !== undefined) {
-      return record.cleanupPromise.then(() => this.start(componentId, options));
+      return record.cleanupPromise.then(() => this.start(componentId, inspectedOptions));
     }
     if (record.startPromise !== undefined) return record.startPromise;
     if (record.state === "READY" || record.state === "DEGRADED") return Promise.resolve(this.snapshot(record));
@@ -193,7 +195,7 @@ export class LocalRuntimeManager {
         `Cannot start ${componentId} while its previous managed process is still alive`
       ));
     }
-    if (options.signal?.aborted === true) {
+    if (inspectedOptions.signal?.aborted === true) {
       return Promise.reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
     }
 
@@ -201,7 +203,7 @@ export class LocalRuntimeManager {
     record.restartBudgetUsed = 0;
     const controller = new AbortController();
     record.operationAbort = controller;
-    const unlink = linkAbortSignal(options.signal, controller);
+    const unlink = linkAbortSignal(inspectedOptions.signal, controller);
     const promise = this.runStartSequence(record, controller.signal, 0);
     record.startPromise = promise;
     void promise.then(
@@ -1019,6 +1021,101 @@ export class LocalRuntimeManager {
     } catch {
       return new Date().toISOString();
     }
+  }
+}
+
+function inspectManagerOptions(options: unknown): LocalRuntimeManagerOptions {
+  const descriptors = inspectRuntimeOptions(
+    options,
+    "Local runtime manager options",
+    new Set(["parentEnvironment", "now", "fetch"])
+  );
+  const parentEnvironment = runtimeOptionValue(descriptors, "parentEnvironment");
+  if (parentEnvironment !== undefined) {
+    if (typeof parentEnvironment !== "object"
+        || parentEnvironment === null
+        || safeRuntimeArrayCheck(parentEnvironment)) {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "parentEnvironment must be an object");
+    }
+  }
+  const now = runtimeOptionValue(descriptors, "now");
+  if (now !== undefined && typeof now !== "function") {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", "now must be a function");
+  }
+  const fetchImpl = runtimeOptionValue(descriptors, "fetch");
+  if (fetchImpl !== undefined && typeof fetchImpl !== "function") {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", "fetch must be a function");
+  }
+  return Object.freeze({
+    ...(parentEnvironment === undefined ? {} : { parentEnvironment: parentEnvironment as NodeJS.ProcessEnv }),
+    ...(now === undefined ? {} : { now: now as () => Date }),
+    ...(fetchImpl === undefined ? {} : { fetch: fetchImpl as typeof globalThis.fetch })
+  });
+}
+
+function inspectStartOptions(options: unknown): { readonly signal?: AbortSignal } {
+  const descriptors = inspectRuntimeOptions(options, "start options", new Set(["signal"]));
+  const signal = runtimeOptionValue(descriptors, "signal");
+  if (signal !== undefined && !safeIsAbortSignal(signal)) {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", "start signal must be an AbortSignal");
+  }
+  return Object.freeze(signal === undefined ? {} : { signal });
+}
+
+function inspectRuntimeOptions(
+  value: unknown,
+  label: string,
+  allowedKeys: ReadonlySet<string>
+): Readonly<Record<string, PropertyDescriptor>> {
+  if (typeof value !== "object" || value === null || safeRuntimeArrayCheck(value)) {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", `${label} must be an object`);
+  }
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", `${label} could not be inspected`);
+  }
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!allowedKeys.has(key)) {
+      if (descriptor.enumerable === true) {
+        throw new LocalRuntimeError("INVALID_ARGUMENT", `${label} contains unsupported field ${key}`);
+      }
+      continue;
+    }
+    if (!("value" in descriptor)) {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", `${label} field ${key} may not be an accessor`);
+    }
+  }
+  return descriptors;
+}
+
+function runtimeOptionValue(
+  descriptors: Readonly<Record<string, PropertyDescriptor>>,
+  key: string
+): unknown {
+  const descriptor = descriptors[key];
+  if (descriptor === undefined) return undefined;
+  if (!("value" in descriptor)) {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", `Runtime option ${key} may not be an accessor`);
+  }
+  return descriptor.value;
+}
+
+function safeRuntimeArrayCheck(value: object): boolean {
+  try {
+    return Array.isArray(value);
+  } catch {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", "Runtime options could not be inspected");
+  }
+}
+
+function safeIsAbortSignal(value: unknown): value is AbortSignal {
+  if (typeof value !== "object" || value === null) return false;
+  try {
+    return value instanceof AbortSignal;
+  } catch {
+    return false;
   }
 }
 
