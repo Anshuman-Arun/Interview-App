@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
+import { snapshotOwnEnumerableRecord } from "./object-validation.js";
 import {
   MAX_GEOMETRY_RECTANGLES,
   clipRectToBounds,
@@ -85,24 +86,18 @@ function compareRects(left: ImageRect, right: ImageRect): number {
 }
 
 function normalizeConfig(config: unknown) {
-  if (config !== undefined) {
-    let isArray: boolean;
+  let ownConfig: Readonly<Record<string, unknown>>;
+  if (config === undefined) {
+    ownConfig = Object.freeze({});
+  } else {
     try {
-      isArray = Array.isArray(config);
+      ownConfig = snapshotOwnEnumerableRecord(config, "Dirty-region planner configuration");
     } catch {
-      throw new RangeError("Dirty-region planner configuration could not be inspected safely");
-    }
-    if (typeof config !== "object" || config === null || isArray) {
-      throw new RangeError("Dirty-region planner configuration must be an object");
+      throw new RangeError("Dirty-region planner configuration could not be read safely");
     }
   }
 
-  let overrides: ReturnType<typeof DirtyRegionConfigOverrideSchema.safeParse>;
-  try {
-    overrides = DirtyRegionConfigOverrideSchema.safeParse(config ?? {});
-  } catch {
-    throw new RangeError("Dirty-region planner configuration could not be read safely");
-  }
+  const overrides = DirtyRegionConfigOverrideSchema.safeParse(ownConfig);
   if (!overrides.success) {
     throw new RangeError("Dirty-region planner configuration is invalid or contains unknown keys");
   }
@@ -139,15 +134,16 @@ function fullFrameFallback(
 }
 
 export function rasterizeDirtyRegion(regionInput: DirtyRegionInput): ImageRect {
-  let parsed: ReturnType<typeof DirtyRegionInputSchema.safeParse>;
+  let ownRegion: Readonly<Record<string, unknown>>;
   try {
-    parsed = DirtyRegionInputSchema.safeParse(regionInput);
+    ownRegion = snapshotOwnEnumerableRecord(regionInput, "Dirty region");
   } catch {
     throw new VisionPreprocessingError(
       "INVALID_RECTANGLE",
       "Dirty region coordinates could not be read safely"
     );
   }
+  const parsed = DirtyRegionInputSchema.safeParse(ownRegion);
   if (!parsed.success) {
     throw new VisionPreprocessingError(
       "INVALID_RECTANGLE",
