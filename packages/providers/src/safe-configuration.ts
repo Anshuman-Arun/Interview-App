@@ -215,13 +215,27 @@ export type ProviderConfigurationSafetyErrorCode =
   | "SECRET_IN_CONFIGURATION";
 
 export class ProviderConfigurationSafetyError extends Error {
+  readonly #providerConfigurationSafetyErrorBrand = true;
+
   public constructor(public readonly code: ProviderConfigurationSafetyErrorCode) {
     super(code === "SECRET_IN_CONFIGURATION"
       ? "Provider configuration contains credential-like material"
       : "Provider configuration is malformed");
     this.name = "ProviderConfigurationSafetyError";
   }
+
+  public static isSafetyError(value: unknown): value is ProviderConfigurationSafetyError {
+    if (typeof value !== "object" || value === null) return false;
+    try {
+      return #providerConfigurationSafetyErrorBrand in value;
+    } catch {
+      return false;
+    }
+  }
 }
+
+const isProviderConfigurationSafetyError =
+  ProviderConfigurationSafetyError.isSafetyError;
 
 export type SafeProviderConfigurationPrimitive = string | number | boolean | null;
 export type SafeProviderConfigurationValue =
@@ -622,7 +636,7 @@ export function inspectSafeProviderConfigurationValue(
 }
 
 function schemaErrorMessage(error: unknown): ProviderConfigurationSafetyErrorCode {
-  return error instanceof ProviderConfigurationSafetyError
+  return isProviderConfigurationSafetyError(error)
     ? error.code
     : "MALFORMED_CONFIGURATION";
 }

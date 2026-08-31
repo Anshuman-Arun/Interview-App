@@ -18,6 +18,7 @@ import {
   type ProviderSettingsValidator
 } from "../packages/providers/src/index.js";
 import {
+  ProviderConfigurationSafetyError,
   containsSecretLikeConfigurationText,
   inspectSafeProviderConfigurationValue
 } from "../packages/providers/src/safe-configuration.js";
@@ -222,6 +223,51 @@ describe("provider secret-classifier intrinsic hardening", () => {
     expect(assignmentDetected).toBe(true);
     expect(commonTokenDetected).toBe(true);
     expect(keyError).toMatchObject({ code: "SECRET_IN_CONFIGURATION" });
+  });
+});
+
+describe("provider configuration safety-error provenance", () => {
+  it("keeps secret issue classification stable under Symbol.hasInstance tampering", () => {
+    const originalHasInstance = Object.getOwnPropertyDescriptor(
+      ProviderConfigurationSafetyError,
+      Symbol.hasInstance
+    );
+
+    let result:
+      | ReturnType<typeof SafeProviderConfigurationRecordSchema.safeParse>
+      | undefined;
+    try {
+      Object.defineProperty(ProviderConfigurationSafetyError, Symbol.hasInstance, {
+        configurable: true,
+        value: () => false
+      });
+      result = SafeProviderConfigurationRecordSchema.safeParse({
+        apiKey: "private-value"
+      });
+    } finally {
+      if (originalHasInstance === undefined) {
+        Reflect.deleteProperty(
+          ProviderConfigurationSafetyError,
+          Symbol.hasInstance
+        );
+      } else {
+        Object.defineProperty(
+          ProviderConfigurationSafetyError,
+          Symbol.hasInstance,
+          originalHasInstance
+        );
+      }
+    }
+
+    if (result === undefined) {
+      throw new Error("Safety-error provenance test did not produce a schema result");
+    }
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some(
+        (issue) => issue.message === "SECRET_IN_CONFIGURATION"
+      )).toBe(true);
+    }
   });
 });
 
