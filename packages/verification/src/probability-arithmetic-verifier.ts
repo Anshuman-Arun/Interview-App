@@ -13,6 +13,7 @@ import {
   parseRationalInput,
   rational,
   subtractRationals,
+  sumRationals,
   type ExactRational
 } from "./math-utils.js";
 import { booleanClaimResult, mathFailure, prepareStructuredStatement } from "./verifier-common.js";
@@ -127,13 +128,10 @@ function evaluateProbabilityClaim(
         throw new BoundedMathError("INVALID_PROBABILITY", "Finite expectation probabilities must sum exactly to 1");
       }
 
-      let expectation = rational(0n, 1n);
-      for (const outcome of outcomes) {
-        expectation = addRationals(
-          expectation,
-          multiplyRationals(outcome.probability, parseRationalInput(outcome.value))
-        );
-      }
+      const expectationTerms = outcomes.map((outcome) =>
+        multiplyRationals(outcome.probability, parseRationalInput(outcome.value))
+      );
+      const expectation = sumRationals(expectationTerms);
       return { actual: expectation, claimed: parseIntermediateRationalInput(claim.claimedExpectation) };
     }
     case "CONDITIONAL_FROM_COUNTS":
