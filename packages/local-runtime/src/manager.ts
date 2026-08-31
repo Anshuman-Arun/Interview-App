@@ -366,12 +366,16 @@ export class LocalRuntimeManager {
 
     const attemptController = new AbortController();
     const unlinkAttempt = linkAbortSignal(signal, attemptController);
+    const initialRemainingMs = remainingStartupTimeout(
+      record.definition.startupTimeoutMs,
+      attemptStartedAt
+    );
     const earlyReadiness = isStdoutReadiness(record.definition.readiness)
       ? this.waitForReadiness(
           record,
           child,
           attemptController.signal,
-          record.definition.startupTimeoutMs
+          initialRemainingMs
         )
       : undefined;
     if (earlyReadiness !== undefined) void earlyReadiness.catch(() => undefined);
@@ -381,7 +385,7 @@ export class LocalRuntimeManager {
         child,
         attemptController.signal,
         record.definition.id,
-        record.definition.startupTimeoutMs
+        initialRemainingMs
       );
       if (child.pid === undefined) {
         throw new LocalRuntimeError("SPAWN_FAILED", `Component ${record.definition.id} did not receive a process id`);
