@@ -25,6 +25,9 @@ import {
   PROBABILITY_ARITHMETIC_PROTOCOL,
   PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
   ProbabilityArithmeticVerifier,
+  RATIONAL_ARITHMETIC_PROTOCOL,
+  RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+  RationalArithmeticVerifier,
   addRationals,
   areCongruent,
   binomial,
@@ -49,6 +52,10 @@ import {
 
 const integer = (value: string) => ({ kind: "INTEGER" as const, value });
 const fraction = (numerator: string, denominator = "1") => ({ numerator, denominator });
+const fractionExpression = (numerator: string, denominator = "1") => ({
+  kind: "RATIONAL" as const,
+  value: fraction(numerator, denominator)
+});
 
 async function verifyJson(verifier: DeterministicVerifier, value: unknown): Promise<VerificationResult> {
   return verifier.verify(JSON.stringify(value), 1);
@@ -246,6 +253,68 @@ describe("adversarial deterministic math verification", () => {
     });
 
     expect(result.status).toBe("VERIFIED");
+  });
+
+  it("cancels exact rational identity pairs before aggregate-order overflow", async () => {
+    const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
+    expect(sumRationals([
+      rational(maximum, 1n),
+      rational(maximum, 1n),
+      rational(-maximum, 1n)
+    ])).toEqual(rational(maximum, 1n));
+    expect(productRationals([
+      rational(maximum, 1n),
+      rational(maximum, 1n),
+      rational(1n, maximum),
+      rational(1n, maximum)
+    ])).toEqual(rational(1n, 1n));
+
+    const operand = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS);
+    const largeMagnitude = {
+      kind: "PRODUCT" as const,
+      terms: Array.from({ length: 16 }, () => fractionExpression(operand))
+    };
+    const inverseMagnitude = {
+      kind: "PRODUCT" as const,
+      terms: Array.from({ length: 16 }, () => fractionExpression("1", operand))
+    };
+
+    const sumResult = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: {
+          kind: "SUM",
+          terms: [
+            largeMagnitude,
+            largeMagnitude,
+            { kind: "NEGATE", operand: largeMagnitude }
+          ]
+        },
+        right: largeMagnitude
+      }
+    });
+    expect(sumResult.status).toBe("VERIFIED");
+
+    const productResult = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: {
+          kind: "PRODUCT",
+          terms: [
+            largeMagnitude,
+            largeMagnitude,
+            inverseMagnitude,
+            inverseMagnitude
+          ]
+        },
+        right: fractionExpression("1")
+      }
+    });
+    expect(productResult.status).toBe("VERIFIED");
   });
 
   it("recognizes a zero product without overflowing earlier bounded factors", async () => {
