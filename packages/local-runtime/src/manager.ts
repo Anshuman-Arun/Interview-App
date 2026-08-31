@@ -1353,6 +1353,7 @@ function parseLoopbackUrl(raw: string): URL {
     invalid("HTTP readiness URL must target loopback only");
   }
   if (url.username.length > 0 || url.password.length > 0) invalid("HTTP readiness URL must not contain credentials");
+  if (host === "localhost") url.hostname = "127.0.0.1";
   return url;
 }
 
