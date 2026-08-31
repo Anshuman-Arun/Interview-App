@@ -472,6 +472,7 @@ export async function cropImage(
   options: VisionProcessingOptions = {}
 ): Promise<CropResult> {
   const safeOptions = normalizeProcessingOptions(options);
+  throwIfAborted(safeOptions.signal);
   const startedAt = now(safeOptions);
   throwIfAborted(safeOptions.signal);
   assertVisionRasterSource(source);
@@ -627,6 +628,7 @@ export async function downscaleImage(
   options: VisionProcessingOptions = {}
 ): Promise<ResizeResult> {
   const safeOptions = normalizeProcessingOptions(options);
+  throwIfAborted(safeOptions.signal);
   const startedAt = now(safeOptions);
   throwIfAborted(safeOptions.signal);
   assertVisionRasterSource(source);
@@ -771,6 +773,7 @@ export async function tileImage(
   options: VisionProcessingOptions = {}
 ): Promise<TileResult> {
   const safeOptions = normalizeProcessingOptions(options);
+  throwIfAborted(safeOptions.signal);
   const startedAt = now(safeOptions);
   throwIfAborted(safeOptions.signal);
   assertVisionRasterSource(source);
