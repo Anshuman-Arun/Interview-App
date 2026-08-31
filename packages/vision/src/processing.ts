@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import { PNG } from "pngjs";
+import { computeVisionArtifactId } from "./artifact-identity.js";
 import { assertRectWithinImage, rectArea, validateImageRect, type ImageRect } from "./geometry.js";
 import { createVisionProcessingDiagnostics, type VisionProcessingDiagnostics } from "./diagnostics.js";
 import { sha256ImageBytes } from "./snapshot.js";
@@ -267,37 +267,6 @@ function composeResizeTransform(
   });
 }
 
-function artifactId(
-  kind: VisionImageArtifactKind,
-  sourceSnapshotId: string,
-  sourceRevision: number,
-  parentArtifactId: string | undefined,
-  dimensions: PixelDimensions,
-  sourceBounds: ArtifactSourceBounds,
-  transform: CoordinateTransform,
-  digest: string
-): string {
-  const canonical = JSON.stringify([
-    "vision-artifact-v1",
-    kind,
-    sourceSnapshotId,
-    sourceRevision,
-    parentArtifactId ?? null,
-    dimensions.width,
-    dimensions.height,
-    sourceBounds.x,
-    sourceBounds.y,
-    sourceBounds.width,
-    sourceBounds.height,
-    transform.offsetX,
-    transform.offsetY,
-    transform.scaleX,
-    transform.scaleY,
-    digest
-  ]);
-  return `img_${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
-}
-
 function encodeArtifact(
   source: VisionRasterSource,
   kind: VisionImageArtifactKind,
@@ -330,16 +299,17 @@ function encodeArtifact(
   const dimensions = PixelDimensionsSchema.parse({ width: raster.width, height: raster.height });
   const digest = sha256ImageBytes(encoded);
   const metadata = VisionImageArtifactMetadataSchema.parse({
-    artifactId: artifactId(
+    artifactId: computeVisionArtifactId({
       kind,
-      descriptor.sourceSnapshotId,
-      descriptor.sourceRevision,
-      descriptor.parentArtifactId,
-      dimensions,
+      sourceSnapshotId: descriptor.sourceSnapshotId,
+      sourceRevision: descriptor.sourceRevision,
+      parentArtifactId: descriptor.parentArtifactId,
+      width: dimensions.width,
+      height: dimensions.height,
       sourceBounds,
-      transform,
-      digest
-    ),
+      coordinateTransform: transform,
+      contentDigest: digest
+    }),
     kind,
     sourceSnapshotId: descriptor.sourceSnapshotId,
     sourceRevision: descriptor.sourceRevision,
