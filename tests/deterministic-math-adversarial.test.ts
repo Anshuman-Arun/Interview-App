@@ -91,6 +91,23 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
+  it("does not misclassify malformed integer spelling as a resource limit", async () => {
+    for (const operand of [
+      `+${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS)}`,
+      ` ${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS)}`,
+      `${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS)} `
+    ]) {
+      const result = await verifyJson(new ModularArithmeticVerifier(), {
+        protocol: MODULAR_ARITHMETIC_PROTOCOL,
+        protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+        claim: { kind: "DIVISIBILITY", divisor: "1", dividend: integer(operand) }
+      });
+      expect(result.status).toBe("UNRESOLVED");
+      expect(result.reason).toContain("MALFORMED_INTERPRETATION");
+      expect(result.reason).not.toContain("RESOURCE_LIMIT");
+    }
+  });
+
   it("classifies sign-aware integer digit overflow as a resource limit", async () => {
     for (const operand of [
       "9".repeat(MAX_INTEGER_DECIMAL_DIGITS + 1),
