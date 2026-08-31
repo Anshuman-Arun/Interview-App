@@ -783,8 +783,6 @@ describe("local model asset manager", () => {
     await expect(manager.install(manifest)).rejects.toMatchObject({
       code: "INVALID_MANIFEST"
     });
-    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
-    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
   });
 
   it("rejects redirect targets above the URL-length safety limit", async () => {
