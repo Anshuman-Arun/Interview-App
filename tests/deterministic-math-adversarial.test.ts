@@ -1095,6 +1095,30 @@ describe("adversarial deterministic math verification", () => {
     expect(boundary.status).toBe("VERIFIED");
   });
 
+  it("supports maximum recurrence order through the maximum checked index", async () => {
+    const coefficients = [
+      fraction("1"),
+      ...Array.from({ length: 15 }, () => fraction("0"))
+    ];
+    const initial = Array.from({ length: 16 }, (_, index) => fraction(String(index)));
+    const result = await verifyJson(new FiniteRecurrenceVerifier(), {
+      protocol: FINITE_RECURRENCE_PROTOCOL,
+      protocolVersion: FINITE_RECURRENCE_PROTOCOL_VERSION,
+      initial,
+      recurrence: {
+        kind: "LINEAR_PREVIOUS_TERMS",
+        coefficients,
+        constant: fraction("0")
+      },
+      claim: {
+        kind: "VALUE_AT_INDEX",
+        index: MAX_RECURRENCE_SEQUENCE_LENGTH - 1,
+        value: fraction("15")
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
+  });
+
   it("deep-freezes registry metadata and keeps identities unique and non-authoritative", async () => {
     expect(Object.isFrozen(DETERMINISTIC_MATH_VERIFIERS)).toBe(true);
     expect(new Set(DETERMINISTIC_MATH_VERIFIERS.map((entry) => entry.verifier)).size)
