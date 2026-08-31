@@ -102,13 +102,13 @@ function validateProcessingOptions(options: VisionProcessingOptions): void {
     throw new TypeError("now must be a function");
   }
   if (options.maxOutputEncodedBytes !== undefined) {
-    const value = positiveSafeInteger(options.maxOutputEncodedBytes, "maxOutputEncodedBytes");
+    const value = nonnegativeSafeInteger(options.maxOutputEncodedBytes, "maxOutputEncodedBytes");
     if (value > HARD_MAX_OUTPUT_ENCODED_BYTES) {
       throw new RangeError("maxOutputEncodedBytes exceeds the package hard cap");
     }
   }
   if (options.maxTotalOutputEncodedBytes !== undefined) {
-    const value = positiveSafeInteger(options.maxTotalOutputEncodedBytes, "maxTotalOutputEncodedBytes");
+    const value = nonnegativeSafeInteger(options.maxTotalOutputEncodedBytes, "maxTotalOutputEncodedBytes");
     if (value > HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES) {
       throw new RangeError("maxTotalOutputEncodedBytes exceeds the package hard cap");
     }
@@ -149,6 +149,11 @@ function positiveSafeInteger(value: number, name: string): number {
   return value;
 }
 
+function nonnegativeSafeInteger(value: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${name} must be a nonnegative safe integer`);
+  return value;
+}
+
 function now(options: VisionProcessingOptions): number {
   const value = (options.now ?? (() => globalThis.performance.now()))();
   if (!Number.isFinite(value)) throw new RangeError("Processing clock must return a finite number");
@@ -174,13 +179,13 @@ async function cooperativeYield(signal: AbortSignal | undefined, row: number): P
 }
 
 function maxOutputBytes(options: VisionProcessingOptions): number {
-  const value = positiveSafeInteger(options.maxOutputEncodedBytes ?? DEFAULT_MAX_OUTPUT_ENCODED_BYTES, "maxOutputEncodedBytes");
+  const value = nonnegativeSafeInteger(options.maxOutputEncodedBytes ?? DEFAULT_MAX_OUTPUT_ENCODED_BYTES, "maxOutputEncodedBytes");
   if (value > HARD_MAX_OUTPUT_ENCODED_BYTES) throw new RangeError("maxOutputEncodedBytes exceeds the package hard cap");
   return value;
 }
 
 function maxTotalOutputBytes(options: VisionProcessingOptions): number {
-  const value = positiveSafeInteger(
+  const value = nonnegativeSafeInteger(
     options.maxTotalOutputEncodedBytes ?? DEFAULT_MAX_TOTAL_OUTPUT_ENCODED_BYTES,
     "maxTotalOutputEncodedBytes"
   );
@@ -207,14 +212,16 @@ function sourceDescriptor(source: VisionRasterSource): SourceDescriptor {
   };
 }
 
-function decodeSource(source: VisionRasterSource): DecodedRaster {
+function decodeSource(source: VisionRasterSource, signal?: AbortSignal): DecodedRaster {
   assertVisionRasterSource(source);
+  throwIfAborted(signal);
   let decoded: ReturnType<typeof PNG.sync.read>;
   try {
     decoded = PNG.sync.read(source.readBytes(), { checkCRC: true });
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Previously validated image payload could not be decoded");
   }
+  throwIfAborted(signal);
   if (decoded.width !== source.metadata.width || decoded.height !== source.metadata.height) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Decoded image dimensions changed after validation");
   }
@@ -222,7 +229,7 @@ function decodeSource(source: VisionRasterSource): DecodedRaster {
   if (!Number.isSafeInteger(expectedLength) || decoded.data.length !== expectedLength) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Decoded image raster has an unexpected byte length");
   }
-  return { width: decoded.width, height: decoded.height, data: Buffer.from(decoded.data) };
+  return { width: decoded.width, height: decoded.height, data: decoded.data };
 }
 
 function composeCropTransform(parent: CoordinateTransform, rect: ImageRect): CoordinateTransform {
@@ -286,6 +293,7 @@ function encodeArtifact(
   transform: CoordinateTransform,
   options: VisionProcessingOptions
 ): VisionImageArtifact {
+  throwIfAborted(options.signal);
   assertRectWithinImage(sourceBounds, {
     width: source.metadata.width,
     height: source.metadata.height
@@ -366,7 +374,7 @@ export async function cropImage(
     width: source.metadata.width,
     height: source.metadata.height
   });
-  const decoded = decodeSource(source);
+  const decoded = decodeSource(source, options.signal);
   const cropped = await cropDecodedRaster(decoded, rect, options.signal);
   const descriptor = sourceDescriptor(source);
   const transform = composeCropTransform(descriptor.transform, rect);
@@ -540,7 +548,7 @@ export async function downscaleImage(
     return Object.freeze({ image: source, plan, diagnostics });
   }
 
-  const decoded = decodeSource(source);
+  const decoded = decodeSource(source, options.signal);
   const resized = await resizeBilinear(decoded, plan.resultWidth, plan.resultHeight, options.signal);
   const descriptor = sourceDescriptor(source);
   const transform = composeResizeTransform(
@@ -584,10 +592,13 @@ function axisTileCount(length: number, tileSize: number, overlap: number): numbe
 function axisPositions(length: number, tileSize: number, overlap: number, count: number): readonly number[] {
   if (count === 1) return Object.freeze([0]);
   const step = tileSize - overlap;
-  const lastPosition = length - tileSize;
   const positions: number[] = [];
   for (let index = 0; index < count; index += 1) {
-    positions.push(index === count - 1 ? lastPosition : Math.min(index * step, lastPosition));
+    const position = index * step;
+    if (!Number.isSafeInteger(position) || position >= length) {
+      throw new RangeError("Tile position exceeds safe image coordinates");
+    }
+    positions.push(position);
   }
   return Object.freeze(positions);
 }
@@ -647,7 +658,7 @@ export async function tileImage(
   maxOutputBytes(options);
   const maximumTotalOutputBytes = maxTotalOutputBytes(options);
   const plan = planImageTiles({ width: source.metadata.width, height: source.metadata.height }, config);
-  const decoded = decodeSource(source);
+  const decoded = decodeSource(source, options.signal);
   const descriptor = sourceDescriptor(source);
   const tiles: ImageTile[] = [];
   let totalOutputBytes = 0;
