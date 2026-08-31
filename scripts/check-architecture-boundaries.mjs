@@ -34,6 +34,7 @@ const PERSISTENCE_PREFIX = "packages/persistence/";
 
 const PACKAGE_RULES = new Map([
   ["domain", new Set()],
+  ["diagnostics", new Set(["domain"])],
   ["events", new Set(["domain"])],
   ["persistence", new Set(["domain", "events"])],
   ["providers", new Set(["domain"])],
