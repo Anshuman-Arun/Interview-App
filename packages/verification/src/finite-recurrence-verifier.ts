@@ -185,12 +185,20 @@ export class FiniteRecurrenceVerifier implements DeterministicVerifier {
         );
       }
 
-      const sequence = extendSequence(initial, coefficients, constant, claim.values.length);
       const claimed = claim.values.map(parseIntermediateRationalInput);
-      const matches = claimed.every((value, index) => {
+      const sequence = [...initial];
+      let matches = true;
+      for (let index = 0; index < claimed.length; index += 1) {
+        while (sequence.length <= index) {
+          sequence.push(recurrenceStep(sequence, coefficients, constant));
+        }
         const actual = sequence[index];
-        return actual !== undefined && equalRationals(actual, value);
-      });
+        const expected = claimed[index];
+        if (actual === undefined || expected === undefined || !equalRationals(actual, expected)) {
+          matches = false;
+          break;
+        }
+      }
       return booleanClaimResult(
         matches,
         prepared.interpretationConfidence,
