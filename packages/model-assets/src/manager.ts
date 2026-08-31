@@ -972,19 +972,6 @@ export class ModelAssetManager {
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
 
       setStage("VERIFYING");
-      const verification = await verifyArtifactFile(stagedPayload, {
-        sizeBytes: manifest.sizeBytes,
-        sha256: manifest.sha256,
-        maxBytes: this.maxArtifactBytes
-      }, signal);
-      if (!verification.ok) {
-        throw new ModelAssetError(
-          verification.reason,
-          "Staged artifact failed manifest integrity verification."
-        );
-      }
-
-      await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
       await writeStoredManifest(
         path.join(stagingDirectory, "manifest.json"),
         serializedManifest
@@ -1010,6 +997,17 @@ export class ModelAssetManager {
         return existing;
       }
 
+      const verification = await verifyArtifactFile(stagedPayload, {
+        sizeBytes: manifest.sizeBytes,
+        sha256: manifest.sha256,
+        maxBytes: this.maxArtifactBytes
+      }, signal);
+      if (!verification.ok) {
+        throw new ModelAssetError(
+          verification.reason,
+          "Staged artifact failed manifest integrity verification."
+        );
+      }
       if (signal.aborted) {
         throw new ModelAssetError(
           "CANCELLED",
@@ -1018,6 +1016,7 @@ export class ModelAssetManager {
       }
 
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
+      await this.assertArtifactDirectoryShape(stagingDirectory, manifest, "UNSAFE_PATH");
       try {
         await this.publishReservedArtifact(
           paths,
