@@ -129,6 +129,25 @@ describe("deterministic math verifier invariants", () => {
     }
   });
 
+  it("rejects non-finite numbers produced by valid JSON numeric syntax", async () => {
+    const modularStatement =
+      `{"protocol":"${MODULAR_ARITHMETIC_PROTOCOL}","protocolVersion":${String(MODULAR_ARITHMETIC_PROTOCOL_VERSION)},`
+      + `"claim":{"kind":"DIVISIBILITY","divisor":"1","dividend":{"kind":"POWER",`
+      + `"base":{"kind":"INTEGER","value":"2"},"exponent":1e400}}}`;
+    const modular = await new ModularArithmeticVerifier().verify(modularStatement, 1);
+    expect(VerificationResultSchema.parse(modular)).toEqual(modular);
+    expect(modular.status).toBe("UNRESOLVED");
+    expect(modular.reason).toContain("MALFORMED_INTERPRETATION");
+
+    const countingStatement =
+      `{"protocol":"${COMBINATORIAL_COUNTING_PROTOCOL}","protocolVersion":${String(COMBINATORIAL_COUNTING_PROTOCOL_VERSION)},`
+      + `"claim":{"kind":"BINOMIAL","n":1e400,"k":1,"claimed":"0"}}`;
+    const counting = await new CombinatorialCountingVerifier().verify(countingStatement, 1);
+    expect(VerificationResultSchema.parse(counting)).toEqual(counting);
+    expect(counting.status).toBe("UNRESOLVED");
+    expect(counting.reason).toContain("MALFORMED_INTERPRETATION");
+  });
+
   it("classifies schema cardinality and literal-size limits as resource abstentions", async () => {
     const oversizedLiteral = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS + 1);
     const result = await new ModularArithmeticVerifier().verify(JSON.stringify({
