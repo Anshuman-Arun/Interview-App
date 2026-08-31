@@ -16,7 +16,7 @@ New math verifiers use stable reason-code prefixes such as `CLAIM_VERIFIED`, `CL
 
 JSON integers are encoded as canonical base-10 strings; leading zeroes, a leading `+`, whitespace, and negative zero are rejected. Operand literals are capped at 256 decimal digits, while explicit claimed-result literals may use the existing 4,096-digit exact-intermediate bound so supported computations can represent their own exact answers. Rationals are `{ numerator, denominator }` string pairs and are normalized with a positive denominator and gcd reduction. Exported rational operations defensively normalize caller-supplied `ExactRational` values and cross-cancel where practical before enforcing intermediate-size bounds. No floating-point comparison is used for verification.
 
-The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility and modular normalization, exact rational arithmetic, finite sums/products, factorial/binomial/permutation/combinations-with-repetition helpers, and finite set/multiset/permutation checks. Direct bigint helpers and supported expression operations retain resource checks; verifier schemas remain the runtime shape boundary for untrusted structured inputs.
+The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility and modular normalization, exact rational arithmetic, finite sums/products, factorial/binomial/permutation/combinations-with-repetition helpers, and finite set/multiset/permutation checks. Divisibility follows the mathematical existence definition, so `0 | 0` is true while `0 | b` is false for nonzero `b`. Direct bigint helpers and supported expression operations retain resource checks; verifier schemas remain the runtime shape boundary for untrusted structured inputs.
 
 ## Verifiers and protocols
 
@@ -32,7 +32,7 @@ The expression grammar is intentionally small. Integer powers accept only bounde
 
 For `LINEAR_PREVIOUS_TERMS`, `coefficients[0]` multiplies the immediately previous sequence value, `coefficients[1]` the value two positions back, and so on; the constant is then added. The initial-condition count must exactly match the coefficient count.
 
-Probability-typed inputs are validated as exact rationals in `[0, 1]`; conditioning and Bayes evidence probabilities must be strictly positive. Internally inconsistent supplied probability models abstain as malformed rather than being contradicted as though they were valid models.
+Probability-model inputs are validated as exact rationals in `[0, 1]`; conditioning and Bayes evidence probabilities must be strictly positive. Internally inconsistent supplied probability models abstain as malformed rather than being contradicted as though they were valid models. Claimed probability answers remain exact rational claims: an out-of-range claimed answer is contradicted when the supplied model itself is valid.
 
 ## Resource limits
 
