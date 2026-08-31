@@ -1160,6 +1160,74 @@ describe("provider definition and capability hostile values", () => {
     expect(duplicateBatchError).toMatchObject({ code: "DUPLICATE_PROVIDER" });
   });
 
+  it("does not let targeted Set.has overrides bypass configuration admission", () => {
+    const originalHas = Set.prototype.has;
+    let tokenError: unknown;
+    let assignmentError: unknown;
+    let blockedKeyError: unknown;
+    let operationError: unknown;
+
+    try {
+      Object.defineProperty(Set.prototype, "has", {
+        configurable: true,
+        writable: true,
+        value(this: Set<unknown>, target: unknown) {
+          if (target === "token" || target === "constructor") return false;
+          if (target === "hunter2" || target === "requirement") return true;
+          return Reflect.apply(originalHas, this, [target]);
+        }
+      });
+
+      try {
+        validateProviderConfiguration(settingsConfiguration({
+          token: "opaque-short-value"
+        }));
+      } catch (error) {
+        tokenError = error;
+      }
+
+      try {
+        validateProviderConfiguration(settingsConfiguration({
+          note: "password=hunter2"
+        }));
+      } catch (error) {
+        assignmentError = error;
+      }
+
+      try {
+        validateProviderConfiguration(settingsConfiguration({
+          constructor: "blocked"
+        }));
+      } catch (error) {
+        blockedKeyError = error;
+      }
+
+      const registry = new ProviderRegistry();
+      registry.register(createSettingsProviderInput());
+      const misspelledInput = {
+        registry,
+        configuration: settingsConfiguration({ mode: "safe" }),
+        requirement: ["IMAGE_INPUT"]
+      };
+      try {
+        resolveProviderConfiguration(misspelledInput);
+      } catch (error) {
+        operationError = error;
+      }
+    } finally {
+      Object.defineProperty(Set.prototype, "has", {
+        configurable: true,
+        writable: true,
+        value: originalHas
+      });
+    }
+
+    expect(tokenError).toMatchObject({ code: "SECRET_IN_CONFIGURATION" });
+    expect(assignmentError).toMatchObject({ code: "SECRET_IN_CONFIGURATION" });
+    expect(blockedKeyError).toMatchObject({ code: "MALFORMED_CONFIGURATION" });
+    expect(operationError).toMatchObject({ code: "MALFORMED_CONFIGURATION" });
+  });
+
   it("does not let monkey-patched Array.find or Array.sort bypass lookup and requirements", () => {
     const registry = new ProviderRegistry();
     registry.register({
@@ -1232,6 +1300,286 @@ describe("provider definition and capability hostile values", () => {
       unsupported: ["IMAGE_INPUT"],
       unknown: []
     });
+  });
+
+  it("does not let monkey-patched Array.some or Array.push bypass validation", () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+
+    const originalSome = Object.getOwnPropertyDescriptor(Array.prototype, "some");
+    const originalPush = Object.getOwnPropertyDescriptor(Array.prototype, "push");
+    if (
+      originalSome === undefined
+      || !("value" in originalSome)
+      || typeof originalSome.value !== "function"
+      || originalPush === undefined
+      || !("value" in originalPush)
+      || typeof originalPush.value !== "function"
+    ) {
+      throw new Error("Array prototype methods are unavailable");
+    }
+    const someCandidate: unknown = originalSome.value;
+    const pushCandidate: unknown = originalPush.value;
+    if (typeof someCandidate !== "function" || typeof pushCandidate !== "function") {
+      throw new Error("Array prototype methods are unavailable");
+    }
+
+    let typoError: unknown;
+    let capabilityResult: unknown;
+    try {
+      Object.defineProperty(Array.prototype, "some", {
+        configurable: true,
+        writable: true,
+        value(this: unknown[], callback: unknown, thisArg?: unknown) {
+          for (let index = 0; index < this.length; index += 1) {
+            if (this[index] === "requirement") return false;
+          }
+          const result: unknown = Reflect.apply(
+            someCandidate,
+            this,
+            [callback, thisArg]
+          );
+          return result === true;
+        }
+      });
+      Object.defineProperty(Array.prototype, "push", {
+        configurable: true,
+        writable: true,
+        value(this: unknown[], ...items: unknown[]) {
+          if (items[0] === "IMAGE_INPUT") return this.length;
+          const result: unknown = Reflect.apply(
+            pushCandidate,
+            this,
+            items
+          );
+          if (typeof result !== "number") {
+            throw new Error("Array.push returned an invalid result");
+          }
+          return result;
+        }
+      });
+
+      const misspelledInput = {
+        registry,
+        configuration: settingsConfiguration({ mode: "safe" }),
+        requirement: ["IMAGE_INPUT"]
+      };
+      try {
+        resolveProviderConfiguration(misspelledInput);
+      } catch (error) {
+        typoError = error;
+      }
+
+      capabilityResult = matchCapabilityRequirements(
+        createCapabilities(),
+        ["IMAGE_INPUT"]
+      );
+    } finally {
+      Object.defineProperty(Array.prototype, "some", originalSome);
+      Object.defineProperty(Array.prototype, "push", originalPush);
+    }
+
+    expect(typoError).toMatchObject({ code: "MALFORMED_CONFIGURATION" });
+    expect(capabilityResult).toEqual({
+      compatible: false,
+      unsupported: ["IMAGE_INPUT"],
+      unknown: []
+    });
+  });
+
+  it("does not let monkey-patched Array.map or Array.sort corrupt normalized provider state", () => {
+    const originalMap = Object.getOwnPropertyDescriptor(Array.prototype, "map");
+    const originalSort = Object.getOwnPropertyDescriptor(Array.prototype, "sort");
+    if (
+      originalMap === undefined
+      || !("value" in originalMap)
+      || typeof originalMap.value !== "function"
+      || originalSort === undefined
+      || !("value" in originalSort)
+      || typeof originalSort.value !== "function"
+    ) {
+      throw new Error("Array prototype methods are unavailable");
+    }
+    const mapCandidate: unknown = originalMap.value;
+    const sortCandidate: unknown = originalSort.value;
+    if (typeof mapCandidate !== "function" || typeof sortCandidate !== "function") {
+      throw new Error("Array prototype methods are unavailable");
+    }
+
+    let secretError: unknown;
+    let definition: ReturnType<typeof defineProvider> | undefined;
+    let enumerated: readonly ReturnType<typeof defineProvider>[] | undefined;
+    let mapRegistrationCount = -1;
+
+    try {
+      Object.defineProperty(Array.prototype, "map", {
+        configurable: true,
+        writable: true,
+        value(this: unknown[], callback: unknown, thisArg?: unknown) {
+          const first = this[0];
+          if (typeof first === "object" && first !== null) {
+            const firstId: unknown = Reflect.get(first, "id");
+            if (firstId === "map-register-provider") return [];
+          }
+          const result: unknown = Reflect.apply(
+            mapCandidate,
+            this,
+            [callback, thisArg]
+          );
+          if (!Array.isArray(result)) {
+            throw new Error("Array.map returned an invalid result");
+          }
+          return result;
+        }
+      });
+      Object.defineProperty(Array.prototype, "sort", {
+        configurable: true,
+        writable: true,
+        value(this: unknown[], compareFn?: unknown) {
+          const first = this[0];
+          if (
+            Array.isArray(first)
+            && first[0] === "authorization"
+          ) {
+            return [];
+          }
+          if (typeof first === "object" && first !== null) {
+            const id: unknown = Reflect.get(first, "id");
+            if (
+              id === "sort-model-b"
+              || id === "enum-z"
+              || id === "enum-a"
+            ) {
+              return [];
+            }
+          }
+          const result: unknown = Reflect.apply(
+            sortCandidate,
+            this,
+            compareFn === undefined ? [] : [compareFn]
+          );
+          if (!Array.isArray(result)) {
+            throw new Error("Array.sort returned an invalid result");
+          }
+          return result;
+        }
+      });
+
+      try {
+        validateProviderConfiguration(settingsConfiguration({
+          authorization: "Bearer abcdefghijklmnop"
+        }));
+      } catch (error) {
+        secretError = error;
+      }
+
+      definition = defineProvider({
+        ...createSettingsProviderInput(),
+        models: [{
+          id: "sort-model-b",
+          displayName: "Model B",
+          capabilities: createCapabilities()
+        }, {
+          id: "sort-model-a",
+          displayName: "Model A",
+          capabilities: createCapabilities()
+        }]
+      });
+
+      const mapRegistry = new ProviderRegistry();
+      mapRegistrationCount = mapRegistry.registerMany([{
+        ...createSettingsProviderInput(),
+        id: "map-register-provider",
+        models: [{
+          id: "map-register-model",
+          displayName: "Map Register Model",
+          capabilities: createCapabilities()
+        }]
+      }]).length;
+
+      const enumerationRegistry = new ProviderRegistry();
+      enumerationRegistry.register({
+        ...createSettingsProviderInput(),
+        id: "enum-z",
+        models: [{
+          id: "enum-z-model",
+          displayName: "Enum Z Model",
+          capabilities: createCapabilities()
+        }]
+      });
+      enumerationRegistry.register({
+        ...createSettingsProviderInput(),
+        id: "enum-a",
+        models: [{
+          id: "enum-a-model",
+          displayName: "Enum A Model",
+          capabilities: createCapabilities()
+        }]
+      });
+      enumerated = enumerationRegistry.enumerateProviders();
+
+    } finally {
+      Object.defineProperty(Array.prototype, "map", originalMap);
+      Object.defineProperty(Array.prototype, "sort", originalSort);
+    }
+
+    expect(secretError).toMatchObject({ code: "SECRET_IN_CONFIGURATION" });
+    expect(definition?.models.map((model) => model.id))
+      .toEqual(["sort-model-a", "sort-model-b"]);
+    expect(enumerated?.map((provider) => provider.id))
+      .toEqual(["enum-a", "enum-z"]);
+    expect(mapRegistrationCount).toBe(1);
+  });
+
+  it("does not let a monkey-patched Map.values hide registered providers", () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+
+    const originalValues = Object.getOwnPropertyDescriptor(Map.prototype, "values");
+    if (
+      originalValues === undefined
+      || !("value" in originalValues)
+      || typeof originalValues.value !== "function"
+    ) {
+      throw new Error("Map.values is unavailable");
+    }
+    const valuesCandidate: unknown = originalValues.value;
+    if (typeof valuesCandidate !== "function") {
+      throw new Error("Map.values is unavailable");
+    }
+    let providers: readonly ReturnType<typeof defineProvider>[] | undefined;
+
+    try {
+      Object.defineProperty(Map.prototype, "values", {
+        configurable: true,
+        writable: true,
+        value(this: Map<unknown, unknown>) {
+          const hasTarget = this.has("settings-provider");
+          const result: unknown = hasTarget
+            ? Reflect.apply(
+                valuesCandidate,
+                new Map<unknown, unknown>(),
+                []
+              )
+            : Reflect.apply(
+                valuesCandidate,
+                this,
+                []
+              );
+          if (typeof result !== "object" || result === null) {
+            throw new Error("Map.values returned an invalid result");
+          }
+          return result;
+        }
+      });
+
+      providers = registry.enumerateProviders();
+    } finally {
+      Object.defineProperty(Map.prototype, "values", originalValues);
+    }
+
+    expect(providers?.map((provider) => provider.id))
+      .toEqual(["settings-provider"]);
   });
 
   it("does not let a monkey-patched Array.includes bypass admission checks", () => {

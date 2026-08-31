@@ -462,6 +462,18 @@ function freezeNullPrototype<T extends object>(value: T): T {
 const MAP_HAS_INTRINSIC = Map.prototype.has;
 const MAP_GET_INTRINSIC = Map.prototype.get;
 const MAP_SET_INTRINSIC = Map.prototype.set;
+const MAP_FOR_EACH_INTRINSIC = Map.prototype.forEach;
+const SET_HAS_INTRINSIC = Set.prototype.has;
+const SET_ADD_INTRINSIC = Set.prototype.add;
+
+function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
+  const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
+  return result === true;
+}
+
+function setAdd<T>(set: Set<T>, value: T): void {
+  Reflect.apply(SET_ADD_INTRINSIC, set, [value]);
+}
 
 function providerMapHas(
   map: Map<ProviderId, ProviderDefinition>,
@@ -562,6 +574,18 @@ const READINESS_INPUT_KEYS = new Set([
   "requirements"
 ]);
 
+function objectHasUnknownOwnKeys(
+  descriptors: Readonly<Record<string, PropertyDescriptor>>,
+  allowedKeys: ReadonlySet<string>
+): boolean {
+  const keys = Object.keys(descriptors);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key !== undefined && !setHas(allowedKeys, key)) return true;
+  }
+  return false;
+}
+
 function assertNoUnknownOwnOperationFields(
   value: unknown,
   allowedKeys: ReadonlySet<string>,
@@ -581,7 +605,7 @@ function assertNoUnknownOwnOperationFields(
   }
   if (
     symbols.length > 0
-    || Object.keys(descriptors).some((key) => !allowedKeys.has(key))
+    || objectHasUnknownOwnKeys(descriptors, allowedKeys)
   ) {
     throw new ProviderControlPlaneError(errorCode, message);
   }
@@ -641,9 +665,14 @@ function inspectPlainDataObjectProperties(
   if (symbols.length > 0) throw new ProviderControlPlaneError(errorCode, message);
   const inspected: Record<string, unknown> = {};
   Object.setPrototypeOf(inspected, null);
-  for (const [key, descriptor] of Object.entries(descriptors)) {
+  const descriptorKeys = Object.keys(descriptors);
+  for (let index = 0; index < descriptorKeys.length; index += 1) {
+    const key = descriptorKeys[index];
+    if (key === undefined) continue;
+    const descriptor = descriptors[key];
     if (
-      !allowedKeys.has(key)
+      descriptor === undefined
+      || !setHas(allowedKeys, key)
       || descriptor.enumerable !== true
       || !("value" in descriptor)
     ) {
@@ -663,13 +692,13 @@ function readResolverMethodWithoutAccessors(
   let current: object | null = value;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
     if (current === Object.prototype) return undefined;
-    if (seen.has(current)) {
+    if (setHas(seen, current)) {
       throw new ProviderControlPlaneError(
         "INVALID_FACTORY_INPUT",
         "Provider secret resolver prototype chain is malformed"
       );
     }
-    seen.add(current);
+    setAdd(seen, current);
 
     let descriptor: PropertyDescriptor | undefined;
     try {
@@ -1001,8 +1030,8 @@ function readAdapterMember(
   let current: object | null = value;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
     if (current === Object.prototype) return undefined;
-    if (seen.has(current)) throw adapterDefinitionMismatch();
-    seen.add(current);
+    if (setHas(seen, current)) throw adapterDefinitionMismatch();
+    setAdd(seen, current);
 
     let descriptor: PropertyDescriptor | undefined;
     try {
@@ -1045,15 +1074,25 @@ function snapshotAdapterCapabilities(value: unknown): unknown {
   } catch {
     throw adapterDefinitionMismatch();
   }
-  for (const [key, descriptor] of Object.entries(descriptors)) {
-    if (descriptor.enumerable === true && !MODEL_CAPABILITY_KEYS.has(key)) {
+  const descriptorKeys = Object.keys(descriptors);
+  for (let index = 0; index < descriptorKeys.length; index += 1) {
+    const key = descriptorKeys[index];
+    if (key === undefined) continue;
+    const descriptor = descriptors[key];
+    if (
+      descriptor !== undefined
+      && descriptor.enumerable === true
+      && !setHas(MODEL_CAPABILITY_KEYS, key)
+    ) {
       throw adapterDefinitionMismatch();
     }
   }
 
   const snapshot: Record<string, unknown> = {};
   Object.setPrototypeOf(snapshot, null);
-  for (const key of REQUIRED_MODEL_CAPABILITY_KEYS) {
+  for (let index = 0; index < REQUIRED_MODEL_CAPABILITY_KEYS.length; index += 1) {
+    const key = REQUIRED_MODEL_CAPABILITY_KEYS[index];
+    if (key === undefined) continue;
     snapshot[key] = readAdapterMember(value, key);
   }
   const reasoningLevels = readAdapterMember(value, "reasoningLevels");
@@ -1134,7 +1173,7 @@ function assertAdapterMatchesResolvedDefinition(
     }
 
     if (
-      !supportMatchesBoolean(declared.imageInput, execution.inputModalities.has("image"))
+      !supportMatchesBoolean(declared.imageInput, setHas(execution.inputModalities, "image"))
       || !supportMatchesBoolean(declared.streaming, execution.textStreaming)
       || !supportMatchesBoolean(declared.persistentSession, execution.persistentSession)
       || !supportMatchesBoolean(declared.resumableSession, execution.resumableSession)
@@ -1227,6 +1266,55 @@ function freezeModel(model: ProviderModelDefinition): ProviderModelDefinition {
   });
 }
 
+function sortedFrozenModelCopy(
+  values: readonly ProviderModelDefinition[]
+): ProviderModelDefinition[] {
+  const output: ProviderModelDefinition[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const source = values[index];
+    if (source === undefined) {
+      throw new ProviderControlPlaneError(
+        "MALFORMED_DEFINITION",
+        "Provider model list is malformed"
+      );
+    }
+    const model = freezeModel(source);
+    let insertionIndex = output.length;
+    while (insertionIndex > 0) {
+      const previous = output[insertionIndex - 1];
+      if (previous === undefined || compareCodeUnits(previous.id, model.id) <= 0) break;
+      output[insertionIndex] = previous;
+      insertionIndex -= 1;
+    }
+    output[insertionIndex] = model;
+  }
+  return output;
+}
+
+function sortedProviderDefinitionCopy(
+  values: readonly ProviderDefinition[]
+): ProviderDefinition[] {
+  const output: ProviderDefinition[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const provider = values[index];
+    if (provider === undefined) {
+      throw new ProviderControlPlaneError(
+        "INVALID_REGISTRY",
+        "Provider registry storage is invalid"
+      );
+    }
+    let insertionIndex = output.length;
+    while (insertionIndex > 0) {
+      const previous = output[insertionIndex - 1];
+      if (previous === undefined || compareCodeUnits(previous.id, provider.id) <= 0) break;
+      output[insertionIndex] = previous;
+      insertionIndex -= 1;
+    }
+    output[insertionIndex] = provider;
+  }
+  return output;
+}
+
 function defineProviderValue(input: unknown): ProviderDefinition {
   if (typeof input !== "object" || input === null) {
     throw new ProviderControlPlaneError(
@@ -1299,14 +1387,21 @@ function defineProviderValue(input: unknown): ProviderDefinition {
   }
 
   const seenModelIds: ProviderModelId[] = [];
-  for (const model of metadataResult.data.models) {
+  for (let index = 0; index < metadataResult.data.models.length; index += 1) {
+    const model = metadataResult.data.models[index];
+    if (model === undefined) {
+      throw new ProviderControlPlaneError(
+        "MALFORMED_DEFINITION",
+        "Provider model list is malformed"
+      );
+    }
     if (readonlyStringArrayContains(seenModelIds, model.id)) {
       throw new ProviderControlPlaneError(
         "DUPLICATE_MODEL",
         "Provider definition contains a duplicate model ID"
       );
     }
-    seenModelIds.push(model.id);
+    seenModelIds[seenModelIds.length] = model.id;
     assertDefinitionCapabilitiesConsistent(model.capabilities);
     if (
       (metadataResult.data.kind === "REMOTE_API"
@@ -1332,9 +1427,7 @@ function defineProviderValue(input: unknown): ProviderDefinition {
     }
   }
 
-  const models = metadataResult.data.models
-    .map((model) => freezeModel(model))
-    .sort((left, right) => compareCodeUnits(left.id, right.id));
+  const models = sortedFrozenModelCopy(metadataResult.data.models);
 
   return freezeNullPrototype({
     ...metadataResult.data,
@@ -1394,7 +1487,7 @@ function snapshotProviderDefinitionInputs(
   const snapshot: unknown[] = [];
   for (let index = 0; index < rawLength; index += 1) {
     const key = String(index);
-    allowedKeys.add(key);
+    setAdd(allowedKeys, key);
     const descriptor = descriptors[key];
     if (
       descriptor === undefined
@@ -1407,9 +1500,9 @@ function snapshotProviderDefinitionInputs(
       );
     }
     const item: unknown = descriptor.value;
-    snapshot.push(item);
+    snapshot[index] = item;
   }
-  if (Object.keys(descriptors).some((key) => !allowedKeys.has(key))) {
+  if (objectHasUnknownOwnKeys(descriptors, allowedKeys)) {
     throw new ProviderControlPlaneError(
       "MALFORMED_DEFINITION",
       "Provider registration batch is malformed"
@@ -1430,28 +1523,65 @@ export class ProviderRegistry {
 
   public registerMany(inputs: readonly ProviderDefinitionInput[]): readonly ProviderDefinition[] {
     const snapshot = snapshotProviderDefinitionInputs(inputs);
-    const definitions = snapshot.map((input) => defineProviderValue(input));
+    const definitions: ProviderDefinition[] = [];
+    for (let index = 0; index < snapshot.length; index += 1) {
+      definitions[index] = defineProviderValue(snapshot[index]);
+    }
+
     const candidateIds: ProviderId[] = [];
-    for (const definition of definitions) {
+    for (let index = 0; index < definitions.length; index += 1) {
+      const definition = definitions[index];
+      if (definition === undefined) {
+        throw new ProviderControlPlaneError(
+          "MALFORMED_DEFINITION",
+          "Provider registration batch is malformed"
+        );
+      }
       if (readonlyStringArrayContains(candidateIds, definition.id)) {
         throw new ProviderControlPlaneError(
           "DUPLICATE_PROVIDER",
           "Provider ID is duplicated in the registration batch"
         );
       }
-      candidateIds.push(definition.id);
+      candidateIds[candidateIds.length] = definition.id;
       this.#assertProviderIdAvailable(definition.id);
     }
-    for (const definition of definitions) {
+
+    for (let index = 0; index < definitions.length; index += 1) {
+      const definition = definitions[index];
+      if (definition === undefined) {
+        throw new ProviderControlPlaneError(
+          "MALFORMED_DEFINITION",
+          "Provider registration batch is malformed"
+        );
+      }
       providerMapSet(this.#providers, definition.id, definition);
     }
     return Object.freeze(definitions);
   }
 
   public enumerateProviders(): readonly ProviderDefinition[] {
-    return Object.freeze(
-      [...this.#providers.values()].sort((left, right) => compareCodeUnits(left.id, right.id))
-    );
+    const values: ProviderDefinition[] = [];
+    try {
+      Reflect.apply(MAP_FOR_EACH_INTRINSIC, this.#providers, [
+        (definition: ProviderDefinition, providerId: ProviderId) => {
+          if (!isStoredProviderDefinition(definition, providerId)) {
+            throw new ProviderControlPlaneError(
+              "INVALID_REGISTRY",
+              "Provider registry storage is invalid"
+            );
+          }
+          values[values.length] = definition;
+        }
+      ]);
+    } catch (error) {
+      if (isProviderControlPlaneError(error)) throw error;
+      throw new ProviderControlPlaneError(
+        "INVALID_REGISTRY",
+        "Provider registry storage is invalid"
+      );
+    }
+    return Object.freeze(sortedProviderDefinitionCopy(values));
   }
 
   public enumerateModels(providerId: string): readonly ProviderModelDefinition[] {
@@ -1597,7 +1727,8 @@ export function matchCapabilityRequirements(
   }
 
   const normalizedRequirements: ProviderCapabilityKey[] = [];
-  for (const requirement of inspectedRequirements) {
+  for (let index = 0; index < inspectedRequirements.length; index += 1) {
+    const requirement = inspectedRequirements[index];
     const parsedRequirement = ProviderCapabilityKeySchema.safeParse(requirement);
     if (!parsedRequirement.success) {
       throw new ProviderControlPlaneError(
@@ -1605,7 +1736,7 @@ export function matchCapabilityRequirements(
         "Provider capability requirements are malformed"
       );
     }
-    normalizedRequirements.push(parsedRequirement.data);
+    normalizedRequirements[normalizedRequirements.length] = parsedRequirement.data;
   }
 
   const uniqueRequirements: ProviderCapabilityKey[] = [];
@@ -1615,16 +1746,18 @@ export function matchCapabilityRequirements(
       requirement !== undefined
       && !readonlyStringArrayContains(uniqueRequirements, requirement)
     ) {
-      uniqueRequirements.push(requirement);
+      uniqueRequirements[uniqueRequirements.length] = requirement;
     }
   }
   const normalized = sortedCodeUnitStringCopy(uniqueRequirements);
   const unsupported: ProviderCapabilityKey[] = [];
   const unknown: ProviderCapabilityKey[] = [];
-  for (const requirement of normalized) {
+  for (let index = 0; index < normalized.length; index += 1) {
+    const requirement = normalized[index];
+    if (requirement === undefined) continue;
     const support = supportForCapability(parsedCapabilities.data, requirement);
-    if (support === "UNSUPPORTED") unsupported.push(requirement);
-    if (support === "UNKNOWN") unknown.push(requirement);
+    if (support === "UNSUPPORTED") unsupported[unsupported.length] = requirement;
+    if (support === "UNKNOWN") unknown[unknown.length] = requirement;
   }
   return freezeNullPrototype({
     compatible: unsupported.length === 0 && unknown.length === 0,
@@ -1633,12 +1766,19 @@ export function matchCapabilityRequirements(
   });
 }
 
+function zodIssuesContainSecret(
+  issues: readonly { readonly message: string }[]
+): boolean {
+  for (let index = 0; index < issues.length; index += 1) {
+    if (issues[index]?.message === "SECRET_IN_CONFIGURATION") return true;
+  }
+  return false;
+}
+
 function parseConfiguration(value: unknown): ProviderConfiguration {
   const parsed = ProviderConfigurationSchema.safeParse(value);
   if (!parsed.success) {
-    const containsSecret = parsed.error.issues.some(
-      (issue) => issue.message === "SECRET_IN_CONFIGURATION"
-    );
+    const containsSecret = zodIssuesContainSecret(parsed.error.issues);
     throw new ProviderControlPlaneError(
       containsSecret ? "SECRET_IN_CONFIGURATION" : "MALFORMED_CONFIGURATION",
       containsSecret
@@ -1675,9 +1815,7 @@ function validateProviderSettings(
   }
   const parsed = SafeProviderConfigurationRecordSchema.safeParse(candidate);
   if (!parsed.success) {
-    const containsSecret = parsed.error.issues.some(
-      (issue) => issue.message === "SECRET_IN_CONFIGURATION"
-    );
+    const containsSecret = zodIssuesContainSecret(parsed.error.issues);
     throw new ProviderControlPlaneError(
       containsSecret ? "SECRET_IN_CONFIGURATION" : "MALFORMED_CONFIGURATION",
       containsSecret
@@ -2136,12 +2274,37 @@ function canonicalizeSafeValue(value: SafeProviderConfigurationValue): string {
   }
   if (typeof value === "string") return JSON.stringify(value);
   if (isSafeProviderConfigurationArray(value)) {
-    return "[" + value.map((item) => canonicalizeSafeValue(item)).join(",") + "]";
+    let output = "[";
+    for (let index = 0; index < value.length; index += 1) {
+      if (index > 0) output += ",";
+      const item = value[index];
+      if (item === undefined) {
+        throw new ProviderControlPlaneError(
+          "MALFORMED_CONFIGURATION",
+          "Provider configuration is malformed"
+        );
+      }
+      output += canonicalizeSafeValue(item);
+    }
+    return output + "]";
   }
-  const entries = Object.entries(value)
-    .sort(([left], [right]) => compareCodeUnits(left, right))
-    .map(([key, item]) => JSON.stringify(key) + ":" + canonicalizeSafeValue(item));
-  return "{" + entries.join(",") + "}";
+
+  const keys = sortedCodeUnitStringCopy(Object.keys(value));
+  let output = "{";
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) continue;
+    const item = value[key];
+    if (item === undefined) {
+      throw new ProviderControlPlaneError(
+        "MALFORMED_CONFIGURATION",
+        "Provider configuration is malformed"
+      );
+    }
+    if (index > 0) output += ",";
+    output += JSON.stringify(key) + ":" + canonicalizeSafeValue(item);
+  }
+  return output + "}";
 }
 
 export function createProviderConfigurationFingerprintMaterial(value: unknown): string {

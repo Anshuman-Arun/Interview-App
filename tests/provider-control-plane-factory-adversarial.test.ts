@@ -953,6 +953,48 @@ describe("adapter factory adversarial boundary", () => {
       .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
   });
 
+  it("does not let a Set.has override hide unknown mock runtime fields", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: MOCK_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    const originalHas = Set.prototype.has;
+    let caught: unknown;
+
+    try {
+      Object.defineProperty(Set.prototype, "has", {
+        configurable: true,
+        writable: true,
+        value(this: Set<unknown>, target: unknown) {
+          if (target === "rogue") return true;
+          return Reflect.apply(originalHas, this, [target]);
+        }
+      });
+
+      try {
+        await factory.createAdapter({
+          resolved,
+          runtime: {
+            proposal: PROPOSAL,
+            rogue: true
+          }
+        });
+      } catch (error) {
+        caught = error;
+      }
+    } finally {
+      Object.defineProperty(Set.prototype, "has", {
+        configurable: true,
+        writable: true,
+        value: originalHas
+      });
+    }
+
+    expect(caught).toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+  });
+
   it("rejects cross-provider factory use before raw factory or credential resolution", async () => {
     let rawFactoryCalls = 0;
     let secretResolverCalls = 0;

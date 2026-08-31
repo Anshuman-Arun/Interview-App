@@ -15,21 +15,35 @@ const registerProviderDefinitions = ProviderRegistry.prototype.registerMany;
 const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
 
 const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
-const PROPOSAL_KEYS = new Set([
+const PROPOSAL_KEYS = Object.freeze([
   "realizedAction",
   "claimedDisclosureLevel",
   "claimedDisclosureIds",
   "speechText",
   "boardActions"
-]);
-const BOARD_ACTION_KEYS = new Set([
+] as const);
+const PROPOSAL_KEY_SET = new Set<string>(PROPOSAL_KEYS);
+const BOARD_ACTION_KEYS = Object.freeze([
   "operation",
   "layer",
   "content",
   "targetShapeId",
   "expectedShapeRevision",
   "annotationPurpose"
-]);
+] as const);
+const BOARD_ACTION_KEY_SET = new Set<string>(BOARD_ACTION_KEYS);
+
+const SET_HAS_INTRINSIC = Set.prototype.has;
+const SET_ADD_INTRINSIC = Set.prototype.add;
+
+function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
+  const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
+  return result === true;
+}
+
+function setAdd<T>(set: Set<T>, value: T): void {
+  Reflect.apply(SET_ADD_INTRINSIC, set, [value]);
+}
 
 function invalidMockRuntime(): never {
   throw new ProviderControlPlaneError(
@@ -46,8 +60,8 @@ function readMockRuntimeMemberWithoutAccessors(
   let current: object | null = value;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
     if (current === Object.prototype) return undefined;
-    if (seen.has(current)) return invalidMockRuntime();
-    seen.add(current);
+    if (setHas(seen, current)) return invalidMockRuntime();
+    setAdd(seen, current);
 
     let descriptor: PropertyDescriptor | undefined;
     try {
@@ -80,8 +94,16 @@ function assertNoUnknownEnumerableMockFields(
   } catch {
     return invalidMockRuntime();
   }
-  for (const [key, descriptor] of Object.entries(descriptors)) {
-    if (descriptor.enumerable === true && !allowedKeys.has(key)) {
+  const descriptorKeys = Object.keys(descriptors);
+  for (let index = 0; index < descriptorKeys.length; index += 1) {
+    const key = descriptorKeys[index];
+    if (key === undefined) continue;
+    const descriptor = descriptors[key];
+    if (
+      descriptor !== undefined
+      && descriptor.enumerable === true
+      && !setHas(allowedKeys, key)
+    ) {
       invalidMockRuntime();
     }
   }
@@ -114,7 +136,7 @@ function snapshotMockArray(
       return invalidMockRuntime();
     }
     const item: unknown = descriptor.value;
-    snapshot.push(mapItem(item));
+    snapshot[index] = mapItem(item);
   }
   return Object.freeze(snapshot);
 }
@@ -123,10 +145,12 @@ function snapshotBoardAction(value: unknown): unknown {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return invalidMockRuntime();
   }
-  assertNoUnknownEnumerableMockFields(value, BOARD_ACTION_KEYS);
+  assertNoUnknownEnumerableMockFields(value, BOARD_ACTION_KEY_SET);
   const snapshot: Record<string, unknown> = {};
   Object.setPrototypeOf(snapshot, null);
-  for (const key of BOARD_ACTION_KEYS) {
+  for (let index = 0; index < BOARD_ACTION_KEYS.length; index += 1) {
+    const key = BOARD_ACTION_KEYS[index];
+    if (key === undefined) continue;
     const item = readMockRuntimeMemberWithoutAccessors(value, key);
     if (item !== undefined) snapshot[key] = item;
   }
@@ -137,11 +161,13 @@ function snapshotInterviewerProposal(value: unknown): unknown {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return invalidMockRuntime();
   }
-  assertNoUnknownEnumerableMockFields(value, PROPOSAL_KEYS);
+  assertNoUnknownEnumerableMockFields(value, PROPOSAL_KEY_SET);
 
   const snapshot: Record<string, unknown> = {};
   Object.setPrototypeOf(snapshot, null);
-  for (const key of PROPOSAL_KEYS) {
+  for (let index = 0; index < PROPOSAL_KEYS.length; index += 1) {
+    const key = PROPOSAL_KEYS[index];
+    if (key === undefined) continue;
     const item = readMockRuntimeMemberWithoutAccessors(value, key);
     if (item === undefined) continue;
     if (key === "claimedDisclosureIds") {

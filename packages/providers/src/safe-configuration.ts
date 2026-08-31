@@ -112,6 +112,29 @@ export const PROVIDER_CONFIGURATION_LIMITS = Object.freeze({
 
 const PROVIDER_DEFINITION_MAX_NODES = 16_384;
 
+const SET_HAS_INTRINSIC = Set.prototype.has;
+const SET_ADD_INTRINSIC = Set.prototype.add;
+const WEAK_SET_HAS_INTRINSIC = WeakSet.prototype.has;
+const WEAK_SET_ADD_INTRINSIC = WeakSet.prototype.add;
+
+function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
+  const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
+  return result === true;
+}
+
+function setAdd<T>(set: Set<T>, value: T): void {
+  Reflect.apply(SET_ADD_INTRINSIC, set, [value]);
+}
+
+function weakSetHas(set: WeakSet<object>, value: object): boolean {
+  const result: unknown = Reflect.apply(WEAK_SET_HAS_INTRINSIC, set, [value]);
+  return result === true;
+}
+
+function weakSetAdd(set: WeakSet<object>, value: object): void {
+  Reflect.apply(WEAK_SET_ADD_INTRINSIC, set, [value]);
+}
+
 export type ProviderConfigurationSafetyErrorCode =
   | "MALFORMED_CONFIGURATION"
   | "SECRET_IN_CONFIGURATION";
@@ -143,6 +166,23 @@ function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function sortedCodeUnitStringCopy(values: readonly string[]): string[] {
+  const output: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === undefined) continue;
+    let insertionIndex = output.length;
+    while (insertionIndex > 0) {
+      const previous = output[insertionIndex - 1];
+      if (previous === undefined || compareCodeUnits(previous, value) <= 0) break;
+      output[insertionIndex] = previous;
+      insertionIndex -= 1;
+    }
+    output[insertionIndex] = value;
+  }
+  return output;
+}
+
 function failMalformedConfiguration(): never {
   throw new ProviderConfigurationSafetyError("MALFORMED_CONFIGURATION");
 }
@@ -157,7 +197,7 @@ function normalizeConfigurationKey(key: string): string {
 
 function isSecretConfigurationKey(key: string): boolean {
   const normalized = normalizeConfigurationKey(key);
-  if (SECRET_CONFIGURATION_KEYS.has(normalized)) return true;
+  if (setHas(SECRET_CONFIGURATION_KEYS, normalized)) return true;
   return normalized.endsWith("accesstoken")
     || normalized.endsWith("accesstokens")
     || normalized.endsWith("refreshtoken")
@@ -278,7 +318,7 @@ function containsExplicitCredentialAssignment(value: string): boolean {
     )
       ? AUTHORIZATION_NON_SECRET_ASSIGNMENT_VALUES
       : GENERIC_NON_SECRET_ASSIGNMENT_VALUES;
-    if (!allowedValues.has(normalizedValue)) return true;
+    if (!setHas(allowedValues, normalizedValue)) return true;
   }
   return GENERIC_SECRET_ASSIGNMENT_PATTERN.test(value);
 }
@@ -328,16 +368,18 @@ function inspectConfigurationArray(
   const output: SafeProviderConfigurationValue[] = [];
   for (let index = 0; index < rawLength; index += 1) {
     const key = String(index);
-    allowedKeys.add(key);
+    setAdd(allowedKeys, key);
     const descriptor = descriptors[key];
     if (descriptor === undefined || !("value" in descriptor) || descriptor.enumerable !== true) {
       failMalformedConfiguration();
     }
     const item: unknown = descriptor.value;
-    output.push(inspectConfigurationValue(item, state, depth + 1, rejectSecrets));
+    output[index] = inspectConfigurationValue(item, state, depth + 1, rejectSecrets);
   }
-  for (const key of Object.keys(descriptors)) {
-    if (!allowedKeys.has(key)) failMalformedConfiguration();
+  const descriptorKeys = Object.keys(descriptors);
+  for (let index = 0; index < descriptorKeys.length; index += 1) {
+    const key = descriptorKeys[index];
+    if (key !== undefined && !setHas(allowedKeys, key)) failMalformedConfiguration();
   }
   return Object.freeze(output);
 }
@@ -361,18 +403,23 @@ function inspectConfigurationRecord(
   if (prototype !== Object.prototype && prototype !== null) failMalformedConfiguration();
   if (symbols.length > 0) failMalformedConfiguration();
 
-  const entries = Object.entries(descriptors);
-  if (entries.length > PROVIDER_CONFIGURATION_LIMITS.maxObjectEntries) {
+  const descriptorKeys = Object.keys(descriptors);
+  if (descriptorKeys.length > PROVIDER_CONFIGURATION_LIMITS.maxObjectEntries) {
     failMalformedConfiguration();
   }
 
+  const sortedKeys = sortedCodeUnitStringCopy(descriptorKeys);
   const output: Record<string, SafeProviderConfigurationValue> = {};
   Object.setPrototypeOf(output, null);
-  for (const [key, descriptor] of entries.sort(([left], [right]) => compareCodeUnits(left, right))) {
+  for (let index = 0; index < sortedKeys.length; index += 1) {
+    const key = sortedKeys[index];
+    if (key === undefined) continue;
+    const descriptor = descriptors[key];
     if (
-      key.length === 0
+      descriptor === undefined
+      || key.length === 0
       || key.length > PROVIDER_CONFIGURATION_LIMITS.maxKeyLength
-      || BLOCKED_CONFIGURATION_KEYS.has(key)
+      || setHas(BLOCKED_CONFIGURATION_KEYS, key)
       || descriptor.enumerable !== true
       || !("value" in descriptor)
     ) {
@@ -414,8 +461,8 @@ function inspectConfigurationValue(
     return failMalformedConfiguration();
   }
 
-  if (state.seen.has(value)) failMalformedConfiguration();
-  state.seen.add(value);
+  if (weakSetHas(state.seen, value)) failMalformedConfiguration();
+  weakSetAdd(state.seen, value);
   try {
     if (Array.isArray(value)) return inspectConfigurationArray(value, state, depth, rejectSecrets);
     return inspectConfigurationRecord(value, state, depth, rejectSecrets);
