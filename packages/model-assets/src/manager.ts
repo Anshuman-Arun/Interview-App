@@ -126,8 +126,16 @@ export class ModelAssetManager {
   private reservedBytes = 0;
 
   public constructor(options: ModelAssetManagerOptions) {
-    if (!path.isAbsolute(options.rootDir)) {
+    const rootDir: unknown = options.rootDir;
+    if (typeof rootDir !== "string" || !path.isAbsolute(rootDir)) {
       throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must be an absolute path.");
+    }
+    const rawCrossOriginRedirects: unknown = options.allowCrossOriginRedirects;
+    if (rawCrossOriginRedirects !== undefined && typeof rawCrossOriginRedirects !== "boolean") {
+      throw new ModelAssetError(
+        "INVALID_CONFIGURATION",
+        "allowCrossOriginRedirects must be a boolean when provided."
+      );
     }
     this.maxArtifactBytes = positiveSafeInteger(
       options.maxArtifactBytes,
@@ -153,13 +161,13 @@ export class ModelAssetManager {
       DEFAULT_MAX_REDIRECTS,
       "maxRedirects"
     );
-    this.allowCrossOriginRedirects = options.allowCrossOriginRedirects ?? false;
+    this.allowCrossOriginRedirects = rawCrossOriginRedirects ?? false;
     this.maxListEntries = positiveSafeInteger(
       options.maxListEntries,
       DEFAULT_MAX_LIST_ENTRIES,
       "maxListEntries"
     );
-    this.cachePathsPromise = initializeCachePaths(options.rootDir);
+    this.cachePathsPromise = initializeCachePaths(rootDir);
     void this.cachePathsPromise.catch(() => undefined);
   }
 
