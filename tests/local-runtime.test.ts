@@ -307,6 +307,25 @@ describe("local worker lifecycle manager", () => {
     expect(stderr).not.toContain("[REDACTED]REDACTED]");
   });
 
+  it("rejects non-string HTTP readiness URLs without coercion", () => {
+    const runtime = manager();
+    let coercions = 0;
+    const hostileUrl = {
+      toString: () => {
+        coercions += 1;
+        return "http://127.0.0.1:43199/health";
+      }
+    };
+
+    expect(() => runtime.register(definition("coercive-url", "ready", {
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: hostileUrl
+      } as unknown as LocalComponentDefinition["readiness"]
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(coercions).toBe(0);
+  });
+
   it("canonicalizes localhost readiness probes to a literal loopback address", async () => {
     let requestedUrl: string | undefined;
     const runtime = manager({
@@ -716,15 +735,22 @@ describe("local worker lifecycle manager", () => {
 
   it("fails immediately on malformed readiness decision shapes", async () => {
     const custom = manager();
+    let probeCalls = 0;
     custom.register(definition("bad-custom-decision", "ready", {
       startupTimeoutMs: 1_000,
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 3, backoffMs: 5 },
       readiness: {
         kind: "CUSTOM_LOCAL",
-        probe: () => ({ ready: "yes" } as unknown as { readonly ready: boolean })
+        probe: () => {
+          probeCalls += 1;
+          return { ready: "yes" } as unknown as { readonly ready: boolean };
+        }
       }
     }));
     await expect(custom.start("bad-custom-decision"))
       .rejects.toMatchObject({ code: "READINESS_FAILED" });
+    expect(probeCalls).toBe(1);
+    expect(custom.getStatus("bad-custom-decision").restartCount).toBe(0);
 
     const stdout = manager();
     stdout.register(definition("bad-stdout-decision", "line-ready", {
@@ -901,6 +927,18 @@ describe("local worker lifecycle manager", () => {
       .toThrow(/data-only array/iu);
     expect(inheritGetterCalls).toBe(0);
 
+    let environmentKeyCoercions = 0;
+    const coerciveKey = {
+      toString: () => {
+        environmentKeyCoercions += 1;
+        return "PATH";
+      }
+    };
+    expect(() => buildLocalEnvironment({
+      inherit: [coerciveKey] as unknown as readonly string[]
+    }, { PATH: "safe" })).toThrow(/expected a string/iu);
+    expect(environmentKeyCoercions).toBe(0);
+
     let parentGetterCalls = 0;
     const parent = Object.defineProperty({}, "PATH", {
       enumerable: true,
@@ -1054,6 +1092,33 @@ describe("local worker lifecycle manager", () => {
       readiness: hostileReadiness
     })).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
     expect(getterCalls).toBe(0);
+  });
+
+  it("does not invoke hostile error message accessors while reporting shutdown failures", async () => {
+    const runtime = manager();
+    let messageGetterCalls = 0;
+    const hostileError = new Error("initial");
+    Object.defineProperty(hostileError, "message", {
+      configurable: true,
+      get: () => {
+        messageGetterCalls += 1;
+        throw new Error("message getter must not run");
+      }
+    });
+
+    runtime.register(definition("hostile-hook-error", "ignore-shutdown", {
+      shutdownTimeoutMs: 30,
+      terminationTimeoutMs: 150,
+      gracefulShutdown: () => {
+        throw hostileError;
+      }
+    }));
+    await runtime.start("hostile-hook-error");
+    await runtime.stop("hostile-hook-error");
+
+    expect(messageGetterCalls).toBe(0);
+    expect(runtime.getStatus("hostile-hook-error").failure?.message)
+      .toContain("unknown error");
   });
 
   it("does not expose direct process signaling through graceful shutdown controls", async () => {
