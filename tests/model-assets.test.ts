@@ -417,7 +417,9 @@ describe("local model asset manager", () => {
 
     const temporaryEntries = await readdir(path.join(root, "tmp"));
     expect(temporaryEntries).toHaveLength(1);
-    const staging = path.join(root, "tmp", temporaryEntries[0]!);
+    const stagingName = temporaryEntries[0];
+    if (stagingName === undefined) throw new Error("Expected one staging directory.");
+    const staging = path.join(root, "tmp", stagingName);
     const detached = staging + "-detached";
     await rename(staging, detached);
     await mkdir(staging);
