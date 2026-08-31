@@ -1138,6 +1138,14 @@ describe("crop, resize, tiling, and cancellation", () => {
     });
   });
 
+  it("rejects a caller clock that moves backward instead of emitting fake zero duration", async () => {
+    const source = snapshot(makePng(2, 2));
+    const times = [10, 5];
+    await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
+      now: () => times.shift() ?? 5
+    })).rejects.toThrowError(RangeError);
+  });
+
   it("rejects unsafe processing clock values before pixel work begins", async () => {
     const source = snapshot(makePng(4, 4));
     await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
