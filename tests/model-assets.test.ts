@@ -809,6 +809,23 @@ describe("local model asset manager", () => {
     expect(await readFile(sentinel, "utf8")).toBe("keep-me");
   });
 
+  it("refuses to recursively delete unexpected nested cache content", async () => {
+    const payload = Buffer.from("nested-cache");
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/nested-cache.bin");
+    await manager.inspect(manifest);
+
+    const installation = path.join(root, "artifacts", artifactInstallationKey(manifest));
+    const nested = path.join(installation, "unexpected");
+    await mkdir(nested, { recursive: true });
+    const sentinel = path.join(nested, "sentinel.txt");
+    await writeFile(sentinel, "keep-me");
+
+    await expect(manager.remove(manifest)).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+    expect(await readFile(sentinel, "utf8")).toBe("keep-me");
+  });
+
   it("does not follow a hostile symlink while removing a cache entry", async () => {
     if (process.platform === "win32") return;
 
