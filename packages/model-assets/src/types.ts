@@ -188,35 +188,42 @@ export function resolveAssetManifest(
     throw new ModelAssetError("INVALID_MANIFEST", "Asset resolution request validation failed.");
   }
   const request = requestResult.data;
-  const manifestsParsed = manifests.map((manifest) => parseAssetManifest(manifest));
-  const compatible = manifestsParsed.filter((manifest) => {
-    if (manifest.familyId !== request.familyId || manifest.version !== request.version) return false;
-    if (manifest.platform !== undefined && manifest.platform !== request.platform) return false;
-    if (manifest.architecture !== undefined && manifest.architecture !== request.architecture) return false;
-    if (request.variant === undefined) return manifest.variant === undefined;
-    return manifest.variant === request.variant;
-  });
+  let best: AssetManifest | undefined;
+  let bestSpecificity = -1;
+  let ambiguous = false;
 
-  if (compatible.length === 0) {
+  for (const manifestValue of manifests) {
+    const manifest = parseAssetManifest(manifestValue);
+    if (manifest.familyId !== request.familyId || manifest.version !== request.version) continue;
+    if (manifest.platform !== undefined && manifest.platform !== request.platform) continue;
+    if (manifest.architecture !== undefined && manifest.architecture !== request.architecture) continue;
+    if (request.variant === undefined ? manifest.variant !== undefined : manifest.variant !== request.variant) {
+      continue;
+    }
+
+    const specificity = Number(manifest.platform !== undefined) + Number(manifest.architecture !== undefined);
+    if (specificity > bestSpecificity) {
+      best = manifest;
+      bestSpecificity = specificity;
+      ambiguous = false;
+    } else if (specificity === bestSpecificity) {
+      ambiguous = true;
+    }
+  }
+
+  if (best === undefined) {
     throw new ModelAssetError(
       "UNSUPPORTED_PLATFORM",
       "No artifact exactly compatible with the requested platform, architecture, and variant is available."
     );
   }
-
-  const scored = compatible.map((manifest) => ({
-    manifest,
-    specificity: Number(manifest.platform !== undefined) + Number(manifest.architecture !== undefined)
-  }));
-  const bestSpecificity = Math.max(...scored.map((entry) => entry.specificity));
-  const best = scored.filter((entry) => entry.specificity === bestSpecificity);
-  if (best.length !== 1 || best[0] === undefined) {
+  if (ambiguous) {
     throw new ModelAssetError(
       "AMBIGUOUS_ARTIFACT",
       "More than one equally specific artifact matches the requested target."
     );
   }
-  return best[0].manifest;
+  return best;
 }
 
 export function resolveAssetForCurrentPlatform(
