@@ -2,6 +2,7 @@ import { crc32, deflateSync } from "node:zlib";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { BoardRevisionSchema } from "../packages/domain/src/index.js";
+import { INTERNAL_VISION_ARTIFACT_CONSTRUCTION } from "../packages/vision/src/internal-artifact-construction.js";
 import {
   ImageSnapshot,
   VisionImageArtifact,
@@ -227,7 +228,7 @@ describe("vision snapshot validation and hashing", () => {
   it("rejects artifact metadata whose deterministic ID is stale after provenance changes", async () => {
     const source = snapshot(makePng(4, 4));
     const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
-    expect(() => new VisionImageArtifact(source, {
+    expect(() => new VisionImageArtifact(INTERNAL_VISION_ARTIFACT_CONSTRUCTION, source, {
       ...crop.metadata,
       sourceRevision: BoardRevisionSchema.parse(crop.metadata.sourceRevision + 1)
     }, crop.readBytes())).toThrowError(RangeError);
@@ -236,12 +237,12 @@ describe("vision snapshot validation and hashing", () => {
   it("rejects impossible artifact kind/source-bound combinations", async () => {
     const source = snapshot(makePng(4, 4));
     const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
-    expect(() => new VisionImageArtifact(source, {
+    expect(() => new VisionImageArtifact(INTERNAL_VISION_ARTIFACT_CONSTRUCTION, source, {
       ...crop.metadata,
       sourceBounds: { x: 1, y: 1, width: 3, height: 2 }
     }, crop.readBytes())).toThrow();
 
-    expect(() => new VisionImageArtifact(source, {
+    expect(() => new VisionImageArtifact(INTERNAL_VISION_ARTIFACT_CONSTRUCTION, source, {
       ...crop.metadata,
       kind: "RESIZED",
       sourceBounds: { x: 0, y: 0, width: crop.metadata.width, height: crop.metadata.height }
@@ -260,7 +261,21 @@ describe("vision snapshot validation and hashing", () => {
     const crop = (await cropImage(firstSource, { x: 1, y: 1, width: 2, height: 2 })).artifact;
 
     expect(() => new VisionImageArtifact(
+      INTERNAL_VISION_ARTIFACT_CONSTRUCTION,
       secondSource,
+      crop.metadata,
+      crop.readBytes()
+    )).toThrowError(RangeError);
+  });
+
+  it("rejects artifact construction without the package's internal capability", async () => {
+    const source = snapshot(makePng(4, 4));
+    const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
+    const invalidToken = Symbol("not-the-package-token") as unknown as typeof INTERNAL_VISION_ARTIFACT_CONSTRUCTION;
+
+    expect(() => new VisionImageArtifact(
+      invalidToken,
+      source,
       crop.metadata,
       crop.readBytes()
     )).toThrowError(RangeError);
