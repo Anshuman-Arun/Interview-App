@@ -34,6 +34,8 @@ function safeAdd(left: number, right: number, label: string): number {
 export function validateImageRect(input: ImageRect): ImageRect {
   const parsed = ImageRectSchema.safeParse(input);
   if (!parsed.success) invalidRect("Rectangle coordinates must be safe integers with positive width and height");
+  safeAdd(parsed.data.x, parsed.data.width, "Rectangle right edge");
+  safeAdd(parsed.data.y, parsed.data.height, "Rectangle bottom edge");
   return Object.freeze(parsed.data);
 }
 
