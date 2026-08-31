@@ -387,6 +387,9 @@ export class LocalRuntimeManager {
       const remainingMs = remainingStartupTimeout(record.definition.startupTimeoutMs, attemptStartedAt);
       const readiness = earlyReadiness
         ?? await this.waitForReadiness(record, child, attemptController.signal, remainingMs);
+      if (signal.aborted || record.expectedStop || record.state !== "STARTING") {
+        throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
+      }
       if (child.exitCode !== null || child.signalCode !== null || record.child !== child) {
         throw new LocalRuntimeError("PROCESS_EXITED", `Component ${record.definition.id} exited during startup`);
       }
