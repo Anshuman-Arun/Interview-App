@@ -15,12 +15,20 @@ import {
   sumIntegers
 } from "./math-utils.js";
 
+const CANONICAL_INTEGER_PATTERN = /^(?:0|-?[1-9]\d*)$/u;
+
 function boundedIntegerStringSchema(maximumDigits: number) {
   return z.string()
     .min(1)
-    .max(maximumDigits + 1)
-    .regex(/^(?:0|-?[1-9]\d*)$/u)
     .superRefine((value, context) => {
+      if (!CANONICAL_INTEGER_PATTERN.test(value)) {
+        context.addIssue({
+          code: "custom",
+          message: "Integer must use canonical base-10 digits"
+        });
+        return;
+      }
+
       const digits = value.startsWith("-") ? value.length - 1 : value.length;
       if (digits > maximumDigits) {
         context.addIssue({
