@@ -114,6 +114,9 @@ export type VisionImageArtifactKind = z.infer<typeof VisionImageArtifactKindSche
 export const VisionArtifactIdSchema = z.string().regex(/^img_[0-9a-f]{64}$/u);
 export type VisionArtifactId = z.infer<typeof VisionArtifactIdSchema>;
 
+export const VisionRasterIdentitySchema = z.string().regex(/^raster_[0-9a-f]{64}$/u);
+export type VisionRasterIdentity = z.infer<typeof VisionRasterIdentitySchema>;
+
 export const ArtifactSourceBoundsSchema = z.object({
   x: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   y: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -134,6 +137,7 @@ export const VisionImageArtifactMetadataSchema = z.object({
   kind: VisionImageArtifactKindSchema,
   sourceSnapshotId: z.string().min(1).max(128),
   sourceRevision: SafeBoardRevisionSchema,
+  sourceImageIdentity: VisionRasterIdentitySchema,
   parentArtifactId: VisionArtifactIdSchema.optional(),
   width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -276,6 +280,7 @@ export class VisionImageArtifact {
       kind: parsed.kind,
       sourceSnapshotId: parsed.sourceSnapshotId,
       sourceRevision: parsed.sourceRevision,
+      sourceImageIdentity: parsed.sourceImageIdentity,
       parentArtifactId: parsed.parentArtifactId,
       width: parsed.width,
       height: parsed.height,
@@ -343,7 +348,9 @@ export function visionRasterIdentity(source: VisionRasterSource): string {
         source.metadata.artifactId,
         source.metadata.contentDigest
       ]);
-  return `raster_${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
+  return VisionRasterIdentitySchema.parse(
+    `raster_${createHash("sha256").update(canonical, "utf8").digest("hex")}`
+  );
 }
 
 export const ImagePayloadReferenceMetadataSchema = z.object({
