@@ -888,6 +888,18 @@ describe("vision geometry", () => {
     expect(imageBounds({ width: 10, height: 5 })).toEqual({ x: 0, y: 0, width: 10, height: 5 });
   });
 
+  it("rejects inherited numeric geometry entries instead of trusting the prototype chain", () => {
+    const inherited = Object.create(Array.prototype) as Array<{ x: number; y: number; width: number; height: number }>;
+    Object.defineProperty(inherited, "length", { value: 1, writable: true });
+    const prototype = Object.create(Array.prototype);
+    Object.defineProperty(prototype, "0", {
+      value: { x: 0, y: 0, width: 1, height: 1 },
+      enumerable: true
+    });
+    Object.setPrototypeOf(inherited, prototype);
+    expect(() => unionRects(inherited)).toThrowError(VisionPreprocessingError);
+  });
+
   it("fails closed on revoked or hostile geometry collections", () => {
     const revoked = Proxy.revocable([] as Array<{ x: number; y: number; width: number; height: number }>, {});
     revoked.revoke();
@@ -2045,6 +2057,22 @@ describe("provider-neutral request preparation and budgeting", () => {
       maxTotalPixels: 1_000_000,
       maxCropsOrTiles: 0
     })).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects inherited request candidates instead of trusting the prototype chain", () => {
+    const source = snapshot(makePng(1, 1));
+    const inherited = Object.create(Array.prototype) as ImageSnapshot[];
+    Object.defineProperty(inherited, "length", { value: 1, writable: true });
+    const prototype = Object.create(Array.prototype);
+    Object.defineProperty(prototype, "0", { value: source, enumerable: true });
+    Object.setPrototypeOf(inherited, prototype);
+
+    try {
+      prepareVisionBatch(inherited, "analysis");
+      throw new Error("Expected inherited candidate rejection");
+    } catch (error) {
+      expectCode(error, "INVALID_IMAGE");
+    }
   });
 
   it("fails closed on hostile request candidate entry access", () => {
