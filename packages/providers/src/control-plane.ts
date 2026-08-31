@@ -862,12 +862,41 @@ function readAdapterMember(
   value: object,
   key: string
 ): unknown {
-  try {
-    const member: unknown = Reflect.get(value, key);
-    return member;
-  } catch {
-    throw adapterDefinitionMismatch();
+  const seen = new Set<object>();
+  let current: object | null = value;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) return undefined;
+    if (seen.has(current)) throw adapterDefinitionMismatch();
+    seen.add(current);
+
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      throw adapterDefinitionMismatch();
+    }
+    if (descriptor !== undefined) {
+      if ("value" in descriptor) {
+        const member: unknown = descriptor.value;
+        return member;
+      }
+      const getter = descriptor.get;
+      if (getter === undefined) return undefined;
+      try {
+        const member: unknown = Reflect.apply(getter, value, []);
+        return member;
+      } catch {
+        throw adapterDefinitionMismatch();
+      }
+    }
+    try {
+      current = Object.getPrototypeOf(current);
+    } catch {
+      throw adapterDefinitionMismatch();
+    }
   }
+  if (current !== null) throw adapterDefinitionMismatch();
+  return undefined;
 }
 
 function snapshotAdapterCapabilities(value: unknown): unknown {

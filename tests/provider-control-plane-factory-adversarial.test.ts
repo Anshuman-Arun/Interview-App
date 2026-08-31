@@ -1318,6 +1318,65 @@ describe("adapter factory adversarial boundary", () => {
     expect(replacementCalls).toBe(0);
   });
 
+  it("does not accept required adapter metadata inherited only from Object.prototype", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "mock-model",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "polluted-adapter-model",
+        displayName: "Polluted Adapter Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "polluted-adapter-factory",
+        createAdapter() {
+          const adapter = new MockModelAdapter({ proposal: PROPOSAL });
+          const capabilities = adapter.capabilities;
+          Reflect.deleteProperty(adapter, "name");
+          Reflect.deleteProperty(adapter, "adapterVersion");
+          Reflect.deleteProperty(adapter, "capabilities");
+          Object.defineProperties(Object.prototype, {
+            name: {
+              configurable: true,
+              enumerable: false,
+              value: "mock-model"
+            },
+            adapterVersion: {
+              configurable: true,
+              enumerable: false,
+              value: "1.0.0"
+            },
+            capabilities: {
+              configurable: true,
+              enumerable: false,
+              value: capabilities
+            }
+          });
+          return adapter;
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "mock-model",
+        modelId: "polluted-adapter-model",
+        enabled: true
+      }
+    });
+
+    try {
+      await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
+        .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "name");
+      Reflect.deleteProperty(Object.prototype, "adapterVersion");
+      Reflect.deleteProperty(Object.prototype, "capabilities");
+    }
+  });
+
   it("reads valid adapter identity accessors once without narrowing ReasoningProvider", async () => {
     let getterCalls = 0;
     const registry = new ProviderRegistry();
