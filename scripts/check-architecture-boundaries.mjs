@@ -435,12 +435,62 @@ function checkVisionInternalConstruction(records, violations) {
         && isInternalVisionConstructionSpecifier(firstArgument.text);
     }
 
-    function exportedNodeReferencesInternalBinding(node) {
+    function unwrapRuntimeExpression(expression) {
+      let current = expression;
+      while (ts.isParenthesizedExpression(current)
+          || ts.isAsExpression(current)
+          || ts.isTypeAssertionExpression(current)
+          || ts.isNonNullExpression(current)) {
+        current = current.expression;
+      }
+      return current;
+    }
+
+    function isDirectTaintedBindingExpression(expression) {
+      const current = unwrapRuntimeExpression(expression);
+      return ts.isIdentifier(current) && taintedBindingNames.has(current.text);
+    }
+
+    function isSafeConstructionConsumption(node) {
+      if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression)) return false;
+      if (node.expression.text !== "ImageSnapshot" && node.expression.text !== "VisionImageArtifact") {
+        return false;
+      }
+      const firstArgument = node.arguments?.[0];
+      return firstArgument !== undefined && isDirectTaintedBindingExpression(firstArgument);
+    }
+
+    function isSafeTokenValidationComparison(node) {
+      if (!ts.isBinaryExpression(node)
+          || (node.operatorToken.kind !== ts.SyntaxKind.ExclamationEqualsEqualsToken
+            && node.operatorToken.kind !== ts.SyntaxKind.ExclamationEqualsToken)) {
+        return false;
+      }
+      const left = unwrapRuntimeExpression(node.left);
+      const right = unwrapRuntimeExpression(node.right);
+      return (ts.isIdentifier(left)
+          && left.text === "token"
+          && isDirectTaintedBindingExpression(right))
+        || (ts.isIdentifier(right)
+          && right.text === "token"
+          && isDirectTaintedBindingExpression(left));
+    }
+
+    function exportedNodeReferencesInternalBinding(node, extraSensitiveNames = new Set()) {
       let found = false;
       function scan(current) {
         if (found) return;
         if (ts.isTypeNode(current)) return;
-        if (ts.isIdentifier(current) && taintedBindingNames.has(current.text)) {
+        if (isSafeTokenValidationComparison(current)) return;
+
+        if (isSafeConstructionConsumption(current)) {
+          const argumentsToScan = current.arguments?.slice(1) ?? [];
+          for (const argument of argumentsToScan) scan(argument);
+          return;
+        }
+
+        if (ts.isIdentifier(current)
+            && (taintedBindingNames.has(current.text) || extraSensitiveNames.has(current.text))) {
           found = true;
           return;
         }
@@ -463,19 +513,8 @@ function checkVisionInternalConstruction(records, violations) {
     }
 
     function functionBodyExposesInternalBinding(node) {
-      let leaked = false;
-      function scanReturn(current) {
-        if (leaked) return;
-        if (ts.isReturnStatement(current)
-            && current.expression !== undefined
-            && expressionExposesInternalBinding(current.expression)) {
-          leaked = true;
-          return;
-        }
-        ts.forEachChild(current, scanReturn);
-      }
-      scanReturn(node);
-      return leaked;
+      if (node.body === undefined) return false;
+      return exportedNodeReferencesInternalBinding(node.body);
     }
 
     function classExposesInternalBinding(node) {
@@ -485,6 +524,13 @@ function checkVisionInternalConstruction(records, violations) {
         ) === true;
         if (isPrivate) continue;
 
+        if (ts.isConstructorDeclaration(member)) {
+          if (member.body !== undefined
+              && exportedNodeReferencesInternalBinding(member.body, new Set(["token"]))) {
+            return true;
+          }
+          continue;
+        }
         if (ts.isPropertyDeclaration(member)
             && member.initializer !== undefined
             && expressionExposesInternalBinding(member.initializer)) {
@@ -559,11 +605,17 @@ function checkVisionInternalConstruction(records, violations) {
 
     function leaksInternalBindingThroughExportedDeclaration(node) {
       if (!hasExportModifier(node)) return false;
-      if (ts.isVariableStatement(node)
-          || ts.isFunctionDeclaration(node)
-          || ts.isMethodDeclaration(node)
-          || ts.isClassDeclaration(node)) {
-        return exportedNodeReferencesInternalBinding(node);
+      if (ts.isVariableStatement(node)) {
+        return node.declarationList.declarations.some((declaration) =>
+          declaration.initializer !== undefined
+            && expressionExposesInternalBinding(declaration.initializer)
+        );
+      }
+      if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
+        return functionBodyExposesInternalBinding(node);
+      }
+      if (ts.isClassDeclaration(node)) {
+        return classExposesInternalBinding(node);
       }
       return false;
     }
