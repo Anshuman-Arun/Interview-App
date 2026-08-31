@@ -853,6 +853,34 @@ describe("local worker lifecycle manager", () => {
     expect(status.lastExit?.stderrTail.join(" ")).not.toContain("crash-attempt-1");
   });
 
+  it("snapshots the manager parent environment before later caller mutation", async () => {
+    const parentEnvironment = {
+      PATH: process.env.PATH,
+      SAFE_PARENT: "snapshot-parent-value"
+    };
+    const runtime = new LocalRuntimeManager({ parentEnvironment });
+    parentEnvironment.SAFE_PARENT = "mutated-parent-value";
+
+    let observed: Record<string, unknown> | undefined;
+    runtime.register(definition("parent-snapshot", "output-env", {
+      environment: { inherit: ["SAFE_PARENT"] },
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => {
+          if (typeof message === "object" && message !== null
+              && (message as Record<string, unknown>).type === "READY") {
+            observed = message as Record<string, unknown>;
+            return readyDecision(message);
+          }
+          return false;
+        }
+      }
+    }));
+
+    await runtime.start("parent-snapshot");
+    expect(observed).toMatchObject({ inheritedValue: "snapshot-parent-value" });
+  });
+
   it("uses platform-specific default inheritance and explicit inherited variables", async () => {
     const posix = buildLocalEnvironment(
       { inherit: ["SAFE_PARENT"] },
