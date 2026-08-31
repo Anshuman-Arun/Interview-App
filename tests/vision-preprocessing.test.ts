@@ -1459,9 +1459,10 @@ describe("provider-neutral request preparation and budgeting", () => {
 
   it("maps hostile candidate length access to a clean invalid-image failure", () => {
     const hostile = new Proxy([] as ImageSnapshot[], {
-      get(target, property, receiver) {
+      get(target, property, receiver): unknown {
         if (property === "length") throw new Error("hostile length trap");
-        return Reflect.get(target, property, receiver);
+        const value: unknown = Reflect.get(target, property, receiver);
+        return value;
       }
     });
     try {
