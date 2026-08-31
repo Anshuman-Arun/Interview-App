@@ -2188,7 +2188,7 @@ function isChildAlive(child: ChildProcessWithoutNullStreams): boolean {
 
 type ManagedTreeTermination = "TERMINATED" | "FORCED" | "UNVERIFIED";
 
-async function terminateManagedTree(
+async async function terminateManagedTree(
   record: ComponentRecord,
   child: ChildProcessWithoutNullStreams,
   platform: NodeJS.Platform,
