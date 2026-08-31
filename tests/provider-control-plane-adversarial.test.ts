@@ -149,10 +149,19 @@ describe("provider configuration secret exclusion", () => {
       "token=abcdefghijklmnopqrst",
       "secret=P@ssword-123456",
       "password=hunter2",
+      "password=bearer",
+      "password=required",
       "password=\"correct horse battery staple\"",
       "api_key=abc123",
+      "api_key=basic",
       "access_token=short",
+      "access_token=required",
       "credential=abc",
+      "authorization=Bearer x",
+      "authorizationHeader=Basic YTpi",
+      "http_authorization: Bearer abc",
+      "auth_header=Basic YTpi",
+      "Basic dXNlcjpwYXNz)",
       "postgres://user:p%40ssw0rd@example.com/database",
       "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----"
     ]) {
@@ -189,9 +198,11 @@ describe("provider configuration secret exclusion", () => {
       "secret: sauce",
       "authorization: required",
       "authorization=Bearer",
+      "authorizationHeader=required",
       "password=none",
       "api_key = placeholder",
       "access_token=disabled",
+      "Basic Configuration)",
       "https://api.example.com/v1/models"
     ]) {
       expect(() => resolveProviderConfiguration({
@@ -340,6 +351,18 @@ describe("provider configuration secret exclusion", () => {
     expect(firstMaterial).toBe(createProviderConfigurationFingerprintMaterial(second));
     expect(firstMaterial).not.toContain("credential-one");
     expect(firstMaterial).not.toContain("credential-two");
+  });
+
+  it("keeps negative zero distinct from positive zero in fingerprint material", () => {
+    const positive = settingsConfiguration({ threshold: 0 });
+    const negative = settingsConfiguration({ threshold: -0 });
+
+    expect(Object.is(
+      validateProviderConfiguration(positive).settings?.threshold,
+      validateProviderConfiguration(negative).settings?.threshold
+    )).toBe(false);
+    expect(createProviderConfigurationFingerprintMaterial(positive))
+      .not.toBe(createProviderConfigurationFingerprintMaterial(negative));
   });
 });
 

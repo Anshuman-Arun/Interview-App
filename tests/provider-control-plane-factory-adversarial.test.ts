@@ -192,6 +192,45 @@ describe("provider registration snapshot semantics", () => {
     expect(registry.enumerateProviders()).toEqual([]);
   });
 
+  it("rejects control characters in diagnostic-facing provider metadata", () => {
+    for (const overrides of [
+      { displayName: "Test\nProvider" },
+      { definitionVersion: "1\nforged" },
+      { capabilityVersion: "1\u0000forged" }
+    ]) {
+      expect(() => defineProvider(providerInput(overrides)))
+        .toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+    }
+
+    expect(() => defineProvider(providerInput({
+      adapterVersion: "1\rforged",
+      adapterFactory: {
+        id: "test-factory",
+        createAdapter() {
+          throw new Error("Factory must not execute during registration");
+        }
+      }
+    }))).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+
+    expect(() => defineProvider(providerInput({
+      models: [{
+        id: "test-model",
+        displayName: "Test\tModel",
+        metadataVersion: "1",
+        capabilities: capabilities()
+      }]
+    }))).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+
+    expect(() => defineProvider(providerInput({
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        metadataVersion: "1\nforged",
+        capabilities: capabilities()
+      }]
+    }))).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+  });
+
   it("rejects execution-kind contradictions instead of publishing ambiguous metadata", () => {
     expect(() => defineProvider(providerInput({
       kind: "REMOTE_API",

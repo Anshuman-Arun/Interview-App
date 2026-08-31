@@ -90,7 +90,13 @@ export type ProviderKind = z.infer<typeof ProviderKindSchema>;
 export const CapabilitySupportSchema = z.enum(["SUPPORTED", "UNSUPPORTED", "UNKNOWN"]);
 export type CapabilitySupport = z.infer<typeof CapabilitySupportSchema>;
 
-const NonBlankTextSchema = z.string().trim().min(1);
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
+const NonBlankTextSchema = z.string()
+  .trim()
+  .min(1)
+  .refine((value) => !CONTROL_CHARACTER_PATTERN.test(value), {
+    message: "CONTROL_CHARACTERS_NOT_ALLOWED"
+  });
 function nonSecretTextSchema(maxLength: number) {
   return NonBlankTextSchema.max(maxLength).refine(
     (value) => !containsSecretLikeConfigurationText(value),
@@ -1919,7 +1925,10 @@ function isSafeProviderConfigurationArray(
 }
 
 function canonicalizeSafeValue(value: SafeProviderConfigurationValue): string {
-  if (value === null || typeof value === "boolean" || typeof value === "number") {
+  if (typeof value === "number") {
+    return Object.is(value, -0) ? "-0" : JSON.stringify(value);
+  }
+  if (value === null || typeof value === "boolean") {
     return JSON.stringify(value);
   }
   if (typeof value === "string") return JSON.stringify(value);

@@ -70,24 +70,29 @@ const SECRET_CONFIGURATION_KEYS = new Set([
 ]);
 const BEARER_AUTH_PATTERN = /\bbearer\s+[a-z0-9._~+/-]{16,}/iu;
 const BASIC_AUTH_CANDIDATE_PATTERN =
-  /\bbasic\s+([A-Za-z0-9+/]+={0,2})(?=$|[\s,;])/iu;
+  /\bbasic\s+([A-Za-z0-9+/]+={0,2})(?=$|[^A-Za-z0-9+/=])/iu;
 const COMMON_API_KEY_PATTERN = /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,})\b/iu;
 const HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN =
-  /\b(?:authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|client[-_]?token|session[-_]?token|auth[-_]?token|bearer[-_]?token|password|passwd|passphrase|private[-_]?key|credential|cookie|set[-_]?cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))/iu;
+  /\b(authorization(?:[-_]?header)?|http[-_]?authorization|auth[-_]?header|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|client[-_]?token|session[-_]?token|auth[-_]?token|bearer[-_]?token|password|passwd|passphrase|private[-_]?key|credential|cookie|set[-_]?cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))/iu;
 const GENERIC_SECRET_ASSIGNMENT_PATTERN =
   /\b(?:token|secret)\b\s*[:=]\s*["']?([^\s"'&]{12,})["']?/iu;
-const NON_SECRET_ASSIGNMENT_VALUES = new Set([
+const AUTHORIZATION_SCHEME_VALUE_PATTERN =
+  /\b(?:authorization(?:[-_]?header)?|http[-_]?authorization|auth[-_]?header)\b\s*[:=]\s*(?:bearer|basic)\s+[^\s&,;]+/iu;
+const GENERIC_NON_SECRET_ASSIGNMENT_VALUES = new Set([
   "",
   "none",
   "null",
   "unset",
   "disabled",
   "placeholder",
-  "required",
   "redacted",
   "[redacted]",
   "n/a",
-  "na",
+  "na"
+]);
+const AUTHORIZATION_NON_SECRET_ASSIGNMENT_VALUES = new Set([
+  ...GENERIC_NON_SECRET_ASSIGNMENT_VALUES,
+  "required",
   "bearer",
   "basic"
 ]);
@@ -256,12 +261,23 @@ function containsBasicAuthCredential(value: string): boolean {
 }
 
 function containsExplicitCredentialAssignment(value: string): boolean {
+  if (AUTHORIZATION_SCHEME_VALUE_PATTERN.test(value)) return true;
+
   const highConfidence = HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN.exec(value);
   if (highConfidence !== null) {
-    const assignedValue = highConfidence[1] ?? highConfidence[2] ?? highConfidence[3] ?? "";
-    if (!NON_SECRET_ASSIGNMENT_VALUES.has(assignedValue.trim().toLowerCase())) {
-      return true;
-    }
+    const key = normalizeConfigurationKey(highConfidence[1] ?? "");
+    const assignedValue =
+      highConfidence[2] ?? highConfidence[3] ?? highConfidence[4] ?? "";
+    const normalizedValue = assignedValue.trim().toLowerCase();
+    const allowedValues = (
+      key === "authorization"
+      || key === "authorizationheader"
+      || key === "httpauthorization"
+      || key === "authheader"
+    )
+      ? AUTHORIZATION_NON_SECRET_ASSIGNMENT_VALUES
+      : GENERIC_NON_SECRET_ASSIGNMENT_VALUES;
+    if (!allowedValues.has(normalizedValue)) return true;
   }
   return GENERIC_SECRET_ASSIGNMENT_PATTERN.test(value);
 }
