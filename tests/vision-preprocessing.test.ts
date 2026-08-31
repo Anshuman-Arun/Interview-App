@@ -1276,6 +1276,18 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(reads).toBe(1);
   });
 
+  it("fails closed on revoked AbortSignal proxies", async () => {
+    const source = snapshot(makePng(2, 2));
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      { signal: revoked.proxy as unknown as AbortSignal }
+    )).rejects.toThrowError(TypeError);
+  });
+
   it("rejects unknown or malformed processing options before image work", async () => {
     const source = snapshot(makePng(4, 4));
     await expect(cropImage(
