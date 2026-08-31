@@ -3,6 +3,7 @@ import {
   MAX_EXPRESSION_DEPTH,
   MAX_EXPRESSION_NODES,
   MAX_INTEGER_DECIMAL_DIGITS,
+  MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
   MAX_POWER_EXPONENT,
   MAX_VARIADIC_EXPRESSION_TERMS
 } from "./limits.js";
@@ -13,6 +14,14 @@ export const IntegerStringSchema = z.string()
   .max(MAX_INTEGER_DECIMAL_DIGITS + 1)
   .regex(/^(?:0|-?[1-9]\d*)$/u)
   .refine((value) => (value.startsWith("-") ? value.length - 1 : value.length) <= MAX_INTEGER_DECIMAL_DIGITS);
+
+export const IntermediateIntegerStringSchema = z.string()
+  .min(1)
+  .max(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1)
+  .regex(/^(?:0|-?[1-9]\d*)$/u)
+  .refine(
+    (value) => (value.startsWith("-") ? value.length - 1 : value.length) <= MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS
+  );
 
 function integerStringSatisfies(value: string, predicate: (parsed: bigint) => boolean): boolean {
   if (!/^(?:0|-?[1-9]\d*)$/u.test(value)) return false;
@@ -27,6 +36,9 @@ export const PositiveIntegerStringSchema = IntegerStringSchema.refine(
   (value) => integerStringSatisfies(value, (parsed) => parsed > 0n)
 );
 export const NonZeroIntegerStringSchema = IntegerStringSchema.refine(
+  (value) => integerStringSatisfies(value, (parsed) => parsed !== 0n)
+);
+export const NonZeroIntermediateIntegerStringSchema = IntermediateIntegerStringSchema.refine(
   (value) => integerStringSatisfies(value, (parsed) => parsed !== 0n)
 );
 
