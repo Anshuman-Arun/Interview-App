@@ -550,12 +550,15 @@ export class LocalRuntimeManager {
     child: ChildProcessWithoutNullStreams,
     stderr: BoundedLineBuffer
   ): void {
-    if (record.lastExitProcess === child && record.lastExit !== undefined) {
-      const stderrLines = stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
-      record.lastExit = Object.freeze({
-        ...record.lastExit,
-        stderrTail: Object.freeze(stderrLines.slice(-MAX_STDERR_TAIL_LINES))
-      });
+    if (record.lastExitProcess === child) {
+      if (record.lastExit !== undefined) {
+        const stderrLines = stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
+        record.lastExit = Object.freeze({
+          ...record.lastExit,
+          stderrTail: Object.freeze(stderrLines.slice(-MAX_STDERR_TAIL_LINES))
+        });
+      }
+      record.lastExitProcess = undefined;
     }
     if (record.child === child) record.child = undefined;
   }
