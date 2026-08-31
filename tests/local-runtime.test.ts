@@ -1656,6 +1656,36 @@ describe("local worker lifecycle manager", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("does not execute proxy traps while reporting shutdown failures", async () => {
+    let shutdownErrorProxyTraps = 0;
+    const proxiedError = new Proxy(new Error("hidden"), {
+      getOwnPropertyDescriptor: (target, key) => {
+        shutdownErrorProxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      getPrototypeOf: (target) => {
+        shutdownErrorProxyTraps += 1;
+        return Reflect.getPrototypeOf(target);
+      }
+    });
+    const runtime = manager();
+    runtime.register(definition("proxy-hook-error", "ignore-shutdown", {
+      shutdownTimeoutMs: 30,
+      terminationTimeoutMs: 150,
+      gracefulShutdown: () => {
+        throw proxiedError;
+      }
+    }));
+
+    await runtime.start("proxy-hook-error");
+    await runtime.stop("proxy-hook-error");
+    expect(shutdownErrorProxyTraps).toBe(0);
+    expect(runtime.getStatus("proxy-hook-error").failure).toMatchObject({
+      code: "GRACEFUL_SHUTDOWN_FAILED",
+      message: expect.stringContaining("unknown error")
+    });
+  });
+
   it("does not invoke hostile error message accessors while reporting shutdown failures", async () => {
     const runtime = manager();
     let messageGetterCalls = 0;
