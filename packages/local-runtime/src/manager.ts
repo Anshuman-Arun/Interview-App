@@ -1783,6 +1783,9 @@ function terminationTimeout(definition: LocalComponentDefinition): number {
 }
 
 function writeToStdin(child: ChildProcessWithoutNullStreams, data: string): Promise<void> {
+  if (typeof data !== "string") {
+    return Promise.reject(new LocalRuntimeError("INVALID_ARGUMENT", "Graceful shutdown stdin data must be a string"));
+  }
   return new Promise((resolve, reject) => {
     child.stdin.write(data, "utf8", (error) => {
       if (error === null || error === undefined) resolve();
