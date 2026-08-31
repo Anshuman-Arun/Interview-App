@@ -207,9 +207,9 @@ describe("local model asset manager", () => {
 
     let proxyReads = 0;
     const proxiedCollection = new Proxy([manifest], {
-      get(target, property, receiver) {
+      get() {
         proxyReads += 1;
-        return Reflect.get(target, property, receiver);
+        throw new Error("manifest collection proxy trap should not run");
       }
     });
     expect(() => UnsafeResolver(proxiedCollection, request)).toThrow(
@@ -1534,9 +1534,9 @@ describe("local model asset manager", () => {
 
     let proxyReads = 0;
     const proxiedKeep = new Proxy([manifest], {
-      get(target, property, receiver) {
+      get() {
         proxyReads += 1;
-        return Reflect.get(target, property, receiver);
+        throw new Error("keep collection proxy trap should not run");
       }
     });
     await expect(UnsafeClear(proxiedKeep)).rejects.toMatchObject({
@@ -1903,12 +1903,9 @@ describe("local model asset manager", () => {
     let proxyReads = 0;
     const realSignal = new AbortController().signal;
     const proxiedSignal = new Proxy(realSignal, {
-      get(target, property, receiver) {
-        if (property === "aborted") {
-          proxyReads += 1;
-          throw new Error("proxy signal getter should not run");
-        }
-        return Reflect.get(target, property, receiver);
+      get() {
+        proxyReads += 1;
+        throw new Error("proxy signal getter should not run");
       }
     });
     await expect(UnsafeInstall(manifest, proxiedSignal)).rejects.toMatchObject({
