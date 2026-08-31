@@ -352,15 +352,41 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
   try {
     entry = await lstat(manifestPath);
   } catch (error) {
-    throw new ModelAssetError("CORRUPT_INSTALLATION", "Installed artifact manifest is missing or unreadable.", { cause: error });
+    if (errnoCode(error) === "ENOENT") {
+      throw new ModelAssetError(
+        "CORRUPT_INSTALLATION",
+        "Installed artifact manifest is missing.",
+        { cause: error }
+      );
+    }
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to inspect installed artifact manifest.",
+      { cause: error }
+    );
   }
   if (entry.isSymbolicLink() || !entry.isFile() || entry.size > MAX_STORED_MANIFEST_BYTES) {
     throw new ModelAssetError("CORRUPT_INSTALLATION", "Installed artifact manifest is not a bounded regular file.");
   }
+
+  let serialized: string;
   try {
-    return JSON.parse(await readFile(manifestPath, "utf8")) as unknown;
+    serialized = await readFile(manifestPath, "utf8");
   } catch (error) {
-    throw new ModelAssetError("CORRUPT_INSTALLATION", "Installed artifact manifest is malformed.", { cause: error });
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to read installed artifact manifest.",
+      { cause: error }
+    );
+  }
+  try {
+    return JSON.parse(serialized) as unknown;
+  } catch (error) {
+    throw new ModelAssetError(
+      "CORRUPT_INSTALLATION",
+      "Installed artifact manifest is malformed.",
+      { cause: error }
+    );
   }
 }
 
