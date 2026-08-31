@@ -5,6 +5,11 @@ import { BoardRevisionSchema, type BoardRevision } from "../../domain/src/index.
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
+const SafeBoardRevisionSchema = BoardRevisionSchema.refine(
+  (revision) => Number.isSafeInteger(revision),
+  "Board revision must remain within JavaScript safe integer range"
+);
+
 const UNSUPPORTED_APNG_CHUNKS = new Set(["acTL", "fcTL", "fdAT"]);
 
 const SUPPORTED_PNG_BIT_DEPTHS = new Map<number, ReadonlySet<number>>([
@@ -156,7 +161,7 @@ export type CoordinateTransform = z.infer<typeof CoordinateTransformSchema>;
 export const ImageSnapshotMetadataSchema = z.object({
   snapshotId: z.string().min(1).max(128),
   sourceType: ImageSourceTypeSchema,
-  sourceRevision: BoardRevisionSchema,
+  sourceRevision: SafeBoardRevisionSchema,
   capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -193,7 +198,7 @@ export const VisionImageArtifactMetadataSchema = z.object({
   artifactId: VisionArtifactIdSchema,
   kind: VisionImageArtifactKindSchema,
   sourceSnapshotId: z.string().min(1).max(128),
-  sourceRevision: BoardRevisionSchema,
+  sourceRevision: SafeBoardRevisionSchema,
   parentArtifactId: VisionArtifactIdSchema.optional(),
   width: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   height: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -413,7 +418,7 @@ export class ImagePayloadReference {
 export const ImageSnapshotInputSchema = z.object({
   snapshotId: z.string().min(1).max(128),
   sourceType: ImageSourceTypeSchema,
-  sourceRevision: BoardRevisionSchema,
+  sourceRevision: SafeBoardRevisionSchema,
   capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
   captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   mimeType: z.string().min(1).max(128),
