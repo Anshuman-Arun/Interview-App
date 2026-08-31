@@ -196,6 +196,17 @@ describe("adversarial deterministic math verification", () => {
     expect(() => parseBoundedIntermediateInteger(overLimit)).toThrow(BoundedMathError);
   });
 
+  it("treats a maximum-size claimed result as a false claim rather than malformed", async () => {
+    const claimed = "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS);
+    const result = await verifyJson(new CombinatorialCountingVerifier(), {
+      protocol: COMBINATORIAL_COUNTING_PROTOCOL,
+      protocolVersion: COMBINATORIAL_COUNTING_PROTOCOL_VERSION,
+      claim: { kind: "BINOMIAL", n: 1, k: 1, claimed }
+    });
+    expect(result.status).toBe("CONTRADICTED");
+    expect(result.reason).toContain("CLAIM_CONTRADICTED");
+  });
+
   it("normalizes forged rational utility inputs instead of trusting caller invariants", () => {
     const forgedHalf: ExactRational = { numerator: 2n, denominator: 4n };
     const forgedNegativeDenominator: ExactRational = { numerator: -2n, denominator: -4n };
