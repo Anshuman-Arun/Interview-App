@@ -1,8 +1,13 @@
 import { z } from "zod";
 import type { DeterministicVerifier, VerificationResult } from "../../domain/src/index.js";
-import { MAX_RECURRENCE_ORDER, MAX_RECURRENCE_SEQUENCE_LENGTH } from "./limits.js";
+import {
+  MAX_RECURRENCE_ORDER,
+  MAX_RECURRENCE_SEQUENCE_LENGTH,
+  MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS
+} from "./limits.js";
 import { IntermediateRationalInputSchema, RationalInputSchema } from "./rational-expression.js";
 import {
+  BoundedMathError,
   assertIntermediateIntegerBound,
   equalRationals,
   parseIntermediateRationalInput,
@@ -52,6 +57,24 @@ interface WideRecurrenceValue {
   readonly denominator: bigint;
 }
 
+function recurrenceWideWorkWithinBound(value: bigint): boolean {
+  const magnitude = value < 0n ? -value : value;
+  return magnitude.toString().length <= MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS;
+}
+
+function assertRecurrenceWideWorkBound(value: WideRecurrenceValue): WideRecurrenceValue {
+  if (
+    !recurrenceWideWorkWithinBound(value.numerator)
+    || !recurrenceWideWorkWithinBound(value.denominator)
+  ) {
+    throw new BoundedMathError(
+      "INTERMEDIATE_LIMIT_EXCEEDED",
+      "Recurrence evaluation exceeds the configured exact-work limit"
+    );
+  }
+  return value;
+}
+
 function recurrenceWideGcd(left: bigint, right: bigint): bigint {
   let a = left < 0n ? -left : left;
   let b = right < 0n ? -right : right;
@@ -69,14 +92,14 @@ function wideRecurrenceProduct(
 ): WideRecurrenceValue {
   const leftCancellation = recurrenceWideGcd(coefficient.numerator, previous.denominator);
   const rightCancellation = recurrenceWideGcd(previous.numerator, coefficient.denominator);
-  return {
+  return assertRecurrenceWideWorkBound({
     numerator:
       (coefficient.numerator / leftCancellation)
       * (previous.numerator / rightCancellation),
     denominator:
       (coefficient.denominator / rightCancellation)
       * (previous.denominator / leftCancellation)
-  };
+  });
 }
 
 function addWideRecurrenceValues(
@@ -88,11 +111,7 @@ function addWideRecurrenceValues(
   const rightScale = left.denominator / commonFactor;
   const numerator = left.numerator * leftScale + right.numerator * rightScale;
   const denominator = left.denominator * leftScale;
-  const cancellation = recurrenceWideGcd(numerator, denominator);
-  return {
-    numerator: numerator / cancellation,
-    denominator: denominator / cancellation
-  };
+  return assertRecurrenceWideWorkBound({ numerator, denominator });
 }
 
 function recurrenceStep(
@@ -102,8 +121,8 @@ function recurrenceStep(
 ): ExactRational {
   // A recurrence step is one exact bounded linear combination. Individual
   // coefficient×state products may exceed the reduced-state limit and then
-  // cancel. With order <= MAX_RECURRENCE_ORDER, these validation/evaluation
-  // temporaries are still bounded by the configured coefficient/state sizes.
+  // cancel, but all unreduced accumulator components remain subject to the
+  // shared exact-work bound.
   let total: WideRecurrenceValue = {
     numerator: constant.numerator,
     denominator: constant.denominator
@@ -117,9 +136,10 @@ function recurrenceStep(
     total = addWideRecurrenceValues(total, wideRecurrenceProduct(coefficient, previous));
   });
 
+  const cancellation = recurrenceWideGcd(total.numerator, total.denominator);
   return rational(
-    assertIntermediateIntegerBound(total.numerator),
-    assertIntermediateIntegerBound(total.denominator)
+    assertIntermediateIntegerBound(total.numerator / cancellation),
+    assertIntermediateIntegerBound(total.denominator / cancellation)
   );
 }
 
