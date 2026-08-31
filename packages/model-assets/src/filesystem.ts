@@ -967,22 +967,22 @@ export async function sumManagedCacheBytes(
     );
   }
 
-  let entry: Stats;
+  let entry: BigIntStats;
   try {
-    entry = await lstat(root);
+    entry = await lstat(root, { bigint: true });
   } catch (error) {
     if (errnoCode(error) === "ENOENT") return 0;
     throw new ModelAssetError("IO_ERROR", "Unable to inspect artifact payload usage.", { cause: error });
   }
   if (entry.isSymbolicLink()) return 0;
   if (entry.isFile()) {
-    if (!Number.isSafeInteger(entry.size) || entry.size < 0) {
+    if (entry.size < 0n || entry.size > BigInt(Number.MAX_SAFE_INTEGER)) {
       throw new ModelAssetError(
         "CACHE_LIMIT_EXCEEDED",
         "Managed cache file size exceeds safe integer accounting limits."
       );
     }
-    return entry.size;
+    return Number(entry.size);
   }
   if (!entry.isDirectory()) return 0;
 
@@ -1008,9 +1008,9 @@ export async function sumManagedCacheBytes(
       );
     }
     const childPath = path.join(root, child.name);
-    let childStat: Stats;
+    let childStat: BigIntStats;
     try {
-      childStat = await lstat(childPath);
+      childStat = await lstat(childPath, { bigint: true });
     } catch (error) {
       if (errnoCode(error) === "ENOENT") continue;
       throw new ModelAssetError(
@@ -1027,13 +1027,13 @@ export async function sumManagedCacheBytes(
       );
     }
     if (!childStat.isFile()) continue;
-    if (!Number.isSafeInteger(childStat.size) || childStat.size < 0) {
+    if (childStat.size < 0n || childStat.size > BigInt(Number.MAX_SAFE_INTEGER)) {
       throw new ModelAssetError(
         "CACHE_LIMIT_EXCEEDED",
         "Managed cache file size exceeds safe integer accounting limits."
       );
     }
-    total += childStat.size;
+    total += Number(childStat.size);
     if (!Number.isSafeInteger(total)) {
       throw new ModelAssetError(
         "CACHE_LIMIT_EXCEEDED",
