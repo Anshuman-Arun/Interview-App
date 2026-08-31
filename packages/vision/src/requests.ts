@@ -283,8 +283,9 @@ export function requestPayloadIsSafeReference(
 ): request is { readonly payload: ImagePayloadReference } {
   if (typeof request !== "object" || request === null) return false;
   try {
-    if (!("payload" in request)) return false;
-    return ImagePayloadReference.isValidatedInstance(request.payload);
+    const descriptor = Object.getOwnPropertyDescriptor(request, "payload");
+    if (descriptor === undefined || !("value" in descriptor)) return false;
+    return ImagePayloadReference.isValidatedInstance(descriptor.value);
   } catch {
     return false;
   }
