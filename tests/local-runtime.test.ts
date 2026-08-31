@@ -563,7 +563,7 @@ describe("local worker lifecycle manager", () => {
 
   it("does not commit READY when stop is requested from a readiness callback", async () => {
     const runtime = manager();
-    let stopping: Promise<ReturnType<LocalRuntimeManager["stop"]> extends Promise<infer T> ? T : never> | undefined;
+    let stopping: ReturnType<LocalRuntimeManager["stop"]> | undefined;
     runtime.register(definition("readiness-stop-race", "line-ready", {
       readiness: {
         kind: "STDOUT_LINE",
