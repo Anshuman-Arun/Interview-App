@@ -801,7 +801,7 @@ export class ModelAssetManager {
   }
 
   private managedDirectoryTraversalLimit(): number {
-    return MANAGED_DIRECTORY_ENTRY_LIMIT;
+    return Math.max(MANAGED_DIRECTORY_ENTRY_LIMIT, this.maxListEntries);
   }
 
   private async removeManagedEntry(paths: CachePaths, candidate: string): Promise<void> {
