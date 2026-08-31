@@ -193,6 +193,23 @@ function ownValue(record: Record<string, unknown>, key: string): unknown {
   return descriptor.value;
 }
 
+function clonePlainDataArray(value: unknown): readonly unknown[] | undefined {
+  if (!Array.isArray(value) || isProxy(value)) return undefined;
+  try {
+    const prototype: unknown = Object.getPrototypeOf(value);
+    if (prototype !== Array.prototype) return undefined;
+    const clone: unknown[] = new Array<unknown>(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (descriptor === undefined || !("value" in descriptor)) return undefined;
+      clone[index] = descriptor.value;
+    }
+    return clone;
+  } catch {
+    return undefined;
+  }
+}
+
 function isAbortSignal(value: unknown): value is AbortSignal {
   if (typeof value !== "object" || value === null || isProxy(value)) return false;
   try {
@@ -612,14 +629,13 @@ export class ModelAssetManager {
   }
 
   public async clearUnused(keepManifestValues: readonly unknown[]): Promise<number> {
-    const rawKeepManifestValues: unknown = keepManifestValues;
-    if (!Array.isArray(rawKeepManifestValues)) {
+    const keepValues = clonePlainDataArray(keepManifestValues);
+    if (keepValues === undefined) {
       throw new ModelAssetError(
         "INVALID_MANIFEST",
-        "Keep-manifest collection must be an array."
+        "Keep-manifest collection must be a plain dense data array."
       );
     }
-    const keepValues: readonly unknown[] = rawKeepManifestValues;
 
     if (keepValues.length > this.maxListEntries) {
       throw new ModelAssetError(
