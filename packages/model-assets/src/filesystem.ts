@@ -52,6 +52,10 @@ export interface CachePaths {
   readonly temporary: string;
   readonly rootDevice: bigint;
   readonly rootInode: bigint;
+  readonly artifactsDevice: bigint;
+  readonly artifactsInode: bigint;
+  readonly temporaryDevice: bigint;
+  readonly temporaryInode: bigint;
 }
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
@@ -104,12 +108,35 @@ export async function initializeCachePaths(rootInput: string): Promise<CachePath
     const temporary = path.join(canonicalRoot, "tmp");
     await ensureSafeDirectory(canonicalRoot, artifacts);
     await ensureSafeDirectory(canonicalRoot, temporary);
+    const [artifactsStat, temporaryStat] = await Promise.all([
+      lstat(artifacts, { bigint: true }),
+      lstat(temporary, { bigint: true })
+    ]);
+    if (artifactsStat.isSymbolicLink()
+        || temporaryStat.isSymbolicLink()
+        || !artifactsStat.isDirectory()
+        || !temporaryStat.isDirectory()) {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Cache parent directories are not regular directories."
+      );
+    }
+    if (artifactsStat.dev !== temporaryStat.dev) {
+      throw new ModelAssetError(
+        "INVALID_CACHE_ROOT",
+        "Temporary and installed artifact directories must be on the same filesystem."
+      );
+    }
     return {
       root: canonicalRoot,
       artifacts,
       temporary,
       rootDevice: rootStat.dev,
-      rootInode: rootStat.ino
+      rootInode: rootStat.ino,
+      artifactsDevice: artifactsStat.dev,
+      artifactsInode: artifactsStat.ino,
+      temporaryDevice: temporaryStat.dev,
+      temporaryInode: temporaryStat.ino
     };
   } catch (error) {
     if (error instanceof ModelAssetError) throw error;
@@ -143,8 +170,6 @@ export async function validateCachePaths(paths: CachePaths): Promise<void> {
 
   assertPathInsideRoot(paths.root, paths.artifacts);
   assertPathInsideRoot(paths.root, paths.temporary);
-  await ensureSafeDirectory(paths.root, paths.artifacts);
-  await ensureSafeDirectory(paths.root, paths.temporary);
 
   let artifactsStat: BigIntStats;
   let temporaryStat: BigIntStats;
@@ -154,6 +179,13 @@ export async function validateCachePaths(paths: CachePaths): Promise<void> {
       lstat(paths.temporary, { bigint: true })
     ]);
   } catch (error) {
+    if (errnoCode(error) === "ENOENT") {
+      throw new ModelAssetError(
+        "INVALID_CACHE_ROOT",
+        "A managed cache parent directory was removed after manager initialization.",
+        { cause: error }
+      );
+    }
     throw new ModelAssetError(
       "IO_ERROR",
       "Unable to inspect cache directories for atomic publication compatibility.",
@@ -167,6 +199,15 @@ export async function validateCachePaths(paths: CachePaths): Promise<void> {
     throw new ModelAssetError(
       "UNSAFE_PATH",
       "Cache parent directories changed to unsafe filesystem entries."
+    );
+  }
+  if (artifactsStat.dev !== paths.artifactsDevice
+      || artifactsStat.ino !== paths.artifactsInode
+      || temporaryStat.dev !== paths.temporaryDevice
+      || temporaryStat.ino !== paths.temporaryInode) {
+    throw new ModelAssetError(
+      "INVALID_CACHE_ROOT",
+      "A managed cache parent directory was replaced after manager initialization."
     );
   }
   if (artifactsStat.dev !== temporaryStat.dev) {
