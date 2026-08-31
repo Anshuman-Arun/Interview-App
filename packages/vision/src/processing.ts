@@ -66,7 +66,14 @@ const TileConfigSchema = z.object({
   tileHeight: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   overlap: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   maxTileCount: z.number().int().nonnegative().max(512)
-}).strict();
+}).strict().superRefine((config, context) => {
+  if (config.overlap >= config.tileWidth || config.overlap >= config.tileHeight) {
+    context.addIssue({
+      code: "custom",
+      message: "Tile overlap must be smaller than both tile dimensions"
+    });
+  }
+});
 
 export interface TileConfig {
   readonly tileWidth: number;
