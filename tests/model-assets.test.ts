@@ -1,0 +1,647 @@
+import { createHash } from "node:crypto";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  AssetManifestSchema,
+  ModelAssetManager,
+  artifactInstallationKey,
+  resolveAssetManifest,
+  verifyArtifactFile,
+  type AssetManifest
+} from "../packages/model-assets/src/index.js";
+
+interface FixtureServer {
+  readonly server: Server;
+  readonly baseUrl: string;
+  readonly requestCount: () => number;
+}
+
+type FixtureHandler = (
+  request: IncomingMessage,
+  response: ServerResponse
+) => void | Promise<void>;
+
+const roots: string[] = [];
+const servers: Server[] = [];
+
+afterEach(async () => {
+  for (const server of servers.splice(0)) {
+    server.closeAllConnections();
+    await new Promise<void>((resolvePromise) => {
+      server.close(() => resolvePromise());
+    });
+  }
+  for (const root of roots.splice(0)) {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+describe("local model asset manager", () => {
+  it("accepts a strict valid manifest and rejects malformed or unsafe manifests", () => {
+    const payload = Buffer.from("fixture-model-bytes");
+    const valid = manifestFor(payload, "https://example.test/artifact.bin");
+    expect(AssetManifestSchema.parse(valid)).toEqual(valid);
+
+    const invalid: unknown[] = [
+      { ...valid, schemaVersion: 2 },
+      { ...valid, artifactId: "../escape" },
+      { ...valid, filename: "../artifact.bin" },
+      { ...valid, filename: "nested/artifact.bin" },
+      { ...valid, filename: "nested\\artifact.bin" },
+      { ...valid, filename: "CON" },
+      { ...valid, filename: "manifest.json" },
+      { ...valid, filename: "trailing." },
+      { ...valid, sizeBytes: 0 },
+      { ...valid, sha256: "ABC" },
+      { ...valid, sourceUrl: "file:///tmp/model.bin" },
+      { ...valid, sourceUrl: "https://user:pass@example.test/model.bin" },
+      { ...valid, extra: true }
+    ];
+
+    for (const candidate of invalid) {
+      expect(() => AssetManifestSchema.parse(candidate)).toThrow();
+    }
+  });
+
+  it("resolves platform, architecture, and variant deterministically", () => {
+    const payload = Buffer.from("resolver");
+    const base = manifestFor(payload, "https://example.test/base.bin", {
+      platform: undefined,
+      architecture: undefined
+    });
+    const linux = manifestFor(payload, "https://example.test/linux.bin", {
+      artifactId: "linux",
+      platform: "linux",
+      architecture: undefined
+    });
+    const linuxX64 = manifestFor(payload, "https://example.test/linux-x64.bin", {
+      artifactId: "linux-x64",
+      platform: "linux",
+      architecture: "x64"
+    });
+    const avx = manifestFor(payload, "https://example.test/avx.bin", {
+      artifactId: "linux-x64-avx",
+      platform: "linux",
+      architecture: "x64",
+      variant: "avx2"
+    });
+
+    expect(resolveAssetManifest([base, linux, linuxX64, avx], {
+      familyId: "fixture",
+      version: "1.0.0",
+      platform: "linux",
+      architecture: "x64"
+    }).artifactId).toBe("linux-x64");
+
+    expect(resolveAssetManifest([base, linux, linuxX64, avx], {
+      familyId: "fixture",
+      version: "1.0.0",
+      platform: "linux",
+      architecture: "x64",
+      variant: "avx2"
+    }).artifactId).toBe("linux-x64-avx");
+  });
+
+  it("fails explicitly for unsupported and ambiguous platform resolution", () => {
+    const payload = Buffer.from("resolver");
+    const linux = manifestFor(payload, "https://example.test/linux.bin", {
+      artifactId: "linux",
+      platform: "linux",
+      architecture: "x64"
+    });
+
+    expect(() => resolveAssetManifest([linux], {
+      familyId: "fixture",
+      version: "1.0.0",
+      platform: "win32",
+      architecture: "x64"
+    })).toThrow(expect.objectContaining({ code: "UNSUPPORTED_PLATFORM" }));
+
+    const duplicate = { ...linux, sourceUrl: "https://mirror.test/linux.bin" };
+    expect(() => resolveAssetManifest([linux, duplicate], {
+      familyId: "fixture",
+      version: "1.0.0",
+      platform: "linux",
+      architecture: "x64"
+    })).toThrow(expect.objectContaining({ code: "AMBIGUOUS_ARTIFACT" }));
+  });
+
+  it("downloads, verifies, atomically installs, lists, and exposes safe diagnostics", async () => {
+    const payload = Buffer.from("valid remote artifact bytes");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.end(payload);
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    const installedPath = await manager.install(manifest);
+    expect(await readFile(installedPath)).toEqual(payload);
+    expect(await manager.verifyInstalledArtifact(manifest)).toBe(true);
+    expect(await manager.getInstalledPath(manifest)).toBe(installedPath);
+    expect((await manager.inspect(manifest)).status).toBe("INSTALLED");
+    expect(fixture.requestCount()).toBe(1);
+
+    const list = await manager.listInstalledArtifacts();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      artifactId: manifest.artifactId,
+      familyId: manifest.familyId,
+      version: manifest.version,
+      sha256: manifest.sha256,
+      byteSize: payload.byteLength
+    });
+
+    const diagnostics = await manager.getDiagnosticMetadata(manifest);
+    const serialized = JSON.stringify(diagnostics);
+    expect(diagnostics.status).toBe("INSTALLED");
+    expect(serialized).not.toContain(root);
+    expect(serialized).not.toContain(fixture.baseUrl);
+  });
+
+  it("rejects SHA-256 mismatch and never publishes the staged bytes", async () => {
+    const payload = Buffer.from("actual bytes");
+    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact", {
+      sha256: "0".repeat(64)
+    });
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "DIGEST_MISMATCH" });
+    expect(await manager.inspect(manifest)).toMatchObject({
+      status: "CORRUPT",
+      errorCode: "DIGEST_MISMATCH"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
+  it("rejects a response whose size differs from the manifest", async () => {
+    const expected = Buffer.from("expected-size");
+    const shorter = Buffer.from("short");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(200, { "Content-Length": String(shorter.byteLength) });
+      response.end(shorter);
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(expected, fixture.baseUrl + "/artifact");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "SIZE_MISMATCH" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
+  it("stops oversized downloads before publication", async () => {
+    const expected = Buffer.from("12345");
+    const oversized = Buffer.from("123456");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(200, { "Content-Length": String(oversized.byteLength) });
+      response.end(oversized);
+    });
+    const root = await newRoot();
+    const manager = managerFor(root, { maxArtifactBytes: expected.byteLength });
+    const manifest = manifestFor(expected, fixture.baseUrl + "/artifact");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "ARTIFACT_TOO_LARGE" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
+  it("cleans up an interrupted download without publishing a partial artifact", async () => {
+    const payload = Buffer.from("interrupted-download-payload");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(200);
+      response.write(payload.subarray(0, 4));
+      response.destroy();
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    await expect(manager.install(manifest)).rejects.toBeInstanceOf(Error);
+    expect((await manager.inspect(manifest)).status).toBe("FAILED");
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
+  it("supports cancellation and removes the incomplete staging directory", async () => {
+    const payload = Buffer.from("cancel-me");
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const fixture = await startFixtureServer(async (_request, response) => {
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.write(payload.subarray(0, 2));
+      started.resolve();
+      await release.promise;
+      response.end(payload.subarray(2));
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+    const controller = new AbortController();
+
+    const operation = manager.install(manifest, controller.signal);
+    await started.promise;
+    controller.abort();
+    await expect(operation).rejects.toMatchObject({ code: "CANCELLED" });
+    release.resolve();
+    await eventually(async () => (await readdir(path.join(root, "tmp"))).length === 0);
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
+  it("enforces an overall download timeout", async () => {
+    const payload = Buffer.from("timeout");
+    const fixture = await startFixtureServer(async () => {
+      await new Promise<void>(() => undefined);
+    });
+    const root = await newRoot();
+    const manager = managerFor(root, { downloadTimeoutMs: 40 });
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "DOWNLOAD_TIMEOUT" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
+  it("follows bounded same-origin redirects and rejects redirect loops", async () => {
+    const payload = Buffer.from("redirected");
+    const fixture = await startFixtureServer((request, response) => {
+      if (request.url === "/start") {
+        response.writeHead(302, { Location: "/artifact" });
+        response.end();
+        return;
+      }
+      if (request.url === "/loop") {
+        response.writeHead(302, { Location: "/loop" });
+        response.end();
+        return;
+      }
+      response.end(payload);
+    });
+    const root = await newRoot();
+    const manager = managerFor(root, { maxRedirects: 1 });
+
+    const valid = manifestFor(payload, fixture.baseUrl + "/start");
+    expect(await readFile(await manager.install(valid))).toEqual(payload);
+
+    const loop = manifestFor(payload, fixture.baseUrl + "/loop", { artifactId: "loop" });
+    await expect(manager.install(loop)).rejects.toMatchObject({ code: "REDIRECT_LIMIT" });
+  });
+
+  it("rejects cross-origin redirects by default", async () => {
+    const payload = Buffer.from("cross-origin");
+    const target = await startFixtureServer((_request, response) => response.end(payload));
+    const redirect = await startFixtureServer((_request, response) => {
+      response.writeHead(302, { Location: target.baseUrl + "/artifact" });
+      response.end();
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, redirect.baseUrl + "/start");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "UNSAFE_REDIRECT" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
+  it("keeps partial bytes invisible until atomic publication", async () => {
+    const payload = Buffer.from("atomic-publish");
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const fixture = await startFixtureServer(async (_request, response) => {
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.write(payload.subarray(0, 3));
+      started.resolve();
+      await release.promise;
+      response.end(payload.subarray(3));
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    const installation = manager.install(manifest);
+    await started.promise;
+    expect((await manager.inspect(manifest)).status).toBe("DOWNLOADING");
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    await expect(manager.getInstalledPath(manifest)).rejects.toMatchObject({ code: "NOT_INSTALLED" });
+
+    release.resolve();
+    const installed = await installation;
+    expect(await readFile(installed)).toEqual(payload);
+    expect((await manager.inspect(manifest)).status).toBe("INSTALLED");
+  });
+
+  it("imports local files only after enforcing size and digest", async () => {
+    const payload = Buffer.from("local-import");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/local-import.bin");
+
+    const installed = await manager.importLocal(manifest, source);
+    expect(await readFile(installed)).toEqual(payload);
+
+    const wrong = path.join(sourceRoot, "wrong.bin");
+    await writeFile(wrong, Buffer.from("wrong"));
+    const other = { ...manifest, artifactId: "other" };
+    await expect(manager.importLocal(other, wrong)).rejects.toMatchObject({ code: "SIZE_MISMATCH" });
+  });
+
+  it("coalesces duplicate installs and lets one waiter cancel without aborting another", async () => {
+    const payload = Buffer.from("coalesced");
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const fixture = await startFixtureServer(async (_request, response) => {
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.write(payload.subarray(0, 2));
+      started.resolve();
+      await release.promise;
+      response.end(payload.subarray(2));
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+    const firstController = new AbortController();
+
+    const first = manager.install(manifest, firstController.signal);
+    const second = manager.install(manifest);
+    await started.promise;
+    firstController.abort();
+    await expect(first).rejects.toMatchObject({ code: "CANCELLED" });
+    release.resolve();
+
+    const installed = await second;
+    expect(await readFile(installed)).toEqual(payload);
+    expect(fixture.requestCount()).toBe(1);
+  });
+
+  it("detects corruption of a previously installed artifact", async () => {
+    const payload = Buffer.from("good-bytes");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/good.bin");
+    const installed = await manager.importLocal(manifest, source);
+
+    await writeFile(installed, Buffer.from("bad!-bytes"));
+    expect(await manager.verifyInstalledArtifact(manifest)).toBe(false);
+    expect(await manager.inspect(manifest)).toMatchObject({
+      status: "CORRUPT",
+      errorCode: "DIGEST_MISMATCH"
+    });
+    await expect(manager.getInstalledPath(manifest)).rejects.toMatchObject({ code: "NOT_INSTALLED" });
+    expect(await manager.listInstalledArtifacts()).toEqual([]);
+  });
+
+  it("removes one installed artifact and derives NOT_PRESENT from the filesystem", async () => {
+    const payload = Buffer.from("remove-me");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/remove.bin");
+
+    await manager.importLocal(manifest, source);
+    await manager.remove(manifest);
+    expect((await manager.inspect(manifest)).status).toBe("NOT_PRESENT");
+    expect(await manager.listInstalledArtifacts()).toEqual([]);
+  });
+
+  it("clears stale temporary entries without deleting outside the cache root", async () => {
+    const payload = Buffer.from("cleanup");
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/cleanup.bin");
+    await manager.inspect(manifest);
+
+    const stale = path.join(root, "tmp", "stale");
+    await mkdir(stale);
+    await writeFile(path.join(stale, "partial.bin"), "partial");
+    await manager.cleanupTemporary();
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
+  it("deterministically clears unused installed artifacts", async () => {
+    const firstPayload = Buffer.from("first");
+    const secondPayload = Buffer.from("second");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const firstSource = path.join(sourceRoot, "first.bin");
+    const secondSource = path.join(sourceRoot, "second.bin");
+    await writeFile(firstSource, firstPayload);
+    await writeFile(secondSource, secondPayload);
+
+    const manager = managerFor(root);
+    const first = manifestFor(firstPayload, "https://example.test/first.bin", { artifactId: "first" });
+    const second = manifestFor(secondPayload, "https://example.test/second.bin", { artifactId: "second" });
+    await manager.importLocal(first, firstSource);
+    await manager.importLocal(second, secondSource);
+
+    expect(await manager.clearUnused([first])).toBe(1);
+    expect(await manager.verifyInstalledArtifact(first)).toBe(true);
+    expect(await manager.verifyInstalledArtifact(second)).toBe(false);
+  });
+
+  it("enforces the configured aggregate artifact cache-size limit", async () => {
+    const one = Buffer.from("123456");
+    const two = Buffer.from("abcdef");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const oneSource = path.join(sourceRoot, "one.bin");
+    const twoSource = path.join(sourceRoot, "two.bin");
+    await writeFile(oneSource, one);
+    await writeFile(twoSource, two);
+
+    const manager = managerFor(root, { maxArtifactBytes: 10, maxCacheBytes: 10 });
+    const first = manifestFor(one, "https://example.test/one.bin", { artifactId: "one" });
+    const second = manifestFor(two, "https://example.test/two.bin", { artifactId: "two" });
+    await manager.importLocal(first, oneSource);
+    await expect(manager.importLocal(second, twoSource)).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect(await manager.verifyInstalledArtifact(first)).toBe(true);
+  });
+
+  it("provides standalone bounded file verification", async () => {
+    const payload = Buffer.from("verify-me");
+    const root = await newRoot();
+    const file = path.join(root, "verify.bin");
+    await writeFile(file, payload);
+
+    const valid = await verifyArtifactFile(file, {
+      sizeBytes: payload.byteLength,
+      sha256: sha256(payload),
+      maxBytes: payload.byteLength
+    });
+    expect(valid.ok).toBe(true);
+
+    const invalid = await verifyArtifactFile(file, {
+      sizeBytes: payload.byteLength,
+      sha256: "0".repeat(64),
+      maxBytes: payload.byteLength
+    });
+    expect(invalid).toMatchObject({ ok: false, reason: "DIGEST_MISMATCH" });
+  });
+
+  it("keeps generated installation paths contained and Windows-safe", async () => {
+    const payload = Buffer.from("safe");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/safe.bin", {
+      artifactId: "safe-artifact",
+      filename: "portable-file_1.bin"
+    });
+
+    const installed = await manager.importLocal(manifest, source);
+    const relative = path.relative(root, installed);
+    expect(relative.startsWith("..")).toBe(false);
+    expect(path.isAbsolute(relative)).toBe(false);
+    expect(path.basename(path.dirname(installed))).toBe(artifactInstallationKey(manifest));
+    expect(path.basename(installed)).toBe("portable-file_1.bin");
+  });
+
+  it("rejects a relative cache root before performing filesystem writes", async () => {
+    const payload = Buffer.from("root");
+    const manager = new ModelAssetManager({
+      rootDir: "relative-model-cache",
+      maxArtifactBytes: 1024
+    });
+    const manifest = manifestFor(payload, "https://example.test/root.bin");
+
+    await expect(manager.inspect(manifest)).rejects.toMatchObject({ code: "INVALID_CACHE_ROOT" });
+  });
+
+  it("does not follow a hostile symlink while removing a cache entry", async () => {
+    if (process.platform === "win32") return;
+
+    const payload = Buffer.from("symlink-safe");
+    const root = await newRoot();
+    const outside = await newRoot();
+    const sentinel = path.join(outside, "sentinel.txt");
+    await writeFile(sentinel, "keep-me");
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/symlink.bin");
+    await manager.inspect(manifest);
+
+    const installation = path.join(root, "artifacts", artifactInstallationKey(manifest));
+    await symlink(outside, installation, "dir");
+    expect((await manager.inspect(manifest)).status).toBe("CORRUPT");
+    await manager.remove(manifest);
+
+    expect(await readFile(sentinel, "utf8")).toBe("keep-me");
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+});
+
+function managerFor(
+  rootDir: string,
+  overrides: Partial<ConstructorParameters<typeof ModelAssetManager>[0]> = {}
+): ModelAssetManager {
+  return new ModelAssetManager({
+    rootDir,
+    maxArtifactBytes: 1024 * 1024,
+    downloadTimeoutMs: 2_000,
+    maxRedirects: 3,
+    ...overrides
+  });
+}
+
+function sha256(payload: Buffer): AssetManifest["sha256"] {
+  return createHash("sha256").update(payload).digest("hex");
+}
+
+function manifestFor(
+  payload: Buffer,
+  sourceUrl: string,
+  overrides: Partial<AssetManifest> = {}
+): AssetManifest {
+  return AssetManifestSchema.parse({
+    schemaVersion: 1,
+    familyId: "fixture",
+    artifactId: "artifact",
+    version: "1.0.0",
+    type: "MODEL",
+    platform: "linux",
+    architecture: "x64",
+    filename: "artifact.bin",
+    sizeBytes: payload.byteLength,
+    sha256: sha256(payload),
+    sourceUrl,
+    ...overrides
+  });
+}
+
+async function newRoot(): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), "interview-model-assets-"));
+  roots.push(root);
+  return root;
+}
+
+async function startFixtureServer(handler: FixtureHandler): Promise<FixtureServer> {
+  let requests = 0;
+  const server = createServer((request, response) => {
+    requests += 1;
+    void Promise.resolve(handler(request, response)).catch(() => response.destroy());
+  });
+  servers.push(server);
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    server.once("error", rejectPromise);
+    server.listen(0, "127.0.0.1", () => {
+      server.removeListener("error", rejectPromise);
+      resolvePromise();
+    });
+  });
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("Fixture server did not expose a TCP address.");
+  }
+  return {
+    server,
+    baseUrl: "http://127.0.0.1:" + String(address.port),
+    requestCount: () => requests
+  };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolvePromise: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return {
+    promise,
+    resolve: (value: T) => {
+      if (resolvePromise === undefined) throw new Error("Deferred promise is not initialized.");
+      resolvePromise(value);
+    }
+  };
+}
+
+async function eventually(predicate: () => Promise<boolean>): Promise<void> {
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 10));
+  }
+  throw new Error("Condition was not satisfied before test timeout.");
+}
