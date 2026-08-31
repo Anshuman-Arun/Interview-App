@@ -186,6 +186,27 @@ describe("deterministic math verifier invariants", () => {
     expect(combinatorial.reason).toContain("RESOURCE_LIMIT");
   });
 
+  it("enforces the exact generic structured-input depth boundary", async () => {
+    const verifier = new ModularArithmeticVerifier();
+    const base = {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: { kind: "DIVISIBILITY", divisor: "2", dividend: integer("4") }
+    };
+
+    let atLimit: unknown = "leaf";
+    for (let depth = 0; depth < 30; depth += 1) atLimit = { child: atLimit };
+    const acceptedDepth = await verifier.verify(JSON.stringify({ ...base, extra: atLimit }), 1);
+    expect(acceptedDepth.status).toBe("UNRESOLVED");
+    expect(acceptedDepth.reason).toContain("MALFORMED_INTERPRETATION");
+    expect(acceptedDepth.reason).not.toContain("RESOURCE_LIMIT");
+
+    const overLimit = { child: atLimit };
+    const rejectedDepth = await verifier.verify(JSON.stringify({ ...base, extra: overLimit }), 1);
+    expect(rejectedDepth.status).toBe("UNRESOLVED");
+    expect(rejectedDepth.reason).toContain("RESOURCE_LIMIT");
+  });
+
   it("enforces generic structured-input depth before recursive schema evaluation", async () => {
     let deep: unknown = "leaf";
     for (let depth = 0; depth < 40; depth += 1) deep = { child: deep };
