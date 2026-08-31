@@ -335,12 +335,17 @@ async function openStableRegularFile(
 
   try {
     const opened = await handle.stat({ bigint: true });
+    const afterOpen = await lstat(filePath, { bigint: true });
     if (!opened.isFile()
+        || afterOpen.isSymbolicLink()
+        || !afterOpen.isFile()
         || opened.dev !== beforeOpen.dev
-        || opened.ino !== beforeOpen.ino) {
+        || opened.ino !== beforeOpen.ino
+        || afterOpen.dev !== opened.dev
+        || afterOpen.ino !== opened.ino) {
       throw new ModelAssetError(
         "UNSAFE_PATH",
-        "File identity changed between inspection and open."
+        "File identity or pathname type changed between inspection and open."
       );
     }
     return { handle, stat: opened };
