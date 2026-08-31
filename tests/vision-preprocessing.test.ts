@@ -408,6 +408,28 @@ describe("vision snapshot validation and hashing", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects proxied or revoked encoded byte payloads as invalid images", () => {
+    const proxied = new Proxy(makePng(1, 1), {});
+    const revoked = Proxy.revocable(makePng(1, 1), {});
+    revoked.revoke();
+
+    for (const encodedBytes of [proxied, revoked.proxy]) {
+      try {
+        createValidatedImageSnapshot({
+          snapshotId: "proxied-bytes",
+          sourceType: "WHITEBOARD_SNAPSHOT",
+          sourceRevision: BoardRevisionSchema.parse(0),
+          capturedAtMs: 0,
+          mimeType: "image/png",
+          encodedBytes: encodedBytes as Uint8Array
+        });
+        throw new Error("Expected proxied byte rejection");
+      } catch (error) {
+        expectCode(error, "INVALID_IMAGE");
+      }
+    }
+  });
+
   it("reports a PNG-signature prefix with a truncated header as INVALID_IMAGE, not MIME mismatch", () => {
     const truncated = Buffer.from([
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
