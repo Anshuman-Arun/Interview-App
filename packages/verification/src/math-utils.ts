@@ -38,12 +38,15 @@ function parseCanonicalInteger(
   maximumDigits: number,
   limitCode: "INTEGER_LIMIT_EXCEEDED" | "INTERMEDIATE_LIMIT_EXCEEDED"
 ): bigint {
-  if (!/^(?:0|-?[1-9]\d*)$/u.test(value)) {
-    throw new BoundedMathError("INVALID_INTEGER", "Integer must use canonical base-10 digits");
+  if (typeof value !== "string") {
+    throw new BoundedMathError("INVALID_INTEGER", "Integer must be supplied as a string");
   }
   const digits = value.startsWith("-") ? value.length - 1 : value.length;
   if (digits > maximumDigits) {
     throw new BoundedMathError(limitCode, "Integer exceeds the configured decimal digit limit");
+  }
+  if (!/^(?:0|-?[1-9]\d*)$/u.test(value)) {
+    throw new BoundedMathError("INVALID_INTEGER", "Integer must use canonical base-10 digits");
   }
   return BigInt(value);
 }
@@ -65,6 +68,9 @@ export function formatInteger(value: bigint): string {
 }
 
 export function assertIntermediateIntegerBound(value: bigint): bigint {
+  if (typeof value !== "bigint") {
+    throw new BoundedMathError("INVALID_INTEGER", "Exact integer values must use bigint");
+  }
   if (decimalDigitCount(value) > MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS) {
     throw new BoundedMathError(
       "INTERMEDIATE_LIMIT_EXCEEDED",
@@ -108,8 +114,7 @@ export function normalizeModulo(value: bigint, modulus: bigint): bigint {
 export function areCongruent(left: bigint, right: bigint, modulus: bigint): boolean {
   assertIntermediateIntegerBound(left);
   assertIntermediateIntegerBound(right);
-  const difference = assertIntermediateIntegerBound(left - right);
-  return normalizeModulo(difference, modulus) === 0n;
+  return normalizeModulo(left, modulus) === normalizeModulo(right, modulus);
 }
 
 export function isDivisibleBy(dividend: bigint, divisor: bigint): boolean {

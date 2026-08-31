@@ -11,6 +11,7 @@ import {
   FiniteRecurrenceVerifier,
   IntegerStringSchema,
   IntermediateIntegerStringSchema,
+  PositiveIntegerStringSchema,
   MAX_INTEGER_DECIMAL_DIGITS,
   MAX_FINITE_CONTAINER_ITEMS,
   MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
@@ -24,6 +25,7 @@ import {
   PROBABILITY_ARITHMETIC_PROTOCOL,
   PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
   ProbabilityArithmeticVerifier,
+  areCongruent,
   binomial,
   createDeterministicMathVerifier,
   divideRationals,
@@ -54,6 +56,36 @@ describe("adversarial deterministic math verification", () => {
       expect(IntegerStringSchema.safeParse(value).success).toBe(false);
       expect(() => parseBoundedInteger(value)).toThrow(BoundedMathError);
     }
+  });
+
+  it("enforces integer bounds before numeric conversion and fails closed on runtime type misuse", () => {
+    const oversized = "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 100_000);
+    expect(PositiveIntegerStringSchema.safeParse(oversized).success).toBe(false);
+
+    const runtimeParser = parseBoundedInteger as unknown as (value: unknown) => bigint;
+    expect(() => runtimeParser(17)).toThrow(BoundedMathError);
+  });
+
+  it("checks congruence without creating an avoidable over-limit subtraction", async () => {
+    const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
+    expect(areCongruent(maximum, -maximum, 2n)).toBe(true);
+
+    const operand = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS);
+    const product = {
+      kind: "PRODUCT" as const,
+      terms: Array.from({ length: 16 }, () => integer(operand))
+    };
+    const result = await verifyJson(new ModularArithmeticVerifier(), {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "CONGRUENCE",
+        left: product,
+        right: { kind: "NEGATE", operand: product },
+        modulus: "2"
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
   });
 
   it("enforces exact claimed-result digit boundaries", () => {

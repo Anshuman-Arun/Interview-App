@@ -23,23 +23,14 @@ export const IntermediateIntegerStringSchema = z.string()
     (value) => (value.startsWith("-") ? value.length - 1 : value.length) <= MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS
   );
 
-function integerStringSatisfies(value: string, predicate: (parsed: bigint) => boolean): boolean {
-  if (!/^(?:0|-?[1-9]\d*)$/u.test(value)) return false;
-  try {
-    return predicate(BigInt(value));
-  } catch {
-    return false;
-  }
-}
-
 export const PositiveIntegerStringSchema = IntegerStringSchema.refine(
-  (value) => integerStringSatisfies(value, (parsed) => parsed > 0n)
+  (value) => value !== "0" && !value.startsWith("-")
 );
 export const NonZeroIntegerStringSchema = IntegerStringSchema.refine(
-  (value) => integerStringSatisfies(value, (parsed) => parsed !== 0n)
+  (value) => value !== "0"
 );
 export const NonZeroIntermediateIntegerStringSchema = IntermediateIntegerStringSchema.refine(
-  (value) => integerStringSatisfies(value, (parsed) => parsed !== 0n)
+  (value) => value !== "0"
 );
 
 export type IntegerExpression =
