@@ -76,7 +76,8 @@ describe("local model asset manager", () => {
 
   it("resolves platform, architecture, and variant deterministically", () => {
     const payload = Buffer.from("resolver");
-    const base = manifestFor(payload, "https://example.test/base.bin", {
+    const base = AssetManifestSchema.parse({
+      ...manifestFor(payload, "https://example.test/base.bin"),
       platform: undefined,
       architecture: undefined
     });
@@ -520,13 +521,10 @@ describe("local model asset manager", () => {
 
   it("rejects a relative cache root before performing filesystem writes", async () => {
     const payload = Buffer.from("root");
-    const manager = new ModelAssetManager({
+    expect(() => new ModelAssetManager({
       rootDir: "relative-model-cache",
       maxArtifactBytes: 1024
-    });
-    const manifest = manifestFor(payload, "https://example.test/root.bin");
-
-    await expect(manager.inspect(manifest)).rejects.toMatchObject({ code: "INVALID_CACHE_ROOT" });
+    })).toThrow(expect.objectContaining({ code: "INVALID_CACHE_ROOT" }));
   });
 
   it("does not follow a hostile symlink while removing a cache entry", async () => {
