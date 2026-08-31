@@ -474,7 +474,9 @@ describe("adversarial deterministic math verification", () => {
       (product, denominator) => product * denominator,
       1n
     );
-    const overWorkProduct = underWorkProduct * denominators[35]!;
+    const finalDenominator = denominators[35];
+    if (finalDenominator === undefined) throw new Error("Expected 36 work-bound denominators");
+    const overWorkProduct = underWorkProduct * finalDenominator;
     expect(underWorkProduct.toString().length)
       .toBeLessThanOrEqual(MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS);
     expect(overWorkProduct.toString().length)
