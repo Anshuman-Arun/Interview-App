@@ -65,21 +65,21 @@ interface ComponentRecord {
   readonly exitListeners: Set<(exit: InternalExitRecord) => void>;
   readonly startupStdoutLines: string[];
   state: LocalComponentState;
-  child?: ChildProcessWithoutNullStreams;
+  child: ChildProcessWithoutNullStreams | undefined;
   stdoutFramer?: BoundedLineFramer;
   stderrFramer?: BoundedLineFramer;
   startedAt?: string;
-  readyAt?: string;
-  readinessDetail?: string;
-  handshake?: LocalComponentHandshake;
+  readyAt: string | undefined;
+  readinessDetail: string | undefined;
+  handshake: LocalComponentHandshake | undefined;
   lastExit?: InternalExitRecord;
-  failure?: LocalFailureSnapshot;
+  failure: LocalFailureSnapshot | undefined;
   restartCount: number;
   restartBudgetUsed: number;
   expectedStop: boolean;
-  operationAbort?: AbortController;
-  startPromise?: Promise<LocalComponentStatus>;
-  stopPromise?: Promise<LocalStopResult>;
+  operationAbort: AbortController | undefined;
+  startPromise: Promise<LocalComponentStatus> | undefined;
+  stopPromise: Promise<LocalStopResult> | undefined;
 }
 
 export class LocalRuntimeManager {
@@ -125,6 +125,14 @@ export class LocalRuntimeManager {
       exitListeners: new Set(),
       startupStdoutLines: [],
       state: "STOPPED",
+      child: undefined,
+      readyAt: undefined,
+      readinessDetail: undefined,
+      handshake: undefined,
+      failure: undefined,
+      operationAbort: undefined,
+      startPromise: undefined,
+      stopPromise: undefined,
       restartCount: 0,
       restartBudgetUsed: 0,
       expectedStop: false
