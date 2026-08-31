@@ -85,8 +85,16 @@ function compareRects(left: ImageRect, right: ImageRect): number {
 }
 
 function normalizeConfig(config: unknown) {
-  if (config !== undefined && (typeof config !== "object" || config === null || Array.isArray(config))) {
-    throw new RangeError("Dirty-region planner configuration must be an object");
+  if (config !== undefined) {
+    let isArray: boolean;
+    try {
+      isArray = Array.isArray(config);
+    } catch {
+      throw new RangeError("Dirty-region planner configuration could not be inspected safely");
+    }
+    if (typeof config !== "object" || config === null || isArray) {
+      throw new RangeError("Dirty-region planner configuration must be an object");
+    }
   }
 
   let overrides: ReturnType<typeof DirtyRegionConfigOverrideSchema.safeParse>;
