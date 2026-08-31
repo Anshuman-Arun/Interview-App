@@ -1355,6 +1355,63 @@ describe("adapter factory adversarial boundary", () => {
       .not.toContain("private-adapter-secret");
   });
 
+  it("rejects runtime data-use values that contradict the registered execution kind", async () => {
+    for (const entry of [
+      {
+        id: "remote-kind-provider",
+        kind: "REMOTE_API" as const,
+        localExecution: "UNSUPPORTED" as const,
+        remoteExecution: "SUPPORTED" as const,
+        runtimeDataUse: "LOCAL_ONLY" as const
+      },
+      {
+        id: "local-kind-provider",
+        kind: "LOCAL_PROCESS" as const,
+        localExecution: "SUPPORTED" as const,
+        remoteExecution: "UNSUPPORTED" as const,
+        runtimeDataUse: "REMOTE_NO_TRAINING" as const
+      }
+    ]) {
+      const registry = new ProviderRegistry();
+      registry.register(providerInput({
+        id: entry.id,
+        kind: entry.kind,
+        adapterVersion: "1.0.0",
+        models: [{
+          id: "test-model",
+          displayName: "Test Model",
+          capabilities: capabilities({
+            localExecution: entry.localExecution,
+            remoteExecution: entry.remoteExecution,
+            dataUse: "UNKNOWN",
+            cancellation: "CLOSE_CLIENT_STREAM"
+          })
+        }],
+        adapterFactory: {
+          id: entry.id + "-factory",
+          createAdapter() {
+            return new GeminiApiAdapter({
+              name: entry.id,
+              dataUse: entry.runtimeDataUse
+            });
+          }
+        }
+      }));
+      const resolved = resolveProviderConfiguration({
+        registry,
+        configuration: {
+          version: 1,
+          providerId: entry.id,
+          modelId: "test-model",
+          enabled: true
+        }
+      });
+
+      await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
+        .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
+    }
+  });
+
   it("rejects returned adapters whose identity contradicts registry metadata", async () => {
     const registry = new ProviderRegistry();
     registry.register(providerInput({

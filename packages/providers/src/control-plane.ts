@@ -897,6 +897,15 @@ function supportMatchesBoolean(
     || declared === (actual ? "SUPPORTED" : "UNSUPPORTED");
 }
 
+function runtimeDataUseMatchesProviderKind(
+  kind: ProviderKind,
+  dataUse: ModelCapabilities["dataUse"]
+): boolean {
+  if (kind === "REMOTE_API") return dataUse !== "LOCAL_ONLY";
+  if (kind === "LOCAL_PROCESS") return dataUse === "LOCAL_ONLY";
+  return true;
+}
+
 function sortedReasoningLevels(capabilities: ModelCapabilities): readonly string[] {
   return [...(capabilities.reasoningLevels ?? [])].sort(compareCodeUnits);
 }
@@ -973,6 +982,7 @@ function assertAdapterMatchesResolvedDefinition(
       || (declared.cancellation !== "UNKNOWN"
         && declared.cancellation !== execution.cancellation)
       || (declared.dataUse !== "UNKNOWN" && declared.dataUse !== execution.dataUse)
+      || !runtimeDataUseMatchesProviderKind(resolved.provider.kind, execution.dataUse)
     ) {
       throw adapterDefinitionMismatch();
     }
