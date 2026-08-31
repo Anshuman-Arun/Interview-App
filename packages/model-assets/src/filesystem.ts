@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream, type Stats } from "node:fs";
+import { createReadStream, createWriteStream, type Dir, type Stats } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -229,7 +229,7 @@ export async function removeEntryInsideRoot(
     }
 
     const children: string[] = [];
-    let directory;
+    let directory: Dir;
     try {
       directory = await opendir(detached);
     } catch (error) {
@@ -624,7 +624,7 @@ export async function sumManagedCacheBytes(
 
   let total = 0;
   let inspectedEntries = 0;
-  let directory;
+  let directory: Dir;
   try {
     directory = await opendir(root);
   } catch (error) {
