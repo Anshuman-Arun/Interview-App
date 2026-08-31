@@ -554,6 +554,167 @@ describe("local worker lifecycle manager", () => {
       expect(isPidAlive(childPid)).toBe(false);
     }
   });
+
+  it("serializes reentrant start behind an in-progress stop", async () => {
+    const runtime = manager();
+    let restarted: Promise<ReturnType<LocalRuntimeManager["getStatus"]>> | undefined;
+    runtime.register(definition("reentrant", "stdin-shutdown", {
+      shutdownTimeoutMs: 300,
+      terminationTimeoutMs: 300,
+      gracefulShutdown: (control) => {
+        restarted = runtime.start("reentrant");
+        return control.writeStdin("shutdown-now\n");
+      }
+    }));
+
+    const first = await runtime.start("reentrant");
+    const firstPid = first.pid;
+    await expect(runtime.stop("reentrant")).resolves.toMatchObject({ disposition: "GRACEFUL" });
+    expect(restarted).toBeDefined();
+    const second = await restarted;
+    expect(second.state).toBe("READY");
+    expect(second.pid).not.toBe(firstPid);
+  });
+
+  it("prevents new managed work from entering while stopAll is in progress", async () => {
+    const runtime = manager();
+    runtime.register(definition("late", "ready"));
+    let startFailure: unknown;
+    let registerFailure: unknown;
+    runtime.register(definition("blocker", "stdin-shutdown", {
+      gracefulShutdown: async (control) => {
+        try {
+          await runtime.start("late");
+        } catch (error) {
+          startFailure = error;
+        }
+        try {
+          runtime.register(definition("new-during-stop-all", "ready"));
+        } catch (error) {
+          registerFailure = error;
+        }
+        await control.writeStdin("shutdown-now\n");
+      }
+    }));
+    await runtime.start("blocker");
+
+    await runtime.stopAll();
+    expect(startFailure).toMatchObject({ code: "INVALID_STATE" });
+    expect(registerFailure).toMatchObject({ code: "INVALID_STATE" });
+    expect(runtime.listStatuses().map((status) => status.state)).toEqual(["STOPPED", "STOPPED"]);
+  });
+
+  it("does not retry deterministic version-handshake mismatches", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-version-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
+    const runtime = manager();
+    runtime.register(definition("version-no-retry", "ready-counter", {
+      expectedHandshake: { protocolVersion: 2 },
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 3, backoffMs: 5 }
+    }, [counter]));
+
+    await expect(runtime.start("version-no-retry")).rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
+    expect(readFileSync(counter, "utf8")).toBe("1");
+    expect(runtime.getStatus("version-no-retry").restartCount).toBe(0);
+  });
+
+  it("rejects malformed reported handshake metadata", async () => {
+    const runtime = manager();
+    runtime.register(definition("bad-handshake-shape", "ready", {
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: {
+            protocolVersion: {} as unknown as number
+          }
+        })
+      }
+    }));
+
+    await expect(runtime.start("bad-handshake-shape")).rejects.toMatchObject({ code: "READINESS_FAILED" });
+  });
+
+  it("redacts long runtime secrets before handshake metadata truncation", async () => {
+    const secret = "long-runtime-secret-" + "x".repeat(3_000);
+    const runtime = manager();
+    runtime.register(definition("long-secret-handshake", "ready", {
+      environment: { secrets: { RUNTIME_ONLY_SECRET: secret } },
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: {
+            componentVersion: "fixture-1",
+            metadata: { note: secret }
+          }
+        })
+      }
+    }));
+
+    const status = await runtime.start("long-secret-handshake");
+    const serialized = JSON.stringify(status);
+    expect(serialized).not.toContain(secret.slice(0, 500));
+    expect(serialized).toContain("[REDACTED]");
+  });
+
+  it("observes parent process exit even while a descendant keeps inherited pipes open", async () => {
+    const runtime = manager();
+    let childPid: number | undefined;
+    runtime.register(definition("pipe-exit", "exit-with-pipe-child", {
+      terminationTimeoutMs: 500,
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => {
+          if (typeof message !== "object" || message === null) return false;
+          const value = message as Record<string, unknown>;
+          if (typeof value.childPid === "number") {
+            childPid = value.childPid;
+            fixturePids.push(value.childPid);
+          }
+          return readyDecision(message);
+        }
+      }
+    }, ["500"]));
+    await runtime.start("pipe-exit");
+
+    await waitForStatus(runtime, "pipe-exit", (status) =>
+      status.state === "FAILED" && status.lastExit?.code === 15
+    );
+    expect(childPid).toBeTypeOf("number");
+  });
+
+  it("rejects impossible and excessively large output/readiness configurations", () => {
+    const runtime = manager();
+    expect(() => runtime.register(definition("stable-too-long", "ready", {
+      startupTimeoutMs: 50,
+      readiness: { kind: "STABLE_PROCESS", stableMs: 100 }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register(definition("too-many-lines", "ready", {
+      output: { maxLines: 10_001 }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register(definition("too-many-bytes", "ready", {
+      output: { maxBytes: 4 * 1024 * 1024 + 1 }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register({
+      ...definition("bad-hook", "ready"),
+      gracefulShutdown: "not-a-function" as unknown as LocalComponentDefinition["gracefulShutdown"]
+    })).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+
+    expect(() => runtime.register(null as unknown as LocalComponentDefinition))
+      .toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+  });
+
+  it("keeps lifecycle timestamps available when an injected diagnostic clock is invalid", async () => {
+    const runtime = manager({ now: () => new Date(Number.NaN) });
+    runtime.register(definition("invalid-clock", "ready"));
+    const status = await runtime.start("invalid-clock");
+    expect(() => new Date(status.startedAt ?? "").toISOString()).not.toThrow();
+  });
 });
 
 
