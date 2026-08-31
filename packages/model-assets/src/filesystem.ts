@@ -152,6 +152,16 @@ export async function initializeCachePaths(rootInput: string): Promise<CachePath
         "Temporary and installed artifact directories must be on the same filesystem."
       );
     }
+    const finalRootStat = await lstat(canonicalRoot, { bigint: true });
+    if (finalRootStat.isSymbolicLink()
+        || !finalRootStat.isDirectory()
+        || finalRootStat.dev !== rootStat.dev
+        || finalRootStat.ino !== rootStat.ino) {
+      throw new ModelAssetError(
+        "INVALID_CACHE_ROOT",
+        "Asset cache root was replaced during initialization."
+      );
+    }
     return {
       root: canonicalRoot,
       artifacts,
