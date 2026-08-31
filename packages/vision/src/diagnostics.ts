@@ -86,7 +86,34 @@ export function createVisionProcessingDiagnostics(input: VisionDiagnosticsInput)
   } catch {
     throw new TypeError("Vision processing diagnostics could not be read safely");
   }
-  const parsed = VisionProcessingDiagnosticsSchema.parse(ownInput);
+  let sourceDimensions: Readonly<Record<string, unknown>>;
+  try {
+    sourceDimensions = snapshotOwnEnumerableRecord(
+      ownInput["sourceDimensions"],
+      "Vision diagnostics source dimensions"
+    );
+  } catch {
+    throw new TypeError("Vision diagnostics source dimensions could not be read safely");
+  }
+
+  const rawOutputDimensions = ownInput["outputDimensions"];
+  let outputDimensions: Readonly<Record<string, unknown>> | undefined;
+  if (rawOutputDimensions !== undefined) {
+    try {
+      outputDimensions = snapshotOwnEnumerableRecord(
+        rawOutputDimensions,
+        "Vision diagnostics output dimensions"
+      );
+    } catch {
+      throw new TypeError("Vision diagnostics output dimensions could not be read safely");
+    }
+  }
+
+  const parsed = VisionProcessingDiagnosticsSchema.parse({
+    ...ownInput,
+    sourceDimensions,
+    ...(outputDimensions === undefined ? {} : { outputDimensions })
+  });
   return Object.freeze({
     ...parsed,
     sourceDimensions: Object.freeze({ ...parsed.sourceDimensions }),
