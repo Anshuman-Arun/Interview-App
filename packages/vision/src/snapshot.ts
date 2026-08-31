@@ -23,6 +23,25 @@ interface PngHeader {
   readonly height: number;
 }
 
+const IMAGE_VALIDATION_LIMIT_FIELDS = new Set([
+  "maxEncodedBytes",
+  "maxWidth",
+  "maxHeight",
+  "maxPixels"
+]);
+
+const IMAGE_SNAPSHOT_INPUT_FIELDS = new Set([
+  "snapshotId",
+  "sourceType",
+  "sourceRevision",
+  "capturedAtMs",
+  "captureSequence",
+  "mimeType",
+  "declaredWidth",
+  "declaredHeight",
+  "encodedBytes"
+]);
+
 const ImageValidationLimitsOverrideSchema = z.object({
   maxEncodedBytes: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes).optional(),
   maxWidth: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth).optional(),
@@ -41,7 +60,7 @@ function normalizeLimits(limits: unknown): Readonly<ImageValidationLimits> {
     ownLimits = Object.freeze({});
   } else {
     try {
-      ownLimits = snapshotOwnEnumerableRecord(limits, "Image validation limits");
+      ownLimits = snapshotOwnEnumerableRecord(limits, "Image validation limits", IMAGE_VALIDATION_LIMIT_FIELDS);
     } catch {
       throw new RangeError("Image validation limits could not be read safely");
     }
@@ -125,7 +144,7 @@ export function createValidatedImageSnapshot(
 ): ImageSnapshot {
   let ownInput: Readonly<Record<string, unknown>>;
   try {
-    ownInput = snapshotOwnEnumerableRecord(input, "Image snapshot input");
+    ownInput = snapshotOwnEnumerableRecord(input, "Image snapshot input", IMAGE_SNAPSHOT_INPUT_FIELDS);
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input could not be read safely");
   }
