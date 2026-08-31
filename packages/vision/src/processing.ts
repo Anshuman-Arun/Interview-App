@@ -86,29 +86,40 @@ const PROCESSING_OPTION_KEYS = new Set([
   "maxTotalOutputEncodedBytes"
 ]);
 
-function validateProcessingOptions(options: VisionProcessingOptions): void {
-  if (typeof options !== "object" || options === null || Array.isArray(options)) {
+function validateProcessingOptions(input: unknown): void {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new TypeError("Vision processing options must be an object");
   }
+  const options = input as Record<string, unknown>;
   for (const key of Object.keys(options)) {
     if (!PROCESSING_OPTION_KEYS.has(key)) {
       throw new RangeError(`Unknown vision processing option: ${key}`);
     }
   }
-  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
+
+  const signal = options["signal"];
+  if (signal !== undefined && !(signal instanceof AbortSignal)) {
     throw new TypeError("signal must be an AbortSignal");
   }
-  if (options.now !== undefined && typeof options.now !== "function") {
+
+  const clock = options["now"];
+  if (clock !== undefined && typeof clock !== "function") {
     throw new TypeError("now must be a function");
   }
-  if (options.maxOutputEncodedBytes !== undefined) {
-    const value = nonnegativeSafeInteger(options.maxOutputEncodedBytes, "maxOutputEncodedBytes");
+
+  const outputBytes = options["maxOutputEncodedBytes"];
+  if (outputBytes !== undefined) {
+    if (typeof outputBytes !== "number") throw new RangeError("maxOutputEncodedBytes must be numeric");
+    const value = nonnegativeSafeInteger(outputBytes, "maxOutputEncodedBytes");
     if (value > HARD_MAX_OUTPUT_ENCODED_BYTES) {
       throw new RangeError("maxOutputEncodedBytes exceeds the package hard cap");
     }
   }
-  if (options.maxTotalOutputEncodedBytes !== undefined) {
-    const value = nonnegativeSafeInteger(options.maxTotalOutputEncodedBytes, "maxTotalOutputEncodedBytes");
+
+  const totalOutputBytes = options["maxTotalOutputEncodedBytes"];
+  if (totalOutputBytes !== undefined) {
+    if (typeof totalOutputBytes !== "number") throw new RangeError("maxTotalOutputEncodedBytes must be numeric");
+    const value = nonnegativeSafeInteger(totalOutputBytes, "maxTotalOutputEncodedBytes");
     if (value > HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES) {
       throw new RangeError("maxTotalOutputEncodedBytes exceeds the package hard cap");
     }
