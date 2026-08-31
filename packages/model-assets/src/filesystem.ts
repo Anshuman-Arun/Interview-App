@@ -491,11 +491,17 @@ export async function verifyArtifactFile(
     throw new ModelAssetError("INVALID_CONFIGURATION", "Expected SHA-256 digest is invalid.");
   }
   const rawMaximum = expectationRecord["maxBytes"];
-  const maximum = rawMaximum ?? expectedSize;
+  const maximum = rawMaximum === undefined ? expectedSize : rawMaximum;
   if (typeof maximum !== "number"
       || !Number.isSafeInteger(maximum)
       || maximum <= 0) {
     throw new ModelAssetError("INVALID_CONFIGURATION", "Verification byte limit must be a positive safe integer.");
+  }
+  if (expectedSize > maximum) {
+    throw new ModelAssetError(
+      "ARTIFACT_TOO_LARGE",
+      "Expected artifact size exceeds the configured verification byte limit."
+    );
   }
   if (validatedSignal?.aborted === true) throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
 
