@@ -1113,6 +1113,7 @@ export class ModelAssetManager {
         || !finalDirectoryStat.isDirectory()
         || finalDirectoryStat.dev !== directoryStat.dev
         || finalDirectoryStat.ino !== directoryStat.ino
+        || finalDirectoryStat.ctimeNs !== directoryStat.ctimeNs
         || (expectedIdentity !== undefined
           && (finalDirectoryStat.dev !== expectedIdentity.device
             || finalDirectoryStat.ino !== expectedIdentity.inode))) {
@@ -1459,7 +1460,8 @@ export class ModelAssetManager {
       if (finalDirectoryStat.isSymbolicLink()
           || !finalDirectoryStat.isDirectory()
           || finalDirectoryStat.dev !== directoryStat.dev
-          || finalDirectoryStat.ino !== directoryStat.ino) {
+          || finalDirectoryStat.ino !== directoryStat.ino
+          || finalDirectoryStat.ctimeNs !== directoryStat.ctimeNs) {
         return { status: "CORRUPT", errorCode: "CORRUPT_INSTALLATION" };
       }
       await this.assertArtifactDirectoryShape(
