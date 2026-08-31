@@ -1387,6 +1387,47 @@ describe("vision diagnostics validation", () => {
   });
 });
 
+  it("rejects semantically impossible successful diagnostics", () => {
+    const base = {
+      sourceDimensions: { width: 1, height: 1 },
+      inputBytes: 10,
+      outputBytes: 10,
+      durationMs: 1,
+      outcome: "SUCCESS" as const
+    };
+
+    expect(() => createVisionProcessingDiagnostics({
+      ...base,
+      operation: "CROP",
+      outputDimensions: { width: 1, height: 1 },
+      cropCount: 0,
+      tileCount: 0
+    })).toThrow();
+
+    expect(() => createVisionProcessingDiagnostics({
+      ...base,
+      operation: "RESIZE",
+      cropCount: 0,
+      tileCount: 0
+    })).toThrow();
+
+    expect(() => createVisionProcessingDiagnostics({
+      ...base,
+      operation: "TILE",
+      cropCount: 0,
+      tileCount: 0
+    })).toThrow();
+
+    expect(() => createVisionProcessingDiagnostics({
+      ...base,
+      operation: "CROP",
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 0,
+      cropCount: 1,
+      tileCount: 0
+    })).toThrow();
+  });
+
 describe("provider-neutral request preparation and budgeting", () => {
   it("retains revision, dimensions, coordinate transform, and a non-serializing safe payload reference", async () => {
     const source = snapshot(makePng(6, 4), { revision: 21 });
