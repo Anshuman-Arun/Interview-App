@@ -670,6 +670,30 @@ describe("local worker lifecycle manager", () => {
     expect(runtime.getStatus("version-no-retry").restartCount).toBe(0);
   });
 
+  it("fails immediately on malformed readiness decision shapes", async () => {
+    const custom = manager();
+    custom.register(definition("bad-custom-decision", "ready", {
+      startupTimeoutMs: 1_000,
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({ ready: "yes" } as unknown as { readonly ready: boolean })
+      }
+    }));
+    await expect(custom.start("bad-custom-decision"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+
+    const stdout = manager();
+    stdout.register(definition("bad-stdout-decision", "line-ready", {
+      startupTimeoutMs: 1_000,
+      readiness: {
+        kind: "STDOUT_LINE",
+        evaluate: () => ({ ready: "yes" } as unknown as { readonly ready: boolean })
+      }
+    }));
+    await expect(stdout.start("bad-stdout-decision"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+  });
+
   it("rejects malformed reported handshake metadata", async () => {
     const runtime = manager();
     runtime.register(definition("bad-handshake-shape", "ready", {
