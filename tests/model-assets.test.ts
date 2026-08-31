@@ -909,6 +909,35 @@ describe("local model asset manager", () => {
     expect(await manager.listInstalledArtifacts()).toEqual([]);
   });
 
+  it("keeps per-artifact two-file operations valid when maxListEntries is one", async () => {
+    const payload = Buffer.from("two-file-layout");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+
+    const first = manifestFor(payload, "https://example.test/one.bin", {
+      artifactId: "one"
+    });
+    const second = manifestFor(payload, "https://example.test/two.bin", {
+      artifactId: "two"
+    });
+    const manager = managerFor(root, {
+      maxListEntries: 1,
+      maxCacheBytes: managedArtifactBytes(first)
+    });
+
+    await manager.importLocal(first, source);
+    expect((await manager.listInstalledArtifacts()).map((entry) => entry.artifactId)).toEqual(["one"]);
+
+    await expect(manager.importLocal(second, source)).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+
+    await manager.remove(first);
+    expect((await manager.inspect(first)).status).toBe("NOT_PRESENT");
+  });
+
   it("clears only manager-owned stale temporary entries", async () => {
     const payload = Buffer.from("cleanup");
     const root = await newRoot();
