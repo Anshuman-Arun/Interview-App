@@ -39,7 +39,7 @@ export function revisionImageProcessingKey(source: VisionRasterSource): string {
 
 export function cropPayloadKey(crop: VisionImageArtifact): string {
   assertVisionRasterSource(crop);
-  if (!(crop instanceof VisionImageArtifact) || crop.metadata.kind !== "CROP") {
+  if (crop.metadata.kind !== "CROP") {
     throw new TypeError("cropPayloadKey requires a crop artifact");
   }
   return crop.metadata.contentDigest;
