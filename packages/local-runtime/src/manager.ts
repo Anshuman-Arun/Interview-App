@@ -1141,8 +1141,10 @@ function validateExpectedHandshakeDefinition(expected: LocalExpectedHandshake | 
     invalid("expectedHandshake must be an object");
   }
   if (expected.componentVersion !== undefined) {
-    if (typeof expected.componentVersion !== "string" || expected.componentVersion.length === 0) {
-      invalid("expectedHandshake.componentVersion must be a non-empty string");
+    if (typeof expected.componentVersion !== "string"
+        || expected.componentVersion.length === 0
+        || expected.componentVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      invalid("expectedHandshake.componentVersion must be a non-empty bounded string");
     }
   }
   if (expected.protocolVersion !== undefined) {
@@ -1219,7 +1221,15 @@ function normalizeReadinessDecision(decision: LocalReadinessDecision): {
   readonly detail?: string;
   readonly handshake?: LocalComponentHandshake;
 } {
-  return typeof decision === "boolean" ? { ready: decision } : decision;
+  if (typeof decision === "boolean") return { ready: decision };
+  if (typeof decision !== "object" || decision === null || Array.isArray(decision)
+      || typeof decision.ready !== "boolean") {
+    throw new LocalRuntimeError("READINESS_FAILED", "Readiness callback returned an invalid decision");
+  }
+  if (decision.detail !== undefined && typeof decision.detail !== "string") {
+    throw new LocalRuntimeError("READINESS_FAILED", "Readiness detail must be a string");
+  }
+  return decision;
 }
 
 function sanitizeReadyResult(
@@ -1452,11 +1462,11 @@ async function waitForManagedTreeExit(
   platform: NodeJS.Platform,
   timeoutMs: number
 ): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = performance.now() + timeoutMs;
   for (;;) {
     const childClosed = record.child !== child;
     if (childClosed && !isOwnedProcessTreeAlive(child, platform)) return true;
-    const remaining = deadline - Date.now();
+    const remaining = deadline - performance.now();
     if (remaining <= 0) return childClosed && !isOwnedProcessTreeAlive(child, platform);
     await new Promise<void>((resolve) => {
       setTimeout(resolve, Math.min(PROCESS_TREE_POLL_INTERVAL_MS, remaining));
@@ -1546,7 +1556,11 @@ function runTaskkill(
       resolve(success);
     };
     const timer = setTimeout(() => {
-      task.kill();
+      try {
+        task.kill();
+      } catch {
+        // The task may already have exited between the timeout and the kill attempt.
+      }
       finish(false);
     }, timeoutMs);
     task.once("error", () => finish(false));
