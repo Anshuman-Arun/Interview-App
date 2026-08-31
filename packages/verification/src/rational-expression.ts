@@ -4,7 +4,12 @@ import {
   MAX_EXPRESSION_NODES,
   MAX_VARIADIC_EXPRESSION_TERMS
 } from "./limits.js";
-import { NonZeroIntegerStringSchema, IntegerStringSchema } from "./integer-expression.js";
+import {
+  IntegerStringSchema,
+  IntermediateIntegerStringSchema,
+  NonZeroIntegerStringSchema,
+  NonZeroIntermediateIntegerStringSchema
+} from "./integer-expression.js";
 import {
   BoundedMathError,
   addRationals,
@@ -22,6 +27,11 @@ import {
 export const RationalInputSchema = z.object({
   numerator: IntegerStringSchema,
   denominator: NonZeroIntegerStringSchema
+}).strict();
+
+export const IntermediateRationalInputSchema = z.object({
+  numerator: IntermediateIntegerStringSchema,
+  denominator: NonZeroIntermediateIntegerStringSchema
 }).strict();
 
 export type RationalExpression =
