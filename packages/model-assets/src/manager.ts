@@ -1385,9 +1385,6 @@ export class ModelAssetManager {
       }
       return installedPayloadPath(installationDirectory, manifest);
     } finally {
-      // Once an operation stops owning its staging directory, capacity scans must
-      // count any bytes still present there before the reservation is released.
-      shared.activeStagingDirectories.delete(stagingDirectory);
       if (!published) {
         await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
       }
@@ -1660,6 +1657,7 @@ export class ModelAssetManager {
         await validateCachePaths(paths);
 
         shared.stagingReservations.delete(stagingDirectory);
+        shared.activeStagingDirectories.delete(stagingDirectory);
         shared.reservedBytes -= reservationBytes;
       });
     });
@@ -1781,6 +1779,7 @@ export class ModelAssetManager {
         );
       }
       shared.stagingReservations.delete(stagingDirectory);
+      shared.activeStagingDirectories.delete(stagingDirectory);
       shared.reservedBytes -= bytes;
     });
   }
