@@ -1249,6 +1249,46 @@ describe("local model asset manager", () => {
     })).toThrow(expect.objectContaining({ code: "INVALID_CACHE_ROOT" }));
   });
 
+  it("rejects replacement of the artifacts parent by another directory", async () => {
+    const payload = Buffer.from("artifacts-parent-replacement");
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/artifacts-parent.bin");
+    await manager.inspect(manifest);
+
+    const original = path.join(root, "artifacts");
+    const moved = path.join(root, "artifacts-original");
+    await rename(original, moved);
+    await mkdir(original);
+    const sentinel = path.join(original, "sentinel.txt");
+    await writeFile(sentinel, "replacement");
+
+    await expect(manager.inspect(manifest)).rejects.toMatchObject({
+      code: "INVALID_CACHE_ROOT"
+    });
+    expect(await readFile(sentinel, "utf8")).toBe("replacement");
+  });
+
+  it("rejects replacement of the temporary parent by another directory", async () => {
+    const payload = Buffer.from("tmp-parent-replacement");
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/tmp-parent.bin");
+    await manager.inspect(manifest);
+
+    const original = path.join(root, "tmp");
+    const moved = path.join(root, "tmp-original");
+    await rename(original, moved);
+    await mkdir(original);
+    const sentinel = path.join(original, "sentinel.txt");
+    await writeFile(sentinel, "replacement");
+
+    await expect(manager.cleanupTemporary()).rejects.toMatchObject({
+      code: "INVALID_CACHE_ROOT"
+    });
+    expect(await readFile(sentinel, "utf8")).toBe("replacement");
+  });
+
   it("refuses removal if the artifacts parent is replaced by a symlink", async () => {
     if (process.platform === "win32") return;
 
