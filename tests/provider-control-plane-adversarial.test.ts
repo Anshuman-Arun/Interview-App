@@ -17,6 +17,10 @@ import {
   type ProviderModelCapabilities,
   type ProviderSettingsValidator
 } from "../packages/providers/src/index.js";
+import {
+  containsSecretLikeConfigurationText,
+  inspectSafeProviderConfigurationValue
+} from "../packages/providers/src/safe-configuration.js";
 
 function createCapabilities(
   overrides: Partial<ProviderModelCapabilities> = {}
@@ -74,6 +78,152 @@ function settingsConfiguration(settings: unknown) {
     settings
   };
 }
+
+describe("provider secret-classifier intrinsic hardening", () => {
+  it("does not let RegExp or String prototype overrides disable secret detection", () => {
+    const originalRegExpExec = Object.getOwnPropertyDescriptor(RegExp.prototype, "exec");
+    const originalRegExpTest = Object.getOwnPropertyDescriptor(RegExp.prototype, "test");
+    const originalNormalize = Object.getOwnPropertyDescriptor(String.prototype, "normalize");
+    const originalEndsWith = Object.getOwnPropertyDescriptor(String.prototype, "endsWith");
+    const originalReplace = Object.getOwnPropertyDescriptor(String.prototype, "replace");
+    const originalTrim = Object.getOwnPropertyDescriptor(String.prototype, "trim");
+    const originalToLowerCase = Object.getOwnPropertyDescriptor(String.prototype, "toLowerCase");
+    const originalIndexOf = Object.getOwnPropertyDescriptor(String.prototype, "indexOf");
+    const originalCharCodeAt = Object.getOwnPropertyDescriptor(String.prototype, "charCodeAt");
+    const originalIterator = Object.getOwnPropertyDescriptor(
+      String.prototype,
+      Symbol.iterator
+    );
+
+    let bearerDetected = false;
+    let basicDetected = false;
+    let assignmentDetected = false;
+    let commonTokenDetected = false;
+    let keyError: unknown;
+
+    try {
+      Object.defineProperty(RegExp.prototype, "exec", {
+        configurable: true,
+        writable: true,
+        value() {
+          return null;
+        }
+      });
+      Object.defineProperty(RegExp.prototype, "test", {
+        configurable: true,
+        writable: true,
+        value() {
+          return false;
+        }
+      });
+      Object.defineProperty(String.prototype, "normalize", {
+        configurable: true,
+        writable: true,
+        value() {
+          return "safe";
+        }
+      });
+      Object.defineProperty(String.prototype, "endsWith", {
+        configurable: true,
+        writable: true,
+        value() {
+          return false;
+        }
+      });
+      Object.defineProperty(String.prototype, "replace", {
+        configurable: true,
+        writable: true,
+        value() {
+          return "safe";
+        }
+      });
+      Object.defineProperty(String.prototype, "trim", {
+        configurable: true,
+        writable: true,
+        value() {
+          return "none";
+        }
+      });
+      Object.defineProperty(String.prototype, "toLowerCase", {
+        configurable: true,
+        writable: true,
+        value() {
+          return "safe";
+        }
+      });
+      Object.defineProperty(String.prototype, "indexOf", {
+        configurable: true,
+        writable: true,
+        value() {
+          return -1;
+        }
+      });
+      Object.defineProperty(String.prototype, "charCodeAt", {
+        configurable: true,
+        writable: true,
+        value() {
+          return -1;
+        }
+      });
+      Object.defineProperty(String.prototype, Symbol.iterator, {
+        configurable: true,
+        writable: true,
+        value() {
+          throw new Error("String iteration must not be used by secret classification");
+        }
+      });
+
+      bearerDetected = containsSecretLikeConfigurationText(
+        "Bearer abcdefghijklmnop"
+      );
+      basicDetected = containsSecretLikeConfigurationText("Basic YTpi");
+      assignmentDetected = containsSecretLikeConfigurationText("password=hunter2");
+      commonTokenDetected = containsSecretLikeConfigurationText(
+        "ghp_abcdefghijklmnopqrstuvwxyz"
+      );
+      try {
+        inspectSafeProviderConfigurationValue({
+          customAccessToken: "opaque-short-value"
+        });
+      } catch (error) {
+        keyError = error;
+      }
+    } finally {
+      const restorations: readonly [
+        object,
+        PropertyKey,
+        PropertyDescriptor | undefined
+      ][] = [
+        [RegExp.prototype, "exec", originalRegExpExec],
+        [RegExp.prototype, "test", originalRegExpTest],
+        [String.prototype, "normalize", originalNormalize],
+        [String.prototype, "endsWith", originalEndsWith],
+        [String.prototype, "replace", originalReplace],
+        [String.prototype, "trim", originalTrim],
+        [String.prototype, "toLowerCase", originalToLowerCase],
+        [String.prototype, "indexOf", originalIndexOf],
+        [String.prototype, "charCodeAt", originalCharCodeAt],
+        [String.prototype, Symbol.iterator, originalIterator]
+      ];
+      for (let index = 0; index < restorations.length; index += 1) {
+        const restoration = restorations[index];
+        if (restoration === undefined) continue;
+        const [target, key, descriptor] = restoration;
+        if (descriptor === undefined) {
+          Reflect.deleteProperty(target, key);
+        } else {
+          Object.defineProperty(target, key, descriptor);
+        }
+      }
+    }
+
+    expect(bearerDetected).toBe(true);
+    expect(basicDetected).toBe(true);
+    expect(assignmentDetected).toBe(true);
+    expect(commonTokenDetected).toBe(true);
+    expect(keyError).toMatchObject({ code: "SECRET_IN_CONFIGURATION" });
+  });
+});
 
 describe("provider configuration secret exclusion", () => {
   it("enforces secret exclusion through the exported configuration schema itself", () => {

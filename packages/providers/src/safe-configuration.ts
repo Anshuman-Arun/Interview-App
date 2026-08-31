@@ -137,6 +137,11 @@ const SET_ADD_INTRINSIC = Set.prototype.add;
 const WEAK_SET_HAS_INTRINSIC = WeakSet.prototype.has;
 const WEAK_SET_ADD_INTRINSIC = WeakSet.prototype.add;
 const WEAK_SET_DELETE_INTRINSIC = WeakSet.prototype.delete;
+const REGEXP_EXEC_INTRINSIC = RegExp.prototype.exec;
+const STRING_NORMALIZE_INTRINSIC = String.prototype.normalize;
+const STRING_TRIM_INTRINSIC = String.prototype.trim;
+const STRING_TO_LOWER_CASE_INTRINSIC = String.prototype.toLowerCase;
+const STRING_CHAR_CODE_AT_INTRINSIC = String.prototype.charCodeAt;
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
   const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
@@ -158,6 +163,51 @@ function weakSetAdd(set: WeakSet<object>, value: object): void {
 
 function weakSetDelete(set: WeakSet<object>, value: object): void {
   Reflect.apply(WEAK_SET_DELETE_INTRINSIC, set, [value]);
+}
+
+function regexpExec(pattern: RegExp, value: string): readonly unknown[] | null {
+  const result: unknown = Reflect.apply(REGEXP_EXEC_INTRINSIC, pattern, [value]);
+  if (result === null) return null;
+  if (!Array.isArray(result)) failMalformedConfiguration();
+  const output: unknown[] = [];
+  for (let index = 0; index < result.length; index += 1) {
+    const item: unknown = result[index];
+    output[index] = item;
+  }
+  return Object.freeze(output);
+}
+
+function normalizeUnicode(value: string): string {
+  const result: unknown = Reflect.apply(STRING_NORMALIZE_INTRINSIC, value, ["NFKC"]);
+  if (typeof result !== "string") return failMalformedConfiguration();
+  return result;
+}
+
+function trimString(value: string): string {
+  const result: unknown = Reflect.apply(STRING_TRIM_INTRINSIC, value, []);
+  if (typeof result !== "string") return failMalformedConfiguration();
+  return result;
+}
+
+function lowerCaseString(value: string): string {
+  const result: unknown = Reflect.apply(STRING_TO_LOWER_CASE_INTRINSIC, value, []);
+  if (typeof result !== "string") return failMalformedConfiguration();
+  return result;
+}
+
+function stringCharCodeAt(value: string, index: number): number {
+  const result: unknown = Reflect.apply(STRING_CHAR_CODE_AT_INTRINSIC, value, [index]);
+  if (typeof result !== "number" || !Number.isFinite(result)) return -1;
+  return result;
+}
+
+function stringEndsWith(value: string, suffix: string): boolean {
+  if (suffix.length > value.length) return false;
+  const offset = value.length - suffix.length;
+  for (let index = 0; index < suffix.length; index += 1) {
+    if (value[offset + index] !== suffix[index]) return false;
+  }
+  return true;
 }
 
 export type ProviderConfigurationSafetyErrorCode =
@@ -216,88 +266,110 @@ function failSecretConfiguration(): never {
   throw new ProviderConfigurationSafetyError("SECRET_IN_CONFIGURATION");
 }
 
+const ASCII_LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
+
 function normalizeConfigurationKey(key: string): string {
-  return key.normalize("NFKC").replace(/[^a-z0-9]/giu, "").toLowerCase();
+  const normalized = normalizeUnicode(key);
+  let output = "";
+  for (let index = 0; index < normalized.length; index += 1) {
+    const code = stringCharCodeAt(normalized, index);
+    if ((code >= 0x30 && code <= 0x39) || (code >= 0x61 && code <= 0x7a)) {
+      output += normalized[index] ?? "";
+    } else if (code >= 0x41 && code <= 0x5a) {
+      output += ASCII_LOWERCASE[code - 0x41] ?? "";
+    }
+  }
+  return output;
 }
 
 function isSecretConfigurationKey(key: string): boolean {
   const normalized = normalizeConfigurationKey(key);
   if (setHas(SECRET_CONFIGURATION_KEYS, normalized)) return true;
-  return normalized.endsWith("accesstoken")
-    || normalized.endsWith("accesstokens")
-    || normalized.endsWith("refreshtoken")
-    || normalized.endsWith("refreshtokens")
-    || normalized.endsWith("clienttoken")
-    || normalized.endsWith("clienttokens")
-    || normalized.endsWith("sessiontoken")
-    || normalized.endsWith("sessiontokens")
-    || normalized.endsWith("authtoken")
-    || normalized.endsWith("authtokens")
-    || normalized.endsWith("bearertoken")
-    || normalized.endsWith("bearertokens")
-    || normalized.endsWith("apitoken")
-    || normalized.endsWith("apitokens")
-    || normalized.endsWith("oauthtoken")
-    || normalized.endsWith("oauthtokens")
-    || normalized.endsWith("csrftoken")
-    || normalized.endsWith("csrftokens")
-    || normalized.endsWith("apikey")
-    || normalized.endsWith("apikeys")
-    || normalized.endsWith("secret")
-    || normalized.endsWith("secrets")
-    || normalized.endsWith("secretkey")
-    || normalized.endsWith("secretkeys")
-    || normalized.endsWith("privatekey")
-    || normalized.endsWith("privatekeys")
-    || normalized.endsWith("credential")
-    || normalized.endsWith("credentials")
-    || normalized.endsWith("password")
-    || normalized.endsWith("passwords")
-    || normalized.endsWith("passphrase")
-    || normalized.endsWith("passphrases")
+  return stringEndsWith(normalized, "accesstoken")
+    || stringEndsWith(normalized, "accesstokens")
+    || stringEndsWith(normalized, "refreshtoken")
+    || stringEndsWith(normalized, "refreshtokens")
+    || stringEndsWith(normalized, "clienttoken")
+    || stringEndsWith(normalized, "clienttokens")
+    || stringEndsWith(normalized, "sessiontoken")
+    || stringEndsWith(normalized, "sessiontokens")
+    || stringEndsWith(normalized, "authtoken")
+    || stringEndsWith(normalized, "authtokens")
+    || stringEndsWith(normalized, "bearertoken")
+    || stringEndsWith(normalized, "bearertokens")
+    || stringEndsWith(normalized, "apitoken")
+    || stringEndsWith(normalized, "apitokens")
+    || stringEndsWith(normalized, "oauthtoken")
+    || stringEndsWith(normalized, "oauthtokens")
+    || stringEndsWith(normalized, "csrftoken")
+    || stringEndsWith(normalized, "csrftokens")
+    || stringEndsWith(normalized, "apikey")
+    || stringEndsWith(normalized, "apikeys")
+    || stringEndsWith(normalized, "secret")
+    || stringEndsWith(normalized, "secrets")
+    || stringEndsWith(normalized, "secretkey")
+    || stringEndsWith(normalized, "secretkeys")
+    || stringEndsWith(normalized, "privatekey")
+    || stringEndsWith(normalized, "privatekeys")
+    || stringEndsWith(normalized, "credential")
+    || stringEndsWith(normalized, "credentials")
+    || stringEndsWith(normalized, "password")
+    || stringEndsWith(normalized, "passwords")
+    || stringEndsWith(normalized, "passphrase")
+    || stringEndsWith(normalized, "passphrases")
     || normalized === "cookie"
     || normalized === "cookies"
-    || normalized.endsWith("authorizationheader")
-    || normalized.endsWith("authheader")
-    || normalized.endsWith("credentialref")
-    || normalized.endsWith("credentialsref")
-    || normalized.endsWith("credentialrefs")
-    || normalized.endsWith("secretref")
-    || normalized.endsWith("secretrefs")
-    || normalized.endsWith("secretkeyref")
-    || normalized.endsWith("secretkeyrefs")
-    || normalized.endsWith("privatekeyref")
-    || normalized.endsWith("privatekeyrefs")
-    || normalized.endsWith("apikeyref")
-    || normalized.endsWith("apikeyrefs")
-    || normalized.endsWith("accesstokenref")
-    || normalized.endsWith("accesstokenrefs")
-    || normalized.endsWith("refreshtokenref")
-    || normalized.endsWith("refreshtokenrefs")
-    || normalized.endsWith("authtokenref")
-    || normalized.endsWith("authtokenrefs")
-    || normalized.endsWith("bearertokenref")
-    || normalized.endsWith("bearertokenrefs")
-    || normalized.endsWith("passwordref")
-    || normalized.endsWith("passwordrefs")
-    || normalized.endsWith("passphraseref")
-    || normalized.endsWith("passphraserefs")
-    || normalized.endsWith("secretaccesskey")
-    || normalized.endsWith("secretaccesskeys")
-    || normalized.endsWith("subscriptionkey")
-    || normalized.endsWith("subscriptionkeys")
-    || normalized.endsWith("sastoken")
-    || normalized.endsWith("sastokens")
-    || normalized.endsWith("sharedaccesssignature")
-    || normalized.endsWith("sharedaccesssignatures");
+    || stringEndsWith(normalized, "authorizationheader")
+    || stringEndsWith(normalized, "authheader")
+    || stringEndsWith(normalized, "credentialref")
+    || stringEndsWith(normalized, "credentialsref")
+    || stringEndsWith(normalized, "credentialrefs")
+    || stringEndsWith(normalized, "secretref")
+    || stringEndsWith(normalized, "secretrefs")
+    || stringEndsWith(normalized, "secretkeyref")
+    || stringEndsWith(normalized, "secretkeyrefs")
+    || stringEndsWith(normalized, "privatekeyref")
+    || stringEndsWith(normalized, "privatekeyrefs")
+    || stringEndsWith(normalized, "apikeyref")
+    || stringEndsWith(normalized, "apikeyrefs")
+    || stringEndsWith(normalized, "accesstokenref")
+    || stringEndsWith(normalized, "accesstokenrefs")
+    || stringEndsWith(normalized, "refreshtokenref")
+    || stringEndsWith(normalized, "refreshtokenrefs")
+    || stringEndsWith(normalized, "authtokenref")
+    || stringEndsWith(normalized, "authtokenrefs")
+    || stringEndsWith(normalized, "bearertokenref")
+    || stringEndsWith(normalized, "bearertokenrefs")
+    || stringEndsWith(normalized, "passwordref")
+    || stringEndsWith(normalized, "passwordrefs")
+    || stringEndsWith(normalized, "passphraseref")
+    || stringEndsWith(normalized, "passphraserefs")
+    || stringEndsWith(normalized, "secretaccesskey")
+    || stringEndsWith(normalized, "secretaccesskeys")
+    || stringEndsWith(normalized, "subscriptionkey")
+    || stringEndsWith(normalized, "subscriptionkeys")
+    || stringEndsWith(normalized, "sastoken")
+    || stringEndsWith(normalized, "sastokens")
+    || stringEndsWith(normalized, "sharedaccesssignature")
+    || stringEndsWith(normalized, "sharedaccesssignatures");
 }
 
-const BASE64_ALPHABET =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function base64Value(character: string): number {
+  const code = stringCharCodeAt(character, 0);
+  if (code >= 0x41 && code <= 0x5a) return code - 0x41;
+  if (code >= 0x61 && code <= 0x7a) return code - 0x61 + 26;
+  if (code >= 0x30 && code <= 0x39) return code - 0x30 + 52;
+  if (character === "+") return 62;
+  if (character === "/") return 63;
+  return -1;
+}
 
 function base64ContainsColon(candidate: string): boolean {
-  const withoutPadding = candidate.replace(/=+$/u, "");
-  const paddingLength = candidate.length - withoutPadding.length;
+  let contentLength = candidate.length;
+  while (contentLength > 0 && candidate[contentLength - 1] === "=") {
+    contentLength -= 1;
+  }
+  const paddingLength = candidate.length - contentLength;
   if (
     candidate.length < 2
     || candidate.length % 4 === 1
@@ -309,8 +381,10 @@ function base64ContainsColon(candidate: string): boolean {
   let accumulator = 0;
   let bitCount = 0;
   let sawColon = false;
-  for (const character of withoutPadding) {
-    const value = BASE64_ALPHABET.indexOf(character);
+  for (let index = 0; index < contentLength; index += 1) {
+    const character = candidate[index];
+    if (character === undefined) return false;
+    const value = base64Value(character);
     if (value < 0) return false;
     accumulator = (accumulator << 6) | value;
     bitCount += 6;
@@ -330,19 +404,26 @@ function base64ContainsColon(candidate: string): boolean {
 }
 
 function containsBasicAuthCredential(value: string): boolean {
-  const candidate = BASIC_AUTH_CANDIDATE_PATTERN.exec(value)?.[1];
-  return candidate !== undefined && base64ContainsColon(candidate);
+  const match = regexpExec(BASIC_AUTH_CANDIDATE_PATTERN, value);
+  const candidate = match?.[1];
+  return typeof candidate === "string" && base64ContainsColon(candidate);
 }
 
 function containsExplicitCredentialAssignment(value: string): boolean {
-  if (AUTHORIZATION_SCHEME_VALUE_PATTERN.test(value)) return true;
+  if (regexpExec(AUTHORIZATION_SCHEME_VALUE_PATTERN, value) !== null) return true;
 
-  const highConfidence = HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN.exec(value);
+  const highConfidence = regexpExec(HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN, value);
   if (highConfidence !== null) {
-    const key = normalizeConfigurationKey(highConfidence[1] ?? "");
-    const assignedValue =
+    const keyCandidate = highConfidence[1];
+    const key = normalizeConfigurationKey(
+      typeof keyCandidate === "string" ? keyCandidate : ""
+    );
+    const assignedValueCandidate =
       highConfidence[2] ?? highConfidence[3] ?? highConfidence[4] ?? "";
-    const normalizedValue = assignedValue.trim().toLowerCase();
+    const assignedValue = typeof assignedValueCandidate === "string"
+      ? assignedValueCandidate
+      : "";
+    const normalizedValue = lowerCaseString(trimString(assignedValue));
     const allowedValues = (
       key === "authorization"
       || key === "authorizationheader"
@@ -353,16 +434,16 @@ function containsExplicitCredentialAssignment(value: string): boolean {
       : GENERIC_NON_SECRET_ASSIGNMENT_VALUES;
     if (!setHas(allowedValues, normalizedValue)) return true;
   }
-  return GENERIC_SECRET_ASSIGNMENT_PATTERN.test(value);
+  return regexpExec(GENERIC_SECRET_ASSIGNMENT_PATTERN, value) !== null;
 }
 
 export function containsSecretLikeConfigurationText(value: string): boolean {
-  const normalized = value.normalize("NFKC");
-  return BEARER_AUTH_PATTERN.test(normalized)
+  const normalized = normalizeUnicode(value);
+  return regexpExec(BEARER_AUTH_PATTERN, normalized) !== null
     || containsBasicAuthCredential(normalized)
-    || COMMON_API_KEY_PATTERN.test(normalized)
-    || URL_USERINFO_PATTERN.test(normalized)
-    || PRIVATE_KEY_PATTERN.test(normalized)
+    || regexpExec(COMMON_API_KEY_PATTERN, normalized) !== null
+    || regexpExec(URL_USERINFO_PATTERN, normalized) !== null
+    || regexpExec(PRIVATE_KEY_PATTERN, normalized) !== null
     || containsExplicitCredentialAssignment(normalized);
 }
 
