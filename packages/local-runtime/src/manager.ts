@@ -97,19 +97,18 @@ export class LocalRuntimeManager {
     this.parentEnvironment = options.parentEnvironment ?? process.env;
     this.now = options.now ?? (() => new Date());
     this.fetchImpl = options.fetch ?? globalThis.fetch;
-    this.platform = options.platform ?? process.platform;
+    this.platform = process.platform;
   }
 
   public register(definition: LocalComponentDefinition): LocalComponentStatus {
     validateDefinition(definition);
-    const normalizedDefinition = freezeDefinition(definition);
-    if (this.components.has(normalizedDefinition.id)) {
-      throw new LocalRuntimeError("DUPLICATE_COMPONENT", `Component ${normalizedDefinition.id} is already registered`);
+    if (this.components.has(definition.id)) {
+      throw new LocalRuntimeError("DUPLICATE_COMPONENT", `Component ${definition.id} is already registered`);
     }
 
     let environment: BuiltLocalEnvironment;
     try {
-      environment = buildLocalEnvironment(normalizedDefinition.environment, this.parentEnvironment, this.platform);
+      environment = buildLocalEnvironment(definition.environment, this.parentEnvironment, this.platform);
     } catch (error) {
       throw new LocalRuntimeError(
         "INVALID_DEFINITION",
@@ -117,6 +116,7 @@ export class LocalRuntimeManager {
       );
     }
 
+    const normalizedDefinition = freezeDefinition(definition);
     const maxLines = normalizedDefinition.output?.maxLines ?? DEFAULT_OUTPUT_MAX_LINES;
     const maxBytes = normalizedDefinition.output?.maxBytes ?? DEFAULT_OUTPUT_MAX_BYTES;
     const record: ComponentRecord = {
@@ -869,19 +869,6 @@ export class LocalRuntimeManager {
 }
 
 function freezeDefinition(definition: LocalComponentDefinition): LocalComponentDefinition {
-  const environment = definition.environment === undefined
-    ? undefined
-    : Object.freeze({
-        ...(definition.environment.inherit === undefined
-          ? {}
-          : { inherit: Object.freeze([...definition.environment.inherit]) }),
-        ...(definition.environment.values === undefined
-          ? {}
-          : { values: Object.freeze({ ...definition.environment.values }) }),
-        ...(definition.environment.secrets === undefined
-          ? {}
-          : { secrets: Object.freeze({ ...definition.environment.secrets }) })
-      });
   const readiness = Object.freeze({ ...definition.readiness }) as LocalComponentDefinition["readiness"];
   const restartPolicy = definition.restartPolicy === undefined
     ? undefined
@@ -898,7 +885,6 @@ function freezeDefinition(definition: LocalComponentDefinition): LocalComponentD
     executable: definition.executable,
     ...(definition.args === undefined ? {} : { args: Object.freeze([...definition.args]) }),
     ...(definition.cwd === undefined ? {} : { cwd: definition.cwd }),
-    ...(environment === undefined ? {} : { environment }),
     startupTimeoutMs: definition.startupTimeoutMs,
     shutdownTimeoutMs: definition.shutdownTimeoutMs,
     ...(definition.terminationTimeoutMs === undefined
