@@ -174,6 +174,68 @@ describe("local model asset manager", () => {
     expect(serialized).not.toContain(fixture.baseUrl);
   });
 
+  it("reuses a verified installed artifact without another download", async () => {
+    const payload = Buffer.from("already-installed");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+
+    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const manager = managerFor(root);
+    const imported = manifestFor(payload, "https://example.test/original.bin");
+    await manager.importLocal(imported, source);
+
+    const mirror = { ...imported, sourceUrl: fixture.baseUrl + "/artifact" };
+    const installed = await manager.install(mirror);
+
+    expect(await readFile(installed)).toEqual(payload);
+    expect(fixture.requestCount()).toBe(0);
+  });
+
+  it("repairs a corrupted installed artifact through the verified staging path", async () => {
+    const payload = Buffer.from("repair-me");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const manager = managerFor(root);
+    const imported = manifestFor(payload, "https://example.test/original.bin");
+    const installed = await manager.importLocal(imported, source);
+    await writeFile(installed, Buffer.from("corrupt!!"));
+
+    const remote = { ...imported, sourceUrl: fixture.baseUrl + "/artifact" };
+    const repaired = await manager.install(remote);
+
+    expect(await readFile(repaired)).toEqual(payload);
+    expect(await manager.verifyInstalledArtifact(remote)).toBe(true);
+    expect(fixture.requestCount()).toBe(1);
+  });
+
+  it("treats malformed cached manifest metadata as corruption and repairs it", async () => {
+    const payload = Buffer.from("repair-metadata");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const manager = managerFor(root);
+    const imported = manifestFor(payload, "https://example.test/original.bin");
+    await manager.importLocal(imported, source);
+
+    const installation = path.join(root, "artifacts", artifactInstallationKey(imported));
+    await writeFile(path.join(installation, "manifest.json"), "{not-json");
+    expect(await manager.inspect(imported)).toMatchObject({
+      status: "CORRUPT",
+      errorCode: "CORRUPT_INSTALLATION"
+    });
+
+    const remote = { ...imported, sourceUrl: fixture.baseUrl + "/artifact" };
+    await manager.install(remote);
+    expect(await manager.verifyInstalledArtifact(remote)).toBe(true);
+  });
+
   it("rejects SHA-256 mismatch and never publishes the staged bytes", async () => {
     const payload = Buffer.from("actual bytes");
     const fixture = await startFixtureServer((_request, response) => response.end(payload));
@@ -754,6 +816,36 @@ describe("local model asset manager", () => {
       maxBytes: payload.byteLength
     });
     expect(invalid).toMatchObject({ ok: false, reason: "DIGEST_MISMATCH" });
+  });
+
+  it("rejects malformed runtime inputs with model-asset errors", async () => {
+    const root = await newRoot();
+    const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
+    const UnsafeResolver = resolveAssetManifest as unknown as (
+      manifests: unknown,
+      request: unknown
+    ) => AssetManifest;
+    const UnsafeVerifier = verifyArtifactFile as unknown as (
+      filePath: unknown,
+      expectations: unknown
+    ) => Promise<unknown>;
+
+    expect(() => new UnsafeManager(null)).toThrow(expect.objectContaining({
+      code: "INVALID_CONFIGURATION"
+    }));
+    expect(() => new UnsafeManager({
+      rootDir: root,
+      maxArtifactBytes: "1024"
+    })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
+    expect(() => UnsafeResolver(null, {
+      familyId: "fixture",
+      version: "1.0.0",
+      platform: "linux",
+      architecture: "x64"
+    })).toThrow(expect.objectContaining({ code: "INVALID_MANIFEST" }));
+    await expect(UnsafeVerifier(path.join(root, "missing.bin"), null)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
   });
 
   it("keeps generated installation paths contained and Windows-safe", async () => {
