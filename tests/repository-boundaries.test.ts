@@ -165,6 +165,27 @@ describe("repository architecture boundary checker", () => {
         "packages/vision/src/leak.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport function leaked() { return secret; }\n"
       }
     },
+    {
+      name: "authorized vision constructor module re-exporting a tainted local alias",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nconst alias = secret;\nexport { alias };\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module re-exporting a tainted function alias",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nconst leak = () => secret;\nexport { leak };\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module exposing capability through an exported class",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport class Leak { static token = secret; }\n"
+      }
+    },
 
     {
       name: "an unmapped new project package",
