@@ -41,11 +41,14 @@ Other hard ceilings prevent downstream configuration from becoming effectively u
 - at most 64 MiB encoded bytes per processed output;
 - at most 128 MiB combined encoded tile output;
 - at most 2048 candidates in one exact-dedup operation;
+- snapshot/artifact metadata schemas enforce the same hard width/height/byte/pixel caps as the containers;
 - prepared batches capped at 128 MiB, 128 MiPixels, 256 images, 256 crop/tile payloads, and 1024 candidate inputs.
 
 Request budgets may be zero. This lets a caller explicitly prohibit work: fail-closed mode returns a budget error for non-empty work, while bounded-prefix mode returns no requests and reports all work as deferred.
 
 ## Snapshot, artifact, and provenance model
+
+Validated snapshots are admitted through `createValidatedImageSnapshot`; direct snapshot construction is package-internal. Processed artifacts are also package-generated only. The internal construction capability is not re-exported, and the repository architecture checker rejects production imports/re-exports of it.
 
 A validated snapshot retains:
 
@@ -69,9 +72,9 @@ Byte-level deduplication and processing deduplication are intentionally distinct
 
 ## Geometry and dirty-region planning
 
-Raster crop/tile rectangles are strict positive-integer rectangles with safe derived edges.
+Raster crop/tile rectangles use safe-integer coordinates with strictly positive dimensions; actual crop/tile requests must additionally lie within their immediate source image.
 
-Future whiteboard dirty hints may be fractional or zero-sized. The dirty planner accepts those as finite nonnegative continuous bounds and deterministically rasterizes them outward before clipping/padding. This keeps compatibility with existing whiteboard dirty-region semantics without weakening actual crop geometry.
+Future whiteboard dirty hints may use signed/fractional x/y coordinates and nonnegative fractional/zero width/height. The dirty planner deterministically rasterizes them outward before clipping/padding, so partially or wholly out-of-frame hints are handled without weakening actual crop geometry. This keeps compatibility with existing whiteboard dirty-region semantics without weakening actual crop geometry.
 
 Dirty-region planning:
 
@@ -116,7 +119,7 @@ Batch budgeting is deterministic over image count, encoded bytes, pixels, and cr
 
 ## Cancellation and diagnostics
 
-Longer crop, resize, and tile pixel loops cooperatively observe `AbortSignal`. Cancellation is checked before and after synchronous decoder/encoder boundaries and again before completed results are returned. A synchronous codec call cannot itself be interrupted mid-call, but cancelled work is not published as completed afterward.
+Longer crop, resize, and tile work cooperatively observes `AbortSignal`. Cancellation is checked around synchronous decoder/encoder boundaries, periodically across rows/tiles, on no-op resize, and again before completed results are returned. A synchronous codec call cannot itself be interrupted mid-call, but cancelled work is not published as completed afterward.
 
 Diagnostics contain only safe mechanical metadata such as source/output dimensions, input/output bytes, crop/tile counts, outcome, and duration. Raw image bytes are never included. Caller-supplied clocks must return nonnegative safe values and may not move backward during an operation.
 
