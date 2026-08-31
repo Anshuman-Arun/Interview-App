@@ -390,13 +390,13 @@ export class LocalRuntimeManager {
       if (child.exitCode !== null || child.signalCode !== null || record.child !== child) {
         throw new LocalRuntimeError("PROCESS_EXITED", `Component ${record.definition.id} exited during startup`);
       }
-      if (readiness.handshake !== undefined) {
-        validateReportedHandshake(readiness.handshake, record.definition.id);
-      }
-      validateExpectedHandshake(record.definition.expectedHandshake, readiness.handshake, record.definition.id);
-      record.handshake = readiness.handshake === undefined
+      const reportedHandshake = readiness.handshake === undefined
         ? undefined
-        : sanitizeHandshake(readiness.handshake, record.environment.secretValues);
+        : normalizeReportedHandshake(readiness.handshake, record.definition.id);
+      validateExpectedHandshake(record.definition.expectedHandshake, reportedHandshake, record.definition.id);
+      record.handshake = reportedHandshake === undefined
+        ? undefined
+        : sanitizeHandshake(reportedHandshake, record.environment.secretValues);
       record.readinessDetail = readiness.detail;
       record.readyAt = this.timestamp();
       record.state = "READY";
@@ -1407,20 +1407,32 @@ function parseLoopbackUrl(raw: unknown): URL {
   return url;
 }
 
-function normalizeReadinessDecision(decision: LocalReadinessDecision): {
+function normalizeReadinessDecision(decision: unknown): {
   readonly ready: boolean;
   readonly detail?: string;
   readonly handshake?: LocalComponentHandshake;
 } {
-  if (typeof decision === "boolean") return { ready: decision };
-  if (typeof decision !== "object" || decision === null || Array.isArray(decision)
-      || typeof decision.ready !== "boolean") {
+  if (typeof decision === "boolean") return Object.freeze({ ready: decision });
+  const descriptors = inspectReadinessObject(
+    decision,
+    "Readiness callback returned an invalid decision"
+  );
+  validateReadinessObjectFields(descriptors, new Set(["ready", "detail", "handshake"]));
+
+  const ready = dataDescriptorValue(descriptors, "ready");
+  if (typeof ready !== "boolean") {
     throw new LocalRuntimeError("READINESS_FAILED", "Readiness callback returned an invalid decision");
   }
-  if (decision.detail !== undefined && typeof decision.detail !== "string") {
+  const detail = dataDescriptorValue(descriptors, "detail");
+  if (detail !== undefined && typeof detail !== "string") {
     throw new LocalRuntimeError("READINESS_FAILED", "Readiness detail must be a string");
   }
-  return decision;
+  const handshake = dataDescriptorValue(descriptors, "handshake");
+  return Object.freeze({
+    ready,
+    ...(detail === undefined ? {} : { detail }),
+    ...(handshake === undefined ? {} : { handshake: handshake as LocalComponentHandshake })
+  });
 }
 
 function sanitizeReadyResult(
@@ -1483,49 +1495,161 @@ function validateVersionValue(
   fail(`${label} must be a nonnegative safe integer or non-empty string`);
 }
 
-function validateReportedHandshake(handshake: LocalComponentHandshake, componentId: string): void {
+function normalizeReportedHandshake(
+  handshake: unknown,
+  componentId: string
+): LocalComponentHandshake {
   const fail = (message: string): never => {
     throw new LocalRuntimeError(
       "READINESS_FAILED",
       `Invalid version handshake from ${componentId}: ${message}`
     );
   };
-  if (typeof handshake !== "object" || handshake === null || Array.isArray(handshake)) {
-    fail("handshake must be an object");
-  }
-  if (handshake.componentVersion !== undefined) {
-    if (typeof handshake.componentVersion !== "string"
-        || handshake.componentVersion.length === 0
-        || handshake.componentVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+  const descriptors = inspectReadinessObject(handshake, "handshake must be an object", fail);
+  validateReadinessObjectFields(
+    descriptors,
+    new Set(["componentVersion", "protocolVersion", "modelVersionOrHash", "capabilities", "metadata"]),
+    fail
+  );
+
+  const componentVersion = dataDescriptorValue(descriptors, "componentVersion", fail);
+  if (componentVersion !== undefined) {
+    if (typeof componentVersion !== "string"
+        || componentVersion.length === 0
+        || componentVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
       fail("componentVersion must be a non-empty bounded string");
     }
   }
-  if (handshake.protocolVersion !== undefined) {
-    validateVersionValue(handshake.protocolVersion, "protocolVersion", fail);
+
+  const protocolVersion = dataDescriptorValue(descriptors, "protocolVersion", fail);
+  if (protocolVersion !== undefined) {
+    validateVersionValue(protocolVersion, "protocolVersion", fail);
   }
-  if (handshake.modelVersionOrHash !== undefined) {
-    if (typeof handshake.modelVersionOrHash !== "string"
-        || handshake.modelVersionOrHash.length === 0
-        || handshake.modelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+
+  const modelVersionOrHash = dataDescriptorValue(descriptors, "modelVersionOrHash", fail);
+  if (modelVersionOrHash !== undefined) {
+    if (typeof modelVersionOrHash !== "string"
+        || modelVersionOrHash.length === 0
+        || modelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
       fail("modelVersionOrHash must be a non-empty bounded string");
     }
   }
-  if (handshake.capabilities !== undefined) {
-    if (!Array.isArray(handshake.capabilities) || handshake.capabilities.length > MAX_CAPABILITIES) {
-      fail(`capabilities must contain at most ${String(MAX_CAPABILITIES)} items`);
-    }
-    for (const capability of handshake.capabilities) {
-      if (typeof capability !== "string"
-          || capability.length === 0
-          || capability.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
-        fail("capabilities must contain only non-empty bounded strings");
-      }
+
+  const rawCapabilities = dataDescriptorValue(descriptors, "capabilities", fail);
+  const capabilities = rawCapabilities === undefined
+    ? undefined
+    : inspectHandshakeCapabilities(rawCapabilities, fail);
+
+  const metadata = dataDescriptorValue(descriptors, "metadata", fail);
+  if (metadata !== undefined) {
+    if (typeof metadata !== "object" || metadata === null || safeArrayCheck(metadata, fail)) {
+      fail("metadata must be an object");
     }
   }
-  if (handshake.metadata !== undefined
-      && (typeof handshake.metadata !== "object" || handshake.metadata === null || Array.isArray(handshake.metadata))) {
-    fail("metadata must be an object");
+
+  return Object.freeze({
+    ...(componentVersion === undefined ? {} : { componentVersion }),
+    ...(protocolVersion === undefined ? {} : { protocolVersion: protocolVersion as string | number }),
+    ...(modelVersionOrHash === undefined ? {} : { modelVersionOrHash }),
+    ...(capabilities === undefined ? {} : { capabilities }),
+    ...(metadata === undefined ? {} : { metadata: metadata as Readonly<Record<string, unknown>> })
+  });
+}
+
+function inspectHandshakeCapabilities(
+  value: unknown,
+  fail: (message: string) => never
+): readonly string[] {
+  if (!safeArrayCheck(value, fail)) fail("capabilities must be an array");
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    fail("capabilities could not be inspected");
   }
+  const rawLength = descriptors.length?.value as unknown;
+  if (typeof rawLength !== "number"
+      || !Number.isSafeInteger(rawLength)
+      || rawLength < 0
+      || rawLength > MAX_CAPABILITIES) {
+    fail(`capabilities must contain at most ${String(MAX_CAPABILITIES)} items`);
+  }
+  const output: string[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (descriptor === undefined || !("value" in descriptor)) {
+      fail("capabilities must be a dense data-only array");
+    }
+    const capability = descriptor.value;
+    if (typeof capability !== "string"
+        || capability.length === 0
+        || capability.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      fail("capabilities must contain only non-empty bounded strings");
+    }
+    output.push(capability);
+  }
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (key === "length" || descriptor.enumerable !== true) continue;
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(key)) {
+      fail("capabilities may not contain extra enumerable properties");
+    }
+  }
+  return Object.freeze(output);
+}
+
+function inspectReadinessObject(
+  value: unknown,
+  message: string,
+  fail: (message: string) => never = (detail) => {
+    throw new LocalRuntimeError("READINESS_FAILED", detail);
+  }
+): Readonly<Record<string, PropertyDescriptor>> {
+  if (typeof value !== "object" || value === null || safeArrayCheck(value, fail)) fail(message);
+  try {
+    return Object.getOwnPropertyDescriptors(value);
+  } catch {
+    fail(message);
+  }
+}
+
+function safeArrayCheck(
+  value: unknown,
+  fail: (message: string) => never
+): boolean {
+  try {
+    return Array.isArray(value);
+  } catch {
+    fail("value could not be inspected");
+  }
+}
+
+function validateReadinessObjectFields(
+  descriptors: Readonly<Record<string, PropertyDescriptor>>,
+  allowed: ReadonlySet<string>,
+  fail: (message: string) => never = (detail) => {
+    throw new LocalRuntimeError("READINESS_FAILED", detail);
+  }
+): void {
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!allowed.has(key)) {
+      if (descriptor.enumerable === true) fail(`Unsupported readiness field ${key}`);
+      continue;
+    }
+    if (!("value" in descriptor)) fail(`Readiness field ${key} may not be an accessor`);
+  }
+}
+
+function dataDescriptorValue(
+  descriptors: Readonly<Record<string, PropertyDescriptor>>,
+  key: string,
+  fail: (message: string) => never = (detail) => {
+    throw new LocalRuntimeError("READINESS_FAILED", detail);
+  }
+): unknown {
+  const descriptor = descriptors[key];
+  if (descriptor === undefined) return undefined;
+  if (!("value" in descriptor)) fail(`Readiness field ${key} may not be an accessor`);
+  return descriptor.value;
 }
 
 function validateExpectedHandshake(
