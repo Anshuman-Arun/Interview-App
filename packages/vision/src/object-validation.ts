@@ -4,7 +4,8 @@ const MAX_SNAPSHOTTED_OBJECT_FIELDS = 64;
 
 export function snapshotOwnEnumerableRecord(
   value: unknown,
-  label: string
+  label: string,
+  allowedFields?: ReadonlySet<string>
 ): Readonly<Record<string, unknown>> {
   if (typeof value !== "object" || value === null) {
     throw new TypeError(`${label} must be an object`);
@@ -28,6 +29,13 @@ export function snapshotOwnEnumerableRecord(
     throw new RangeError(
       `${label} contains too many own enumerable fields for bounded validation`
     );
+  }
+  if (allowedFields !== undefined) {
+    for (const key of keys) {
+      if (!allowedFields.has(key)) {
+        throw new RangeError(`${label} contains unknown field ${key}`);
+      }
+    }
   }
 
   const snapshot: Record<string, unknown> = Object.create(null);
