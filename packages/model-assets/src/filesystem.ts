@@ -700,6 +700,37 @@ export async function verifyArtifactFileWithIdentity(
   if (actualSha256 !== digest.data) {
     return { ok: false, reason: "DIGEST_MISMATCH", actualBytes: bytes, actualSha256 };
   }
+
+  let finalPathStat: BigIntStats;
+  try {
+    finalPathStat = await lstat(rawFilePath, { bigint: true });
+  } catch (error) {
+    if (errnoCode(error) === "ENOENT") {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Verified artifact path disappeared before verification completed.",
+        { cause: error }
+      );
+    }
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to re-inspect artifact path after verification.",
+      { cause: error }
+    );
+  }
+  if (finalPathStat.isSymbolicLink()
+      || !finalPathStat.isFile()
+      || finalPathStat.dev !== fileStat.dev
+      || finalPathStat.ino !== fileStat.ino
+      || finalPathStat.size !== fileStat.size
+      || finalPathStat.mtimeNs !== fileStat.mtimeNs
+      || finalPathStat.ctimeNs !== fileStat.ctimeNs) {
+    throw new ModelAssetError(
+      "UNSAFE_PATH",
+      "Artifact path changed while integrity verification was in progress."
+    );
+  }
+
   return {
     ok: true,
     actualBytes: bytes,
