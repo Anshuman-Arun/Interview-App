@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PixelDimensionsSchema } from "./types.js";
+import { HARD_IMAGE_VALIDATION_LIMITS, PixelDimensionsSchema } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
 export const VisionProcessingOperationSchema = z.enum([
@@ -12,12 +12,25 @@ export type VisionProcessingOperation = z.infer<typeof VisionProcessingOperation
 export const VisionProcessingOutcomeSchema = z.enum(["SUCCESS", "CANCELLED", "FAILURE"]);
 export type VisionProcessingOutcome = z.infer<typeof VisionProcessingOutcomeSchema>;
 
+const HARD_MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024 * 1024;
+
+const VisionDiagnosticDimensionsSchema = PixelDimensionsSchema.superRefine((dimensions, context) => {
+  if (dimensions.width > HARD_IMAGE_VALIDATION_LIMITS.maxWidth
+      || dimensions.height > HARD_IMAGE_VALIDATION_LIMITS.maxHeight) {
+    context.addIssue({ code: "custom", message: "Vision diagnostics dimensions exceed package hard dimension caps" });
+  }
+  const pixels = dimensions.width * dimensions.height;
+  if (!Number.isSafeInteger(pixels) || pixels > HARD_IMAGE_VALIDATION_LIMITS.maxPixels) {
+    context.addIssue({ code: "custom", message: "Vision diagnostics dimensions exceed package hard pixel cap" });
+  }
+});
+
 export const VisionProcessingDiagnosticsSchema = z.object({
   operation: VisionProcessingOperationSchema,
-  sourceDimensions: PixelDimensionsSchema,
-  outputDimensions: PixelDimensionsSchema.optional(),
-  inputBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  outputBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  sourceDimensions: VisionDiagnosticDimensionsSchema,
+  outputDimensions: VisionDiagnosticDimensionsSchema.optional(),
+  inputBytes: z.number().int().nonnegative().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes),
+  outputBytes: z.number().int().nonnegative().max(HARD_MAX_DIAGNOSTIC_OUTPUT_BYTES),
   cropCount: z.number().int().nonnegative().max(1),
   tileCount: z.number().int().nonnegative().max(512),
   durationMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -27,6 +40,10 @@ export const VisionProcessingDiagnosticsSchema = z.object({
 
   if (diagnostics.inputBytes <= 0 || diagnostics.outputBytes <= 0) {
     context.addIssue({ code: "custom", message: "Successful processing diagnostics require nonzero image bytes" });
+  }
+  if ((diagnostics.operation === "CROP" || diagnostics.operation === "RESIZE")
+      && diagnostics.outputBytes > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
+    context.addIssue({ code: "custom", message: "Successful single-image diagnostics exceed the package output byte cap" });
   }
 
   if (diagnostics.operation === "CROP") {
