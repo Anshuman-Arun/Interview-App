@@ -187,6 +187,9 @@ export function prepareVisionBatch(
   budgetInput: VisionRequestBudget = DEFAULT_VISION_REQUEST_BUDGET,
   strategyInput: VisionBudgetStrategy = "FAIL"
 ): PreparedVisionBatch {
+  if (!Array.isArray(sources)) {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must be an array");
+  }
   const budget = RequestBudgetSchema.parse(budgetInput);
   const strategy = VisionBudgetStrategySchema.parse(strategyInput);
   const validatedPurpose = VisionPurposeSchema.parse(purpose);
@@ -203,7 +206,9 @@ export function prepareVisionBatch(
 
   for (let index = 0; index < sources.length; index += 1) {
     const source = sources[index];
-    if (source === undefined) continue;
+    if (source === undefined) {
+      throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
+    }
     if (wouldExceed(totals, source, budget)) {
       if (strategy === "FAIL") {
         throw new VisionPreprocessingError(
@@ -213,7 +218,10 @@ export function prepareVisionBatch(
       }
       for (let deferredIndex = index; deferredIndex < sources.length; deferredIndex += 1) {
         const deferredSource = sources[deferredIndex];
-        if (deferredSource !== undefined) deferred.push(imageIdentity(deferredSource));
+        if (deferredSource === undefined) {
+          throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
+        }
+        deferred.push(imageIdentity(deferredSource));
       }
       break;
     }
