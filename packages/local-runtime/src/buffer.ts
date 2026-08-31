@@ -67,7 +67,8 @@ export class BoundedLineBuffer {
 }
 
 export class BoundedLineFramer {
-  private pending = Buffer.alloc(0);
+  private readonly pendingChunks: Buffer[] = [];
+  private pendingBytes = 0;
   private droppingOversizeLine = false;
 
   public constructor(
@@ -84,20 +85,19 @@ export class BoundedLineFramer {
       const fragment = chunk.subarray(offset, end);
 
       if (!this.droppingOversizeLine) {
-        if (this.pending.length + fragment.length > this.maxLineBytes) {
-          this.pending = Buffer.alloc(0);
+        if (this.pendingBytes + fragment.length > this.maxLineBytes) {
+          this.clearPending();
           this.droppingOversizeLine = true;
           this.onMalformed();
         } else if (fragment.length > 0) {
-          this.pending = this.pending.length === 0
-            ? Buffer.from(fragment)
-            : Buffer.concat([this.pending, fragment], this.pending.length + fragment.length);
+          this.pendingChunks.push(Buffer.from(fragment));
+          this.pendingBytes += fragment.length;
         }
       }
 
       if (newline === -1) return;
       if (!this.droppingOversizeLine) this.emitPending();
-      this.pending = Buffer.alloc(0);
+      this.clearPending();
       this.droppingOversizeLine = false;
       offset = newline + 1;
     }
@@ -105,16 +105,25 @@ export class BoundedLineFramer {
 
   public flush(): void {
     if (this.droppingOversizeLine) {
-      this.pending = Buffer.alloc(0);
+      this.clearPending();
       this.droppingOversizeLine = false;
       return;
     }
-    if (this.pending.length > 0) this.emitPending();
-    this.pending = Buffer.alloc(0);
+    if (this.pendingBytes > 0) this.emitPending();
+    this.clearPending();
+  }
+
+  private clearPending(): void {
+    this.pendingChunks.length = 0;
+    this.pendingBytes = 0;
   }
 
   private emitPending(): void {
-    let lineBuffer = this.pending;
+    let lineBuffer = this.pendingChunks.length === 0
+      ? Buffer.alloc(0)
+      : this.pendingChunks.length === 1
+        ? this.pendingChunks[0] as Buffer
+        : Buffer.concat(this.pendingChunks, this.pendingBytes);
     if (lineBuffer.at(-1) === 0x0d) lineBuffer = lineBuffer.subarray(0, -1);
     try {
       const line = new TextDecoder("utf-8", { fatal: true }).decode(lineBuffer);
