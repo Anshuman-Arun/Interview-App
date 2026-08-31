@@ -825,6 +825,48 @@ describe("local model asset manager", () => {
     await expect(firstInstall).resolves.toEqual(expect.any(String));
   });
 
+  it("uses the strictest active cache limit across shared-root managers", async () => {
+    const firstPayload = Buffer.from("strict-shared-one");
+    const secondPayload = Buffer.from("strict-shared-two");
+    const firstStarted = deferred<void>();
+    const releaseFirst = deferred<void>();
+    const fixture = await startFixtureServer(async (request, response) => {
+      if (request.url === "/first") {
+        response.writeHead(200, { "Content-Length": String(firstPayload.byteLength) });
+        response.write(firstPayload.subarray(0, 2));
+        firstStarted.resolve();
+        await releaseFirst.promise;
+        response.end(firstPayload.subarray(2));
+        return;
+      }
+      response.end(secondPayload);
+    });
+
+    const root = await newRoot();
+    const first = manifestFor(firstPayload, fixture.baseUrl + "/first", {
+      artifactId: "strict-one"
+    });
+    const second = manifestFor(secondPayload, fixture.baseUrl + "/second", {
+      artifactId: "strict-two"
+    });
+    const strictLimit = managedArtifactBytes(first);
+    const managerStrict = managerFor(root, { maxCacheBytes: strictLimit });
+    const managerLoose = managerFor(root, {
+      maxCacheBytes: strictLimit + managedArtifactBytes(second) + 1024
+    });
+
+    const firstInstall = managerStrict.install(first);
+    await firstStarted.promise;
+
+    await expect(managerLoose.install(second)).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect(fixture.requestCount()).toBe(1);
+
+    releaseFirst.resolve();
+    await expect(firstInstall).resolves.toEqual(expect.any(String));
+  });
+
   it("blocks shared-root cleanup and removal while another manager is installing", async () => {
     const payload = Buffer.from("shared-root-busy");
     const started = deferred<void>();
