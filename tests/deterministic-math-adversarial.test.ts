@@ -408,7 +408,7 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
-  it("reports combinations-with-repetition expansion overflow as a resource limit", async () => {
+  it("supports combinations with repetition across the full bounded input domain", async () => {
     const result = await verifyJson(new CombinatorialCountingVerifier(), {
       protocol: COMBINATORIAL_COUNTING_PROTOCOL,
       protocolVersion: COMBINATORIAL_COUNTING_PROTOCOL_VERSION,
@@ -416,11 +416,10 @@ describe("adversarial deterministic math verification", () => {
         kind: "COMBINATIONS_WITH_REPETITION",
         types: 1000,
         selections: 2,
-        claimed: "0"
+        claimed: "500500"
       }
     });
-    expect(result.status).toBe("UNRESOLVED");
-    expect(result.reason).toContain("RESOURCE_LIMIT");
+    expect(result.status).toBe("VERIFIED");
   });
 
   it("rejects semantically invalid probability values at the structured boundary", async () => {

@@ -404,14 +404,20 @@ export function combinationsWithRepetition(types: number, selections: number): b
   assertCombinatorialInteger(selections, "selections");
   if (selections === 0) return 1n;
   if (types === 0) return 0n;
+
+  // The stars-and-bars effective n can reach 2 * MAX_COMBINATORIAL_N - 1
+  // even though each supplied dimension is independently within its bound.
+  // Compute the equivalent binomial directly instead of feeding the derived
+  // value back through the public n <= MAX_COMBINATORIAL_N guard.
   const effectiveN = types + selections - 1;
-  if (effectiveN > MAX_COMBINATORIAL_N) {
-    throw new BoundedMathError(
-      "COMBINATORIAL_LIMIT_EXCEEDED",
-      "Combinations-with-repetition expansion exceeds the configured n limit"
+  const reducedK = Math.min(selections, effectiveN - selections);
+  let result = 1n;
+  for (let index = 1; index <= reducedK; index += 1) {
+    result = assertIntermediateIntegerBound(
+      (result * BigInt(effectiveN - reducedK + index)) / BigInt(index)
     );
   }
-  return binomial(effectiveN, selections);
+  return result;
 }
 
 function assertContainerBound(values: readonly string[]): void {

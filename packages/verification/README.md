@@ -48,7 +48,7 @@ Limits are exported from `limits.ts` and enforced before or during evaluation. C
 - 128 terms per variadic expression;
 - exponent at most 1,024;
 - recurrence order at most 16 and checked sequence length at most 256;
-- combinatorial `n` at most 1,000;
+- each supplied combinatorial count/dimension at most 1,000 (the internal stars-and-bars index may therefore reach 1,999);
 - at most 512 probability outcomes;
 - at most 1,024 items for finite-container helpers.
 
