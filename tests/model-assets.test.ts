@@ -1082,6 +1082,54 @@ describe("local model asset manager", () => {
     expect(path.basename(installed)).toBe("portable-file_1.bin");
   });
 
+  it("rejects malformed runtime cancellation signals before side effects", async () => {
+    const payload = Buffer.from("bad-signal");
+    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    const verifyFile = path.join(sourceRoot, "verify.bin");
+    await writeFile(source, payload);
+    await writeFile(verifyFile, payload);
+
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+    const UnsafeInstall = manager.install.bind(manager) as unknown as (
+      manifest: unknown,
+      signal: unknown
+    ) => Promise<string>;
+    const UnsafeImport = manager.importLocal.bind(manager) as unknown as (
+      manifest: unknown,
+      sourcePath: string,
+      signal: unknown
+    ) => Promise<string>;
+    const UnsafeVerifier = verifyArtifactFile as unknown as (
+      filePath: string,
+      expectations: unknown,
+      signal: unknown
+    ) => Promise<unknown>;
+    const malformedSignal = {
+      aborted: false
+    };
+
+    await expect(UnsafeInstall(manifest, malformedSignal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    await expect(UnsafeImport(manifest, source, malformedSignal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    await expect(UnsafeVerifier(verifyFile, {
+      sizeBytes: payload.byteLength,
+      sha256: sha256(payload)
+    }, malformedSignal)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+
+    expect(fixture.requestCount()).toBe(0);
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
   it("rejects malformed runtime redirect security configuration", async () => {
     const root = await newRoot();
     const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
