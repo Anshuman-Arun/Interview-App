@@ -354,6 +354,32 @@ function checkDependencies(root, records, violations) {
   checkDependencyCycles(graph, violations);
 }
 
+function checkBrowserProcessCapabilities(root, records, violations) {
+  for (const record of records) {
+    if (record.location.kind !== "app" || record.location.name !== "web") continue;
+    for (const specifier of extractModuleSpecifiers(record.sourceFile)) {
+      if (/^(?:node:)?child_process$/u.test(specifier)) {
+        addViolation(
+          violations,
+          "BROWSER_PROCESS_CAPABILITY",
+          record.relativePath,
+          "Browser code may not import child-process execution capabilities."
+        );
+        continue;
+      }
+      const target = projectTargetForSpecifier(root, record, specifier);
+      if (target?.kind === "package" && target.name === "local-runtime") {
+        addViolation(
+          violations,
+          "BROWSER_PROCESS_CAPABILITY",
+          record.relativePath,
+          "Browser code may not import the local process lifecycle package."
+        );
+      }
+    }
+  }
+}
+
 function checkDependencyCycles(graph, violations) {
   const visiting = new Set();
   const visited = new Set();
@@ -714,6 +740,7 @@ async function main() {
   const records = await loadRecords(root, files, violations);
 
   checkDependencies(root, records, violations);
+  checkBrowserProcessCapabilities(root, records, violations);
   checkAuthority(records, violations);
   checkProviders(records, violations);
   checkEventCredentials(root, records, violations);
