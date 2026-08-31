@@ -14,9 +14,9 @@ import type { PixelDimensions } from "./types.js";
 
 const DirtyRegionConfigSchema = z.object({
   paddingPixels: z.number().int().nonnegative().max(100_000),
-  maxInputRegions: z.number().int().positive().max(10_000),
-  maxRegionCount: z.number().int().positive().max(1_000),
-  maxTotalAnalyzedArea: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  maxInputRegions: z.number().int().positive().max(2048),
+  maxRegionCount: z.number().int().positive().max(256),
+  maxTotalAnalyzedArea: z.number().int().positive().max(128 * 1024 * 1024),
   fullFrameFallbackAreaRatio: z.number().finite().positive().max(1)
 }).strict();
 
@@ -93,29 +93,30 @@ function fullFrameFallback(
 }
 
 export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): readonly ImageRect[] {
-  let working = rectangles.map((rect) => validateImageRect(rect)).sort(compareRects);
-  let merged = true;
+  if (rectangles.length > 2048) throw new RangeError("At most 2048 regions may be coalesced at once");
+  const input = rectangles.map((rect) => validateImageRect(rect)).sort(compareRects);
+  const merged: ImageRect[] = [];
 
-  while (merged) {
-    merged = false;
-    outer: for (let leftIndex = 0; leftIndex < working.length; leftIndex += 1) {
-      const left = working[leftIndex];
-      if (left === undefined) continue;
-      for (let rightIndex = leftIndex + 1; rightIndex < working.length; rightIndex += 1) {
-        const right = working[rightIndex];
-        if (right === undefined || !rectsOverlap(left, right)) continue;
-        const union = unionRects([left, right]);
-        if (union === undefined) throw new Error("Union unexpectedly missing for two rectangles");
-        working = working.filter((_, index) => index !== leftIndex && index !== rightIndex);
-        working.push(union);
-        working.sort(compareRects);
-        merged = true;
-        break outer;
+  for (const rect of input) {
+    let candidate = rect;
+    let index = 0;
+    while (index < merged.length) {
+      const existing = merged[index];
+      if (existing === undefined || !rectsOverlap(candidate, existing)) {
+        index += 1;
+        continue;
       }
+      const union = unionRects([candidate, existing]);
+      if (union === undefined) throw new Error("Union unexpectedly missing for overlapping rectangles");
+      candidate = union;
+      merged.splice(index, 1);
+      index = 0;
     }
+    merged.push(candidate);
   }
 
-  return Object.freeze(working.map((rect) => Object.freeze({ ...rect })));
+  merged.sort(compareRects);
+  return Object.freeze(merged.map((rect) => Object.freeze({ ...rect })));
 }
 
 export function planDirtyRegions(
