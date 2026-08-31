@@ -16,6 +16,7 @@ import type {
   LocalComponentStatus,
   LocalExpectedHandshake,
   LocalFailureSnapshot,
+  LocalOutputSnapshot,
   LocalReadinessContext,
   LocalReadinessDecision,
   LocalReadinessSnapshot,
