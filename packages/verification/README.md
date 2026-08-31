@@ -16,7 +16,7 @@ New math verifiers use stable reason-code prefixes such as `CLAIM_VERIFIED`, `CL
 
 JSON integers are encoded as canonical base-10 strings; leading zeroes, a leading `+`, whitespace, and negative zero are rejected. Operand literals are capped at 256 decimal digits, while explicit claimed-result literals may use the 4,096-digit reduced exact-result bound so supported computations can represent their own exact answers. Rationals are `{ numerator, denominator }` string pairs and are normalized with a positive denominator and gcd reduction. Exported rational operations defensively normalize caller-supplied `ExactRational` values and cross-cancel where practical before enforcing reduced-result bounds. Some exact operations use wider implementation-only temporaries when those temporaries are mathematically bounded by the already configured input digit/cardinality limits; such temporaries are reduced before they can become an `ExactRational` state or verifier result. Integer/rational truth evaluation never converts exact values to floating point. Small schema counters, indices, and exponents use JavaScript `number` only inside explicit integer bounds where every accepted value is exactly representable.
 
-The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility and modular normalization, exact rational arithmetic, finite sums/products, factorial/binomial/permutation/combinations-with-repetition helpers, and finite set/multiset/permutation checks. Divisibility follows the mathematical existence definition, so `0 | 0` is true while `0 | b` is false for nonzero `b`. Finite rational aggregates use wider exact cancellation when the combined decimal size of their factors/denominators stays within the existing 100,000 statement-scale work budget; larger direct utility calls retain the conservative bounded fallback rather than allocating unbounded temporaries. Direct bigint helpers and supported expression operations retain resource checks; verifier schemas remain the runtime shape boundary for untrusted structured inputs.
+The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility and modular normalization, exact rational arithmetic, finite sums/products, factorial/binomial/permutation/combinations-with-repetition helpers, and finite set/multiset/permutation checks. Divisibility follows the mathematical existence definition, so `0 | 0` is true while `0 | b` is false for nonzero `b`. Finite rational aggregates may use wider exact components up to the shared 8,450-digit work bound and defer numerator/denominator gcd normalization until the end of an aggregate; this avoids repeated large-gcd work while preserving exact cancellation. Inputs that require larger exact-work components use conservative bounded fallbacks or abstain rather than allocating statement-scale temporaries. Direct bigint helpers and supported expression operations retain resource checks; verifier schemas remain the runtime shape boundary for untrusted structured inputs.
 
 ## Verifiers and protocols
 
@@ -34,7 +34,7 @@ For `LINEAR_PREVIOUS_TERMS`, sequence indices are zero-based: `initial[0]` is in
 
 Counting helpers use explicit total-function conventions at their finite-domain boundary: `C(n, k) = 0` and `P(n, k) = 0` when `k > n`; combinations with repetition return 1 for zero selections and 0 for positive selections from zero types.
 
-Probability-model inputs are validated as exact rationals in `[0, 1]`; conditioning and Bayes evidence probabilities must be strictly positive. Finite-distribution mass and finite expectations are accumulated exactly independent of outcome ordering. Their validation-only/common-denominator temporaries are bounded by the existing maximum outcome count and operand digit limits, and the reduced expectation must still fit the 4,096-digit exact-result bound. Internally inconsistent supplied probability models abstain as malformed rather than being contradicted as though they were valid models. Claimed probability answers remain exact rational claims: an out-of-range claimed answer is contradicted when the supplied model itself is valid.
+Probability-model inputs are validated as exact rationals in `[0, 1]`; conditioning and Bayes evidence probabilities must be strictly positive. Finite-distribution mass and finite expectations are accumulated exactly independent of outcome ordering. Their validation-only/common-denominator components use the shared 8,450-digit exact-work bound, and the reduced expectation must still fit the 4,096-digit exact-result bound. Internally inconsistent supplied probability models abstain as malformed rather than being contradicted as though they were valid models. Claimed probability answers remain exact rational claims: an out-of-range claimed answer is contradicted when the supplied model itself is valid.
 
 ## Resource limits
 
@@ -43,6 +43,7 @@ Limits are exported from `limits.ts` and enforced before or during evaluation. C
 - 100,000 statement characters;
 - 256 decimal digits per supplied operand integer;
 - 4,096 decimal digits per reduced exact arithmetic state/result or claimed-result integer;
+- 8,450 decimal digits per wide exact-work component used only for bounded cancellation/normalization;
 - 32 levels / 10,000 nodes for generic structured input;
 - 24 levels / 512 nodes for arithmetic expressions;
 - 128 terms per variadic expression;
@@ -52,7 +53,7 @@ Limits are exported from `limits.ts` and enforced before or during evaluation. C
 - at most 512 probability outcomes;
 - at most 1,024 items for finite-container helpers.
 
-Over-limit or undefined inputs abstain rather than producing positive evidence. Exact cancellation/normalization may use wider implementation-only integers where their size is already bounded by these input/cardinality limits; those values are not exposed as verifier state and the reduced result must still satisfy the 4,096-digit bound.
+Over-limit or undefined inputs abstain rather than producing positive evidence. Exact cancellation/normalization may use wider implementation-only integers only up to the 8,450-digit work-component bound; those values are not exposed as verifier state, and the reduced result must still satisfy the 4,096-digit bound.
 
 ## Registry and evidence scope
 
