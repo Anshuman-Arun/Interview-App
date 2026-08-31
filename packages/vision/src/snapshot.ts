@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { assertSupportedPngHeaderParameters } from "./png-validation.js";
 import {
   DEFAULT_IMAGE_VALIDATION_LIMITS,
   HARD_IMAGE_VALIDATION_LIMITS,
@@ -7,7 +8,6 @@ import {
   ImageSnapshotInputSchema,
   ImageSnapshotMetadataSchema,
   VisionPreprocessingError,
-  assertSupportedPngHeader,
   type ImageSnapshotInput,
   type ImageValidationLimits,
   type Sha256Digest
@@ -75,7 +75,7 @@ function inspectPngHeader(bytes: Buffer): PngHeader {
   }
 
   try {
-    assertSupportedPngHeader(bytes);
+    assertSupportedPngHeaderParameters(bytes);
   } catch {
     throw new VisionPreprocessingError(
       "INVALID_IMAGE",
