@@ -650,7 +650,15 @@ export const ImageSnapshotInputSchema = z.preprocess(
     mimeType: z.string().min(1).max(128),
     declaredWidth: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth).optional(),
     declaredHeight: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight).optional(),
-    encodedBytes: z.custom<Uint8Array>((value) => isDirectUint8Array(value))
+    encodedBytes: z.custom<Uint8Array>((value) => {
+      if (!isDirectUint8Array(value)) return false;
+      try {
+        const length = actualUint8ArrayByteLength(value);
+        return length > 0 && length <= HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes;
+      } catch {
+        return false;
+      }
+    })
   }).strict()
 );
 export type ImageSnapshotInput = z.infer<typeof ImageSnapshotInputSchema>;
