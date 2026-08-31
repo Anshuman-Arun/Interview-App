@@ -1170,6 +1170,14 @@ describe("local worker lifecycle manager", () => {
     expect(() => buildLocalEnvironment({ values: tooManyValues }, {}))
       .toThrow(/at most 256/iu);
 
+    const tooManySecretLines = Array.from(
+      { length: 257 },
+      (_, index) => `secret-line-${String(index)}`
+    ).join("\n");
+    expect(() => buildLocalEnvironment({
+      secrets: { MULTILINE_SECRET: tooManySecretLines }
+    }, {})).toThrow(/at most 256 physical lines/iu);
+
     const mutableValues = { SNAPSHOT_VALUE: "snapshot-source" };
     const snapshotted = buildLocalEnvironment({ values: mutableValues }, {});
     mutableValues.SNAPSHOT_VALUE = "mutated-after-validation";
