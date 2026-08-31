@@ -382,10 +382,16 @@ export class LocalRuntimeManager {
     });
     child.stdout.on("data", (chunk: Buffer) => stdoutFramer.append(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderrFramer.append(chunk));
+    let exitObserved = false;
+    child.once("exit", (code, signal) => {
+      exitObserved = true;
+      this.handleProcessExit(record, child, code, signal);
+    });
     child.once("close", (code, signal) => {
       stdoutFramer.flush();
       stderrFramer.flush();
-      this.handleExit(record, child, code, signal);
+      if (!exitObserved) this.handleProcessExit(record, child, code, signal);
+      this.handleProcessClose(record, child);
     });
     child.on("error", () => {
       if (record.child !== child) return;
@@ -395,7 +401,7 @@ export class LocalRuntimeManager {
     });
   }
 
-  private handleExit(
+  private handleProcessExit(
     record: ComponentRecord,
     child: ChildProcessWithoutNullStreams,
     code: number | null,
@@ -404,17 +410,8 @@ export class LocalRuntimeManager {
     if (record.child !== child) return;
     const previousState = record.state;
     const unexpected = !record.expectedStop && previousState !== "STOPPING" && previousState !== "STOPPED";
-    const stderrLines = record.stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
-    const exit: InternalExitRecord = Object.freeze({
-      code,
-      signal,
-      timestamp: this.timestamp(),
-      previousState,
-      unexpected,
-      stderrTail: Object.freeze(stderrLines.slice(-MAX_STDERR_TAIL_LINES))
-    });
+    const exit = this.createExitRecord(record, code, signal, previousState, unexpected);
     record.lastExit = exit;
-    record.child = undefined;
     for (const listener of [...record.exitListeners]) listener(exit);
 
     if (!unexpected || previousState === "STARTING") return;
@@ -440,6 +437,40 @@ export class LocalRuntimeManager {
         if (record.cleanupPromise === cleanup) record.cleanupPromise = undefined;
       }
     );
+  }
+
+  private handleProcessClose(
+    record: ComponentRecord,
+    child: ChildProcessWithoutNullStreams
+  ): void {
+    if (record.child !== child && record.residualProcess !== child) return;
+    const lastExit = record.lastExit;
+    if (lastExit !== undefined) {
+      const stderrLines = record.stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
+      record.lastExit = Object.freeze({
+        ...lastExit,
+        stderrTail: Object.freeze(stderrLines.slice(-MAX_STDERR_TAIL_LINES))
+      });
+    }
+    if (record.child === child) record.child = undefined;
+  }
+
+  private createExitRecord(
+    record: ComponentRecord,
+    code: number | null,
+    signal: NodeJS.Signals | null,
+    previousState: LocalComponentState,
+    unexpected: boolean
+  ): InternalExitRecord {
+    const stderrLines = record.stderr.snapshot().lines.filter((line) => line !== "[TRUNCATED]");
+    return Object.freeze({
+      code,
+      signal,
+      timestamp: this.timestamp(),
+      previousState,
+      unexpected,
+      stderrTail: Object.freeze(stderrLines.slice(-MAX_STDERR_TAIL_LINES))
+    });
   }
 
   private async cleanupUnexpectedExit(
