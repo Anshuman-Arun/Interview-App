@@ -1,0 +1,114 @@
+import { z } from "zod";
+import {
+  MAX_EXPRESSION_DEPTH,
+  MAX_EXPRESSION_NODES,
+  MAX_INTEGER_DECIMAL_DIGITS,
+  MAX_POWER_EXPONENT,
+  MAX_VARIADIC_EXPRESSION_TERMS
+} from "./limits.js";
+import { BoundedMathError, assertIntermediateIntegerBound, parseBoundedInteger } from "./math-utils.js";
+
+export const IntegerStringSchema = z.string()
+  .min(1)
+  .max(MAX_INTEGER_DECIMAL_DIGITS + 1)
+  .regex(/^-?(?:0|[1-9]\d*)$/u)
+  .refine((value) => (value.startsWith("-") ? value.length - 1 : value.length) <= MAX_INTEGER_DECIMAL_DIGITS);
+
+function integerStringSatisfies(value: string, predicate: (parsed: bigint) => boolean): boolean {
+  if (!/^-?(?:0|[1-9]\d*)$/u.test(value)) return false;
+  try {
+    return predicate(BigInt(value));
+  } catch {
+    return false;
+  }
+}
+
+export const PositiveIntegerStringSchema = IntegerStringSchema.refine(
+  (value) => integerStringSatisfies(value, (parsed) => parsed > 0n)
+);
+export const NonZeroIntegerStringSchema = IntegerStringSchema.refine(
+  (value) => integerStringSatisfies(value, (parsed) => parsed !== 0n)
+);
+
+export type IntegerExpression =
+  | { readonly kind: "INTEGER"; readonly value: string }
+  | { readonly kind: "ADD" | "SUBTRACT" | "MULTIPLY"; readonly left: IntegerExpression; readonly right: IntegerExpression }
+  | { readonly kind: "NEGATE"; readonly operand: IntegerExpression }
+  | { readonly kind: "POWER"; readonly base: IntegerExpression; readonly exponent: number }
+  | { readonly kind: "SUM" | "PRODUCT"; readonly terms: readonly IntegerExpression[] };
+
+export const IntegerExpressionSchema: z.ZodType<IntegerExpression> = z.lazy(() => z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("INTEGER"), value: IntegerStringSchema }).strict(),
+  z.object({ kind: z.literal("ADD"), left: IntegerExpressionSchema, right: IntegerExpressionSchema }).strict(),
+  z.object({ kind: z.literal("SUBTRACT"), left: IntegerExpressionSchema, right: IntegerExpressionSchema }).strict(),
+  z.object({ kind: z.literal("MULTIPLY"), left: IntegerExpressionSchema, right: IntegerExpressionSchema }).strict(),
+  z.object({ kind: z.literal("NEGATE"), operand: IntegerExpressionSchema }).strict(),
+  z.object({
+    kind: z.literal("POWER"),
+    base: IntegerExpressionSchema,
+    exponent: z.number().int().min(0).max(MAX_POWER_EXPONENT)
+  }).strict(),
+  z.object({
+    kind: z.literal("SUM"),
+    terms: z.array(IntegerExpressionSchema).min(1).max(MAX_VARIADIC_EXPRESSION_TERMS)
+  }).strict(),
+  z.object({
+    kind: z.literal("PRODUCT"),
+    terms: z.array(IntegerExpressionSchema).min(1).max(MAX_VARIADIC_EXPRESSION_TERMS)
+  }).strict()
+]));
+
+interface EvaluationBudget {
+  remainingNodes: number;
+}
+
+function consumeNode(budget: EvaluationBudget, depth: number): void {
+  if (depth > MAX_EXPRESSION_DEPTH || budget.remainingNodes <= 0) {
+    throw new BoundedMathError("INTERMEDIATE_LIMIT_EXCEEDED", "Integer expression exceeds configured resource limits");
+  }
+  budget.remainingNodes -= 1;
+}
+
+function integerPower(base: bigint, exponent: number): bigint {
+  let result = 1n;
+  let factor = base;
+  let remaining = exponent;
+  while (remaining > 0) {
+    if (remaining % 2 === 1) result = assertIntermediateIntegerBound(result * factor);
+    remaining = Math.floor(remaining / 2);
+    if (remaining > 0) factor = assertIntermediateIntegerBound(factor * factor);
+  }
+  return result;
+}
+
+function evaluateNode(expression: IntegerExpression, budget: EvaluationBudget, depth: number): bigint {
+  consumeNode(budget, depth);
+  switch (expression.kind) {
+    case "INTEGER": return parseBoundedInteger(expression.value);
+    case "ADD": return assertIntermediateIntegerBound(
+      evaluateNode(expression.left, budget, depth + 1) + evaluateNode(expression.right, budget, depth + 1)
+    );
+    case "SUBTRACT": return assertIntermediateIntegerBound(
+      evaluateNode(expression.left, budget, depth + 1) - evaluateNode(expression.right, budget, depth + 1)
+    );
+    case "MULTIPLY": return assertIntermediateIntegerBound(
+      evaluateNode(expression.left, budget, depth + 1) * evaluateNode(expression.right, budget, depth + 1)
+    );
+    case "NEGATE": return -evaluateNode(expression.operand, budget, depth + 1);
+    case "POWER": return integerPower(evaluateNode(expression.base, budget, depth + 1), expression.exponent);
+    case "SUM": {
+      let result = 0n;
+      for (const term of expression.terms) result = assertIntermediateIntegerBound(result + evaluateNode(term, budget, depth + 1));
+      return result;
+    }
+    case "PRODUCT": {
+      let result = 1n;
+      for (const term of expression.terms) result = assertIntermediateIntegerBound(result * evaluateNode(term, budget, depth + 1));
+      return result;
+    }
+  }
+}
+
+export function evaluateIntegerExpression(expression: IntegerExpression): bigint {
+  return evaluateNode(expression, { remainingNodes: MAX_EXPRESSION_NODES }, 1);
+}
