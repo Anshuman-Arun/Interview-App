@@ -182,6 +182,18 @@ function addSecretRedactionVariants(target: Set<string>, value: string): void {
   }
 }
 
+function assertPlainEnvironmentObject(value: object, label: string): void {
+  let prototype: unknown;
+  try {
+    prototype = Object.getPrototypeOf(value);
+  } catch {
+    throw new Error(`${label} could not be inspected`);
+  }
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error(`${label} must be a plain data object`);
+  }
+}
+
 function safelyIsEnvironmentArray(value: unknown, label: string): boolean {
   if (typeof value === "object" && value !== null && utilTypes.isProxy(value)) {
     throw new Error(`${label} could not be inspected`);
@@ -201,6 +213,7 @@ function inspectEnvironmentDefinition(
       || safelyIsEnvironmentArray(definition, "Environment definition")) {
     throw new Error("Environment definition must be an object");
   }
+  assertPlainEnvironmentObject(definition, "Environment definition");
 
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
@@ -248,6 +261,7 @@ function validateAndReturnStringRecord(
   if (typeof value !== "object" || value === null || safelyIsEnvironmentArray(value, label)) {
     throw new Error(`${label} must be an object`);
   }
+  assertPlainEnvironmentObject(value, label);
   const entries = ownDataEntries(value as Readonly<Record<string, string>>, label);
   if (entries.length > MAX_CONFIGURED_ENVIRONMENT_KEYS) {
     throw new Error(`${label} may contain at most ${String(MAX_CONFIGURED_ENVIRONMENT_KEYS)} keys`);
@@ -353,7 +367,10 @@ function findParentEntry(
 
   if (platform !== "win32") {
     const descriptor = descriptors[requested];
-    if (descriptor === undefined || !("value" in descriptor) || typeof descriptor.value !== "string") {
+    if (descriptor === undefined
+        || descriptor.enumerable !== true
+        || !("value" in descriptor)
+        || typeof descriptor.value !== "string") {
       return undefined;
     }
     return { key: requested, value: descriptor.value };
@@ -362,7 +379,10 @@ function findParentEntry(
   const wanted = requested.toUpperCase();
   let match: { readonly key: string; readonly value: string } | undefined;
   for (const [key, descriptor] of Object.entries(descriptors)) {
-    if (key.toUpperCase() !== wanted || !("value" in descriptor) || typeof descriptor.value !== "string") continue;
+    if (key.toUpperCase() !== wanted
+        || descriptor.enumerable !== true
+        || !("value" in descriptor)
+        || typeof descriptor.value !== "string") continue;
     if (match !== undefined) {
       throw new Error(`Ambiguous case-insensitive parent environment key: ${requested}`);
     }
