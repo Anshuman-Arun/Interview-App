@@ -605,15 +605,12 @@ export class LocalRuntimeManager {
     child: ChildProcessWithoutNullStreams
   ): Promise<void> {
     const timeoutMs = terminationTimeout(record.definition);
-    await terminateChildTree(child, this.platform, "SIGTERM", timeoutMs);
-    if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
-      await forceKillChildTree(child, this.platform, timeoutMs);
-      if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
-        throw new LocalRuntimeError(
-          "TERMINATION_FAILED",
-          `Could not clean up residual process tree for ${record.definition.id}`
-        );
-      }
+    const termination = await terminateManagedTree(record, child, this.platform, timeoutMs);
+    if (termination === "UNVERIFIED") {
+      throw new LocalRuntimeError(
+        "TERMINATION_FAILED",
+        `Could not verify residual process-tree cleanup for ${record.definition.id}`
+      );
     }
     record.residualProcess = undefined;
   }
@@ -899,21 +896,18 @@ export class LocalRuntimeManager {
     const timeoutMs = terminationTimeout(record.definition);
     let cleaned = false;
     try {
-      await terminateChildTree(child, this.platform, "SIGTERM", timeoutMs);
-      if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
-        await forceKillChildTree(child, this.platform, timeoutMs);
-        if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
-          record.state = "FAILED";
-          record.failure = this.failure(
-            "TERMINATION_FAILED",
-            `Could not terminate failed startup for ${record.definition.id}`,
-            record.environment.secretValues
-          );
-          throw new LocalRuntimeError(
-            "TERMINATION_FAILED",
-            `Could not terminate failed startup for ${record.definition.id}`
-          );
-        }
+      const termination = await terminateManagedTree(record, child, this.platform, timeoutMs);
+      if (termination === "UNVERIFIED") {
+        record.state = "FAILED";
+        record.failure = this.failure(
+          "TERMINATION_FAILED",
+          `Could not verify failed-startup process-tree cleanup for ${record.definition.id}`,
+          record.environment.secretValues
+        );
+        throw new LocalRuntimeError(
+          "TERMINATION_FAILED",
+          `Could not verify failed-startup process-tree cleanup for ${record.definition.id}`
+        );
       }
       record.residualProcess = undefined;
       cleaned = true;
@@ -946,30 +940,23 @@ export class LocalRuntimeManager {
       record.residualProcess = child;
       record.state = "STOPPING";
       const timeoutMs = terminationTimeout(record.definition);
-      await terminateChildTree(child, this.platform, "SIGTERM", timeoutMs);
-      if (await waitForManagedTreeExit(record, child, this.platform, timeoutMs)) {
-        record.residualProcess = undefined;
-        this.clearLiveReadiness(record);
-        record.state = "STOPPED";
-        return Object.freeze({ componentId: record.definition.id, disposition: "TERMINATED" });
-      }
-      await forceKillChildTree(child, this.platform, timeoutMs);
-      if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
+      const termination = await terminateManagedTree(record, child, this.platform, timeoutMs);
+      if (termination === "UNVERIFIED") {
         record.state = "FAILED";
         record.failure = this.failure(
           "TERMINATION_FAILED",
-          `Could not terminate dead-root residual tree for ${record.definition.id}`,
+          `Could not verify dead-root residual-tree cleanup for ${record.definition.id}`,
           record.environment.secretValues
         );
         throw new LocalRuntimeError(
           "TERMINATION_FAILED",
-          `Could not terminate dead-root residual tree for ${record.definition.id}`
+          `Could not verify dead-root residual-tree cleanup for ${record.definition.id}`
         );
       }
       record.residualProcess = undefined;
       this.clearLiveReadiness(record);
       record.state = "STOPPED";
-      return Object.freeze({ componentId: record.definition.id, disposition: "FORCED" });
+      return Object.freeze({ componentId: record.definition.id, disposition: termination });
     }
     if (child === undefined) {
       if (record.cleanupPromise !== undefined) {
@@ -994,30 +981,23 @@ export class LocalRuntimeManager {
       if (residual !== undefined && isOwnedProcessTreeAlive(residual, this.platform)) {
         record.state = "STOPPING";
         const timeoutMs = terminationTimeout(record.definition);
-        await terminateChildTree(residual, this.platform, "SIGTERM", timeoutMs);
-        if (await waitForManagedTreeExit(record, residual, this.platform, timeoutMs)) {
-          record.residualProcess = undefined;
-          this.clearLiveReadiness(record);
-          record.state = "STOPPED";
-          return Object.freeze({ componentId: record.definition.id, disposition: "TERMINATED" });
-        }
-        await forceKillChildTree(residual, this.platform, timeoutMs);
-        if (!(await waitForManagedTreeExit(record, residual, this.platform, timeoutMs))) {
+        const termination = await terminateManagedTree(record, residual, this.platform, timeoutMs);
+        if (termination === "UNVERIFIED") {
           record.state = "FAILED";
           record.failure = this.failure(
             "TERMINATION_FAILED",
-            `Could not terminate residual managed process tree for ${record.definition.id}`,
+            `Could not verify residual managed process-tree cleanup for ${record.definition.id}`,
             record.environment.secretValues
           );
           throw new LocalRuntimeError(
             "TERMINATION_FAILED",
-            `Could not terminate residual managed process tree for ${record.definition.id}`
+            `Could not verify residual managed process-tree cleanup for ${record.definition.id}`
           );
         }
         record.residualProcess = undefined;
         this.clearLiveReadiness(record);
         record.state = "STOPPED";
-        return Object.freeze({ componentId: record.definition.id, disposition: "FORCED" });
+        return Object.freeze({ componentId: record.definition.id, disposition: termination });
       }
       record.residualProcess = undefined;
       this.clearLiveReadiness(record);
@@ -1030,22 +1010,21 @@ export class LocalRuntimeManager {
     let disposition: LocalStopResult["disposition"] = "GRACEFUL";
     void this.requestGracefulShutdown(record, child).catch(() => undefined);
     if (!(await waitForManagedTreeExit(record, child, this.platform, record.definition.shutdownTimeoutMs))) {
-      disposition = "TERMINATED";
       const terminationTimeoutMs = terminationTimeout(record.definition);
-      await terminateChildTree(child, this.platform, "SIGTERM", terminationTimeoutMs);
-      if (!(await waitForManagedTreeExit(record, child, this.platform, terminationTimeoutMs))) {
-        disposition = "FORCED";
-        await forceKillChildTree(child, this.platform, terminationTimeoutMs);
-        if (!(await waitForManagedTreeExit(record, child, this.platform, terminationTimeoutMs))) {
-          record.state = "FAILED";
-          record.failure = this.failure(
-            "TERMINATION_FAILED",
-            `Could not terminate managed component ${record.definition.id}`,
-            record.environment.secretValues
-          );
-          throw new LocalRuntimeError("TERMINATION_FAILED", `Could not terminate managed component ${record.definition.id}`);
-        }
+      const termination = await terminateManagedTree(record, child, this.platform, terminationTimeoutMs);
+      if (termination === "UNVERIFIED") {
+        record.state = "FAILED";
+        record.failure = this.failure(
+          "TERMINATION_FAILED",
+          `Could not verify managed process-tree termination for ${record.definition.id}`,
+          record.environment.secretValues
+        );
+        throw new LocalRuntimeError(
+          "TERMINATION_FAILED",
+          `Could not verify managed process-tree termination for ${record.definition.id}`
+        );
       }
+      disposition = termination;
     }
 
     if (record.startPromise !== undefined) {
@@ -2088,43 +2067,61 @@ function isChildAlive(child: ChildProcessWithoutNullStreams): boolean {
   return child.pid !== undefined && child.exitCode === null && child.signalCode === null;
 }
 
+type ManagedTreeTermination = "TERMINATED" | "FORCED" | "UNVERIFIED";
+
+async function terminateManagedTree(
+  record: ComponentRecord,
+  child: ChildProcessWithoutNullStreams,
+  platform: NodeJS.Platform,
+  timeoutMs: number
+): Promise<ManagedTreeTermination> {
+  const treeTerminationVerified = await terminateChildTree(child, platform, "SIGTERM", timeoutMs);
+  const terminated = await waitForManagedTreeExit(record, child, platform, timeoutMs);
+  if (terminated && (platform !== "win32" || treeTerminationVerified)) return "TERMINATED";
+
+  const treeForceVerified = await forceKillChildTree(child, platform, timeoutMs);
+  const forced = await waitForManagedTreeExit(record, child, platform, timeoutMs);
+  if (!forced || (platform === "win32" && !treeForceVerified)) return "UNVERIFIED";
+  return "FORCED";
+}
+
 async function terminateChildTree(
   child: ChildProcessWithoutNullStreams,
   platform: NodeJS.Platform,
   signal: NodeJS.Signals,
   commandTimeoutMs: number
-): Promise<void> {
+): Promise<boolean> {
   const pid = child.pid;
-  if (pid === undefined) return;
+  if (pid === undefined) return true;
   if (platform === "win32") {
-    const treeTerminated = await runTaskkill(pid, false, commandTimeoutMs);
-    if (!treeTerminated && isChildAlive(child)) child.kill(signal);
-    return;
+    return runTaskkill(pid, false, commandTimeoutMs);
   }
   try {
     process.kill(-pid, signal);
   } catch {
     if (isChildAlive(child)) child.kill(signal);
   }
+  return true;
 }
 
 async function forceKillChildTree(
   child: ChildProcessWithoutNullStreams,
   platform: NodeJS.Platform,
   commandTimeoutMs: number
-): Promise<void> {
+): Promise<boolean> {
   const pid = child.pid;
-  if (pid === undefined) return;
+  if (pid === undefined) return true;
   if (platform === "win32") {
     const treeKilled = await runTaskkill(pid, true, commandTimeoutMs);
     if (!treeKilled && isChildAlive(child)) child.kill("SIGKILL");
-    return;
+    return treeKilled;
   }
   try {
     process.kill(-pid, "SIGKILL");
   } catch {
-    child.kill("SIGKILL");
+    if (isChildAlive(child)) child.kill("SIGKILL");
   }
+  return true;
 }
 
 function runTaskkill(
@@ -2175,6 +2172,7 @@ function runTaskkill(
       } catch {
         // The task may already have exited between the timeout and the kill attempt.
       }
+      task.unref();
       finish(false);
     }, timeoutMs);
     task.once("error", () => finish(false));
