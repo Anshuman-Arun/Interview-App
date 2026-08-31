@@ -211,7 +211,10 @@ export class ModelAssetManager {
     sourcePath: string,
     signal?: AbortSignal
   ): Promise<string> {
-    if (typeof sourcePath !== "string" || sourcePath.length === 0 || sourcePath.includes("\0")) {
+    const rawSourcePath: unknown = sourcePath;
+    if (typeof rawSourcePath !== "string"
+        || rawSourcePath.length === 0
+        || rawSourcePath.includes("\0")) {
       throw new ModelAssetError(
         "INVALID_CONFIGURATION",
         "Local import source path must be a non-empty valid path string."
@@ -228,7 +231,7 @@ export class ModelAssetManager {
         setStagingDirectory,
         async (destination) => {
           await copyLocalArtifactBounded(
-            sourcePath,
+            rawSourcePath,
             destination,
             this.maxArtifactBytes,
             internalSignal
