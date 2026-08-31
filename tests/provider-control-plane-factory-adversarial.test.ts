@@ -204,6 +204,53 @@ describe("provider registration snapshot semantics", () => {
     expect(definition.capabilityVersion).toBe("cap-1");
   });
 
+  it("keeps provider metadata validation stable under RegExp and String prototype overrides", () => {
+    const originalTest = Object.getOwnPropertyDescriptor(RegExp.prototype, "test");
+    const originalTrim = Object.getOwnPropertyDescriptor(String.prototype, "trim");
+
+    let controlCharacterError: unknown;
+    let normalized: ReturnType<typeof defineProvider> | undefined;
+    try {
+      Object.defineProperty(RegExp.prototype, "test", {
+        configurable: true,
+        writable: true,
+        value() {
+          return false;
+        }
+      });
+      Object.defineProperty(String.prototype, "trim", {
+        configurable: true,
+        writable: true,
+        value() {
+          return "polluted";
+        }
+      });
+
+      try {
+        defineProvider(providerInput({ displayName: "Test\nProvider" }));
+      } catch (error) {
+        controlCharacterError = error;
+      }
+      normalized = defineProvider(providerInput({
+        displayName: "  Test Provider  "
+      }));
+    } finally {
+      if (originalTest === undefined) {
+        Reflect.deleteProperty(RegExp.prototype, "test");
+      } else {
+        Object.defineProperty(RegExp.prototype, "test", originalTest);
+      }
+      if (originalTrim === undefined) {
+        Reflect.deleteProperty(String.prototype, "trim");
+      } else {
+        Object.defineProperty(String.prototype, "trim", originalTrim);
+      }
+    }
+
+    expect(controlCharacterError).toMatchObject({ code: "MALFORMED_DEFINITION" });
+    expect(normalized?.displayName).toBe("Test Provider");
+  });
+
   it("rejects control characters in diagnostic-facing provider metadata", () => {
     for (const overrides of [
       { displayName: "Test\nProvider" },
@@ -2203,6 +2250,48 @@ describe("adapter factory adversarial boundary", () => {
       secretResolver: resolver
     })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
     expect(getterCalls).toBe(0);
+  });
+
+  it("treats whitespace-only Gemini credentials as missing despite String.trim overrides", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: GEMINI_CONFIGURATION
+    });
+    const factory = resolveAdapterFactory(resolved);
+    const resolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        return "   ";
+      }
+    };
+    const originalTrim = Object.getOwnPropertyDescriptor(String.prototype, "trim");
+
+    let caught: unknown;
+    try {
+      Object.defineProperty(String.prototype, "trim", {
+        configurable: true,
+        writable: true,
+        value() {
+          return "nonblank";
+        }
+      });
+      try {
+        await factory.createAdapter({
+          resolved,
+          secretResolver: resolver
+        });
+      } catch (error) {
+        caught = error;
+      }
+    } finally {
+      if (originalTrim === undefined) {
+        Reflect.deleteProperty(String.prototype, "trim");
+      } else {
+        Object.defineProperty(String.prototype, "trim", originalTrim);
+      }
+    }
+
+    expect(caught).toMatchObject({ code: "CREDENTIALS_REQUIRED" });
   });
 
   it("normalizes Gemini resolver failures and rejects non-string resolver results", async () => {

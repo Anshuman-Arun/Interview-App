@@ -35,6 +35,7 @@ const BOARD_ACTION_KEY_SET = new Set<string>(BOARD_ACTION_KEYS);
 
 const SET_HAS_INTRINSIC = Set.prototype.has;
 const SET_ADD_INTRINSIC = Set.prototype.add;
+const STRING_TRIM_INTRINSIC = String.prototype.trim;
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
   const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
@@ -43,6 +44,17 @@ function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
 
 function setAdd<T>(set: Set<T>, value: T): void {
   Reflect.apply(SET_ADD_INTRINSIC, set, [value]);
+}
+
+function trimBuiltInCredential(value: string): string {
+  const result: unknown = Reflect.apply(STRING_TRIM_INTRINSIC, value, []);
+  if (typeof result !== "string") {
+    throw new ProviderControlPlaneError(
+      "CREDENTIAL_RESOLUTION_FAILED",
+      "Provider credential normalization failed"
+    );
+  }
+  return result;
 }
 
 function invalidMockRuntime(): never {
@@ -250,7 +262,7 @@ const geminiFactory: ProviderAdapterFactoryDefinition = {
         "Gemini API credential resolver returned an invalid value"
       );
     }
-    if (resolvedSecret.trim().length === 0) {
+    if (trimBuiltInCredential(resolvedSecret).length === 0) {
       throw new ProviderControlPlaneError(
         "CREDENTIALS_REQUIRED",
         "Gemini API credential could not be resolved"

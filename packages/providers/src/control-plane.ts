@@ -110,13 +110,31 @@ export const CapabilitySupportSchema = z.enum(["SUPPORTED", "UNSUPPORTED", "UNKN
 export type CapabilitySupport = z.infer<typeof CapabilitySupportSchema>;
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
+const REGEXP_TEST_INTRINSIC = RegExp.prototype.test;
+const STRING_TRIM_INTRINSIC = String.prototype.trim;
+
+function controlPlaneRegExpTest(pattern: RegExp, value: string): boolean {
+  const result: unknown = Reflect.apply(REGEXP_TEST_INTRINSIC, pattern, [value]);
+  return result === true;
+}
+
+function trimControlPlaneText(value: string): string {
+  const result: unknown = Reflect.apply(STRING_TRIM_INTRINSIC, value, []);
+  if (typeof result !== "string") {
+    throw new ProviderControlPlaneError(
+      "MALFORMED_DEFINITION",
+      "Provider text normalization failed"
+    );
+  }
+  return result;
+}
 
 function nonSecretTextSchema(maxLength: number) {
   return z.string()
-    .refine((value) => !CONTROL_CHARACTER_PATTERN.test(value), {
+    .refine((value) => !controlPlaneRegExpTest(CONTROL_CHARACTER_PATTERN, value), {
       message: "CONTROL_CHARACTERS_NOT_ALLOWED"
     })
-    .transform((value) => value.trim())
+    .transform((value) => trimControlPlaneText(value))
     .pipe(z.string().min(1).max(maxLength))
     .refine((value) => !containsSecretLikeConfigurationText(value), {
       message: "SECRET_IN_CONFIGURATION"
