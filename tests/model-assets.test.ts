@@ -1047,6 +1047,78 @@ describe("local model asset manager", () => {
     await expect(firstInstall).resolves.toEqual(expect.any(String));
   });
 
+  it("does not pool one staging overage against another install's unused reservation", async () => {
+    const firstPayload = Buffer.alloc(64, 1);
+    const secondPayload = Buffer.alloc(64, 2);
+    const thirdPayload = Buffer.alloc(64, 3);
+    const firstStarted = deferred<void>();
+    const secondStarted = deferred<void>();
+    const releaseFirst = deferred<void>();
+    const releaseSecond = deferred<void>();
+    const fixture = await startFixtureServer(async (request, response) => {
+      if (request.url === "/first") {
+        response.writeHead(200, { "Content-Length": String(firstPayload.byteLength) });
+        response.write(firstPayload.subarray(0, 2));
+        firstStarted.resolve();
+        await releaseFirst.promise;
+        response.end(firstPayload.subarray(2));
+        return;
+      }
+      if (request.url === "/second") {
+        response.writeHead(200, { "Content-Length": String(secondPayload.byteLength) });
+        response.write(secondPayload.subarray(0, 2));
+        secondStarted.resolve();
+        await releaseSecond.promise;
+        response.end(secondPayload.subarray(2));
+        return;
+      }
+      response.end(thirdPayload);
+    });
+
+    const root = await newRoot();
+    const first = manifestFor(firstPayload, fixture.baseUrl + "/first", {
+      artifactId: "over-one"
+    });
+    const second = manifestFor(secondPayload, fixture.baseUrl + "/second", {
+      artifactId: "over-two"
+    });
+    const third = manifestFor(thirdPayload, fixture.baseUrl + "/third", {
+      artifactId: "over-three"
+    });
+    const firstReservation = managedArtifactBytes(first);
+    const totalLimit = firstReservation
+      + managedArtifactBytes(second)
+      + managedArtifactBytes(third);
+    const managerOne = managerFor(root, { maxCacheBytes: totalLimit });
+    const managerTwo = managerFor(root, { maxCacheBytes: totalLimit });
+    const managerThree = managerFor(root, { maxCacheBytes: totalLimit });
+
+    const firstInstall = managerOne.install(first);
+    const secondInstall = managerTwo.install(second);
+    await Promise.all([firstStarted.promise, secondStarted.promise]);
+
+    const temporaryEntries = await readdir(path.join(root, "tmp"));
+    const firstPrefix = artifactInstallationKey(first) + "-";
+    const firstStagingName = temporaryEntries.find((entry) => entry.startsWith(firstPrefix));
+    if (firstStagingName === undefined) {
+      throw new Error("Expected first active staging directory.");
+    }
+    await writeFile(
+      path.join(root, "tmp", firstStagingName, "external-overage.bin"),
+      Buffer.alloc(firstReservation + 32, 9)
+    );
+
+    await expect(managerThree.install(third)).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect(fixture.requestCount()).toBe(2);
+
+    releaseFirst.resolve();
+    releaseSecond.resolve();
+    await expect(firstInstall).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+    await expect(secondInstall).resolves.toEqual(expect.any(String));
+  });
+
   it("uses the strictest active cache limit across shared-root managers", async () => {
     const firstPayload = Buffer.from("strict-shared-one");
     const secondPayload = Buffer.from("strict-shared-two");
