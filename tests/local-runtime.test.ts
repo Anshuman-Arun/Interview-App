@@ -844,6 +844,12 @@ describe("local worker lifecycle manager", () => {
     expect(posix.environment).toMatchObject({ PATH: "safe-path", SAFE_PARENT: "allowed" });
     expect(posix.environment).not.toHaveProperty("Path");
 
+    expect(() => buildLocalEnvironment(
+      undefined,
+      { Path: "first-path", PATH: "second-path" },
+      "win32"
+    )).toThrow(/Ambiguous case-insensitive parent environment key/iu);
+
     const windows = buildLocalEnvironment(
       undefined,
       { Path: "windows-path", SYSTEMROOT: "windows-root", TMPDIR: "posix-only" },
