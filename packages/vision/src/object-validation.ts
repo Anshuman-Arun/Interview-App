@@ -60,3 +60,16 @@ export function snapshotOwnEnumerableRecord(
   }
   return Object.freeze(snapshot);
 }
+
+
+export function snapshotOwnEnumerableRecordForSchema(
+  value: unknown,
+  label: string,
+  allowedFields: ReadonlySet<string>
+): Readonly<Record<string, unknown>> | undefined {
+  try {
+    return snapshotOwnEnumerableRecord(value, label, allowedFields);
+  } catch {
+    return undefined;
+  }
+}
