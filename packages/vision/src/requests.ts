@@ -244,7 +244,7 @@ export function prepareVisionBatch(
 
 export function requestPayloadIsSafeReference(
   request: unknown
-): request is PreparedVisionImageRequest & { readonly payload: ImagePayloadReference } {
+): request is { readonly payload: ImagePayloadReference } {
   if (typeof request !== "object" || request === null || !("payload" in request)) return false;
   return ImagePayloadReference.isValidatedInstance(request.payload);
 }
