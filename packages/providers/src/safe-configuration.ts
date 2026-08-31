@@ -43,7 +43,30 @@ const SECRET_CONFIGURATION_KEYS = new Set([
   "secretkeys",
   "privatekeys",
   "cookies",
-  "setcookies"
+  "setcookies",
+  "credentialref",
+  "credentialsref",
+  "credentialrefs",
+  "secretref",
+  "secretrefs",
+  "secretkeyref",
+  "secretkeyrefs",
+  "privatekeyref",
+  "privatekeyrefs",
+  "apikeyref",
+  "apikeyrefs",
+  "accesstokenref",
+  "accesstokenrefs",
+  "refreshtokenref",
+  "refreshtokenrefs",
+  "authtokenref",
+  "authtokenrefs",
+  "bearertokenref",
+  "bearertokenrefs",
+  "passwordref",
+  "passwordrefs",
+  "passphraseref",
+  "passphraserefs"
 ]);
 const BEARER_AUTH_PATTERN = /\bbearer\s+[a-z0-9._~+/-]{16,}/iu;
 const BASIC_AUTH_CANDIDATE_PATTERN =
@@ -147,7 +170,30 @@ function isSecretConfigurationKey(key: string): boolean {
     || normalized === "cookie"
     || normalized === "cookies"
     || normalized.endsWith("authorizationheader")
-    || normalized.endsWith("authheader");
+    || normalized.endsWith("authheader")
+    || normalized.endsWith("credentialref")
+    || normalized.endsWith("credentialsref")
+    || normalized.endsWith("credentialrefs")
+    || normalized.endsWith("secretref")
+    || normalized.endsWith("secretrefs")
+    || normalized.endsWith("secretkeyref")
+    || normalized.endsWith("secretkeyrefs")
+    || normalized.endsWith("privatekeyref")
+    || normalized.endsWith("privatekeyrefs")
+    || normalized.endsWith("apikeyref")
+    || normalized.endsWith("apikeyrefs")
+    || normalized.endsWith("accesstokenref")
+    || normalized.endsWith("accesstokenrefs")
+    || normalized.endsWith("refreshtokenref")
+    || normalized.endsWith("refreshtokenrefs")
+    || normalized.endsWith("authtokenref")
+    || normalized.endsWith("authtokenrefs")
+    || normalized.endsWith("bearertokenref")
+    || normalized.endsWith("bearertokenrefs")
+    || normalized.endsWith("passwordref")
+    || normalized.endsWith("passwordrefs")
+    || normalized.endsWith("passphraseref")
+    || normalized.endsWith("passphraserefs");
 }
 
 const BASE64_ALPHABET =

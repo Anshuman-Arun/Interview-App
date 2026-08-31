@@ -232,6 +232,36 @@ describe("provider configuration secret exclusion", () => {
     })).not.toThrow();
   });
 
+  it("rejects alternate credential-reference channels inside provider settings", () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+
+    for (const settings of [
+      { credentialRef: "credential-two" },
+      { nested: { apiKeyRef: "credential-two" } },
+      { secretRef: "credential-two" },
+      { accessTokenRefs: ["credential-two"] }
+    ]) {
+      expect(() => resolveProviderConfiguration({
+        registry,
+        configuration: settingsConfiguration(settings)
+      })).toThrow(expect.objectContaining({ code: "SECRET_IN_CONFIGURATION" }));
+    }
+  });
+
+  it("rejects credential-reference channels introduced by provider-specific normalization", () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput(() => ({
+      mode: "safe",
+      credentialRef: "credential-two"
+    })));
+
+    expect(() => resolveProviderConfiguration({
+      registry,
+      configuration: settingsConfiguration({ mode: "safe" })
+    })).toThrow(expect.objectContaining({ code: "SECRET_IN_CONFIGURATION" }));
+  });
+
   it("rejects raw secret-looking values in persistable identity and reasoning fields", () => {
     for (const configuration of [
       {
