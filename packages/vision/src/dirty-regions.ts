@@ -12,6 +12,14 @@ import {
 import { PixelDimensionsSchema, VisionPreprocessingError } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
+export const DirtyRegionInputSchema = z.object({
+  x: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+  y: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+  width: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  height: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER)
+}).strict();
+export type DirtyRegionInput = z.infer<typeof DirtyRegionInputSchema>;
+
 const DirtyRegionConfigSchema = z.object({
   paddingPixels: z.number().int().nonnegative().max(100_000),
   maxInputRegions: z.number().int().positive().max(2048),
@@ -99,6 +107,33 @@ function fullFrameFallback(
   });
 }
 
+export function rasterizeDirtyRegion(regionInput: DirtyRegionInput): ImageRect {
+  const parsed = DirtyRegionInputSchema.safeParse(regionInput);
+  if (!parsed.success) {
+    throw new VisionPreprocessingError(
+      "INVALID_RECTANGLE",
+      "Dirty region coordinates must be finite with nonnegative dimensions"
+    );
+  }
+
+  const rawRight = parsed.data.x + parsed.data.width;
+  const rawBottom = parsed.data.y + parsed.data.height;
+  if (!Number.isFinite(rawRight)
+      || !Number.isFinite(rawBottom)
+      || rawRight < Number.MIN_SAFE_INTEGER
+      || rawRight > Number.MAX_SAFE_INTEGER
+      || rawBottom < Number.MIN_SAFE_INTEGER
+      || rawBottom > Number.MAX_SAFE_INTEGER) {
+    throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty region edges exceed safe numeric range");
+  }
+
+  const x = Math.floor(parsed.data.x);
+  const y = Math.floor(parsed.data.y);
+  const right = Math.max(x + 1, Math.ceil(rawRight));
+  const bottom = Math.max(y + 1, Math.ceil(rawBottom));
+  return validateImageRect({ x, y, width: right - x, height: bottom - y });
+}
+
 export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): readonly ImageRect[] {
   if (rectangles.length > 2048) throw new RangeError("At most 2048 regions may be coalesced at once");
   const input = rectangles.map((rect) => validateImageRect(rect)).sort(compareRects);
@@ -127,7 +162,7 @@ export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): re
 }
 
 export function planDirtyRegions(
-  dirtyRegions: readonly ImageRect[],
+  dirtyRegions: readonly DirtyRegionInput[],
   dimensions: PixelDimensions,
   config?: DirtyRegionPlannerConfig
 ): DirtyRegionPlan {
@@ -147,14 +182,21 @@ export function planDirtyRegions(
     );
   }
 
-  const validatedRegions = dirtyRegions.map((region) => validateImageRect(region));
-  if (validatedRegions.length > safeConfig.maxInputRegions) {
+  const rasterRegions: ImageRect[] = [];
+  for (let index = 0; index < dirtyRegions.length; index += 1) {
+    const region = dirtyRegions[index];
+    if (region === undefined) {
+      throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty-region list must not contain missing entries");
+    }
+    rasterRegions.push(rasterizeDirtyRegion(region));
+  }
+  if (rasterRegions.length > safeConfig.maxInputRegions) {
     return fullFrameFallback(frame, safeConfig.maxTotalAnalyzedArea, "TOO_MANY_INPUTS");
   }
 
   const padded: ImageRect[] = [];
-  for (const rawRegion of validatedRegions) {
-    const clipped = clipRectToBounds(validateImageRect(rawRegion), frame);
+  for (const rawRegion of rasterRegions) {
+    const clipped = clipRectToBounds(rawRegion, frame);
     if (clipped === undefined) continue;
     const expanded = expandRect(clipped, safeConfig.paddingPixels, frame);
     if (expanded !== undefined) padded.push(expanded);
