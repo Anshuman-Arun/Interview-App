@@ -209,6 +209,19 @@ switch (mode) {
     }, 20);
     break;
   }
+  case "exit-with-stubborn-pipe-child": {
+    const child = spawn(process.execPath, [import.meta.filename, "ignore-shutdown"], {
+      stdio: ["ignore", "inherit", "inherit"],
+      windowsHide: true
+    });
+    if (child.pid === undefined) throw new Error("fixture child did not receive a pid");
+    ready({ childPid: child.pid });
+    setTimeout(() => {
+      clearInterval(keepAlive);
+      process.exit(18);
+    }, Number(args[0] ?? 20));
+    break;
+  }
   case "stdin-shutdown":
     ready();
     process.stdin.setEncoding("utf8");
