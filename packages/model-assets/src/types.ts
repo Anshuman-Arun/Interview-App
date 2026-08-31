@@ -159,6 +159,12 @@ export const AssetResolutionRequestSchema = PlainDataRecordSchema.pipe(z.object(
 }).strict());
 export type AssetResolutionRequest = z.infer<typeof AssetResolutionRequestSchema>;
 
+const CurrentPlatformResolutionRequestSchema = PlainDataRecordSchema.pipe(z.object({
+  familyId: StableAssetIdentifierSchema,
+  version: AssetVersionSchema,
+  variant: StableAssetIdentifierSchema.optional()
+}).strict());
+
 export const AssetDiagnosticMetadataSchema = PlainDataRecordSchema.pipe(z.object({
   artifactId: StableAssetIdentifierSchema,
   familyId: StableAssetIdentifierSchema,
@@ -265,8 +271,15 @@ export function resolveAssetManifest(
 
 export function resolveAssetForCurrentPlatform(
   manifests: readonly unknown[],
-  request: Omit<AssetResolutionRequest, "platform" | "architecture">
+  requestValue: Omit<AssetResolutionRequest, "platform" | "architecture">
 ): AssetManifest {
+  const requestResult = CurrentPlatformResolutionRequestSchema.safeParse(requestValue);
+  if (!requestResult.success) {
+    throw new ModelAssetError(
+      "INVALID_MANIFEST",
+      "Current-platform asset resolution request validation failed."
+    );
+  }
   const platform = AssetPlatformSchema.safeParse(process.platform);
   const architecture = AssetArchitectureSchema.safeParse(process.arch);
   if (!platform.success || !architecture.success) {
@@ -276,7 +289,7 @@ export function resolveAssetForCurrentPlatform(
     );
   }
   return resolveAssetManifest(manifests, {
-    ...request,
+    ...requestResult.data,
     platform: platform.data,
     architecture: architecture.data
   });
