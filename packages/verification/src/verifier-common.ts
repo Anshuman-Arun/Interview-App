@@ -1,4 +1,4 @@
-import { z } from "zod";
+import type { ZodType } from "zod";
 import type { VerificationResult } from "../../domain/src/index.js";
 import { normalizeInterpretationConfidence } from "./confidence.js";
 import { BoundedMathError } from "./math-utils.js";
@@ -42,7 +42,7 @@ interface JsonBudgetItem {
 
 function structuredInputWithinBounds(value: unknown): boolean {
   const pending: JsonBudgetItem[] = [{ value, depth: 1 }];
-  let remainingNodes = MAX_STRUCTURED_INPUT_NODES;
+  let visitedNodes: number = 0;
   while (pending.length > 0) {
     const item = pending.pop();
     if (item === undefined) break;
@@ -70,7 +70,7 @@ export function prepareStructuredStatement<T>(
   statement: string,
   interpretationConfidence: number,
   verifier: string,
-  schema: z.ZodType<T>
+  schema: ZodType<T>
 ): PreparedStatement<T> {
   const normalized = normalizeInterpretationConfidence(interpretationConfidence);
   if (!normalized.valid) {
