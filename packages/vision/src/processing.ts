@@ -718,6 +718,14 @@ export async function tileImage(
   assertPngOutputPossible(maximumOutputBytes, "Configured tile output");
   assertPngOutputPossible(maximumTotalOutputBytes, "Configured combined tile output");
   const plan = planImageTiles({ width: source.metadata.width, height: source.metadata.height }, config);
+  const minimumCombinedOutputBytes = plan.length * MIN_STATIC_PNG_ENCODED_BYTES;
+  if (!Number.isSafeInteger(minimumCombinedOutputBytes)
+      || minimumCombinedOutputBytes > maximumTotalOutputBytes) {
+    throw new VisionPreprocessingError(
+      "OUTPUT_TOO_LARGE_BYTES",
+      "Combined tile byte ceiling cannot contain the planned number of PNG tiles"
+    );
+  }
   const decoded = decodeSource(source, safeOptions.signal);
   await yieldForCancellation(safeOptions.signal);
   const descriptor = sourceDescriptor(source);
