@@ -646,6 +646,10 @@ export async function copyLocalArtifactBounded(
     sourcePath,
     "Unable to inspect local import source."
   );
+  if (signal.aborted) {
+    await openedSource.handle.close().catch(() => undefined);
+    throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.");
+  }
   const sourceStat = openedSource.stat;
   if (sourceStat.size < 0n || sourceStat.size > BigInt(Number.MAX_SAFE_INTEGER)) {
     await openedSource.handle.close().catch(() => undefined);
