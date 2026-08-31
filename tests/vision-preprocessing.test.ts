@@ -632,6 +632,26 @@ describe("vision snapshot validation and hashing", () => {
     }
   });
 
+  it("rejects inherited snapshot input fields instead of trusting the prototype chain", () => {
+    const inherited = Object.create({
+      snapshotId: "inherited",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: makePng(1, 1)
+    });
+
+    try {
+      createValidatedImageSnapshot(
+        inherited as unknown as Parameters<typeof createValidatedImageSnapshot>[0]
+      );
+      throw new Error("Expected inherited snapshot input rejection");
+    } catch (error) {
+      expectCode(error, "INVALID_IMAGE");
+    }
+  });
+
   it("fails closed on revoked validation-limit proxies", () => {
     const validInput = {
       snapshotId: "revoked-limits",
@@ -899,6 +919,13 @@ describe("vision geometry", () => {
     expect(() => unionRects(inherited)).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects inherited geometry fields instead of trusting the prototype chain", () => {
+    const inheritedDimensions = Object.create({ width: 1, height: 1 });
+    expect(() => imageBounds(
+      inheritedDimensions as unknown as Parameters<typeof imageBounds>[0]
+    )).toThrowError(VisionPreprocessingError);
+  });
+
   it("fails closed on hostile rectangle, corner, and dimension objects", () => {
     const hostile = new Proxy({}, {
       get() {
@@ -1112,6 +1139,18 @@ describe("dirty-region planning", () => {
     }
   });
 
+  it("ignores inherited dirty planner overrides and uses only own configuration fields", () => {
+    const inheritedConfig = Object.create({ paddingPixels: 0 });
+    const plan = planDirtyRegions(
+      [{ x: 50, y: 50, width: 1, height: 1 }],
+      { width: 100, height: 100 },
+      inheritedConfig as Parameters<typeof planDirtyRegions>[2]
+    );
+    expect(plan.mode).toBe("REGIONS");
+    if (plan.mode !== "REGIONS") throw new Error("Expected regional dirty plan");
+    expect(plan.regions).toEqual([{ x: 26, y: 26, width: 49, height: 49 }]);
+  });
+
   it("fails closed on hostile dirty-region objects and revoked planner config", () => {
     const hostileRegion = new Proxy({}, {
       get() {
@@ -1256,6 +1295,17 @@ describe("crop, resize, tiling, and cancellation", () => {
       outcome: "SUCCESS"
     });
     expect(JSON.stringify(first.diagnostics)).not.toContain("encodedBytes");
+  });
+
+  it("ignores inherited processing options instead of trusting the prototype chain", async () => {
+    const source = snapshot(makePng(2, 2));
+    const inheritedOptions = Object.create({ maxOutputEncodedBytes: 0 });
+    const result = await cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      inheritedOptions as Parameters<typeof cropImage>[2]
+    );
+    expect(result.artifact.metadata.width).toBe(1);
   });
 
   it("fails closed on revoked processing option proxies", async () => {
@@ -2201,6 +2251,20 @@ describe("provider-neutral request preparation and budgeting", () => {
       Array.from({ length: 1025 }, () => source),
       "analysis"
     )).toThrowError(VisionPreprocessingError);
+  });
+
+  it("rejects inherited request-budget fields instead of trusting the prototype chain", () => {
+    const inheritedBudget = Object.create({
+      maxImages: 1,
+      maxTotalBytes: 1_000_000,
+      maxTotalPixels: 1_000_000,
+      maxCropsOrTiles: 1
+    });
+    expect(() => prepareVisionBatch(
+      [],
+      "analysis",
+      inheritedBudget as Parameters<typeof prepareVisionBatch>[2]
+    )).toThrowError(RangeError);
   });
 
   it("fails closed on hostile request budget objects", () => {
