@@ -89,6 +89,9 @@ export function createValidatedImageSnapshot(
   input: ImageSnapshotInput,
   limits?: Partial<ImageValidationLimits>
 ): ImageSnapshot {
+  if (typeof input !== "object" || input === null) {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input must be an object");
+  }
   if (input.mimeType !== "image/png") {
     throw new VisionPreprocessingError("UNSUPPORTED_IMAGE_TYPE", "Only image/png snapshots are supported");
   }
@@ -102,6 +105,9 @@ export function createValidatedImageSnapshot(
     ...(input.captureSequence === undefined ? {} : { captureSequence: input.captureSequence })
   });
 
+  if (!(input.encodedBytes instanceof Uint8Array)) {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Encoded image payload must be a Uint8Array");
+  }
   if (input.encodedBytes.byteLength === 0) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image input must not be empty");
   }
