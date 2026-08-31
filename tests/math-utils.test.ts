@@ -93,14 +93,18 @@ describe("deterministic math utilities", () => {
   it("computes exact finite sums, products, and standard counting formulas", () => {
     expect(sumIntegers([])).toBe(0n);
     expect(productIntegers([])).toBe(1n);
+    expect(sumRationals([])).toEqual(rational(0n, 1n));
+    expect(productRationals([])).toEqual(rational(1n, 1n));
     expect(sumIntegers([1n, -2n, 5n])).toBe(4n);
     expect(productIntegers([2n, -3n, 4n])).toBe(-24n);
     expect(factorial(0)).toBe(1n);
     expect(binomial(10, 3)).toBe(120n);
     expect(binomial(3, 5)).toBe(0n);
     expect(permutations(5, 3)).toBe(60n);
+    expect(permutations(3, 5)).toBe(0n);
     expect(combinationsWithRepetition(4, 3)).toBe(20n);
     expect(combinationsWithRepetition(0, 0)).toBe(1n);
+    expect(combinationsWithRepetition(0, 3)).toBe(0n);
   });
 
   it("distinguishes malformed combinatorial arguments from configured resource limits", () => {
