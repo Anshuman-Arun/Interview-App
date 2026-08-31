@@ -203,7 +203,7 @@ function base64ContainsColon(candidate: string): boolean {
   const withoutPadding = candidate.replace(/=+$/u, "");
   const paddingLength = candidate.length - withoutPadding.length;
   if (
-    candidate.length < 8
+    candidate.length < 4
     || candidate.length % 4 === 1
     || paddingLength > 2
   ) {
