@@ -20,7 +20,7 @@ import {
   removeEntryInsideRoot,
   sumManagedCacheBytes,
   validateCachePaths,
-  verifyArtifactFile,
+  verifyArtifactFileWithIdentity,
   writeStoredManifest,
   type CachePaths
 } from "./filesystem.js";
@@ -788,6 +788,51 @@ export class ModelAssetManager {
     return paths;
   }
 
+  private async assertVerifiedPayloadPath(
+    payloadPath: string,
+    identity: {
+      readonly device: bigint;
+      readonly inode: bigint;
+      readonly size: bigint;
+      readonly mtimeNs: bigint;
+      readonly ctimeNs: bigint;
+    },
+    errorCode: "CORRUPT_INSTALLATION" | "UNSAFE_PATH"
+  ): Promise<void> {
+    let payloadStat: BigIntStats;
+    try {
+      payloadStat = await lstat(payloadPath, { bigint: true });
+    } catch (error) {
+      if (typeof error === "object"
+          && error !== null
+          && "code" in error
+          && error.code === "ENOENT") {
+        throw new ModelAssetError(
+          errorCode,
+          "Verified artifact payload disappeared before it could be accepted.",
+          { cause: error }
+        );
+      }
+      throw new ModelAssetError(
+        "IO_ERROR",
+        "Unable to re-inspect the verified artifact payload.",
+        { cause: error }
+      );
+    }
+    if (payloadStat.isSymbolicLink()
+        || !payloadStat.isFile()
+        || payloadStat.dev !== identity.device
+        || payloadStat.ino !== identity.inode
+        || payloadStat.size !== identity.size
+        || payloadStat.mtimeNs !== identity.mtimeNs
+        || payloadStat.ctimeNs !== identity.ctimeNs) {
+      throw new ModelAssetError(
+        errorCode,
+        "Artifact payload changed after integrity verification."
+      );
+    }
+  }
+
   private async assertSafeStagingDirectory(
     paths: CachePaths,
     stagingDirectory: string,
@@ -1098,7 +1143,7 @@ export class ModelAssetManager {
         return existing;
       }
 
-      const verification = await verifyArtifactFile(stagedPayload, {
+      const verification = await verifyArtifactFileWithIdentity(stagedPayload, {
         sizeBytes: manifest.sizeBytes,
         sha256: manifest.sha256,
         maxBytes: this.maxArtifactBytes
@@ -1109,6 +1154,11 @@ export class ModelAssetManager {
           "Staged artifact failed manifest integrity verification."
         );
       }
+      await this.assertVerifiedPayloadPath(
+        stagedPayload,
+        verification.identity,
+        "UNSAFE_PATH"
+      );
       if (signal.aborted) {
         throw new ModelAssetError(
           "CANCELLED",
@@ -1131,7 +1181,8 @@ export class ModelAssetManager {
           reservationBytes,
           signal,
           stagingIdentity,
-          manifest
+          manifest,
+          verification.identity
         );
         reservationHeld = false;
         published = true;
@@ -1211,7 +1262,7 @@ export class ModelAssetManager {
       }
 
       const payload = installedPayloadPath(directory, manifest);
-      const verification = await verifyArtifactFile(payload, {
+      const verification = await verifyArtifactFileWithIdentity(payload, {
         sizeBytes: manifest.sizeBytes,
         sha256: manifest.sha256,
         maxBytes: this.maxArtifactBytes
@@ -1219,6 +1270,11 @@ export class ModelAssetManager {
       if (!verification.ok) {
         return { status: "CORRUPT", errorCode: verification.reason };
       }
+      await this.assertVerifiedPayloadPath(
+        payload,
+        verification.identity,
+        "CORRUPT_INSTALLATION"
+      );
       if (signal?.aborted === true) {
         throw new ModelAssetError("CANCELLED", "Artifact integrity inspection was cancelled.");
       }
@@ -1235,6 +1291,11 @@ export class ModelAssetManager {
         manifest,
         "CORRUPT_INSTALLATION",
         { device: directoryStat.dev, inode: directoryStat.ino }
+      );
+      await this.assertVerifiedPayloadPath(
+        payload,
+        verification.identity,
+        "CORRUPT_INSTALLATION"
       );
       return { status: "INSTALLED", path: payload };
     } catch (error) {
@@ -1316,7 +1377,14 @@ export class ModelAssetManager {
     reservationBytes: number,
     signal: AbortSignal,
     stagingIdentity: { readonly device: bigint; readonly inode: bigint },
-    manifest: AssetManifest
+    manifest: AssetManifest,
+    verifiedPayloadIdentity: {
+      readonly device: bigint;
+      readonly inode: bigint;
+      readonly size: bigint;
+      readonly mtimeNs: bigint;
+      readonly ctimeNs: bigint;
+    }
   ): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
       await this.withMutationGate(paths, async () => {
@@ -1332,6 +1400,11 @@ export class ModelAssetManager {
           manifest,
           "UNSAFE_PATH",
           stagingIdentity
+        );
+        await this.assertVerifiedPayloadPath(
+          installedPayloadPath(stagingDirectory, manifest),
+          verifiedPayloadIdentity,
+          "UNSAFE_PATH"
         );
         if (signal.aborted) {
           throw new ModelAssetError(
