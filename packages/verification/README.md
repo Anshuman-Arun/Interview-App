@@ -14,9 +14,9 @@ New math verifiers use stable reason-code prefixes such as `CLAIM_VERIFIED`, `CL
 
 ## Exact arithmetic model
 
-JSON integers are encoded as canonical base-10 strings. Rationals are `{ numerator, denominator }` string pairs and are normalized with a positive denominator and gcd reduction. No floating-point comparison is used for verification.
+JSON integers are encoded as canonical base-10 strings; leading zeroes, a leading `+`, whitespace, and negative zero are rejected. Rationals are `{ numerator, denominator }` string pairs and are normalized with a positive denominator and gcd reduction. Exported rational operations defensively normalize caller-supplied `ExactRational` values and cross-cancel where practical before enforcing intermediate-size bounds. No floating-point comparison is used for verification.
 
-The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility and modular normalization, exact rational arithmetic, finite sums/products, factorial/binomial/permutation/combinations-with-repetition helpers, and finite set/multiset/permutation checks.
+The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility and modular normalization, exact rational arithmetic, finite sums/products, factorial/binomial/permutation/combinations-with-repetition helpers, and finite set/multiset/permutation checks. Direct bigint/expression utility calls retain resource and shape checks instead of relying only on the verifier schemas.
 
 ## Verifiers and protocols
 
@@ -28,7 +28,11 @@ The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility
 | `deterministic-combinatorial-counting-verifier@1` | `INTERVIEW_APP_COMBINATORIAL_COUNTING_CLAIM` | binomial coefficients, permutations, combinations with repetition, two-set inclusion/exclusion |
 | `deterministic-probability-arithmetic-verifier@1` | `INTERVIEW_APP_PROBABILITY_ARITHMETIC_CLAIM` | finite expectation, conditional probability from explicit counts/probabilities, and Bayes arithmetic |
 
-The expression grammar is intentionally small. There is no algebra-string parser, symbolic simplifier, recurrence solver, theorem prover, or computer-algebra dependency.
+The expression grammar is intentionally small. Integer powers accept only bounded non-negative integer exponents; `0^0` is deliberately treated as undefined and therefore abstains instead of choosing a convention. There is no algebra-string parser, symbolic simplifier, recurrence solver, theorem prover, or computer-algebra dependency.
+
+For `LINEAR_PREVIOUS_TERMS`, `coefficients[0]` multiplies the immediately previous sequence value, `coefficients[1]` the value two positions back, and so on; the constant is then added. The initial-condition count must exactly match the coefficient count.
+
+Probability-typed inputs are validated as exact rationals in `[0, 1]`; conditioning and Bayes evidence probabilities must be strictly positive. Internally inconsistent supplied probability models abstain as malformed rather than being contradicted as though they were valid models.
 
 ## Resource limits
 
@@ -50,4 +54,4 @@ Over-limit or undefined inputs abstain rather than producing positive evidence.
 
 ## Registry and evidence scope
 
-`DETERMINISTIC_MATH_VERIFIERS` exposes names, protocol versions, and factories so runtime code can register a verifier without duplicating identities. It deliberately contains no evidence keys and grants no authorization. A later integration must explicitly bind a verifier name to an allowed curated-problem evidence scope using the existing admission architecture.
+`DETERMINISTIC_MATH_VERIFIERS` exposes names, protocol versions, and factories so runtime code can register a verifier without duplicating identities. The registry array and each descriptor are frozen at runtime. It deliberately contains no evidence keys or problem IDs and grants no authorization. A later integration must explicitly bind a verifier name to an allowed curated-problem evidence scope using the existing admission architecture.
