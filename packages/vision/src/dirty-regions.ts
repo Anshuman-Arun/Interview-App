@@ -4,7 +4,6 @@ import {
   expandRect,
   imageBounds,
   rectArea,
-  rectsOverlap,
   unionRects,
   validateImageRect,
   type ImageRect
@@ -134,6 +133,13 @@ export function rasterizeDirtyRegion(regionInput: DirtyRegionInput): ImageRect {
   return validateImageRect({ x, y, width: right - x, height: bottom - y });
 }
 
+function validatedRectsOverlap(left: ImageRect, right: ImageRect): boolean {
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y;
+}
+
 export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): readonly ImageRect[] {
   if (rectangles.length > 2048) throw new RangeError("At most 2048 regions may be coalesced at once");
   const input = rectangles.map((rect) => validateImageRect(rect)).sort(compareRects);
@@ -144,7 +150,7 @@ export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): re
     let index = 0;
     while (index < merged.length) {
       const existing = merged[index];
-      if (existing === undefined || !rectsOverlap(candidate, existing)) {
+      if (existing === undefined || !validatedRectsOverlap(candidate, existing)) {
         index += 1;
         continue;
       }
