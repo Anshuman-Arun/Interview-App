@@ -1039,6 +1039,37 @@ describe("local worker lifecycle manager", () => {
       .rejects.toMatchObject({ code: "READINESS_FAILED" });
   });
 
+  it("rejects proxy-backed handshake capabilities without executing traps", async () => {
+    let capabilityProxyTraps = 0;
+    const capabilities = new Proxy(["CAPABILITY_A"], {
+      ownKeys: (target) => {
+        capabilityProxyTraps += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        capabilityProxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      }
+    });
+    const runtime = manager();
+    runtime.register(definition("proxy-capabilities", "ready", {
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: {
+            componentVersion: "fixture-1",
+            capabilities
+          }
+        })
+      }
+    }));
+
+    await expect(runtime.start("proxy-capabilities"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+    expect(capabilityProxyTraps).toBe(0);
+  });
+
   it("handles hostile readiness callback values without executing proxy traps", async () => {
     const revokedDecision = Proxy.revocable({ ready: true }, {});
     revokedDecision.revoke();
