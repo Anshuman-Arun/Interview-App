@@ -190,7 +190,11 @@ function now(options: VisionProcessingOptions): number {
 }
 
 function elapsed(startedAt: number, options: VisionProcessingOptions): number {
-  return Math.max(0, now(options) - startedAt);
+  const endedAt = now(options);
+  if (endedAt < startedAt) {
+    throw new RangeError("Processing clock moved backward during the operation");
+  }
+  return endedAt - startedAt;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
