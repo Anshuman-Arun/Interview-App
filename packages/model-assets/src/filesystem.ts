@@ -62,6 +62,12 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function ownValue(record: Record<string, unknown>, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(record, key)
+    ? record[key]
+    : undefined;
+}
+
 function isAbortSignal(value: unknown): value is AbortSignal {
   if (!isUnknownRecord(value)) return false;
   return typeof value["aborted"] === "boolean"
@@ -507,17 +513,17 @@ export async function verifyArtifactFile(
     );
   }
   const expectationRecord = rawExpectations;
-  const expectedSize = expectationRecord["sizeBytes"];
+  const expectedSize = ownValue(expectationRecord, "sizeBytes");
   if (typeof expectedSize !== "number"
       || !Number.isSafeInteger(expectedSize)
       || expectedSize <= 0) {
     throw new ModelAssetError("INVALID_CONFIGURATION", "Expected artifact size must be a positive safe integer.");
   }
-  const digest = Sha256DigestSchema.safeParse(expectationRecord["sha256"]);
+  const digest = Sha256DigestSchema.safeParse(ownValue(expectationRecord, "sha256"));
   if (!digest.success) {
     throw new ModelAssetError("INVALID_CONFIGURATION", "Expected SHA-256 digest is invalid.");
   }
-  const rawMaximum = expectationRecord["maxBytes"];
+  const rawMaximum = ownValue(expectationRecord, "maxBytes");
   const maximum = rawMaximum === undefined ? expectedSize : rawMaximum;
   if (typeof maximum !== "number"
       || !Number.isSafeInteger(maximum)
