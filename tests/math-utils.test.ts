@@ -1,19 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   BoundedMathError,
+  MAX_COMBINATORIAL_N,
   MAX_INTEGER_DECIMAL_DIGITS,
+  addRationals,
   areCongruent,
   binomial,
   combinationsWithRepetition,
+  compareRationals,
+  divideRationals,
   equalRationals,
+  factorial,
   gcd,
   isDivisibleBy,
   isPermutationOf,
   lcm,
+  multiplyRationals,
   normalizeModulo,
   parseBoundedInteger,
   parseRationalInput,
   permutations,
+  rational,
   productIntegers,
   sameFiniteMultiset,
   sameFiniteSet,
@@ -55,13 +62,84 @@ describe("deterministic math utilities", () => {
   });
 
   it("computes exact finite sums, products, and standard counting formulas", () => {
+    expect(sumIntegers([])).toBe(0n);
+    expect(productIntegers([])).toBe(1n);
     expect(sumIntegers([1n, -2n, 5n])).toBe(4n);
     expect(productIntegers([2n, -3n, 4n])).toBe(-24n);
+    expect(factorial(0)).toBe(1n);
     expect(binomial(10, 3)).toBe(120n);
     expect(binomial(3, 5)).toBe(0n);
     expect(permutations(5, 3)).toBe(60n);
     expect(combinationsWithRepetition(4, 3)).toBe(20n);
     expect(combinationsWithRepetition(0, 0)).toBe(1n);
+  });
+
+  it("distinguishes malformed combinatorial arguments from configured resource limits", () => {
+    for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      try {
+        factorial(value);
+        throw new Error("Expected invalid combinatorial input to fail");
+      } catch (error) {
+        expect(error).toBeInstanceOf(BoundedMathError);
+        expect((error as BoundedMathError).code).toBe("INVALID_COMBINATORIAL_ARGUMENT");
+      }
+    }
+
+    try {
+      factorial(MAX_COMBINATORIAL_N + 1);
+      throw new Error("Expected combinatorial resource limit to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BoundedMathError);
+      expect((error as BoundedMathError).code).toBe("COMBINATORIAL_LIMIT_EXCEEDED");
+    }
+  });
+
+  it("matches exact rational identities across a deterministic small exhaustive domain", () => {
+    for (let leftNumerator = -3; leftNumerator <= 3; leftNumerator += 1) {
+      for (let leftDenominator = 1; leftDenominator <= 4; leftDenominator += 1) {
+        const left = rational(BigInt(leftNumerator), BigInt(leftDenominator));
+        for (let rightNumerator = -3; rightNumerator <= 3; rightNumerator += 1) {
+          for (let rightDenominator = 1; rightDenominator <= 4; rightDenominator += 1) {
+            const right = rational(BigInt(rightNumerator), BigInt(rightDenominator));
+            const expectedAdd = rational(
+              BigInt(leftNumerator * rightDenominator + rightNumerator * leftDenominator),
+              BigInt(leftDenominator * rightDenominator)
+            );
+            const expectedMultiply = rational(
+              BigInt(leftNumerator * rightNumerator),
+              BigInt(leftDenominator * rightDenominator)
+            );
+            const crossDifference = leftNumerator * rightDenominator - rightNumerator * leftDenominator;
+            const expectedComparison = crossDifference === 0 ? 0 : crossDifference < 0 ? -1 : 1;
+
+            expect(addRationals(left, right)).toEqual(expectedAdd);
+            expect(multiplyRationals(left, right)).toEqual(expectedMultiply);
+            expect(compareRationals(left, right)).toBe(expectedComparison);
+
+            if (rightNumerator !== 0) {
+              expect(divideRationals(left, right)).toEqual(rational(
+                BigInt(leftNumerator * rightDenominator),
+                BigInt(leftDenominator * rightNumerator)
+              ));
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("matches stars-and-bars counts throughout a deterministic small domain", () => {
+    for (let types = 0; types <= 12; types += 1) {
+      for (let selections = 0; selections <= 12; selections += 1) {
+        const expected = selections === 0
+          ? 1n
+          : types === 0
+            ? 0n
+            : binomial(types + selections - 1, selections);
+        expect(combinationsWithRepetition(types, selections)).toBe(expected);
+      }
+    }
+    expect(combinationsWithRepetition(MAX_COMBINATORIAL_N, 2)).toBe(500500n);
   });
 
   it("checks sets, multisets, and permutations without conflating multiplicity", () => {

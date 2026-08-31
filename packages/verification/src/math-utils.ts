@@ -357,10 +357,16 @@ export function productRationals(values: readonly ExactRational[]): ExactRationa
 }
 
 function assertCombinatorialInteger(value: number, label: string): void {
-  if (!Number.isInteger(value) || value < 0 || value > MAX_COMBINATORIAL_N) {
+  if (!Number.isInteger(value) || value < 0) {
     throw new BoundedMathError(
       "INVALID_COMBINATORIAL_ARGUMENT",
-      `${label} must be an integer between 0 and ${String(MAX_COMBINATORIAL_N)}`
+      `${label} must be a non-negative integer`
+    );
+  }
+  if (value > MAX_COMBINATORIAL_N) {
+    throw new BoundedMathError(
+      "COMBINATORIAL_LIMIT_EXCEEDED",
+      `${label} exceeds the configured combinatorial limit of ${String(MAX_COMBINATORIAL_N)}`
     );
   }
 }
