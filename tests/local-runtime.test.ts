@@ -263,6 +263,25 @@ describe("local worker lifecycle manager", () => {
     expect(serialized).not.toContain("must-not-cross");
   });
 
+  it("canonicalizes localhost readiness probes to a literal loopback address", async () => {
+    let requestedUrl: string | undefined;
+    const runtime = manager({
+      fetch: (input) => {
+        requestedUrl = String(input);
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+    });
+    runtime.register(definition("localhost-health", "ready", {
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://localhost:43199/health"
+      }
+    }));
+
+    await expect(runtime.start("localhost-health")).resolves.toMatchObject({ state: "READY" });
+    expect(requestedUrl).toBe("http://127.0.0.1:43199/health");
+  });
+
   it("rejects non-loopback readiness endpoints and exposes non-authoritative degradation state", async () => {
     const runtime = manager();
     expect(() => runtime.register(definition("remote", "ready", {
