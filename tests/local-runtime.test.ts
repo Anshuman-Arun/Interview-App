@@ -533,6 +533,32 @@ describe("local worker lifecycle manager", () => {
     expect(coercions).toBe(0);
   });
 
+  it("rejects HTTP readiness redirects even when an injected fetch returns them", async () => {
+    let evaluateCalls = 0;
+    const runtime = manager({
+      fetch: () => Promise.resolve(new Response(null, {
+        status: 302,
+        headers: { Location: "http://example.com/escaped" }
+      }))
+    });
+    runtime.register(definition("redirect-health", "ready", {
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 2, backoffMs: 5 },
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        evaluate: () => {
+          evaluateCalls += 1;
+          return true;
+        }
+      }
+    }));
+
+    await expect(runtime.start("redirect-health"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+    expect(evaluateCalls).toBe(0);
+    expect(runtime.getStatus("redirect-health").restartCount).toBe(0);
+  });
+
   it("canonicalizes localhost readiness probes to a literal loopback address", async () => {
     let requestedUrl: string | undefined;
     const runtime = manager({
