@@ -261,8 +261,13 @@ export function prepareVisionBatch(
 export function requestPayloadIsSafeReference(
   request: unknown
 ): request is { readonly payload: ImagePayloadReference } {
-  if (typeof request !== "object" || request === null || !("payload" in request)) return false;
-  return ImagePayloadReference.isValidatedInstance(request.payload);
+  if (typeof request !== "object" || request === null) return false;
+  try {
+    if (!("payload" in request)) return false;
+    return ImagePayloadReference.isValidatedInstance(request.payload);
+  } catch {
+    return false;
+  }
 }
 
 export function isCropOrTileArtifact(source: unknown): source is VisionImageArtifact {
