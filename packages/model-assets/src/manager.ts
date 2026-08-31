@@ -1344,6 +1344,7 @@ export class ModelAssetManager {
         verification.identity,
         "CORRUPT_INSTALLATION"
       );
+      await validateCachePaths(paths);
       return { status: "INSTALLED", path: payload };
     } catch (error) {
       if (error instanceof ModelAssetError && error.code === "CANCELLED") throw error;
@@ -1454,6 +1455,7 @@ export class ModelAssetManager {
           verifiedPayloadIdentity,
           "UNSAFE_PATH"
         );
+        await validateCachePaths(paths);
         if (signal.aborted) {
           throw new ModelAssetError(
             "CANCELLED",
