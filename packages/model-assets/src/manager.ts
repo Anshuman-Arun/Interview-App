@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, readdir } from "node:fs/promises";
+import { lstat, opendir } from "node:fs/promises";
 import path from "node:path";
 import { downloadHttpArtifact } from "./download.js";
 import {
@@ -252,16 +252,18 @@ export class ModelAssetManager {
 
   public async listInstalledArtifacts(): Promise<readonly InstalledArtifactSummary[]> {
     const paths = await this.cachePathsPromise;
-    const entries = await readdir(paths.artifacts, { withFileTypes: true });
-    if (entries.length > this.maxListEntries) {
-      throw new ModelAssetError(
-        "CACHE_LIMIT_EXCEEDED",
-        "Installed artifact entry count exceeds the configured inspection limit."
-      );
-    }
-
     const installed: InstalledArtifactSummary[] = [];
-    for (const entry of entries) {
+    const directoryHandle = await opendir(paths.artifacts);
+    let inspectedEntries = 0;
+
+    for await (const entry of directoryHandle) {
+      inspectedEntries += 1;
+      if (inspectedEntries > this.maxListEntries) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Installed artifact entry count exceeds the configured inspection limit."
+        );
+      }
       if (!INSTALLATION_KEY_PATTERN.test(entry.name)
           || !entry.isDirectory()
           || entry.isSymbolicLink()) {
@@ -337,15 +339,9 @@ export class ModelAssetManager {
     }
 
     const paths = await this.cachePathsPromise;
-    const entries = await readdir(paths.temporary);
-    if (entries.length > this.maxListEntries) {
-      throw new ModelAssetError(
-        "CACHE_LIMIT_EXCEEDED",
-        "Temporary entry count exceeds the configured cleanup limit."
-      );
-    }
-    for (const entry of entries) {
-      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry));
+    const directoryHandle = await opendir(paths.temporary);
+    for await (const entry of directoryHandle) {
+      await removeEntryInsideRoot(paths.root, path.join(paths.temporary, entry.name));
     }
     this.lastFailures.clear();
   }
@@ -362,22 +358,27 @@ export class ModelAssetManager {
       keepManifestValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
     );
     const paths = await this.cachePathsPromise;
-    const entries = await readdir(paths.artifacts);
-    if (entries.length > this.maxListEntries) {
-      throw new ModelAssetError(
-        "CACHE_LIMIT_EXCEEDED",
-        "Artifact entry count exceeds the configured cleanup limit."
-      );
-    }
-
+    const directoryHandle = await opendir(paths.artifacts);
     let removed = 0;
-    for (const entry of entries) {
-      if (keepKeys.has(entry)) continue;
-      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry));
-      this.lastFailures.delete(entry);
+
+    for await (const entry of directoryHandle) {
+      if (keepKeys.has(entry.name)) continue;
+      await removeEntryInsideRoot(paths.root, path.join(paths.artifacts, entry.name));
+      this.lastFailures.delete(entry.name);
       removed += 1;
     }
     return removed;
+  }
+
+  private recordFailure(key: string, error: unknown): void {
+    if (!this.lastFailures.has(key) && this.lastFailures.size >= this.maxListEntries) {
+      const oldestKey = this.lastFailures.keys().next().value;
+      if (oldestKey !== undefined) this.lastFailures.delete(oldestKey);
+    }
+    this.lastFailures.set(key, {
+      status: isIntegrityFailure(error) ? "CORRUPT" : "FAILED",
+      code: modelAssetErrorCode(error)
+    });
   }
 
   private inspectionFor(
@@ -429,10 +430,7 @@ export class ModelAssetManager {
         this.lastFailures.delete(key);
         return installedPath;
       }).catch((error: unknown) => {
-        this.lastFailures.set(key, {
-          status: isIntegrityFailure(error) ? "CORRUPT" : "FAILED",
-          code: modelAssetErrorCode(error)
-        });
+        this.recordFailure(key, error);
         throw error;
       }).finally(() => {
         current.settled = true;
