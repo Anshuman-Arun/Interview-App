@@ -50,7 +50,7 @@ interface PayloadIntegrityMetadata {
   readonly contentDigest: string;
 }
 
-function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffer): void {
+function assertEncodedPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffer): void {
   if (bytes.length !== metadata.byteSize) throw new RangeError("Image payload byte size does not match metadata");
   if (bytes.length > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes
       || metadata.width > HARD_IMAGE_VALIDATION_LIMITS.maxWidth
@@ -74,6 +74,11 @@ function assertPayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffe
   assertStaticPngChunkStructure(bytes);
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (digest !== metadata.contentDigest) throw new RangeError("Image payload digest does not match metadata");
+
+}
+
+function assertDecodablePayloadIntegrity(metadata: PayloadIntegrityMetadata, bytes: Buffer): void {
+  assertEncodedPayloadIntegrity(metadata, bytes);
 
   let decoded: ReturnType<typeof PNG.sync.read>;
   try {
@@ -360,7 +365,7 @@ export class ImageSnapshot {
       throw new RangeError("Image payload exceeds the package hard encoded-byte cap");
     }
     const copiedBytes = Buffer.from(bytes);
-    assertPayloadIntegrity(parsed, copiedBytes);
+    assertDecodablePayloadIntegrity(parsed, copiedBytes);
     this.metadata = Object.freeze(parsed);
     this.#bytes = copiedBytes;
     Object.freeze(this);
@@ -504,7 +509,7 @@ export class VisionImageArtifact {
       throw new RangeError("Image payload exceeds the package hard encoded-byte cap");
     }
     const copiedBytes = Buffer.from(bytes);
-    assertPayloadIntegrity(parsed, copiedBytes);
+    assertEncodedPayloadIntegrity(parsed, copiedBytes);
     this.metadata = Object.freeze({
       ...parsed,
       sourceBounds: Object.freeze({ ...parsed.sourceBounds }),
