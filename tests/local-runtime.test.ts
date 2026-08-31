@@ -114,6 +114,29 @@ describe("local worker lifecycle manager", () => {
     })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
     expect(parentEnvironmentProxyTraps).toBe(0);
 
+    let parentEnvironmentGetterCalls = 0;
+    const accessorParentEnvironment = Object.defineProperty({}, "SAFE_PARENT", {
+      enumerable: true,
+      get: () => {
+        parentEnvironmentGetterCalls += 1;
+        return "hidden";
+      }
+    });
+    expect(() => new LocalRuntimeManager({
+      parentEnvironment: accessorParentEnvironment as NodeJS.ProcessEnv
+    })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(parentEnvironmentGetterCalls).toBe(0);
+
+    expect(() => new LocalRuntimeManager({
+      parentEnvironment: new Date() as unknown as NodeJS.ProcessEnv
+    })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+
+    expect(() => new LocalRuntimeManager({
+      parentEnvironment: {
+        BAD_VALUE: 42 as unknown as string
+      }
+    })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+
     const runtime = manager();
     runtime.register(definition("invalid-start-options", "ready"));
     let signalGetterCalls = 0;
