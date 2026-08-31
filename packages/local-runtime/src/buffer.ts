@@ -67,8 +67,11 @@ export function redactKnownSecrets(value: string, secretValues: readonly string[
 }
 
 function redactionMatchers(secretValues: readonly string[]): readonly RedactionMatcher[] {
-  const cached = redactionMatcherCache.get(secretValues);
-  if (cached !== undefined) return cached;
+  const cacheable = Object.isFrozen(secretValues);
+  if (cacheable) {
+    const cached = redactionMatcherCache.get(secretValues);
+    if (cached !== undefined) return cached;
+  }
 
   const orderedSecrets = [...secretValues]
     .filter((secret) => secret.length > 0)
@@ -110,7 +113,7 @@ function redactionMatchers(secretValues: readonly string[]): readonly RedactionM
   flushBatch();
 
   const frozen = Object.freeze(matchers);
-  redactionMatcherCache.set(secretValues, frozen);
+  if (cacheable) redactionMatcherCache.set(secretValues, frozen);
   return frozen;
 }
 
