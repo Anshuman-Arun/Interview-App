@@ -237,16 +237,23 @@ export async function downloadHttpArtifact(
   timer.unref();
 
   try {
-    return await downloadResponseToFile(source, destinationPath, {
+    const bytes = await downloadResponseToFile(source, destinationPath, {
       ...options,
       signal: controller.signal
     }, 0, source.origin);
-  } catch (error) {
-    if (timedOut) {
-      throw new ModelAssetError("DOWNLOAD_TIMEOUT", "Artifact download exceeded the configured timeout.", { cause: error });
+    if (options.signal.aborted) {
+      throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
     }
+    if (timedOut) {
+      throw new ModelAssetError("DOWNLOAD_TIMEOUT", "Artifact download exceeded the configured timeout.");
+    }
+    return bytes;
+  } catch (error) {
     if (options.signal.aborted) {
       throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.", { cause: error });
+    }
+    if (timedOut) {
+      throw new ModelAssetError("DOWNLOAD_TIMEOUT", "Artifact download exceeded the configured timeout.", { cause: error });
     }
     throw error;
   } finally {
