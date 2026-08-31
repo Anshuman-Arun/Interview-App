@@ -750,6 +750,83 @@ describe("local model asset manager", () => {
     expect(await manager.listInstalledArtifacts()).toHaveLength(2);
   });
 
+  it("shares cache reservations across manager instances using the same root", async () => {
+    const firstPayload = Buffer.from("shared-root-one");
+    const secondPayload = Buffer.from("shared-root-two");
+    const firstStarted = deferred<void>();
+    const releaseFirst = deferred<void>();
+    const fixture = await startFixtureServer(async (request, response) => {
+      if (request.url === "/first") {
+        response.writeHead(200, { "Content-Length": String(firstPayload.byteLength) });
+        response.write(firstPayload.subarray(0, 2));
+        firstStarted.resolve();
+        await releaseFirst.promise;
+        response.end(firstPayload.subarray(2));
+        return;
+      }
+      response.end(secondPayload);
+    });
+
+    const root = await newRoot();
+    const first = manifestFor(firstPayload, fixture.baseUrl + "/first", {
+      artifactId: "one"
+    });
+    const second = manifestFor(secondPayload, fixture.baseUrl + "/second", {
+      artifactId: "two"
+    });
+    const cacheLimit = Math.max(managedArtifactBytes(first), managedArtifactBytes(second));
+    const managerOne = managerFor(root, { maxCacheBytes: cacheLimit });
+    const managerTwo = managerFor(root, { maxCacheBytes: cacheLimit });
+
+    const firstInstall = managerOne.install(first);
+    await firstStarted.promise;
+
+    await expect(managerTwo.install(second)).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect(fixture.requestCount()).toBe(1);
+
+    releaseFirst.resolve();
+    await expect(firstInstall).resolves.toEqual(expect.any(String));
+  });
+
+  it("blocks shared-root cleanup and removal while another manager is installing", async () => {
+    const payload = Buffer.from("shared-root-busy");
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const fixture = await startFixtureServer(async (_request, response) => {
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.write(payload.subarray(0, 2));
+      started.resolve();
+      await release.promise;
+      response.end(payload.subarray(2));
+    });
+
+    const root = await newRoot();
+    const managerOne = managerFor(root);
+    const managerTwo = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    const installation = managerOne.install(manifest);
+    await started.promise;
+
+    await expect(managerTwo.cleanupTemporary()).rejects.toMatchObject({
+      code: "ASSET_BUSY"
+    });
+    await expect(managerTwo.clearUnused([])).rejects.toMatchObject({
+      code: "ASSET_BUSY"
+    });
+    await expect(managerTwo.remove(manifest)).rejects.toMatchObject({
+      code: "ASSET_BUSY"
+    });
+
+    const temporaryEntries = await readdir(path.join(root, "tmp"));
+    expect(temporaryEntries).toHaveLength(1);
+
+    release.resolve();
+    await expect(installation).resolves.toEqual(expect.any(String));
+  });
+
   it("refuses removal while the same artifact is installing", async () => {
     const payload = Buffer.from("busy-remove");
     const started = deferred<void>();
