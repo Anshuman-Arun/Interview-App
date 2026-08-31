@@ -115,9 +115,18 @@ export class LocalRuntimeManager {
 
   public constructor(options: LocalRuntimeManagerOptions = {}) {
     const inspectedOptions = inspectManagerOptions(options);
-    this.parentEnvironment = inspectedOptions.parentEnvironment === undefined
-      ? process.env
-      : snapshotParentEnvironmentRecord(inspectedOptions.parentEnvironment);
+    if (inspectedOptions.parentEnvironment === undefined) {
+      this.parentEnvironment = process.env;
+    } else {
+      try {
+        this.parentEnvironment = snapshotParentEnvironmentRecord(inspectedOptions.parentEnvironment);
+      } catch (error) {
+        throw new LocalRuntimeError(
+          "INVALID_ARGUMENT",
+          `Invalid parentEnvironment: ${safeErrorMessage(error)}`
+        );
+      }
+    }
     this.now = inspectedOptions.now ?? (() => new Date());
     this.fetchImpl = inspectedOptions.fetch ?? globalThis.fetch;
     this.platform = process.platform;
