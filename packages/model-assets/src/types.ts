@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { isProxy } from "node:util/types";
 
 const STABLE_ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u;
 const VERSION_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._+-]{0,62}[A-Za-z0-9])?$/u;
@@ -7,7 +8,10 @@ const PORTABLE_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/u;
 const WINDOWS_DEVICE_NAME_PATTERN = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu;
 
 function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  if (typeof value !== "object"
+      || value === null
+      || Array.isArray(value)
+      || isProxy(value)) return false;
   try {
     const prototype: unknown = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return false;
