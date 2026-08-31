@@ -1075,9 +1075,9 @@ export class ModelAssetManager {
     const key = artifactInstallationKey(manifest);
     const directory = path.join(paths.artifacts, key);
 
-    let directoryStat: Stats;
+    let directoryStat: BigIntStats;
     try {
-      directoryStat = await lstat(directory);
+      directoryStat = await lstat(directory, { bigint: true });
     } catch (error) {
       if (typeof error === "object"
           && error !== null
@@ -1113,8 +1113,11 @@ export class ModelAssetManager {
         throw new ModelAssetError("CANCELLED", "Artifact integrity inspection was cancelled.");
       }
       await validateCachePaths(paths);
-      const finalDirectoryStat = await lstat(directory);
-      if (finalDirectoryStat.isSymbolicLink() || !finalDirectoryStat.isDirectory()) {
+      const finalDirectoryStat = await lstat(directory, { bigint: true });
+      if (finalDirectoryStat.isSymbolicLink()
+          || !finalDirectoryStat.isDirectory()
+          || finalDirectoryStat.dev !== directoryStat.dev
+          || finalDirectoryStat.ino !== directoryStat.ino) {
         return { status: "CORRUPT", errorCode: "CORRUPT_INSTALLATION" };
       }
       await this.assertArtifactDirectoryShape(directory, manifest, "CORRUPT_INSTALLATION");
