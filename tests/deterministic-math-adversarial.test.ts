@@ -104,6 +104,14 @@ describe("adversarial deterministic math verification", () => {
       ` ${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS)}`,
       `${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS)} `
     ]) {
+      try {
+        parseBoundedInteger(operand);
+        throw new Error("Expected malformed integer input to fail");
+      } catch (error) {
+        expect(error).toBeInstanceOf(BoundedMathError);
+        expect((error as BoundedMathError).code).toBe("INVALID_INTEGER");
+      }
+
       const result = await verifyJson(new ModularArithmeticVerifier(), {
         protocol: MODULAR_ARITHMETIC_PROTOCOL,
         protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
