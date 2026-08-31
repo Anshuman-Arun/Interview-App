@@ -322,6 +322,24 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
+  it("rejects a cleanly-ended chunked response that is shorter than the manifest", async () => {
+    const expected = Buffer.from("chunked-expected");
+    const shorter = Buffer.from("short");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.write(shorter);
+      response.end();
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(expected, fixture.baseUrl + "/artifact");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({
+      code: "SIZE_MISMATCH"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
   it("stops oversized downloads before publication", async () => {
     const expected = Buffer.from("12345");
     const oversized = Buffer.from("123456");
@@ -690,6 +708,23 @@ describe("local model asset manager", () => {
     await expect(manager.importLocal(digestMismatch, sameSizeWrongDigest)).rejects.toMatchObject({
       code: "DIGEST_MISMATCH"
     });
+  });
+
+  it("rejects a directory as a local import source without publishing it", async () => {
+    const payload = Buffer.from("directory-source");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const sourceDirectory = path.join(sourceRoot, "source-directory");
+    await mkdir(sourceDirectory);
+
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, "https://example.test/directory-source.bin");
+
+    await expect(manager.importLocal(manifest, sourceDirectory)).rejects.toMatchObject({
+      code: "UNSAFE_PATH"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
   });
 
   it("coalesces duplicate installs and lets one waiter cancel without aborting another", async () => {
