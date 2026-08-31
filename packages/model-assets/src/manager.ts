@@ -972,6 +972,10 @@ export class ModelAssetManager {
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled.");
       }
+      await validateCachePaths(paths);
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled.");
+      }
       await ensureSafeDirectory(paths.root, stagingDirectory);
       const createdStaging = await this.assertSafeStagingDirectory(paths, stagingDirectory);
       const stagingIdentity = {
