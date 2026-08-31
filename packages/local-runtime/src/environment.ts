@@ -112,10 +112,11 @@ export function snapshotParentEnvironmentRecord(parent: NodeJS.ProcessEnv): Node
 function validateParentEnvironmentRecord(
   parent: NodeJS.ProcessEnv
 ): Readonly<Record<string, PropertyDescriptor>> {
-  if (typeof parent !== "object" || parent === null || Array.isArray(parent)) {
+  if (typeof parent !== "object" || parent === null) {
     throw new Error("Parent environment must be an object");
   }
   if (utilTypes.isProxy(parent)) throw new Error("Parent environment could not be inspected");
+  if (Array.isArray(parent)) throw new Error("Parent environment must be an object");
 
   let prototype: unknown;
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
