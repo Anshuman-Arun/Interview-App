@@ -12,6 +12,7 @@ import {
   IntegerStringSchema,
   IntermediateIntegerStringSchema,
   MAX_INTEGER_DECIMAL_DIGITS,
+  MAX_FINITE_CONTAINER_ITEMS,
   MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
   MAX_POWER_EXPONENT,
   MAX_PROBABILITY_OUTCOMES,
@@ -34,6 +35,8 @@ import {
   parseBoundedIntermediateInteger,
   rational,
   serializeRational,
+  sumIntegers,
+  sumRationals,
   type ExactRational,
   type IntegerExpression
 } from "../packages/verification/src/index.js";
@@ -88,6 +91,20 @@ describe("adversarial deterministic math verification", () => {
   it("bounds direct bigint utility inputs rather than only parsed string inputs", () => {
     const oversized = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1));
     expect(() => gcd(oversized, 1n)).toThrow(BoundedMathError);
+  });
+
+  it("bounds exported finite aggregate helpers by the shared container limit", () => {
+    expect(sumIntegers(Array.from({ length: MAX_FINITE_CONTAINER_ITEMS }, () => 1n)))
+      .toBe(BigInt(MAX_FINITE_CONTAINER_ITEMS));
+    expect(sumRationals(Array.from({ length: MAX_FINITE_CONTAINER_ITEMS }, () => rational(1n, 1n))))
+      .toEqual(rational(BigInt(MAX_FINITE_CONTAINER_ITEMS), 1n));
+
+    expect(() => sumIntegers(
+      Array.from({ length: MAX_FINITE_CONTAINER_ITEMS + 1 }, () => 1n)
+    )).toThrow(BoundedMathError);
+    expect(() => sumRationals(
+      Array.from({ length: MAX_FINITE_CONTAINER_ITEMS + 1 }, () => rational(1n, 1n))
+    )).toThrow(BoundedMathError);
   });
 
   it("fails closed for invalid direct integer-expression shapes", () => {
