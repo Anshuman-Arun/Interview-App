@@ -480,7 +480,7 @@ export function installedPayloadPath(installationDirectory: string, manifest: As
   return candidate;
 }
 
-export async function sumArtifactPayloadBytes(
+export async function sumManagedCacheBytes(
   root: string,
   maxEntries = 10_000
 ): Promise<number> {
@@ -499,7 +499,7 @@ export async function sumArtifactPayloadBytes(
     throw new ModelAssetError("IO_ERROR", "Unable to inspect artifact payload usage.", { cause: error });
   }
   if (entry.isSymbolicLink()) return 0;
-  if (entry.isFile()) return path.basename(root).toLowerCase() === "manifest.json" ? 0 : entry.size;
+  if (entry.isFile()) return entry.size;
   if (!entry.isDirectory()) return 0;
 
   let total = 0;
@@ -532,12 +532,12 @@ export async function sumArtifactPayloadBytes(
         "Managed cache entries must not contain nested directories."
       );
     }
-    if (!childStat.isFile() || child.name.toLowerCase() === "manifest.json") continue;
+    if (!childStat.isFile()) continue;
     total += childStat.size;
     if (!Number.isSafeInteger(total)) {
       throw new ModelAssetError(
         "CACHE_LIMIT_EXCEEDED",
-        "Artifact payload usage exceeds safe integer limits."
+        "Managed cache usage exceeds safe integer limits."
       );
     }
   }
