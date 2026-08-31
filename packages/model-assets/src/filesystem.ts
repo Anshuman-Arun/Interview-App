@@ -1298,6 +1298,33 @@ export async function sumManagedCacheBytes(
       );
     }
   }
+
+  let finalEntry: BigIntStats;
+  try {
+    finalEntry = await lstat(root, { bigint: true });
+  } catch (error) {
+    if (errnoCode(error) === "ENOENT") {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Managed cache directory disappeared during accounting.",
+        { cause: error }
+      );
+    }
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to re-inspect managed cache directory after accounting.",
+      { cause: error }
+    );
+  }
+  if (finalEntry.isSymbolicLink()
+      || !finalEntry.isDirectory()
+      || finalEntry.dev !== entry.dev
+      || finalEntry.ino !== entry.ino) {
+    throw new ModelAssetError(
+      "UNSAFE_PATH",
+      "Managed cache directory was replaced during accounting."
+    );
+  }
   return total;
 }
 
