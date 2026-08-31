@@ -584,6 +584,9 @@ export async function verifyArtifactFile(
     stream.destroy(new ModelAssetError("CANCELLED", "Artifact verification was cancelled."));
   };
   validatedSignal?.addEventListener("abort", abortListener, { once: true });
+  if (validatedSignal?.aborted === true) {
+    abortListener();
+  }
   try {
     for await (const chunk of stream) {
       if (validatedSignal?.aborted === true) {
