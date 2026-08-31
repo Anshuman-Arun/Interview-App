@@ -435,13 +435,27 @@ export class ModelAssetManager {
           "Installed artifact entry count exceeds the configured inspection limit."
         );
       }
-      if (!INSTALLATION_KEY_PATTERN.test(entry.name)
-          || !entry.isDirectory()
-          || entry.isSymbolicLink()) {
-        continue;
-      }
+      if (!INSTALLATION_KEY_PATTERN.test(entry.name)) continue;
 
       const directory = path.join(paths.artifacts, entry.name);
+      let directoryStat: BigIntStats;
+      try {
+        directoryStat = await lstat(directory, { bigint: true });
+      } catch (error) {
+        if (typeof error === "object"
+            && error !== null
+            && "code" in error
+            && error.code === "ENOENT") {
+          continue;
+        }
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to inspect an installed artifact cache entry.",
+          { cause: error }
+        );
+      }
+      if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) continue;
+
       let manifest: AssetManifest;
       try {
         const stored = await readStoredManifest(path.join(directory, "manifest.json"));
@@ -476,6 +490,7 @@ export class ModelAssetManager {
       });
     }
 
+    await validateCachePaths(paths);
     return installed.sort((left, right) => {
       const leftKey = [
         left.familyId,
@@ -554,6 +569,7 @@ export class ModelAssetManager {
         }
         await this.removeManagedEntry(paths, path.join(paths.temporary, entry));
       }
+      await validateCachePaths(paths);
     });
     this.lastFailures.clear();
   }
@@ -600,6 +616,7 @@ export class ModelAssetManager {
         this.lastFailures.delete(entry);
         removed += 1;
       }
+      await validateCachePaths(paths);
       return removed;
     });
   }
@@ -1268,6 +1285,7 @@ export class ModelAssetManager {
           && error !== null
           && "code" in error
           && error.code === "ENOENT") {
+        await validateCachePaths(paths);
         return { status: "NOT_PRESENT" };
       }
       return { status: "FAILED", errorCode: "IO_ERROR" };
@@ -1396,6 +1414,7 @@ export class ModelAssetManager {
         );
       }
     }
+    await validateCachePaths(paths);
     return total;
   }
 
@@ -1525,6 +1544,10 @@ export class ModelAssetManager {
           "INSUFFICIENT_DISK_SPACE",
           "Insufficient free disk space for verified atomic installation."
         );
+      }
+      await validateCachePaths(paths);
+      if (signal.aborted) {
+        throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
       shared.reservedBytes = reservedProjection;
     });
