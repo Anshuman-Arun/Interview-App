@@ -22,10 +22,39 @@ export const PROBABILITY_ARITHMETIC_VERIFIER_NAME = "deterministic-probability-a
 const CountSchema = z.number().int().min(0).max(MAX_COMBINATORIAL_N);
 const PositiveCountSchema = z.number().int().min(1).max(MAX_COMBINATORIAL_N);
 
+function isProbabilityInput(value: z.infer<typeof RationalInputSchema>): boolean {
+  try {
+    const parsed = parseRationalInput(value);
+    return compareRationals(parsed, rational(0n, 1n)) >= 0
+      && compareRationals(parsed, rational(1n, 1n)) <= 0;
+  } catch {
+    return false;
+  }
+}
+
+function isPositiveProbabilityInput(value: z.infer<typeof RationalInputSchema>): boolean {
+  if (!isProbabilityInput(value)) return false;
+  try {
+    return parseRationalInput(value).numerator > 0n;
+  } catch {
+    return false;
+  }
+}
+
+export const ProbabilityInputSchema = RationalInputSchema.refine(
+  isProbabilityInput,
+  "Probability must lie between 0 and 1 inclusive"
+);
+
+export const PositiveProbabilityInputSchema = RationalInputSchema.refine(
+  isPositiveProbabilityInput,
+  "Probability must lie strictly between 0 and 1 inclusive"
+);
+
 export const ProbabilityArithmeticClaimSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("FINITE_EXPECTATION"),
-    outcomes: z.array(z.object({ probability: RationalInputSchema, value: RationalInputSchema }).strict())
+    outcomes: z.array(z.object({ probability: ProbabilityInputSchema, value: RationalInputSchema }).strict())
       .min(1).max(MAX_PROBABILITY_OUTCOMES),
     claimedExpectation: RationalInputSchema
   }).strict(),
@@ -33,7 +62,7 @@ export const ProbabilityArithmeticClaimSchema = z.discriminatedUnion("kind", [
     kind: z.literal("CONDITIONAL_FROM_COUNTS"),
     jointCount: CountSchema,
     conditionCount: PositiveCountSchema,
-    claimedProbability: RationalInputSchema
+    claimedProbability: ProbabilityInputSchema
   }).strict().superRefine((value, context) => {
     if (value.jointCount > value.conditionCount) {
       context.addIssue({ code: "custom", path: ["jointCount"], message: "Joint count cannot exceed the conditioning count" });
@@ -41,16 +70,16 @@ export const ProbabilityArithmeticClaimSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("CONDITIONAL_FROM_PROBABILITIES"),
-    jointProbability: RationalInputSchema,
-    conditionProbability: RationalInputSchema,
-    claimedProbability: RationalInputSchema
+    jointProbability: ProbabilityInputSchema,
+    conditionProbability: PositiveProbabilityInputSchema,
+    claimedProbability: ProbabilityInputSchema
   }).strict(),
   z.object({
     kind: z.literal("BAYES"),
-    prior: RationalInputSchema,
-    likelihoodGivenHypothesis: RationalInputSchema,
-    evidenceProbability: RationalInputSchema,
-    claimedPosterior: RationalInputSchema
+    prior: ProbabilityInputSchema,
+    likelihoodGivenHypothesis: ProbabilityInputSchema,
+    evidenceProbability: PositiveProbabilityInputSchema,
+    claimedPosterior: ProbabilityInputSchema
   }).strict()
 ]);
 
@@ -65,7 +94,7 @@ function assertProbability(value: ExactRational, label: string): ExactRational {
   const zero = rational(0n, 1n);
   const one = rational(1n, 1n);
   if (compareRationals(value, zero) < 0 || compareRationals(value, one) > 0) {
-    throw new BoundedMathError("INVALID_COMBINATORIAL_ARGUMENT", `${label} must lie between 0 and 1 inclusive`);
+    throw new BoundedMathError("INVALID_PROBABILITY", `${label} must lie between 0 and 1 inclusive`);
   }
   return value;
 }
@@ -83,7 +112,7 @@ function evaluateProbabilityClaim(
         expectation = addRationals(expectation, multiplyRationals(probability, parseRationalInput(outcome.value)));
       }
       if (!equalRationals(totalProbability, rational(1n, 1n))) {
-        throw new BoundedMathError("INVALID_COMBINATORIAL_ARGUMENT", "Finite expectation probabilities must sum exactly to 1");
+        throw new BoundedMathError("INVALID_PROBABILITY", "Finite expectation probabilities must sum exactly to 1");
       }
       return { actual: expectation, claimed: parseRationalInput(claim.claimedExpectation) };
     }
@@ -95,9 +124,11 @@ function evaluateProbabilityClaim(
     case "CONDITIONAL_FROM_PROBABILITIES": {
       const joint = assertProbability(parseRationalInput(claim.jointProbability), "Joint probability");
       const condition = assertProbability(parseRationalInput(claim.conditionProbability), "Condition probability");
-      if (condition.numerator === 0n) throw new BoundedMathError("DIVISION_BY_ZERO", "Condition probability must be positive");
+      if (condition.numerator === 0n) {
+        throw new BoundedMathError("INVALID_PROBABILITY", "Condition probability must be positive");
+      }
       if (compareRationals(joint, condition) > 0) {
-        throw new BoundedMathError("INVALID_COMBINATORIAL_ARGUMENT", "Joint probability cannot exceed the conditioning probability");
+        throw new BoundedMathError("INVALID_PROBABILITY", "Joint probability cannot exceed the conditioning probability");
       }
       return { actual: divideRationals(joint, condition), claimed: parseRationalInput(claim.claimedProbability) };
     }
@@ -105,7 +136,9 @@ function evaluateProbabilityClaim(
       const prior = assertProbability(parseRationalInput(claim.prior), "Prior probability");
       const likelihood = assertProbability(parseRationalInput(claim.likelihoodGivenHypothesis), "Conditional likelihood");
       const evidence = assertProbability(parseRationalInput(claim.evidenceProbability), "Evidence probability");
-      if (evidence.numerator === 0n) throw new BoundedMathError("DIVISION_BY_ZERO", "Evidence probability must be positive");
+      if (evidence.numerator === 0n) {
+        throw new BoundedMathError("INVALID_PROBABILITY", "Evidence probability must be positive");
+      }
       const posterior = divideRationals(multiplyRationals(prior, likelihood), evidence);
       assertProbability(posterior, "Computed posterior probability");
       return { actual: posterior, claimed: parseRationalInput(claim.claimedPosterior) };
