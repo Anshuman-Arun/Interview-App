@@ -1729,6 +1729,9 @@ function inspectHandshakeCapabilities(
   value: unknown,
   fail: (message: string) => never
 ): readonly string[] {
+  if (typeof value === "object" && value !== null && utilTypes.isProxy(value)) {
+    fail("capabilities could not be inspected");
+  }
   if (!safeArrayCheck(value, fail)) fail("capabilities must be an array");
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
