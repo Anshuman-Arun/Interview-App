@@ -798,6 +798,17 @@ export async function copyLocalArtifactBounded(
 }
 
 export async function readStoredManifest(manifestPath: string): Promise<unknown> {
+  return (await readStoredManifestWithIdentity(manifestPath)).value;
+}
+
+export interface StoredManifestReadResult {
+  readonly value: unknown;
+  readonly identity: VerifiedFileIdentity;
+}
+
+export async function readStoredManifestWithIdentity(
+  manifestPath: string
+): Promise<StoredManifestReadResult> {
   let openedManifest: { readonly handle: FileHandle; readonly stat: BigIntStats };
   try {
     openedManifest = await openStableRegularFile(
@@ -893,8 +904,9 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
       { cause: error }
     );
   }
+  let value: unknown;
   try {
-    return JSON.parse(serialized) as unknown;
+    value = JSON.parse(serialized) as unknown;
   } catch (error) {
     throw new ModelAssetError(
       "CORRUPT_INSTALLATION",
@@ -902,6 +914,47 @@ export async function readStoredManifest(manifestPath: string): Promise<unknown>
       { cause: error }
     );
   }
+
+  let finalManifestStat: BigIntStats;
+  try {
+    finalManifestStat = await lstat(manifestPath, { bigint: true });
+  } catch (error) {
+    if (errnoCode(error) === "ENOENT") {
+      throw new ModelAssetError(
+        "CORRUPT_INSTALLATION",
+        "Installed artifact manifest disappeared after it was read.",
+        { cause: error }
+      );
+    }
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to re-inspect installed artifact manifest.",
+      { cause: error }
+    );
+  }
+  if (finalManifestStat.isSymbolicLink()
+      || !finalManifestStat.isFile()
+      || finalManifestStat.dev !== manifestStat.dev
+      || finalManifestStat.ino !== manifestStat.ino
+      || finalManifestStat.size !== manifestStat.size
+      || finalManifestStat.mtimeNs !== manifestStat.mtimeNs
+      || finalManifestStat.ctimeNs !== manifestStat.ctimeNs) {
+    throw new ModelAssetError(
+      "CORRUPT_INSTALLATION",
+      "Installed artifact manifest changed after it was read."
+    );
+  }
+
+  return {
+    value,
+    identity: {
+      device: manifestStat.dev,
+      inode: manifestStat.ino,
+      size: manifestStat.size,
+      mtimeNs: manifestStat.mtimeNs,
+      ctimeNs: manifestStat.ctimeNs
+    }
+  };
 }
 
 export async function writeStoredManifest(manifestPath: string, serializedManifest: string): Promise<void> {
