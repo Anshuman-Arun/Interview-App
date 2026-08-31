@@ -43,7 +43,7 @@ function asSafePositiveInteger(value: number, name: string): number {
   return value;
 }
 
-function normalizeLimits(limits: Partial<ImageValidationLimits> | undefined): Readonly<ImageValidationLimits> {
+function normalizeLimits(limits: unknown): Readonly<ImageValidationLimits> {
   if (limits !== undefined && (typeof limits !== "object" || limits === null || Array.isArray(limits))) {
     throw new RangeError("Image validation limits must be an object");
   }
@@ -122,7 +122,8 @@ function checkDimensions(header: PngHeader, limits: ImageValidationLimits): void
   }
 }
 
-export function sha256ImageBytes(bytes: Uint8Array): Sha256Digest {
+export function sha256ImageBytes(bytes: Uint8Array): Sha256Digest;
+export function sha256ImageBytes(bytes: unknown): Sha256Digest {
   if (!(bytes instanceof Uint8Array)) throw new TypeError("Image digest input must be a Uint8Array");
   return createHash("sha256").update(bytes).digest("hex");
 }
