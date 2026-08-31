@@ -700,6 +700,34 @@ export class ModelAssetManager {
     await removeEntryInsideRoot(paths.root, candidate);
   }
 
+  private async assertArtifactDirectoryShape(
+    directoryPath: string,
+    manifest: AssetManifest,
+    errorCode: "CORRUPT_INSTALLATION" | "UNSAFE_PATH"
+  ): Promise<void> {
+    const expectedNames = new Set(["manifest.json", manifest.filename]);
+    const directory = await this.openCacheDirectory(
+      directoryPath,
+      "Unable to open an artifact directory for structural inspection."
+    );
+    let entries = 0;
+    for await (const entry of directory) {
+      entries += 1;
+      if (entries > 2 || !expectedNames.delete(entry.name)) {
+        throw new ModelAssetError(
+          errorCode,
+          "Artifact directory contains entries outside the declared cache layout."
+        );
+      }
+    }
+    if (expectedNames.size !== 0) {
+      throw new ModelAssetError(
+        errorCode,
+        "Artifact directory is missing a required cache-layout entry."
+      );
+    }
+  }
+
   private rejectTransientInstallationFailure(check: InstallationCheck): void {
     if (check.status === "FAILED") {
       throw new ModelAssetError(
@@ -787,6 +815,7 @@ export class ModelAssetManager {
         path.join(stagingDirectory, "manifest.json"),
         serializedManifest
       );
+      await this.assertArtifactDirectoryShape(stagingDirectory, manifest, "UNSAFE_PATH");
       if (signal.aborted) {
         throw new ModelAssetError(
           "CANCELLED",
@@ -889,6 +918,7 @@ export class ModelAssetManager {
     }
 
     try {
+      await this.assertArtifactDirectoryShape(directory, manifest, "CORRUPT_INSTALLATION");
       const storedValue = await readStoredManifest(path.join(directory, "manifest.json"));
       const stored = AssetManifestSchema.safeParse(storedValue);
       if (!stored.success || artifactInstallationKey(stored.data) !== key) {
@@ -912,6 +942,7 @@ export class ModelAssetManager {
       if (finalDirectoryStat.isSymbolicLink() || !finalDirectoryStat.isDirectory()) {
         return { status: "CORRUPT", errorCode: "CORRUPT_INSTALLATION" };
       }
+      await this.assertArtifactDirectoryShape(directory, manifest, "CORRUPT_INSTALLATION");
       return { status: "INSTALLED", path: payload };
     } catch (error) {
       if (error instanceof ModelAssetError && error.code === "CANCELLED") throw error;
