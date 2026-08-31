@@ -261,8 +261,7 @@ export function planDirtyRegions(
   }
 
   const frameArea = rectArea(frame);
-  if (analyzedArea / frameArea >= safeConfig.fullFrameFallbackAreaRatio
-      && frameArea <= safeConfig.maxTotalAnalyzedArea) {
+  if (analyzedArea / frameArea >= safeConfig.fullFrameFallbackAreaRatio) {
     return fullFrameFallback(frame, safeConfig.maxTotalAnalyzedArea, "AREA_FRAGMENTATION");
   }
 
