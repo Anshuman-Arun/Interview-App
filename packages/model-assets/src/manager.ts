@@ -838,10 +838,12 @@ export class ModelAssetManager {
       }
       return installedPayloadPath(installationDirectory, manifest);
     } finally {
+      // Once an operation stops owning its staging directory, capacity scans must
+      // count any bytes still present there before the reservation is released.
+      setStagingDirectory(undefined);
       if (reservationHeld) {
         await this.releaseCapacity(reservationBytes);
       }
-      setStagingDirectory(undefined);
       if (!published) {
         await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
       }
