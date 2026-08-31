@@ -1180,6 +1180,32 @@ describe("local worker lifecycle manager", () => {
     expect(metadataProxyTraps).toBe(0);
   });
 
+  it("does not cascade secret redaction across normalized handshake metadata", async () => {
+    const runtime = manager();
+    runtime.register(definition("metadata-marker-redaction", "ready", {
+      environment: { secrets: { RUNTIME_ONLY_SECRET: "[" } },
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: {
+            componentVersion: "fixture-1",
+            metadata: {
+              "[": "["
+            }
+          }
+        })
+      }
+    }));
+
+    const status = await runtime.start("metadata-marker-redaction");
+    expect(status.handshake?.metadata).toEqual({
+      "[REDACTED]": "[REDACTED]"
+    });
+    expect(JSON.stringify(status.handshake?.metadata))
+      .not.toContain("[REDACTED]REDACTED]");
+  });
+
   it("redacts runtime secrets used as handshake metadata keys", async () => {
     const secret = "q7V9m2L4z8P6";
     const runtime = manager();
