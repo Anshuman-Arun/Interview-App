@@ -71,6 +71,8 @@ export const PortableAssetFilenameSchema = z.string()
   .max(96)
   .regex(PORTABLE_FILENAME_PATTERN)
   .refine((value) => value !== "." && value !== "..", "filename must be a leaf name")
+  .refine((value) => !value.endsWith("."), "filename may not end with a dot")
+  .refine((value) => value.toLowerCase() !== "manifest.json", "filename is reserved for cache metadata")
   .refine((value) => !WINDOWS_DEVICE_NAME_PATTERN.test(value), "filename is reserved on Windows");
 
 export const Sha256DigestSchema = z.string().regex(/^[0-9a-f]{64}$/u);
