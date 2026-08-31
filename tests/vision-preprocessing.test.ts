@@ -195,6 +195,55 @@ describe("vision snapshot validation and hashing", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects oversized IHDR dimensions before full PNG decode", () => {
+    const oversizedWidth = Buffer.from(makePng(1, 1));
+    oversizedWidth.writeUInt32BE(9000, 16);
+    try {
+      snapshot(oversizedWidth);
+      throw new Error("Expected oversized width rejection");
+    } catch (error) {
+      expectCode(error, "IMAGE_DIMENSIONS_EXCEEDED");
+    }
+
+    const oversizedPixels = Buffer.from(makePng(1, 1));
+    oversizedPixels.writeUInt32BE(6000, 16);
+    oversizedPixels.writeUInt32BE(6000, 20);
+    try {
+      snapshot(oversizedPixels);
+      throw new Error("Expected oversized pixel-count rejection");
+    } catch (error) {
+      expectCode(error, "IMAGE_PIXELS_EXCEEDED");
+    }
+  });
+
+  it("rejects unsafe board revisions before they can enter deterministic image identity", () => {
+    const unsafeRevision = BoardRevisionSchema.parse(Number.MAX_SAFE_INTEGER + 1);
+    expect(() => createValidatedImageSnapshot({
+      snapshotId: "unsafe-revision",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: unsafeRevision,
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: makePng(1, 1)
+    })).toThrowError(VisionPreprocessingError);
+  });
+
+  it("bounds static PNG chunk walking against tiny-chunk CPU amplification", () => {
+    const base = makePng(1, 1);
+    const ihdrEnd = 8 + 12 + 13;
+    const emptyChunk = Buffer.alloc(12);
+    emptyChunk.writeUInt32BE(0, 0);
+    emptyChunk.write("tEXt", 4, "ascii");
+    const manyChunks = Array.from({ length: 4096 }, () => emptyChunk);
+    const adversarial = Buffer.concat([
+      base.subarray(0, ihdrEnd),
+      ...manyChunks,
+      base.subarray(ihdrEnd)
+    ]);
+
+    expect(() => snapshot(adversarial)).toThrowError(VisionPreprocessingError);
+  });
+
   it("rejects interlaced PNGs before entering the decoder's unbounded sync inflate path", () => {
     const interlaced = Buffer.from(makePng(2, 2));
     interlaced[28] = 1;
