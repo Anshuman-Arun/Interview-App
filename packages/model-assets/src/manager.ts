@@ -122,6 +122,9 @@ export class ModelAssetManager {
   private reservedBytes = 0;
 
   public constructor(options: ModelAssetManagerOptions) {
+    if (!path.isAbsolute(options.rootDir)) {
+      throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must be an absolute path.");
+    }
     this.maxArtifactBytes = positiveSafeInteger(
       options.maxArtifactBytes,
       0,
