@@ -150,6 +150,7 @@ export class BoundedLineBuffer {
 
     const fitted = fitUtf8(line, this.maxBytes);
     if (fitted !== line) this.truncated = true;
+    if (fitted.length === 0) return;
     const fittedBytes = Buffer.byteLength(fitted, "utf8");
     this.lines.push(fitted);
     this.bytes += fittedBytes;
@@ -176,15 +177,14 @@ export class BoundedLineBuffer {
     const lines = this.lines.slice(this.head);
     let bytes = this.bytes;
 
-    if (this.truncated) {
-      const marker = fitUtf8(TRUNCATED_MARKER, this.maxBytes);
-      const markerBytes = Buffer.byteLength(marker, "utf8");
+    const markerBytes = Buffer.byteLength(TRUNCATED_MARKER, "utf8");
+    if (this.truncated && markerBytes <= this.maxBytes) {
       while (lines.length >= this.maxLines || bytes + markerBytes > this.maxBytes) {
         const removed = lines.shift();
         if (removed === undefined) break;
         bytes -= Buffer.byteLength(removed, "utf8");
       }
-      if (markerBytes <= this.maxBytes && lines.length < this.maxLines) lines.unshift(marker);
+      if (lines.length < this.maxLines) lines.unshift(TRUNCATED_MARKER);
     }
 
     return Object.freeze({ lines: Object.freeze(lines), truncated: this.truncated });
@@ -275,9 +275,17 @@ export class BoundedLineFramer {
 function fitUtf8(value: string, maxBytes: number): string {
   const bytes = Buffer.from(value, "utf8");
   if (bytes.length <= maxBytes) return value;
-  if (maxBytes <= Buffer.byteLength(TRUNCATED_MARKER, "utf8")) return TRUNCATED_MARKER.slice(0, maxBytes);
-  const budget = maxBytes - Buffer.byteLength(TRUNCATED_MARKER, "utf8");
-  let prefix = bytes.subarray(0, budget).toString("utf8");
-  if (prefix.endsWith("\uFFFD")) prefix = prefix.slice(0, -1);
-  return `${prefix}${TRUNCATED_MARKER}`;
+
+  const markerBytes = Buffer.byteLength(TRUNCATED_MARKER, "utf8");
+  if (maxBytes < markerBytes) return utf8Prefix(bytes, maxBytes);
+
+  const budget = maxBytes - markerBytes;
+  return `${utf8Prefix(bytes, budget)}${TRUNCATED_MARKER}`;
+}
+
+function utf8Prefix(bytes: Buffer, maxBytes: number): string {
+  if (maxBytes <= 0) return "";
+  let prefix = bytes.subarray(0, maxBytes).toString("utf8");
+  while (prefix.endsWith("\uFFFD")) prefix = prefix.slice(0, -1);
+  return prefix;
 }
