@@ -141,6 +141,7 @@ function validatedRectsOverlap(left: ImageRect, right: ImageRect): boolean {
 }
 
 export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): readonly ImageRect[] {
+  if (!Array.isArray(rectangles)) throw new TypeError("Rectangle collection must be an array");
   if (rectangles.length > 2048) throw new RangeError("At most 2048 regions may be coalesced at once");
   const input = rectangles.map((rect) => validateImageRect(rect)).sort(compareRects);
   const merged: ImageRect[] = [];
@@ -172,6 +173,9 @@ export function planDirtyRegions(
   dimensions: PixelDimensions,
   config?: DirtyRegionPlannerConfig
 ): DirtyRegionPlan {
+  if (!Array.isArray(dirtyRegions)) {
+    throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty-region input must be an array");
+  }
   const safeDimensions = PixelDimensionsSchema.parse(dimensions);
   const safeConfig = normalizeConfig(config);
   const frame = imageBounds(safeDimensions);
