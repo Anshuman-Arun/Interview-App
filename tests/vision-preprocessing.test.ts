@@ -889,8 +889,7 @@ describe("vision geometry", () => {
   });
 
   it("rejects inherited numeric geometry entries instead of trusting the prototype chain", () => {
-    const inherited = Object.create(Array.prototype) as Array<{ x: number; y: number; width: number; height: number }>;
-    Object.defineProperty(inherited, "length", { value: 1, writable: true });
+    const inherited = new Array<{ x: number; y: number; width: number; height: number }>(1);
     const prototype = Object.create(Array.prototype);
     Object.defineProperty(prototype, "0", {
       value: { x: 0, y: 0, width: 1, height: 1 },
@@ -2061,8 +2060,7 @@ describe("provider-neutral request preparation and budgeting", () => {
 
   it("rejects inherited request candidates instead of trusting the prototype chain", () => {
     const source = snapshot(makePng(1, 1));
-    const inherited = Object.create(Array.prototype) as ImageSnapshot[];
-    Object.defineProperty(inherited, "length", { value: 1, writable: true });
+    const inherited = new Array<ImageSnapshot>(1);
     const prototype = Object.create(Array.prototype);
     Object.defineProperty(prototype, "0", { value: source, enumerable: true });
     Object.setPrototypeOf(inherited, prototype);
