@@ -1823,6 +1823,36 @@ describe("local worker lifecycle manager", () => {
     expect(serialized).toContain("[REDACTED]");
   });
 
+  it("bounds oversized non-secret handshake metadata before redaction", async () => {
+    const oversizedValue = "metadata-value-" + "x".repeat(20_000);
+    const oversizedKey = "metadata-key-" + "y".repeat(2_000);
+    const runtime = manager();
+    runtime.register(definition("bounded-handshake-metadata", "ready", {
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: {
+            componentVersion: "fixture-1",
+            metadata: {
+              note: oversizedValue,
+              [oversizedKey]: "small-value"
+            }
+          }
+        })
+      }
+    }));
+
+    const status = await runtime.start("bounded-handshake-metadata");
+    expect(status.handshake?.metadata).toMatchObject({
+      note: "[TRUNCATED]",
+      "[TRUNCATED]": "small-value"
+    });
+    const serialized = JSON.stringify(status.handshake?.metadata);
+    expect(serialized).not.toContain(oversizedValue.slice(0, 1_000));
+    expect(serialized).not.toContain(oversizedKey.slice(0, 500));
+  });
+
   it("redacts long runtime secrets before handshake metadata truncation", async () => {
     const secret = "long-runtime-secret-" + "x".repeat(3_000);
     const runtime = manager();
