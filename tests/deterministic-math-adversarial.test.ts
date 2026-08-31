@@ -10,6 +10,7 @@ import {
   FINITE_RECURRENCE_PROTOCOL_VERSION,
   FiniteRecurrenceVerifier,
   IntegerStringSchema,
+  IntermediateIntegerStringSchema,
   MAX_INTEGER_DECIMAL_DIGITS,
   MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
   MAX_POWER_EXPONENT,
@@ -29,6 +30,7 @@ import {
   gcd,
   multiplyRationals,
   parseBoundedInteger,
+  parseBoundedIntermediateInteger,
   rational,
   serializeRational,
   type ExactRational,
@@ -48,6 +50,16 @@ describe("adversarial deterministic math verification", () => {
       expect(IntegerStringSchema.safeParse(value).success).toBe(false);
       expect(() => parseBoundedInteger(value)).toThrow(BoundedMathError);
     }
+  });
+
+  it("enforces exact claimed-result digit boundaries", () => {
+    const atLimit = "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS);
+    const overLimit = "9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1);
+
+    expect(IntermediateIntegerStringSchema.safeParse(atLimit).success).toBe(true);
+    expect(parseBoundedIntermediateInteger(atLimit).toString()).toBe(atLimit);
+    expect(IntermediateIntegerStringSchema.safeParse(overLimit).success).toBe(false);
+    expect(() => parseBoundedIntermediateInteger(overLimit)).toThrow(BoundedMathError);
   });
 
   it("normalizes forged rational utility inputs instead of trusting caller invariants", () => {
@@ -92,7 +104,22 @@ describe("adversarial deterministic math verification", () => {
       exponent: 0
     })).toThrow(BoundedMathError);
 
+    expect(evaluateIntegerExpression({
+      kind: "POWER",
+      base: integer("1"),
+      exponent: MAX_POWER_EXPONENT
+    })).toBe(1n);
+
+    expect(evaluateIntegerExpression({
+      kind: "SUM",
+      terms: Array.from({ length: 128 }, () => integer("1"))
+    })).toBe(128n);
+
     expect(() => evaluateIntegerExpression({ kind: "SUM", terms: [] })).toThrow(BoundedMathError);
+    expect(() => evaluateIntegerExpression({
+      kind: "SUM",
+      terms: Array.from({ length: 129 }, () => integer("1"))
+    })).toThrow(BoundedMathError);
   });
 
   it("enforces the expression depth boundary for direct utility calls", () => {
