@@ -9,7 +9,7 @@ import {
   buildLocalEnvironment,
   type LocalComponentDefinition
 } from "../packages/local-runtime/src/index.js";
-import { BoundedLineFramer } from "../packages/local-runtime/src/buffer.js";
+import { BoundedLineBuffer, BoundedLineFramer } from "../packages/local-runtime/src/buffer.js";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/local-runtime-worker.mjs", import.meta.url));
 const temporaryRoots: string[] = [];
@@ -984,6 +984,21 @@ describe("local worker lifecycle manager", () => {
     expect(built.environment.SAFE_VALUE).toBe("visible");
     expect(built.environment.MODEL_API_KEY).toBe(secret);
     expect(built.secretValues).toContain(secret);
+  });
+
+  it("retains the newest bounded output through repeated eviction", () => {
+    const buffer = new BoundedLineBuffer(3, 128, []);
+    for (let index = 0; index < 5_000; index += 1) {
+      buffer.push(`line-${String(index)}`);
+    }
+
+    const snapshot = buffer.snapshot();
+    expect(snapshot.truncated).toBe(true);
+    expect(snapshot.lines).toEqual([
+      "[TRUNCATED]",
+      "line-4998",
+      "line-4999"
+    ]);
   });
 
   it("reassembles a heavily fragmented bounded output line", () => {
