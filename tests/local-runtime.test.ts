@@ -1022,24 +1022,27 @@ describe("local worker lifecycle manager", () => {
   });
 
   it("serializes reentrant start behind an in-progress stop", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-reentrant-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
     const runtime = manager();
-    let restarted: Promise<ReturnType<LocalRuntimeManager["getStatus"]>> | undefined;
-    runtime.register(definition("reentrant", "stdin-shutdown", {
+    let restarted: ReturnType<LocalRuntimeManager["start"]> | undefined;
+    runtime.register(definition("reentrant", "ready-counter", {
       shutdownTimeoutMs: 300,
       terminationTimeoutMs: 300,
       gracefulShutdown: (control) => {
         restarted = runtime.start("reentrant");
-        return control.writeStdin("shutdown-now\n");
+        control.endStdin();
       }
-    }));
+    }, [counter]));
 
-    const first = await runtime.start("reentrant");
-    const firstPid = first.pid;
+    await runtime.start("reentrant");
+    expect(readFileSync(counter, "utf8")).toBe("1");
     await expect(runtime.stop("reentrant")).resolves.toMatchObject({ disposition: "GRACEFUL" });
     expect(restarted).toBeDefined();
     const second = await restarted;
     expect(second.state).toBe("READY");
-    expect(second.pid).not.toBe(firstPid);
+    expect(readFileSync(counter, "utf8")).toBe("2");
   });
 
   it("prevents new managed work from entering while stopAll is in progress", async () => {
