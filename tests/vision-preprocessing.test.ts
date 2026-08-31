@@ -963,6 +963,22 @@ describe("provider-neutral request preparation and budgeting", () => {
       .toBe(prepareVisionImageRequest(source, "context").requestId);
   });
 
+  it("rejects subclasses that inherit the private brand but override validated byte access", () => {
+    const goodBytes = makePng(2, 2);
+    const base = snapshot(goodBytes);
+
+    class EvilSnapshot extends ImageSnapshot {
+      public override readBytes(): Buffer {
+        return Buffer.from("not-a-png");
+      }
+    }
+
+    const evil = new EvilSnapshot(base.metadata, goodBytes);
+    expect(() => prepareVisionImageRequest(evil, "analysis"))
+      .toThrowError(VisionPreprocessingError);
+    expect(Object.isFrozen(ImageSnapshot.prototype)).toBe(true);
+  });
+
   it("rejects prototype-forged raster instances that never ran a validating constructor", () => {
     const real = snapshot(makePng(2, 2));
     const forged = Object.create(ImageSnapshot.prototype) as Record<string, unknown>;
