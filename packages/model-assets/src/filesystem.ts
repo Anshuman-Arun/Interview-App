@@ -616,7 +616,12 @@ export async function availableDiskBytes(root: string): Promise<bigint | undefin
     return stats.bavail * stats.bsize;
   } catch (error) {
     const code = errnoCode(error);
-    if (code === "ENOSYS" || code === "ENOTSUP" || code === "EINVAL") return undefined;
+    if (code === "ENOSYS"
+        || code === "ENOTSUP"
+        || code === "EINVAL"
+        || code === "ERR_METHOD_NOT_IMPLEMENTED") {
+      return undefined;
+    }
     throw new ModelAssetError("IO_ERROR", "Unable to inspect available disk space.", { cause: error });
   }
 }
