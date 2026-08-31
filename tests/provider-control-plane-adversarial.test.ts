@@ -147,6 +147,10 @@ describe("provider configuration secret exclusion", () => {
       "Basic Og",
       "AIza123456789012345678901234567890",
       "sk_abcdefghijklmnopqrstuvwxyz",
+      "ghp_abcdefghijklmnopqrstuvwxyz1234567890",
+      "github_pat_abcdefghijklmnopqrstuvwxyz_1234567890",
+      "glpat-abcdefghijklmnopqrstuvwxyz123456",
+      "hf_abcdefghijklmnopqrstuvwxyz123456",
       "token=raw-private-token",
       "token=abcdefghijklmnopqrst",
       "secret=P@ssword-123456",
@@ -241,10 +245,7 @@ describe("provider configuration secret exclusion", () => {
       { nested: { passwords: ["value-one"] } },
       { privateKeys: ["value-one"] },
       { authorizationHeader: "placeholder" },
-      { authHeader: "placeholder" },
-      { githubToken: "opaque-value" },
-      { huggingFaceToken: "opaque-value" },
-      { customTokens: ["opaque-value"] }
+      { authHeader: "placeholder" }
     ]) {
       expect(() => resolveProviderConfiguration({
         registry,
@@ -260,7 +261,10 @@ describe("provider configuration secret exclusion", () => {
         maxTokens: 2_048,
         outputTokens: 512,
         inputTokens: 256,
-        tokenCount: 42
+        tokenCount: 42,
+        stopToken: "<END>",
+        eosToken: "</s>",
+        specialTokens: ["<s>", "</s>"]
       })
     })).not.toThrow();
   });

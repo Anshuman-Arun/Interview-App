@@ -71,7 +71,8 @@ const SECRET_CONFIGURATION_KEYS = new Set([
 const BEARER_AUTH_PATTERN = /\bbearer\s+[a-z0-9._~+/-]{16,}/iu;
 const BASIC_AUTH_CANDIDATE_PATTERN =
   /\bbasic\s+([A-Za-z0-9+/]+={0,2})(?=$|[^A-Za-z0-9+/=])/iu;
-const COMMON_API_KEY_PATTERN = /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,})\b/iu;
+const COMMON_API_KEY_PATTERN =
+  /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,}|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|glpat-[a-z0-9_-]{20,}|hf_[a-z0-9]{20,})\b/iu;
 const HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN =
   /\b(authorization(?:[-_]?header)?|http[-_]?authorization|auth[-_]?header|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|client[-_]?token|session[-_]?token|auth[-_]?token|bearer[-_]?token|client[-_]?secret|provider[-_]?secret|webhook[-_]?secret|secret[-_]?key|secret[-_]?access[-_]?key|aws[-_]?secret[-_]?access[-_]?key|password|passwd|passphrase|private[-_]?key|credential|cookie|set[-_]?cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))/iu;
 const GENERIC_SECRET_ASSIGNMENT_PATTERN =
@@ -154,7 +155,7 @@ function normalizeConfigurationKey(key: string): string {
   return key.normalize("NFKC").replace(/[^a-z0-9]/giu, "").toLowerCase();
 }
 
-function isSecretConfigurationKey(key: string, value: unknown): boolean {
+function isSecretConfigurationKey(key: string): boolean {
   const normalized = normalizeConfigurationKey(key);
   if (SECRET_CONFIGURATION_KEYS.has(normalized)) return true;
   return normalized.endsWith("accesstoken")
@@ -215,14 +216,7 @@ function isSecretConfigurationKey(key: string, value: unknown): boolean {
     || normalized.endsWith("passwordref")
     || normalized.endsWith("passwordrefs")
     || normalized.endsWith("passphraseref")
-    || normalized.endsWith("passphraserefs")
-    || (
-      (normalized.endsWith("token") || normalized.endsWith("tokens"))
-      && (
-        typeof value === "string"
-        || (typeof value === "object" && value !== null)
-      )
-    );
+    || normalized.endsWith("passphraserefs");
 }
 
 const BASE64_ALPHABET =
@@ -385,7 +379,7 @@ function inspectConfigurationRecord(
       failMalformedConfiguration();
     }
     const item: unknown = descriptor.value;
-    if (rejectSecrets && isSecretConfigurationKey(key, item)) failSecretConfiguration();
+    if (rejectSecrets && isSecretConfigurationKey(key)) failSecretConfiguration();
     output[key] = inspectConfigurationValue(item, state, depth + 1, rejectSecrets);
   }
   return Object.freeze(output);
