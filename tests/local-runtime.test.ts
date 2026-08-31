@@ -355,6 +355,21 @@ describe("local worker lifecycle manager", () => {
     await runtime.start("health");
     expect(runtime.markDegraded("health", "probe missed one interval").state).toBe("DEGRADED");
     expect(runtime.markReady("health").state).toBe("READY");
+
+    let coercions = 0;
+    const hostileString = {
+      toString: () => {
+        coercions += 1;
+        return "coerced";
+      }
+    };
+    expect(() => runtime.getStatus(hostileString as unknown as string))
+      .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(() => runtime.markDegraded("health", hostileString as unknown as string))
+      .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(() => runtime.markReady("health", hostileString as unknown as string))
+      .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(coercions).toBe(0);
   });
 
 
