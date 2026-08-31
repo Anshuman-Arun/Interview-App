@@ -27,8 +27,10 @@ export function redactKnownSecrets(value: string, secretValues: readonly string[
       if (!overlapsExistingRedaction) {
         mask ??= new Uint8Array(value.length);
         mask.fill(1, match, matchEnd);
+        searchFrom = matchEnd;
+      } else {
+        searchFrom = match + 1;
       }
-      searchFrom = matchEnd;
     }
   }
 
