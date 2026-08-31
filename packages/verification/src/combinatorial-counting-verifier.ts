@@ -1,8 +1,13 @@
 import { z } from "zod";
 import type { DeterministicVerifier, VerificationResult } from "../../domain/src/index.js";
-import { IntegerStringSchema } from "./integer-expression.js";
+import { IntermediateIntegerStringSchema } from "./integer-expression.js";
 import { MAX_COMBINATORIAL_N } from "./limits.js";
-import { binomial, combinationsWithRepetition, parseBoundedInteger, permutations } from "./math-utils.js";
+import {
+  binomial,
+  combinationsWithRepetition,
+  parseBoundedIntermediateInteger,
+  permutations
+} from "./math-utils.js";
 import { booleanClaimResult, mathFailure, prepareStructuredStatement } from "./verifier-common.js";
 
 export const COMBINATORIAL_COUNTING_PROTOCOL = "INTERVIEW_APP_COMBINATORIAL_COUNTING_CLAIM" as const;
@@ -12,20 +17,20 @@ export const COMBINATORIAL_COUNTING_VERIFIER_NAME = "deterministic-combinatorial
 const BoundedCountSchema = z.number().int().min(0).max(MAX_COMBINATORIAL_N);
 
 export const CombinatorialCountingClaimSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("BINOMIAL"), n: BoundedCountSchema, k: BoundedCountSchema, claimed: IntegerStringSchema }).strict(),
-  z.object({ kind: z.literal("PERMUTATION"), n: BoundedCountSchema, k: BoundedCountSchema, claimed: IntegerStringSchema }).strict(),
+  z.object({ kind: z.literal("BINOMIAL"), n: BoundedCountSchema, k: BoundedCountSchema, claimed: IntermediateIntegerStringSchema }).strict(),
+  z.object({ kind: z.literal("PERMUTATION"), n: BoundedCountSchema, k: BoundedCountSchema, claimed: IntermediateIntegerStringSchema }).strict(),
   z.object({
     kind: z.literal("COMBINATIONS_WITH_REPETITION"),
     types: BoundedCountSchema,
     selections: BoundedCountSchema,
-    claimed: IntegerStringSchema
+    claimed: IntermediateIntegerStringSchema
   }).strict(),
   z.object({
     kind: z.literal("INCLUSION_EXCLUSION_TWO"),
     leftCount: BoundedCountSchema,
     rightCount: BoundedCountSchema,
     intersectionCount: BoundedCountSchema,
-    claimedUnionCount: IntegerStringSchema
+    claimedUnionCount: IntermediateIntegerStringSchema
   }).strict().superRefine((value, context) => {
     if (value.intersectionCount > value.leftCount || value.intersectionCount > value.rightCount) {
       context.addIssue({ code: "custom", path: ["intersectionCount"], message: "Intersection count cannot exceed either set count" });
@@ -50,7 +55,7 @@ function expectedCount(claim: z.infer<typeof CombinatorialCountingClaimSchema>):
 }
 
 function claimedCount(claim: z.infer<typeof CombinatorialCountingClaimSchema>): bigint {
-  return parseBoundedInteger(claim.kind === "INCLUSION_EXCLUSION_TWO" ? claim.claimedUnionCount : claim.claimed);
+  return parseBoundedIntermediateInteger(claim.kind === "INCLUSION_EXCLUSION_TWO" ? claim.claimedUnionCount : claim.claimed);
 }
 
 export class CombinatorialCountingVerifier implements DeterministicVerifier {
