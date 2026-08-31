@@ -106,7 +106,7 @@ export function assertStaticPngChunkStructure(bytes: Buffer): void {
     }
 
     if (chunkType === "PLTE") {
-      if (seenPalette || seenImageData) {
+      if (seenPalette || seenTransparency || seenImageData) {
         throw new RangeError("PNG palette must appear at most once before image data");
       }
       if (colorType === 0 || colorType === 4) {
@@ -124,14 +124,26 @@ export function assertStaticPngChunkStructure(bytes: Buffer): void {
       if (seenTransparency || seenImageData) {
         throw new RangeError("PNG transparency chunk must appear at most once before image data");
       }
-      if (colorType === 0 && chunkLength !== 2) {
-        throw new RangeError("Grayscale PNG transparency chunk must contain one sample");
+      if (colorType === 0) {
+        if (chunkLength !== 2) {
+          throw new RangeError("Grayscale PNG transparency chunk must contain one sample");
+        }
+        if (bytes.readUInt16BE(dataStart) >= 2 ** bitDepth) {
+          throw new RangeError("Grayscale PNG transparency sample exceeds the bit-depth range");
+        }
       }
-      if (colorType === 2 && chunkLength !== 6) {
-        throw new RangeError("RGB PNG transparency chunk must contain three samples");
+      if (colorType === 2) {
+        if (chunkLength !== 6) {
+          throw new RangeError("RGB PNG transparency chunk must contain three samples");
+        }
+        for (let sampleOffset = 0; sampleOffset < 6; sampleOffset += 2) {
+          if (bytes.readUInt16BE(dataStart + sampleOffset) >= 2 ** bitDepth) {
+            throw new RangeError("RGB PNG transparency sample exceeds the bit-depth range");
+          }
+        }
       }
       if (colorType === 3) {
-        if (!seenPalette || chunkLength > paletteEntries) {
+        if (!seenPalette || chunkLength === 0 || chunkLength > paletteEntries) {
           throw new RangeError("Indexed PNG transparency must follow and fit its palette");
         }
       }
@@ -140,8 +152,11 @@ export function assertStaticPngChunkStructure(bytes: Buffer): void {
       }
       seenTransparency = true;
     } else if (chunkType === "gAMA") {
-      if (seenGamma || seenPalette || seenImageData || chunkLength !== 4) {
-        throw new RangeError("PNG gamma chunk must appear once before palette/image data and contain four bytes");
+      if (seenGamma || seenPalette || seenTransparency || seenImageData || chunkLength !== 4) {
+        throw new RangeError("PNG gamma chunk must appear once before palette/transparency/image data and contain four bytes");
+      }
+      if (bytes.readUInt32BE(dataStart) === 0) {
+        throw new RangeError("PNG gamma value must be nonzero");
       }
       seenGamma = true;
     } else if (chunkType === "IDAT") {
