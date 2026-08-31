@@ -2027,6 +2027,13 @@ describe("local worker lifecycle manager", () => {
     expect(unicodeSnapshot.truncated).toBe(true);
     expect(unicodeSnapshot.lines).toEqual([]);
     expect(JSON.stringify(unicodeSnapshot)).not.toContain("\uFFFD");
+
+    const legitimateReplacement = new BoundedLineBuffer(2, 3, []);
+    legitimateReplacement.push("\uFFFDx");
+    expect(legitimateReplacement.snapshot()).toEqual({
+      lines: ["\uFFFD"],
+      truncated: true
+    });
   });
 
   it("retains the newest bounded output through repeated eviction", () => {
