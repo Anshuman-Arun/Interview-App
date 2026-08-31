@@ -51,6 +51,7 @@ export type LocalRuntimeErrorCode =
   | "READINESS_FAILED"
   | "PROCESS_EXITED"
   | "HANDSHAKE_MISMATCH"
+  | "GRACEFUL_SHUTDOWN_FAILED"
   | "TERMINATION_FAILED"
   | "INVALID_STATE"
   | "INVALID_ARGUMENT";
@@ -2302,7 +2303,7 @@ function writeToStdin(child: ChildProcessWithoutNullStreams, data: string): Prom
   return new Promise((resolve, reject) => {
     child.stdin.write(data, "utf8", (error) => {
       if (error === null || error === undefined) resolve();
-      else reject(new LocalRuntimeError("TERMINATION_FAILED", "Could not write graceful shutdown request"));
+      else reject(new LocalRuntimeError("GRACEFUL_SHUTDOWN_FAILED", "Could not write graceful shutdown request"));
     });
   });
 }
