@@ -43,7 +43,15 @@ describe("deterministic math verifier invariants", () => {
 
     expect((await verifier.verify(valid, 0.75)).status).toBe("UNRESOLVED");
     expect((await verifier.verify("{not-json", 1)).status).toBe("UNRESOLVED");
-    expect((await verifier.verify("[".padEnd(MAX_MATH_STATEMENT_CHARACTERS + 1, " "), 1)).status).toBe("UNRESOLVED");
+
+    const atStatementLimit = valid.padEnd(MAX_MATH_STATEMENT_CHARACTERS, " ");
+    const acceptedAtLimit = await verifier.verify(atStatementLimit, 1);
+    expect(acceptedAtLimit.status).toBe("VERIFIED");
+
+    const overStatementLimit = valid.padEnd(MAX_MATH_STATEMENT_CHARACTERS + 1, " ");
+    const rejectedOverLimit = await verifier.verify(overStatementLimit, 1);
+    expect(rejectedOverLimit.status).toBe("UNRESOLVED");
+    expect(rejectedOverLimit.reason).toContain("STATEMENT_TOO_LARGE");
 
     for (const confidence of [Number.NaN, Number.POSITIVE_INFINITY, -0.1, 1.1]) {
       const result = await verifier.verify(valid, confidence);
