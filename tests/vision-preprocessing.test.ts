@@ -178,6 +178,17 @@ describe("vision snapshot validation and hashing", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects interlaced PNGs before entering the decoder's unbounded sync inflate path", () => {
+    const interlaced = Buffer.from(makePng(2, 2));
+    interlaced[28] = 1;
+    expect(() => snapshot(interlaced)).toThrowError(VisionPreprocessingError);
+    try {
+      snapshot(interlaced);
+    } catch (error) {
+      expectCode(error, "INVALID_IMAGE");
+    }
+  });
+
   it("rejects trailing bytes after IEND and APNG control chunks", () => {
     const trailing = Buffer.concat([makePng(2, 2), Buffer.from([0xde, 0xad])]);
     expect(() => snapshot(trailing)).toThrowError(VisionPreprocessingError);
