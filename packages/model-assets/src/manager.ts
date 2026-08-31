@@ -66,7 +66,7 @@ export interface InstalledArtifactSummary {
 interface InFlightEntry {
   readonly controller: AbortController;
   stage: "DOWNLOADING" | "VERIFYING";
-  stagingDirectory?: string;
+  stagingDirectory: string | undefined;
   waiters: number;
   settled: boolean;
   promise: Promise<string>;
@@ -441,6 +441,7 @@ export class ModelAssetManager {
       entry = {
         controller,
         stage: "DOWNLOADING",
+        stagingDirectory: undefined,
         waiters: 0,
         settled: false,
         promise: Promise.resolve("")
