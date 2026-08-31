@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import {
   DEFAULT_IMAGE_VALIDATION_LIMITS,
   HARD_IMAGE_VALIDATION_LIMITS,
@@ -20,15 +21,24 @@ interface PngHeader {
   readonly height: number;
 }
 
+const ImageValidationLimitsOverrideSchema = z.object({
+  maxEncodedBytes: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes).optional(),
+  maxWidth: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth).optional(),
+  maxHeight: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight).optional(),
+  maxPixels: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxPixels).optional()
+}).strict();
+
 function asSafePositiveInteger(value: number, name: string): number {
   if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive safe integer`);
   return value;
 }
 
 function normalizeLimits(limits: Partial<ImageValidationLimits> | undefined): Readonly<ImageValidationLimits> {
+  const parsedLimits = ImageValidationLimitsOverrideSchema.safeParse(limits ?? {});
+  if (!parsedLimits.success) throw new RangeError("Image validation limits are invalid or contain unknown keys");
   const merged = {
     ...DEFAULT_IMAGE_VALIDATION_LIMITS,
-    ...limits
+    ...parsedLimits.data
   };
   const normalized = {
     maxEncodedBytes: asSafePositiveInteger(merged.maxEncodedBytes, "maxEncodedBytes"),
