@@ -65,8 +65,18 @@ export class BoundedLineBuffer {
   ) {}
 
   public push(rawLine: string): void {
-    let line = redactKnownSecrets(rawLine, this.secretValues);
-    line = sanitizeDiagnosticText(line);
+    this.pushSanitized(sanitizeDiagnosticText(redactKnownSecrets(rawLine, this.secretValues)));
+  }
+
+  public pushInternal(rawLine: string): void {
+    this.pushSanitized(sanitizeDiagnosticText(rawLine));
+  }
+
+  public markMalformed(): void {
+    this.pushInternal(MALFORMED_MARKER);
+  }
+
+  private pushSanitized(line: string): void {
     if (line.length === 0) return;
 
     const fitted = fitUtf8(line, this.maxBytes);
@@ -84,10 +94,6 @@ export class BoundedLineBuffer {
       this.truncated = true;
     }
     this.compact();
-  }
-
-  public markMalformed(): void {
-    this.push(MALFORMED_MARKER);
   }
 
   public clear(): void {
