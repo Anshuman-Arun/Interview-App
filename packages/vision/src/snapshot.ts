@@ -44,6 +44,9 @@ function asSafePositiveInteger(value: number, name: string): number {
 }
 
 function normalizeLimits(limits: Partial<ImageValidationLimits> | undefined): Readonly<ImageValidationLimits> {
+  if (limits !== undefined && (typeof limits !== "object" || limits === null || Array.isArray(limits))) {
+    throw new RangeError("Image validation limits must be an object");
+  }
   const parsedLimits = ImageValidationLimitsOverrideSchema.safeParse(limits ?? {});
   if (!parsedLimits.success) throw new RangeError("Image validation limits are invalid or contain unknown keys");
   const merged = {
