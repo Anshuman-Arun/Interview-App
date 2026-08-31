@@ -1927,6 +1927,19 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(JSON.stringify(request.payload)).not.toContain(encodedBase64);
     expect(JSON.stringify(request)).not.toContain(encodedBase64);
     expect(JSON.stringify(prepareVisionBatch([crop.artifact], "context"))).not.toContain(encodedBase64);
+
+    const serializedRequest = JSON.parse(JSON.stringify(request)) as {
+      readonly payload: Record<string, unknown>;
+    };
+    expect(serializedRequest.payload).toEqual(request.payload.metadata);
+    expect(Object.keys(serializedRequest.payload).sort()).toEqual([
+      "byteSize",
+      "contentDigest",
+      "height",
+      "imageIdentity",
+      "mimeType",
+      "width"
+    ]);
   });
 
   it("fails closed instead of throwing through hostile payload proxy traps", () => {
