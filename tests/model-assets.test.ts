@@ -17,6 +17,7 @@ import {
   ModelAssetManager,
   artifactInstallationKey,
   resolveAssetManifest,
+  serializeAssetManifest,
   verifyArtifactFile,
   type AssetManifest
 } from "../packages/model-assets/src/index.js";
@@ -522,12 +523,15 @@ describe("local model asset manager", () => {
     const sourceRoot = await newRoot();
     const localSource = path.join(sourceRoot, "local.bin");
     await writeFile(localSource, localPayload);
-    const manager = managerFor(root, { maxArtifactBytes: 5, maxCacheBytes: 10 });
     const remote = manifestFor(remotePayload, fixture.baseUrl + "/remote", {
       artifactId: "remote"
     });
     const local = manifestFor(localPayload, "https://example.test/local.bin", {
       artifactId: "local"
+    });
+    const manager = managerFor(root, {
+      maxArtifactBytes: 5,
+      maxCacheBytes: managedArtifactBytes(remote) + managedArtifactBytes(local)
     });
 
     const remoteInstall = manager.install(remote);
@@ -653,8 +657,11 @@ describe("local model asset manager", () => {
     const sourceRoot = await newRoot();
     const source = path.join(sourceRoot, "source.bin");
     await writeFile(source, payload);
-    const manager = managerFor(root, { maxArtifactBytes: 10, maxCacheBytes: 5 });
     const manifest = manifestFor(payload, "https://example.test/independent-limits.bin");
+    const manager = managerFor(root, {
+      maxArtifactBytes: managedArtifactBytes(manifest) + 100,
+      maxCacheBytes: managedArtifactBytes(manifest)
+    });
 
     const installed = await manager.importLocal(manifest, source);
     expect(await readFile(installed)).toEqual(payload);
@@ -670,9 +677,12 @@ describe("local model asset manager", () => {
     await writeFile(oneSource, one);
     await writeFile(twoSource, two);
 
-    const manager = managerFor(root, { maxArtifactBytes: 10, maxCacheBytes: 10 });
     const first = manifestFor(one, "https://example.test/one.bin", { artifactId: "one" });
     const second = manifestFor(two, "https://example.test/two.bin", { artifactId: "two" });
+    const manager = managerFor(root, {
+      maxArtifactBytes: 10,
+      maxCacheBytes: managedArtifactBytes(first)
+    });
     await manager.importLocal(first, oneSource);
     await expect(manager.importLocal(second, twoSource)).rejects.toMatchObject({
       code: "CACHE_LIMIT_EXCEEDED"
@@ -686,8 +696,11 @@ describe("local model asset manager", () => {
     const sourceRoot = await newRoot();
     const source = path.join(sourceRoot, "source.bin");
     await writeFile(source, payload);
-    const manager = managerFor(root, { maxArtifactBytes: 10, maxCacheBytes: 10 });
     const manifest = manifestFor(payload, "https://example.test/stale-capacity.bin");
+    const manager = managerFor(root, {
+      maxArtifactBytes: 10,
+      maxCacheBytes: managedArtifactBytes(manifest) + 5
+    });
     await manager.inspect(manifest);
 
     const stale = path.join(
@@ -859,6 +872,10 @@ function managerFor(
     maxRedirects: 3,
     ...overrides
   });
+}
+
+function managedArtifactBytes(manifest: AssetManifest): number {
+  return manifest.sizeBytes + Buffer.byteLength(serializeAssetManifest(manifest), "utf8");
 }
 
 function sha256(payload: Buffer): AssetManifest["sha256"] {
