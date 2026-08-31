@@ -19,7 +19,20 @@ export default tseslint.config(
     }
   },
   {
-    files: ["scripts/**/*.mjs", "tests/fixtures/**/*.mjs"],
+    files: ["scripts/**/*.mjs"],
     extends: [tseslint.configs.disableTypeChecked]
+  },
+  {
+    files: ["tests/fixtures/**/*.mjs"],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        setTimeout: "readonly"
+      }
+    }
   }
 );
