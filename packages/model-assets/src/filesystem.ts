@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream, type Dir, type Stats } from "node:fs";
+import { createWriteStream, type Dir, type Stats } from "node:fs";
 import {
   lstat,
   mkdir,
+  open,
   opendir,
   realpath,
   rename,
@@ -11,6 +12,7 @@ import {
   unlink,
   writeFile
 } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -172,6 +174,48 @@ export async function ensureSafeDirectory(root: string, directory: string): Prom
         throw new ModelAssetError("UNSAFE_PATH", "Cache directory creation raced with an unsafe filesystem entry.");
       }
     }
+  }
+}
+
+async function openStableRegularFile(
+  filePath: string,
+  inspectMessage: string
+): Promise<{ readonly handle: FileHandle; readonly stat: Stats }> {
+  let beforeOpen: Stats;
+  try {
+    beforeOpen = await lstat(filePath);
+  } catch (error) {
+    throw new ModelAssetError("IO_ERROR", inspectMessage, { cause: error });
+  }
+  if (beforeOpen.isSymbolicLink() || !beforeOpen.isFile()) {
+    throw new ModelAssetError(
+      "UNSAFE_PATH",
+      "Expected a regular non-symlink file."
+    );
+  }
+
+  let handle: FileHandle;
+  try {
+    handle = await open(filePath, "r");
+  } catch (error) {
+    throw new ModelAssetError("IO_ERROR", inspectMessage, { cause: error });
+  }
+
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile()
+        || opened.dev !== beforeOpen.dev
+        || opened.ino !== beforeOpen.ino) {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "File identity changed between inspection and open."
+      );
+    }
+    return { handle, stat: opened };
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    if (error instanceof ModelAssetError) throw error;
+    throw new ModelAssetError("IO_ERROR", inspectMessage, { cause: error });
   }
 }
 
@@ -377,34 +421,37 @@ export async function verifyArtifactFile(
   }
   if (signal?.aborted === true) throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
 
-  let fileStat: Stats;
-  try {
-    fileStat = await lstat(rawFilePath);
-  } catch (error) {
-    throw new ModelAssetError("IO_ERROR", "Unable to inspect artifact file.", { cause: error });
-  }
-  if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
-    throw new ModelAssetError("UNSAFE_PATH", "Artifact verification requires a regular non-symlink file.");
-  }
+  const openedFile = await openStableRegularFile(
+    rawFilePath,
+    "Unable to inspect artifact file."
+  );
+  const fileStat = openedFile.stat;
   if (!Number.isSafeInteger(fileStat.size) || fileStat.size < 0) {
+    await openedFile.handle.close().catch(() => undefined);
     throw new ModelAssetError(
       "ARTIFACT_TOO_LARGE",
       "Artifact file size exceeds safe integer byte accounting."
     );
   }
   if (signal?.aborted === true) {
+    await openedFile.handle.close().catch(() => undefined);
     throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
   }
   if (fileStat.size > maximum) {
+    await openedFile.handle.close().catch(() => undefined);
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact exceeds the configured verification byte limit.");
   }
   if (fileStat.size !== expectedSize) {
+    await openedFile.handle.close().catch(() => undefined);
     return { ok: false, reason: "SIZE_MISMATCH", actualBytes: fileStat.size };
   }
 
   const hash = createHash("sha256");
   let bytes = 0;
-  const stream = createReadStream(filePath, { highWaterMark: 1024 * 1024 });
+  const stream = openedFile.handle.createReadStream({
+    highWaterMark: 1024 * 1024,
+    autoClose: false
+  });
   const abortListener = (): void => {
     stream.destroy(new ModelAssetError("CANCELLED", "Artifact verification was cancelled."));
   };
@@ -436,6 +483,7 @@ export async function verifyArtifactFile(
     throw new ModelAssetError("IO_ERROR", "Unable to read artifact for verification.", { cause: error });
   } finally {
     signal?.removeEventListener("abort", abortListener);
+    await openedFile.handle.close().catch(() => undefined);
   }
 
   if (signal?.aborted === true) {
@@ -472,25 +520,24 @@ export async function copyLocalArtifactBounded(
     );
   }
   if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.");
-  let sourceStat: Stats;
-  try {
-    sourceStat = await lstat(sourcePath);
-  } catch (error) {
-    throw new ModelAssetError("IO_ERROR", "Unable to inspect local import source.", { cause: error });
-  }
-  if (sourceStat.isSymbolicLink() || !sourceStat.isFile()) {
-    throw new ModelAssetError("UNSAFE_PATH", "Local import source must be a regular non-symlink file.");
-  }
+  const openedSource = await openStableRegularFile(
+    sourcePath,
+    "Unable to inspect local import source."
+  );
+  const sourceStat = openedSource.stat;
   if (!Number.isSafeInteger(sourceStat.size) || sourceStat.size < 0) {
+    await openedSource.handle.close().catch(() => undefined);
     throw new ModelAssetError(
       "ARTIFACT_TOO_LARGE",
       "Local import source exceeds safe integer byte accounting."
     );
   }
   if (sourceStat.size > maxBytes) {
+    await openedSource.handle.close().catch(() => undefined);
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Local import exceeds the configured artifact-size limit.");
   }
   if (sourceStat.size !== expectedBytes) {
+    await openedSource.handle.close().catch(() => undefined);
     throw new ModelAssetError("SIZE_MISMATCH", "Local import size does not match the asset manifest.");
   }
 
@@ -519,7 +566,7 @@ export async function copyLocalArtifactBounded(
   });
   try {
     await pipeline(
-      createReadStream(sourcePath),
+      openedSource.handle.createReadStream({ autoClose: false }),
       limiter,
       createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }),
       { signal }
@@ -539,6 +586,8 @@ export async function copyLocalArtifactBounded(
       );
     }
     throw new ModelAssetError("IO_ERROR", "Unable to copy local artifact into the cache staging area.", { cause: error });
+  } finally {
+    await openedSource.handle.close().catch(() => undefined);
   }
 }
 
