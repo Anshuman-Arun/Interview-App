@@ -109,7 +109,7 @@ export type ProviderKind = z.infer<typeof ProviderKindSchema>;
 export const CapabilitySupportSchema = z.enum(["SUPPORTED", "UNSUPPORTED", "UNKNOWN"]);
 export type CapabilitySupport = z.infer<typeof CapabilitySupportSchema>;
 
-const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
 
 function nonSecretTextSchema(maxLength: number) {
   return z.string()

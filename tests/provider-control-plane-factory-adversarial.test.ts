@@ -210,8 +210,10 @@ describe("provider registration snapshot semantics", () => {
       { displayName: "\tTest Provider" },
       { definitionVersion: "1\nforged" },
       { definitionVersion: "1\n" },
+      { definitionVersion: "1\u2028forged" },
       { capabilityVersion: "1\u0000forged" },
-      { capabilityVersion: "\r1" }
+      { capabilityVersion: "\r1" },
+      { capabilityVersion: "1\u2029forged" }
     ]) {
       expect(() => defineProvider(providerInput(overrides)))
         .toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
