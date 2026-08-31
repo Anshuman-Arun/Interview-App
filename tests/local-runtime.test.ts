@@ -98,6 +98,22 @@ describe("local worker lifecycle manager", () => {
       fetch: 42 as unknown as typeof globalThis.fetch
     })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
 
+    let parentEnvironmentProxyTraps = 0;
+    const proxiedParentEnvironment = new Proxy({ PATH: process.env.PATH }, {
+      ownKeys: (target) => {
+        parentEnvironmentProxyTraps += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        parentEnvironmentProxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      }
+    });
+    expect(() => new LocalRuntimeManager({
+      parentEnvironment: proxiedParentEnvironment
+    })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(parentEnvironmentProxyTraps).toBe(0);
+
     const runtime = manager();
     runtime.register(definition("invalid-start-options", "ready"));
     let signalGetterCalls = 0;
@@ -1209,6 +1225,21 @@ describe("local worker lifecycle manager", () => {
       inherit: [coerciveKey] as unknown as readonly string[]
     }, { PATH: "safe" })).toThrow(/expected a string/iu);
     expect(environmentKeyCoercions).toBe(0);
+
+    let directParentProxyTraps = 0;
+    const directParentProxy = new Proxy({ PATH: "safe" }, {
+      ownKeys: (target) => {
+        directParentProxyTraps += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        directParentProxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      }
+    });
+    expect(() => buildLocalEnvironment(undefined, directParentProxy))
+      .toThrow(/Parent environment could not be inspected/iu);
+    expect(directParentProxyTraps).toBe(0);
 
     let parentGetterCalls = 0;
     const parent = Object.defineProperty({}, "PATH", {
