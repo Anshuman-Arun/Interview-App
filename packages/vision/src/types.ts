@@ -3,7 +3,10 @@ import { z } from "zod";
 import { PNG } from "pngjs";
 import { computeVisionArtifactId } from "./artifact-identity.js";
 import { actualUint8ArrayByteLength } from "./byte-validation.js";
-import { assertSupportedPngHeaderParameters } from "./png-validation.js";
+import {
+  assertStaticPngChunkStructure,
+  assertSupportedPngHeaderParameters
+} from "./png-validation.js";
 import { BoardRevisionSchema } from "../../domain/src/index.js";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -12,47 +15,6 @@ const SafeBoardRevisionSchema = BoardRevisionSchema.refine(
   (revision) => Number.isSafeInteger(revision),
   "Board revision must remain within JavaScript safe integer range"
 );
-
-const UNSUPPORTED_APNG_CHUNKS = new Set(["acTL", "fcTL", "fdAT"]);
-const HARD_MAX_PNG_CHUNKS = 4096;
-
-function assertStaticPngChunkStructure(bytes: Buffer): void {
-  let offset = PNG_SIGNATURE.length;
-  let chunkIndex = 0;
-  let foundEnd = false;
-
-  while (offset < bytes.length) {
-    if (chunkIndex >= HARD_MAX_PNG_CHUNKS) {
-      throw new RangeError("PNG contains too many chunks for bounded preprocessing");
-    }
-    if (offset + 12 > bytes.length) throw new RangeError("PNG contains a truncated chunk");
-    const chunkLength = bytes.readUInt32BE(offset);
-    const chunkType = bytes.toString("ascii", offset + 4, offset + 8);
-    const nextOffset = offset + 12 + chunkLength;
-    if (!Number.isSafeInteger(nextOffset) || nextOffset > bytes.length) {
-      throw new RangeError("PNG chunk length exceeds encoded payload bounds");
-    }
-    if (chunkIndex === 0 && (chunkType !== "IHDR" || chunkLength !== 13)) {
-      throw new RangeError("PNG must begin with exactly one IHDR chunk");
-    }
-    if (chunkIndex > 0 && chunkType === "IHDR") {
-      throw new RangeError("PNG contains multiple IHDR chunks");
-    }
-    if (UNSUPPORTED_APNG_CHUNKS.has(chunkType)) {
-      throw new RangeError("Animated PNG chunks are unsupported");
-    }
-    if (chunkType === "IEND") {
-      if (chunkLength !== 0) throw new RangeError("PNG IEND chunk must be empty");
-      if (nextOffset !== bytes.length) throw new RangeError("PNG contains trailing bytes after IEND");
-      foundEnd = true;
-      break;
-    }
-    offset = nextOffset;
-    chunkIndex += 1;
-  }
-
-  if (!foundEnd) throw new RangeError("PNG is missing its terminal IEND chunk");
-}
 
 interface PayloadIntegrityMetadata {
   readonly width: number;
