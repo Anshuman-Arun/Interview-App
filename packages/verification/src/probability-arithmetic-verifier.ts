@@ -4,7 +4,6 @@ import { IntermediateRationalInputSchema, RationalInputSchema } from "./rational
 import { MAX_COMBINATORIAL_N, MAX_PROBABILITY_OUTCOMES } from "./limits.js";
 import {
   BoundedMathError,
-  addRationals,
   compareRationals,
   divideRationals,
   equalRationals,
@@ -104,6 +103,38 @@ function assertProbability(value: ExactRational, label: string): ExactRational {
   return value;
 }
 
+function sumProbabilityMass(values: readonly ExactRational[]): ExactRational {
+  const one = rational(1n, 1n);
+  let pending = [...values];
+
+  while (true) {
+    const groups = new Map<string, { denominator: bigint; numerator: bigint }>();
+    for (const value of pending) {
+      const key = value.denominator.toString();
+      const existing = groups.get(key);
+      if (existing === undefined) {
+        groups.set(key, { denominator: value.denominator, numerator: value.numerator });
+      } else {
+        existing.numerator += value.numerator;
+      }
+    }
+
+    const grouped = [...groups.values()].map(({ numerator, denominator }) => {
+      const value = rational(numerator, denominator);
+      if (compareRationals(value, one) > 0) {
+        throw new BoundedMathError(
+          "INVALID_PROBABILITY",
+          "Finite expectation probabilities cannot sum to more than 1"
+        );
+      }
+      return value;
+    });
+
+    if (grouped.length === pending.length) return sumRationals(grouped);
+    pending = grouped;
+  }
+}
+
 function evaluateProbabilityClaim(
   claim: z.infer<typeof ProbabilityArithmeticClaimSchema>
 ): { readonly actual: ExactRational; readonly claimed: ExactRational } {
@@ -114,16 +145,7 @@ function evaluateProbabilityClaim(
         value: outcome.value
       }));
       const one = rational(1n, 1n);
-      let totalProbability = rational(0n, 1n);
-      for (const outcome of outcomes) {
-        totalProbability = addRationals(totalProbability, outcome.probability);
-        if (compareRationals(totalProbability, one) > 0) {
-          throw new BoundedMathError(
-            "INVALID_PROBABILITY",
-            "Finite expectation probabilities cannot sum to more than 1"
-          );
-        }
-      }
+      const totalProbability = sumProbabilityMass(outcomes.map((outcome) => outcome.probability));
       if (!equalRationals(totalProbability, one)) {
         throw new BoundedMathError("INVALID_PROBABILITY", "Finite expectation probabilities must sum exactly to 1");
       }
