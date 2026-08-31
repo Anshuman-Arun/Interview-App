@@ -430,13 +430,13 @@ describe("vision snapshot validation and hashing", () => {
 
   it("does not trust a caller-supplied array iterator to enforce deduplication bounds", () => {
     const source = snapshot(makePng(1, 1));
-    class IteratorTrap extends Array<ImageSnapshot> {
-      public override *[Symbol.iterator](): ArrayIterator<ImageSnapshot> {
+    const images: ImageSnapshot[] = [source, source];
+    Object.defineProperty(images, Symbol.iterator, {
+      configurable: true,
+      value: () => {
         throw new Error("caller iterator must not run");
       }
-    }
-    const images = new IteratorTrap();
-    images.push(source, source);
+    });
     expect(deduplicateExactImagePayloads(images)).toEqual([source]);
   });
 
