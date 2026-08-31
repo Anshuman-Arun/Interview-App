@@ -227,7 +227,7 @@ describe("vision snapshot validation and hashing", () => {
   it("rejects artifact metadata whose deterministic ID is stale after provenance changes", async () => {
     const source = snapshot(makePng(4, 4));
     const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
-    expect(() => new VisionImageArtifact({
+    expect(() => new VisionImageArtifact(source, {
       ...crop.metadata,
       sourceRevision: BoardRevisionSchema.parse(crop.metadata.sourceRevision + 1)
     }, crop.readBytes())).toThrowError(RangeError);
@@ -236,16 +236,34 @@ describe("vision snapshot validation and hashing", () => {
   it("rejects impossible artifact kind/source-bound combinations", async () => {
     const source = snapshot(makePng(4, 4));
     const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
-    expect(() => new VisionImageArtifact({
+    expect(() => new VisionImageArtifact(source, {
       ...crop.metadata,
       sourceBounds: { x: 1, y: 1, width: 3, height: 2 }
     }, crop.readBytes())).toThrow();
 
-    expect(() => new VisionImageArtifact({
+    expect(() => new VisionImageArtifact(source, {
       ...crop.metadata,
       kind: "RESIZED",
       sourceBounds: { x: 0, y: 0, width: crop.metadata.width, height: crop.metadata.height }
     }, crop.readBytes())).toThrow();
+  });
+
+  it("rejects artifact construction against a different immediate source even when dimensions and revision match", async () => {
+    const firstSource = snapshot(makePng(4, 4, () => [10, 10, 10, 255]), {
+      id: "same-shape-a",
+      revision: 12
+    });
+    const secondSource = snapshot(makePng(4, 4, () => [20, 20, 20, 255]), {
+      id: "same-shape-b",
+      revision: 12
+    });
+    const crop = (await cropImage(firstSource, { x: 1, y: 1, width: 2, height: 2 })).artifact;
+
+    expect(() => new VisionImageArtifact(
+      secondSource,
+      crop.metadata,
+      crop.readBytes()
+    )).toThrowError(RangeError);
   });
 
   it("rejects forged metadata when public image containers are constructed directly", () => {
