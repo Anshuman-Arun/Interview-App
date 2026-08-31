@@ -150,6 +150,12 @@ export async function initializeCachePaths(rootInput: string): Promise<CachePath
   try {
     await mkdir(rootInput, { recursive: true });
     const canonicalRoot = await realpath(rootInput);
+    if (canonicalRoot === path.parse(canonicalRoot).root) {
+      throw new ModelAssetError(
+        "INVALID_CACHE_ROOT",
+        "Asset cache root may not resolve to a filesystem or share root."
+      );
+    }
     const rootStat = await lstat(canonicalRoot, { bigint: true });
     if (!rootStat.isDirectory()) {
       throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must resolve to a directory.");
