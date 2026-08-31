@@ -1818,9 +1818,10 @@ describe("crop, resize, tiling, and cancellation", () => {
     const proxiedController = new AbortController();
     proxiedController.abort();
     const proxiedSignal = new Proxy(proxiedController.signal, {
-      get(target, property, receiver) {
+      get(target, property, receiver): unknown {
         if (property === "aborted") return false;
-        return Reflect.get(target, property, receiver);
+        const value: unknown = Reflect.get(target, property, receiver);
+        return value;
       }
     });
     await expect(cropImage(
