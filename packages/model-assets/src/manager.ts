@@ -722,9 +722,17 @@ export class ModelAssetManager {
 
   private async reserveCapacity(paths: CachePaths, requestedBytes: number): Promise<void> {
     await this.withCapacityGate(async () => {
+      const reservedProjection = this.reservedBytes + requestedBytes;
+      if (!Number.isSafeInteger(reservedProjection)) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "In-flight artifact reservations exceed safe integer accounting limits."
+        );
+      }
+
       if (this.maxCacheBytes !== undefined) {
         const usedBytes = await this.managedCachePayloadBytes(paths);
-        const projected = usedBytes + this.reservedBytes + requestedBytes;
+        const projected = usedBytes + reservedProjection;
         if (!Number.isSafeInteger(projected) || projected > this.maxCacheBytes) {
           throw new ModelAssetError(
             "CACHE_LIMIT_EXCEEDED",
@@ -734,14 +742,13 @@ export class ModelAssetManager {
       }
 
       const available = await availableDiskBytes(paths.root);
-      if (available !== undefined
-          && available < BigInt(this.reservedBytes + requestedBytes)) {
+      if (available !== undefined && available < BigInt(reservedProjection)) {
         throw new ModelAssetError(
           "INSUFFICIENT_DISK_SPACE",
           "Insufficient free disk space for verified atomic installation."
         );
       }
-      this.reservedBytes += requestedBytes;
+      this.reservedBytes = reservedProjection;
     });
   }
 
