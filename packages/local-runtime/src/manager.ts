@@ -2529,6 +2529,15 @@ function safeIsErrorObject(value: object): boolean {
   }
 }
 
+function preRedactBoundedText(
+  value: string,
+  secretValues: readonly string[],
+  maxLength: number
+): string {
+  if (value.length <= maxLength) return redactKnownSecrets(value, secretValues);
+  return secretValues.includes(value) ? "[REDACTED]" : "[TRUNCATED]";
+}
+
 function preRedactDiagnosticValue(
   value: unknown,
   secretValues: readonly string[],
@@ -2539,7 +2548,13 @@ function preRedactDiagnosticValue(
     return "[TRUNCATED]";
   }
   state.remainingNodes -= 1;
-  if (typeof value === "string") return redactKnownSecrets(value, secretValues);
+  if (typeof value === "string") {
+    return preRedactBoundedText(
+      value,
+      secretValues,
+      DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength
+    );
+  }
   if (value === null || typeof value === "number" || typeof value === "boolean") return value;
   if (typeof value === "bigint") return `${value.toString()}n`;
   if (typeof value !== "object") return undefined;
@@ -2593,7 +2608,11 @@ function preRedactDiagnosticValue(
       .slice(0, DIAGNOSTIC_SANITIZATION_LIMITS.maxObjectEntries);
     for (const [key, descriptor] of entries) {
       if (key === "__proto__" || key === "prototype" || key === "constructor") continue;
-      const requestedKey = redactKnownSecrets(key, secretValues);
+      const requestedKey = preRedactBoundedText(
+        key,
+        secretValues,
+        DIAGNOSTIC_SANITIZATION_LIMITS.maxKeyLength
+      );
       let outputKey = requestedKey;
       let suffix = 2;
       while (Object.hasOwn(output, outputKey)) {
