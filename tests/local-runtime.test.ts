@@ -951,18 +951,21 @@ describe("local worker lifecycle manager", () => {
     const revokedThrown = Proxy.revocable({}, {});
     revokedThrown.revoke();
     const throwing = manager();
+    let throwingProbeCalls = 0;
     throwing.register(definition("revoked-thrown", "ready", {
-      startupTimeoutMs: 60,
+      startupTimeoutMs: 300,
       readiness: {
         kind: "CUSTOM_LOCAL",
         intervalMs: 5,
         probe: () => {
+          throwingProbeCalls += 1;
           throw revokedThrown.proxy;
         }
       }
     }));
     await expect(throwing.start("revoked-thrown"))
       .rejects.toMatchObject({ code: "READINESS_TIMEOUT" });
+    expect(throwingProbeCalls).toBeGreaterThan(0);
   });
 
   it("rejects malformed reported handshake metadata", async () => {
