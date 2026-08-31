@@ -244,22 +244,46 @@ export async function verifyArtifactFile(
   expectations: FileVerificationExpectations,
   signal?: AbortSignal
 ): Promise<FileVerificationResult> {
-  if (!Number.isSafeInteger(expectations.sizeBytes) || expectations.sizeBytes <= 0) {
+  const rawFilePath: unknown = filePath;
+  if (typeof rawFilePath !== "string"
+      || rawFilePath.length === 0
+      || rawFilePath.includes("\0")) {
+    throw new ModelAssetError(
+      "INVALID_CONFIGURATION",
+      "Artifact verification path must be a non-empty valid path string."
+    );
+  }
+
+  const rawExpectations: unknown = expectations;
+  if (typeof rawExpectations !== "object" || rawExpectations === null) {
+    throw new ModelAssetError(
+      "INVALID_CONFIGURATION",
+      "Artifact verification expectations must be an object."
+    );
+  }
+  const expectationRecord = rawExpectations as Record<string, unknown>;
+  const expectedSize = expectationRecord["sizeBytes"];
+  if (typeof expectedSize !== "number"
+      || !Number.isSafeInteger(expectedSize)
+      || expectedSize <= 0) {
     throw new ModelAssetError("INVALID_CONFIGURATION", "Expected artifact size must be a positive safe integer.");
   }
-  const digest = Sha256DigestSchema.safeParse(expectations.sha256);
+  const digest = Sha256DigestSchema.safeParse(expectationRecord["sha256"]);
   if (!digest.success) {
     throw new ModelAssetError("INVALID_CONFIGURATION", "Expected SHA-256 digest is invalid.");
   }
-  const maximum = expectations.maxBytes ?? expectations.sizeBytes;
-  if (!Number.isSafeInteger(maximum) || maximum <= 0) {
+  const rawMaximum = expectationRecord["maxBytes"];
+  const maximum = rawMaximum ?? expectedSize;
+  if (typeof maximum !== "number"
+      || !Number.isSafeInteger(maximum)
+      || maximum <= 0) {
     throw new ModelAssetError("INVALID_CONFIGURATION", "Verification byte limit must be a positive safe integer.");
   }
   if (signal?.aborted === true) throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
 
   let fileStat: Stats;
   try {
-    fileStat = await lstat(filePath);
+    fileStat = await lstat(rawFilePath);
   } catch (error) {
     throw new ModelAssetError("IO_ERROR", "Unable to inspect artifact file.", { cause: error });
   }
@@ -269,7 +293,7 @@ export async function verifyArtifactFile(
   if (fileStat.size > maximum) {
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact exceeds the configured verification byte limit.");
   }
-  if (fileStat.size !== expectations.sizeBytes) {
+  if (fileStat.size !== expectedSize) {
     return { ok: false, reason: "SIZE_MISMATCH", actualBytes: fileStat.size };
   }
 
@@ -302,11 +326,11 @@ export async function verifyArtifactFile(
     signal?.removeEventListener("abort", abortListener);
   }
 
-  if (bytes !== expectations.sizeBytes) {
+  if (bytes !== expectedSize) {
     return { ok: false, reason: "SIZE_MISMATCH", actualBytes: bytes };
   }
   const actualSha256 = hash.digest("hex") as Sha256Digest;
-  if (actualSha256 !== expectations.sha256) {
+  if (actualSha256 !== digest.data) {
     return { ok: false, reason: "DIGEST_MISMATCH", actualBytes: bytes, actualSha256 };
   }
   return { ok: true, actualBytes: bytes, actualSha256 };
