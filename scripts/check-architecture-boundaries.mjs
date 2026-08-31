@@ -369,17 +369,26 @@ function checkVisionInternalConstruction(records, violations) {
     const internalBindingNames = new Set();
 
     function recordInternalImportBindings(node) {
-      if (!ts.isImportDeclaration(node)
-          || !ts.isStringLiteralLike(node.moduleSpecifier)
-          || !isInternalVisionConstructionSpecifier(node.moduleSpecifier.text)
-          || node.importClause === undefined) return;
+      if (ts.isImportDeclaration(node)
+          && ts.isStringLiteralLike(node.moduleSpecifier)
+          && isInternalVisionConstructionSpecifier(node.moduleSpecifier.text)
+          && node.importClause !== undefined) {
+        if (node.importClause.name !== undefined) internalBindingNames.add(node.importClause.name.text);
+        const bindings = node.importClause.namedBindings;
+        if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+          internalBindingNames.add(bindings.name.text);
+        } else if (bindings !== undefined && ts.isNamedImports(bindings)) {
+          for (const element of bindings.elements) internalBindingNames.add(element.name.text);
+        }
+        return;
+      }
 
-      if (node.importClause.name !== undefined) internalBindingNames.add(node.importClause.name.text);
-      const bindings = node.importClause.namedBindings;
-      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-        internalBindingNames.add(bindings.name.text);
-      } else if (bindings !== undefined && ts.isNamedImports(bindings)) {
-        for (const element of bindings.elements) internalBindingNames.add(element.name.text);
+      if (ts.isImportEqualsDeclaration(node)
+          && ts.isExternalModuleReference(node.moduleReference)
+          && node.moduleReference.expression !== undefined
+          && ts.isStringLiteralLike(node.moduleReference.expression)
+          && isInternalVisionConstructionSpecifier(node.moduleReference.expression.text)) {
+        internalBindingNames.add(node.name.text);
       }
     }
 
@@ -440,9 +449,25 @@ function checkVisionInternalConstruction(records, violations) {
           || ts.isNonNullExpression(expression)) {
         return expressionExposesInternalBinding(expression.expression);
       }
+      if (ts.isCallExpression(expression) && expression.arguments.length === 1) {
+        const firstArgument = expression.arguments[0];
+        if (firstArgument !== undefined && ts.isStringLiteralLike(firstArgument)) {
+          if (expression.expression.kind === ts.SyntaxKind.ImportKeyword
+              && isInternalVisionConstructionSpecifier(firstArgument.text)) {
+            return true;
+          }
+          if (ts.isIdentifier(expression.expression)
+              && expression.expression.text === "require"
+              && isInternalVisionConstructionSpecifier(firstArgument.text)) {
+            return true;
+          }
+        }
+      }
       if (ts.isPropertyAccessExpression(expression)) {
-        return ts.isIdentifier(expression.expression)
-          && taintedBindingNames.has(expression.expression.text);
+        return expressionExposesInternalBinding(expression.expression);
+      }
+      if (ts.isElementAccessExpression(expression)) {
+        return expressionExposesInternalBinding(expression.expression);
       }
       if (ts.isArrayLiteralExpression(expression)) {
         return expression.elements.some((element) =>
