@@ -278,6 +278,9 @@ export class LocalRuntimeManager {
     if (typeof detail !== "string") {
       throw new LocalRuntimeError("INVALID_ARGUMENT", "Degradation detail must be a string");
     }
+    if (detail.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "Degradation detail exceeds the diagnostic string limit");
+    }
     if (record.state !== "READY" && record.state !== "DEGRADED") {
       throw new LocalRuntimeError("INVALID_STATE", `Cannot mark ${componentId} degraded from ${record.state}`);
     }
@@ -290,6 +293,9 @@ export class LocalRuntimeManager {
     const record = this.requireRecord(componentId);
     if (detail !== undefined && typeof detail !== "string") {
       throw new LocalRuntimeError("INVALID_ARGUMENT", "Readiness detail must be a string");
+    }
+    if (detail !== undefined && detail.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      throw new LocalRuntimeError("INVALID_ARGUMENT", "Readiness detail exceeds the diagnostic string limit");
     }
     if (record.state !== "READY" && record.state !== "DEGRADED") {
       throw new LocalRuntimeError("INVALID_STATE", `Cannot mark ${componentId} ready from ${record.state}`);
@@ -1753,6 +1759,9 @@ function normalizeReadinessDecision(
   if (detail !== undefined && typeof detail !== "string") {
     throw new LocalRuntimeError("READINESS_FAILED", "Readiness detail must be a string");
   }
+  if (typeof detail === "string" && detail.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+    throw new LocalRuntimeError("READINESS_FAILED", "Readiness detail exceeds the diagnostic string limit");
+  }
   const rawHandshake = dataDescriptorValue(descriptors, "handshake");
   const handshake = rawHandshake === undefined
     ? undefined
@@ -2450,6 +2459,9 @@ function safeErrorMessage(error: unknown, secretValues: readonly string[] = []):
   try {
     const descriptor = Object.getOwnPropertyDescriptor(error, "message");
     if (descriptor !== undefined && "value" in descriptor && typeof descriptor.value === "string") {
+      if (descriptor.value.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+        return "error detail exceeded diagnostic limit";
+      }
       return sanitizeStatusText(descriptor.value, secretValues);
     }
   } catch {
