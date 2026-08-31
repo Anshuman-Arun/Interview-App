@@ -279,11 +279,14 @@ describe("vision snapshot validation and hashing", () => {
     const third = snapshot(bytes, { id: "c", revision: 10 });
     const different = snapshot(makePng(3, 3, () => [255, 0, 0, 255]), { id: "d", revision: 9 });
 
+    const repeated = snapshot(bytes, { id: "a", revision: 9 });
     expect(exactImagePayloadDuplicate(first, second)).toBe(true);
-    expect(sameRevisionAndImage(first, second)).toBe(true);
+    expect(sameRevisionAndImage(first, repeated)).toBe(true);
+    expect(sameRevisionAndImage(first, second)).toBe(false);
     expect(sameRevisionAndImage(first, third)).toBe(false);
     expect(exactImagePayloadDuplicate(first, different)).toBe(false);
-    expect(revisionImageProcessingKey(first)).toBe(revisionImageProcessingKey(second));
+    expect(revisionImageProcessingKey(first)).toBe(revisionImageProcessingKey(repeated));
+    expect(revisionImageProcessingKey(first)).not.toBe(revisionImageProcessingKey(second));
     expect(deduplicateExactImagePayloads([first, second, different])).toEqual([first, different]);
   });
 });
