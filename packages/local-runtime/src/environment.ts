@@ -32,6 +32,10 @@ export function buildLocalEnvironment(
   parent: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): BuiltLocalEnvironment {
+  if (typeof parent !== "object" || parent === null || Array.isArray(parent)) {
+    throw new Error("Parent environment must be an object");
+  }
+  if (utilTypes.isProxy(parent)) throw new Error("Parent environment could not be inspected");
   const inspectedDefinition = inspectEnvironmentDefinition(definition);
   const environment = Object.create(null) as NodeJS.ProcessEnv;
   const secretValues = new Set<string>();
@@ -293,7 +297,6 @@ function findParentEntry(
   requested: string,
   platform: NodeJS.Platform
 ): { readonly key: string; readonly value: string } | undefined {
-  if (utilTypes.isProxy(parent)) return undefined;
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
     descriptors = Object.getOwnPropertyDescriptors(parent);
