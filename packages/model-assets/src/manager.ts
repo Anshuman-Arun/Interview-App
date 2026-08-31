@@ -786,6 +786,12 @@ export class ModelAssetManager {
         const existing = await this.checkInstallation(manifest, signal);
         if (existing.status === "INSTALLED" && existing.path !== undefined) {
           await this.removeManagedEntry(paths, stagingDirectory);
+          if (signal.aborted) {
+            throw new ModelAssetError(
+              "CANCELLED",
+              "Artifact installation request was cancelled."
+            );
+          }
           return existing.path;
         }
         this.rejectTransientInstallationFailure(existing);
@@ -811,9 +817,21 @@ export class ModelAssetManager {
         reservationHeld = false;
         published = true;
       } catch (error) {
+        if (error instanceof ModelAssetError
+            && (error.code === "CANCELLED"
+              || error.code === "UNSAFE_PATH"
+              || error.code === "INVALID_CACHE_ROOT")) {
+          throw error;
+        }
         const raced = await this.checkInstallation(manifest, signal);
         if (raced.status === "INSTALLED" && raced.path !== undefined) {
           await this.removeManagedEntry(paths, stagingDirectory);
+          if (signal.aborted) {
+            throw new ModelAssetError(
+              "CANCELLED",
+              "Artifact installation request was cancelled."
+            );
+          }
           return raced.path;
         }
         throw error;
