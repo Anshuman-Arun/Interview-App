@@ -78,6 +78,47 @@ describe("local model asset manager", () => {
     }
   });
 
+  it("rejects inherited and accessor-backed manifest data without invoking getters", () => {
+    const payload = Buffer.from("prototype-manifest");
+    const manifest = manifestFor(payload, "https://example.test/prototype.bin");
+
+    const inheritedManifest = Object.create(manifest) as unknown;
+    expect(AssetManifestSchema.safeParse(inheritedManifest).success).toBe(false);
+
+    let getterReads = 0;
+    const accessorManifest: Record<string, unknown> = { ...manifest };
+    Object.defineProperty(accessorManifest, "sourceUrl", {
+      enumerable: true,
+      configurable: true,
+      get() {
+        getterReads += 1;
+        return manifest.sourceUrl;
+      }
+    });
+    expect(AssetManifestSchema.safeParse(accessorManifest).success).toBe(false);
+    expect(getterReads).toBe(0);
+
+    const inheritedLicense = {
+      ...manifest,
+      license: Object.create({ name: "MIT" }) as unknown
+    };
+    expect(AssetManifestSchema.safeParse(inheritedLicense).success).toBe(false);
+
+    const inheritedRequest = Object.create({
+      familyId: manifest.familyId,
+      version: manifest.version,
+      platform: "linux",
+      architecture: "x64"
+    }) as unknown;
+    const UnsafeResolver = resolveAssetManifest as unknown as (
+      manifests: readonly unknown[],
+      request: unknown
+    ) => AssetManifest;
+    expect(() => UnsafeResolver([manifest], inheritedRequest)).toThrow(
+      expect.objectContaining({ code: "INVALID_MANIFEST" })
+    );
+  });
+
   it("resolves platform, architecture, and variant deterministically", () => {
     const payload = Buffer.from("resolver");
     const base = AssetManifestSchema.parse({
