@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
-import { snapshotOwnEnumerableRecord } from "./object-validation.js";
+import {
+  snapshotOwnEnumerableRecord,
+  snapshotOwnEnumerableRecordForSchema
+} from "./object-validation.js";
 import { PixelDimensionsSchema, VisionPreprocessingError } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
@@ -14,20 +17,34 @@ const PIXEL_DIMENSION_FIELDS = new Set(["width", "height"]);
 const IMAGE_RECT_FIELDS = new Set(["x", "y", "width", "height"]);
 const RECT_CORNER_FIELDS = new Set(["x1", "y1", "x2", "y2"]);
 
-export const ImageRectSchema = z.object({
-  x: SAFE_INTEGER_SCHEMA,
-  y: SAFE_INTEGER_SCHEMA,
-  width: SAFE_POSITIVE_INTEGER_SCHEMA,
-  height: SAFE_POSITIVE_INTEGER_SCHEMA
-}).strict();
+export const ImageRectSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Image rectangle schema input",
+    IMAGE_RECT_FIELDS
+  ),
+  z.object({
+    x: SAFE_INTEGER_SCHEMA,
+    y: SAFE_INTEGER_SCHEMA,
+    width: SAFE_POSITIVE_INTEGER_SCHEMA,
+    height: SAFE_POSITIVE_INTEGER_SCHEMA
+  }).strict()
+);
 export type ImageRect = z.infer<typeof ImageRectSchema>;
 
-export const RectCornersSchema = z.object({
-  x1: SAFE_INTEGER_SCHEMA,
-  y1: SAFE_INTEGER_SCHEMA,
-  x2: SAFE_INTEGER_SCHEMA,
-  y2: SAFE_INTEGER_SCHEMA
-}).strict();
+export const RectCornersSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Rectangle corners schema input",
+    RECT_CORNER_FIELDS
+  ),
+  z.object({
+    x1: SAFE_INTEGER_SCHEMA,
+    y1: SAFE_INTEGER_SCHEMA,
+    x2: SAFE_INTEGER_SCHEMA,
+    y2: SAFE_INTEGER_SCHEMA
+  }).strict()
+);
 export type RectCorners = z.infer<typeof RectCornersSchema>;
 
 function invalidRect(message: string): never {
