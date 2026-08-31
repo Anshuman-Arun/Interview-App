@@ -1253,7 +1253,7 @@ function sanitizeHandshake(
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
     ...(handshake.modelVersionOrHash === undefined ? {} : { modelVersionOrHash: sanitizeDiagnosticText(redactKnownSecrets(handshake.modelVersionOrHash, secretValues)) }),
     ...(capabilities === undefined ? {} : { capabilities: Object.freeze(capabilities) }),
-    ...(handshake.metadata === undefined ? {} : { metadata: redactKnownSecretsFromRecord(sanitizeDiagnosticRecord(handshake.metadata), secretValues) })
+    ...(handshake.metadata === undefined ? {} : { metadata: sanitizeHandshakeMetadata(handshake.metadata, secretValues) })
   });
 }
 
@@ -1265,6 +1265,66 @@ function cloneHandshake(handshake: LocalComponentHandshake): LocalComponentHands
     ...(handshake.capabilities === undefined ? {} : { capabilities: Object.freeze([...handshake.capabilities]) }),
     ...(handshake.metadata === undefined ? {} : { metadata: Object.freeze({ ...handshake.metadata }) })
   });
+}
+
+function validateVersionValue(
+  value: unknown,
+  label: string,
+  fail: (message: string) => never
+): void {
+  if (typeof value === "string") {
+    if (value.length === 0 || value.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      fail(`${label} must be a non-empty bounded string`);
+    }
+    return;
+  }
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return;
+  fail(`${label} must be a nonnegative safe integer or non-empty string`);
+}
+
+function validateReportedHandshake(handshake: LocalComponentHandshake, componentId: string): void {
+  const fail = (message: string): never => {
+    throw new LocalRuntimeError(
+      "READINESS_FAILED",
+      `Invalid version handshake from ${componentId}: ${message}`
+    );
+  };
+  if (typeof handshake !== "object" || handshake === null || Array.isArray(handshake)) {
+    fail("handshake must be an object");
+  }
+  if (handshake.componentVersion !== undefined) {
+    if (typeof handshake.componentVersion !== "string"
+        || handshake.componentVersion.length === 0
+        || handshake.componentVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      fail("componentVersion must be a non-empty bounded string");
+    }
+  }
+  if (handshake.protocolVersion !== undefined) {
+    validateVersionValue(handshake.protocolVersion, "protocolVersion", fail);
+  }
+  if (handshake.modelVersionOrHash !== undefined) {
+    if (typeof handshake.modelVersionOrHash !== "string"
+        || handshake.modelVersionOrHash.length === 0
+        || handshake.modelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      fail("modelVersionOrHash must be a non-empty bounded string");
+    }
+  }
+  if (handshake.capabilities !== undefined) {
+    if (!Array.isArray(handshake.capabilities) || handshake.capabilities.length > MAX_CAPABILITIES) {
+      fail(`capabilities must contain at most ${String(MAX_CAPABILITIES)} items`);
+    }
+    for (const capability of handshake.capabilities) {
+      if (typeof capability !== "string"
+          || capability.length === 0
+          || capability.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+        fail("capabilities must contain only non-empty bounded strings");
+      }
+    }
+  }
+  if (handshake.metadata !== undefined
+      && (typeof handshake.metadata !== "object" || handshake.metadata === null || Array.isArray(handshake.metadata))) {
+    fail("metadata must be an object");
+  }
 }
 
 function validateExpectedHandshake(
@@ -1612,8 +1672,8 @@ function sanitizeStatusText(value: string, secretValues: readonly string[]): str
   return sanitizeDiagnosticText(redactKnownSecrets(value, secretValues));
 }
 
-function safeErrorMessage(error: unknown): string {
-  if (error instanceof Error) return sanitizeDiagnosticText(error.message);
+function safeErrorMessage(error: unknown, secretValues: readonly string[] = []): string {
+  if (error instanceof Error) return sanitizeStatusText(error.message, secretValues);
   return "unknown error";
 }
 
@@ -1625,17 +1685,92 @@ function redactKnownSecrets(value: string, secretValues: readonly string[]): str
   return output;
 }
 
-function redactKnownSecretsFromRecord(
-  record: Readonly<Record<string, unknown>>,
+function sanitizeHandshakeMetadata(
+  metadata: Readonly<Record<string, unknown>>,
   secretValues: readonly string[]
 ): Readonly<Record<string, unknown>> {
-  const visit = (value: unknown): unknown => {
-    if (typeof value === "string") return redactKnownSecrets(value, secretValues);
-    if (Array.isArray(value)) return Object.freeze(value.map((item) => visit(item)));
-    if (typeof value !== "object" || value === null) return value;
+  const preRedacted = preRedactDiagnosticValue(metadata, secretValues, {
+    seen: new WeakSet<object>(),
+    remainingNodes: DIAGNOSTIC_SANITIZATION_LIMITS.maxNodes
+  });
+  if (typeof preRedacted !== "object" || preRedacted === null || Array.isArray(preRedacted)) {
+    return Object.freeze({});
+  }
+  return sanitizeDiagnosticRecord(preRedacted as Readonly<Record<string, unknown>>);
+}
+
+interface PreRedactionState {
+  readonly seen: WeakSet<object>;
+  remainingNodes: number;
+}
+
+function preRedactDiagnosticValue(
+  value: unknown,
+  secretValues: readonly string[],
+  state: PreRedactionState,
+  depth = 0
+): unknown {
+  if (state.remainingNodes <= 0 || depth >= DIAGNOSTIC_SANITIZATION_LIMITS.maxDepth) {
+    return "[TRUNCATED]";
+  }
+  state.remainingNodes -= 1;
+  if (typeof value === "string") return redactKnownSecrets(value, secretValues);
+  if (value === null || typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "bigint") return `${value.toString()}n`;
+  if (typeof value !== "object") return undefined;
+  if (state.seen.has(value)) return "[CIRCULAR]";
+  state.seen.add(value);
+  try {
+    let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+    try {
+      descriptors = Object.getOwnPropertyDescriptors(value);
+    } catch {
+      return "[UNINSPECTABLE_OBJECT]";
+    }
+    if (Array.isArray(value)) {
+      const rawLength = descriptors.length?.value;
+      if (typeof rawLength !== "number" || !Number.isSafeInteger(rawLength) || rawLength < 0) {
+        return "[UNINSPECTABLE_OBJECT]";
+      }
+      const output: unknown[] = [];
+      const count = Math.min(rawLength, DIAGNOSTIC_SANITIZATION_LIMITS.maxArrayItems);
+      for (let index = 0; index < count; index += 1) {
+        const descriptor = descriptors[String(index)];
+        if (descriptor === undefined) {
+          output.push(null);
+        } else if (!("value" in descriptor)) {
+          output.push("[ACCESSOR_OMITTED]");
+        } else {
+          output.push(preRedactDiagnosticValue(descriptor.value, secretValues, state, depth + 1));
+        }
+      }
+      if (rawLength > count) output.push("[TRUNCATED]");
+      return output;
+    }
+
+    let prototype: unknown;
+    try {
+      prototype = Object.getPrototypeOf(value);
+    } catch {
+      return "[UNINSPECTABLE_OBJECT]";
+    }
+    if (prototype !== Object.prototype && prototype !== null && !(value instanceof Error)) {
+      return "[UNSUPPORTED_OBJECT]";
+    }
+
     const output: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) output[key] = visit(item);
-    return Object.freeze(output);
-  };
-  return visit(record) as Readonly<Record<string, unknown>>;
+    const entries = Object.entries(descriptors)
+      .filter(([, descriptor]) => descriptor.enumerable === true || value instanceof Error)
+      .slice(0, DIAGNOSTIC_SANITIZATION_LIMITS.maxObjectEntries);
+    for (const [key, descriptor] of entries) {
+      if (key === "__proto__" || key === "prototype" || key === "constructor") continue;
+      output[key] = "value" in descriptor
+        ? preRedactDiagnosticValue(descriptor.value, secretValues, state, depth + 1)
+        : "[ACCESSOR_OMITTED]";
+    }
+    if (Object.entries(descriptors).length > entries.length) output.diagnosticTruncation = "[TRUNCATED]";
+    return output;
+  } finally {
+    state.seen.delete(value);
+  }
 }
