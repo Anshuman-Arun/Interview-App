@@ -103,7 +103,7 @@ export class LocalRuntimeManager {
 
   public constructor(options: LocalRuntimeManagerOptions = {}) {
     const inspectedOptions = inspectManagerOptions(options);
-    this.parentEnvironment = inspectedOptions.parentEnvironment ?? process.env;
+    this.parentEnvironment = snapshotParentEnvironment(inspectedOptions.parentEnvironment ?? process.env);
     this.now = inspectedOptions.now ?? (() => new Date());
     this.fetchImpl = inspectedOptions.fetch ?? globalThis.fetch;
     this.platform = process.platform;
@@ -1146,6 +1146,16 @@ export class LocalRuntimeManager {
       return new Date().toISOString();
     }
   }
+}
+
+function snapshotParentEnvironment(parent: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const descriptors = Object.getOwnPropertyDescriptors(parent);
+  const snapshot = Object.create(null) as NodeJS.ProcessEnv;
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!("value" in descriptor) || typeof descriptor.value !== "string") continue;
+    snapshot[key] = descriptor.value;
+  }
+  return Object.freeze(snapshot);
 }
 
 function inspectManagerOptions(options: unknown): LocalRuntimeManagerOptions {
