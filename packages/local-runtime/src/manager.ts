@@ -513,16 +513,21 @@ export class LocalRuntimeManager {
     child.stdout.on("data", (chunk: Buffer) => stdoutFramer.append(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderrFramer.append(chunk));
     let exitObserved = false;
-    child.once("exit", (code, signal) => {
+    const observeExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+      if (exitObserved) return;
       exitObserved = true;
       this.handleProcessExit(record, child, stderr, code, signal);
-    });
+    };
+    child.once("exit", observeExit);
     child.once("close", (code, signal) => {
       stdoutFramer.flush();
       stderrFramer.flush();
-      if (!exitObserved) this.handleProcessExit(record, child, stderr, code, signal);
+      observeExit(code, signal);
       this.handleProcessClose(record, child, stderr);
     });
+    if (child.exitCode !== null || child.signalCode !== null) {
+      observeExit(child.exitCode, child.signalCode);
+    }
     child.on("error", () => {
       if (record.child !== child) return;
       if (record.state === "READY" || record.state === "DEGRADED") {
