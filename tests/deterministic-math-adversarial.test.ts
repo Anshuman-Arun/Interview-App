@@ -10,6 +10,7 @@ import {
   FINITE_RECURRENCE_PROTOCOL_VERSION,
   FiniteRecurrenceVerifier,
   IntegerStringSchema,
+  MAX_INTEGER_DECIMAL_DIGITS,
   MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
   MAX_POWER_EXPONENT,
   MAX_PROBABILITY_OUTCOMES,
@@ -20,7 +21,9 @@ import {
   PROBABILITY_ARITHMETIC_PROTOCOL,
   PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
   ProbabilityArithmeticVerifier,
+  binomial,
   createDeterministicMathVerifier,
+  divideRationals,
   equalRationals,
   evaluateIntegerExpression,
   gcd,
@@ -134,6 +137,77 @@ describe("adversarial deterministic math verification", () => {
     });
     expect(result.status).toBe("UNRESOLVED");
     expect(result.reason).toContain("ARITHMETIC_UNDEFINED");
+  });
+
+  it("represents exact verifier results larger than the operand-literal limit", async () => {
+    const largeBinomial = binomial(1000, 500).toString();
+    expect(largeBinomial.length).toBeGreaterThan(MAX_INTEGER_DECIMAL_DIGITS);
+    const counting = await verifyJson(new CombinatorialCountingVerifier(), {
+      protocol: COMBINATORIAL_COUNTING_PROTOCOL,
+      protocolVersion: COMBINATORIAL_COUNTING_PROTOCOL_VERSION,
+      claim: { kind: "BINOMIAL", n: 1000, k: 500, claimed: largeBinomial }
+    });
+    expect(counting.status).toBe("VERIFIED");
+
+    const operand = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS);
+    const recurrenceValue = (BigInt(operand) * BigInt(operand)).toString();
+    expect(recurrenceValue.length).toBeGreaterThan(MAX_INTEGER_DECIMAL_DIGITS);
+    const recurrence = await verifyJson(new FiniteRecurrenceVerifier(), {
+      protocol: FINITE_RECURRENCE_PROTOCOL,
+      protocolVersion: FINITE_RECURRENCE_PROTOCOL_VERSION,
+      initial: [fraction(operand)],
+      recurrence: {
+        kind: "LINEAR_PREVIOUS_TERMS",
+        coefficients: [fraction(operand)],
+        constant: fraction("0")
+      },
+      claim: { kind: "VALUE_AT_INDEX", index: 1, value: fraction(recurrenceValue) }
+    });
+    expect(recurrence.status).toBe("VERIFIED");
+
+    const denominatorA = 10n ** 255n + 7n;
+    const denominatorB = 10n ** 255n + 9n;
+    const expectation = serializeRational(rational(
+      denominatorA + denominatorB,
+      2n * denominatorA * denominatorB
+    ));
+    expect(expectation.denominator.length).toBeGreaterThan(MAX_INTEGER_DECIMAL_DIGITS);
+    const probability = await verifyJson(new ProbabilityArithmeticVerifier(), {
+      protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+      protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "FINITE_EXPECTATION",
+        outcomes: [
+          { probability: fraction("1", "2"), value: fraction("1", denominatorA.toString()) },
+          { probability: fraction("1", "2"), value: fraction("1", denominatorB.toString()) }
+        ],
+        claimedExpectation: expectation
+      }
+    });
+    expect(probability.status).toBe("VERIFIED");
+  });
+
+  it("accepts bounded intermediate-sized claimed probabilities", async () => {
+    const scale = 10n ** 254n;
+    const left = scale + 7n;
+    const right = scale + 11n;
+    const joint = rational(left, 4n * left + 1n);
+    const condition = rational(right, 2n * right + 1n);
+    const claimed = serializeRational(divideRationals(joint, condition));
+    expect(Math.max(claimed.numerator.length, claimed.denominator.length))
+      .toBeGreaterThan(MAX_INTEGER_DECIMAL_DIGITS);
+
+    const result = await verifyJson(new ProbabilityArithmeticVerifier(), {
+      protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+      protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "CONDITIONAL_FROM_PROBABILITIES",
+        jointProbability: serializeRational(joint),
+        conditionProbability: serializeRational(condition),
+        claimedProbability: claimed
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
   });
 
   it("reports combinations-with-repetition expansion overflow as a resource limit", async () => {
