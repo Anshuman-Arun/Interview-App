@@ -389,6 +389,8 @@ function checkVisionInternalConstruction(records, violations) {
     }
     collect(record.sourceFile);
 
+    const taintedBindingNames = new Set(internalBindingNames);
+
     for (const specifier of extractModuleSpecifiers(record.sourceFile)) {
       const internalConstructionImport = isInternalVisionConstructionSpecifier(specifier);
       if (outsideVision
@@ -416,7 +418,7 @@ function checkVisionInternalConstruction(records, violations) {
       let found = false;
       function scan(current) {
         if (found) return;
-        if (ts.isIdentifier(current) && internalBindingNames.has(current.text)) {
+        if (ts.isIdentifier(current) && taintedBindingNames.has(current.text)) {
           found = true;
           return;
         }
@@ -431,7 +433,7 @@ function checkVisionInternalConstruction(records, violations) {
     }
 
     function expressionExposesInternalBinding(expression) {
-      if (ts.isIdentifier(expression)) return internalBindingNames.has(expression.text);
+      if (ts.isIdentifier(expression)) return taintedBindingNames.has(expression.text);
       if (ts.isParenthesizedExpression(expression)
           || ts.isAsExpression(expression)
           || ts.isTypeAssertionExpression(expression)
@@ -440,7 +442,7 @@ function checkVisionInternalConstruction(records, violations) {
       }
       if (ts.isPropertyAccessExpression(expression)) {
         return ts.isIdentifier(expression.expression)
-          && internalBindingNames.has(expression.expression.text);
+          && taintedBindingNames.has(expression.expression.text);
       }
       if (ts.isArrayLiteralExpression(expression)) {
         return expression.elements.some((element) =>
@@ -449,7 +451,7 @@ function checkVisionInternalConstruction(records, violations) {
       }
       if (ts.isObjectLiteralExpression(expression)) {
         return expression.properties.some((property) => {
-          if (ts.isShorthandPropertyAssignment(property)) return internalBindingNames.has(property.name.text);
+          if (ts.isShorthandPropertyAssignment(property)) return taintedBindingNames.has(property.name.text);
           if (ts.isPropertyAssignment(property)) return expressionExposesInternalBinding(property.initializer);
           if (ts.isSpreadAssignment(property)) return expressionExposesInternalBinding(property.expression);
           return false;
@@ -478,6 +480,76 @@ function checkVisionInternalConstruction(records, violations) {
       return false;
     }
 
+    function functionBodyExposesInternalBinding(node) {
+      let leaked = false;
+      function scanReturn(current) {
+        if (leaked) return;
+        if (ts.isReturnStatement(current)
+            && current.expression !== undefined
+            && expressionExposesInternalBinding(current.expression)) {
+          leaked = true;
+          return;
+        }
+        ts.forEachChild(current, scanReturn);
+      }
+      scanReturn(node);
+      return leaked;
+    }
+
+    function classExposesInternalBinding(node) {
+      for (const member of node.members) {
+        const isPrivate = member.modifiers?.some((modifier) =>
+          modifier.kind === ts.SyntaxKind.PrivateKeyword
+        ) === true;
+        if (isPrivate) continue;
+
+        if (ts.isPropertyDeclaration(member)
+            && member.initializer !== undefined
+            && expressionExposesInternalBinding(member.initializer)) {
+          return true;
+        }
+        if ((ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member))
+            && functionBodyExposesInternalBinding(member)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function propagateInternalAliases() {
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const statement of record.sourceFile.statements) {
+          if (ts.isVariableStatement(statement)) {
+            for (const declaration of statement.declarationList.declarations) {
+              if (ts.isIdentifier(declaration.name)
+                  && declaration.initializer !== undefined
+                  && expressionExposesInternalBinding(declaration.initializer)
+                  && !taintedBindingNames.has(declaration.name.text)) {
+                taintedBindingNames.add(declaration.name.text);
+                changed = true;
+              }
+            }
+          } else if (ts.isFunctionDeclaration(statement)
+              && statement.name !== undefined
+              && functionBodyExposesInternalBinding(statement)
+              && !taintedBindingNames.has(statement.name.text)) {
+            taintedBindingNames.add(statement.name.text);
+            changed = true;
+          } else if (ts.isClassDeclaration(statement)
+              && statement.name !== undefined
+              && classExposesInternalBinding(statement)
+              && !taintedBindingNames.has(statement.name.text)) {
+            taintedBindingNames.add(statement.name.text);
+            changed = true;
+          }
+        }
+      }
+    }
+
+    propagateInternalAliases();
+
     function leaksInternalBindingThroughExportedDeclaration(node) {
       if (ts.isVariableStatement(node) && hasExportModifier(node)) {
         return node.declarationList.declarations.some((declaration) =>
@@ -486,19 +558,10 @@ function checkVisionInternalConstruction(records, violations) {
         );
       }
       if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && hasExportModifier(node)) {
-        let leaked = false;
-        function scanReturn(current) {
-          if (leaked) return;
-          if (ts.isReturnStatement(current)
-              && current.expression !== undefined
-              && expressionExposesInternalBinding(current.expression)) {
-            leaked = true;
-            return;
-          }
-          ts.forEachChild(current, scanReturn);
-        }
-        scanReturn(node);
-        return leaked;
+        return functionBodyExposesInternalBinding(node);
+      }
+      if (ts.isClassDeclaration(node) && hasExportModifier(node)) {
+        return classExposesInternalBinding(node);
       }
       return false;
     }
