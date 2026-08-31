@@ -1225,6 +1225,17 @@ describe("local model asset manager", () => {
     })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
   });
 
+  it("rejects unknown manager option keys", async () => {
+    const root = await newRoot();
+    const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
+
+    expect(() => new UnsafeManager({
+      rootDir: root,
+      maxArtifactBytes: 1024,
+      maxCacheByte: 2048
+    })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
+  });
+
   it("rejects null optional manager settings instead of silently defaulting", async () => {
     const root = await newRoot();
     const UnsafeManager = ModelAssetManager as unknown as new (options: unknown) => ModelAssetManager;
