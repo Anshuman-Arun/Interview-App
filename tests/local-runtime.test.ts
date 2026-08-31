@@ -185,6 +185,29 @@ describe("local worker lifecycle manager", () => {
     expect(readFileSync(counter, "utf8")).toBe("2");
   });
 
+  it("cancels cleanly while waiting in retry backoff", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-backoff-cancel-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
+    const runtime = manager();
+    const controller = new AbortController();
+
+    runtime.register(definition("retry-cancel", "always-crash-counter", {
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 3, backoffMs: 500, maxBackoffMs: 500 }
+    }, [counter]));
+
+    const start = runtime.start("retry-cancel", { signal: controller.signal });
+    await waitForStatus(runtime, "retry-cancel", (status) =>
+      status.state === "FAILED" && status.restartCount === 1
+    );
+    controller.abort();
+
+    await expect(start).rejects.toMatchObject({ code: "START_CANCELLED" });
+    expect(runtime.getStatus("retry-cancel").state).toBe("STOPPED");
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    expect(readFileSync(counter, "utf8")).toBe("1");
+  });
+
   it("exhausts limited retries without entering an infinite restart loop", async () => {
     const root = mkdtempSync(join(tmpdir(), "local-runtime-exhaust-"));
     temporaryRoots.push(root);
@@ -261,6 +284,27 @@ describe("local worker lifecycle manager", () => {
     expect(serialized).not.toContain("inline-private-token");
     expect(serialized).toContain("[REDACTED]");
     expect(serialized).not.toContain("must-not-cross");
+  });
+
+  it("does not reprocess runtime redaction markers as later secrets", async () => {
+    const runtime = manager();
+    runtime.register(definition("overlap-redaction", "output-env", {
+      environment: {
+        secrets: {
+          RUNTIME_ONLY_SECRET: "abcdef",
+          SECOND_RUNTIME_SECRET: "["
+        }
+      },
+      readiness: {
+        kind: "STDOUT_JSON",
+        evaluate: (message) => readyDecision(message)
+      }
+    }));
+
+    const status = await runtime.start("overlap-redaction");
+    const stderr = status.stderr.lines.join("\n");
+    expect(stderr).toContain("[REDACTED]");
+    expect(stderr).not.toContain("[REDACTED]REDACTED]");
   });
 
   it("canonicalizes localhost readiness probes to a literal loopback address", async () => {
