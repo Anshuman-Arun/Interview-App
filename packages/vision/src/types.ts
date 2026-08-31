@@ -11,6 +11,7 @@ const SafeBoardRevisionSchema = BoardRevisionSchema.refine(
 );
 
 const UNSUPPORTED_APNG_CHUNKS = new Set(["acTL", "fcTL", "fdAT"]);
+const HARD_MAX_PNG_CHUNKS = 4096;
 
 const SUPPORTED_PNG_BIT_DEPTHS = new Map<number, ReadonlySet<number>>([
   [0, new Set([1, 2, 4, 8])],
@@ -52,6 +53,9 @@ function assertStaticPngChunkStructure(bytes: Buffer): void {
   let foundEnd = false;
 
   while (offset < bytes.length) {
+    if (chunkIndex >= HARD_MAX_PNG_CHUNKS) {
+      throw new RangeError("PNG contains too many chunks for bounded preprocessing");
+    }
     if (offset + 12 > bytes.length) throw new RangeError("PNG contains a truncated chunk");
     const chunkLength = bytes.readUInt32BE(offset);
     const chunkType = bytes.toString("ascii", offset + 4, offset + 8);
