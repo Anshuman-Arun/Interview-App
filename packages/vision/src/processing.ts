@@ -590,7 +590,7 @@ export async function downscaleImage(
         "Unchanged image exceeds the configured output byte limit"
       );
     }
-    throwIfAborted(safeOptions.signal);
+    await yieldForCancellation(safeOptions.signal);
     const diagnostics = createVisionProcessingDiagnostics({
       operation: "RESIZE",
       sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
