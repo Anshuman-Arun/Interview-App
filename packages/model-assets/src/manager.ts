@@ -471,30 +471,40 @@ export class ModelAssetManager {
       );
     }
     const paths = await this.getSafeCachePaths();
-    await this.removeManagedEntry(paths, path.join(paths.artifacts, key));
+    await this.withMutationGate(paths, async (shared) => {
+      if ((shared.activeInstallationCounts.get(key) ?? 0) > 0) {
+        throw new ModelAssetError(
+          "ASSET_BUSY",
+          "Cannot remove an artifact while its installation is in flight."
+        );
+      }
+      await this.removeManagedEntry(paths, path.join(paths.artifacts, key));
+    });
     this.lastFailures.delete(key);
   }
 
   public async cleanupTemporary(): Promise<void> {
-    if (this.inFlight.size > 0) {
-      throw new ModelAssetError(
-        "ASSET_BUSY",
-        "Cannot clear temporary downloads while installations are in flight."
-      );
-    }
-
     const paths = await this.getSafeCachePaths();
-    const entries = await this.listCacheEntryNames(
-      paths.temporary,
-      "Temporary cache entry count exceeds the configured cleanup limit."
-    );
-    for (const entry of entries) {
-      if (!TEMPORARY_ENTRY_PATTERN.test(entry)
-          && !REMOVAL_TOMBSTONE_PATTERN.test(entry)) {
-        continue;
+    await this.withMutationGate(paths, async (shared) => {
+      if (shared.activeInstallationCounts.size > 0) {
+        throw new ModelAssetError(
+          "ASSET_BUSY",
+          "Cannot clear temporary downloads while installations are in flight."
+        );
       }
-      await this.removeManagedEntry(paths, path.join(paths.temporary, entry));
-    }
+
+      const entries = await this.listCacheEntryNames(
+        paths.temporary,
+        "Temporary cache entry count exceeds the configured cleanup limit."
+      );
+      for (const entry of entries) {
+        if (!TEMPORARY_ENTRY_PATTERN.test(entry)
+            && !REMOVAL_TOMBSTONE_PATTERN.test(entry)) {
+          continue;
+        }
+        await this.removeManagedEntry(paths, path.join(paths.temporary, entry));
+      }
+    });
     this.lastFailures.clear();
   }
 
@@ -507,12 +517,6 @@ export class ModelAssetManager {
       );
     }
     const keepValues: readonly unknown[] = rawKeepManifestValues;
-    if (this.inFlight.size > 0) {
-      throw new ModelAssetError(
-        "ASSET_BUSY",
-        "Cannot clear unused artifacts while installations are in flight."
-      );
-    }
 
     if (keepValues.length > this.maxListEntries) {
       throw new ModelAssetError(
@@ -524,22 +528,30 @@ export class ModelAssetManager {
       keepValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
     );
     const paths = await this.getSafeCachePaths();
-    const entries = await this.listCacheEntryNames(
-      paths.artifacts,
-      "Artifact cache entry count exceeds the configured cleanup limit."
-    );
-    let removed = 0;
+    return await this.withMutationGate(paths, async (shared) => {
+      if (shared.activeInstallationCounts.size > 0) {
+        throw new ModelAssetError(
+          "ASSET_BUSY",
+          "Cannot clear unused artifacts while installations are in flight."
+        );
+      }
+      const entries = await this.listCacheEntryNames(
+        paths.artifacts,
+        "Artifact cache entry count exceeds the configured cleanup limit."
+      );
+      let removed = 0;
 
-    for (const entry of entries) {
-      const installationEntry = INSTALLATION_KEY_PATTERN.test(entry);
-      const tombstoneEntry = REMOVAL_TOMBSTONE_PATTERN.test(entry);
-      if (!installationEntry && !tombstoneEntry) continue;
-      if (installationEntry && keepKeys.has(entry)) continue;
-      await this.removeManagedEntry(paths, path.join(paths.artifacts, entry));
-      this.lastFailures.delete(entry);
-      removed += 1;
-    }
-    return removed;
+      for (const entry of entries) {
+        const installationEntry = INSTALLATION_KEY_PATTERN.test(entry);
+        const tombstoneEntry = REMOVAL_TOMBSTONE_PATTERN.test(entry);
+        if (!installationEntry && !tombstoneEntry) continue;
+        if (installationEntry && keepKeys.has(entry)) continue;
+        await this.removeManagedEntry(paths, path.join(paths.artifacts, entry));
+        this.lastFailures.delete(entry);
+        removed += 1;
+      }
+      return removed;
+    });
   }
 
   private async openCacheDirectory(
