@@ -978,6 +978,39 @@ export class LocalRuntimeManager {
   }
 }
 
+interface EffectiveOutputLimits {
+  readonly maxLines: number;
+  readonly maxBytes: number;
+  readonly maxLineBytes: number;
+}
+
+function outputLimitsFor(definition: LocalComponentDefinition): EffectiveOutputLimits {
+  return outputLimitsForValues(definition.output);
+}
+
+function outputLimitsForValues(output: LocalComponentDefinition["output"]): EffectiveOutputLimits {
+  const maxLines = output?.maxLines ?? DEFAULT_OUTPUT_MAX_LINES;
+  const maxBytes = output?.maxBytes ?? DEFAULT_OUTPUT_MAX_BYTES;
+  const configuredLineBytes = output?.maxLineBytes ?? DEFAULT_OUTPUT_MAX_LINE_BYTES;
+  return Object.freeze({
+    maxLines,
+    maxBytes,
+    maxLineBytes: Math.min(configuredLineBytes, maxBytes)
+  });
+}
+
+function remainingStartupTimeout(totalMs: number, startedAt: number): number {
+  const elapsedMs = performance.now() - startedAt;
+  return Math.max(0, Math.ceil(totalMs - elapsedMs));
+}
+
+function isRetryableStartFailure(error: LocalRuntimeError): boolean {
+  return error.code === "SPAWN_FAILED"
+    || error.code === "READINESS_TIMEOUT"
+    || error.code === "READINESS_FAILED"
+    || error.code === "PROCESS_EXITED";
+}
+
 function freezeDefinition(definition: LocalComponentDefinition): LocalComponentDefinition {
   const readiness = Object.freeze({ ...definition.readiness }) as LocalComponentDefinition["readiness"];
   const restartPolicy = definition.restartPolicy === undefined
@@ -1017,6 +1050,9 @@ function isStdoutReadiness(
 }
 
 function validateDefinition(definition: LocalComponentDefinition): void {
+  if (typeof definition !== "object" || definition === null || Array.isArray(definition)) {
+    invalid("Component definition must be an object");
+  }
   if (typeof definition.id !== "string" || !COMPONENT_ID.test(definition.id)) {
     invalid("Component id must be stable and contain only letters, numbers, dot, underscore, or dash");
   }
@@ -1033,16 +1069,24 @@ function validateDefinition(definition: LocalComponentDefinition): void {
   if (definition.terminationTimeoutMs !== undefined) positiveTimer(definition.terminationTimeoutMs, "terminationTimeoutMs");
   validateReadiness(definition);
   validateRestartPolicy(definition.restartPolicy ?? DEFAULT_RESTART_POLICY);
-  if (definition.output?.maxLines !== undefined) positiveInteger(definition.output.maxLines, "output.maxLines");
-  if (definition.output?.maxBytes !== undefined) positiveInteger(definition.output.maxBytes, "output.maxBytes");
-  if (definition.output?.maxLineBytes !== undefined) positiveInteger(definition.output.maxLineBytes, "output.maxLineBytes");
+  validateExpectedHandshakeDefinition(definition.expectedHandshake);
+  validateOutputLimits(definition.output);
+  if (definition.gracefulShutdown !== undefined && typeof definition.gracefulShutdown !== "function") {
+    invalid("gracefulShutdown must be a function");
+  }
 }
 
 function validateReadiness(definition: LocalComponentDefinition): void {
   const readiness = definition.readiness;
+  if (typeof readiness !== "object" || readiness === null || Array.isArray(readiness)) {
+    invalid("readiness must be an object");
+  }
   switch (readiness.kind) {
     case "STABLE_PROCESS":
       positiveTimer(readiness.stableMs, "readiness.stableMs");
+      if (readiness.stableMs > definition.startupTimeoutMs) {
+        invalid("readiness.stableMs may not exceed startupTimeoutMs");
+      }
       break;
     case "HTTP_LOOPBACK":
       parseLoopbackUrl(readiness.url);
@@ -1065,13 +1109,58 @@ function validateReadiness(definition: LocalComponentDefinition): void {
 }
 
 function validateRestartPolicy(policy: LocalRestartPolicy): void {
+  if (typeof policy !== "object" || policy === null || Array.isArray(policy)) {
+    invalid("restartPolicy must be an object");
+  }
   if (policy.mode === "NEVER") return;
   if (policy.mode !== "ON_FAILURE") invalid("Unsupported restart policy");
-  if (!Number.isSafeInteger(policy.maxRetries) || policy.maxRetries < 0) invalid("restartPolicy.maxRetries must be a nonnegative safe integer");
+  if (!Number.isSafeInteger(policy.maxRetries) || policy.maxRetries < 0) {
+    invalid("restartPolicy.maxRetries must be a nonnegative safe integer");
+  }
   if (policy.backoffMs !== undefined) nonnegativeTimer(policy.backoffMs, "restartPolicy.backoffMs");
   if (policy.maxBackoffMs !== undefined) nonnegativeTimer(policy.maxBackoffMs, "restartPolicy.maxBackoffMs");
   if (policy.backoffMs !== undefined && policy.maxBackoffMs !== undefined && policy.maxBackoffMs < policy.backoffMs) {
     invalid("restartPolicy.maxBackoffMs must be at least restartPolicy.backoffMs");
+  }
+}
+
+function validateExpectedHandshakeDefinition(expected: LocalExpectedHandshake | undefined): void {
+  if (expected === undefined) return;
+  if (typeof expected !== "object" || expected === null || Array.isArray(expected)) {
+    invalid("expectedHandshake must be an object");
+  }
+  if (expected.componentVersion !== undefined) {
+    if (typeof expected.componentVersion !== "string" || expected.componentVersion.length === 0) {
+      invalid("expectedHandshake.componentVersion must be a non-empty string");
+    }
+  }
+  if (expected.protocolVersion !== undefined) {
+    validateVersionValue(expected.protocolVersion, "expectedHandshake.protocolVersion", invalid);
+  }
+}
+
+function validateOutputLimits(output: LocalComponentDefinition["output"]): void {
+  if (output === undefined) return;
+  if (typeof output !== "object" || output === null || Array.isArray(output)) {
+    invalid("output must be an object");
+  }
+  if (output.maxLines !== undefined) {
+    positiveInteger(output.maxLines, "output.maxLines");
+    if (output.maxLines > MAX_OUTPUT_LINES) invalid(`output.maxLines may not exceed ${String(MAX_OUTPUT_LINES)}`);
+  }
+  if (output.maxBytes !== undefined) {
+    positiveInteger(output.maxBytes, "output.maxBytes");
+    if (output.maxBytes > MAX_OUTPUT_BYTES) invalid(`output.maxBytes may not exceed ${String(MAX_OUTPUT_BYTES)}`);
+  }
+  if (output.maxLineBytes !== undefined) {
+    positiveInteger(output.maxLineBytes, "output.maxLineBytes");
+    if (output.maxLineBytes > MAX_OUTPUT_LINE_BYTES) {
+      invalid(`output.maxLineBytes may not exceed ${String(MAX_OUTPUT_LINE_BYTES)}`);
+    }
+  }
+  const limits = outputLimitsForValues(output);
+  if (limits.maxLineBytes > limits.maxBytes) {
+    invalid("output.maxLineBytes may not exceed output.maxBytes");
   }
 }
 
@@ -1185,7 +1274,7 @@ function validateExpectedHandshake(
 function restartBackoff(policy: LocalRestartPolicy, retryNumber: number): number {
   if (policy.mode === "NEVER") return 0;
   const base = policy.backoffMs ?? 100;
-  const maximum = policy.maxBackoffMs ?? 5_000;
+  const maximum = policy.maxBackoffMs ?? Math.max(base, 5_000);
   if (base === 0) return 0;
   const exponent = Math.max(0, retryNumber - 1);
   return Math.min(maximum, base * (2 ** exponent));
