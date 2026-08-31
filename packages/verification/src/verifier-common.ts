@@ -167,14 +167,17 @@ export function prepareStructuredStatement<T>(
     };
   }
   if (!validated.success) {
+    const resourceLimitExceeded = validated.error.issues.some((issue) => issue.code === "too_big");
     return {
       ok: false,
       result: result(
         "UNRESOLVED",
         normalized.value,
         verifier,
-        "MALFORMED_INTERPRETATION",
-        "Formal interpretation is malformed, unsupported, or incomplete"
+        resourceLimitExceeded ? "RESOURCE_LIMIT" : "MALFORMED_INTERPRETATION",
+        resourceLimitExceeded
+          ? "Formal interpretation exceeds a schema resource limit"
+          : "Formal interpretation is malformed, unsupported, or incomplete"
       )
     };
   }

@@ -46,6 +46,21 @@ describe("deterministic math verifier invariants", () => {
     }
   });
 
+  it("classifies schema cardinality and literal-size limits as resource abstentions", async () => {
+    const oversizedLiteral = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS + 1);
+    const result = await new ModularArithmeticVerifier().verify(JSON.stringify({
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "DIVISIBILITY",
+        divisor: "2",
+        dividend: { kind: "INTEGER", value: oversizedLiteral }
+      }
+    }), 1);
+    expect(result.status).toBe("UNRESOLVED");
+    expect(result.reason).toContain("RESOURCE_LIMIT");
+  });
+
   it("enforces exact arithmetic intermediate limits", async () => {
     const result = await new ModularArithmeticVerifier().verify(JSON.stringify({
       protocol: MODULAR_ARITHMETIC_PROTOCOL,
@@ -78,6 +93,7 @@ describe("deterministic math verifier invariants", () => {
       claim: { kind: "VALUE_AT_INDEX", index: MAX_RECURRENCE_SEQUENCE_LENGTH, value: rational("0") }
     }), 1);
     expect(recurrence.status).toBe("UNRESOLVED");
+    expect(recurrence.reason).toContain("RESOURCE_LIMIT");
 
     const combinatorial = await new CombinatorialCountingVerifier().verify(JSON.stringify({
       protocol: COMBINATORIAL_COUNTING_PROTOCOL,
@@ -85,6 +101,7 @@ describe("deterministic math verifier invariants", () => {
       claim: { kind: "BINOMIAL", n: MAX_COMBINATORIAL_N + 1, k: 1, claimed: "0" }
     }), 1);
     expect(combinatorial.status).toBe("UNRESOLVED");
+    expect(combinatorial.reason).toContain("RESOURCE_LIMIT");
   });
 
   it("enforces generic structured-input depth before recursive schema evaluation", async () => {
