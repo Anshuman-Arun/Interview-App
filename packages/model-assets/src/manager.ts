@@ -1236,4 +1236,23 @@ export class ModelAssetManager {
       release?.();
     }
   }
+
+  private async withMutationGate<T>(
+    paths: CachePaths,
+    operation: (shared: SharedCacheState) => Promise<T>
+  ): Promise<T> {
+    const shared = sharedCacheStateFor(paths);
+    let release: (() => void) | undefined;
+    const turn = new Promise<void>((resolvePromise) => {
+      release = resolvePromise;
+    });
+    const previous = shared.mutationGate;
+    shared.mutationGate = previous.then(() => turn);
+    await previous;
+    try {
+      return await operation(shared);
+    } finally {
+      release?.();
+    }
+  }
 }
