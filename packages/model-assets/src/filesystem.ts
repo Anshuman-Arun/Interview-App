@@ -33,6 +33,12 @@ export interface FileVerificationExpectations {
   readonly maxBytes?: number;
 }
 
+const FILE_VERIFICATION_EXPECTATION_KEYS = new Set([
+  "sizeBytes",
+  "sha256",
+  "maxBytes"
+]);
+
 export type FileVerificationResult =
   | {
       readonly ok: true;
@@ -572,6 +578,14 @@ export async function verifyArtifactFileWithIdentity(
     );
   }
   const expectationRecord = rawExpectations;
+  for (const key of Object.keys(expectationRecord)) {
+    if (!FILE_VERIFICATION_EXPECTATION_KEYS.has(key)) {
+      throw new ModelAssetError(
+        "INVALID_CONFIGURATION",
+        "Unknown artifact verification expectation: " + key + "."
+      );
+    }
+  }
   const expectedSize = ownValue(expectationRecord, "sizeBytes");
   if (typeof expectedSize !== "number"
       || !Number.isSafeInteger(expectedSize)
