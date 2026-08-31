@@ -773,7 +773,11 @@ export class LocalRuntimeManager {
 
       let response: Response;
       try {
-        response = await this.fetchImpl(url, { method: "GET", redirect: "error", signal });
+        response = await awaitWithAbort(
+          Promise.resolve().then(() => this.fetchImpl(url, { method: "GET", redirect: "error", signal })),
+          signal,
+          record.definition.id
+        );
       } catch {
         if (signal.aborted) {
           throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
