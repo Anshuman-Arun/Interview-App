@@ -423,11 +423,27 @@ function checkVisionInternalConstruction(records, violations) {
       }
     }
 
+    function directlyLoadsInternalConstruction(node) {
+      if (!ts.isCallExpression(node) || node.arguments.length !== 1) return false;
+      const firstArgument = node.arguments[0];
+      if (firstArgument === undefined || !ts.isStringLiteralLike(firstArgument)) return false;
+      if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        return isInternalVisionConstructionSpecifier(firstArgument.text);
+      }
+      return ts.isIdentifier(node.expression)
+        && node.expression.text === "require"
+        && isInternalVisionConstructionSpecifier(firstArgument.text);
+    }
+
     function exportedNodeReferencesInternalBinding(node) {
       let found = false;
       function scan(current) {
         if (found) return;
         if (ts.isIdentifier(current) && taintedBindingNames.has(current.text)) {
+          found = true;
+          return;
+        }
+        if (directlyLoadsInternalConstruction(current)) {
           found = true;
           return;
         }
@@ -442,69 +458,7 @@ function checkVisionInternalConstruction(records, violations) {
     }
 
     function expressionExposesInternalBinding(expression) {
-      if (ts.isIdentifier(expression)) return taintedBindingNames.has(expression.text);
-      if (ts.isParenthesizedExpression(expression)
-          || ts.isAsExpression(expression)
-          || ts.isTypeAssertionExpression(expression)
-          || ts.isNonNullExpression(expression)) {
-        return expressionExposesInternalBinding(expression.expression);
-      }
-      if (ts.isCallExpression(expression) && expression.arguments.length === 1) {
-        const firstArgument = expression.arguments[0];
-        if (firstArgument !== undefined && ts.isStringLiteralLike(firstArgument)) {
-          if (expression.expression.kind === ts.SyntaxKind.ImportKeyword
-              && isInternalVisionConstructionSpecifier(firstArgument.text)) {
-            return true;
-          }
-          if (ts.isIdentifier(expression.expression)
-              && expression.expression.text === "require"
-              && isInternalVisionConstructionSpecifier(firstArgument.text)) {
-            return true;
-          }
-        }
-      }
-      if (ts.isPropertyAccessExpression(expression)) {
-        return expressionExposesInternalBinding(expression.expression);
-      }
-      if (ts.isElementAccessExpression(expression)) {
-        return expressionExposesInternalBinding(expression.expression);
-      }
-      if (ts.isArrayLiteralExpression(expression)) {
-        return expression.elements.some((element) =>
-          !ts.isOmittedExpression(element) && expressionExposesInternalBinding(element)
-        );
-      }
-      if (ts.isObjectLiteralExpression(expression)) {
-        return expression.properties.some((property) => {
-          if (ts.isShorthandPropertyAssignment(property)) return taintedBindingNames.has(property.name.text);
-          if (ts.isPropertyAssignment(property)) return expressionExposesInternalBinding(property.initializer);
-          if (ts.isSpreadAssignment(property)) return expressionExposesInternalBinding(property.expression);
-          if (ts.isMethodDeclaration(property) || ts.isGetAccessorDeclaration(property)) {
-            return functionBodyExposesInternalBinding(property);
-          }
-          return false;
-        });
-      }
-      if (ts.isConditionalExpression(expression)) {
-        return expressionExposesInternalBinding(expression.whenTrue)
-          || expressionExposesInternalBinding(expression.whenFalse);
-      }
-      if (ts.isArrowFunction(expression)) {
-        if (!ts.isBlock(expression.body)) return expressionExposesInternalBinding(expression.body);
-        return functionBodyExposesInternalBinding(expression);
-      }
-      if (ts.isFunctionExpression(expression)) {
-        return functionBodyExposesInternalBinding(expression);
-      }
-      if (ts.isBinaryExpression(expression)
-          && (expression.operatorToken.kind === ts.SyntaxKind.BarBarToken
-            || expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
-            || expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
-            || expression.operatorToken.kind === ts.SyntaxKind.CommaToken)) {
-        return expressionExposesInternalBinding(expression.left)
-          || expressionExposesInternalBinding(expression.right);
-      }
-      return false;
+      return exportedNodeReferencesInternalBinding(expression);
     }
 
     function functionBodyExposesInternalBinding(node) {
@@ -603,17 +557,12 @@ function checkVisionInternalConstruction(records, violations) {
     propagateInternalAliases();
 
     function leaksInternalBindingThroughExportedDeclaration(node) {
-      if (ts.isVariableStatement(node) && hasExportModifier(node)) {
-        return node.declarationList.declarations.some((declaration) =>
-          declaration.initializer !== undefined
-            && expressionExposesInternalBinding(declaration.initializer)
-        );
-      }
-      if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && hasExportModifier(node)) {
-        return functionBodyExposesInternalBinding(node);
-      }
-      if (ts.isClassDeclaration(node) && hasExportModifier(node)) {
-        return classExposesInternalBinding(node);
+      if (!hasExportModifier(node)) return false;
+      if (ts.isVariableStatement(node)
+          || ts.isFunctionDeclaration(node)
+          || ts.isMethodDeclaration(node)
+          || ts.isClassDeclaration(node)) {
+        return exportedNodeReferencesInternalBinding(node);
       }
       return false;
     }
