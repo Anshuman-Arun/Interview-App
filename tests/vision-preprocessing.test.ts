@@ -291,6 +291,16 @@ describe("vision snapshot validation and hashing", () => {
   });
 });
 
+  it("does not conflate identical crop bytes from different coordinates in processing deduplication", async () => {
+    const source = snapshot(makePng(6, 2, () => [42, 42, 42, 255]), { id: "same-board", revision: 14 });
+    const left = (await cropImage(source, { x: 0, y: 0, width: 2, height: 2 })).artifact;
+    const right = (await cropImage(source, { x: 4, y: 0, width: 2, height: 2 })).artifact;
+
+    expect(exactImagePayloadDuplicate(left, right)).toBe(true);
+    expect(revisionImageProcessingKey(left)).not.toBe(revisionImageProcessingKey(right));
+    expect(sameRevisionAndImage(left, right)).toBe(false);
+  });
+
 describe("vision geometry", () => {
   it("normalizes, clips, expands, intersects, unions, and measures raster rectangles", () => {
     expect(normalizeRect({ x1: 8, y1: 9, x2: 2, y2: 3 })).toEqual({ x: 2, y: 3, width: 6, height: 6 });
