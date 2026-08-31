@@ -400,6 +400,49 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
+  it("rejects non-success HTTP responses without publishing bytes", async () => {
+    const payload = Buffer.from("http-status");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(404);
+      response.end("not found");
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/missing");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "HTTP_STATUS" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
+  it("rejects redirects without a Location header", async () => {
+    const payload = Buffer.from("redirect-location");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(302);
+      response.end();
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/redirect");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
+  it("rejects invalid Content-Length metadata", async () => {
+    const payload = Buffer.from("content-length");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.setHeader("Content-Length", "not-a-number");
+      response.end(payload);
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
   it("follows bounded same-origin redirects and rejects redirect loops", async () => {
     const payload = Buffer.from("redirected");
     const fixture = await startFixtureServer((request, response) => {
@@ -755,6 +798,23 @@ describe("local model asset manager", () => {
     expect(await readFile(installed)).toEqual(payload);
   });
 
+  it("rejects insufficient cache capacity before opening the network", async () => {
+    const payload = Buffer.from("no-network-capacity");
+    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const root = await newRoot();
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+    const manager = managerFor(root, {
+      maxArtifactBytes: payload.byteLength,
+      maxCacheBytes: managedArtifactBytes(manifest) - 1
+    });
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect(fixture.requestCount()).toBe(0);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
   it("enforces the configured aggregate artifact cache-size limit", async () => {
     const one = Buffer.from("123456");
     const two = Buffer.from("abcdef");
@@ -886,11 +946,28 @@ describe("local model asset manager", () => {
     })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
   });
 
+  it("rejects redirect limits above the package safety ceiling", async () => {
+    const root = await newRoot();
+    expect(() => managerFor(root, {
+      maxRedirects: 21
+    })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
+  });
+
   it("rejects timeout values that overflow Node.js timers", async () => {
     const root = await newRoot();
     expect(() => managerFor(root, {
       downloadTimeoutMs: 2_147_483_648
     })).toThrow(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
+  });
+
+  it("rejects a malformed clearUnused collection at runtime", async () => {
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const UnsafeClear = manager.clearUnused.bind(manager) as unknown as (
+      manifests: unknown
+    ) => Promise<number>;
+
+    await expect(UnsafeClear(null)).rejects.toMatchObject({ code: "INVALID_MANIFEST" });
   });
 
   it("rejects a relative cache root before performing filesystem writes", async () => {
