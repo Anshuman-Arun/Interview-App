@@ -1013,6 +1013,92 @@ describe("provider definition and capability hostile values", () => {
     })).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
   });
 
+  it("does not let Map prototype overrides corrupt registry storage semantics", () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const storedProvider = registry.getProvider("settings-provider");
+
+    const originalHas = Map.prototype.has;
+    let duplicateError: unknown;
+    try {
+      Object.defineProperty(Map.prototype, "has", {
+        configurable: true,
+        writable: true,
+        value(this: Map<unknown, unknown>, key: unknown) {
+          if (
+            key === "settings-provider"
+            && Reflect.apply(originalHas, this, [key]) === true
+          ) {
+            return false;
+          }
+          return Reflect.apply(originalHas, this, [key]);
+        }
+      });
+      try {
+        registry.register(createSettingsProviderInput());
+      } catch (error) {
+        duplicateError = error;
+      }
+    } finally {
+      Object.defineProperty(Map.prototype, "has", {
+        configurable: true,
+        writable: true,
+        value: originalHas
+      });
+    }
+
+    const originalGet = Map.prototype.get;
+    let unknownLookupError: unknown;
+    try {
+      Object.defineProperty(Map.prototype, "get", {
+        configurable: true,
+        writable: true,
+        value(this: Map<unknown, unknown>, key: unknown) {
+          if (key === "missing-provider") return storedProvider;
+          return Reflect.apply(originalGet, this, [key]);
+        }
+      });
+      try {
+        registry.getProvider("missing-provider");
+      } catch (error) {
+        unknownLookupError = error;
+      }
+    } finally {
+      Object.defineProperty(Map.prototype, "get", {
+        configurable: true,
+        writable: true,
+        value: originalGet
+      });
+    }
+
+    const setRegistry = new ProviderRegistry();
+    const originalSet = Map.prototype.set;
+    try {
+      Object.defineProperty(Map.prototype, "set", {
+        configurable: true,
+        writable: true,
+        value(this: Map<unknown, unknown>, key: unknown, value: unknown) {
+          if (key === "set-provider") return this;
+          return Reflect.apply(originalSet, this, [key, value]);
+        }
+      });
+      setRegistry.register({
+        ...createSettingsProviderInput(),
+        id: "set-provider"
+      });
+    } finally {
+      Object.defineProperty(Map.prototype, "set", {
+        configurable: true,
+        writable: true,
+        value: originalSet
+      });
+    }
+
+    expect(duplicateError).toMatchObject({ code: "DUPLICATE_PROVIDER" });
+    expect(unknownLookupError).toMatchObject({ code: "UNKNOWN_PROVIDER" });
+    expect(setRegistry.getProvider("set-provider").id).toBe("set-provider");
+  });
+
   it("does not let a targeted Set.has override hide duplicate identities", () => {
     const originalHas = Set.prototype.has;
     let duplicateModelError: unknown;

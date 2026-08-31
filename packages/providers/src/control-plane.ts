@@ -459,6 +459,81 @@ function freezeNullPrototype<T extends object>(value: T): T {
   return Object.freeze(value);
 }
 
+const MAP_HAS_INTRINSIC = Map.prototype.has;
+const MAP_GET_INTRINSIC = Map.prototype.get;
+const MAP_SET_INTRINSIC = Map.prototype.set;
+
+function providerMapHas(
+  map: Map<ProviderId, ProviderDefinition>,
+  providerId: ProviderId
+): boolean {
+  let result: unknown;
+  try {
+    result = Reflect.apply(MAP_HAS_INTRINSIC, map, [providerId]);
+  } catch {
+    throw new ProviderControlPlaneError(
+      "INVALID_REGISTRY",
+      "Provider registry storage is invalid"
+    );
+  }
+  return result === true;
+}
+
+function isStoredProviderDefinition(
+  value: unknown,
+  expectedId: ProviderId
+): value is ProviderDefinition {
+  if (typeof value !== "object" || value === null) return false;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, "id");
+    return descriptor !== undefined
+      && "value" in descriptor
+      && descriptor.value === expectedId
+      && Object.getPrototypeOf(value) === null
+      && Object.isFrozen(value);
+  } catch {
+    return false;
+  }
+}
+
+function providerMapGet(
+  map: Map<ProviderId, ProviderDefinition>,
+  providerId: ProviderId
+): ProviderDefinition | undefined {
+  let result: unknown;
+  try {
+    result = Reflect.apply(MAP_GET_INTRINSIC, map, [providerId]);
+  } catch {
+    throw new ProviderControlPlaneError(
+      "INVALID_REGISTRY",
+      "Provider registry storage is invalid"
+    );
+  }
+  if (result === undefined) return undefined;
+  if (!isStoredProviderDefinition(result, providerId)) {
+    throw new ProviderControlPlaneError(
+      "INVALID_REGISTRY",
+      "Provider registry storage is invalid"
+    );
+  }
+  return result;
+}
+
+function providerMapSet(
+  map: Map<ProviderId, ProviderDefinition>,
+  providerId: ProviderId,
+  definition: ProviderDefinition
+): void {
+  try {
+    Reflect.apply(MAP_SET_INTRINSIC, map, [providerId, definition]);
+  } catch {
+    throw new ProviderControlPlaneError(
+      "INVALID_REGISTRY",
+      "Provider registry storage is invalid"
+    );
+  }
+}
+
 const PROVIDER_DEFINITION_INPUT_KEYS = new Set([
   "id",
   "displayName",
@@ -1349,7 +1424,7 @@ export class ProviderRegistry {
   public register(input: ProviderDefinitionInput): ProviderDefinition {
     const definition = defineProvider(input);
     this.#assertProviderIdAvailable(definition.id);
-    this.#providers.set(definition.id, definition);
+    providerMapSet(this.#providers, definition.id, definition);
     return definition;
   }
 
@@ -1367,7 +1442,9 @@ export class ProviderRegistry {
       candidateIds.push(definition.id);
       this.#assertProviderIdAvailable(definition.id);
     }
-    for (const definition of definitions) this.#providers.set(definition.id, definition);
+    for (const definition of definitions) {
+      providerMapSet(this.#providers, definition.id, definition);
+    }
     return Object.freeze(definitions);
   }
 
@@ -1394,7 +1471,7 @@ export class ProviderRegistry {
     if (!parsedId.success) {
       throw new ProviderControlPlaneError("UNKNOWN_PROVIDER", "Provider is not registered");
     }
-    const provider = this.#providers.get(parsedId.data);
+    const provider = providerMapGet(this.#providers, parsedId.data);
     if (provider === undefined) {
       throw new ProviderControlPlaneError("UNKNOWN_PROVIDER", "Provider is not registered");
     }
@@ -1417,7 +1494,7 @@ export class ProviderRegistry {
   }
 
   #assertProviderIdAvailable(providerId: ProviderId): void {
-    if (this.#providers.has(providerId)) {
+    if (providerMapHas(this.#providers, providerId)) {
       throw new ProviderControlPlaneError(
         "DUPLICATE_PROVIDER",
         "Provider ID is already registered"
