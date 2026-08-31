@@ -2080,6 +2080,33 @@ describe("vision runtime schema boundaries", () => {
 });
 
 describe("vision diagnostics validation", () => {
+  it("rejects oversized unknown field names before evaluating their getters", () => {
+    let getterCalls = 0;
+    const diagnostic: Record<string, unknown> = {
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS"
+    };
+    Object.defineProperty(diagnostic, "x".repeat(100_000), {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "must-not-run";
+      }
+    });
+
+    expect(() => createVisionProcessingDiagnostics(
+      diagnostic as Parameters<typeof createVisionProcessingDiagnostics>[0]
+    )).toThrow();
+    expect(getterCalls).toBe(0);
+  });
+
   it("rejects unknown diagnostic getters without executing them", () => {
     let getterCalls = 0;
     const diagnostic: Record<string, unknown> = {
