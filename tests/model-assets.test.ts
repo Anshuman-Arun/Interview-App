@@ -770,7 +770,7 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
-  it("rejects an initial URL whose canonical encoding exceeds the URL limit", async () => {
+  it("rejects a manifest whose canonical URL encoding exceeds the URL limit", async () => {
     const payload = Buffer.from("canonical-url-limit");
     const root = await newRoot();
     const manager = managerFor(root);
@@ -779,8 +779,9 @@ describe("local model asset manager", () => {
     expect(new URL(sourceUrl).href.length).toBeGreaterThan(2_048);
     const manifest = manifestFor(payload, sourceUrl);
 
+    expect(AssetManifestSchema.safeParse(manifest).success).toBe(false);
     await expect(manager.install(manifest)).rejects.toMatchObject({
-      code: "UNSAFE_REDIRECT"
+      code: "INVALID_MANIFEST"
     });
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
     expect(await readdir(path.join(root, "tmp"))).toEqual([]);
