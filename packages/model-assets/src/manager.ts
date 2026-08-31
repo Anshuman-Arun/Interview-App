@@ -234,6 +234,7 @@ export class ModelAssetManager {
           await copyLocalArtifactBounded(
             rawSourcePath,
             destination,
+            manifest.sizeBytes,
             this.maxArtifactBytes,
             internalSignal
           );
