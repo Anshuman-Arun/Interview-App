@@ -4,6 +4,7 @@ import {
   MAX_COMBINATORIAL_N,
   MAX_FINITE_CONTAINER_ITEMS,
   MAX_INTEGER_DECIMAL_DIGITS,
+  MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS,
   addRationals,
   areCongruent,
   binomial,
@@ -12,13 +13,16 @@ import {
   divideRationals,
   equalRationals,
   factorial,
+  formatInteger,
   gcd,
   isCanonicalIntegerString,
   isDivisibleBy,
   isPermutationOf,
   lcm,
   multiplyRationals,
+  negateRational,
   normalizeModulo,
+  normalizeRational,
   parseBoundedInteger,
   parseRationalInput,
   permutations,
@@ -28,6 +32,7 @@ import {
   sameFiniteMultiset,
   sameFiniteSet,
   serializeRational,
+  subtractRationals,
   sumIntegers,
   sumRationals
 } from "../packages/verification/src/index.js";
@@ -65,6 +70,14 @@ describe("deterministic math utilities", () => {
     expect(normalizeModulo(-12n, 5n)).toBe(3n);
     expect(areCongruent(-12n, 3n, 5n)).toBe(true);
     expect(() => normalizeModulo(3n, 0n)).toThrow(BoundedMathError);
+  });
+
+  it("bounds exported integer formatting and runtime values", () => {
+    const atLimit = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
+    expect(formatInteger(atLimit)).toBe(atLimit.toString());
+    expect(() => formatInteger(
+      BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS + 1))
+    )).toThrow(BoundedMathError);
   });
 
   it("normalizes rationals exactly", () => {
@@ -146,6 +159,9 @@ describe("deterministic math utilities", () => {
             const expectedComparison = crossDifference === 0 ? 0 : crossDifference < 0 ? -1 : 1;
 
             expect(addRationals(left, right)).toEqual(expectedAdd);
+            expect(subtractRationals(left, right)).toEqual(addRationals(left, negateRational(right)));
+            expect(negateRational(negateRational(left))).toEqual(normalizeRational(left));
+            expect(normalizeRational(normalizeRational(left))).toEqual(normalizeRational(left));
             expect(multiplyRationals(left, right)).toEqual(expectedMultiply);
             expect(compareRationals(left, right)).toBe(expectedComparison);
 
