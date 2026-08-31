@@ -162,12 +162,18 @@ describe("adversarial deterministic math verification", () => {
     expect(() => gcd(oversized, 1n)).toThrow(BoundedMathError);
   });
 
-  it("compares bounded rationals without constructing an avoidable over-limit difference", () => {
+  it("compares bounded rationals without oversized subtraction or cross-products", () => {
     const maximum = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
 
     expect(compareRationals(rational(maximum, 1n), rational(-maximum, 1n))).toBe(1);
     expect(compareRationals(rational(-maximum, 1n), rational(maximum, 1n))).toBe(-1);
     expect(compareRationals(rational(maximum, 1n), rational(maximum, 1n))).toBe(0);
+
+    const denominator = 10n ** BigInt(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS - 1);
+    const left = rational(denominator - 1n, denominator);
+    const right = rational(denominator - 2n, denominator - 1n);
+    expect(compareRationals(left, right)).toBe(1);
+    expect(compareRationals(right, left)).toBe(-1);
   });
 
   it("bounds exported finite aggregate helpers by the shared container limit", () => {
