@@ -6,13 +6,11 @@ import {
   ImageSnapshot,
   ImageSnapshotInputSchema,
   ImageSnapshotMetadataSchema,
-  ImageSourceTypeSchema,
   VisionPreprocessingError,
   type ImageSnapshotInput,
   type ImageValidationLimits,
   type Sha256Digest
 } from "./types.js";
-import { BoardRevisionSchema } from "../../domain/src/index.js";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -162,8 +160,8 @@ export function createValidatedImageSnapshot(
 
   const metadata = ImageSnapshotMetadataSchema.parse({
     snapshotId: safeInput.snapshotId,
-    sourceType: ImageSourceTypeSchema.parse(safeInput.sourceType),
-    sourceRevision: BoardRevisionSchema.parse(safeInput.sourceRevision),
+    sourceType: safeInput.sourceType,
+    sourceRevision: safeInput.sourceRevision,
     capturedAtMs: safeInput.capturedAtMs,
     ...(safeInput.captureSequence === undefined ? {} : { captureSequence: safeInput.captureSequence }),
     width: header.width,
