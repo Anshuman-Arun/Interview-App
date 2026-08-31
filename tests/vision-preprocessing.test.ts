@@ -774,6 +774,21 @@ describe("crop, resize, tiling, and cancellation", () => {
     ]);
   });
 
+  it("does not ignore a stricter total-output byte ceiling on single-output operations", async () => {
+    const source = snapshot(makePng(4, 4));
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      { maxOutputEncodedBytes: 1_000_000, maxTotalOutputEncodedBytes: 0 }
+    )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+
+    await expect(downscaleImage(
+      source,
+      { maxWidth: 2, maxHeight: 2, maxPixels: 4 },
+      { maxOutputEncodedBytes: 1_000_000, maxTotalOutputEncodedBytes: 0 }
+    )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
+  });
+
   it("accepts zero output-byte ceilings as an explicit way to prohibit image output", async () => {
     const source = snapshot(makePng(4, 4));
     await expect(cropImage(
