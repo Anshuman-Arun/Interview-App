@@ -279,12 +279,6 @@ describe("adversarial deterministic math verification", () => {
         claimedExpectation: fraction("-1", "2")
       },
       {
-        kind: "CONDITIONAL_FROM_COUNTS",
-        jointCount: 1,
-        conditionCount: 2,
-        claimedProbability: fraction("2")
-      },
-      {
         kind: "CONDITIONAL_FROM_PROBABILITIES",
         jointProbability: fraction("0"),
         conditionProbability: fraction("0"),
@@ -315,6 +309,21 @@ describe("adversarial deterministic math verification", () => {
       expect(result.status).toBe("UNRESOLVED");
       expect(result.reason).toContain("MALFORMED_INTERPRETATION");
     }
+  });
+
+  it("contradicts false probability answers even when the claimed value lies outside [0, 1]", async () => {
+    const result = await verifyJson(new ProbabilityArithmeticVerifier(), {
+      protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+      protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "CONDITIONAL_FROM_COUNTS",
+        jointCount: 1,
+        conditionCount: 2,
+        claimedProbability: fraction("2")
+      }
+    });
+    expect(result.status).toBe("CONTRADICTED");
+    expect(result.reason).toContain("CLAIM_CONTRADICTED");
   });
 
   it("classifies an internally inconsistent finite distribution as malformed rather than false", async () => {
