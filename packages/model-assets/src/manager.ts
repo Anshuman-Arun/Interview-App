@@ -1091,7 +1091,8 @@ export class ModelAssetManager {
           installationDirectory,
           reservationBytes,
           signal,
-          stagingIdentity
+          stagingIdentity,
+          manifest
         );
         reservationHeld = false;
         published = true;
@@ -1275,7 +1276,8 @@ export class ModelAssetManager {
     installationDirectory: string,
     reservationBytes: number,
     signal: AbortSignal,
-    stagingIdentity: { readonly device: bigint; readonly inode: bigint }
+    stagingIdentity: { readonly device: bigint; readonly inode: bigint },
+    manifest: AssetManifest
   ): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
       await this.withMutationGate(paths, async () => {
@@ -1286,6 +1288,12 @@ export class ModelAssetManager {
           );
         }
         await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
+        await this.assertArtifactDirectoryShape(
+          stagingDirectory,
+          manifest,
+          "UNSAFE_PATH",
+          stagingIdentity
+        );
         if (signal.aborted) {
           throw new ModelAssetError(
             "CANCELLED",
