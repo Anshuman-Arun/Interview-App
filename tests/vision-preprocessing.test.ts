@@ -1582,6 +1582,25 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).toThrowError(RangeError);
   });
 
+  it("uses the nearest valid raster dimensions instead of avoidably distorting aspect ratio", () => {
+    expect(planDownscale(
+      { width: 9139, height: 9130 },
+      { maxWidth: 3, maxHeight: 17, maxPixels: 100 }
+    )).toMatchObject({
+      resized: true,
+      resultWidth: 3,
+      resultHeight: 3
+    });
+
+    const pixelBounded = planDownscale(
+      { width: 101, height: 101 },
+      { maxWidth: 100, maxHeight: 100, maxPixels: 9_999 }
+    );
+    expect(pixelBounded.resultWidth).toBeLessThanOrEqual(100);
+    expect(pixelBounded.resultHeight).toBeLessThanOrEqual(100);
+    expect(pixelBounded.resultWidth * pixelBounded.resultHeight).toBeLessThanOrEqual(9_999);
+  });
+
   it("bounds extreme standalone downscale planning without a linear correction loop", () => {
     const plan = planDownscale(
       { width: Number.MAX_SAFE_INTEGER, height: 1 },
