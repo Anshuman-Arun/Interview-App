@@ -443,6 +443,17 @@ function readonlyStringArraysEqual(
   return true;
 }
 
+function hasDuplicateStrings(values: readonly string[]): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === undefined) continue;
+    for (let previousIndex = 0; previousIndex < index; previousIndex += 1) {
+      if (values[previousIndex] === value) return true;
+    }
+  }
+  return false;
+}
+
 function freezeNullPrototype<T extends object>(value: T): T {
   Object.setPrototypeOf(value, null);
   return Object.freeze(value);
@@ -1084,7 +1095,7 @@ function isCapabilityDeclarationConsistent(
   if (capabilities.reasoningControls === "SUPPORTED") {
     if (
       levels !== "UNKNOWN"
-      && (levels.length === 0 || new Set(levels).size !== levels.length)
+      && (levels.length === 0 || hasDuplicateStrings(levels))
     ) {
       return false;
     }
@@ -1202,7 +1213,7 @@ function defineProviderValue(input: unknown): ProviderDefinition {
 
   const credentialPurposes = metadataResult.data.credentialPurposes;
   if (
-    new Set(credentialPurposes).size !== credentialPurposes.length
+    hasDuplicateStrings(credentialPurposes)
     || (metadataResult.data.credentialRequirement === "NONE" && credentialPurposes.length !== 0)
     || (metadataResult.data.credentialRequirement !== "NONE" && credentialPurposes.length === 0)
   ) {
@@ -1212,15 +1223,15 @@ function defineProviderValue(input: unknown): ProviderDefinition {
     );
   }
 
-  const seenModelIds = new Set<ProviderModelId>();
+  const seenModelIds: ProviderModelId[] = [];
   for (const model of metadataResult.data.models) {
-    if (seenModelIds.has(model.id)) {
+    if (readonlyStringArrayContains(seenModelIds, model.id)) {
       throw new ProviderControlPlaneError(
         "DUPLICATE_MODEL",
         "Provider definition contains a duplicate model ID"
       );
     }
-    seenModelIds.add(model.id);
+    seenModelIds.push(model.id);
     assertDefinitionCapabilitiesConsistent(model.capabilities);
     if (
       (metadataResult.data.kind === "REMOTE_API"
@@ -1345,15 +1356,15 @@ export class ProviderRegistry {
   public registerMany(inputs: readonly ProviderDefinitionInput[]): readonly ProviderDefinition[] {
     const snapshot = snapshotProviderDefinitionInputs(inputs);
     const definitions = snapshot.map((input) => defineProviderValue(input));
-    const candidateIds = new Set<ProviderId>();
+    const candidateIds: ProviderId[] = [];
     for (const definition of definitions) {
-      if (candidateIds.has(definition.id)) {
+      if (readonlyStringArrayContains(candidateIds, definition.id)) {
         throw new ProviderControlPlaneError(
           "DUPLICATE_PROVIDER",
           "Provider ID is duplicated in the registration batch"
         );
       }
-      candidateIds.add(definition.id);
+      candidateIds.push(definition.id);
       this.#assertProviderIdAvailable(definition.id);
     }
     for (const definition of definitions) this.#providers.set(definition.id, definition);

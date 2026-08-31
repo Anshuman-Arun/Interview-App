@@ -1013,6 +1013,67 @@ describe("provider definition and capability hostile values", () => {
     })).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
   });
 
+  it("does not let a targeted Set.has override hide duplicate identities", () => {
+    const originalHas = Set.prototype.has;
+    let duplicateModelError: unknown;
+    let duplicateBatchError: unknown;
+
+    try {
+      Object.defineProperty(Set.prototype, "has", {
+        configurable: true,
+        writable: true,
+        value(this: Set<unknown>, target: unknown) {
+          if (
+            target === "duplicate-model"
+            || target === "duplicate-batch-provider"
+          ) {
+            return false;
+          }
+          return Reflect.apply(originalHas, this, [target]);
+        }
+      });
+
+      try {
+        defineProvider({
+          ...createSettingsProviderInput(),
+          models: [{
+            id: "duplicate-model",
+            displayName: "Duplicate Model One",
+            capabilities: createCapabilities()
+          }, {
+            id: "duplicate-model",
+            displayName: "Duplicate Model Two",
+            capabilities: createCapabilities()
+          }]
+        });
+      } catch (error) {
+        duplicateModelError = error;
+      }
+
+      const registry = new ProviderRegistry();
+      try {
+        registry.registerMany([{
+          ...createSettingsProviderInput(),
+          id: "duplicate-batch-provider"
+        }, {
+          ...createSettingsProviderInput(),
+          id: "duplicate-batch-provider"
+        }]);
+      } catch (error) {
+        duplicateBatchError = error;
+      }
+    } finally {
+      Object.defineProperty(Set.prototype, "has", {
+        configurable: true,
+        writable: true,
+        value: originalHas
+      });
+    }
+
+    expect(duplicateModelError).toMatchObject({ code: "DUPLICATE_MODEL" });
+    expect(duplicateBatchError).toMatchObject({ code: "DUPLICATE_PROVIDER" });
+  });
+
   it("does not let monkey-patched Array.find or Array.sort bypass lookup and requirements", () => {
     const registry = new ProviderRegistry();
     registry.register({
