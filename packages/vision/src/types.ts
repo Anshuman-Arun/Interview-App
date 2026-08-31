@@ -448,7 +448,7 @@ export function assertVisionRasterSource(value: unknown): asserts value is Visio
   }
 }
 
-export function visionRasterIdentity(source: VisionRasterSource): string {
+export function visionRasterIdentity(source: VisionRasterSource): VisionRasterIdentity {
   assertVisionRasterSource(source);
   const canonical = ImageSnapshot.isValidatedInstance(source)
     ? JSON.stringify([
