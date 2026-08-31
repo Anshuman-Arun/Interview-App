@@ -2349,6 +2349,13 @@ describe("local worker lifecycle manager", () => {
     }, {})).toThrow(/could not be inspected/iu);
     expect(environmentProxyTraps).toBe(0);
 
+    const revokedParentEnvironment = Proxy.revocable({ PATH: "safe" }, {});
+    revokedParentEnvironment.revoke();
+    expect(() => buildLocalEnvironment(
+      undefined,
+      revokedParentEnvironment.proxy as NodeJS.ProcessEnv
+    )).toThrow(/Parent environment could not be inspected/iu);
+
     const environmentProxy = Proxy.revocable({ values: { SAFE_VALUE: "x" } }, {});
     environmentProxy.revoke();
     expect(() => buildLocalEnvironment(
