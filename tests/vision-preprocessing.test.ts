@@ -7,8 +7,12 @@ import {
   INTERNAL_VISION_ARTIFACT_CONSTRUCTION
 } from "../packages/vision/src/internal-artifact-construction.js";
 import {
+  HARD_IMAGE_VALIDATION_LIMITS,
+  ImagePayloadReferenceMetadataSchema,
   ImageSnapshot,
+  ImageSnapshotMetadataSchema,
   VisionImageArtifact,
+  VisionImageArtifactMetadataSchema,
   VisionPreprocessingError,
   assertRectWithinImage,
   clipRectToBounds,
@@ -226,6 +230,33 @@ describe("vision snapshot validation and hashing", () => {
     bytes.fill(0);
     expect(value.metadata.contentDigest).toBe(originalDigest);
     expect(sha256ImageBytes(value.readBytes())).toBe(originalDigest);
+  });
+
+  it("makes exported metadata schemas enforce package hard image caps directly", async () => {
+    const source = snapshot(makePng(2, 2));
+    const crop = (await cropImage(source, { x: 0, y: 0, width: 1, height: 1 })).artifact;
+    const request = prepareVisionImageRequest(source, "schema-caps");
+
+    expect(ImageSnapshotMetadataSchema.safeParse({
+      ...source.metadata,
+      width: HARD_IMAGE_VALIDATION_LIMITS.maxWidth + 1
+    }).success).toBe(false);
+
+    expect(ImageSnapshotMetadataSchema.safeParse({
+      ...source.metadata,
+      width: 8192,
+      height: 8193
+    }).success).toBe(false);
+
+    expect(VisionImageArtifactMetadataSchema.safeParse({
+      ...crop.metadata,
+      byteSize: HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes + 1
+    }).success).toBe(false);
+
+    expect(ImagePayloadReferenceMetadataSchema.safeParse({
+      ...request.payload.metadata,
+      height: HARD_IMAGE_VALIDATION_LIMITS.maxHeight + 1
+    }).success).toBe(false);
   });
 
   it("rejects artifact metadata whose deterministic ID is stale after provenance changes", async () => {
