@@ -81,7 +81,8 @@ describe("local model asset manager", () => {
       platform: undefined,
       architecture: undefined
     });
-    const linux = manifestFor(payload, "https://example.test/linux.bin", {
+    const linux = AssetManifestSchema.parse({
+      ...manifestFor(payload, "https://example.test/linux.bin"),
       artifactId: "linux",
       platform: "linux",
       architecture: undefined
