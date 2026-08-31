@@ -688,11 +688,11 @@ export class ModelAssetManager {
         );
       };
 
+      signal?.addEventListener("abort", abortListener, { once: true });
       if (signal?.aborted === true) {
         abortListener();
         return;
       }
-      signal?.addEventListener("abort", abortListener, { once: true });
 
       entry.promise.then((value) => {
         if (completed) return;
@@ -732,6 +732,10 @@ export class ModelAssetManager {
       };
 
       signal?.addEventListener("abort", abortListener, { once: true });
+      if (signal?.aborted === true) {
+        abortListener();
+        return;
+      }
       entry.promise.then(finish, finish);
     });
   }
