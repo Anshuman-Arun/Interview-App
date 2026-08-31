@@ -133,6 +133,17 @@ describe("adversarial deterministic math verification", () => {
     }
   });
 
+  it("treats malformed integers beyond the lexical window as resource overflows", async () => {
+    const operand = `+${"9".repeat(MAX_INTEGER_DECIMAL_DIGITS + 2)}`;
+    const result = await verifyJson(new ModularArithmeticVerifier(), {
+      protocol: MODULAR_ARITHMETIC_PROTOCOL,
+      protocolVersion: MODULAR_ARITHMETIC_PROTOCOL_VERSION,
+      claim: { kind: "DIVISIBILITY", divisor: "1", dividend: integer(operand) }
+    });
+    expect(result.status).toBe("UNRESOLVED");
+    expect(result.reason).toContain("RESOURCE_LIMIT");
+  });
+
   it("classifies sign-aware integer digit overflow as a resource limit", async () => {
     for (const operand of [
       "9".repeat(MAX_INTEGER_DECIMAL_DIGITS + 1),
