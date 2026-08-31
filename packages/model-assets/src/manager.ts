@@ -1115,11 +1115,6 @@ export class ModelAssetManager {
     if (signal.aborted) {
       throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
     }
-    if (initial.status === "CORRUPT") {
-      const reconciled = await this.reconcileDestinationForInstall(paths, manifest, signal);
-      if (reconciled !== undefined) return reconciled;
-    }
-
     const serializedManifest = serializeAssetManifest(manifest);
     const reservationBytes = manifest.sizeBytes + Buffer.byteLength(serializedManifest, "utf8");
     if (!Number.isSafeInteger(reservationBytes)) {
@@ -1176,19 +1171,6 @@ export class ModelAssetManager {
         );
       }
 
-      await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
-      const existing = await this.reconcileDestinationForInstall(paths, manifest, signal);
-      if (existing !== undefined) {
-        await this.removeManagedEntry(paths, stagingDirectory);
-        if (signal.aborted) {
-          throw new ModelAssetError(
-            "CANCELLED",
-            "Artifact installation request was cancelled."
-          );
-        }
-        return existing;
-      }
-
       const verification = await verifyArtifactFileWithIdentity(stagedPayload, {
         sizeBytes: manifest.sizeBytes,
         sha256: manifest.sha256,
@@ -1212,6 +1194,22 @@ export class ModelAssetManager {
         );
       }
 
+      const existing = await this.reconcileDestinationForInstall(paths, manifest, signal);
+      if (existing !== undefined) {
+        await this.removeManagedEntry(paths, stagingDirectory);
+        if (signal.aborted) {
+          throw new ModelAssetError(
+            "CANCELLED",
+            "Artifact installation request was cancelled."
+          );
+        }
+        return existing;
+      }
+      await this.assertVerifiedPayloadPath(
+        stagedPayload,
+        verification.identity,
+        "UNSAFE_PATH"
+      );
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
       await this.assertArtifactDirectoryShape(
         stagingDirectory,
