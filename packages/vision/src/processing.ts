@@ -111,7 +111,7 @@ const DOWNSCALE_ENVELOPE_FIELDS = new Set(["maxWidth", "maxHeight", "maxPixels"]
 const TILE_CONFIG_FIELDS = new Set(["tileWidth", "tileHeight", "overlap", "maxTileCount"]);
 
 function isProcessingClock(value: unknown): value is () => number {
-  return typeof value === "function";
+  return typeof value === "function" && !isProxy(value);
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -250,8 +250,16 @@ function parseTileConfig(input: TileConfig): TileConfig {
 }
 
 function now(options: VisionProcessingOptions): number {
-  const value = (options.now ?? (() => globalThis.performance.now()))();
-  if (!Number.isFinite(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
+  let value: unknown;
+  try {
+    value = (options.now ?? (() => globalThis.performance.now()))();
+  } catch {
+    throw new TypeError("Processing clock could not be evaluated safely");
+  }
+  if (typeof value !== "number"
+      || !Number.isFinite(value)
+      || value < 0
+      || value > Number.MAX_SAFE_INTEGER) {
     throw new RangeError("Processing clock must return a nonnegative finite value within safe numeric range");
   }
   return value;
