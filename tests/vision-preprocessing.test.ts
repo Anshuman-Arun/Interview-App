@@ -257,6 +257,15 @@ describe("vision snapshot validation and hashing", () => {
       encodedBytes: new Uint8Array()
     }).success).toBe(false);
 
+    expect(ImageSnapshotInputSchema.safeParse({
+      snapshotId: "unsupported-mime-schema",
+      sourceType: "BROWSER_SCREENSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/jpeg",
+      encodedBytes: makePng(1, 1)
+    }).success).toBe(false);
+
     expect(ArtifactSourceBoundsSchema.safeParse({
       x: HARD_IMAGE_VALIDATION_LIMITS.maxWidth - 1,
       y: 0,
@@ -500,14 +509,19 @@ describe("vision snapshot validation and hashing", () => {
     }
 
     const bytes = makePng(1, 1);
-    expect(() => createValidatedImageSnapshot({
-      snapshotId: "bad-mime",
-      sourceType: "BROWSER_SCREENSHOT",
-      sourceRevision: BoardRevisionSchema.parse(0),
-      capturedAtMs: 0,
-      mimeType: "image/jpeg",
-      encodedBytes: bytes
-    })).toThrowError(VisionPreprocessingError);
+    try {
+      createValidatedImageSnapshot({
+        snapshotId: "bad-mime",
+        sourceType: "BROWSER_SCREENSHOT",
+        sourceRevision: BoardRevisionSchema.parse(0),
+        capturedAtMs: 0,
+        mimeType: "image/jpeg",
+        encodedBytes: bytes
+      });
+      throw new Error("Expected unsupported MIME rejection");
+    } catch (error) {
+      expectCode(error, "UNSUPPORTED_IMAGE_TYPE");
+    }
   });
 
   it("rejects oversized IHDR dimensions before full PNG decode", () => {
