@@ -23,6 +23,8 @@ const DEFAULT_OUTPUT_MAX_LINES = 200;
 const DEFAULT_OUTPUT_MAX_BYTES = 64 * 1024;
 const DEFAULT_OUTPUT_MAX_LINE_BYTES = 64 * 1024;
 const DEFAULT_POLL_INTERVAL_MS = 50;
+const MAX_TIMER_MS = 2_147_483_647;
+const PROCESS_TREE_POLL_INTERVAL_MS = 10;
 const MAX_CAPABILITIES = 128;
 const MAX_STDERR_TAIL_LINES = 20;
 const COMPONENT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
@@ -63,7 +65,6 @@ interface ComponentRecord {
   readonly stderr: BoundedLineBuffer;
   readonly stdoutListeners: Set<(line: string) => void>;
   readonly exitListeners: Set<(exit: InternalExitRecord) => void>;
-  readonly startupStdoutLines: string[];
   state: LocalComponentState;
   child: ChildProcessWithoutNullStreams | undefined;
   stdoutFramer?: BoundedLineFramer;
@@ -80,6 +81,7 @@ interface ComponentRecord {
   operationAbort: AbortController | undefined;
   startPromise: Promise<LocalComponentStatus> | undefined;
   stopPromise: Promise<LocalStopResult> | undefined;
+  cleanupPromise: Promise<void> | undefined;
 }
 
 export class LocalRuntimeManager {
@@ -99,13 +101,14 @@ export class LocalRuntimeManager {
 
   public register(definition: LocalComponentDefinition): LocalComponentStatus {
     validateDefinition(definition);
-    if (this.components.has(definition.id)) {
-      throw new LocalRuntimeError("DUPLICATE_COMPONENT", `Component ${definition.id} is already registered`);
+    const normalizedDefinition = freezeDefinition(definition);
+    if (this.components.has(normalizedDefinition.id)) {
+      throw new LocalRuntimeError("DUPLICATE_COMPONENT", `Component ${normalizedDefinition.id} is already registered`);
     }
 
     let environment: BuiltLocalEnvironment;
     try {
-      environment = buildLocalEnvironment(definition.environment, this.parentEnvironment, this.platform);
+      environment = buildLocalEnvironment(normalizedDefinition.environment, this.parentEnvironment, this.platform);
     } catch (error) {
       throw new LocalRuntimeError(
         "INVALID_DEFINITION",
@@ -113,17 +116,16 @@ export class LocalRuntimeManager {
       );
     }
 
-    const maxLines = definition.output?.maxLines ?? DEFAULT_OUTPUT_MAX_LINES;
-    const maxBytes = definition.output?.maxBytes ?? DEFAULT_OUTPUT_MAX_BYTES;
+    const maxLines = normalizedDefinition.output?.maxLines ?? DEFAULT_OUTPUT_MAX_LINES;
+    const maxBytes = normalizedDefinition.output?.maxBytes ?? DEFAULT_OUTPUT_MAX_BYTES;
     const record: ComponentRecord = {
-      definition,
+      definition: normalizedDefinition,
       environment,
       registrationIndex: this.registrationSequence,
       stdout: new BoundedLineBuffer(maxLines, maxBytes, environment.secretValues),
       stderr: new BoundedLineBuffer(maxLines, maxBytes, environment.secretValues),
       stdoutListeners: new Set(),
       exitListeners: new Set(),
-      startupStdoutLines: [],
       state: "STOPPED",
       child: undefined,
       readyAt: undefined,
@@ -133,21 +135,31 @@ export class LocalRuntimeManager {
       operationAbort: undefined,
       startPromise: undefined,
       stopPromise: undefined,
+      cleanupPromise: undefined,
       restartCount: 0,
       restartBudgetUsed: 0,
       expectedStop: false
     };
     this.registrationSequence += 1;
-    this.components.set(definition.id, record);
+    this.components.set(normalizedDefinition.id, record);
     return this.snapshot(record);
   }
 
   public start(componentId: string, options: { readonly signal?: AbortSignal } = {}): Promise<LocalComponentStatus> {
     const record = this.requireRecord(componentId);
-    if (record.startPromise !== undefined) return record.startPromise;
-    if (record.state === "READY" || record.state === "DEGRADED") return Promise.resolve(this.snapshot(record));
     if (record.stopPromise !== undefined) {
       return record.stopPromise.then(() => this.start(componentId, options));
+    }
+    if (record.cleanupPromise !== undefined) {
+      return record.cleanupPromise.then(() => this.start(componentId, options));
+    }
+    if (record.startPromise !== undefined) return record.startPromise;
+    if (record.state === "READY" || record.state === "DEGRADED") return Promise.resolve(this.snapshot(record));
+    if (record.child !== undefined && isChildAlive(record.child)) {
+      return Promise.reject(new LocalRuntimeError(
+        "INVALID_STATE",
+        `Cannot start ${componentId} while its previous managed process is still alive`
+      ));
     }
     if (options.signal?.aborted === true) {
       return Promise.reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
@@ -202,7 +214,7 @@ export class LocalRuntimeManager {
       throw new LocalRuntimeError("INVALID_STATE", `Cannot mark ${componentId} degraded from ${record.state}`);
     }
     record.state = "DEGRADED";
-    record.readinessDetail = sanitizeDiagnosticText(detail);
+    record.readinessDetail = sanitizeStatusText(detail, record.environment.secretValues);
     return this.snapshot(record);
   }
 
@@ -212,7 +224,9 @@ export class LocalRuntimeManager {
       throw new LocalRuntimeError("INVALID_STATE", `Cannot mark ${componentId} ready from ${record.state}`);
     }
     record.state = "READY";
-    record.readinessDetail = detail === undefined ? undefined : sanitizeDiagnosticText(detail);
+    record.readinessDetail = detail === undefined
+      ? undefined
+      : sanitizeStatusText(detail, record.environment.secretValues);
     return this.snapshot(record);
   }
 
@@ -251,8 +265,12 @@ export class LocalRuntimeManager {
         }
         const runtimeError = normalizeRuntimeError(error, record.definition.id);
         record.state = "FAILED";
-        record.failure = this.failure(runtimeError.code, runtimeError.message);
-        if (!this.reserveRestart(record)) throw runtimeError;
+        record.failure = this.failure(
+          runtimeError.code,
+          runtimeError.message,
+          record.environment.secretValues
+        );
+        if (runtimeError.code === "TERMINATION_FAILED" || !this.reserveRestart(record)) throw runtimeError;
         delayMs = restartBackoff(record.definition.restartPolicy ?? DEFAULT_RESTART_POLICY, record.restartBudgetUsed);
       }
     }
@@ -266,16 +284,24 @@ export class LocalRuntimeManager {
     record.handshake = undefined;
     record.readinessDetail = undefined;
     record.startedAt = this.timestamp();
-    record.startupStdoutLines.length = 0;
+    record.stdout.clear();
+    record.stderr.clear();
 
     const child = this.spawnChild(record);
     record.child = child;
     this.attachChild(record, child);
 
+    const attemptController = new AbortController();
+    const unlinkAttempt = linkAbortSignal(signal, attemptController);
+    const earlyReadiness = isStdoutReadiness(record.definition.readiness)
+      ? this.waitForReadiness(record, child, attemptController.signal)
+      : undefined;
+
     try {
-      await waitForSpawn(child, signal, record.definition.id);
+      await waitForSpawn(child, attemptController.signal, record.definition.id);
       if (child.pid === undefined) throw new LocalRuntimeError("SPAWN_FAILED", `Component ${record.definition.id} did not receive a process id`);
-      const readiness = await this.waitForReadiness(record, child, signal);
+      const readiness = earlyReadiness
+        ?? await this.waitForReadiness(record, child, attemptController.signal);
       if (child.exitCode !== null || child.signalCode !== null || record.child !== child) {
         throw new LocalRuntimeError("PROCESS_EXITED", `Component ${record.definition.id} exited during startup`);
       }
@@ -288,8 +314,15 @@ export class LocalRuntimeManager {
       record.readyAt = this.timestamp();
       record.state = "READY";
     } catch (error) {
-      await this.cleanupFailedAttempt(record, child);
+      attemptController.abort();
+      if (earlyReadiness !== undefined) {
+        await earlyReadiness.catch(() => undefined);
+      }
+      if (!record.expectedStop) await this.cleanupFailedAttempt(record, child);
       throw error;
+    } finally {
+      unlinkAttempt?.();
+      attemptController.abort();
     }
   }
 
@@ -315,8 +348,6 @@ export class LocalRuntimeManager {
       maxLineBytes,
       (line) => {
         record.stdout.push(line);
-        record.startupStdoutLines.push(line);
-        if (record.startupStdoutLines.length > 64) record.startupStdoutLines.shift();
         for (const listener of [...record.stdoutListeners]) listener(line);
       },
       () => record.stdout.markMalformed()
@@ -329,9 +360,18 @@ export class LocalRuntimeManager {
     record.stdoutFramer = stdoutFramer;
     record.stderrFramer = stderrFramer;
 
+    child.stdin.on("error", () => {
+      record.stderr.push("Managed component stdin stream error");
+    });
+    child.stdout.on("error", () => {
+      record.stderr.push("Managed component stdout stream error");
+    });
+    child.stderr.on("error", () => {
+      record.stderr.push("Managed component stderr stream error");
+    });
     child.stdout.on("data", (chunk: Buffer) => stdoutFramer.append(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderrFramer.append(chunk));
-    child.once("exit", (code, signal) => {
+    child.once("close", (code, signal) => {
       stdoutFramer.flush();
       stderrFramer.flush();
       this.handleExit(record, child, code, signal);
@@ -370,9 +410,44 @@ export class LocalRuntimeManager {
     record.state = "FAILED";
     record.failure = this.failure(
       "PROCESS_EXITED",
-      `Managed component ${record.definition.id} exited unexpectedly`
+      `Managed component ${record.definition.id} exited unexpectedly`,
+      record.environment.secretValues
     );
-    if (record.startPromise === undefined && this.reserveRestart(record)) this.beginAutomaticRestart(record);
+    const cleanup = this.cleanupUnexpectedExit(record, child);
+    record.cleanupPromise = cleanup;
+    void cleanup.then(
+      () => {
+        if (record.cleanupPromise === cleanup) record.cleanupPromise = undefined;
+      },
+      (error: unknown) => {
+        record.failure = this.failure(
+          "TERMINATION_FAILED",
+          `Residual process-tree cleanup failed: ${safeErrorMessage(error)}`,
+          record.environment.secretValues
+        );
+        if (record.cleanupPromise === cleanup) record.cleanupPromise = undefined;
+      }
+    );
+  }
+
+  private async cleanupUnexpectedExit(
+    record: ComponentRecord,
+    child: ChildProcessWithoutNullStreams
+  ): Promise<void> {
+    const timeoutMs = terminationTimeout(record.definition);
+    await terminateChildTree(child, this.platform, "SIGTERM");
+    if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
+      await forceKillChildTree(child, this.platform);
+      if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
+        throw new LocalRuntimeError(
+          "TERMINATION_FAILED",
+          `Could not clean up residual process tree for ${record.definition.id}`
+        );
+      }
+    }
+    if (!record.expectedStop && record.startPromise === undefined && this.reserveRestart(record)) {
+      this.beginAutomaticRestart(record);
+    }
   }
 
   private beginAutomaticRestart(record: ComponentRecord): void {
@@ -482,10 +557,7 @@ export class LocalRuntimeManager {
         if (!normalized.ready || settled) return;
         settled = true;
         cleanup();
-        resolve({
-          ...(normalized.detail === undefined ? {} : { detail: sanitizeDiagnosticText(normalized.detail) }),
-          ...(normalized.handshake === undefined ? {} : { handshake: normalized.handshake })
-        });
+        resolve(sanitizeReadyResult(normalized, record.environment.secretValues));
       };
       const onLine = (line: string): void => {
         try {
@@ -509,7 +581,6 @@ export class LocalRuntimeManager {
       record.stdoutListeners.add(onLine);
       record.exitListeners.add(onExit);
       signal.addEventListener("abort", onAbort, { once: true });
-      for (const line of record.startupStdoutLines) onLine(line);
       if (child.exitCode !== null || child.signalCode !== null) onExit();
       else if (signal.aborted) onAbort();
     });
@@ -529,15 +600,21 @@ export class LocalRuntimeManager {
       throwIfAborted(signal, record.definition.id);
       try {
         const response = await this.fetchImpl(url, { method: "GET", redirect: "error", signal });
-        let decision: LocalReadinessDecision;
-        if (strategy.evaluate === undefined) {
-          decision = response.ok;
-          void response.body?.cancel();
-        } else {
-          decision = await strategy.evaluate(response);
+        try {
+          const decision = strategy.evaluate === undefined
+            ? response.ok
+            : await awaitWithAbort(
+                Promise.resolve().then(() => strategy.evaluate?.(response) ?? false),
+                signal,
+                record.definition.id
+              );
+          const normalized = normalizeReadinessDecision(decision);
+          if (normalized.ready) {
+            return sanitizeReadyResult(normalized, record.environment.secretValues);
+          }
+        } finally {
+          disposeResponseBody(response);
         }
-        const normalized = normalizeReadinessDecision(decision);
-        if (normalized.ready) return normalizeReadyResult(normalized);
       } catch (error) {
         if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
         if (error instanceof LocalRuntimeError) throw error;
@@ -563,8 +640,15 @@ export class LocalRuntimeManager {
         signal
       });
       try {
-        const normalized = normalizeReadinessDecision(await strategy.probe(context));
-        if (normalized.ready) return normalizeReadyResult(normalized);
+        const decision = await awaitWithAbort(
+          Promise.resolve().then(() => strategy.probe(context)),
+          signal,
+          record.definition.id
+        );
+        const normalized = normalizeReadinessDecision(decision);
+        if (normalized.ready) {
+          return sanitizeReadyResult(normalized, record.environment.secretValues);
+        }
       } catch {
         if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
       }
@@ -573,15 +657,26 @@ export class LocalRuntimeManager {
   }
 
   private async cleanupFailedAttempt(record: ComponentRecord, child: ChildProcessWithoutNullStreams): Promise<void> {
-    if (record.child !== child || !isChildAlive(child)) return;
+    if (record.child !== child && !isOwnedProcessTreeAlive(child, this.platform)) return;
     const previousExpectedStop = record.expectedStop;
     record.expectedStop = true;
+    const timeoutMs = terminationTimeout(record.definition);
     try {
       await terminateChildTree(child, this.platform, "SIGTERM");
-      const exited = await waitForExit(child, Math.min(record.definition.terminationTimeoutMs ?? 1_000, 1_000));
-      if (!exited) {
+      if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
         await forceKillChildTree(child, this.platform);
-        await waitForExit(child, Math.min(record.definition.terminationTimeoutMs ?? 1_000, 1_000));
+        if (!(await waitForManagedTreeExit(record, child, this.platform, timeoutMs))) {
+          record.state = "FAILED";
+          record.failure = this.failure(
+            "TERMINATION_FAILED",
+            `Could not terminate failed startup for ${record.definition.id}`,
+            record.environment.secretValues
+          );
+          throw new LocalRuntimeError(
+            "TERMINATION_FAILED",
+            `Could not terminate failed startup for ${record.definition.id}`
+          );
+        }
       }
     } finally {
       record.expectedStop = previousExpectedStop;
@@ -592,7 +687,14 @@ export class LocalRuntimeManager {
     record.expectedStop = true;
     record.operationAbort?.abort();
     const child = record.child;
-    if (child === undefined || !isChildAlive(child)) {
+    if (child === undefined) {
+      if (record.cleanupPromise !== undefined) {
+        try {
+          await record.cleanupPromise;
+        } catch {
+          // Failure is reflected in status; stop still checks for any surviving managed process below.
+        }
+      }
       if (record.startPromise !== undefined) {
         try {
           await record.startPromise;
@@ -600,23 +702,31 @@ export class LocalRuntimeManager {
           // Cancellation is expected when stopping a pending start or retry backoff.
         }
       }
+      const survivingChild = record.child;
+      if (survivingChild !== undefined && isOwnedProcessTreeAlive(survivingChild, this.platform)) {
+        return this.runStop(record);
+      }
       record.state = "STOPPED";
       return Object.freeze({ componentId: record.definition.id, disposition: "ALREADY_STOPPED" });
     }
 
     record.state = "STOPPING";
     let disposition: LocalStopResult["disposition"] = "GRACEFUL";
-    await this.requestGracefulShutdown(record, child);
-    if (!(await waitForExit(child, record.definition.shutdownTimeoutMs))) {
+    void this.requestGracefulShutdown(record, child);
+    if (!(await waitForManagedTreeExit(record, child, this.platform, record.definition.shutdownTimeoutMs))) {
       disposition = "TERMINATED";
       await terminateChildTree(child, this.platform, "SIGTERM");
-      const terminationTimeoutMs = record.definition.terminationTimeoutMs ?? Math.min(record.definition.shutdownTimeoutMs, 1_000);
-      if (!(await waitForExit(child, terminationTimeoutMs))) {
+      const terminationTimeoutMs = terminationTimeout(record.definition);
+      if (!(await waitForManagedTreeExit(record, child, this.platform, terminationTimeoutMs))) {
         disposition = "FORCED";
         await forceKillChildTree(child, this.platform);
-        if (!(await waitForExit(child, terminationTimeoutMs))) {
+        if (!(await waitForManagedTreeExit(record, child, this.platform, terminationTimeoutMs))) {
           record.state = "FAILED";
-          record.failure = this.failure("TERMINATION_FAILED", `Could not terminate managed component ${record.definition.id}`);
+          record.failure = this.failure(
+            "TERMINATION_FAILED",
+            `Could not terminate managed component ${record.definition.id}`,
+            record.environment.secretValues
+          );
           throw new LocalRuntimeError("TERMINATION_FAILED", `Could not terminate managed component ${record.definition.id}`);
         }
       }
@@ -667,7 +777,9 @@ export class LocalRuntimeManager {
       ...(record.readinessDetail === undefined ? {} : { detail: record.readinessDetail })
     });
     const childPid = record.child?.pid;
-    const includePid = childPid !== undefined && ["STARTING", "READY", "DEGRADED", "STOPPING"].includes(record.state);
+    const includePid = childPid !== undefined
+      && record.child !== undefined
+      && isChildAlive(record.child);
     const lastExit = record.lastExit === undefined ? undefined : Object.freeze({
       ...record.lastExit,
       stderrTail: Object.freeze([...record.lastExit.stderrTail])
@@ -709,14 +821,73 @@ export class LocalRuntimeManager {
   }
 }
 
+function freezeDefinition(definition: LocalComponentDefinition): LocalComponentDefinition {
+  const environment = definition.environment === undefined
+    ? undefined
+    : Object.freeze({
+        ...(definition.environment.inherit === undefined
+          ? {}
+          : { inherit: Object.freeze([...definition.environment.inherit]) }),
+        ...(definition.environment.values === undefined
+          ? {}
+          : { values: Object.freeze({ ...definition.environment.values }) }),
+        ...(definition.environment.secrets === undefined
+          ? {}
+          : { secrets: Object.freeze({ ...definition.environment.secrets }) })
+      });
+  const readiness = Object.freeze({ ...definition.readiness }) as LocalComponentDefinition["readiness"];
+  const restartPolicy = definition.restartPolicy === undefined
+    ? undefined
+    : Object.freeze({ ...definition.restartPolicy }) as LocalRestartPolicy;
+  const expectedHandshake = definition.expectedHandshake === undefined
+    ? undefined
+    : Object.freeze({ ...definition.expectedHandshake });
+  const output = definition.output === undefined
+    ? undefined
+    : Object.freeze({ ...definition.output });
+
+  return Object.freeze({
+    id: definition.id,
+    executable: definition.executable,
+    ...(definition.args === undefined ? {} : { args: Object.freeze([...definition.args]) }),
+    ...(definition.cwd === undefined ? {} : { cwd: definition.cwd }),
+    ...(environment === undefined ? {} : { environment }),
+    startupTimeoutMs: definition.startupTimeoutMs,
+    shutdownTimeoutMs: definition.shutdownTimeoutMs,
+    ...(definition.terminationTimeoutMs === undefined
+      ? {}
+      : { terminationTimeoutMs: definition.terminationTimeoutMs }),
+    readiness,
+    ...(restartPolicy === undefined ? {} : { restartPolicy }),
+    ...(expectedHandshake === undefined ? {} : { expectedHandshake }),
+    ...(output === undefined ? {} : { output }),
+    ...(definition.gracefulShutdown === undefined
+      ? {}
+      : { gracefulShutdown: definition.gracefulShutdown })
+  });
+}
+
+function isStdoutReadiness(
+  readiness: LocalComponentDefinition["readiness"]
+): boolean {
+  return readiness.kind === "STDOUT_LINE" || readiness.kind === "STDOUT_JSON";
+}
+
 function validateDefinition(definition: LocalComponentDefinition): void {
-  if (!COMPONENT_ID.test(definition.id)) invalid("Component id must be stable and contain only letters, numbers, dot, underscore, or dash");
+  if (typeof definition.id !== "string" || !COMPONENT_ID.test(definition.id)) {
+    invalid("Component id must be stable and contain only letters, numbers, dot, underscore, or dash");
+  }
   validateCommandPart(definition.executable, "executable");
+  if (definition.args !== undefined && !Array.isArray(definition.args)) invalid("args must be an array");
   for (const argument of definition.args ?? []) validateCommandPart(argument, "argument");
-  if (definition.cwd?.includes("\0") === true) invalid("Working directory contains a NUL byte");
-  positiveInteger(definition.startupTimeoutMs, "startupTimeoutMs");
-  positiveInteger(definition.shutdownTimeoutMs, "shutdownTimeoutMs");
-  if (definition.terminationTimeoutMs !== undefined) positiveInteger(definition.terminationTimeoutMs, "terminationTimeoutMs");
+  if (definition.cwd !== undefined) {
+    if (typeof definition.cwd !== "string" || definition.cwd.length === 0 || definition.cwd.includes("\0")) {
+      invalid("Working directory must be a non-empty path without NUL bytes");
+    }
+  }
+  positiveTimer(definition.startupTimeoutMs, "startupTimeoutMs");
+  positiveTimer(definition.shutdownTimeoutMs, "shutdownTimeoutMs");
+  if (definition.terminationTimeoutMs !== undefined) positiveTimer(definition.terminationTimeoutMs, "terminationTimeoutMs");
   validateReadiness(definition);
   validateRestartPolicy(definition.restartPolicy ?? DEFAULT_RESTART_POLICY);
   if (definition.output?.maxLines !== undefined) positiveInteger(definition.output.maxLines, "output.maxLines");
@@ -728,41 +899,56 @@ function validateReadiness(definition: LocalComponentDefinition): void {
   const readiness = definition.readiness;
   switch (readiness.kind) {
     case "STABLE_PROCESS":
-      positiveInteger(readiness.stableMs, "readiness.stableMs");
+      positiveTimer(readiness.stableMs, "readiness.stableMs");
       break;
     case "HTTP_LOOPBACK":
       parseLoopbackUrl(readiness.url);
-      if (readiness.intervalMs !== undefined) positiveInteger(readiness.intervalMs, "readiness.intervalMs");
+      if (readiness.intervalMs !== undefined) positiveTimer(readiness.intervalMs, "readiness.intervalMs");
+      if (readiness.evaluate !== undefined && typeof readiness.evaluate !== "function") {
+        invalid("HTTP readiness evaluate must be a function");
+      }
       break;
     case "CUSTOM_LOCAL":
-      if (readiness.intervalMs !== undefined) positiveInteger(readiness.intervalMs, "readiness.intervalMs");
+      if (readiness.intervalMs !== undefined) positiveTimer(readiness.intervalMs, "readiness.intervalMs");
+      if (typeof readiness.probe !== "function") invalid("Custom readiness probe must be a function");
       break;
     case "STDOUT_LINE":
     case "STDOUT_JSON":
+      if (typeof readiness.evaluate !== "function") invalid("Stdout readiness evaluate must be a function");
       break;
+    default:
+      invalid("Unsupported readiness strategy");
   }
 }
 
 function validateRestartPolicy(policy: LocalRestartPolicy): void {
   if (policy.mode === "NEVER") return;
+  if (policy.mode !== "ON_FAILURE") invalid("Unsupported restart policy");
   if (!Number.isSafeInteger(policy.maxRetries) || policy.maxRetries < 0) invalid("restartPolicy.maxRetries must be a nonnegative safe integer");
-  if (policy.backoffMs !== undefined) nonnegativeInteger(policy.backoffMs, "restartPolicy.backoffMs");
-  if (policy.maxBackoffMs !== undefined) nonnegativeInteger(policy.maxBackoffMs, "restartPolicy.maxBackoffMs");
+  if (policy.backoffMs !== undefined) nonnegativeTimer(policy.backoffMs, "restartPolicy.backoffMs");
+  if (policy.maxBackoffMs !== undefined) nonnegativeTimer(policy.maxBackoffMs, "restartPolicy.maxBackoffMs");
   if (policy.backoffMs !== undefined && policy.maxBackoffMs !== undefined && policy.maxBackoffMs < policy.backoffMs) {
     invalid("restartPolicy.maxBackoffMs must be at least restartPolicy.backoffMs");
   }
 }
 
 function validateCommandPart(value: string, label: string): void {
-  if (value.length === 0 || value.includes("\0")) invalid(`Invalid ${label}`);
+  if (typeof value !== "string" || value.length === 0 || value.includes("\0")) invalid(`Invalid ${label}`);
 }
 
 function positiveInteger(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) invalid(`${label} must be a positive safe integer`);
 }
 
-function nonnegativeInteger(value: number, label: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) invalid(`${label} must be a nonnegative safe integer`);
+function positiveTimer(value: number, label: string): void {
+  positiveInteger(value, label);
+  if (value > MAX_TIMER_MS) invalid(`${label} exceeds the maximum supported timer delay`);
+}
+
+function nonnegativeTimer(value: number, label: string): void {
+  if (!Number.isSafeInteger(value) || value < 0 || value > MAX_TIMER_MS) {
+    invalid(`${label} must be a nonnegative timer delay no greater than ${String(MAX_TIMER_MS)}`);
+  }
 }
 
 function invalid(message: string): never {
@@ -793,13 +979,18 @@ function normalizeReadinessDecision(decision: LocalReadinessDecision): {
   return typeof decision === "boolean" ? { ready: decision } : decision;
 }
 
-function normalizeReadyResult(decision: {
-  readonly ready: boolean;
-  readonly detail?: string;
-  readonly handshake?: LocalComponentHandshake;
-}): { readonly detail?: string; readonly handshake?: LocalComponentHandshake } {
+function sanitizeReadyResult(
+  decision: {
+    readonly ready: boolean;
+    readonly detail?: string;
+    readonly handshake?: LocalComponentHandshake;
+  },
+  secretValues: readonly string[]
+): { readonly detail?: string; readonly handshake?: LocalComponentHandshake } {
   return {
-    ...(decision.detail === undefined ? {} : { detail: sanitizeDiagnosticText(decision.detail) }),
+    ...(decision.detail === undefined
+      ? {}
+      : { detail: sanitizeStatusText(decision.detail, secretValues) }),
     ...(decision.handshake === undefined ? {} : { handshake: decision.handshake })
   };
 }
@@ -940,21 +1131,22 @@ function waitForSpawn(child: ChildProcessWithoutNullStreams, signal: AbortSignal
   });
 }
 
-function waitForExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
-  if (!isChildAlive(child)) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (value: boolean): void => {
-      if (settled) return;
-      settled = true;
-      child.off("exit", onExit);
-      clearTimeout(timer);
-      resolve(value);
-    };
-    const onExit = (): void => finish(true);
-    const timer = setTimeout(() => finish(!isChildAlive(child)), timeoutMs);
-    child.once("exit", onExit);
-  });
+async function waitForManagedTreeExit(
+  record: ComponentRecord,
+  child: ChildProcessWithoutNullStreams,
+  platform: NodeJS.Platform,
+  timeoutMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const childClosed = record.child !== child;
+    if (childClosed && !isOwnedProcessTreeAlive(child, platform)) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return childClosed && !isOwnedProcessTreeAlive(child, platform);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, Math.min(PROCESS_TREE_POLL_INTERVAL_MS, remaining));
+    });
+  }
 }
 
 function isChildAlive(child: ChildProcessWithoutNullStreams): boolean {
@@ -967,28 +1159,33 @@ async function terminateChildTree(
   signal: NodeJS.Signals
 ): Promise<void> {
   const pid = child.pid;
-  if (pid === undefined || !isChildAlive(child)) return;
+  if (pid === undefined) return;
   if (platform === "win32") {
-    child.kill(signal);
+    const result = spawnSync("taskkill", ["/pid", String(pid), "/t"], {
+      shell: false,
+      windowsHide: true,
+      stdio: "ignore"
+    });
+    if ((result.error !== undefined || result.status !== 0) && isChildAlive(child)) child.kill(signal);
     return;
   }
   try {
     process.kill(-pid, signal);
   } catch {
-    child.kill(signal);
+    if (isChildAlive(child)) child.kill(signal);
   }
 }
 
 async function forceKillChildTree(child: ChildProcessWithoutNullStreams, platform: NodeJS.Platform): Promise<void> {
   const pid = child.pid;
-  if (pid === undefined || !isChildAlive(child)) return;
+  if (pid === undefined) return;
   if (platform === "win32") {
     const result = spawnSync("taskkill", ["/pid", String(pid), "/t", "/f"], {
       shell: false,
       windowsHide: true,
       stdio: "ignore"
     });
-    if (result.error !== undefined && isChildAlive(child)) child.kill("SIGKILL");
+    if ((result.error !== undefined || result.status !== 0) && isChildAlive(child)) child.kill("SIGKILL");
     return;
   }
   try {
@@ -996,6 +1193,31 @@ async function forceKillChildTree(child: ChildProcessWithoutNullStreams, platfor
   } catch {
     child.kill("SIGKILL");
   }
+}
+
+function isOwnedProcessTreeAlive(
+  child: ChildProcessWithoutNullStreams,
+  platform: NodeJS.Platform
+): boolean {
+  const pid = child.pid;
+  if (pid === undefined) return false;
+  if (platform === "win32") return isChildAlive(child);
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return !isProcessMissingError(error);
+  }
+}
+
+function isProcessMissingError(error: unknown): boolean {
+  return error instanceof Error
+    && "code" in error
+    && (error as NodeJS.ErrnoException).code === "ESRCH";
+}
+
+function terminationTimeout(definition: LocalComponentDefinition): number {
+  return definition.terminationTimeoutMs ?? Math.min(definition.shutdownTimeoutMs, 1_000);
 }
 
 function writeToStdin(child: ChildProcessWithoutNullStreams, data: string): Promise<void> {
@@ -1023,6 +1245,46 @@ function abortableDelay(ms: number, signal: AbortSignal, componentId: string): P
   });
 }
 
+function awaitWithAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+  componentId: string
+): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
+  }
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = (): void => signal.removeEventListener("abort", onAbort);
+    const onAbort = (): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    void promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error instanceof Error ? error : new Error("Local readiness callback failed"));
+      }
+    );
+  });
+}
+
+function disposeResponseBody(response: Response): void {
+  const cancellation = response.body?.cancel();
+  if (cancellation !== undefined) void cancellation.catch(() => undefined);
+}
+
 function throwIfAborted(signal: AbortSignal, componentId: string): void {
   if (signal.aborted) throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`);
 }
@@ -1041,6 +1303,10 @@ function isCancellation(error: unknown): boolean {
 function normalizeRuntimeError(error: unknown, componentId: string): LocalRuntimeError {
   if (error instanceof LocalRuntimeError) return error;
   return new LocalRuntimeError("READINESS_FAILED", `Readiness failed for ${componentId}`);
+}
+
+function sanitizeStatusText(value: string, secretValues: readonly string[]): string {
+  return sanitizeDiagnosticText(redactKnownSecrets(value, secretValues));
 }
 
 function safeErrorMessage(error: unknown): string {
