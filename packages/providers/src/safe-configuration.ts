@@ -73,12 +73,17 @@ const BASIC_AUTH_CANDIDATE_PATTERN =
   /\bbasic\s+([A-Za-z0-9+/]+={0,2})(?=$|[^A-Za-z0-9+/=])/iu;
 const COMMON_API_KEY_PATTERN =
   /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,}|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|glpat-[a-z0-9_-]{20,}|hf_[a-z0-9]{20,})\b/iu;
-const HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN =
-  /\b(authorization(?:[-_]?header)?|http[-_]?authorization|auth[-_]?header|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|client[-_]?token|session[-_]?token|auth[-_]?token|bearer[-_]?token|client[-_]?secret|provider[-_]?secret|webhook[-_]?secret|secret[-_]?key|secret[-_]?access[-_]?key|aws[-_]?secret[-_]?access[-_]?key|password|passwd|passphrase|private[-_]?key|credential|cookie|set[-_]?cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))/iu;
+const CREDENTIAL_WORD_SEPARATOR = "[\\s._-]*";
+const HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN = new RegExp(
+  String.raw`\b(authorization(?:${CREDENTIAL_WORD_SEPARATOR}header)?|http${CREDENTIAL_WORD_SEPARATOR}authorization|auth${CREDENTIAL_WORD_SEPARATOR}header|api${CREDENTIAL_WORD_SEPARATOR}key|access${CREDENTIAL_WORD_SEPARATOR}token|refresh${CREDENTIAL_WORD_SEPARATOR}token|id${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}token|session${CREDENTIAL_WORD_SEPARATOR}token|auth${CREDENTIAL_WORD_SEPARATOR}token|bearer${CREDENTIAL_WORD_SEPARATOR}token|client${CREDENTIAL_WORD_SEPARATOR}secret|provider${CREDENTIAL_WORD_SEPARATOR}secret|webhook${CREDENTIAL_WORD_SEPARATOR}secret|secret${CREDENTIAL_WORD_SEPARATOR}key|secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|aws${CREDENTIAL_WORD_SEPARATOR}secret${CREDENTIAL_WORD_SEPARATOR}access${CREDENTIAL_WORD_SEPARATOR}key|password|passwd|passphrase|private${CREDENTIAL_WORD_SEPARATOR}key|credential|cookie|set${CREDENTIAL_WORD_SEPARATOR}cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))`,
+  "iu"
+);
 const GENERIC_SECRET_ASSIGNMENT_PATTERN =
   /\b(?:token|secret)\b\s*[:=]\s*["']?([^\s"'&]{12,})["']?/iu;
-const AUTHORIZATION_SCHEME_VALUE_PATTERN =
-  /\b(?:authorization(?:[-_]?header)?|http[-_]?authorization|auth[-_]?header)\b\s*[:=]\s*(?:bearer|basic)\s+[^\s&,;]+/iu;
+const AUTHORIZATION_SCHEME_VALUE_PATTERN = new RegExp(
+  String.raw`\b(?:authorization(?:${CREDENTIAL_WORD_SEPARATOR}header)?|http${CREDENTIAL_WORD_SEPARATOR}authorization|auth${CREDENTIAL_WORD_SEPARATOR}header)\b\s*[:=]\s*(?:bearer|basic)\s+[^\s&,;]+`,
+  "iu"
+);
 const GENERIC_NON_SECRET_ASSIGNMENT_VALUES = new Set([
   "",
   "none",
