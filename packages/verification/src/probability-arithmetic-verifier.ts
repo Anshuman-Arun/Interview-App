@@ -1,7 +1,11 @@
 import { z } from "zod";
 import type { DeterministicVerifier, VerificationResult } from "../../domain/src/index.js";
 import { IntermediateRationalInputSchema, RationalInputSchema } from "./rational-expression.js";
-import { MAX_COMBINATORIAL_N, MAX_PROBABILITY_OUTCOMES } from "./limits.js";
+import {
+  MAX_COMBINATORIAL_N,
+  MAX_PROBABILITY_OUTCOMES,
+  MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS
+} from "./limits.js";
 import {
   BoundedMathError,
   addRationals,
@@ -120,6 +124,11 @@ interface WideRationalAccumulator {
   readonly denominator: bigint;
 }
 
+function probabilityWideWorkWithinBound(value: bigint): boolean {
+  const magnitude = value < 0n ? -value : value;
+  return magnitude.toString().length <= MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS;
+}
+
 function addToWideAccumulator(
   total: WideRationalAccumulator,
   value: ExactRational
@@ -129,11 +138,29 @@ function addToWideAccumulator(
   const rightScale = total.denominator / commonFactor;
   const numerator = total.numerator * leftScale + value.numerator * rightScale;
   const denominator = total.denominator * leftScale;
-  const cancellation = probabilityNormalizationGcd(numerator, denominator);
-  return {
-    numerator: numerator / cancellation,
-    denominator: denominator / cancellation
-  };
+
+  if (
+    !probabilityWideWorkWithinBound(numerator)
+    || !probabilityWideWorkWithinBound(denominator)
+  ) {
+    throw new BoundedMathError(
+      "INTERMEDIATE_LIMIT_EXCEEDED",
+      "Probability arithmetic exceeds the configured exact-work limit"
+    );
+  }
+
+  // Keep a shared exact denominator and defer gcd normalization. Repeatedly
+  // reducing a growing multi-thousand-digit accumulator is unnecessarily
+  // expensive and does not change probability-mass comparisons.
+  return { numerator, denominator };
+}
+
+function reduceWideAccumulator(total: WideRationalAccumulator): ExactRational {
+  const cancellation = probabilityNormalizationGcd(total.numerator, total.denominator);
+  return rational(
+    assertIntermediateIntegerBound(total.numerator / cancellation),
+    assertIntermediateIntegerBound(total.denominator / cancellation)
+  );
 }
 
 function assertProbabilityMassIsOne(values: readonly ExactRational[]): void {
@@ -150,11 +177,9 @@ function assertProbabilityMassIsOne(values: readonly ExactRational[]): void {
 
   let total: WideRationalAccumulator = { numerator: 0n, denominator: 1n };
   for (const { numerator, denominator } of groups.values()) {
-    // Probability inputs are individually limited to 256 decimal digits and
-    // there are at most MAX_PROBABILITY_OUTCOMES entries. Therefore this exact
-    // normalization denominator is bounded by the product of the supplied
-    // denominators even when it is larger than the 4,096-digit result/state
-    // limit. It is validation-only and is never exposed as an ExactRational.
+    // This accumulator is validation-only and is not exposed as an
+    // ExactRational. The shared exact-work bound prevents a formally valid
+    // statement from forcing statement-scale BigInt gcd/multiplication work.
     total = addToWideAccumulator(total, { numerator, denominator });
 
     if (total.numerator > total.denominator) {
@@ -191,10 +216,7 @@ function evaluateProbabilityClaim(
       for (const term of expectationTerms) {
         expectationTotal = addToWideAccumulator(expectationTotal, term);
       }
-      const expectation = rational(
-        assertIntermediateIntegerBound(expectationTotal.numerator),
-        assertIntermediateIntegerBound(expectationTotal.denominator)
-      );
+      const expectation = reduceWideAccumulator(expectationTotal);
       return { actual: expectation, claimed: parseIntermediateRationalInput(claim.claimedExpectation) };
     }
     case "CONDITIONAL_FROM_COUNTS":
