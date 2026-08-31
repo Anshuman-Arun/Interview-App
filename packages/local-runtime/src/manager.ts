@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { join } from "node:path";
+import { join, win32 as win32Path } from "node:path";
 import { performance } from "node:perf_hooks";
 import { types as utilTypes } from "node:util";
 import { DIAGNOSTIC_SANITIZATION_LIMITS, sanitizeDiagnosticRecord, sanitizeDiagnosticText } from "../../diagnostics/src/index.js";
@@ -1965,7 +1965,11 @@ function runTaskkill(
 ): Promise<boolean> {
   return new Promise((resolve) => {
     const systemRoot = process.env["SystemRoot"] ?? process.env["SYSTEMROOT"];
-    if (systemRoot === undefined || systemRoot.length === 0 || systemRoot.includes("\0")) {
+    if (systemRoot === undefined
+        || systemRoot.length === 0
+        || systemRoot.includes("\0")
+        || !win32Path.isAbsolute(systemRoot)
+        || systemRoot.startsWith("\\\\")) {
       resolve(false);
       return;
     }
