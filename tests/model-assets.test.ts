@@ -627,6 +627,25 @@ describe("local model asset manager", () => {
     expect(await readFile(path.join(foreign, "sentinel.txt"), "utf8")).toBe("keep-me");
   });
 
+  it("cleans crash-left manager removal tombstones", async () => {
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const tombstoneName = ".model-assets-delete-00000000-0000-4000-8000-000000000000";
+
+    const artifactTombstone = path.join(root, "artifacts", tombstoneName);
+    const temporaryTombstone = path.join(root, "tmp", tombstoneName);
+    await mkdir(artifactTombstone);
+    await mkdir(temporaryTombstone);
+    await writeFile(path.join(artifactTombstone, "artifact.bin"), "artifact");
+    await writeFile(path.join(temporaryTombstone, "partial.bin"), "partial");
+
+    expect(await manager.clearUnused([])).toBe(1);
+    await manager.cleanupTemporary();
+
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
   it("deterministically clears unused installed artifacts", async () => {
     const firstPayload = Buffer.from("first");
     const secondPayload = Buffer.from("second");
