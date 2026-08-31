@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { snapshotOwnEnumerableRecord } from "./object-validation.js";
+import {
+  snapshotOwnEnumerableRecord,
+  snapshotOwnEnumerableRecordForSchema
+} from "./object-validation.js";
 import { HARD_IMAGE_VALIDATION_LIMITS, PixelDimensionsSchema } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
@@ -39,17 +42,24 @@ const VisionDiagnosticDimensionsSchema = PixelDimensionsSchema.superRefine((dime
   }
 });
 
-export const VisionProcessingDiagnosticsSchema = z.object({
-  operation: VisionProcessingOperationSchema,
-  sourceDimensions: VisionDiagnosticDimensionsSchema,
-  outputDimensions: VisionDiagnosticDimensionsSchema.optional(),
-  inputBytes: z.number().int().nonnegative().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes),
-  outputBytes: z.number().int().nonnegative().max(HARD_MAX_DIAGNOSTIC_OUTPUT_BYTES),
-  cropCount: z.number().int().nonnegative().max(1),
-  tileCount: z.number().int().nonnegative().max(512),
-  durationMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  outcome: VisionProcessingOutcomeSchema
-}).strict().superRefine((diagnostics, context) => {
+export const VisionProcessingDiagnosticsSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Vision processing diagnostics schema input",
+    VISION_DIAGNOSTIC_FIELDS
+  ),
+  z.object({
+    operation: VisionProcessingOperationSchema,
+    sourceDimensions: VisionDiagnosticDimensionsSchema,
+    outputDimensions: VisionDiagnosticDimensionsSchema.optional(),
+    inputBytes: z.number().int().nonnegative().max(HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes),
+    outputBytes: z.number().int().nonnegative().max(HARD_MAX_DIAGNOSTIC_OUTPUT_BYTES),
+    cropCount: z.number().int().nonnegative().max(1),
+    tileCount: z.number().int().nonnegative().max(512),
+    durationMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    outcome: VisionProcessingOutcomeSchema
+  }).strict()
+).superRefine((diagnostics, context) => {
   if (diagnostics.outcome !== "SUCCESS") return;
 
   if (diagnostics.inputBytes <= 0 || diagnostics.outputBytes <= 0) {
