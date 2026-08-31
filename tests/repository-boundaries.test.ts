@@ -138,6 +138,13 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "an unauthorized vision module importing the construction capability",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION",
+      files: {
+        "packages/vision/src/new-helper.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION } from \"./internal-artifact-construction.js\";\nvoid INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION;\n"
+      }
+    },
+    {
       name: "vision indirectly re-exporting an imported construction capability",
       expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
       files: {
