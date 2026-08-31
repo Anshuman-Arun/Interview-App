@@ -77,6 +77,7 @@ interface ComponentRecord {
   state: LocalComponentState;
   child: ChildProcessWithoutNullStreams | undefined;
   residualProcess: ChildProcessWithoutNullStreams | undefined;
+  residualTreeUnverified: boolean;
   startedAt: string | undefined;
   readyAt: string | undefined;
   readinessDetail: string | undefined;
@@ -147,6 +148,7 @@ export class LocalRuntimeManager {
       state: "STOPPED",
       child: undefined,
       residualProcess: undefined,
+      residualTreeUnverified: false,
       startedAt: undefined,
       readyAt: undefined,
       readinessDetail: undefined,
@@ -194,6 +196,12 @@ export class LocalRuntimeManager {
         : awaitWithAbort(record.startPromise, inspectedOptions.signal, componentId);
     }
     if (record.state === "READY" || record.state === "DEGRADED") return Promise.resolve(this.snapshot(record));
+    if (record.residualTreeUnverified) {
+      return Promise.reject(new LocalRuntimeError(
+        "INVALID_STATE",
+        `Cannot start ${componentId} while previous process-tree cleanup remains unverified`
+      ));
+    }
     if (record.residualProcess !== undefined) {
       if (isOwnedProcessTreeAlive(record.residualProcess, this.platform)) {
         return Promise.reject(new LocalRuntimeError(
@@ -530,6 +538,7 @@ export class LocalRuntimeManager {
 
     if (!unexpected || previousState === "STARTING") return;
     record.residualProcess = child;
+    record.residualTreeUnverified = false;
     this.clearLiveReadiness(record);
     record.state = "FAILED";
     record.failure = this.failure(
@@ -607,12 +616,14 @@ export class LocalRuntimeManager {
     const timeoutMs = terminationTimeout(record.definition);
     const termination = await terminateManagedTree(record, child, this.platform, timeoutMs);
     if (termination === "UNVERIFIED") {
+      record.residualTreeUnverified = true;
       throw new LocalRuntimeError(
         "TERMINATION_FAILED",
         `Could not verify residual process-tree cleanup for ${record.definition.id}`
       );
     }
     record.residualProcess = undefined;
+    record.residualTreeUnverified = false;
   }
 
   private beginAutomaticRestart(record: ComponentRecord): void {
@@ -891,6 +902,7 @@ export class LocalRuntimeManager {
   ): Promise<void> {
     if (record.child !== child && !isOwnedProcessTreeAlive(child, this.platform)) return;
     record.residualProcess = child;
+    record.residualTreeUnverified = false;
     const previousExpectedStop = record.expectedStop;
     record.expectedStop = true;
     const timeoutMs = terminationTimeout(record.definition);
@@ -898,6 +910,7 @@ export class LocalRuntimeManager {
     try {
       const termination = await terminateManagedTree(record, child, this.platform, timeoutMs);
       if (termination === "UNVERIFIED") {
+        record.residualTreeUnverified = true;
         record.state = "FAILED";
         record.failure = this.failure(
           "TERMINATION_FAILED",
@@ -910,6 +923,7 @@ export class LocalRuntimeManager {
         );
       }
       record.residualProcess = undefined;
+      record.residualTreeUnverified = false;
       cleaned = true;
     } finally {
       if (cleaned && !signal.aborted) record.expectedStop = previousExpectedStop;
@@ -942,6 +956,7 @@ export class LocalRuntimeManager {
       const timeoutMs = terminationTimeout(record.definition);
       const termination = await terminateManagedTree(record, child, this.platform, timeoutMs);
       if (termination === "UNVERIFIED") {
+        record.residualTreeUnverified = true;
         record.state = "FAILED";
         record.failure = this.failure(
           "TERMINATION_FAILED",
@@ -954,6 +969,7 @@ export class LocalRuntimeManager {
         );
       }
       record.residualProcess = undefined;
+      record.residualTreeUnverified = false;
       this.clearLiveReadiness(record);
       record.state = "STOPPED";
       return Object.freeze({ componentId: record.definition.id, disposition: termination });
@@ -978,6 +994,36 @@ export class LocalRuntimeManager {
         return this.runStop(record);
       }
       const residual = record.residualProcess;
+      if (record.residualTreeUnverified) {
+        if (residual === undefined) {
+          record.state = "FAILED";
+          throw new LocalRuntimeError(
+            "TERMINATION_FAILED",
+            `Residual process-tree verification state is inconsistent for ${record.definition.id}`
+          );
+        }
+        record.state = "STOPPING";
+        const timeoutMs = terminationTimeout(record.definition);
+        const termination = await terminateManagedTree(record, residual, this.platform, timeoutMs);
+        if (termination === "UNVERIFIED") {
+          record.residualTreeUnverified = true;
+          record.state = "FAILED";
+          record.failure = this.failure(
+            "TERMINATION_FAILED",
+            `Could not verify residual managed process-tree cleanup for ${record.definition.id}`,
+            record.environment.secretValues
+          );
+          throw new LocalRuntimeError(
+            "TERMINATION_FAILED",
+            `Could not verify residual managed process-tree cleanup for ${record.definition.id}`
+          );
+        }
+        record.residualProcess = undefined;
+        record.residualTreeUnverified = false;
+        this.clearLiveReadiness(record);
+        record.state = "STOPPED";
+        return Object.freeze({ componentId: record.definition.id, disposition: termination });
+      }
       if (residual !== undefined && isOwnedProcessTreeAlive(residual, this.platform)) {
         record.state = "STOPPING";
         const timeoutMs = terminationTimeout(record.definition);
@@ -995,17 +1041,20 @@ export class LocalRuntimeManager {
           );
         }
         record.residualProcess = undefined;
+        record.residualTreeUnverified = false;
         this.clearLiveReadiness(record);
         record.state = "STOPPED";
         return Object.freeze({ componentId: record.definition.id, disposition: termination });
       }
       record.residualProcess = undefined;
+      record.residualTreeUnverified = false;
       this.clearLiveReadiness(record);
       record.state = "STOPPED";
       return Object.freeze({ componentId: record.definition.id, disposition: "ALREADY_STOPPED" });
     }
 
     record.residualProcess = child;
+    record.residualTreeUnverified = false;
     record.state = "STOPPING";
     let disposition: LocalStopResult["disposition"] = "GRACEFUL";
     void this.requestGracefulShutdown(record, child).catch(() => undefined);
@@ -1013,6 +1062,7 @@ export class LocalRuntimeManager {
       const terminationTimeoutMs = terminationTimeout(record.definition);
       const termination = await terminateManagedTree(record, child, this.platform, terminationTimeoutMs);
       if (termination === "UNVERIFIED") {
+        record.residualTreeUnverified = true;
         record.state = "FAILED";
         record.failure = this.failure(
           "TERMINATION_FAILED",
@@ -1035,6 +1085,7 @@ export class LocalRuntimeManager {
       }
     }
     record.residualProcess = undefined;
+    record.residualTreeUnverified = false;
     this.clearLiveReadiness(record);
     record.state = "STOPPED";
     return Object.freeze({ componentId: record.definition.id, disposition });
