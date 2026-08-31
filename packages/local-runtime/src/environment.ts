@@ -53,6 +53,7 @@ export function buildLocalEnvironment(
     inheritedNames.add(identity);
     const parentEntry = findParentEntry(parent, key, platform);
     if (parentEntry === undefined) continue;
+    validateEnvironmentEntry(parentEntry.key, parentEntry.value);
     environment[parentEntry.key] = parentEntry.value;
     if (SECRET_KEY.test(parentEntry.key)) {
       secretIdentities.add(normalizeKey(parentEntry.key, platform));
