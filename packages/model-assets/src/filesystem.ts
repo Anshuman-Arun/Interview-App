@@ -336,6 +336,13 @@ export async function copyLocalArtifactBounded(
   } catch (error) {
     if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.", { cause: error });
     if (error instanceof ModelAssetError) throw error;
+    if (errnoCode(error) === "ENOSPC") {
+      throw new ModelAssetError(
+        "INSUFFICIENT_DISK_SPACE",
+        "Local artifact import could not continue because the destination filesystem is full.",
+        { cause: error }
+      );
+    }
     throw new ModelAssetError("IO_ERROR", "Unable to copy local artifact into the cache staging area.", { cause: error });
   }
 }
@@ -364,6 +371,13 @@ export async function writeStoredManifest(manifestPath: string, serializedManife
   try {
     await writeFile(manifestPath, serializedManifest, { encoding: "utf8", flag: "wx", mode: 0o600 });
   } catch (error) {
+    if (errnoCode(error) === "ENOSPC") {
+      throw new ModelAssetError(
+        "INSUFFICIENT_DISK_SPACE",
+        "Unable to write staged asset metadata because the destination filesystem is full.",
+        { cause: error }
+      );
+    }
     throw new ModelAssetError("IO_ERROR", "Unable to write staged asset manifest.", { cause: error });
   }
 }
@@ -372,6 +386,13 @@ export async function atomicRenameDirectory(source: string, destination: string)
   try {
     await rename(source, destination);
   } catch (error) {
+    if (errnoCode(error) === "ENOSPC") {
+      throw new ModelAssetError(
+        "INSUFFICIENT_DISK_SPACE",
+        "Unable to publish the verified artifact because the destination filesystem is full.",
+        { cause: error }
+      );
+    }
     throw new ModelAssetError("IO_ERROR", "Unable to atomically publish verified artifact.", { cause: error });
   }
 }
