@@ -20,6 +20,13 @@ import type { BoardRevision } from "../../domain/src/index.js";
 export const VisionPurposeSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/u);
 export type VisionPurpose = z.infer<typeof VisionPurposeSchema>;
 
+const REQUEST_BUDGET_FIELDS = new Set([
+  "maxImages",
+  "maxTotalBytes",
+  "maxTotalPixels",
+  "maxCropsOrTiles"
+]);
+
 const RequestBudgetSchema = z.object({
   maxImages: z.number().int().nonnegative().max(256),
   maxTotalBytes: z.number().int().nonnegative().max(128 * 1024 * 1024),
@@ -210,7 +217,7 @@ export function prepareVisionBatch(
 
   let ownBudget: Readonly<Record<string, unknown>>;
   try {
-    ownBudget = snapshotOwnEnumerableRecord(budgetInput, "Vision request budget");
+    ownBudget = snapshotOwnEnumerableRecord(budgetInput, "Vision request budget", REQUEST_BUDGET_FIELDS);
   } catch {
     throw new RangeError("Vision request budget could not be read safely");
   }
