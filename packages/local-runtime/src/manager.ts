@@ -520,9 +520,12 @@ export class LocalRuntimeManager {
     };
     child.once("exit", observeExit);
     child.once("close", (code, signal) => {
+      // Close can be the first observable terminal event if an earlier exit event
+      // was missed. Record exit before flushing unterminated stdout so a dead
+      // process cannot trigger readiness callback side effects during flush.
+      observeExit(code, signal);
       stdoutFramer.flush();
       stderrFramer.flush();
-      observeExit(code, signal);
       this.handleProcessClose(record, child, stderr);
     });
     if (child.exitCode !== null || child.signalCode !== null) {
