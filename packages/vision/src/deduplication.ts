@@ -74,7 +74,7 @@ export function deduplicateExactImagePayloads<T extends VisionRasterSource>(imag
 
 export function sourceSnapshotId(source: VisionRasterSource): string {
   assertVisionRasterSource(source);
-  return source instanceof ImageSnapshot ? source.metadata.snapshotId : source.metadata.sourceSnapshotId;
+  return ImageSnapshot.isValidatedInstance(source) ? source.metadata.snapshotId : source.metadata.sourceSnapshotId;
 }
 
 export function imageIdentity(source: VisionRasterSource): string {
