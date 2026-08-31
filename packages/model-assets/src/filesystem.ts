@@ -395,9 +395,23 @@ export async function verifyArtifactFile(
 export async function copyLocalArtifactBounded(
   sourcePath: string,
   destinationPath: string,
+  expectedBytes: number,
   maxBytes: number,
   signal: AbortSignal
 ): Promise<number> {
+  if (!Number.isSafeInteger(expectedBytes) || expectedBytes <= 0
+      || !Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw new ModelAssetError(
+      "INVALID_CONFIGURATION",
+      "Local import size bounds must be positive safe integers."
+    );
+  }
+  if (expectedBytes > maxBytes) {
+    throw new ModelAssetError(
+      "ARTIFACT_TOO_LARGE",
+      "Manifest artifact size exceeds the configured local-import limit."
+    );
+  }
   if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.");
   let sourceStat: Stats;
   try {
@@ -411,6 +425,9 @@ export async function copyLocalArtifactBounded(
   if (sourceStat.size > maxBytes) {
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Local import exceeds the configured artifact-size limit.");
   }
+  if (sourceStat.size !== expectedBytes) {
+    throw new ModelAssetError("SIZE_MISMATCH", "Local import size does not match the asset manifest.");
+  }
 
   let bytes = 0;
   const limiter = new Transform({
@@ -418,6 +435,10 @@ export async function copyLocalArtifactBounded(
       bytes += chunk.byteLength;
       if (bytes > maxBytes) {
         callback(new ModelAssetError("ARTIFACT_TOO_LARGE", "Local import exceeds the configured artifact-size limit."));
+        return;
+      }
+      if (bytes > expectedBytes) {
+        callback(new ModelAssetError("SIZE_MISMATCH", "Local import exceeded the manifest size during copy."));
         return;
       }
       callback(null, chunk);
@@ -430,6 +451,9 @@ export async function copyLocalArtifactBounded(
       createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }),
       { signal }
     );
+    if (bytes !== expectedBytes) {
+      throw new ModelAssetError("SIZE_MISMATCH", "Local import size changed during copy.");
+    }
     return bytes;
   } catch (error) {
     if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.", { cause: error });
