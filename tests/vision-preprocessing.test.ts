@@ -517,7 +517,7 @@ describe("vision snapshot validation and hashing", () => {
         capturedAtMs: 0,
         mimeType: "image/jpeg",
         encodedBytes: bytes
-      });
+      } as unknown as Parameters<typeof createValidatedImageSnapshot>[0]);
       throw new Error("Expected unsupported MIME rejection");
     } catch (error) {
       expectCode(error, "UNSUPPORTED_IMAGE_TYPE");
