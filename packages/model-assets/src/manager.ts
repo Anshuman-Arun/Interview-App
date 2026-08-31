@@ -407,6 +407,14 @@ export class ModelAssetManager {
   }
 
   public async clearUnused(keepManifestValues: readonly unknown[]): Promise<number> {
+    const rawKeepManifestValues: unknown = keepManifestValues;
+    if (!Array.isArray(rawKeepManifestValues)) {
+      throw new ModelAssetError(
+        "INVALID_MANIFEST",
+        "Keep-manifest collection must be an array."
+      );
+    }
+    const keepValues: readonly unknown[] = rawKeepManifestValues;
     if (this.inFlight.size > 0) {
       throw new ModelAssetError(
         "ASSET_BUSY",
@@ -414,14 +422,14 @@ export class ModelAssetManager {
       );
     }
 
-    if (keepManifestValues.length > this.maxListEntries) {
+    if (keepValues.length > this.maxListEntries) {
       throw new ModelAssetError(
         "CACHE_LIMIT_EXCEEDED",
         "Keep-manifest count exceeds the configured cleanup limit."
       );
     }
     const keepKeys = new Set(
-      keepManifestValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
+      keepValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
     );
     const paths = await this.getSafeCachePaths();
     const entries = await this.listCacheEntryNames(
@@ -680,15 +688,15 @@ export class ModelAssetManager {
         "Artifact payload and metadata exceed safe integer accounting limits."
       );
     }
-    await this.reserveCapacity(paths, reservationBytes);
     const stagingDirectory = path.join(
       paths.temporary,
       key + "-" + randomUUID()
     );
-    setStagingDirectory(stagingDirectory);
+    await this.reserveCapacity(paths, reservationBytes);
     let published = false;
 
     try {
+      setStagingDirectory(stagingDirectory);
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled.");
       }
@@ -808,6 +816,11 @@ export class ModelAssetManager {
       if (signal?.aborted === true) {
         throw new ModelAssetError("CANCELLED", "Artifact integrity inspection was cancelled.");
       }
+      await validateCachePaths(paths);
+      const finalDirectoryStat = await lstat(directory);
+      if (finalDirectoryStat.isSymbolicLink() || !finalDirectoryStat.isDirectory()) {
+        return { status: "CORRUPT", errorCode: "CORRUPT_INSTALLATION" };
+      }
       return { status: "INSTALLED", path: payload };
     } catch (error) {
       if (error instanceof ModelAssetError && error.code === "CANCELLED") throw error;
@@ -889,6 +902,7 @@ export class ModelAssetManager {
 
   private async reserveCapacity(paths: CachePaths, requestedBytes: number): Promise<void> {
     await this.withCapacityGate(async () => {
+      await validateCachePaths(paths);
       const reservedProjection = this.reservedBytes + requestedBytes;
       if (!Number.isSafeInteger(reservedProjection)) {
         throw new ModelAssetError(
