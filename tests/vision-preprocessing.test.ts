@@ -510,6 +510,18 @@ describe("dirty-region planning", () => {
     });
   });
 
+  it("fails when coverage ratio requires full-frame fallback but the full frame exceeds area budget", () => {
+    expect(() => planDirtyRegions([
+      { x: 0, y: 0, width: 50, height: 10 }
+    ], { width: 100, height: 100 }, {
+      paddingPixels: 0,
+      maxInputRegions: 8,
+      maxRegionCount: 8,
+      maxTotalAnalyzedArea: 1000,
+      fullFrameFallbackAreaRatio: 0.05
+    })).toThrowError(VisionPreprocessingError);
+  });
+
   it("falls back for excessive analyzed area and fails if that full frame would violate the area budget", () => {
     const full = planDirtyRegions([
       { x: 0, y: 0, width: 80, height: 80 }
@@ -933,6 +945,16 @@ describe("provider-neutral request preparation and budgeting", () => {
     const request = prepareVisionImageRequest(source, "context");
     expect(request.imageIdentity.length).toBeGreaterThan(160);
     expect(request.payload.metadata.imageIdentity).toBe(request.imageIdentity);
+  });
+
+  it("keeps snapshot image identities distinct across source revisions even when ID and bytes are reused", () => {
+    const bytes = makePng(3, 3);
+    const first = snapshot(bytes, { id: "reused-id", revision: 6 });
+    const second = snapshot(bytes, { id: "reused-id", revision: 7 });
+
+    expect(prepareVisionImageRequest(first, "context").imageIdentity)
+      .not.toBe(prepareVisionImageRequest(second, "context").imageIdentity);
+    expect(revisionImageProcessingKey(first)).not.toBe(revisionImageProcessingKey(second));
   });
 
   it("creates stable request identities for repeatable preparation", () => {
