@@ -1925,4 +1925,5 @@ async function waitForPidExit(pid: number): Promise<void> {
   while (isPidAlive(pid) && performance.now() < deadline) {
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
   }
+  expect(isPidAlive(pid)).toBe(false);
 }
