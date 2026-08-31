@@ -193,13 +193,22 @@ function ownValue(record: Record<string, unknown>, key: string): unknown {
   return descriptor.value;
 }
 
-function clonePlainDataArray(value: unknown): readonly unknown[] | undefined {
+function clonePlainDataArray(
+  value: unknown,
+  maxLength: number
+): readonly unknown[] | undefined {
   if (typeof value !== "object" || value === null || isProxy(value) || !Array.isArray(value)) {
     return undefined;
   }
   try {
     const prototype: unknown = Object.getPrototypeOf(value);
     if (prototype !== Array.prototype) return undefined;
+    if (value.length > maxLength) {
+      throw new ModelAssetError(
+        "CACHE_LIMIT_EXCEEDED",
+        "Keep-manifest count exceeds the configured cleanup limit."
+      );
+    }
     const clone: unknown[] = new Array<unknown>(value.length);
     for (let index = 0; index < value.length; index += 1) {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
@@ -207,7 +216,8 @@ function clonePlainDataArray(value: unknown): readonly unknown[] | undefined {
       clone[index] = descriptor.value;
     }
     return clone;
-  } catch {
+  } catch (error) {
+    if (error instanceof ModelAssetError) throw error;
     return undefined;
   }
 }
@@ -631,7 +641,7 @@ export class ModelAssetManager {
   }
 
   public async clearUnused(keepManifestValues: readonly unknown[]): Promise<number> {
-    const keepValues = clonePlainDataArray(keepManifestValues);
+    const keepValues = clonePlainDataArray(keepManifestValues, this.maxListEntries);
     if (keepValues === undefined) {
       throw new ModelAssetError(
         "INVALID_MANIFEST",
@@ -639,12 +649,6 @@ export class ModelAssetManager {
       );
     }
 
-    if (keepValues.length > this.maxListEntries) {
-      throw new ModelAssetError(
-        "CACHE_LIMIT_EXCEEDED",
-        "Keep-manifest count exceeds the configured cleanup limit."
-      );
-    }
     const keepKeys = new Set(
       keepValues.map((value) => artifactInstallationKey(parseAssetManifest(value)))
     );
