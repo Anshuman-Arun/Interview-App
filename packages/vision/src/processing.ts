@@ -214,6 +214,39 @@ function nonnegativeSafeInteger(value: number, name: string): number {
   return value;
 }
 
+function parsePlanningDimensions(input: PixelDimensions): PixelDimensions {
+  let parsed: ReturnType<typeof PixelDimensionsSchema.safeParse>;
+  try {
+    parsed = PixelDimensionsSchema.safeParse(input);
+  } catch {
+    throw new RangeError("Planning dimensions could not be read safely");
+  }
+  if (!parsed.success) throw new RangeError("Planning dimensions must be positive safe integers");
+  return parsed.data;
+}
+
+function parseDownscaleEnvelope(input: DownscaleEnvelope): DownscaleEnvelope {
+  let parsed: ReturnType<typeof DownscaleEnvelopeSchema.safeParse>;
+  try {
+    parsed = DownscaleEnvelopeSchema.safeParse(input);
+  } catch {
+    throw new RangeError("Downscale envelope could not be read safely");
+  }
+  if (!parsed.success) throw new RangeError("Downscale envelope is invalid or contains unknown keys");
+  return parsed.data;
+}
+
+function parseTileConfig(input: TileConfig): TileConfig {
+  let parsed: ReturnType<typeof TileConfigSchema.safeParse>;
+  try {
+    parsed = TileConfigSchema.safeParse(input);
+  } catch {
+    throw new RangeError("Tile configuration could not be read safely");
+  }
+  if (!parsed.success) throw new RangeError("Tile configuration is invalid or contains unknown keys");
+  return parsed.data;
+}
+
 function now(options: VisionProcessingOptions): number {
   const value = (options.now ?? (() => globalThis.performance.now()))();
   if (!Number.isFinite(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
@@ -488,8 +521,8 @@ export async function cropImage(
 }
 
 export function planDownscale(dimensions: PixelDimensions, envelope: DownscaleEnvelope): DownscalePlan {
-  const source = PixelDimensionsSchema.parse(dimensions);
-  const limits = DownscaleEnvelopeSchema.parse(envelope);
+  const source = parsePlanningDimensions(dimensions);
+  const limits = parseDownscaleEnvelope(envelope);
   const sourcePixels = source.width * source.height;
   if (!Number.isSafeInteger(sourcePixels)) throw new RangeError("Source pixel count exceeds safe integer range");
   const pixelScale = Math.sqrt(limits.maxPixels / sourcePixels);
@@ -697,8 +730,8 @@ function axisPositions(length: number, tileSize: number, overlap: number, count:
 }
 
 export function planImageTiles(dimensions: PixelDimensions, config: TileConfig): readonly TilePlanItem[] {
-  const source = PixelDimensionsSchema.parse(dimensions);
-  const safeConfig = TileConfigSchema.parse(config);
+  const source = parsePlanningDimensions(dimensions);
+  const safeConfig = parseTileConfig(config);
   if (safeConfig.overlap >= safeConfig.tileWidth || safeConfig.overlap >= safeConfig.tileHeight) {
     throw new RangeError("Tile overlap must be smaller than tile width and tile height");
   }
