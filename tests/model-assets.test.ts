@@ -874,6 +874,35 @@ describe("local model asset manager", () => {
     });
   });
 
+  it("reports verification policy limits as FAILED rather than CORRUPT", async () => {
+    const payload = Buffer.from("policy-limit");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+
+    const installingManager = managerFor(root, {
+      maxArtifactBytes: payload.byteLength
+    });
+    const manifest = manifestFor(payload, "https://example.test/policy-limit.bin");
+    await installingManager.importLocal(manifest, source);
+
+    const inspectingManager = managerFor(root, {
+      maxArtifactBytes: payload.byteLength - 1
+    });
+
+    expect(await inspectingManager.inspect(manifest)).toMatchObject({
+      status: "FAILED",
+      errorCode: "ARTIFACT_TOO_LARGE"
+    });
+    await expect(inspectingManager.verifyInstalledArtifact(manifest)).rejects.toMatchObject({
+      code: "ARTIFACT_TOO_LARGE"
+    });
+    await expect(inspectingManager.getInstalledPath(manifest)).rejects.toMatchObject({
+      code: "ARTIFACT_TOO_LARGE"
+    });
+  });
+
   it("detects corruption of a previously installed artifact", async () => {
     const payload = Buffer.from("good-bytes");
     const root = await newRoot();
