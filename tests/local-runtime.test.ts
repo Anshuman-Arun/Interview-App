@@ -711,6 +711,29 @@ describe("local worker lifecycle manager", () => {
     await expect(runtime.start("bad-handshake-shape")).rejects.toMatchObject({ code: "READINESS_FAILED" });
   });
 
+  it("redacts runtime secrets used as handshake metadata keys", async () => {
+    const secret = "q7V9m2L4z8P6";
+    const runtime = manager();
+    runtime.register(definition("secret-metadata-key", "ready", {
+      environment: { secrets: { RUNTIME_ONLY_SECRET: secret } },
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: {
+            componentVersion: "fixture-1",
+            metadata: { [secret]: "diagnostic-value" }
+          }
+        })
+      }
+    }));
+
+    const status = await runtime.start("secret-metadata-key");
+    const serialized = JSON.stringify(status);
+    expect(serialized).not.toContain(secret);
+    expect(serialized).toContain("[REDACTED]");
+  });
+
   it("redacts long runtime secrets before handshake metadata truncation", async () => {
     const secret = "long-runtime-secret-" + "x".repeat(3_000);
     const runtime = manager();
