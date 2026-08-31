@@ -268,7 +268,10 @@ export function planDirtyRegions(
   }
 
   if (analyzedArea > safeConfig.maxTotalAnalyzedArea) {
-    return fullFrameFallback(frame, safeConfig.maxTotalAnalyzedArea, "AREA_FRAGMENTATION");
+    throw new VisionPreprocessingError(
+      "DIRTY_PLAN_EXCEEDS_BUDGET",
+      "Dirty-region analysis exceeds the configured total-area budget"
+    );
   }
 
   if (analyzedArea / frameArea >= safeConfig.fullFrameFallbackAreaRatio) {
