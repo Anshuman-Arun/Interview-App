@@ -251,6 +251,13 @@ describe("adversarial deterministic math verification", () => {
         likelihoodGivenHypothesis: fraction("1", "2"),
         evidenceProbability: fraction("0"),
         claimedPosterior: fraction("1", "2")
+      },
+      {
+        kind: "BAYES",
+        prior: fraction("1"),
+        likelihoodGivenHypothesis: fraction("1", "5"),
+        evidenceProbability: fraction("4", "5"),
+        claimedPosterior: fraction("1", "4")
       }
     ];
 
