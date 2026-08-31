@@ -1953,6 +1953,32 @@ describe("local model asset manager", () => {
     })).toThrow(expect.objectContaining({ code: "INVALID_CACHE_ROOT" }));
   });
 
+  it("rejects filesystem/share roots as cache roots", async () => {
+    const filesystemRoot = path.parse(tmpdir()).root;
+    expect(() => new ModelAssetManager({
+      rootDir: filesystemRoot,
+      maxArtifactBytes: 1024
+    })).toThrow(expect.objectContaining({ code: "INVALID_CACHE_ROOT" }));
+  });
+
+  it("rejects a cache path that resolves to the filesystem root", async () => {
+    if (process.platform === "win32") return;
+
+    const holder = await newRoot();
+    const rootLink = path.join(holder, "root-link");
+    await symlink(path.parse(holder).root, rootLink, "dir");
+    const manager = new ModelAssetManager({
+      rootDir: rootLink,
+      maxArtifactBytes: 1024
+    });
+    const payload = Buffer.from("root-link");
+    const manifest = manifestFor(payload, "https://example.test/root-link.bin");
+
+    await expect(manager.inspect(manifest)).rejects.toMatchObject({
+      code: "INVALID_CACHE_ROOT"
+    });
+  });
+
   it("rejects replacement of the artifacts parent by another directory", async () => {
     const payload = Buffer.from("artifacts-parent-replacement");
     const root = await newRoot();
