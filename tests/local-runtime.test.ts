@@ -803,6 +803,64 @@ describe("local worker lifecycle manager", () => {
     await expect(runtime.start("crlf")).resolves.toMatchObject({ state: "READY" });
   });
 
+  it("never executes accessors while inspecting process definitions", () => {
+    const runtime = manager();
+    let getterCalls = 0;
+
+    const topLevel = Object.defineProperty(
+      {
+        id: "accessor-top",
+        args: [FIXTURE, "ready"],
+        startupTimeoutMs: 1_000,
+        shutdownTimeoutMs: 200,
+        readiness: {
+          kind: "STDOUT_JSON",
+          evaluate: (message: unknown) => readyDecision(message)
+        }
+      },
+      "executable",
+      {
+        enumerable: true,
+        get: () => {
+          getterCalls += 1;
+          return process.execPath;
+        }
+      }
+    ) as unknown as LocalComponentDefinition;
+
+    expect(() => runtime.register(topLevel))
+      .toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(getterCalls).toBe(0);
+
+    const hostileArgs = [FIXTURE, "ready"];
+    Object.defineProperty(hostileArgs, "1", {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        getterCalls += 1;
+        return "crash";
+      }
+    });
+    expect(() => runtime.register({
+      ...definition("accessor-args", "ready"),
+      args: hostileArgs
+    })).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(getterCalls).toBe(0);
+
+    const hostileReadiness = Object.defineProperty({}, "kind", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return "STABLE_PROCESS";
+      }
+    }) as LocalComponentDefinition["readiness"];
+    expect(() => runtime.register({
+      ...definition("accessor-readiness", "ready"),
+      readiness: hostileReadiness
+    })).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(getterCalls).toBe(0);
+  });
+
   it("does not expose direct process signaling through graceful shutdown controls", async () => {
     const runtime = manager();
     let signalExposed = true;
