@@ -31,8 +31,12 @@ export function snapshotOwnEnumerableRecord(
     );
   }
   if (allowedFields !== undefined) {
+    let maximumAllowedFieldLength = 0;
+    for (const allowedField of allowedFields) {
+      maximumAllowedFieldLength = Math.max(maximumAllowedFieldLength, allowedField.length);
+    }
     for (const key of keys) {
-      if (!allowedFields.has(key)) {
+      if (key.length > maximumAllowedFieldLength || !allowedFields.has(key)) {
         throw new RangeError(`${label} contains an unknown field`);
       }
     }
