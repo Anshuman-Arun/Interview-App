@@ -4,9 +4,10 @@ import { MAX_RECURRENCE_ORDER, MAX_RECURRENCE_SEQUENCE_LENGTH } from "./limits.j
 import { IntermediateRationalInputSchema, RationalInputSchema } from "./rational-expression.js";
 import {
   equalRationals,
-  multiplyRationals,
+  gcd,
   parseIntermediateRationalInput,
   parseRationalInput,
+  rational,
   sumRationals,
   type ExactRational
 } from "./math-utils.js";
@@ -47,23 +48,32 @@ export const FiniteRecurrenceInterpretationSchema = z.object({
 });
 export type FiniteRecurrenceInterpretation = z.infer<typeof FiniteRecurrenceInterpretationSchema>;
 
-interface RecurrenceContribution {
-  readonly coefficient: ExactRational;
-  readonly previous: ExactRational;
+interface WideRecurrenceContribution {
+  readonly numerator: bigint;
+  readonly denominator: bigint;
 }
 
-function productsAreAdditiveInverses(
-  left: RecurrenceContribution,
-  right: RecurrenceContribution
-): boolean {
-  // Each coefficient is an operand-sized rational and each previous value is
-  // already an intermediate-sized rational. Cross-products here are therefore
-  // bounded comparison temporaries, not recurrence states.
-  const leftNumerator = left.coefficient.numerator * left.previous.numerator;
-  const leftDenominator = left.coefficient.denominator * left.previous.denominator;
-  const rightNumerator = right.coefficient.numerator * right.previous.numerator;
-  const rightDenominator = right.coefficient.denominator * right.previous.denominator;
-  return leftNumerator * rightDenominator === -(rightNumerator * leftDenominator);
+function wideRecurrenceProduct(
+  coefficient: ExactRational,
+  previous: ExactRational
+): WideRecurrenceContribution {
+  // Both inputs are already normalized and individually bounded. Cross-cancel
+  // before multiplying so this produces the canonical reduced product without
+  // applying the 4,096-digit recurrence-state bound yet.
+  const leftCancellation = gcd(coefficient.numerator, previous.denominator);
+  const rightCancellation = gcd(previous.numerator, coefficient.denominator);
+  return {
+    numerator:
+      (coefficient.numerator / leftCancellation)
+      * (previous.numerator / rightCancellation),
+    denominator:
+      (coefficient.denominator / rightCancellation)
+      * (previous.denominator / leftCancellation)
+  };
+}
+
+function wideContributionKey(value: WideRecurrenceContribution): string {
+  return `${value.numerator.toString()}/${value.denominator.toString()}`;
 }
 
 function recurrenceStep(
@@ -71,40 +81,38 @@ function recurrenceStep(
   coefficients: readonly ExactRational[],
   constant: ExactRational
 ): ExactRational {
-  const contributions: RecurrenceContribution[] = coefficients.map((coefficient, index) => {
+  const unmatched = new Map<string, { value: WideRecurrenceContribution; count: number }>();
+
+  coefficients.forEach((coefficient, index) => {
     const previous = sequence[sequence.length - index - 1];
     if (previous === undefined) {
       throw new Error("Recurrence evaluation encountered an impossible missing term");
     }
-    return { coefficient, previous };
-  });
-  const cancelled = new Set<number>();
 
-  for (let left = 0; left < contributions.length; left += 1) {
-    if (cancelled.has(left)) continue;
-    const leftContribution = contributions[left];
-    if (leftContribution === undefined) continue;
+    const contribution = wideRecurrenceProduct(coefficient, previous);
+    if (contribution.numerator === 0n) return;
 
-    for (let right = left + 1; right < contributions.length; right += 1) {
-      if (cancelled.has(right)) continue;
-      const rightContribution = contributions[right];
-      if (
-        rightContribution !== undefined
-        && productsAreAdditiveInverses(leftContribution, rightContribution)
-      ) {
-        cancelled.add(left);
-        cancelled.add(right);
-        break;
-      }
+    const oppositeKey = wideContributionKey({
+      numerator: -contribution.numerator,
+      denominator: contribution.denominator
+    });
+    const opposite = unmatched.get(oppositeKey);
+    if (opposite !== undefined && opposite.count > 0) {
+      opposite.count -= 1;
+      if (opposite.count === 0) unmatched.delete(oppositeKey);
+      return;
     }
-  }
+
+    const key = wideContributionKey(contribution);
+    const existing = unmatched.get(key);
+    if (existing === undefined) unmatched.set(key, { value: contribution, count: 1 });
+    else existing.count += 1;
+  });
 
   const terms: ExactRational[] = [constant];
-  for (let index = 0; index < contributions.length; index += 1) {
-    if (cancelled.has(index)) continue;
-    const contribution = contributions[index];
-    if (contribution === undefined) continue;
-    terms.push(multiplyRationals(contribution.coefficient, contribution.previous));
+  for (const entry of unmatched.values()) {
+    const term = rational(entry.value.numerator, entry.value.denominator);
+    for (let index = 0; index < entry.count; index += 1) terms.push(term);
   }
   return sumRationals(terms);
 }
