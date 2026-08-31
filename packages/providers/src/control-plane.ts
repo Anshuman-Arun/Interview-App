@@ -425,6 +425,39 @@ const PROVIDER_ADAPTER_FACTORY_INPUT_KEYS = new Set([
   "runtime"
 ]);
 
+const RESOLUTION_INPUT_KEYS = new Set(["registry", "configuration", "requirements"]);
+const READINESS_INPUT_KEYS = new Set([
+  "registry",
+  "configuration",
+  "secretResolver",
+  "requirements"
+]);
+
+function assertNoUnknownOwnOperationFields(
+  value: unknown,
+  allowedKeys: ReadonlySet<string>,
+  errorCode: "MALFORMED_CONFIGURATION",
+  message: string
+): void {
+  if (typeof value !== "object" || value === null) {
+    throw new ProviderControlPlaneError(errorCode, message);
+  }
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+  } catch {
+    throw new ProviderControlPlaneError(errorCode, message);
+  }
+  if (
+    symbols.length > 0
+    || Object.keys(descriptors).some((key) => !allowedKeys.has(key))
+  ) {
+    throw new ProviderControlPlaneError(errorCode, message);
+  }
+}
+
 function readOwnDataProperty(
   value: unknown,
   key: string,
@@ -453,7 +486,8 @@ function readOwnDataProperty(
   if (!("value" in descriptor)) {
     throw new ProviderControlPlaneError(errorCode, message);
   }
-  return freezeNullPrototype({ present: true, value: descriptor.value });
+  const propertyValue: unknown = descriptor.value;
+  return freezeNullPrototype({ present: true, value: propertyValue });
 }
 
 function inspectPlainDataObjectProperties(
@@ -1565,6 +1599,12 @@ export function resolveProviderConfiguration(input: {
   readonly configuration: unknown;
   readonly requirements?: readonly ProviderCapabilityKey[];
 }): ResolvedProviderConfiguration {
+  assertNoUnknownOwnOperationFields(
+    input,
+    RESOLUTION_INPUT_KEYS,
+    "MALFORMED_CONFIGURATION",
+    "Provider resolution input is malformed"
+  );
   const configurationProperty = readOwnDataProperty(
     input,
     "configuration",
@@ -1636,6 +1676,12 @@ export async function evaluateProviderReadiness(input: {
 }): Promise<ProviderReadiness> {
   let parsed: ProviderConfiguration;
   try {
+    assertNoUnknownOwnOperationFields(
+      input,
+      READINESS_INPUT_KEYS,
+      "MALFORMED_CONFIGURATION",
+      "Provider readiness input is malformed"
+    );
     const configurationProperty = readOwnDataProperty(
       input,
       "configuration",

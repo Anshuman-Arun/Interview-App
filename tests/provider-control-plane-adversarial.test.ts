@@ -513,6 +513,90 @@ describe("provider configuration hostile object handling", () => {
   });
 });
 
+describe("provider operation input envelopes", () => {
+  it("rejects misspelled resolution controls instead of silently dropping capability checks", () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const input = {
+      registry,
+      configuration: settingsConfiguration({ mode: "safe" }),
+      requirement: ["IMAGE_INPUT"]
+    };
+
+    expect(() => resolveProviderConfiguration(input))
+      .toThrow(expect.objectContaining({ code: "MALFORMED_CONFIGURATION" }));
+  });
+
+  it("reports unknown readiness operation fields as malformed configuration", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const input = {
+      registry,
+      configuration: settingsConfiguration({ mode: "safe" }),
+      requirement: ["IMAGE_INPUT"]
+    };
+
+    await expect(evaluateProviderReadiness(input)).resolves.toMatchObject({
+      state: "MISCONFIGURED",
+      reason: "MALFORMED_CONFIGURATION"
+    });
+  });
+
+  it("rejects symbol operation fields without invoking unrelated values", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const resolutionInput = {
+      registry,
+      configuration: settingsConfiguration({ mode: "safe" })
+    };
+    Object.defineProperty(resolutionInput, Symbol("hidden"), {
+      enumerable: true,
+      value: "hidden"
+    });
+    expect(() => resolveProviderConfiguration(resolutionInput))
+      .toThrow(expect.objectContaining({ code: "MALFORMED_CONFIGURATION" }));
+
+    const readinessInput = {
+      registry,
+      configuration: settingsConfiguration({ mode: "safe" })
+    };
+    Object.defineProperty(readinessInput, Symbol("hidden"), {
+      enumerable: false,
+      value: "hidden"
+    });
+    await expect(evaluateProviderReadiness(readinessInput)).resolves.toMatchObject({
+      state: "MISCONFIGURED",
+      reason: "MALFORMED_CONFIGURATION"
+    });
+  });
+
+  it("continues to ignore inherited operation fields", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const inherited = {
+      requirement: ["IMAGE_INPUT"],
+      secretResolver: "polluted"
+    };
+
+    const resolutionInput = {
+      registry,
+      configuration: settingsConfiguration({ mode: "safe" })
+    };
+    Object.setPrototypeOf(resolutionInput, inherited);
+    expect(() => resolveProviderConfiguration(resolutionInput)).not.toThrow();
+
+    const readinessInput = {
+      registry,
+      configuration: settingsConfiguration({ mode: "safe" })
+    };
+    Object.setPrototypeOf(readinessInput, inherited);
+    await expect(evaluateProviderReadiness(readinessInput)).resolves.toMatchObject({
+      state: "UNAVAILABLE",
+      reason: "ADAPTER_FACTORY_UNAVAILABLE"
+    });
+  });
+});
+
 describe("provider readiness hostile configurations", () => {
   it("does not let DISABLED short-circuit secret or settings validation", async () => {
     const registry = new ProviderRegistry();

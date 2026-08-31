@@ -316,7 +316,8 @@ function inspectConfigurationArray(
     if (descriptor === undefined || !("value" in descriptor) || descriptor.enumerable !== true) {
       failMalformedConfiguration();
     }
-    output.push(inspectConfigurationValue(descriptor.value, state, depth + 1, rejectSecrets));
+    const item: unknown = descriptor.value;
+    output.push(inspectConfigurationValue(item, state, depth + 1, rejectSecrets));
   }
   for (const key of Object.keys(descriptors)) {
     if (!allowedKeys.has(key)) failMalformedConfiguration();
@@ -361,7 +362,8 @@ function inspectConfigurationRecord(
       failMalformedConfiguration();
     }
     if (rejectSecrets && isSecretConfigurationKey(key)) failSecretConfiguration();
-    output[key] = inspectConfigurationValue(descriptor.value, state, depth + 1, rejectSecrets);
+    const item: unknown = descriptor.value;
+    output[key] = inspectConfigurationValue(item, state, depth + 1, rejectSecrets);
   }
   return Object.freeze(output);
 }
