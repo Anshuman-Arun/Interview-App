@@ -632,6 +632,23 @@ describe("vision snapshot validation and hashing", () => {
     }
   });
 
+  it("fails closed on revoked validation-limit proxies", () => {
+    const validInput = {
+      snapshotId: "revoked-limits",
+      sourceType: "WHITEBOARD_SNAPSHOT" as const,
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      encodedBytes: makePng(1, 1)
+    };
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+    expect(() => createValidatedImageSnapshot(
+      validInput,
+      revoked.proxy as unknown as Parameters<typeof createValidatedImageSnapshot>[1]
+    )).toThrowError(RangeError);
+  });
+
   it("fails closed on hostile snapshot input and validation-limit getters", () => {
     const hostileInput = new Proxy({}, {
       get() {
@@ -1049,6 +1066,28 @@ describe("dirty-region planning", () => {
     expect(plan).toEqual({ mode: "NONE", regions: [], analyzedArea: 0 });
   });
 
+  it("fails closed on hostile dirty-region objects and revoked planner config", () => {
+    const hostileRegion = new Proxy({}, {
+      get() {
+        throw new Error("hostile dirty getter");
+      }
+    });
+    try {
+      rasterizeDirtyRegion(hostileRegion as unknown as Parameters<typeof rasterizeDirtyRegion>[0]);
+      throw new Error("Expected hostile dirty-region rejection");
+    } catch (error) {
+      expectCode(error, "INVALID_RECTANGLE");
+    }
+
+    const revokedConfig = Proxy.revocable({}, {});
+    revokedConfig.revoke();
+    expect(() => planDirtyRegions(
+      [{ x: 0, y: 0, width: 1, height: 1 }],
+      { width: 10, height: 10 },
+      revokedConfig.proxy as unknown as Parameters<typeof planDirtyRegions>[2]
+    )).toThrowError(RangeError);
+  });
+
   it("rejects null planner configuration rather than silently using defaults", () => {
     expect(() => planDirtyRegions(
       [{ x: 0, y: 0, width: 1, height: 1 }],
@@ -1171,6 +1210,17 @@ describe("crop, resize, tiling, and cancellation", () => {
       outcome: "SUCCESS"
     });
     expect(JSON.stringify(first.diagnostics)).not.toContain("encodedBytes");
+  });
+
+  it("fails closed on revoked processing option proxies", async () => {
+    const source = snapshot(makePng(2, 2));
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 1, height: 1 },
+      revoked.proxy as unknown as Parameters<typeof cropImage>[2]
+    )).rejects.toThrowError(TypeError);
   });
 
   it("fails closed on hostile processing option enumeration and getters", async () => {
@@ -1992,6 +2042,19 @@ describe("provider-neutral request preparation and budgeting", () => {
       Array.from({ length: 1025 }, () => source),
       "analysis"
     )).toThrowError(VisionPreprocessingError);
+  });
+
+  it("fails closed on hostile request budget objects", () => {
+    const hostileBudget = new Proxy({}, {
+      get() {
+        throw new Error("hostile budget getter");
+      }
+    });
+    expect(() => prepareVisionBatch(
+      [],
+      "analysis",
+      hostileBudget as unknown as Parameters<typeof prepareVisionBatch>[2]
+    )).toThrowError(RangeError);
   });
 
   it("rejects hard image/crop budget overconfiguration and unknown budget keys", () => {
