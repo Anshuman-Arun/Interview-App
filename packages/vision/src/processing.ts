@@ -86,7 +86,7 @@ const PROCESSING_OPTION_KEYS = new Set([
   "maxTotalOutputEncodedBytes"
 ]);
 
-function validateProcessingOptions(input: unknown): void {
+function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOptions> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new TypeError("Vision processing options must be an object");
   }
@@ -108,22 +108,33 @@ function validateProcessingOptions(input: unknown): void {
   }
 
   const outputBytes = options["maxOutputEncodedBytes"];
+  let normalizedOutputBytes: number | undefined;
   if (outputBytes !== undefined) {
     if (typeof outputBytes !== "number") throw new RangeError("maxOutputEncodedBytes must be numeric");
-    const value = nonnegativeSafeInteger(outputBytes, "maxOutputEncodedBytes");
-    if (value > HARD_MAX_OUTPUT_ENCODED_BYTES) {
+    normalizedOutputBytes = nonnegativeSafeInteger(outputBytes, "maxOutputEncodedBytes");
+    if (normalizedOutputBytes > HARD_MAX_OUTPUT_ENCODED_BYTES) {
       throw new RangeError("maxOutputEncodedBytes exceeds the package hard cap");
     }
   }
 
   const totalOutputBytes = options["maxTotalOutputEncodedBytes"];
+  let normalizedTotalOutputBytes: number | undefined;
   if (totalOutputBytes !== undefined) {
     if (typeof totalOutputBytes !== "number") throw new RangeError("maxTotalOutputEncodedBytes must be numeric");
-    const value = nonnegativeSafeInteger(totalOutputBytes, "maxTotalOutputEncodedBytes");
-    if (value > HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES) {
+    normalizedTotalOutputBytes = nonnegativeSafeInteger(totalOutputBytes, "maxTotalOutputEncodedBytes");
+    if (normalizedTotalOutputBytes > HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES) {
       throw new RangeError("maxTotalOutputEncodedBytes exceeds the package hard cap");
     }
   }
+
+  return Object.freeze({
+    ...(signal === undefined ? {} : { signal }),
+    ...(clock === undefined ? {} : { now: clock as () => number }),
+    ...(normalizedOutputBytes === undefined ? {} : { maxOutputEncodedBytes: normalizedOutputBytes }),
+    ...(normalizedTotalOutputBytes === undefined
+      ? {}
+      : { maxTotalOutputEncodedBytes: normalizedTotalOutputBytes })
+  });
 }
 
 export interface CropResult {
@@ -348,11 +359,11 @@ export async function cropImage(
   bounds: ImageRect,
   options: VisionProcessingOptions = {}
 ): Promise<CropResult> {
-  validateProcessingOptions(options);
-  const startedAt = now(options);
-  throwIfAborted(options.signal);
+  const safeOptions = normalizeProcessingOptions(options);
+  const startedAt = now(safeOptions);
+  throwIfAborted(safeOptions.signal);
   assertVisionRasterSource(source);
-  const maximumOutputBytes = maxOutputBytes(options);
+  const maximumOutputBytes = maxOutputBytes(safeOptions);
   if (maximumOutputBytes === 0) {
     throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG output");
   }
@@ -360,12 +371,12 @@ export async function cropImage(
     width: source.metadata.width,
     height: source.metadata.height
   });
-  const decoded = decodeSource(source, options.signal);
-  const cropped = await cropDecodedRaster(decoded, rect, options.signal);
+  const decoded = decodeSource(source, safeOptions.signal);
+  const cropped = await cropDecodedRaster(decoded, rect, safeOptions.signal);
   const descriptor = sourceDescriptor(source);
   const transform = composeCropTransform(descriptor.transform, rect);
-  const artifact = encodeArtifact(source, "CROP", cropped, rect, transform, options);
-  throwIfAborted(options.signal);
+  const artifact = encodeArtifact(source, "CROP", cropped, rect, transform, safeOptions);
+  throwIfAborted(safeOptions.signal);
 
   const diagnostics = createVisionProcessingDiagnostics({
     operation: "CROP",
@@ -375,10 +386,10 @@ export async function cropImage(
     outputBytes: artifact.metadata.byteSize,
     cropCount: 1,
     tileCount: 0,
-    durationMs: elapsed(startedAt, options),
+    durationMs: elapsed(startedAt, safeOptions),
     outcome: "SUCCESS"
   });
-  throwIfAborted(options.signal);
+  throwIfAborted(safeOptions.signal);
   return Object.freeze({ artifact, diagnostics });
 }
 
@@ -504,11 +515,11 @@ export async function downscaleImage(
   envelope: DownscaleEnvelope,
   options: VisionProcessingOptions = {}
 ): Promise<ResizeResult> {
-  validateProcessingOptions(options);
-  const startedAt = now(options);
-  throwIfAborted(options.signal);
+  const safeOptions = normalizeProcessingOptions(options);
+  const startedAt = now(safeOptions);
+  throwIfAborted(safeOptions.signal);
   assertVisionRasterSource(source);
-  const maximumOutputBytes = maxOutputBytes(options);
+  const maximumOutputBytes = maxOutputBytes(safeOptions);
   if (maximumOutputBytes === 0) {
     throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG output");
   }
@@ -521,7 +532,7 @@ export async function downscaleImage(
         "Unchanged image exceeds the configured output byte limit"
       );
     }
-    throwIfAborted(options.signal);
+    throwIfAborted(safeOptions.signal);
     const diagnostics = createVisionProcessingDiagnostics({
       operation: "RESIZE",
       sourceDimensions: { width: source.metadata.width, height: source.metadata.height },
@@ -530,15 +541,15 @@ export async function downscaleImage(
       outputBytes: source.metadata.byteSize,
       cropCount: 0,
       tileCount: 0,
-      durationMs: elapsed(startedAt, options),
+      durationMs: elapsed(startedAt, safeOptions),
       outcome: "SUCCESS"
     });
-    throwIfAborted(options.signal);
+    throwIfAborted(safeOptions.signal);
     return Object.freeze({ image: source, plan, diagnostics });
   }
 
-  const decoded = decodeSource(source, options.signal);
-  const resized = await resizeBilinear(decoded, plan.resultWidth, plan.resultHeight, options.signal);
+  const decoded = decodeSource(source, safeOptions.signal);
+  const resized = await resizeBilinear(decoded, plan.resultWidth, plan.resultHeight, safeOptions.signal);
   const descriptor = sourceDescriptor(source);
   const transform = composeResizeTransform(
     descriptor.transform,
@@ -551,8 +562,8 @@ export async function downscaleImage(
     width: source.metadata.width,
     height: source.metadata.height
   });
-  const artifact = encodeArtifact(source, "RESIZED", resized, resizeSourceBounds, transform, options);
-  throwIfAborted(options.signal);
+  const artifact = encodeArtifact(source, "RESIZED", resized, resizeSourceBounds, transform, safeOptions);
+  throwIfAborted(safeOptions.signal);
 
   const diagnostics = createVisionProcessingDiagnostics({
     operation: "RESIZE",
@@ -562,10 +573,10 @@ export async function downscaleImage(
     outputBytes: artifact.metadata.byteSize,
     cropCount: 0,
     tileCount: 0,
-    durationMs: elapsed(startedAt, options),
+    durationMs: elapsed(startedAt, safeOptions),
     outcome: "SUCCESS"
   });
-  throwIfAborted(options.signal);
+  throwIfAborted(safeOptions.signal);
   return Object.freeze({ image: artifact, plan, diagnostics });
 }
 
@@ -640,26 +651,26 @@ export async function tileImage(
   config: TileConfig,
   options: VisionProcessingOptions = {}
 ): Promise<TileResult> {
-  validateProcessingOptions(options);
-  const startedAt = now(options);
-  throwIfAborted(options.signal);
+  const safeOptions = normalizeProcessingOptions(options);
+  const startedAt = now(safeOptions);
+  throwIfAborted(safeOptions.signal);
   assertVisionRasterSource(source);
-  const maximumOutputBytes = maxOutputBytes(options);
-  const maximumTotalOutputBytes = maxTotalOutputBytes(options);
+  const maximumOutputBytes = maxOutputBytes(safeOptions);
+  const maximumTotalOutputBytes = maxTotalOutputBytes(safeOptions);
   if (maximumOutputBytes === 0 || maximumTotalOutputBytes === 0) {
     throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG tile output");
   }
   const plan = planImageTiles({ width: source.metadata.width, height: source.metadata.height }, config);
-  const decoded = decodeSource(source, options.signal);
+  const decoded = decodeSource(source, safeOptions.signal);
   const descriptor = sourceDescriptor(source);
   const tiles: ImageTile[] = [];
   let totalOutputBytes = 0;
 
   for (const item of plan) {
-    throwIfAborted(options.signal);
-    const raster = await cropDecodedRaster(decoded, item.bounds, options.signal);
+    throwIfAborted(safeOptions.signal);
+    const raster = await cropDecodedRaster(decoded, item.bounds, safeOptions.signal);
     const transform = composeCropTransform(descriptor.transform, item.bounds);
-    const artifact = encodeArtifact(source, "TILE", raster, item.bounds, transform, options);
+    const artifact = encodeArtifact(source, "TILE", raster, item.bounds, transform, safeOptions);
     totalOutputBytes += artifact.metadata.byteSize;
     if (!Number.isSafeInteger(totalOutputBytes) || totalOutputBytes > maximumTotalOutputBytes) {
       throw new VisionPreprocessingError(
@@ -668,9 +679,9 @@ export async function tileImage(
       );
     }
     tiles.push(Object.freeze({ ...item, artifact }));
-    await cooperativeYield(options.signal, item.index + 1);
+    await cooperativeYield(safeOptions.signal, item.index + 1);
   }
-  throwIfAborted(options.signal);
+  throwIfAborted(safeOptions.signal);
 
   const diagnostics = createVisionProcessingDiagnostics({
     operation: "TILE",
@@ -679,9 +690,9 @@ export async function tileImage(
     outputBytes: totalOutputBytes,
     cropCount: 0,
     tileCount: tiles.length,
-    durationMs: elapsed(startedAt, options),
+    durationMs: elapsed(startedAt, safeOptions),
     outcome: "SUCCESS"
   });
-  throwIfAborted(options.signal);
+  throwIfAborted(safeOptions.signal);
   return Object.freeze({ tiles: Object.freeze(tiles), diagnostics });
 }
