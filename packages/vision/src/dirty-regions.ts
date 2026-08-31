@@ -64,6 +64,10 @@ export type DirtyRegionPlan =
       readonly fallbackReason: DirtyRegionFallbackReason;
     };
 
+function assertArrayInput(value: unknown, label: string): void {
+  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
+}
+
 function compareNumber(left: number, right: number): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -145,7 +149,7 @@ function validatedRectsOverlap(left: ImageRect, right: ImageRect): boolean {
 }
 
 export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): readonly ImageRect[] {
-  if (!Array.isArray(rectangles)) throw new TypeError("Rectangle collection must be an array");
+  assertArrayInput(rectangles, "Rectangle collection");
   if (rectangles.length > MAX_GEOMETRY_RECTANGLES) throw new RangeError(`At most ${String(MAX_GEOMETRY_RECTANGLES)} regions may be coalesced at once`);
   const input: ImageRect[] = [];
   for (let index = 0; index < rectangles.length; index += 1) {
@@ -185,7 +189,9 @@ export function planDirtyRegions(
   dimensions: PixelDimensions,
   config?: DirtyRegionPlannerConfig
 ): DirtyRegionPlan {
-  if (!Array.isArray(dirtyRegions)) {
+  try {
+    assertArrayInput(dirtyRegions, "Dirty-region input");
+  } catch {
     throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty-region input must be an array");
   }
   const safeDimensions = PixelDimensionsSchema.parse(dimensions);
