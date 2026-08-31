@@ -221,7 +221,7 @@ export function createValidatedImageSnapshot(
     mimeType: "image/png",
     encoding: "PNG",
     byteSize: bytes.length,
-    contentDigest: sha256ImageBytes(bytes)
+    contentDigest: createHash("sha256").update(bytes).digest("hex")
   });
 
   try {
