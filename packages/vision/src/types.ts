@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PNG } from "pngjs";
 import { computeVisionArtifactId } from "./artifact-identity.js";
 import { assertSupportedPngHeaderParameters } from "./png-validation.js";
-import { BoardRevisionSchema, type BoardRevision } from "../../domain/src/index.js";
+import { BoardRevisionSchema } from "../../domain/src/index.js";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
