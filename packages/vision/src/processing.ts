@@ -26,6 +26,7 @@ const HARD_MAX_OUTPUT_ENCODED_BYTES = 64 * 1024 * 1024;
 const HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 128 * 1024 * 1024;
 export const HARD_MAX_TOTAL_TILE_PIXELS = 128 * 1024 * 1024;
 const COOPERATIVE_YIELD_ROWS = 16;
+const MIN_STATIC_PNG_ENCODED_BYTES = 57;
 
 const DownscaleEnvelopeSchema = z.object({
   maxWidth: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -240,6 +241,15 @@ function maxOutputBytes(options: VisionProcessingOptions): number {
   return Math.min(perImage, total);
 }
 
+function assertPngOutputPossible(maximumOutputBytes: number, context: string): void {
+  if (maximumOutputBytes < MIN_STATIC_PNG_ENCODED_BYTES) {
+    throw new VisionPreprocessingError(
+      "OUTPUT_TOO_LARGE_BYTES",
+      `${context} byte ceiling is too small to contain any valid PNG output`
+    );
+  }
+}
+
 function maxTotalOutputBytes(options: VisionProcessingOptions): number {
   const value = nonnegativeSafeInteger(
     options.maxTotalOutputEncodedBytes ?? DEFAULT_MAX_TOTAL_OUTPUT_ENCODED_BYTES,
@@ -414,9 +424,7 @@ export async function cropImage(
   throwIfAborted(safeOptions.signal);
   assertVisionRasterSource(source);
   const maximumOutputBytes = maxOutputBytes(safeOptions);
-  if (maximumOutputBytes === 0) {
-    throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG output");
-  }
+  assertPngOutputPossible(maximumOutputBytes, "Configured output");
   const rect = assertRectWithinImage(validateImageRect(bounds), {
     width: source.metadata.width,
     height: source.metadata.height
@@ -571,9 +579,7 @@ export async function downscaleImage(
   throwIfAborted(safeOptions.signal);
   assertVisionRasterSource(source);
   const maximumOutputBytes = maxOutputBytes(safeOptions);
-  if (maximumOutputBytes === 0) {
-    throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG output");
-  }
+  assertPngOutputPossible(maximumOutputBytes, "Configured output");
   const plan = planDownscale({ width: source.metadata.width, height: source.metadata.height }, envelope);
 
   if (!plan.resized) {
@@ -709,9 +715,8 @@ export async function tileImage(
   assertVisionRasterSource(source);
   const maximumOutputBytes = maxOutputBytes(safeOptions);
   const maximumTotalOutputBytes = maxTotalOutputBytes(safeOptions);
-  if (maximumOutputBytes === 0 || maximumTotalOutputBytes === 0) {
-    throw new VisionPreprocessingError("OUTPUT_TOO_LARGE_BYTES", "Configured output byte ceiling prohibits PNG tile output");
-  }
+  assertPngOutputPossible(maximumOutputBytes, "Configured tile output");
+  assertPngOutputPossible(maximumTotalOutputBytes, "Configured combined tile output");
   const plan = planImageTiles({ width: source.metadata.width, height: source.metadata.height }, config);
   const decoded = decodeSource(source, safeOptions.signal);
   await yieldForCancellation(safeOptions.signal);
