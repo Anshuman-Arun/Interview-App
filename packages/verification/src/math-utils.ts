@@ -197,57 +197,67 @@ export function serializeRational(value: ExactRational): RationalInput {
 }
 
 export function addRationals(left: ExactRational, right: ExactRational): ExactRational {
-  const normalizedLeft = normalizeRational(left);
-  const normalizedRight = normalizeRational(right);
-  const commonFactor = gcd(normalizedLeft.denominator, normalizedRight.denominator);
-  const leftScale = normalizedRight.denominator / commonFactor;
-  const rightScale = normalizedLeft.denominator / commonFactor;
-  // Cross-scaled terms are bounded implementation temporaries: each is the
-  // product of two already-bounded exact integers. Do not apply the semantic
-  // intermediate bound until after their cancellation, or a bounded reduced
-  // sum can spuriously fail only because the common-denominator expansion is
-  // larger than the exact result.
-  const leftTerm = normalizedLeft.numerator * leftScale;
-  const rightTerm = normalizedRight.numerator * rightScale;
+  const checkedLeft = checkedRational(left);
+  const checkedRight = checkedRational(right);
+  const commonFactor = gcdUnchecked(checkedLeft.denominator, checkedRight.denominator);
+  const leftScale = checkedRight.denominator / commonFactor;
+  const rightScale = checkedLeft.denominator / commonFactor;
 
-  // After reducing denominator cross-factors, any remaining common factor
-  // between the numerator sum and denominator must divide commonFactor.
-  // Cancel it before enforcing the final intermediate bound.
-  const numerator = leftTerm + rightTerm;
-  const cancellation = gcdUnchecked(numerator, commonFactor);
-  return rational(
-    assertIntermediateIntegerBound(numerator / cancellation),
-    assertIntermediateIntegerBound(
-      (normalizedLeft.denominator / cancellation) * leftScale
-    )
-  );
+  // Cross-scaled terms and their common denominator are bounded
+  // implementation temporaries (at most about twice the configured component
+  // digits). Reduce the exact sum before applying the 4,096-digit state/result
+  // bound so unreduced direct inputs cannot cause a false abstention.
+  const numerator =
+    checkedLeft.numerator * leftScale
+    + checkedRight.numerator * rightScale;
+  const denominator = checkedLeft.denominator * leftScale;
+  const cancellation = gcdUnchecked(numerator, denominator);
+  return {
+    numerator: assertIntermediateIntegerBound(numerator / cancellation),
+    denominator: assertIntermediateIntegerBound(denominator / cancellation)
+  };
 }
 
 export function subtractRationals(left: ExactRational, right: ExactRational): ExactRational {
-  return addRationals(left, negateRational(right));
+  const checkedRight = checkedRational(right);
+  return addRationals(left, {
+    numerator: -checkedRight.numerator,
+    denominator: checkedRight.denominator
+  });
 }
 
 export function multiplyRationals(left: ExactRational, right: ExactRational): ExactRational {
-  const normalizedLeft = normalizeRational(left);
-  const normalizedRight = normalizeRational(right);
-  const leftCancellation = gcd(normalizedLeft.numerator, normalizedRight.denominator);
-  const rightCancellation = gcd(normalizedRight.numerator, normalizedLeft.denominator);
-  return rational(
-    assertIntermediateIntegerBound(
-      (normalizedLeft.numerator / leftCancellation) * (normalizedRight.numerator / rightCancellation)
-    ),
-    assertIntermediateIntegerBound(
-      (normalizedLeft.denominator / rightCancellation) * (normalizedRight.denominator / leftCancellation)
-    )
-  );
+  const checkedLeft = checkedRational(left);
+  const checkedRight = checkedRational(right);
+
+  // Cross-cancel first to keep the exact multiplication temporary small, then
+  // perform one final reduction to handle factors internal to unreduced direct
+  // inputs. All pre-reduction products remain bounded by the input component
+  // limits; only the reduced result is subject to the 4,096-digit state bound.
+  const leftCancellation = gcdUnchecked(checkedLeft.numerator, checkedRight.denominator);
+  const rightCancellation = gcdUnchecked(checkedRight.numerator, checkedLeft.denominator);
+  const numerator =
+    (checkedLeft.numerator / leftCancellation)
+    * (checkedRight.numerator / rightCancellation);
+  const denominator =
+    (checkedLeft.denominator / rightCancellation)
+    * (checkedRight.denominator / leftCancellation);
+  const finalCancellation = gcdUnchecked(numerator, denominator);
+  return {
+    numerator: assertIntermediateIntegerBound(numerator / finalCancellation),
+    denominator: assertIntermediateIntegerBound(denominator / finalCancellation)
+  };
 }
 
 export function divideRationals(left: ExactRational, right: ExactRational): ExactRational {
-  const normalizedRight = normalizeRational(right);
-  if (normalizedRight.numerator === 0n) {
+  const checkedRight = checkedRational(right);
+  if (checkedRight.numerator === 0n) {
     throw new BoundedMathError("DIVISION_BY_ZERO", "Cannot divide by zero");
   }
-  return multiplyRationals(normalizeRational(left), rational(normalizedRight.denominator, normalizedRight.numerator));
+  return multiplyRationals(left, {
+    numerator: checkedRight.denominator,
+    denominator: checkedRight.numerator
+  });
 }
 
 export function negateRational(value: ExactRational): ExactRational {
