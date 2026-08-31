@@ -678,19 +678,20 @@ export class LocalRuntimeManager {
     const unlink = linkAbortSignal(signal, controller);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let exitSettled = false;
+    let exitListener: (() => void) | undefined;
     const exitPromise = new Promise<never>((_resolve, reject) => {
-      const onExit = (): void => {
+      exitListener = (): void => {
         if (exitSettled) return;
         exitSettled = true;
-        record.exitListeners.delete(onExit);
+        if (exitListener !== undefined) record.exitListeners.delete(exitListener);
         reject(new LocalRuntimeError(
           "PROCESS_EXITED",
           `Component ${record.definition.id} exited before readiness`
         ));
         controller.abort();
       };
-      record.exitListeners.add(onExit);
-      if (record.child !== child || child.exitCode !== null || child.signalCode !== null) onExit();
+      record.exitListeners.add(exitListener);
+      if (record.child !== child || child.exitCode !== null || child.signalCode !== null) exitListener();
     });
     const readinessPromise = this.runReadinessStrategy(record, child, controller.signal);
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
@@ -705,9 +706,7 @@ export class LocalRuntimeManager {
       if (timer !== undefined) clearTimeout(timer);
       unlink?.();
       controller.abort();
-      for (const listener of [...record.exitListeners]) {
-        if (listener.name === "onExit" && exitSettled) record.exitListeners.delete(listener);
-      }
+      if (exitListener !== undefined) record.exitListeners.delete(exitListener);
     }
   }
 
