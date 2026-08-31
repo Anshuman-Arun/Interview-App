@@ -41,6 +41,8 @@ function classifyTransferError(error: unknown): ModelAssetError {
       || code === "EROFS"
       || code === "EMFILE"
       || code === "ENFILE"
+      || code === "EFBIG"
+      || code === "EBADF"
       || code === "EIO") {
     return new ModelAssetError(
       "IO_ERROR",
