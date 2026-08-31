@@ -742,6 +742,36 @@ export class ModelAssetManager {
         "Artifact directory is missing a required cache-layout entry."
       );
     }
+
+    for (const requiredName of ["manifest.json", manifest.filename]) {
+      const requiredPath = path.join(directoryPath, requiredName);
+      let requiredStat: Stats;
+      try {
+        requiredStat = await lstat(requiredPath);
+      } catch (error) {
+        if (typeof error === "object"
+            && error !== null
+            && "code" in error
+            && error.code === "ENOENT") {
+          throw new ModelAssetError(
+            errorCode,
+            "Artifact directory changed while its required entries were being inspected.",
+            { cause: error }
+          );
+        }
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to inspect a required artifact cache entry.",
+          { cause: error }
+        );
+      }
+      if (requiredStat.isSymbolicLink() || !requiredStat.isFile()) {
+        throw new ModelAssetError(
+          errorCode,
+          "Artifact directory required entries must be regular non-symlink files."
+        );
+      }
+    }
   }
 
   private rejectTransientInstallationFailure(check: InstallationCheck): void {
