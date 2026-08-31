@@ -211,6 +211,14 @@ async function cooperativeYield(signal: AbortSignal | undefined, row: number): P
   throwIfAborted(signal);
 }
 
+async function yieldForCancellation(signal: AbortSignal | undefined): Promise<void> {
+  if (signal === undefined) return;
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+  throwIfAborted(signal);
+}
+
 function maxOutputBytes(options: VisionProcessingOptions): number {
   const perImage = nonnegativeSafeInteger(
     options.maxOutputEncodedBytes ?? DEFAULT_MAX_OUTPUT_ENCODED_BYTES,
@@ -408,11 +416,12 @@ export async function cropImage(
     height: source.metadata.height
   });
   const decoded = decodeSource(source, safeOptions.signal);
+  await yieldForCancellation(safeOptions.signal);
   const cropped = await cropDecodedRaster(decoded, rect, safeOptions.signal);
   const descriptor = sourceDescriptor(source);
   const transform = composeCropTransform(descriptor.transform, rect);
   const artifact = encodeArtifact(source, "CROP", cropped, rect, transform, safeOptions);
-  throwIfAborted(safeOptions.signal);
+  await yieldForCancellation(safeOptions.signal);
 
   const diagnostics = createVisionProcessingDiagnostics({
     operation: "CROP",
@@ -585,6 +594,7 @@ export async function downscaleImage(
   }
 
   const decoded = decodeSource(source, safeOptions.signal);
+  await yieldForCancellation(safeOptions.signal);
   const resized = await resizeBilinear(decoded, plan.resultWidth, plan.resultHeight, safeOptions.signal);
   const descriptor = sourceDescriptor(source);
   const transform = composeResizeTransform(
@@ -599,7 +609,7 @@ export async function downscaleImage(
     height: source.metadata.height
   });
   const artifact = encodeArtifact(source, "RESIZED", resized, resizeSourceBounds, transform, safeOptions);
-  throwIfAborted(safeOptions.signal);
+  await yieldForCancellation(safeOptions.signal);
 
   const diagnostics = createVisionProcessingDiagnostics({
     operation: "RESIZE",
@@ -698,6 +708,7 @@ export async function tileImage(
   }
   const plan = planImageTiles({ width: source.metadata.width, height: source.metadata.height }, config);
   const decoded = decodeSource(source, safeOptions.signal);
+  await yieldForCancellation(safeOptions.signal);
   const descriptor = sourceDescriptor(source);
   const tiles: ImageTile[] = [];
   let totalOutputBytes = 0;
@@ -717,7 +728,7 @@ export async function tileImage(
     tiles.push(Object.freeze({ ...item, artifact }));
     await cooperativeYield(safeOptions.signal, item.index + 1);
   }
-  throwIfAborted(safeOptions.signal);
+  await yieldForCancellation(safeOptions.signal);
 
   const diagnostics = createVisionProcessingDiagnostics({
     operation: "TILE",
