@@ -863,6 +863,13 @@ export async function atomicRenameDirectory(source: string, destination: string)
         { cause: error }
       );
     }
+    if (errnoCode(error) === "EXDEV") {
+      throw new ModelAssetError(
+        "INVALID_CACHE_ROOT",
+        "Temporary and installed artifact directories do not support same-mount atomic rename.",
+        { cause: error }
+      );
+    }
     throw new ModelAssetError("IO_ERROR", "Unable to atomically publish verified artifact.", { cause: error });
   }
 }
