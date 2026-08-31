@@ -198,6 +198,30 @@ describe("local model asset manager", () => {
     expect(listed.map((entry) => entry.variant)).toEqual(["a", "z"]);
   });
 
+  it("orders otherwise-identical installed artifact types deterministically", async () => {
+    const payload = Buffer.from("type-order");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root);
+
+    const model = manifestFor(payload, "https://example.test/model.bin", {
+      artifactId: "typed",
+      type: "MODEL"
+    });
+    const config = manifestFor(payload, "https://example.test/config.bin", {
+      artifactId: "typed",
+      type: "CONFIG"
+    });
+
+    await manager.importLocal(model, source);
+    await manager.importLocal(config, source);
+
+    const listed = await manager.listInstalledArtifacts();
+    expect(listed.map((entry) => entry.type)).toEqual(["CONFIG", "MODEL"]);
+  });
+
   it("reuses a verified installed artifact without another download", async () => {
     const payload = Buffer.from("already-installed");
     const root = await newRoot();
