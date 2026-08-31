@@ -4,6 +4,7 @@ import { imageIdentity } from "./deduplication.js";
 import {
   CoordinateTransformSchema,
   ImagePayloadReference,
+  assertVisionRasterSource,
   ImageSnapshot,
   VisionImageArtifact,
   VisionPreprocessingError,
@@ -90,18 +91,18 @@ function deterministicRequestId(
   source: VisionRasterSource,
   transform: CoordinateTransform
 ): string {
-  const canonical = [
+  const canonical = JSON.stringify([
     "vision-request-v1",
     purpose,
-    String(source.metadata.sourceRevision),
+    source.metadata.sourceRevision,
     imageIdentity(source),
-    String(source.metadata.width),
-    String(source.metadata.height),
-    String(transform.offsetX),
-    String(transform.offsetY),
-    String(transform.scaleX),
-    String(transform.scaleY)
-  ].join("\u0000");
+    source.metadata.width,
+    source.metadata.height,
+    transform.offsetX,
+    transform.offsetY,
+    transform.scaleX,
+    transform.scaleY
+  ]);
   return `vision_${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
 }
 
@@ -109,18 +110,11 @@ export function prepareVisionImageRequest(
   source: VisionRasterSource,
   purposeInput: string
 ): PreparedVisionImageRequest {
+  assertVisionRasterSource(source);
   const purpose = VisionPurposeSchema.parse(purposeInput);
   const transform = Object.freeze({ ...CoordinateTransformSchema.parse(sourceTransform(source)) });
   const identity = imageIdentity(source);
-  const bytes = source.readBytes();
-  const payload = new ImagePayloadReference({
-    imageIdentity: identity,
-    mimeType: source.metadata.mimeType,
-    width: source.metadata.width,
-    height: source.metadata.height,
-    byteSize: source.metadata.byteSize,
-    contentDigest: source.metadata.contentDigest
-  }, bytes);
+  const payload = new ImagePayloadReference(identity, source);
 
   return Object.freeze({
     requestId: deterministicRequestId(purpose, source, transform),
@@ -159,6 +153,7 @@ function wouldExceed(
   source: VisionRasterSource,
   budget: VisionRequestBudget
 ): boolean {
+  assertVisionRasterSource(source);
   const nextImages = totals.images + 1;
   const nextBytes = checkedAdd(totals.totalBytes, source.metadata.byteSize, "Request byte total");
   const sourcePixels = source.metadata.width * source.metadata.height;
