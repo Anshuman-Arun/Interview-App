@@ -10,11 +10,15 @@ The initial package supports a deliberately bounded subset of **PNG (`image/png`
 - non-interlaced images only;
 - standard PNG compression/filter methods only;
 - grayscale, RGB, indexed, grayscale+alpha, and RGBA color types at supported bit depths up to 8 bits per channel;
-- no trailing bytes after the terminal `IEND` chunk.
+- checksum-valid PNG chunks with valid type/reserved bits;
+- bounded/spec-valid `PLTE`, `tRNS`, and `gAMA` structure;
+- consecutive `IDAT` chunks and a terminal empty `IEND`;
+- no trailing bytes after `IEND`;
+- at most 4096 PNG chunks.
 
 16-bit and interlaced PNGs are intentionally rejected. They are not needed for the expected browser/whiteboard capture path and would expand the decoder working set or enter less-bounded decode paths.
 
-PNG bytes are signature/header checked before decode, chunk structure is bounded, CRC-validating decode is required, and actual encoded dimensions are used instead of caller-declared dimensions. The package uses the pure-JavaScript, zero-dependency `pngjs` codec; no native image library is introduced.
+PNG bytes are signature/header checked before decode, chunk structure and palette metadata are bounded, every chunk CRC is checked, and actual encoded dimensions are used instead of caller-declared dimensions. Oversized/repeated/forbidden palettes, malformed transparency/gamma metadata, nonconsecutive image-data chunks, unsupported critical chunks, and APNG structures fail closed before full decode. Accepted `gAMA` metadata is preserved when crop/resize/tile outputs are re-encoded. The package uses the pure-JavaScript, zero-dependency `pngjs` codec; no native image library is introduced.
 
 ## Validation and resource limits
 
@@ -31,6 +35,7 @@ Other hard ceilings prevent downstream configuration from becoming effectively u
 
 - at most 2048 geometry/dirty-region inputs in one bounded collection;
 - at most 128 MiPixels of configured dirty-region analyzed area;
+- at most 4096 PNG chunks per validated payload;
 - at most 512 planned tiles;
 - at most 128 MiPixels of total tile pixel work, including overlap duplication;
 - at most 64 MiB encoded bytes per processed output;
@@ -60,7 +65,7 @@ Processed artifacts retain the original source snapshot ID and revision. They al
 
 For a crop or tile, `sourceBounds` are the exact integer bounds within the immediate source image and must equal the crop/tile output dimensions. For a resize, `sourceBounds` are the complete immediate source frame and resize artifacts are forbidden from upscaling.
 
-Byte-level deduplication and processing deduplication are intentionally distinct. Exact-payload utilities identify byte-identical images/crops. Revision-processing keys include full snapshot/artifact identity, so two identical-looking crops at different coordinates are not incorrectly treated as the same processing work.
+Byte-level deduplication and processing deduplication are intentionally distinct. Exact-payload utilities identify byte-identical images/crops. Revision-processing keys include full snapshot/artifact identity, so two identical-looking crops at different coordinates are not incorrectly treated as the same processing work. Raster identities themselves are fixed-length SHA-256 identifiers over validated provenance, so caller-controlled snapshot IDs cannot make request/payload identity strings unbounded.
 
 ## Geometry and dirty-region planning
 
@@ -113,7 +118,7 @@ Batch budgeting is deterministic over image count, encoded bytes, pixels, and cr
 
 Longer crop, resize, and tile pixel loops cooperatively observe `AbortSignal`. Cancellation is checked before and after synchronous decoder/encoder boundaries and again before completed results are returned. A synchronous codec call cannot itself be interrupted mid-call, but cancelled work is not published as completed afterward.
 
-Diagnostics contain only safe mechanical metadata such as source/output dimensions, input/output bytes, crop/tile counts, outcome, and duration. Raw image bytes are never included.
+Diagnostics contain only safe mechanical metadata such as source/output dimensions, input/output bytes, crop/tile counts, outcome, and duration. Raw image bytes are never included. Caller-supplied clocks must return nonnegative safe values and may not move backward during an operation.
 
 ## Deferred
 
