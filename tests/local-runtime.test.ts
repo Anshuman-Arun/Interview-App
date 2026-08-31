@@ -774,6 +774,32 @@ describe("local worker lifecycle manager", () => {
     expect(runtime.getStatus("redirect-health").restartCount).toBe(0);
   });
 
+  it("keeps the canonical HTTP readiness target immutable across polls", async () => {
+    const inputs: string[] = [];
+    let calls = 0;
+    const runtime = manager({
+      fetch: ((input) => {
+        calls += 1;
+        inputs.push(String(input));
+        if (input instanceof URL) input.hostname = "example.com";
+        return Promise.resolve(new Response(null, { status: calls >= 2 ? 204 : 503 }));
+      }) as typeof globalThis.fetch
+    });
+    runtime.register(definition("immutable-http-target", "ready", {
+      startupTimeoutMs: 500,
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://localhost:43199/health",
+        intervalMs: 5
+      }
+    }));
+
+    await expect(runtime.start("immutable-http-target"))
+      .resolves.toMatchObject({ state: "READY" });
+    expect(calls).toBeGreaterThanOrEqual(2);
+    expect(inputs.every((value) => value === "http://127.0.0.1:43199/health")).toBe(true);
+  });
+
   it("canonicalizes localhost readiness probes to a literal loopback address", async () => {
     let requestedUrl: string | undefined;
     const runtime = manager({
