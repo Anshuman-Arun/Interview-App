@@ -48,6 +48,9 @@ function parseCanonicalInteger(
   if (typeof value !== "string") {
     throw new BoundedMathError("INVALID_INTEGER", "Integer must be supplied as a string");
   }
+  if (value.length > maximumDigits + 1) {
+    throw new BoundedMathError(limitCode, "Integer exceeds the configured decimal digit limit");
+  }
   if (!isCanonicalIntegerString(value)) {
     throw new BoundedMathError("INVALID_INTEGER", "Integer must use canonical base-10 digits");
   }
