@@ -624,6 +624,36 @@ describe("local worker lifecycle manager", () => {
     expect(responseProxyTraps).toBe(0);
   });
 
+  it("ignores shadow accessors on validated HTTP Response objects", async () => {
+    let shadowGetterCalls = 0;
+    const response = new Response(null, { status: 204 });
+    for (const key of ["redirected", "status", "ok", "body"] as const) {
+      Object.defineProperty(response, key, {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          shadowGetterCalls += 1;
+          throw new Error(`shadow getter ${key} should not run`);
+        }
+      });
+    }
+
+    const runtime = manager({
+      fetch: () => Promise.resolve(response)
+    });
+    runtime.register(definition("shadowed-http-response", "ready", {
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        intervalMs: 5
+      }
+    }));
+
+    await expect(runtime.start("shadowed-http-response"))
+      .resolves.toMatchObject({ state: "READY" });
+    expect(shadowGetterCalls).toBe(0);
+  });
+
   it("rejects HTTP readiness redirects even when an injected fetch returns them", async () => {
     let evaluateCalls = 0;
     const runtime = manager({
