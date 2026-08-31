@@ -99,6 +99,16 @@ describe("local model asset manager", () => {
     expect(AssetManifestSchema.safeParse(accessorManifest).success).toBe(false);
     expect(getterReads).toBe(0);
 
+    let manifestOwnKeyReads = 0;
+    const proxiedManifest = new Proxy({ ...manifest }, {
+      ownKeys(target) {
+        manifestOwnKeyReads += 1;
+        return Reflect.ownKeys(target);
+      }
+    });
+    expect(AssetManifestSchema.safeParse(proxiedManifest).success).toBe(false);
+    expect(manifestOwnKeyReads).toBe(0);
+
     const inheritedLicense = {
       ...manifest,
       license: Object.create({ name: "MIT" }) as unknown
@@ -1818,6 +1828,36 @@ describe("local model asset manager", () => {
       code: "INVALID_CONFIGURATION"
     });
     expect(verifierGetterReads).toBe(0);
+
+    let managerOwnKeyReads = 0;
+    const proxiedManagerOptions = new Proxy({
+      rootDir: root,
+      maxArtifactBytes: 1024
+    }, {
+      ownKeys(target) {
+        managerOwnKeyReads += 1;
+        return Reflect.ownKeys(target);
+      }
+    });
+    expect(() => new UnsafeManager(proxiedManagerOptions)).toThrow(
+      expect.objectContaining({ code: "INVALID_CONFIGURATION" })
+    );
+    expect(managerOwnKeyReads).toBe(0);
+
+    let verifierOwnKeyReads = 0;
+    const proxiedExpectations = new Proxy({
+      sizeBytes: 1,
+      sha256: sha256(Buffer.from("x"))
+    }, {
+      ownKeys(target) {
+        verifierOwnKeyReads += 1;
+        return Reflect.ownKeys(target);
+      }
+    });
+    await expect(UnsafeVerifier(file, proxiedExpectations)).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION"
+    });
+    expect(verifierOwnKeyReads).toBe(0);
   });
 
   it("rejects unknown manager option keys", async () => {
