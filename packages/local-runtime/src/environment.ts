@@ -87,11 +87,20 @@ export function buildLocalEnvironment(
   });
 }
 
+function safelyIsEnvironmentArray(value: unknown, label: string): boolean {
+  try {
+    return Array.isArray(value);
+  } catch {
+    throw new Error(`${label} could not be inspected`);
+  }
+}
+
 function inspectEnvironmentDefinition(
   definition: LocalEnvironmentDefinition | undefined
 ): LocalEnvironmentDefinition | undefined {
   if (definition === undefined) return undefined;
-  if (typeof definition !== "object" || definition === null || Array.isArray(definition)) {
+  if (typeof definition !== "object" || definition === null
+      || safelyIsEnvironmentArray(definition, "Environment definition")) {
     throw new Error("Environment definition must be an object");
   }
 
@@ -138,7 +147,7 @@ function validateAndReturnStringRecord(
   value: unknown,
   label: string
 ): Readonly<Record<string, string>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null || safelyIsEnvironmentArray(value, label)) {
     throw new Error(`${label} must be an object`);
   }
   const entries = ownDataEntries(value as Readonly<Record<string, string>>, label);
@@ -154,7 +163,7 @@ function validateAndReturnStringRecord(
 }
 
 function inspectEnvironmentKeyArray(value: unknown, label: string): readonly string[] {
-  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+  if (!safelyIsEnvironmentArray(value, label)) throw new Error(`${label} must be an array`);
 
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
