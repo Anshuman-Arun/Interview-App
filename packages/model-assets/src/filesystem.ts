@@ -356,6 +356,12 @@ export async function verifyArtifactFile(
   if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
     throw new ModelAssetError("UNSAFE_PATH", "Artifact verification requires a regular non-symlink file.");
   }
+  if (!Number.isSafeInteger(fileStat.size) || fileStat.size < 0) {
+    throw new ModelAssetError(
+      "ARTIFACT_TOO_LARGE",
+      "Artifact file size exceeds safe integer byte accounting."
+    );
+  }
   if (signal?.aborted === true) {
     throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
   }
@@ -379,7 +385,14 @@ export async function verifyArtifactFile(
         throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
       }
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      bytes += buffer.byteLength;
+      const nextBytes = bytes + buffer.byteLength;
+      if (!Number.isSafeInteger(nextBytes)) {
+        throw new ModelAssetError(
+          "ARTIFACT_TOO_LARGE",
+          "Artifact exceeds safe integer byte accounting."
+        );
+      }
+      bytes = nextBytes;
       if (bytes > maximum) {
         throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact exceeds the configured verification byte limit.");
       }
@@ -438,6 +451,12 @@ export async function copyLocalArtifactBounded(
   if (sourceStat.isSymbolicLink() || !sourceStat.isFile()) {
     throw new ModelAssetError("UNSAFE_PATH", "Local import source must be a regular non-symlink file.");
   }
+  if (!Number.isSafeInteger(sourceStat.size) || sourceStat.size < 0) {
+    throw new ModelAssetError(
+      "ARTIFACT_TOO_LARGE",
+      "Local import source exceeds safe integer byte accounting."
+    );
+  }
   if (sourceStat.size > maxBytes) {
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Local import exceeds the configured artifact-size limit.");
   }
@@ -448,7 +467,15 @@ export async function copyLocalArtifactBounded(
   let bytes = 0;
   const limiter = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
-      bytes += chunk.byteLength;
+      const nextBytes = bytes + chunk.byteLength;
+      if (!Number.isSafeInteger(nextBytes)) {
+        callback(new ModelAssetError(
+          "ARTIFACT_TOO_LARGE",
+          "Local import exceeds safe integer byte accounting."
+        ));
+        return;
+      }
+      bytes = nextBytes;
       if (bytes > maxBytes) {
         callback(new ModelAssetError("ARTIFACT_TOO_LARGE", "Local import exceeds the configured artifact-size limit."));
         return;
@@ -663,6 +690,12 @@ export async function sumManagedCacheBytes(
       );
     }
     if (!childStat.isFile()) continue;
+    if (!Number.isSafeInteger(childStat.size) || childStat.size < 0) {
+      throw new ModelAssetError(
+        "CACHE_LIMIT_EXCEEDED",
+        "Managed cache file size exceeds safe integer accounting limits."
+      );
+    }
     total += childStat.size;
     if (!Number.isSafeInteger(total)) {
       throw new ModelAssetError(
