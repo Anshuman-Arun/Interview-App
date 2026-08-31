@@ -453,15 +453,19 @@ function checkVisionInternalConstruction(records, violations) {
 
     function isSafeConstructionConsumption(node) {
       if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression)) return false;
-      if (node.expression.text !== "ImageSnapshot" && node.expression.text !== "VisionImageArtifact") {
-        return false;
-      }
+      const allowedConstructor =
+        (record.relativePath === "packages/vision/src/snapshot.ts"
+          && node.expression.text === "ImageSnapshot")
+        || (record.relativePath === "packages/vision/src/processing.ts"
+          && node.expression.text === "VisionImageArtifact");
+      if (!allowedConstructor) return false;
       const firstArgument = node.arguments?.[0];
       return firstArgument !== undefined && isDirectTaintedBindingExpression(firstArgument);
     }
 
     function isSafeTokenValidationComparison(node) {
-      if (!ts.isBinaryExpression(node)
+      if (record.relativePath !== "packages/vision/src/types.ts"
+          || !ts.isBinaryExpression(node)
           || (node.operatorToken.kind !== ts.SyntaxKind.ExclamationEqualsEqualsToken
             && node.operatorToken.kind !== ts.SyntaxKind.ExclamationEqualsToken)) {
         return false;
