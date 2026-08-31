@@ -674,6 +674,13 @@ describe("crop, resize, tiling, and cancellation", () => {
     )).rejects.toMatchObject({ code: "OUTPUT_TOO_LARGE_BYTES" });
   });
 
+  it("allows maxTileCount zero as an explicit prohibition and fails before tile allocation", () => {
+    expect(() => planImageTiles(
+      { width: 4, height: 4 },
+      { tileWidth: 4, tileHeight: 4, overlap: 0, maxTileCount: 0 }
+    )).toThrowError(VisionPreprocessingError);
+  });
+
   it("keeps configured overlap exact at a partial final tile instead of shifting it backward", () => {
     const plan = planImageTiles({ width: 11, height: 4 }, {
       tileWidth: 4,
