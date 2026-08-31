@@ -890,6 +890,8 @@ describe("local model asset manager", () => {
     await expect(manager.getInstalledPath(manifest)).rejects.toMatchObject({
       code: "NOT_INSTALLED"
     });
+    await manager.remove(manifest);
+    expect((await manager.inspect(manifest)).status).toBe("NOT_PRESENT");
   });
 
   it("reports verification policy limits as FAILED rather than CORRUPT", async () => {
