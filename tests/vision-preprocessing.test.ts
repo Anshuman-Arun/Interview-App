@@ -559,10 +559,23 @@ describe("vision snapshot validation and hashing", () => {
       ))).toThrowError(VisionPreprocessingError);
     }
 
+    const physical = Buffer.alloc(9);
+    physical.writeUInt32BE(2835, 0);
+    physical.writeUInt32BE(2835, 4);
+    physical[8] = 1;
+
+    const timestamp = Buffer.alloc(7);
+    timestamp.writeUInt16BE(2026, 0);
+    timestamp[2] = 8;
+    timestamp[3] = 31;
+    timestamp[4] = 10;
+    timestamp[5] = 10;
+    timestamp[6] = 0;
+
     for (const chunk of [
       makePngChunk("tEXt", Buffer.from("note\u0000value")),
-      makePngChunk("pHYs", Buffer.alloc(9)),
-      makePngChunk("tIME", Buffer.alloc(7))
+      makePngChunk("pHYs", physical),
+      makePngChunk("tIME", timestamp)
     ]) {
       expect(snapshot(insertAfterIhdr(base, chunk)).metadata.width).toBe(2);
     }
