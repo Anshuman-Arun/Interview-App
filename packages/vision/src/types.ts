@@ -273,6 +273,12 @@ export class ImageSnapshot {
     return Buffer.from(this.#bytes);
   }
 
+  public matchesEncodedBytes(candidate: Uint8Array): boolean {
+    return candidate instanceof Uint8Array
+      && candidate.byteLength === this.#bytes.length
+      && this.#bytes.equals(candidate);
+  }
+
   public toJSON(): ImageSnapshotMetadata {
     return this.metadata;
   }
@@ -303,6 +309,12 @@ export class VisionImageArtifact {
     return Buffer.from(this.#bytes);
   }
 
+  public matchesEncodedBytes(candidate: Uint8Array): boolean {
+    return candidate instanceof Uint8Array
+      && candidate.byteLength === this.#bytes.length
+      && this.#bytes.equals(candidate);
+  }
+
   public toJSON(): VisionImageArtifactMetadata {
     return this.metadata;
   }
@@ -316,7 +328,7 @@ export function assertVisionRasterSource(value: unknown): asserts value is Visio
   }
 }
 
-function rasterIdentity(source: VisionRasterSource): string {
+export function visionRasterIdentity(source: VisionRasterSource): string {
   if (source instanceof ImageSnapshot) {
     return `snapshot:${source.metadata.snapshotId}:${source.metadata.contentDigest}`;
   }
@@ -340,7 +352,7 @@ export class ImagePayloadReference {
   public constructor(sourceInput: VisionRasterSource) {
     assertVisionRasterSource(sourceInput);
     this.metadata = Object.freeze(ImagePayloadReferenceMetadataSchema.parse({
-      imageIdentity: rasterIdentity(sourceInput),
+      imageIdentity: visionRasterIdentity(sourceInput),
       mimeType: sourceInput.metadata.mimeType,
       width: sourceInput.metadata.width,
       height: sourceInput.metadata.height,
