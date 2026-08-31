@@ -74,7 +74,7 @@ interface InFlightEntry {
 }
 
 interface InstallationCheck {
-  readonly status: "NOT_PRESENT" | "INSTALLED" | "CORRUPT";
+  readonly status: "NOT_PRESENT" | "INSTALLED" | "CORRUPT" | "FAILED";
   readonly path?: string;
   readonly errorCode?: ModelAssetErrorCode;
 }
@@ -262,6 +262,13 @@ export class ModelAssetManager {
         check.errorCode ?? "CORRUPT_INSTALLATION"
       );
     }
+    if (check.status === "FAILED") {
+      return this.inspectionFor(
+        manifest,
+        "FAILED",
+        check.errorCode ?? "IO_ERROR"
+      );
+    }
 
     const failure = this.lastFailures.get(key);
     if (failure !== undefined) {
@@ -318,7 +325,14 @@ export class ModelAssetManager {
         continue;
       }
 
-      if ((await this.checkInstallation(manifest)).status !== "INSTALLED") continue;
+      const check = await this.checkInstallation(manifest);
+      if (check.status === "FAILED") {
+        throw new ModelAssetError(
+          check.errorCode ?? "IO_ERROR",
+          "Unable to inspect an installed artifact while listing the cache."
+        );
+      }
+      if (check.status !== "INSTALLED") continue;
       installed.push({
         artifactId: manifest.artifactId,
         familyId: manifest.familyId,
@@ -653,7 +667,7 @@ export class ModelAssetManager {
   }
 
   private rejectTransientInstallationFailure(check: InstallationCheck): void {
-    if (check.status === "CORRUPT" && check.errorCode === "IO_ERROR") {
+    if (check.status === "FAILED") {
       throw new ModelAssetError(
         "IO_ERROR",
         "Existing artifact installation could not be inspected safely; refusing destructive repair."
@@ -790,7 +804,7 @@ export class ModelAssetManager {
           && error.code === "ENOENT") {
         return { status: "NOT_PRESENT" };
       }
-      return { status: "CORRUPT", errorCode: "IO_ERROR" };
+      return { status: "FAILED", errorCode: "IO_ERROR" };
     }
 
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
@@ -824,7 +838,11 @@ export class ModelAssetManager {
       return { status: "INSTALLED", path: payload };
     } catch (error) {
       if (error instanceof ModelAssetError && error.code === "CANCELLED") throw error;
-      return { status: "CORRUPT", errorCode: modelAssetErrorCode(error) };
+      const errorCode = modelAssetErrorCode(error);
+      return {
+        status: errorCode === "IO_ERROR" ? "FAILED" : "CORRUPT",
+        errorCode
+      };
     }
   }
 
