@@ -616,6 +616,10 @@ describe("local worker lifecycle manager", () => {
     };
     expect(() => runtime.getStatus(hostileString as unknown as string))
       .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(() => runtime.getStatus("x".repeat(129)))
+      .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(() => runtime.getStatus("contains space"))
+      .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
     expect(() => runtime.markDegraded("health", hostileString as unknown as string))
       .toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
     expect(() => runtime.markReady("health", hostileString as unknown as string))
