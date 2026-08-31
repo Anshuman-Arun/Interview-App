@@ -1442,7 +1442,13 @@ export class ModelAssetManager {
           );
         }
         await atomicRenameDirectory(stagingDirectory, installationDirectory);
-        shared.reservedBytes = Math.max(0, shared.reservedBytes - reservationBytes);
+        if (reservationBytes > shared.reservedBytes) {
+          throw new ModelAssetError(
+            "IO_ERROR",
+            "Cache reservation accounting underflowed during atomic publication."
+          );
+        }
+        shared.reservedBytes -= reservationBytes;
       });
     });
   }
@@ -1526,7 +1532,13 @@ export class ModelAssetManager {
 
   private async releaseCapacity(paths: CachePaths, bytes: number): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
-      shared.reservedBytes = Math.max(0, shared.reservedBytes - bytes);
+      if (bytes > shared.reservedBytes) {
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Cache reservation accounting underflowed during release."
+        );
+      }
+      shared.reservedBytes -= bytes;
     });
   }
 
