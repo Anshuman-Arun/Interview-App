@@ -178,6 +178,23 @@ describe("vision snapshot validation and hashing", () => {
     })).toThrowError(VisionPreprocessingError);
   });
 
+  it("rejects trailing bytes after IEND and APNG control chunks", () => {
+    const trailing = Buffer.concat([makePng(2, 2), Buffer.from([0xde, 0xad])]);
+    expect(() => snapshot(trailing)).toThrowError(VisionPreprocessingError);
+
+    const base = makePng(2, 2);
+    const ihdrEnd = 8 + 12 + 13;
+    const apngChunk = Buffer.alloc(20);
+    apngChunk.writeUInt32BE(8, 0);
+    apngChunk.write("acTL", 4, "ascii");
+    const animated = Buffer.concat([
+      base.subarray(0, ihdrEnd),
+      apngChunk,
+      base.subarray(ihdrEnd)
+    ]);
+    expect(() => snapshot(animated)).toThrowError(VisionPreprocessingError);
+  });
+
   it("rejects caller dimension mismatches", () => {
     const bytes = makePng(3, 2);
     expect(() => snapshot(bytes, { declaredWidth: 4 }))
@@ -460,6 +477,20 @@ describe("crop, resize, tiling, and cancellation", () => {
       outcome: "SUCCESS"
     });
     expect(JSON.stringify(first.diagnostics)).not.toContain("encodedBytes");
+  });
+
+  it("rejects unknown or malformed processing options before image work", async () => {
+    const source = snapshot(makePng(4, 4));
+    await expect(cropImage(
+      source,
+      { x: 0, y: 0, width: 2, height: 2 },
+      { maxOutputEncodedByte: 1 } as unknown as Parameters<typeof cropImage>[2]
+    )).rejects.toThrowError(RangeError);
+    await expect(downscaleImage(
+      source,
+      { maxWidth: 2, maxHeight: 2, maxPixels: 4 },
+      { signal: {} } as unknown as Parameters<typeof downscaleImage>[2]
+    )).rejects.toThrowError(TypeError);
   });
 
   it("plans and executes aspect-ratio-preserving downscaling and never upscales", async () => {
