@@ -7,9 +7,11 @@ import {
   INTERNAL_VISION_ARTIFACT_CONSTRUCTION
 } from "../packages/vision/src/internal-artifact-construction.js";
 import {
+  ArtifactSourceBoundsSchema,
   HARD_IMAGE_VALIDATION_LIMITS,
   ImagePayloadReferenceMetadataSchema,
   ImageSnapshot,
+  ImageSnapshotInputSchema,
   ImageSnapshotMetadataSchema,
   VisionImageArtifact,
   VisionImageArtifactMetadataSchema,
@@ -230,6 +232,32 @@ describe("vision snapshot validation and hashing", () => {
     bytes.fill(0);
     expect(value.metadata.contentDigest).toBe(originalDigest);
     expect(sha256ImageBytes(value.readBytes())).toBe(originalDigest);
+  });
+
+  it("rejects impossible declared dimensions and artifact source bounds at schema level", () => {
+    expect(ImageSnapshotInputSchema.safeParse({
+      snapshotId: "oversized-declaration",
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: BoardRevisionSchema.parse(1),
+      capturedAtMs: 1,
+      mimeType: "image/png",
+      declaredWidth: HARD_IMAGE_VALIDATION_LIMITS.maxWidth + 1,
+      encodedBytes: makePng(1, 1)
+    }).success).toBe(false);
+
+    expect(ArtifactSourceBoundsSchema.safeParse({
+      x: HARD_IMAGE_VALIDATION_LIMITS.maxWidth - 1,
+      y: 0,
+      width: 2,
+      height: 1
+    }).success).toBe(false);
+
+    expect(ArtifactSourceBoundsSchema.safeParse({
+      x: 0,
+      y: 0,
+      width: 8192,
+      height: 8193
+    }).success).toBe(false);
   });
 
   it("makes exported metadata schemas enforce package hard image caps directly", async () => {
