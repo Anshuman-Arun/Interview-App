@@ -375,25 +375,31 @@ export class LocalRuntimeManager {
 
     const child = this.spawnChild(record);
     record.child = child;
-    this.attachChild(record, child, stdout, stderr, limits.maxLineBytes);
 
     const attemptController = new AbortController();
-    const unlinkAttempt = linkAbortSignal(signal, attemptController);
-    const initialRemainingMs = remainingStartupTimeout(
-      record.definition.startupTimeoutMs,
-      attemptStartedAt
-    );
-    const earlyReadiness = isStdoutReadiness(record.definition.readiness)
-      ? this.waitForReadiness(
-          record,
-          child,
-          attemptController.signal,
-          initialRemainingMs
-        )
-      : undefined;
-    if (earlyReadiness !== undefined) void earlyReadiness.catch(() => undefined);
+    let unlinkAttempt: (() => void) | undefined;
+    let earlyReadiness: Promise<{
+      readonly detail?: string;
+      readonly handshake?: LocalComponentHandshake;
+    }> | undefined;
 
     try {
+      this.attachChild(record, child, stdout, stderr, limits.maxLineBytes);
+      unlinkAttempt = linkAbortSignal(signal, attemptController);
+      const initialRemainingMs = remainingStartupTimeout(
+        record.definition.startupTimeoutMs,
+        attemptStartedAt
+      );
+      earlyReadiness = isStdoutReadiness(record.definition.readiness)
+        ? this.waitForReadiness(
+            record,
+            child,
+            attemptController.signal,
+            initialRemainingMs
+          )
+        : undefined;
+      if (earlyReadiness !== undefined) void earlyReadiness.catch(() => undefined);
+
       await waitForSpawn(
         child,
         attemptController.signal,
