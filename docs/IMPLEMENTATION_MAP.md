@@ -2,7 +2,7 @@
 
 ## Repository baseline
 
-The repository was empty at Phase 0 bootstrap: there was no Git repository, package manifest, source, test, CI, database, configuration, or reusable implementation. The authoritative source `C:\Users\anshu\Downloads\technical_interview_app_architecture_freeze.md` (2,962 lines, read in full on 2026-08-28) was copied byte-for-byte to `docs/ARCHITECTURE.md` (matching SHA-256). This document maps that frozen architecture; it does not revise it.
+The repository was empty at Phase 0 bootstrap: there was no Git repository, package manifest, source, test, CI, database, configuration, or reusable implementation. The authoritative architecture freeze (2,962 lines, read in full on 2026-08-28) was copied byte-for-byte to `docs/ARCHITECTURE.md` (matching SHA-256). This document maps that frozen architecture; it does not revise it.
 
 The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries, Vitest, fast-check, ESLint, and Node's built-in `node:sqlite`. Phase 0 has no browser UI and no real remote provider.
 

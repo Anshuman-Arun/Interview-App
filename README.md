@@ -83,21 +83,24 @@ All changes must pass the full automated quality matrix:
 # 1. Architectural boundary verification (scans dependency direction, single-writer invariants, and secret leaks)
 node scripts/check-architecture-boundaries.mjs
 
-# 2. TypeScript type-checking (zero errors)
+# 2. Public-release hygiene (tracked secrets, local paths, emails, local data)
+corepack pnpm security:public
+
+# 3. TypeScript type-checking (zero errors)
 corepack pnpm typecheck
 
-# 3. ESLint static analysis (zero warnings/errors)
+# 4. ESLint static analysis (zero warnings/errors)
 corepack pnpm lint
 
-# 4. Production web application build (Vite client bundle)
+# 5. Production web application build (Vite client bundle)
 corepack pnpm build:web
 
-# 5. Vitest automated test suite (50 test files, 624 tests)
+# 6. Vitest automated test suite
 corepack pnpm test
 
-# 6. End-to-end typed interview test suite
+# 7. End-to-end typed interview test suite
 corepack pnpm test:e2e
 
-# 7. Run full check aggregate
+# 8. Run full check aggregate
 corepack pnpm check
 ```
