@@ -6,6 +6,20 @@ const VERSION_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._+-]{0,62}[A-Za-z0-9])?$/u;
 const PORTABLE_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/u;
 const WINDOWS_DEVICE_NAME_PATTERN = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu;
 
+function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    return Object.values(descriptors).every((descriptor) => "value" in descriptor);
+  } catch {
+    return false;
+  }
+}
+
+const PlainDataRecordSchema = z.custom<Record<string, unknown>>(isPlainDataRecord);
+
 export const AssetPlatformSchema = z.enum([
   "aix",
   "android",
@@ -91,7 +105,7 @@ const HttpSourceUrlSchema = z.url().max(2048).refine((value) => {
 
 const OptionalMetadataTextSchema = z.string().min(1).max(512);
 
-export const AssetManifestSchema = z.object({
+export const AssetManifestSchema = PlainDataRecordSchema.pipe(z.object({
   schemaVersion: z.literal(1),
   familyId: StableAssetIdentifierSchema,
   artifactId: StableAssetIdentifierSchema,
@@ -106,35 +120,35 @@ export const AssetManifestSchema = z.object({
   sourceUrl: HttpSourceUrlSchema,
   modelVersion: OptionalMetadataTextSchema.optional(),
   protocolVersion: OptionalMetadataTextSchema.optional(),
-  license: z.object({
+  license: PlainDataRecordSchema.pipe(z.object({
     name: OptionalMetadataTextSchema,
     url: HttpSourceUrlSchema.optional()
-  }).strict().optional(),
-  sourceMetadata: z.object({
+  }).strict()).optional(),
+  sourceMetadata: PlainDataRecordSchema.pipe(z.object({
     publisher: OptionalMetadataTextSchema.optional(),
     repository: HttpSourceUrlSchema.optional(),
     revision: OptionalMetadataTextSchema.optional()
-  }).strict().optional()
-}).strict();
+  }).strict()).optional()
+}).strict());
 export type AssetManifest = z.infer<typeof AssetManifestSchema>;
 
-export const AssetResolutionRequestSchema = z.object({
+export const AssetResolutionRequestSchema = PlainDataRecordSchema.pipe(z.object({
   familyId: StableAssetIdentifierSchema,
   version: AssetVersionSchema,
   platform: AssetPlatformSchema,
   architecture: AssetArchitectureSchema,
   variant: StableAssetIdentifierSchema.optional()
-}).strict();
+}).strict());
 export type AssetResolutionRequest = z.infer<typeof AssetResolutionRequestSchema>;
 
-export const AssetDiagnosticMetadataSchema = z.object({
+export const AssetDiagnosticMetadataSchema = PlainDataRecordSchema.pipe(z.object({
   artifactId: StableAssetIdentifierSchema,
   familyId: StableAssetIdentifierSchema,
   version: AssetVersionSchema,
   sha256: Sha256DigestSchema,
   status: AssetInstallStatusSchema,
   byteSize: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-}).strict();
+}).strict());
 export type AssetDiagnosticMetadata = z.infer<typeof AssetDiagnosticMetadataSchema>;
 
 export type ModelAssetErrorCode =
