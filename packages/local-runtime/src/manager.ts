@@ -814,14 +814,15 @@ export class LocalRuntimeManager {
       const response = validateFetchResponse(candidate, record.definition.id);
 
       try {
-        if (response.redirected || (response.status >= 300 && response.status < 400)) {
+        const responseState = inspectResponseState(response, record.definition.id);
+        if (responseState.redirected || (responseState.status >= 300 && responseState.status < 400)) {
           throw new LocalRuntimeError(
             "READINESS_FAILED",
             `HTTP readiness redirect rejected for ${record.definition.id}`
           );
         }
 
-        let decision: LocalReadinessDecision = response.ok;
+        let decision: LocalReadinessDecision = responseState.ok;
         let evaluatorFailed = false;
         if (strategy.evaluate !== undefined) {
           try {
@@ -2335,28 +2336,47 @@ function validateFetchResponse(value: unknown, componentId: string): Response {
       `HTTP readiness fetch returned an invalid Response for ${componentId}`
     );
   }
+  inspectResponseState(value, componentId);
+  return value as Response;
+}
+
+function inspectResponseState(
+  response: object,
+  componentId: string
+): { readonly redirected: boolean; readonly status: number; readonly ok: boolean } {
   try {
-    if (!(value instanceof Response)) {
-      throw new LocalRuntimeError(
-        "READINESS_FAILED",
-        `HTTP readiness fetch returned an invalid Response for ${componentId}`
-      );
+    const redirectedGetter = Object.getOwnPropertyDescriptor(Response.prototype, "redirected")?.get;
+    const statusGetter = Object.getOwnPropertyDescriptor(Response.prototype, "status")?.get;
+    const okGetter = Object.getOwnPropertyDescriptor(Response.prototype, "ok")?.get;
+    if (redirectedGetter === undefined || statusGetter === undefined || okGetter === undefined) {
+      throw new TypeError("Response getters unavailable");
     }
-  } catch (error) {
-    const runtimeError = localRuntimeErrorOrUndefined(error);
-    if (runtimeError !== undefined) throw runtimeError;
+    const redirected = redirectedGetter.call(response) as unknown;
+    const status = statusGetter.call(response) as unknown;
+    const ok = okGetter.call(response) as unknown;
+    if (typeof redirected !== "boolean"
+        || typeof status !== "number"
+        || !Number.isInteger(status)
+        || typeof ok !== "boolean") {
+      throw new TypeError("Invalid Response state");
+    }
+    return Object.freeze({ redirected, status, ok });
+  } catch {
     throw new LocalRuntimeError(
       "READINESS_FAILED",
       `HTTP readiness fetch returned an invalid Response for ${componentId}`
     );
   }
-  return value;
 }
 
 function disposeResponseBody(response: Response): void {
   try {
-    const cancellation = response.body?.cancel();
-    if (cancellation !== undefined) void cancellation.catch(() => undefined);
+    const bodyGetter = Object.getOwnPropertyDescriptor(Response.prototype, "body")?.get;
+    if (bodyGetter === undefined) return;
+    const body = bodyGetter.call(response) as ReadableStream<Uint8Array> | null;
+    if (body === null) return;
+    const cancellation = ReadableStream.prototype.cancel.call(body);
+    void cancellation.catch(() => undefined);
   } catch {
     // Readiness body disposal is best-effort and must not affect lifecycle state.
   }
