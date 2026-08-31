@@ -67,7 +67,7 @@ export type PreparedStatement<T> =
   | { readonly ok: false; readonly result: VerificationResult };
 
 export function prepareStructuredStatement<T>(
-  statement: string,
+  statement: unknown,
   interpretationConfidence: number,
   verifier: string,
   schema: ZodType<T>
@@ -94,6 +94,18 @@ export function prepareStructuredStatement<T>(
         verifier,
         "INSUFFICIENT_INTERPRETATION_CONFIDENCE",
         "Formal interpretation confidence is insufficient for deterministic verification"
+      )
+    };
+  }
+  if (typeof statement !== "string") {
+    return {
+      ok: false,
+      result: result(
+        "UNRESOLVED",
+        normalized.value,
+        verifier,
+        "MALFORMED_INTERPRETATION",
+        "Formal interpretation must be supplied as a string"
       )
     };
   }
