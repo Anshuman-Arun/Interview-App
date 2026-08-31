@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { DeterministicVerifier, VerificationResult } from "../packages/domain/src/index.js";
+import {
+  VerificationResultSchema,
+  type DeterministicVerifier,
+  type VerificationResult
+} from "../packages/domain/src/index.js";
 import {
   BoundedMathError,
   COMBINATORIAL_COUNTING_PROTOCOL,
@@ -59,7 +63,9 @@ const fractionExpression = (numerator: string, denominator = "1") => ({
 });
 
 async function verifyJson(verifier: DeterministicVerifier, value: unknown): Promise<VerificationResult> {
-  return verifier.verify(JSON.stringify(value), 1);
+  const result = await verifier.verify(JSON.stringify(value), 1);
+  expect(VerificationResultSchema.parse(result)).toEqual(result);
+  return result;
 }
 
 describe("adversarial deterministic math verification", () => {
