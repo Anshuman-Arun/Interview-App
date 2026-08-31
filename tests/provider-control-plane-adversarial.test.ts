@@ -747,6 +747,24 @@ describe("provider definition and capability hostile values", () => {
     });
   });
 
+  it("rejects null capability requirements instead of treating them as an empty set", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+    const configuration = settingsConfiguration({ mode: "safe" });
+
+    const resolutionInput = { registry, configuration };
+    Reflect.set(resolutionInput, "requirements", null);
+    expect(() => resolveProviderConfiguration(resolutionInput))
+      .toThrow(expect.objectContaining({ code: "MALFORMED_REQUIREMENTS" }));
+
+    const readinessInput = { registry, configuration };
+    Reflect.set(readinessInput, "requirements", null);
+    await expect(evaluateProviderReadiness(readinessInput)).resolves.toMatchObject({
+      state: "MISCONFIGURED",
+      reason: "MALFORMED_REQUIREMENTS"
+    });
+  });
+
   it("does not let DISABLED hide malformed capability requirements", async () => {
     const registry = new ProviderRegistry();
     registry.register(createSettingsProviderInput());

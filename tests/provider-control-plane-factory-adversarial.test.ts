@@ -531,6 +531,56 @@ describe("credential readiness edge cases", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("does not accept credential resolver methods inherited only from Object.prototype", async () => {
+    Object.defineProperties(Object.prototype, {
+      resolveSecret: {
+        configurable: true,
+        enumerable: false,
+        value: async () => "polluted-secret"
+      },
+      hasSecret: {
+        configurable: true,
+        enumerable: false,
+        value: async () => true
+      }
+    });
+    const resolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        return "own-secret";
+      },
+      async hasSecret() {
+        return false;
+      }
+    };
+    Reflect.deleteProperty(resolver, "resolveSecret");
+    Reflect.deleteProperty(resolver, "hasSecret");
+
+    try {
+      await expect(evaluateProviderReadiness({
+        registry: registerBuiltInProviders(),
+        configuration: GEMINI_CONFIGURATION,
+        secretResolver: resolver
+      })).resolves.toEqual({
+        state: "UNKNOWN",
+        providerId: "gemini-api",
+        modelId: "gemini-2.5-flash",
+        reason: "CREDENTIAL_STATUS_UNKNOWN"
+      });
+
+      const resolved = resolveProviderConfiguration({
+        registry: registerBuiltInProviders(),
+        configuration: GEMINI_CONFIGURATION
+      });
+      await expect(resolveAdapterFactory(resolved).createAdapter({
+        resolved,
+        secretResolver: resolver
+      })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "resolveSecret");
+      Reflect.deleteProperty(Object.prototype, "hasSecret");
+    }
+  });
+
   it("accepts class-based resolver methods without invoking property accessors", async () => {
     class ClassResolver implements ProviderSecretResolver {
       public async resolveSecret(): Promise<string | undefined> {
@@ -1256,6 +1306,57 @@ describe("adapter factory adversarial boundary", () => {
 });
 
 describe("reasoning configuration exactness", () => {
+  it("allows supported reasoning controls when the exact level set is not yet established", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: capabilities({
+          reasoningControls: "SUPPORTED",
+          reasoningLevels: "UNKNOWN"
+        })
+      }]
+    }));
+
+    expect(() => resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "test-provider",
+        modelId: "test-model",
+        enabled: true
+      },
+      requirements: ["REASONING_CONTROLS"]
+    })).not.toThrow();
+
+    expect(() => resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "test-provider",
+        modelId: "test-model",
+        enabled: true,
+        reasoning: { level: "high" }
+      }
+    })).toThrow(expect.objectContaining({ code: "CAPABILITY_STATUS_UNKNOWN" }));
+
+    await expect(evaluateProviderReadiness({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "test-provider",
+        modelId: "test-model",
+        enabled: true,
+        reasoning: { level: "high" }
+      }
+    })).resolves.toMatchObject({
+      state: "UNKNOWN",
+      reason: "CAPABILITY_STATUS_UNKNOWN"
+    });
+  });
+
+
   it("accepts only an explicitly declared reasoning level", () => {
     const registry = new ProviderRegistry();
     registry.register(providerInput({

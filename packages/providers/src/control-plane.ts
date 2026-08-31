@@ -468,6 +468,7 @@ function readResolverMethodWithoutAccessors(
   const seen = new Set<object>();
   let current: object | null = value;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) return undefined;
     if (seen.has(current)) {
       throw new ProviderControlPlaneError(
         "INVALID_FACTORY_INPUT",
@@ -793,12 +794,13 @@ function assertAdapterMatchesResolvedDefinition(
       reasoningMatches = executionReasoningLevels.length === 0;
     } else {
       const declaredLevels = declared.reasoningLevels;
-      reasoningMatches = declaredLevels !== "UNKNOWN"
-        && executionReasoningLevels.length > 0
-        && executionReasoningLevels.length === declaredLevels.length
-        && executionReasoningLevels.every(
-          (level, index) => level === declaredLevels[index]
-        );
+      reasoningMatches = declaredLevels === "UNKNOWN"
+        ? executionReasoningLevels.length > 0
+        : executionReasoningLevels.length > 0
+          && executionReasoningLevels.length === declaredLevels.length
+          && executionReasoningLevels.every(
+            (level, index) => level === declaredLevels[index]
+          );
     }
 
     if (
@@ -835,7 +837,10 @@ function isCapabilityDeclarationConsistent(
 ): boolean {
   const levels = capabilities.reasoningLevels;
   if (capabilities.reasoningControls === "SUPPORTED") {
-    if (levels === "UNKNOWN" || levels.length === 0 || new Set(levels).size !== levels.length) {
+    if (
+      levels !== "UNKNOWN"
+      && (levels.length === 0 || new Set(levels).size !== levels.length)
+    ) {
       return false;
     }
   } else if (capabilities.reasoningControls === "UNSUPPORTED") {
@@ -1418,7 +1423,10 @@ function resolveParsedProviderConfiguration(input: {
 
   validateCredentialReference(provider, configuration.credentialRef);
   validateReasoningConfiguration(model, configuration.reasoning);
-  const match = matchCapabilityRequirements(model.capabilities, input.requirements ?? []);
+  const match = matchCapabilityRequirements(
+    model.capabilities,
+    input.requirements === undefined ? [] : input.requirements
+  );
   if (match.unsupported.length > 0) {
     throw new ProviderControlPlaneError(
       "INCOMPATIBLE_CAPABILITY",
