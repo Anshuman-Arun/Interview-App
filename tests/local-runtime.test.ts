@@ -988,7 +988,7 @@ describe("local worker lifecycle manager", () => {
       PATH: process.env.PATH,
       SAFE_PARENT: "snapshot-parent-value"
     };
-    const runtime = new LocalRuntimeManager({ parentEnvironment });
+    const runtime = manager({ parentEnvironment });
     parentEnvironment.SAFE_PARENT = "mutated-parent-value";
 
     let observed: Record<string, unknown> | undefined;
