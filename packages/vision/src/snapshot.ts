@@ -159,6 +159,10 @@ export function createValidatedImageSnapshot(
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input could not be read safely");
   }
+  if (ownInput["mimeType"] !== "image/png") {
+    throw new VisionPreprocessingError("UNSUPPORTED_IMAGE_TYPE", "Only image/png snapshots are supported");
+  }
+
   const encodedBytesInput = ownInput["encodedBytes"];
   if (!isDirectUint8Array(encodedBytesInput)) {
     throw new VisionPreprocessingError(
@@ -175,9 +179,6 @@ export function createValidatedImageSnapshot(
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input failed strict schema validation");
   }
   const safeInput = parsedInput.data;
-  if (safeInput.mimeType !== "image/png") {
-    throw new VisionPreprocessingError("UNSUPPORTED_IMAGE_TYPE", "Only image/png snapshots are supported");
-  }
 
   const safeLimits = normalizeLimits(limits);
   const encodedByteLength = actualUint8ArrayByteLength(safeInput.encodedBytes);
