@@ -1,4 +1,4 @@
-import type { Stats } from "node:fs";
+import type { Dir, Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lstat, opendir } from "node:fs/promises";
 import path from "node:path";
@@ -303,7 +303,10 @@ export class ModelAssetManager {
   public async listInstalledArtifacts(): Promise<readonly InstalledArtifactSummary[]> {
     const paths = await this.getSafeCachePaths();
     const installed: InstalledArtifactSummary[] = [];
-    const directoryHandle = await opendir(paths.artifacts);
+    const directoryHandle = await this.openCacheDirectory(
+      paths.artifacts,
+      "Unable to open the installed artifact cache for inspection."
+    );
     let inspectedEntries = 0;
 
     for await (const entry of directoryHandle) {
@@ -471,12 +474,26 @@ export class ModelAssetManager {
     return removed;
   }
 
+  private async openCacheDirectory(
+    directoryPath: string,
+    message: string
+  ): Promise<Dir> {
+    try {
+      return await opendir(directoryPath);
+    } catch (error) {
+      throw new ModelAssetError("IO_ERROR", message, { cause: error });
+    }
+  }
+
   private async listCacheEntryNames(
     directoryPath: string,
     limitMessage: string
   ): Promise<readonly string[]> {
     const names: string[] = [];
-    const directory = await opendir(directoryPath);
+    const directory = await this.openCacheDirectory(
+      directoryPath,
+      "Unable to open a cache directory for cleanup."
+    );
     for await (const entry of directory) {
       if (names.length >= this.maxListEntries) {
         throw new ModelAssetError("CACHE_LIMIT_EXCEEDED", limitMessage);
@@ -861,7 +878,10 @@ export class ModelAssetManager {
     );
 
     let total = 0;
-    const artifacts = await opendir(paths.artifacts);
+    const artifacts = await this.openCacheDirectory(
+      paths.artifacts,
+      "Unable to open the artifact cache for accounting."
+    );
     let artifactEntries = 0;
     for await (const entry of artifacts) {
       artifactEntries += 1;
@@ -884,7 +904,10 @@ export class ModelAssetManager {
       }
     }
 
-    const temporary = await opendir(paths.temporary);
+    const temporary = await this.openCacheDirectory(
+      paths.temporary,
+      "Unable to open the temporary cache for accounting."
+    );
     let temporaryEntries = 0;
     for await (const entry of temporary) {
       temporaryEntries += 1;
