@@ -178,9 +178,15 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function ownValue(record: Record<string, unknown>, key: string): unknown {
-  return Object.prototype.hasOwnProperty.call(record, key)
-    ? record[key]
-    : undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(record, key);
+  if (descriptor === undefined) return undefined;
+  if (!("value" in descriptor)) {
+    throw new ModelAssetError(
+      "INVALID_CONFIGURATION",
+      "Configuration fields must be own data properties."
+    );
+  }
+  return descriptor.value;
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
