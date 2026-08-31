@@ -114,7 +114,7 @@ export function prepareVisionImageRequest(
   const purpose = VisionPurposeSchema.parse(purposeInput);
   const transform = Object.freeze({ ...CoordinateTransformSchema.parse(sourceTransform(source)) });
   const identity = imageIdentity(source);
-  const payload = new ImagePayloadReference(identity, source);
+  const payload = new ImagePayloadReference(source);
 
   return Object.freeze({
     requestId: deterministicRequestId(purpose, source, transform),
