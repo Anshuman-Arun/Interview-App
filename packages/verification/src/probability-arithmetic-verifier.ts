@@ -5,6 +5,7 @@ import { MAX_COMBINATORIAL_N, MAX_PROBABILITY_OUTCOMES } from "./limits.js";
 import {
   BoundedMathError,
   addRationals,
+  assertIntermediateIntegerBound,
   compareRationals,
   divideRationals,
   equalRationals,
@@ -13,7 +14,6 @@ import {
   parseRationalInput,
   rational,
   subtractRationals,
-  sumRationals,
   type ExactRational
 } from "./math-utils.js";
 import { booleanClaimResult, mathFailure, prepareStructuredStatement } from "./verifier-common.js";
@@ -115,6 +115,27 @@ function probabilityNormalizationGcd(left: bigint, right: bigint): bigint {
   return a;
 }
 
+interface WideRationalAccumulator {
+  readonly numerator: bigint;
+  readonly denominator: bigint;
+}
+
+function addToWideAccumulator(
+  total: WideRationalAccumulator,
+  value: ExactRational
+): WideRationalAccumulator {
+  const commonFactor = probabilityNormalizationGcd(total.denominator, value.denominator);
+  const leftScale = value.denominator / commonFactor;
+  const rightScale = total.denominator / commonFactor;
+  const numerator = total.numerator * leftScale + value.numerator * rightScale;
+  const denominator = total.denominator * leftScale;
+  const cancellation = probabilityNormalizationGcd(numerator, denominator);
+  return {
+    numerator: numerator / cancellation,
+    denominator: denominator / cancellation
+  };
+}
+
 function assertProbabilityMassIsOne(values: readonly ExactRational[]): void {
   const groups = new Map<string, { denominator: bigint; numerator: bigint }>();
   for (const value of values) {
@@ -127,25 +148,16 @@ function assertProbabilityMassIsOne(values: readonly ExactRational[]): void {
     }
   }
 
-  let totalNumerator = 0n;
-  let totalDenominator = 1n;
+  let total: WideRationalAccumulator = { numerator: 0n, denominator: 1n };
   for (const { numerator, denominator } of groups.values()) {
     // Probability inputs are individually limited to 256 decimal digits and
     // there are at most MAX_PROBABILITY_OUTCOMES entries. Therefore this exact
     // normalization denominator is bounded by the product of the supplied
     // denominators even when it is larger than the 4,096-digit result/state
     // limit. It is validation-only and is never exposed as an ExactRational.
-    const commonFactor = probabilityNormalizationGcd(totalDenominator, denominator);
-    const leftScale = denominator / commonFactor;
-    const rightScale = totalDenominator / commonFactor;
-    totalNumerator = totalNumerator * leftScale + numerator * rightScale;
-    totalDenominator *= leftScale;
+    total = addToWideAccumulator(total, { numerator, denominator });
 
-    const cancellation = probabilityNormalizationGcd(totalNumerator, totalDenominator);
-    totalNumerator /= cancellation;
-    totalDenominator /= cancellation;
-
-    if (totalNumerator > totalDenominator) {
+    if (total.numerator > total.denominator) {
       throw new BoundedMathError(
         "INVALID_PROBABILITY",
         "Finite expectation probabilities cannot sum to more than 1"
@@ -153,7 +165,7 @@ function assertProbabilityMassIsOne(values: readonly ExactRational[]): void {
     }
   }
 
-  if (totalNumerator !== totalDenominator) {
+  if (total.numerator !== total.denominator) {
     throw new BoundedMathError(
       "INVALID_PROBABILITY",
       "Finite expectation probabilities must sum exactly to 1"
@@ -175,7 +187,14 @@ function evaluateProbabilityClaim(
       const expectationTerms = outcomes.map((outcome) =>
         multiplyRationals(outcome.probability, parseRationalInput(outcome.value))
       );
-      const expectation = sumRationals(expectationTerms);
+      let expectationTotal: WideRationalAccumulator = { numerator: 0n, denominator: 1n };
+      for (const term of expectationTerms) {
+        expectationTotal = addToWideAccumulator(expectationTotal, term);
+      }
+      const expectation = rational(
+        assertIntermediateIntegerBound(expectationTotal.numerator),
+        assertIntermediateIntegerBound(expectationTotal.denominator)
+      );
       return { actual: expectation, claimed: parseIntermediateRationalInput(claim.claimedExpectation) };
     }
     case "CONDITIONAL_FROM_COUNTS":
