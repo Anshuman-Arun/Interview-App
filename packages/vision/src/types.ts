@@ -293,6 +293,7 @@ export class ImageSnapshot {
 }
 
 Object.freeze(ImageSnapshot.prototype);
+Object.freeze(ImageSnapshot);
 
 export class VisionImageArtifact {
   readonly #bytes: Buffer;
@@ -353,6 +354,7 @@ export class VisionImageArtifact {
 }
 
 Object.freeze(VisionImageArtifact.prototype);
+Object.freeze(VisionImageArtifact);
 
 export type VisionRasterSource = ImageSnapshot | VisionImageArtifact;
 
@@ -420,6 +422,7 @@ export class ImagePayloadReference {
 }
 
 Object.freeze(ImagePayloadReference.prototype);
+Object.freeze(ImagePayloadReference);
 
 export const ImageSnapshotInputSchema = z.object({
   snapshotId: z.string().min(1).max(128),
