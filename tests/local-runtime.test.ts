@@ -1021,6 +1021,40 @@ describe("local worker lifecycle manager", () => {
     }
   });
 
+  it("lets a start queued behind stop cancel without spawning afterward", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-queued-stop-cancel-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
+    const runtime = manager();
+    runtime.register(definition("queued-stop-cancel", "ready-counter", {
+      shutdownTimeoutMs: 40,
+      terminationTimeoutMs: 150,
+      gracefulShutdown: () => new Promise<void>(() => undefined)
+    }, [counter]));
+
+    await runtime.start("queued-stop-cancel");
+    expect(readFileSync(counter, "utf8")).toBe("1");
+
+    const stopping = runtime.stop("queued-stop-cancel");
+    await waitForStatus(runtime, "queued-stop-cancel", (status) => status.state === "STOPPING");
+
+    const controller = new AbortController();
+    const queued = runtime.start("queued-stop-cancel", { signal: controller.signal });
+    controller.abort();
+
+    await expect(queued).rejects.toMatchObject({ code: "START_CANCELLED" });
+    await expect(stopping).resolves.toMatchObject({
+      componentId: "queued-stop-cancel"
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    expect(readFileSync(counter, "utf8")).toBe("1");
+    expect(runtime.getStatus("queued-stop-cancel").state).toBe("STOPPED");
+
+    const restarted = await runtime.start("queued-stop-cancel");
+    expect(restarted.state).toBe("READY");
+    expect(readFileSync(counter, "utf8")).toBe("2");
+  });
+
   it("serializes reentrant start behind an in-progress stop", async () => {
     const root = mkdtempSync(join(tmpdir(), "local-runtime-reentrant-"));
     temporaryRoots.push(root);
