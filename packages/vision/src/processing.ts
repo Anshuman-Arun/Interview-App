@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { isProxy } from "node:util/types";
 import { z } from "zod";
 import { PNG } from "pngjs";
@@ -6,7 +7,6 @@ import { computeVisionArtifactId } from "./artifact-identity.js";
 import { INTERNAL_VISION_ARTIFACT_CONSTRUCTION } from "./internal-artifact-construction.js";
 import { assertRectWithinImage, rectArea, validateImageRect, type ImageRect } from "./geometry.js";
 import { createVisionProcessingDiagnostics, type VisionProcessingDiagnostics } from "./diagnostics.js";
-import { sha256ImageBytes } from "./snapshot.js";
 import {
   CoordinateTransformSchema,
   ImageSnapshot,
@@ -438,7 +438,7 @@ function encodeArtifact(
 
   const descriptor = sourceDescriptor(source);
   const dimensions = PixelDimensionsSchema.parse({ width: raster.width, height: raster.height });
-  const digest = sha256ImageBytes(encoded);
+  const digest = createHash("sha256").update(encoded).digest("hex");
   const metadata = VisionImageArtifactMetadataSchema.parse({
     artifactId: computeVisionArtifactId({
       kind,
