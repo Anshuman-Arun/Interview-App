@@ -502,6 +502,24 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
+  it("rejects redirect targets above the URL-length safety limit", async () => {
+    const payload = Buffer.from("redirect-too-long");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.writeHead(302, {
+        Location: "/artifact?" + "x".repeat(2_100)
+      });
+      response.end();
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/start");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({
+      code: "UNSAFE_REDIRECT"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+  });
+
   it("follows bounded same-origin redirects and rejects redirect loops", async () => {
     const payload = Buffer.from("redirected");
     const fixture = await startFixtureServer((request, response) => {
