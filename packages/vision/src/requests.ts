@@ -17,8 +17,8 @@ export type VisionPurpose = z.infer<typeof VisionPurposeSchema>;
 
 const RequestBudgetSchema = z.object({
   maxImages: z.number().int().positive().max(256),
-  maxTotalBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  maxTotalPixels: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  maxTotalBytes: z.number().int().positive().max(128 * 1024 * 1024),
+  maxTotalPixels: z.number().int().positive().max(128 * 1024 * 1024),
   maxCropsOrTiles: z.number().int().nonnegative().max(256)
 }).strict();
 
