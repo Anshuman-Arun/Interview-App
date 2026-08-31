@@ -207,9 +207,22 @@ async function cooperativeYield(signal: AbortSignal | undefined, row: number): P
 }
 
 function maxOutputBytes(options: VisionProcessingOptions): number {
-  const value = nonnegativeSafeInteger(options.maxOutputEncodedBytes ?? DEFAULT_MAX_OUTPUT_ENCODED_BYTES, "maxOutputEncodedBytes");
-  if (value > HARD_MAX_OUTPUT_ENCODED_BYTES) throw new RangeError("maxOutputEncodedBytes exceeds the package hard cap");
-  return value;
+  const perImage = nonnegativeSafeInteger(
+    options.maxOutputEncodedBytes ?? DEFAULT_MAX_OUTPUT_ENCODED_BYTES,
+    "maxOutputEncodedBytes"
+  );
+  if (perImage > HARD_MAX_OUTPUT_ENCODED_BYTES) {
+    throw new RangeError("maxOutputEncodedBytes exceeds the package hard cap");
+  }
+
+  const total = nonnegativeSafeInteger(
+    options.maxTotalOutputEncodedBytes ?? DEFAULT_MAX_TOTAL_OUTPUT_ENCODED_BYTES,
+    "maxTotalOutputEncodedBytes"
+  );
+  if (total > HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES) {
+    throw new RangeError("maxTotalOutputEncodedBytes exceeds the package hard cap");
+  }
+  return Math.min(perImage, total);
 }
 
 function maxTotalOutputBytes(options: VisionProcessingOptions): number {
