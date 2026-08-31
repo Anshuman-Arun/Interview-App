@@ -18,3 +18,15 @@ export function boundedArrayLength(value: unknown, maximum: number, label: strin
   }
   return rawLength;
 }
+
+
+export function readArrayEntry(value: readonly unknown[], index: number, label: string): unknown {
+  if (!Number.isSafeInteger(index) || index < 0) {
+    throw new RangeError("Array index must be a nonnegative safe integer");
+  }
+  try {
+    return Reflect.get(value, String(index));
+  } catch {
+    throw new TypeError(`${label} entry ${String(index)} could not be read safely`);
+  }
+}
