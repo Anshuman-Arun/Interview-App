@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lstat, opendir } from "node:fs/promises";
 import path from "node:path";
@@ -570,7 +571,7 @@ export class ModelAssetManager {
     const key = artifactInstallationKey(manifest);
     const directory = path.join(paths.artifacts, key);
 
-    let directoryStat;
+    let directoryStat: Stats;
     try {
       directoryStat = await lstat(directory);
     } catch (error) {
