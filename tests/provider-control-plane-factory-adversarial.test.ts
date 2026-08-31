@@ -1753,6 +1753,59 @@ describe("adapter factory adversarial boundary", () => {
     }
   });
 
+  it("enforces registered credential requirements before invoking the raw factory", async () => {
+    for (const entry of [
+      {
+        credentialRequirement: "REQUIRED" as const,
+        credentialRef: undefined
+      },
+      {
+        credentialRequirement: "OPTIONAL" as const,
+        credentialRef: {
+          id: "optional-credential",
+          purpose: "API_KEY" as const
+        }
+      }
+    ]) {
+      let rawFactoryCalls = 0;
+      const registry = new ProviderRegistry();
+      registry.register(providerInput({
+        id: "mock-model",
+        adapterVersion: "1.0.0",
+        credentialRequirement: entry.credentialRequirement,
+        credentialPurposes: ["API_KEY"],
+        models: [{
+          id: "credential-gate-model",
+          displayName: "Credential Gate Model",
+          capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+        }],
+        adapterFactory: {
+          id: "credential-gate-factory",
+          createAdapter() {
+            rawFactoryCalls += 1;
+            return new MockModelAdapter({ proposal: PROPOSAL });
+          }
+        }
+      }));
+      const resolved = resolveProviderConfiguration({
+        registry,
+        configuration: {
+          version: 1,
+          providerId: "mock-model",
+          modelId: "credential-gate-model",
+          enabled: true,
+          ...(entry.credentialRef === undefined
+            ? {}
+            : { credentialRef: entry.credentialRef })
+        }
+      });
+
+      await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
+        .rejects.toMatchObject({ code: "CREDENTIALS_REQUIRED" });
+      expect(rawFactoryCalls).toBe(0);
+    }
+  });
+
   it("scopes provider factories to the exact configured credential reference", async () => {
     let underlyingResolverCalls = 0;
     const registry = new ProviderRegistry();

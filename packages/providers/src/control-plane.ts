@@ -794,7 +794,26 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
         "Provider adapter factory does not belong to the resolved provider"
       );
     }
+
+    const reference = resolved.configuration.credentialRef;
+    if (
+      reference === undefined
+      && resolved.provider.credentialRequirement === "REQUIRED"
+    ) {
+      throw new ProviderControlPlaneError(
+        "CREDENTIALS_REQUIRED",
+        "Provider adapter factory requires a configured credential reference"
+      );
+    }
+
     const secretResolver = normalizeFactorySecretResolver(inspected.secretResolver, resolved);
+    if (reference !== undefined && secretResolver === undefined) {
+      throw new ProviderControlPlaneError(
+        "CREDENTIALS_REQUIRED",
+        "Provider adapter factory requires a runtime credential resolver"
+      );
+    }
+
     const normalizedInput = freezeNullPrototype({
       resolved,
       ...(secretResolver === undefined ? {} : { secretResolver }),
