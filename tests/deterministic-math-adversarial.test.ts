@@ -326,6 +326,53 @@ describe("adversarial deterministic math verification", () => {
     expect(productResult.status).toBe("VERIFIED");
   });
 
+  it("sums bounded rational terms independent of non-pairwise cancellation order", async () => {
+    const maximumOdd = BigInt("9".repeat(MAX_INTERMEDIATE_INTEGER_DECIMAL_DIGITS));
+    expect(sumRationals([
+      rational(maximumOdd, 1n),
+      rational(maximumOdd, 1n),
+      rational(-maximumOdd, 2n),
+      rational(-maximumOdd, 2n),
+      rational(-maximumOdd, 2n),
+      rational(-maximumOdd, 2n)
+    ])).toEqual(rational(0n, 1n));
+
+    const operand = "9".repeat(MAX_INTEGER_DECIMAL_DIGITS);
+    const largeMagnitude = {
+      kind: "PRODUCT" as const,
+      terms: Array.from({ length: 16 }, () => fractionExpression(operand))
+    };
+    const negativeHalf = {
+      kind: "NEGATE" as const,
+      operand: {
+        kind: "DIVIDE" as const,
+        left: largeMagnitude,
+        right: fractionExpression("2")
+      }
+    };
+
+    const result = await verifyJson(new RationalArithmeticVerifier(), {
+      protocol: RATIONAL_ARITHMETIC_PROTOCOL,
+      protocolVersion: RATIONAL_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "EQUALITY",
+        left: {
+          kind: "SUM",
+          terms: [
+            largeMagnitude,
+            largeMagnitude,
+            negativeHalf,
+            negativeHalf,
+            negativeHalf,
+            negativeHalf
+          ]
+        },
+        right: fractionExpression("0")
+      }
+    });
+    expect(result.status).toBe("VERIFIED");
+  });
+
   it("cross-cancels rational product factors even without exact reciprocal pairs", async () => {
     const leftScale = 10n ** 3000n + 7n;
     const rightScale = 10n ** 3000n + 11n;
