@@ -580,6 +580,50 @@ describe("local worker lifecycle manager", () => {
     expect(coercions).toBe(0);
   });
 
+  it("rejects malformed injected HTTP Response values without proxy observation", async () => {
+    const plain = manager({
+      fetch: (() => Promise.resolve({ ok: true })) as unknown as typeof globalThis.fetch
+    });
+    plain.register(definition("invalid-http-response", "ready", {
+      restartPolicy: { mode: "ON_FAILURE", maxRetries: 2, backoffMs: 5 },
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        intervalMs: 5
+      }
+    }));
+
+    await expect(plain.start("invalid-http-response"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+    expect(plain.getStatus("invalid-http-response").restartCount).toBe(0);
+
+    let responseProxyTraps = 0;
+    const proxiedResponse = new Proxy(new Response(null, { status: 204 }), {
+      get: (target, key, receiver) => {
+        responseProxyTraps += 1;
+        return Reflect.get(target, key, receiver);
+      },
+      getPrototypeOf: (target) => {
+        responseProxyTraps += 1;
+        return Reflect.getPrototypeOf(target);
+      }
+    });
+    const proxied = manager({
+      fetch: (() => Promise.resolve(proxiedResponse)) as unknown as typeof globalThis.fetch
+    });
+    proxied.register(definition("proxy-http-response", "ready", {
+      readiness: {
+        kind: "HTTP_LOOPBACK",
+        url: "http://127.0.0.1:43199/health",
+        intervalMs: 5
+      }
+    }));
+
+    await expect(proxied.start("proxy-http-response"))
+      .rejects.toMatchObject({ code: "READINESS_FAILED" });
+    expect(responseProxyTraps).toBe(0);
+  });
+
   it("rejects HTTP readiness redirects even when an injected fetch returns them", async () => {
     let evaluateCalls = 0;
     const runtime = manager({
