@@ -161,6 +161,7 @@ interface DecodedRaster {
   readonly width: number;
   readonly height: number;
   readonly data: Buffer;
+  readonly gamma: number;
 }
 
 interface SourceDescriptor {
@@ -263,6 +264,9 @@ function decodeSource(source: VisionRasterSource, signal?: AbortSignal): Decoded
     throw new VisionPreprocessingError("INVALID_IMAGE", "Previously validated image payload could not be decoded");
   }
   throwIfAborted(signal);
+  if (!Number.isFinite(decoded.gamma) || (decoded.gamma ?? 0) < 0) {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Decoded PNG gamma metadata is invalid");
+  }
   if (decoded.width !== source.metadata.width || decoded.height !== source.metadata.height) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Decoded image dimensions changed after validation");
   }
@@ -270,7 +274,12 @@ function decodeSource(source: VisionRasterSource, signal?: AbortSignal): Decoded
   if (!Number.isSafeInteger(expectedLength) || decoded.data.length !== expectedLength) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Decoded image raster has an unexpected byte length");
   }
-  return { width: decoded.width, height: decoded.height, data: decoded.data };
+  return {
+    width: decoded.width,
+    height: decoded.height,
+    data: decoded.data,
+    gamma: decoded.gamma ?? 0
+  };
 }
 
 function composeCropTransform(parent: CoordinateTransform, rect: ImageRect): CoordinateTransform {
@@ -312,7 +321,12 @@ function encodeArtifact(
   let encoded: Buffer;
   try {
     encoded = PNG.sync.write(
-      { width: raster.width, height: raster.height, data: raster.data },
+      {
+        width: raster.width,
+        height: raster.height,
+        data: raster.data,
+        ...(raster.gamma === 0 ? {} : { gamma: raster.gamma })
+      },
       { colorType: 6, inputColorType: 6, bitDepth: 8 }
     );
   } catch {
@@ -368,7 +382,7 @@ async function cropDecodedRaster(
     await cooperativeYield(signal, row + 1);
   }
   throwIfAborted(signal);
-  return { width: rect.width, height: rect.height, data: output };
+  return { width: rect.width, height: rect.height, data: output, gamma: decoded.gamma };
 }
 
 export async function cropImage(
@@ -524,7 +538,7 @@ async function resizeBilinear(
     await cooperativeYield(signal, y + 1);
   }
   throwIfAborted(signal);
-  return { width, height, data: output };
+  return { width, height, data: output, gamma: source.gamma };
 }
 
 export async function downscaleImage(
