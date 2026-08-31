@@ -758,6 +758,21 @@ export class ModelAssetManager {
     return total;
   }
 
+  private async activeStagingPayloadBytes(): Promise<number> {
+    let total = 0;
+    for (const entry of this.inFlight.values()) {
+      if (entry.stagingDirectory === undefined) continue;
+      total += await sumArtifactPayloadBytes(entry.stagingDirectory);
+      if (!Number.isSafeInteger(total)) {
+        throw new ModelAssetError(
+          "CACHE_LIMIT_EXCEEDED",
+          "Active staging usage exceeds safe integer accounting limits."
+        );
+      }
+    }
+    return total;
+  }
+
   private async reserveCapacity(paths: CachePaths, requestedBytes: number): Promise<void> {
     await this.withCapacityGate(async () => {
       const reservedProjection = this.reservedBytes + requestedBytes;
@@ -779,8 +794,11 @@ export class ModelAssetManager {
         }
       }
 
+      const activeStagingBytes = await this.activeStagingPayloadBytes();
+      const alreadyMaterialized = Math.min(activeStagingBytes, this.reservedBytes);
+      const outstandingReservation = reservedProjection - alreadyMaterialized;
       const available = await availableDiskBytes(paths.root);
-      if (available !== undefined && available < BigInt(reservedProjection)) {
+      if (available !== undefined && available < BigInt(outstandingReservation)) {
         throw new ModelAssetError(
           "INSUFFICIENT_DISK_SPACE",
           "Insufficient free disk space for verified atomic installation."
