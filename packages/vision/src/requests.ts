@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
 import { z } from "zod";
 import { imageIdentity } from "./deduplication.js";
+import { snapshotOwnEnumerableRecord } from "./object-validation.js";
 import {
   CoordinateTransformSchema,
   ImagePayloadReference,
@@ -207,12 +208,13 @@ export function prepareVisionBatch(
     throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must be a bounded array");
   }
 
-  let parsedBudget: ReturnType<typeof RequestBudgetSchema.safeParse>;
+  let ownBudget: Readonly<Record<string, unknown>>;
   try {
-    parsedBudget = RequestBudgetSchema.safeParse(budgetInput);
+    ownBudget = snapshotOwnEnumerableRecord(budgetInput, "Vision request budget");
   } catch {
     throw new RangeError("Vision request budget could not be read safely");
   }
+  const parsedBudget = RequestBudgetSchema.safeParse(ownBudget);
   if (!parsedBudget.success) {
     throw new RangeError("Vision request budget is invalid or contains unknown keys");
   }
