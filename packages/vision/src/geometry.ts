@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
+import { snapshotOwnEnumerableRecord } from "./object-validation.js";
 import { PixelDimensionsSchema, VisionPreprocessingError } from "./types.js";
 import type { PixelDimensions } from "./types.js";
 
@@ -30,12 +31,13 @@ function invalidRect(message: string): never {
 }
 
 function parsePixelDimensions(input: PixelDimensions): PixelDimensions {
-  let parsed: ReturnType<typeof PixelDimensionsSchema.safeParse>;
+  let ownInput: Readonly<Record<string, unknown>>;
   try {
-    parsed = PixelDimensionsSchema.safeParse(input);
+    ownInput = snapshotOwnEnumerableRecord(input, "Image dimensions");
   } catch {
     invalidRect("Image dimensions could not be read safely");
   }
+  const parsed = PixelDimensionsSchema.safeParse(ownInput);
   if (!parsed.success) invalidRect("Image dimensions must be positive safe integers");
   return parsed.data;
 }
@@ -47,12 +49,13 @@ function safeAdd(left: number, right: number, label: string): number {
 }
 
 export function validateImageRect(input: ImageRect): ImageRect {
-  let parsed: ReturnType<typeof ImageRectSchema.safeParse>;
+  let ownInput: Readonly<Record<string, unknown>>;
   try {
-    parsed = ImageRectSchema.safeParse(input);
+    ownInput = snapshotOwnEnumerableRecord(input, "Rectangle");
   } catch {
     invalidRect("Rectangle coordinates could not be read safely");
   }
+  const parsed = ImageRectSchema.safeParse(ownInput);
   if (!parsed.success) invalidRect("Rectangle coordinates must be safe integers with positive width and height");
   safeAdd(parsed.data.x, parsed.data.width, "Rectangle right edge");
   safeAdd(parsed.data.y, parsed.data.height, "Rectangle bottom edge");
@@ -65,12 +68,13 @@ export function imageBounds(dimensions: PixelDimensions): ImageRect {
 }
 
 export function normalizeRect(corners: RectCorners): ImageRect {
-  let parsed: ReturnType<typeof RectCornersSchema.safeParse>;
+  let ownCorners: Readonly<Record<string, unknown>>;
   try {
-    parsed = RectCornersSchema.safeParse(corners);
+    ownCorners = snapshotOwnEnumerableRecord(corners, "Rectangle corners");
   } catch {
     invalidRect("Rectangle corners could not be read safely");
   }
+  const parsed = RectCornersSchema.safeParse(ownCorners);
   if (!parsed.success) invalidRect("Rectangle corners must be safe integers");
 
   const x = Math.min(parsed.data.x1, parsed.data.x2);
