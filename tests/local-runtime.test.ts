@@ -263,24 +263,24 @@ describe("local worker lifecycle manager", () => {
   });
 
   it("detects post-readiness crashes and spends the same bounded restart budget", async () => {
+    const root = mkdtempSync(join(tmpdir(), "local-runtime-late-crash-"));
+    temporaryRoots.push(root);
+    const counter = join(root, "counter.txt");
     const runtime = manager();
-    runtime.register(definition("late-crash", "ready-then-crash", {
+    runtime.register(definition("late-crash", "ready-crash-counter", {
       restartPolicy: { mode: "ON_FAILURE", maxRetries: 1, backoffMs: 5 }
-    }, ["40"]));
+    }, [counter, "40"]));
     await runtime.start("late-crash");
 
-    const deadline = Date.now() + 1_500;
-    while (Date.now() < deadline) {
-      const current = runtime.getStatus("late-crash");
-      if (current.state === "FAILED" && current.restartCount === 1) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 80));
-        if (runtime.getStatus("late-crash").state === "FAILED") break;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
-    }
+    await waitForStatus(runtime, "late-crash", (status) =>
+      status.state === "FAILED"
+        && status.restartCount === 1
+        && readFileSync(counter, "utf8") === "2"
+    );
     const status = runtime.getStatus("late-crash");
     expect(status).toMatchObject({ state: "FAILED", restartCount: 1 });
     expect(status.lastExit?.unexpected).toBe(true);
+    expect(readFileSync(counter, "utf8")).toBe("2");
   });
 
   it("bounds and sanitizes output while passing only controlled environment values", async () => {
