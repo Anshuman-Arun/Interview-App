@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { actualUint8ArrayByteLength } from "./byte-validation.js";
+import { actualUint8ArrayByteLength, isDirectUint8Array } from "./byte-validation.js";
 import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION } from "./internal-artifact-construction.js";
 import { snapshotOwnEnumerableRecord } from "./object-validation.js";
 import { assertSupportedPngHeaderParameters } from "./png-validation.js";
@@ -131,7 +131,7 @@ function checkDimensions(header: PngHeader, limits: ImageValidationLimits): void
 
 export function sha256ImageBytes(bytes: Uint8Array): Sha256Digest;
 export function sha256ImageBytes(bytes: unknown): Sha256Digest {
-  if (!(bytes instanceof Uint8Array)) throw new TypeError("Image digest input must be a Uint8Array");
+  if (!isDirectUint8Array(bytes)) throw new TypeError("Image digest input must be a direct readable Uint8Array");
   if (actualUint8ArrayByteLength(bytes) > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes) {
     throw new RangeError("Image digest input exceeds the package hard encoded-byte cap");
   }
@@ -148,7 +148,18 @@ export function createValidatedImageSnapshot(
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input could not be read safely");
   }
-  const parsedInput = ImageSnapshotInputSchema.safeParse(ownInput);
+  const encodedBytesInput = ownInput["encodedBytes"];
+  if (!isDirectUint8Array(encodedBytesInput)) {
+    throw new VisionPreprocessingError(
+      "INVALID_IMAGE",
+      "Image snapshot encodedBytes must be a direct readable Uint8Array"
+    );
+  }
+
+  const parsedInput = ImageSnapshotInputSchema.safeParse({
+    ...ownInput,
+    encodedBytes: encodedBytesInput
+  });
   if (!parsedInput.success) {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input failed strict schema validation");
   }
