@@ -459,6 +459,23 @@ describe("local model asset manager", () => {
     expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
   });
 
+  it("rejects oversized response headers without publishing bytes", async () => {
+    const payload = Buffer.from("oversized-headers");
+    const fixture = await startFixtureServer((_request, response) => {
+      response.setHeader("X-Oversized-Fixture", "x".repeat(20 * 1024));
+      response.end(payload);
+    });
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({
+      code: "NETWORK_ERROR"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+  });
+
   it("rejects non-success HTTP responses without publishing bytes", async () => {
     const payload = Buffer.from("http-status");
     const fixture = await startFixtureServer((_request, response) => {
