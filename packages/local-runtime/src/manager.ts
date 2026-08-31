@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
+import { types as utilTypes } from "node:util";
 import { DIAGNOSTIC_SANITIZATION_LIMITS, sanitizeDiagnosticRecord, sanitizeDiagnosticText } from "../../diagnostics/src/index.js";
 import { BoundedLineBuffer, BoundedLineFramer, redactKnownSecrets } from "./buffer.js";
 import { buildLocalEnvironment, type BuiltLocalEnvironment } from "./environment.js";
@@ -1018,6 +1019,9 @@ export class LocalRuntimeManager {
   private timestamp(): string {
     try {
       const observed = this.now();
+      if (typeof observed === "object" && observed !== null && utilTypes.isProxy(observed)) {
+        throw new TypeError("Proxy diagnostic clock value");
+      }
       const observedTime = Date.prototype.getTime.call(observed);
       if (!Number.isFinite(observedTime)) throw new TypeError("Invalid diagnostic clock value");
       return Date.prototype.toISOString.call(observed);
@@ -1070,7 +1074,13 @@ function inspectRuntimeOptions(
   label: string,
   allowedKeys: ReadonlySet<string>
 ): Readonly<Record<string, PropertyDescriptor>> {
-  if (typeof value !== "object" || value === null || safeRuntimeArrayCheck(value)) {
+  if (typeof value !== "object" || value === null) {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", `${label} must be an object`);
+  }
+  if (utilTypes.isProxy(value)) {
+    throw new LocalRuntimeError("INVALID_ARGUMENT", `${label} could not be inspected`);
+  }
+  if (safeRuntimeArrayCheck(value)) {
     throw new LocalRuntimeError("INVALID_ARGUMENT", `${label} must be an object`);
   }
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
@@ -1114,11 +1124,9 @@ function safeRuntimeArrayCheck(value: object): boolean {
 }
 
 function safeIsAbortSignal(value: unknown): value is AbortSignal {
-  if (typeof value !== "object" || value === null) return false;
-  const abortedGetter = Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
-  if (abortedGetter === undefined) return false;
+  if (typeof value !== "object" || value === null || utilTypes.isProxy(value)) return false;
   try {
-    return typeof abortedGetter.call(value) === "boolean";
+    return value instanceof AbortSignal;
   } catch {
     return false;
   }
@@ -1238,9 +1246,9 @@ function inspectKnownDataObject(
   label: string,
   allowedKeys: ReadonlySet<string>
 ): Readonly<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || safelyIsArray(value, label)) {
-    invalid(`${label} must be an object`);
-  }
+  if (typeof value !== "object" || value === null) invalid(`${label} must be an object`);
+  if (utilTypes.isProxy(value)) invalid(`${label} could not be inspected`);
+  if (safelyIsArray(value, label)) invalid(`${label} must be an object`);
 
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
@@ -1262,6 +1270,9 @@ function inspectKnownDataObject(
 }
 
 function inspectDefinitionArguments(value: unknown): readonly string[] {
+  if (typeof value === "object" && value !== null && utilTypes.isProxy(value)) {
+    invalid("args could not be inspected");
+  }
   if (!safelyIsArray(value, "args")) invalid("args must be an array");
 
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
@@ -1713,7 +1724,9 @@ function inspectReadinessObject(
     throw new LocalRuntimeError("READINESS_FAILED", detail);
   }
 ): Readonly<Record<string, PropertyDescriptor>> {
-  if (typeof value !== "object" || value === null || safeArrayCheck(value, fail)) fail(message);
+  if (typeof value !== "object" || value === null) fail(message);
+  if (utilTypes.isProxy(value)) fail(message);
+  if (safeArrayCheck(value, fail)) fail(message);
   try {
     return Object.getOwnPropertyDescriptors(value);
   } catch {
@@ -2105,6 +2118,7 @@ function linkAbortSignal(source: AbortSignal | undefined, target: AbortControlle
 }
 
 function localRuntimeErrorOrUndefined(error: unknown): LocalRuntimeError | undefined {
+  if (typeof error === "object" && error !== null && utilTypes.isProxy(error)) return undefined;
   try {
     return error instanceof LocalRuntimeError ? error : undefined;
   } catch {
@@ -2166,6 +2180,7 @@ function safeArrayObject(value: object): boolean | undefined {
 }
 
 function safeIsErrorObject(value: object): boolean {
+  if (utilTypes.isProxy(value)) return false;
   try {
     return value instanceof Error;
   } catch {
@@ -2187,6 +2202,7 @@ function preRedactDiagnosticValue(
   if (value === null || typeof value === "number" || typeof value === "boolean") return value;
   if (typeof value === "bigint") return `${value.toString()}n`;
   if (typeof value !== "object") return undefined;
+  if (utilTypes.isProxy(value)) return "[UNINSPECTABLE_OBJECT]";
   if (state.seen.has(value)) return "[CIRCULAR]";
   state.seen.add(value);
   try {
