@@ -78,9 +78,9 @@ interface InstallationCheck {
   readonly errorCode?: ModelAssetErrorCode;
 }
 
-function positiveSafeInteger(value: number | undefined, fallback: number, label: string): number {
+function positiveSafeInteger(value: unknown, fallback: number, label: string): number {
   const resolved = value ?? fallback;
-  if (!Number.isSafeInteger(resolved) || resolved <= 0) {
+  if (typeof resolved !== "number" || !Number.isSafeInteger(resolved) || resolved <= 0) {
     throw new ModelAssetError(
       "INVALID_CONFIGURATION",
       label + " must be a positive safe integer."
@@ -89,9 +89,9 @@ function positiveSafeInteger(value: number | undefined, fallback: number, label:
   return resolved;
 }
 
-function nonnegativeSafeInteger(value: number | undefined, fallback: number, label: string): number {
+function nonnegativeSafeInteger(value: unknown, fallback: number, label: string): number {
   const resolved = value ?? fallback;
-  if (!Number.isSafeInteger(resolved) || resolved < 0) {
+  if (typeof resolved !== "number" || !Number.isSafeInteger(resolved) || resolved < 0) {
     throw new ModelAssetError(
       "INVALID_CONFIGURATION",
       label + " must be a non-negative safe integer."
@@ -126,27 +126,38 @@ export class ModelAssetManager {
   private reservedBytes = 0;
 
   public constructor(options: ModelAssetManagerOptions) {
-    const rootDir: unknown = options.rootDir;
+    const rawOptions: unknown = options;
+    if (typeof rawOptions !== "object" || rawOptions === null) {
+      throw new ModelAssetError(
+        "INVALID_CONFIGURATION",
+        "Model asset manager options must be an object."
+      );
+    }
+    const optionRecord = rawOptions as Record<string, unknown>;
+    const rootDir = optionRecord["rootDir"];
     if (typeof rootDir !== "string" || !path.isAbsolute(rootDir)) {
       throw new ModelAssetError("INVALID_CACHE_ROOT", "Asset cache root must be an absolute path.");
     }
-    const rawCrossOriginRedirects: unknown = options.allowCrossOriginRedirects;
+
+    const rawCrossOriginRedirects = optionRecord["allowCrossOriginRedirects"];
     if (rawCrossOriginRedirects !== undefined && typeof rawCrossOriginRedirects !== "boolean") {
       throw new ModelAssetError(
         "INVALID_CONFIGURATION",
         "allowCrossOriginRedirects must be a boolean when provided."
       );
     }
+
     this.maxArtifactBytes = positiveSafeInteger(
-      options.maxArtifactBytes,
+      optionRecord["maxArtifactBytes"],
       0,
       "maxArtifactBytes"
     );
-    this.maxCacheBytes = options.maxCacheBytes === undefined
+    const rawMaxCacheBytes = optionRecord["maxCacheBytes"];
+    this.maxCacheBytes = rawMaxCacheBytes === undefined
       ? undefined
-      : positiveSafeInteger(options.maxCacheBytes, 0, "maxCacheBytes");
+      : positiveSafeInteger(rawMaxCacheBytes, 0, "maxCacheBytes");
     this.downloadTimeoutMs = positiveSafeInteger(
-      options.downloadTimeoutMs,
+      optionRecord["downloadTimeoutMs"],
       DEFAULT_DOWNLOAD_TIMEOUT_MS,
       "downloadTimeoutMs"
     );
@@ -157,13 +168,13 @@ export class ModelAssetManager {
       );
     }
     this.maxRedirects = nonnegativeSafeInteger(
-      options.maxRedirects,
+      optionRecord["maxRedirects"],
       DEFAULT_MAX_REDIRECTS,
       "maxRedirects"
     );
     this.allowCrossOriginRedirects = rawCrossOriginRedirects ?? false;
     this.maxListEntries = positiveSafeInteger(
-      options.maxListEntries,
+      optionRecord["maxListEntries"],
       DEFAULT_MAX_LIST_ENTRIES,
       "maxListEntries"
     );
@@ -200,6 +211,12 @@ export class ModelAssetManager {
     sourcePath: string,
     signal?: AbortSignal
   ): Promise<string> {
+    if (typeof sourcePath !== "string" || sourcePath.length === 0 || sourcePath.includes("\0")) {
+      throw new ModelAssetError(
+        "INVALID_CONFIGURATION",
+        "Local import source path must be a non-empty valid path string."
+      );
+    }
     const manifest = parseAssetManifest(manifestValue);
     return await this.joinOrStart(
       manifest,
@@ -469,7 +486,7 @@ export class ModelAssetManager {
       const controller = new AbortController();
       entry = {
         controller,
-        stage: "DOWNLOADING",
+        stage: "VERIFYING",
         stagingDirectory: undefined,
         waiters: 0,
         settled: false,
