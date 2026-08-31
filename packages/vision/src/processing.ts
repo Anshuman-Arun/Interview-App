@@ -86,28 +86,32 @@ const PROCESSING_OPTION_KEYS = new Set([
   "maxTotalOutputEncodedBytes"
 ]);
 
+function isProcessingClock(value: unknown): value is () => number {
+  return typeof value === "function";
+}
+
 function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOptions> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new TypeError("Vision processing options must be an object");
   }
-  const options = input as Record<string, unknown>;
+  const options = input;
   for (const key of Object.keys(options)) {
     if (!PROCESSING_OPTION_KEYS.has(key)) {
       throw new RangeError(`Unknown vision processing option: ${key}`);
     }
   }
 
-  const signal = options["signal"];
+  const signal: unknown = Reflect.get(options, "signal");
   if (signal !== undefined && !(signal instanceof AbortSignal)) {
     throw new TypeError("signal must be an AbortSignal");
   }
 
-  const clock = options["now"];
-  if (clock !== undefined && typeof clock !== "function") {
+  const clock: unknown = Reflect.get(options, "now");
+  if (clock !== undefined && !isProcessingClock(clock)) {
     throw new TypeError("now must be a function");
   }
 
-  const outputBytes = options["maxOutputEncodedBytes"];
+  const outputBytes: unknown = Reflect.get(options, "maxOutputEncodedBytes");
   let normalizedOutputBytes: number | undefined;
   if (outputBytes !== undefined) {
     if (typeof outputBytes !== "number") throw new RangeError("maxOutputEncodedBytes must be numeric");
@@ -117,7 +121,7 @@ function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOp
     }
   }
 
-  const totalOutputBytes = options["maxTotalOutputEncodedBytes"];
+  const totalOutputBytes: unknown = Reflect.get(options, "maxTotalOutputEncodedBytes");
   let normalizedTotalOutputBytes: number | undefined;
   if (totalOutputBytes !== undefined) {
     if (typeof totalOutputBytes !== "number") throw new RangeError("maxTotalOutputEncodedBytes must be numeric");
@@ -129,7 +133,7 @@ function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOp
 
   return Object.freeze({
     ...(signal === undefined ? {} : { signal }),
-    ...(clock === undefined ? {} : { now: clock as () => number }),
+    ...(clock === undefined ? {} : { now: clock }),
     ...(normalizedOutputBytes === undefined ? {} : { maxOutputEncodedBytes: normalizedOutputBytes }),
     ...(normalizedTotalOutputBytes === undefined
       ? {}
