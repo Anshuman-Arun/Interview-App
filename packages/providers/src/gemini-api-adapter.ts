@@ -30,11 +30,13 @@ export interface GeminiApiAdapterOptions {
  * is configured. It is treated as an experimental provider.
  */
 export class GeminiApiAdapter implements ReasoningProvider {
+  readonly #options: GeminiApiAdapterOptions;
   public readonly name: string;
   public readonly adapterVersion: string;
   public readonly capabilities: ModelCapabilities;
 
-  public constructor(private readonly options: GeminiApiAdapterOptions = {}) {
+  public constructor(options: GeminiApiAdapterOptions = {}) {
+    this.#options = options;
     this.name = options.name ?? "gemini-api";
     this.adapterVersion = options.adapterVersion ?? "1.0.0";
     this.capabilities = {
@@ -52,8 +54,8 @@ export class GeminiApiAdapter implements ReasoningProvider {
   }
 
   public async verifyBillingSafety(input: { readonly now: Date }): Promise<unknown> {
-    if (this.options.billingVerificationFactory !== undefined) {
-      return this.options.billingVerificationFactory(input.now);
+    if (this.#options.billingVerificationFactory !== undefined) {
+      return this.#options.billingVerificationFactory(input.now);
     }
 
     // By default, Google AI Studio / Gemini API keys cannot prove impossibility of spend
@@ -70,7 +72,7 @@ export class GeminiApiAdapter implements ReasoningProvider {
   public async createSession(): Promise<ReasoningSession> {
     const controllers = new Map<GenerationId, AbortController>();
     let closed = false;
-    const options = this.options;
+    const options = this.#options;
     const fetchImpl = options.fetchImpl ?? globalThis.fetch;
     const apiKey = options.apiKey ?? "";
     const model = options.model ?? "gemini-2.5-flash";

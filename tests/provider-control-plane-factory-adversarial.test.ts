@@ -1686,6 +1686,29 @@ describe("adapter factory adversarial boundary", () => {
     })).rejects.toMatchObject({ code: "CREDENTIAL_RESOLUTION_FAILED" });
   });
 
+  it("does not expose resolved Gemini credentials through returned adapter own state", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: GEMINI_CONFIGURATION
+    });
+    const secret = "runtime-only-private-gemini-key";
+    const resolver: ProviderSecretResolver = {
+      async resolveSecret() {
+        return secret;
+      }
+    };
+
+    const adapter = await resolveAdapterFactory(resolved).createAdapter({
+      resolved,
+      secretResolver: resolver
+    });
+
+    expect(Object.getOwnPropertyNames(adapter)).not.toContain("options");
+    expect(JSON.stringify(adapter)).not.toContain(secret);
+    expect(String(adapter)).not.toContain(secret);
+  });
+
   it("snapshots resolver methods before provider factory execution", async () => {
     const registry = registerBuiltInProviders();
     const resolved = resolveProviderConfiguration({
