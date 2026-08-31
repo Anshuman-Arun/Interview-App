@@ -25,7 +25,7 @@ export function exactImagePayloadDuplicate(left: VisionRasterSource, right: Visi
   assertVisionRasterSource(right);
   if (left === right) return true;
   if (imageByteSize(left) !== imageByteSize(right) || imageDigest(left) !== imageDigest(right)) return false;
-  return left.matchesEncodedBytes(right.readBytes());
+  return left.matchesValidatedImagePayload(right);
 }
 
 export function revisionImageProcessingKey(source: VisionRasterSource): string {
