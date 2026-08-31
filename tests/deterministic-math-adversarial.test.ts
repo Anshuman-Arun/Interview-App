@@ -36,6 +36,7 @@ import {
   divideRationals,
   equalRationals,
   evaluateIntegerExpression,
+  evaluateRationalExpression,
   gcd,
   multiplyRationals,
   productIntegers,
@@ -354,13 +355,31 @@ describe("adversarial deterministic math verification", () => {
     expect(result.status).toBe("VERIFIED");
   });
 
-  it("fails closed for invalid direct integer-expression shapes", () => {
-    for (const exponent of [-1, 1.5, MAX_POWER_EXPONENT + 1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(() => evaluateIntegerExpression({
+  it("distinguishes malformed direct expressions from configured resource overflows", () => {
+    for (const exponent of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      try {
+        evaluateIntegerExpression({
+          kind: "POWER",
+          base: integer("2"),
+          exponent
+        });
+        throw new Error("Expected malformed exponent to fail");
+      } catch (error) {
+        expect(error).toBeInstanceOf(BoundedMathError);
+        expect((error as BoundedMathError).code).toBe("INVALID_EXPRESSION");
+      }
+    }
+
+    try {
+      evaluateIntegerExpression({
         kind: "POWER",
         base: integer("2"),
-        exponent
-      })).toThrow(BoundedMathError);
+        exponent: MAX_POWER_EXPONENT + 1
+      });
+      throw new Error("Expected exponent resource limit to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BoundedMathError);
+      expect((error as BoundedMathError).code).toBe("INTERMEDIATE_LIMIT_EXCEEDED");
     }
 
     expect(() => evaluateIntegerExpression({
@@ -380,11 +399,38 @@ describe("adversarial deterministic math verification", () => {
       terms: Array.from({ length: MAX_VARIADIC_EXPRESSION_TERMS }, () => integer("1"))
     })).toBe(BigInt(MAX_VARIADIC_EXPRESSION_TERMS));
 
-    expect(() => evaluateIntegerExpression({ kind: "SUM", terms: [] })).toThrow(BoundedMathError);
-    expect(() => evaluateIntegerExpression({
-      kind: "SUM",
-      terms: Array.from({ length: MAX_VARIADIC_EXPRESSION_TERMS + 1 }, () => integer("1"))
-    })).toThrow(BoundedMathError);
+    try {
+      evaluateIntegerExpression({ kind: "SUM", terms: [] });
+      throw new Error("Expected empty integer sum to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BoundedMathError);
+      expect((error as BoundedMathError).code).toBe("INVALID_EXPRESSION");
+    }
+
+    try {
+      evaluateIntegerExpression({
+        kind: "SUM",
+        terms: Array.from({ length: MAX_VARIADIC_EXPRESSION_TERMS + 1 }, () => integer("1"))
+      });
+      throw new Error("Expected integer term resource limit to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BoundedMathError);
+      expect((error as BoundedMathError).code).toBe("INTERMEDIATE_LIMIT_EXCEEDED");
+    }
+
+    try {
+      evaluateRationalExpression({
+        kind: "PRODUCT",
+        terms: Array.from(
+          { length: MAX_VARIADIC_EXPRESSION_TERMS + 1 },
+          () => fractionExpression("1")
+        )
+      });
+      throw new Error("Expected rational term resource limit to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BoundedMathError);
+      expect((error as BoundedMathError).code).toBe("INTERMEDIATE_LIMIT_EXCEEDED");
+    }
   });
 
   it("enforces the expression depth boundary for direct utility calls", () => {
