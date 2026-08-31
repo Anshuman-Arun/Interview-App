@@ -421,11 +421,10 @@ function sortedCodeUnitStringCopy<T extends string>(
     const value = values[index];
     if (value === undefined) continue;
     let insertionIndex = output.length;
-    while (
-      insertionIndex > 0
-      && compareCodeUnits(output[insertionIndex - 1] ?? "", value) > 0
-    ) {
-      output[insertionIndex] = output[insertionIndex - 1] as T;
+    while (insertionIndex > 0) {
+      const previous = output[insertionIndex - 1];
+      if (previous === undefined || compareCodeUnits(previous, value) <= 0) break;
+      output[insertionIndex] = previous;
       insertionIndex -= 1;
     }
     output[insertionIndex] = value;
