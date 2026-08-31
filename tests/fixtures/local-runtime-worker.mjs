@@ -42,6 +42,9 @@ switch (mode) {
   case "ready":
     ready();
     break;
+  case "arg-ready":
+    ready({ argument: args[0] ?? null });
+    break;
   case "delayed-ready":
     setTimeout(() => ready(), Number(args[0] ?? 250));
     break;
