@@ -335,8 +335,24 @@ export class ModelAssetManager {
     }
 
     return installed.sort((left, right) => {
-      const leftKey = left.familyId + "\0" + left.version + "\0" + left.artifactId;
-      const rightKey = right.familyId + "\0" + right.version + "\0" + right.artifactId;
+      const leftKey = [
+        left.familyId,
+        left.artifactId,
+        left.version,
+        left.platform ?? "",
+        left.architecture ?? "",
+        left.variant ?? "",
+        left.sha256
+      ].join("\0");
+      const rightKey = [
+        right.familyId,
+        right.artifactId,
+        right.version,
+        right.platform ?? "",
+        right.architecture ?? "",
+        right.variant ?? "",
+        right.sha256
+      ].join("\0");
       return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
     });
   }
