@@ -1262,24 +1262,20 @@ export class ModelAssetManager {
       );
 
       setStage("DOWNLOADING");
-      let transferFailed = false;
       try {
         await stagePayload(stagedPayloadHandle);
       } catch (error) {
-        transferFailed = true;
+        await stagedPayloadHandle.close().catch(() => undefined);
         throw error;
-      } finally {
-        try {
-          await stagedPayloadHandle.close();
-        } catch (error) {
-          if (!transferFailed) {
-            throw new ModelAssetError(
-              "IO_ERROR",
-              "Unable to close the staged artifact payload after transfer.",
-              { cause: error }
-            );
-          }
-        }
+      }
+      try {
+        await stagedPayloadHandle.close();
+      } catch (error) {
+        throw new ModelAssetError(
+          "IO_ERROR",
+          "Unable to close the staged artifact payload after transfer.",
+          { cause: error }
+        );
       }
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled after transfer.");
