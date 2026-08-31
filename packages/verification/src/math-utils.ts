@@ -392,8 +392,6 @@ function addWideRational(
 }
 
 function canUseWideRationalSum(values: readonly ExactRational[]): boolean {
-  if (values.length > MAX_VARIADIC_EXPRESSION_TERMS) return false;
-
   let denominatorDigits = 0;
   for (const value of values) {
     denominatorDigits += decimalDigitCount(value.denominator);
@@ -477,6 +475,33 @@ export function sumRationals(values: readonly ExactRational[]): ExactRational {
   return result;
 }
 
+function canUseWideRationalProduct(values: readonly ExactRational[]): boolean {
+  let factorDigits = 0;
+  for (const value of values) {
+    factorDigits += decimalDigitCount(value.numerator) + decimalDigitCount(value.denominator);
+    if (factorDigits > MAX_MATH_STATEMENT_CHARACTERS) return false;
+  }
+  return true;
+}
+
+function wideRationalProduct(values: readonly ExactRational[]): ExactRational {
+  let numerator = 1n;
+  let denominator = 1n;
+
+  for (const value of values) {
+    numerator *= value.numerator;
+    denominator *= value.denominator;
+    const cancellation = gcdUnchecked(numerator, denominator);
+    numerator /= cancellation;
+    denominator /= cancellation;
+  }
+
+  return rational(
+    assertIntermediateIntegerBound(numerator),
+    assertIntermediateIntegerBound(denominator)
+  );
+}
+
 function fullyCancelledRationalProduct(values: readonly ExactRational[]): ExactRational {
   let negative = false;
   const numerators = values.map((value) => {
@@ -511,6 +536,7 @@ export function productRationals(values: readonly ExactRational[]): ExactRationa
   assertFiniteContainerLength(values.length);
   const normalizedValues = values.map(normalizeRational);
   if (normalizedValues.some((value) => value.numerator === 0n)) return rational(0n, 1n);
+  if (canUseWideRationalProduct(normalizedValues)) return wideRationalProduct(normalizedValues);
 
   const counts = rationalCounts(normalizedValues);
   const visited = new Set<string>();
