@@ -372,6 +372,104 @@ async function openStableRegularFile(
   }
 }
 
+export async function createStableStagingFile(
+  stagingDirectory: string,
+  filename: string,
+  expectedDirectoryIdentity: { readonly device: bigint; readonly inode: bigint }
+): Promise<FileHandle> {
+  const filePath = path.join(stagingDirectory, filename);
+  assertPathInsideRoot(stagingDirectory, filePath);
+
+  let beforeDirectory: BigIntStats;
+  try {
+    beforeDirectory = await lstat(stagingDirectory, { bigint: true });
+  } catch (error) {
+    throw new ModelAssetError(
+      "UNSAFE_PATH",
+      "Artifact staging directory disappeared before payload creation.",
+      { cause: error }
+    );
+  }
+  if (beforeDirectory.isSymbolicLink()
+      || !beforeDirectory.isDirectory()
+      || beforeDirectory.dev !== expectedDirectoryIdentity.device
+      || beforeDirectory.ino !== expectedDirectoryIdentity.inode) {
+    throw new ModelAssetError(
+      "UNSAFE_PATH",
+      "Artifact staging directory changed before payload creation."
+    );
+  }
+
+  let handle: FileHandle;
+  try {
+    handle = await open(filePath, "wx", 0o600);
+  } catch (error) {
+    if (isDiskSpaceError(error)) {
+      throw new ModelAssetError(
+        "INSUFFICIENT_DISK_SPACE",
+        "Unable to create the staged artifact payload because the filesystem is full.",
+        { cause: error }
+      );
+    }
+    if (errnoCode(error) === "EEXIST") {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Artifact staging payload path already exists unexpectedly.",
+        { cause: error }
+      );
+    }
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to create the staged artifact payload.",
+      { cause: error }
+    );
+  }
+
+  let openedStat: BigIntStats | undefined;
+  try {
+    openedStat = await handle.stat({ bigint: true });
+    const [afterDirectory, pathStat] = await Promise.all([
+      lstat(stagingDirectory, { bigint: true }),
+      lstat(filePath, { bigint: true })
+    ]);
+    if (!openedStat.isFile()
+        || afterDirectory.isSymbolicLink()
+        || !afterDirectory.isDirectory()
+        || afterDirectory.dev !== expectedDirectoryIdentity.device
+        || afterDirectory.ino !== expectedDirectoryIdentity.inode
+        || pathStat.isSymbolicLink()
+        || !pathStat.isFile()
+        || pathStat.dev !== openedStat.dev
+        || pathStat.ino !== openedStat.ino) {
+      throw new ModelAssetError(
+        "UNSAFE_PATH",
+        "Artifact staging path changed while the payload file was being created."
+      );
+    }
+    return handle;
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    if (openedStat !== undefined) {
+      try {
+        const current = await lstat(filePath, { bigint: true });
+        if (!current.isDirectory()
+            && current.dev === openedStat.dev
+            && current.ino === openedStat.ino) {
+          await unlink(filePath);
+        }
+      } catch {
+        // Best-effort cleanup only; no payload bytes have been written yet.
+      }
+    }
+    if (error instanceof ModelAssetError) throw error;
+    throw new ModelAssetError(
+      "IO_ERROR",
+      "Unable to verify the staged artifact payload file.",
+      { cause: error }
+    );
+  }
+}
+
 export async function pathEntryExists(candidate: string): Promise<boolean> {
   try {
     await lstat(candidate);
