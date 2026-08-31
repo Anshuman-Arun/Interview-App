@@ -1460,6 +1460,34 @@ describe("local model asset manager", () => {
     });
   });
 
+  it("fails cache accounting closed on over-wide managed entries without starting HTTP", async () => {
+    const payload = Buffer.from("wide-staging");
+    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const root = await newRoot();
+    const stale = path.join(
+      root,
+      "tmp",
+      `${"d".repeat(64)}-00000000-0000-4000-8000-000000000000`
+    );
+    await mkdir(stale, { recursive: true });
+    await writeFile(path.join(stale, "one.bin"), "1");
+    await writeFile(path.join(stale, "two.bin"), "2");
+    await writeFile(path.join(stale, "three.bin"), "3");
+
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
+    const manager = managerFor(root, {
+      maxCacheBytes: managedArtifactBytes(manifest) + 1024
+    });
+
+    await expect(manager.install(manifest)).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect(fixture.requestCount()).toBe(0);
+
+    await manager.cleanupTemporary();
+    await expect(readdir(stale)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("rechecks cache growth after reservation before atomic publication", async () => {
     const payload = Buffer.from("late-cache-growth");
     const started = deferred<void>();
