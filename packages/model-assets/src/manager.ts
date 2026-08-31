@@ -846,6 +846,26 @@ export class ModelAssetManager {
     }
   }
 
+  private async beginSharedInstallation(paths: CachePaths, key: string): Promise<void> {
+    await this.withMutationGate(paths, async (shared) => {
+      shared.activeInstallationCounts.set(
+        key,
+        (shared.activeInstallationCounts.get(key) ?? 0) + 1
+      );
+    });
+  }
+
+  private async endSharedInstallation(paths: CachePaths, key: string): Promise<void> {
+    await this.withMutationGate(paths, async (shared) => {
+      const count = shared.activeInstallationCounts.get(key) ?? 0;
+      if (count <= 1) {
+        shared.activeInstallationCounts.delete(key);
+      } else {
+        shared.activeInstallationCounts.set(key, count - 1);
+      }
+    });
+  }
+
   private async performInstallation(
     manifest: AssetManifest,
     signal: AbortSignal,
@@ -855,9 +875,11 @@ export class ModelAssetManager {
   ): Promise<string> {
     const paths = await this.getSafeCachePaths();
     const key = artifactInstallationKey(manifest);
-    const installationDirectory = path.join(paths.artifacts, key);
+    await this.beginSharedInstallation(paths, key);
+    try {
+      const installationDirectory = path.join(paths.artifacts, key);
 
-    setStage("VERIFYING");
+      setStage("VERIFYING");
     const initial = await this.checkInstallation(manifest, signal);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
     this.rejectTransientInstallationFailure(initial);
@@ -891,6 +913,8 @@ export class ModelAssetManager {
       key + "-" + randomUUID()
     );
     await this.reserveCapacity(paths, reservationBytes, signal);
+    const shared = sharedCacheStateFor(paths);
+    shared.activeStagingDirectories.add(stagingDirectory);
     let published = false;
     let reservationHeld = true;
 
@@ -998,12 +1022,16 @@ export class ModelAssetManager {
       // Once an operation stops owning its staging directory, capacity scans must
       // count any bytes still present there before the reservation is released.
       setStagingDirectory(undefined);
+      shared.activeStagingDirectories.delete(stagingDirectory);
       if (reservationHeld) {
         await this.releaseCapacity(paths, reservationBytes);
       }
       if (!published) {
         await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
       }
+    }
+    } finally {
+      await this.endSharedInstallation(paths, key);
     }
   }
 
