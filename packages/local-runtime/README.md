@@ -42,7 +42,7 @@ The default policy is `NEVER`. `ON_FAILURE` requires an explicit finite retry bu
 
 `stopAll()` stops components sequentially in reverse registration order and waits for each managed child to terminate. It continues attempting to stop the remaining components if one fails, then reports an aggregate failure rather than returning success while a known managed child is still alive.
 
-Node core cannot create Windows Job Objects, and no portable API can control descendants that deliberately daemonize/disassociate from the managed process tree. Local components are therefore required not to daemonize; ordinary child trees are handled by the escalation path above.
+Node core cannot create Windows Job Objects, and no portable API can retain a durable Windows tree handle after the root process exits. Tree-aware `taskkill /T` escalation is therefore verified when escalation owns a live root process; if that mechanism is unavailable, shutdown fails closed rather than treating a root-only kill as proof that descendants are gone. A Windows root that exits before tree-aware escalation cannot provide the same descendant-absence guarantee through Node core alone. Local components must not daemonize or intentionally leave long-lived descendants behind.
 
 ## Relationship to local-compute
 
