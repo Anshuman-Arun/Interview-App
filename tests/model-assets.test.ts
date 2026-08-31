@@ -174,6 +174,29 @@ describe("local model asset manager", () => {
     expect(serialized).not.toContain(fixture.baseUrl);
   });
 
+  it("lists installed variants in deterministic order", async () => {
+    const payload = Buffer.from("variant-order");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+    const manager = managerFor(root);
+
+    const variantZ = manifestFor(payload, "https://example.test/z.bin", {
+      artifactId: "multi",
+      variant: "z"
+    });
+    const variantA = manifestFor(payload, "https://example.test/a.bin", {
+      artifactId: "multi",
+      variant: "a"
+    });
+    await manager.importLocal(variantZ, source);
+    await manager.importLocal(variantA, source);
+
+    const listed = await manager.listInstalledArtifacts();
+    expect(listed.map((entry) => entry.variant)).toEqual(["a", "z"]);
+  });
+
   it("reuses a verified installed artifact without another download", async () => {
     const payload = Buffer.from("already-installed");
     const root = await newRoot();
@@ -737,6 +760,36 @@ describe("local model asset manager", () => {
 
     expect(await readdir(path.join(root, "tmp"))).toEqual(["foreign"]);
     expect(await readFile(path.join(foreign, "sentinel.txt"), "utf8")).toBe("keep-me");
+  });
+
+  it("fails temporary cleanup bounds before deleting any entry", async () => {
+    const root = await newRoot();
+    const manager = managerFor(root, { maxListEntries: 1 });
+    const manifest = manifestFor(Buffer.from("seed"), "https://example.test/seed.bin");
+    await manager.inspect(manifest);
+
+    const first = path.join(
+      root,
+      "tmp",
+      `${"1".repeat(64)}-00000000-0000-4000-8000-000000000000`
+    );
+    const second = path.join(
+      root,
+      "tmp",
+      `${"2".repeat(64)}-00000000-0000-4000-8000-000000000000`
+    );
+    await mkdir(first);
+    await mkdir(second);
+    await writeFile(path.join(first, "partial.bin"), "first");
+    await writeFile(path.join(second, "partial.bin"), "second");
+
+    await expect(manager.cleanupTemporary()).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect((await readdir(path.join(root, "tmp"))).sort()).toEqual([
+      path.basename(first),
+      path.basename(second)
+    ].sort());
   });
 
   it("cleans crash-left manager removal tombstones", async () => {
