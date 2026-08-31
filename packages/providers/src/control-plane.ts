@@ -73,7 +73,7 @@ export interface SafeProviderConfigurationRecord {
 export const SafeProviderConfigurationValueSchema: z.ZodType<SafeProviderConfigurationValue> = z.lazy(() =>
   z.union([
     z.string().max(4096),
-    z.number().finite(),
+    z.number(),
     z.boolean(),
     z.null(),
     z.array(SafeProviderConfigurationValueSchema).max(128),
@@ -195,8 +195,14 @@ function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function isSafeProviderConfigurationArray(
+  value: SafeProviderConfigurationValue
+): value is readonly SafeProviderConfigurationValue[] {
+  return Array.isArray(value);
+}
+
 function deepFreezeSafeValue(value: SafeProviderConfigurationValue): SafeProviderConfigurationValue {
-  if (Array.isArray(value)) {
+  if (isSafeProviderConfigurationArray(value)) {
     const frozen = value.map((item) => deepFreezeSafeValue(item));
     return Object.freeze(frozen);
   }
@@ -213,7 +219,7 @@ function deepFreezeSafeValue(value: SafeProviderConfigurationValue): SafeProvide
 }
 
 function assertNoSecretSettings(value: SafeProviderConfigurationValue, path = "settings"): void {
-  if (Array.isArray(value)) {
+  if (isSafeProviderConfigurationArray(value)) {
     value.forEach((item, index) => assertNoSecretSettings(item, path + "[" + String(index) + "]"));
     return;
   }
@@ -578,7 +584,7 @@ export async function evaluateProviderReadiness(input: {
         modelId: resolved.model.id
       });
     }
-    let available = false;
+    let available: boolean;
     try {
       available = await input.secretResolver.hasSecret(reference);
     } catch {
@@ -625,7 +631,7 @@ function canonicalizeSafeValue(value: SafeProviderConfigurationValue): string {
     return JSON.stringify(value);
   }
   if (typeof value === "string") return JSON.stringify(value);
-  if (Array.isArray(value)) {
+  if (isSafeProviderConfigurationArray(value)) {
     return "[" + value.map((item) => canonicalizeSafeValue(item)).join(",") + "]";
   }
   const entries = Object.entries(value)

@@ -72,6 +72,12 @@ function createUnknownCapabilityProvider(): ProviderDefinition {
   });
 }
 
+function firstModel(definition: ProviderDefinition) {
+  const model = definition.models[0];
+  if (model === undefined) throw new Error("Test provider definition has no model");
+  return model;
+}
+
 describe("provider control plane registry", () => {
   it("registers and enumerates providers/models deterministically", () => {
     const registry = new ProviderRegistry();
@@ -106,7 +112,7 @@ describe("provider control plane registry", () => {
       definitionVersion: "1",
       capabilityVersion: "1",
       credentialRequirement: "NONE",
-      models: [model!, model!]
+      models: [model, model]
     })).toThrow(expect.objectContaining({ code: "DUPLICATE_MODEL" }));
   });
 
@@ -127,7 +133,7 @@ describe("provider control plane registry", () => {
 
 describe("provider capability declarations and matching", () => {
   it("matches supported requirements and separates unsupported from unknown", () => {
-    const mockCapabilities = MOCK_PROVIDER_DEFINITION.models[0]!.capabilities;
+    const mockCapabilities = firstModel(MOCK_PROVIDER_DEFINITION).capabilities;
     expect(matchCapabilityRequirements(
       mockCapabilities,
       ["TEXT_GENERATION", "LOCAL_EXECUTION", "STRUCTURED_OUTPUT"]
@@ -146,7 +152,7 @@ describe("provider capability declarations and matching", () => {
       unknown: []
     });
 
-    const uncertain = createUnknownCapabilityProvider().models[0]!.capabilities;
+    const uncertain = firstModel(createUnknownCapabilityProvider()).capabilities;
     expect(matchCapabilityRequirements(uncertain, ["IMAGE_INPUT"])).toEqual({
       compatible: false,
       unsupported: [],
@@ -182,7 +188,7 @@ describe("provider configuration and secret boundary", () => {
       ...createUnknownCapabilityProvider(),
       id: "settings-provider",
       models: [{
-        ...createUnknownCapabilityProvider().models[0]!,
+        ...firstModel(createUnknownCapabilityProvider()),
         id: "settings-model"
       }],
       validateSettings(settings) {
@@ -223,7 +229,7 @@ describe("provider configuration and secret boundary", () => {
       ...createUnknownCapabilityProvider(),
       id: "settings-provider",
       models: [{
-        ...createUnknownCapabilityProvider().models[0]!,
+        ...firstModel(createUnknownCapabilityProvider()),
         id: "settings-model"
       }],
       validateSettings(settings) {
@@ -405,7 +411,7 @@ describe("adapter factory boundary and built-in registrations", () => {
   it("keeps built-in Gemini registration descriptive rather than policy approval", () => {
     expect(GEMINI_API_PROVIDER_DEFINITION.kind).toBe("REMOTE_API");
     expect(GEMINI_API_PROVIDER_DEFINITION.credentialRequirement).toBe("REQUIRED");
-    expect(GEMINI_API_PROVIDER_DEFINITION.models[0]!.capabilities.dataUse)
+    expect(firstModel(GEMINI_API_PROVIDER_DEFINITION).capabilities.dataUse)
       .toBe("REMOTE_MAY_BE_USED_FOR_IMPROVEMENT");
   });
 
