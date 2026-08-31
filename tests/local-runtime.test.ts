@@ -1090,6 +1090,44 @@ describe("local worker lifecycle manager", () => {
     expect(throwingProbeCalls).toBeGreaterThan(0);
   });
 
+  it("snapshots returned handshake state before queued caller mutation", async () => {
+    const runtime = manager();
+    const metadata = { note: "initial" };
+    const handshake = {
+      componentVersion: "fixture-1",
+      protocolVersion: 1,
+      metadata
+    };
+
+    runtime.register(definition("handshake-mutation", "line-ready", {
+      expectedHandshake: {
+        componentVersion: "fixture-1",
+        protocolVersion: 1
+      },
+      readiness: {
+        kind: "STDOUT_LINE",
+        evaluate: (line) => {
+          if (line !== "READY-LINE") return false;
+          queueMicrotask(() => {
+            handshake.componentVersion = "mutated-after-return";
+            metadata.note = "mutated-after-return";
+          });
+          return { ready: true, handshake };
+        }
+      }
+    }));
+
+    const status = await runtime.start("handshake-mutation");
+    await Promise.resolve();
+    expect(handshake.componentVersion).toBe("mutated-after-return");
+    expect(metadata.note).toBe("mutated-after-return");
+    expect(status.handshake).toMatchObject({
+      componentVersion: "fixture-1",
+      protocolVersion: 1,
+      metadata: { note: "initial" }
+    });
+  });
+
   it("rejects malformed reported handshake metadata", async () => {
     const runtime = manager();
     runtime.register(definition("bad-handshake-shape", "ready", {
