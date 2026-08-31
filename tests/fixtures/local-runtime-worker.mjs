@@ -156,6 +156,19 @@ switch (mode) {
     ready({ childPid: child.pid });
     break;
   }
+  case "tree-parent-crash": {
+    const child = spawn(process.execPath, [import.meta.filename, "ignore-shutdown"], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    if (child.pid === undefined) throw new Error("fixture child did not receive a pid");
+    ready({ childPid: child.pid });
+    setTimeout(() => {
+      clearInterval(keepAlive);
+      process.exit(16);
+    }, Number(args[0] ?? 40));
+    break;
+  }
   case "delayed-pipe-child":
     setTimeout(() => {
       console.error("delayed-pipe-child-exit");
