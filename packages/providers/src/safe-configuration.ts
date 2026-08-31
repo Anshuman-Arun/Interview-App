@@ -73,7 +73,7 @@ const BASIC_AUTH_CANDIDATE_PATTERN =
   /\bbasic\s+([A-Za-z0-9+/]+={0,2})(?=$|[^A-Za-z0-9+/=])/iu;
 const COMMON_API_KEY_PATTERN = /\b(?:sk[-_][a-z0-9_-]{16,}|AIza[a-z0-9_-]{20,})\b/iu;
 const HIGH_CONFIDENCE_SECRET_ASSIGNMENT_PATTERN =
-  /\b(authorization(?:[-_]?header)?|http[-_]?authorization|auth[-_]?header|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|client[-_]?token|session[-_]?token|auth[-_]?token|bearer[-_]?token|password|passwd|passphrase|private[-_]?key|credential|cookie|set[-_]?cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))/iu;
+  /\b(authorization(?:[-_]?header)?|http[-_]?authorization|auth[-_]?header|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|client[-_]?token|session[-_]?token|auth[-_]?token|bearer[-_]?token|client[-_]?secret|provider[-_]?secret|webhook[-_]?secret|secret[-_]?key|secret[-_]?access[-_]?key|aws[-_]?secret[-_]?access[-_]?key|password|passwd|passphrase|private[-_]?key|credential|cookie|set[-_]?cookie)\b\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\s&,;]+))/iu;
 const GENERIC_SECRET_ASSIGNMENT_PATTERN =
   /\b(?:token|secret)\b\s*[:=]\s*["']?([^\s"'&]{12,})["']?/iu;
 const AUTHORIZATION_SCHEME_VALUE_PATTERN =
@@ -154,7 +154,7 @@ function normalizeConfigurationKey(key: string): string {
   return key.normalize("NFKC").replace(/[^a-z0-9]/giu, "").toLowerCase();
 }
 
-function isSecretConfigurationKey(key: string): boolean {
+function isSecretConfigurationKey(key: string, value: unknown): boolean {
   const normalized = normalizeConfigurationKey(key);
   if (SECRET_CONFIGURATION_KEYS.has(normalized)) return true;
   return normalized.endsWith("accesstoken")
@@ -215,7 +215,14 @@ function isSecretConfigurationKey(key: string): boolean {
     || normalized.endsWith("passwordref")
     || normalized.endsWith("passwordrefs")
     || normalized.endsWith("passphraseref")
-    || normalized.endsWith("passphraserefs");
+    || normalized.endsWith("passphraserefs")
+    || (
+      (normalized.endsWith("token") || normalized.endsWith("tokens"))
+      && (
+        typeof value === "string"
+        || (typeof value === "object" && value !== null)
+      )
+    );
 }
 
 const BASE64_ALPHABET =
@@ -377,8 +384,8 @@ function inspectConfigurationRecord(
     ) {
       failMalformedConfiguration();
     }
-    if (rejectSecrets && isSecretConfigurationKey(key)) failSecretConfiguration();
     const item: unknown = descriptor.value;
+    if (rejectSecrets && isSecretConfigurationKey(key, item)) failSecretConfiguration();
     output[key] = inspectConfigurationValue(item, state, depth + 1, rejectSecrets);
   }
   return Object.freeze(output);

@@ -157,6 +157,10 @@ describe("provider configuration secret exclusion", () => {
       "access_token=short",
       "access_token=required",
       "credential=abc",
+      "clientSecret=abc",
+      "provider_secret=abc",
+      "secretKey=abc",
+      "aws_secret_access_key=abc",
       "authorization=Bearer x",
       "authorizationHeader=Basic YTpi",
       "http_authorization: Bearer abc",
@@ -235,7 +239,10 @@ describe("provider configuration secret exclusion", () => {
       { nested: { passwords: ["value-one"] } },
       { privateKeys: ["value-one"] },
       { authorizationHeader: "placeholder" },
-      { authHeader: "placeholder" }
+      { authHeader: "placeholder" },
+      { githubToken: "opaque-value" },
+      { huggingFaceToken: "opaque-value" },
+      { customTokens: ["opaque-value"] }
     ]) {
       expect(() => resolveProviderConfiguration({
         registry,
@@ -249,7 +256,9 @@ describe("provider configuration secret exclusion", () => {
         authMode: "none",
         keyRotationInterval: 30,
         maxTokens: 2_048,
-        outputTokens: 512
+        outputTokens: 512,
+        inputTokens: 256,
+        tokenCount: 42
       })
     })).not.toThrow();
   });
