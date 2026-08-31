@@ -81,7 +81,6 @@ export interface InstalledArtifactSummary {
 interface InFlightEntry {
   readonly controller: AbortController;
   stage: "DOWNLOADING" | "VERIFYING";
-  stagingDirectory: string | undefined;
   waiters: number;
   settled: boolean;
   promise: Promise<string>;
@@ -278,11 +277,10 @@ export class ModelAssetManager {
     return await this.joinOrStart(
       manifest,
       validatedSignal,
-      async (internalSignal, setStage, setStagingDirectory) => await this.performInstallation(
+      async (internalSignal, setStage) => await this.performInstallation(
         manifest,
         internalSignal,
         setStage,
-        setStagingDirectory,
         async (destination) => {
           await downloadHttpArtifact(manifest.sourceUrl, destination, {
             maxBytes: this.maxArtifactBytes,
@@ -316,11 +314,10 @@ export class ModelAssetManager {
     return await this.joinOrStart(
       manifest,
       validatedSignal,
-      async (internalSignal, setStage, setStagingDirectory) => await this.performInstallation(
+      async (internalSignal, setStage) => await this.performInstallation(
         manifest,
         internalSignal,
         setStage,
-        setStagingDirectory,
         async (destination) => {
           await copyLocalArtifactBounded(
             rawSourcePath,
@@ -645,8 +642,7 @@ export class ModelAssetManager {
     signal: AbortSignal | undefined,
     operation: (
       signal: AbortSignal,
-      setStage: (stage: "DOWNLOADING" | "VERIFYING") => void,
-      setStagingDirectory: (directory: string | undefined) => void
+      setStage: (stage: "DOWNLOADING" | "VERIFYING") => void
     ) => Promise<string>
   ): Promise<string> {
     if (signal?.aborted === true) {
@@ -670,7 +666,6 @@ export class ModelAssetManager {
       entry = {
         controller,
         stage: "VERIFYING",
-        stagingDirectory: undefined,
         waiters: 0,
         settled: false,
         promise: Promise.resolve("")
@@ -680,9 +675,6 @@ export class ModelAssetManager {
         controller.signal,
         (stage) => {
           current.stage = stage;
-        },
-        (directory) => {
-          current.stagingDirectory = directory;
         }
       ).then((installedPath) => {
         this.lastFailures.delete(key);
@@ -932,7 +924,6 @@ export class ModelAssetManager {
     manifest: AssetManifest,
     signal: AbortSignal,
     setStage: (stage: "DOWNLOADING" | "VERIFYING") => void,
-    setStagingDirectory: (directory: string | undefined) => void,
     stagePayload: (destination: string) => Promise<void>
   ): Promise<string> {
     const paths = await this.getSafeCachePaths();
@@ -972,7 +963,6 @@ export class ModelAssetManager {
     let reservationHeld = true;
 
     try {
-      setStagingDirectory(stagingDirectory);
       if (signal.aborted) {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled.");
       }
@@ -1073,7 +1063,6 @@ export class ModelAssetManager {
     } finally {
       // Once an operation stops owning its staging directory, capacity scans must
       // count any bytes still present there before the reservation is released.
-      setStagingDirectory(undefined);
       shared.activeStagingDirectories.delete(stagingDirectory);
       if (reservationHeld) {
         await this.releaseCapacity(paths, reservationBytes);
