@@ -99,9 +99,13 @@ describe("provider configuration secret exclusion", () => {
   it("rejects common raw secret payloads even when hidden under innocuous keys", () => {
     for (const value of [
       "Bearer abcdefghijklmnop.12345678",
+      "Bearer abcdefghijklmnop",
       "Basic Zm9vOmJhcg==",
+      "Basic dXNlcjpwYXNz",
       "AIza123456789012345678901234567890",
+      "sk_abcdefghijklmno",
       "token=raw-private-token",
+      "token=abcdefghijklmnopqrst",
       "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----"
     ]) {
       expect(() => validateProviderConfiguration(settingsConfiguration({ endpoint: value })))
@@ -116,14 +120,46 @@ describe("provider configuration secret exclusion", () => {
     for (const mode of [
       "Basic mode",
       "Basic configuration",
+      "Basic abcdefgh",
       "Bearer strategy",
-      "Use basic defaults"
+      "Use basic defaults",
+      "token: bucket",
+      "secret: sauce",
+      "authorization: required",
+      "api_key = placeholder"
     ]) {
       expect(() => resolveProviderConfiguration({
         registry,
         configuration: settingsConfiguration({ mode })
       })).not.toThrow();
     }
+  });
+
+  it("rejects plural and header-shaped credential fields at any settings depth", () => {
+    const registry = new ProviderRegistry();
+    registry.register(createSettingsProviderInput());
+
+    for (const settings of [
+      { apiKeys: ["value-one"] },
+      { nested: { tokens: ["value-one"] } },
+      { nested: { passwords: ["value-one"] } },
+      { privateKeys: ["value-one"] },
+      { authorizationHeader: "placeholder" },
+      { authHeader: "placeholder" }
+    ]) {
+      expect(() => resolveProviderConfiguration({
+        registry,
+        configuration: settingsConfiguration(settings)
+      })).toThrow(expect.objectContaining({ code: "SECRET_IN_CONFIGURATION" }));
+    }
+
+    expect(() => resolveProviderConfiguration({
+      registry,
+      configuration: settingsConfiguration({
+        authMode: "none",
+        keyRotationInterval: 30
+      })
+    })).not.toThrow();
   });
 
   it("rejects raw secret-looking values in persistable identity and reasoning fields", () => {
@@ -330,6 +366,32 @@ describe("provider configuration hostile object handling", () => {
       nested: { count: 2 },
       values: [1, { mode: "safe" }]
     });
+  });
+
+  it("isolates sanitized settings from polluted Object.prototype values", () => {
+    const registry = new ProviderRegistry();
+    let inheritedValue: unknown = "not-observed";
+    registry.register(createSettingsProviderInput((settings) => {
+      inheritedValue = settings.injectedSetting;
+      return settings;
+    }));
+
+    Object.defineProperty(Object.prototype, "injectedSetting", {
+      configurable: true,
+      enumerable: false,
+      value: "polluted-value"
+    });
+    try {
+      const resolved = resolveProviderConfiguration({
+        registry,
+        configuration: settingsConfiguration({ mode: "safe" })
+      });
+      expect(inheritedValue).toBeUndefined();
+      expect(Object.getPrototypeOf(resolved.configuration.settings)).toBeNull();
+      expect(resolved.configuration.settings).toEqual({ mode: "safe" });
+    } finally {
+      Reflect.deleteProperty(Object.prototype, "injectedSetting");
+    }
   });
 
   it("rejects revoked proxies without throwing non-control-plane errors", () => {

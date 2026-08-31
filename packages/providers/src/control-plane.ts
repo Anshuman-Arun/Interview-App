@@ -47,7 +47,8 @@ export type ProviderControlPlaneErrorCode =
   | "ADAPTER_FACTORY_FAILED"
   | "ADAPTER_DEFINITION_MISMATCH"
   | "INVALID_FACTORY_INPUT"
-  | "INVALID_REGISTRY";
+  | "INVALID_REGISTRY"
+  | "CAPABILITY_STATUS_UNKNOWN";
 
 export class ProviderControlPlaneError extends Error {
   public constructor(
@@ -416,6 +417,7 @@ function inspectPlainDataObjectProperties(
   }
   if (symbols.length > 0) throw new ProviderControlPlaneError(errorCode, message);
   const inspected: Record<string, unknown> = {};
+  Object.setPrototypeOf(inspected, null);
   for (const [key, descriptor] of Object.entries(descriptors)) {
     if (
       !allowedKeys.has(key)
@@ -887,11 +889,16 @@ function defineProviderValue(input: unknown): ProviderDefinition {
         && (
           model.capabilities.remoteExecution !== "SUPPORTED"
           || model.capabilities.localExecution !== "UNSUPPORTED"
+          || model.capabilities.dataUse === "LOCAL_ONLY"
         ))
       || (metadataResult.data.kind === "LOCAL_PROCESS"
         && (
           model.capabilities.localExecution !== "SUPPORTED"
           || model.capabilities.remoteExecution !== "UNSUPPORTED"
+          || (
+            model.capabilities.dataUse !== "UNKNOWN"
+            && model.capabilities.dataUse !== "LOCAL_ONLY"
+          )
         ))
     ) {
       throw new ProviderControlPlaneError(
@@ -1268,17 +1275,29 @@ function validateReasoningConfiguration(
   reasoning: ProviderConfiguration["reasoning"]
 ): void {
   if (reasoning === undefined) return;
-  if (model.capabilities.reasoningControls !== "SUPPORTED") {
+  if (model.capabilities.reasoningControls === "UNKNOWN") {
+    throw new ProviderControlPlaneError(
+      "CAPABILITY_STATUS_UNKNOWN",
+      "Configured model reasoning-control support is unknown"
+    );
+  }
+  if (model.capabilities.reasoningControls === "UNSUPPORTED") {
     throw new ProviderControlPlaneError(
       "INCOMPATIBLE_CAPABILITY",
-      "Configured model does not establish reasoning-control support"
+      "Configured model does not support reasoning controls"
     );
   }
   const levels = model.capabilities.reasoningLevels;
-  if (levels === "UNKNOWN" || !levels.includes(reasoning.level)) {
+  if (levels === "UNKNOWN") {
+    throw new ProviderControlPlaneError(
+      "CAPABILITY_STATUS_UNKNOWN",
+      "Configured model reasoning levels are unknown"
+    );
+  }
+  if (!levels.includes(reasoning.level)) {
     throw new ProviderControlPlaneError(
       "INCOMPATIBLE_CAPABILITY",
-      "Configured model does not establish the requested reasoning level"
+      "Configured model does not support the requested reasoning level"
     );
   }
 }
@@ -1312,10 +1331,16 @@ function resolveParsedProviderConfiguration(input: {
   validateCredentialReference(provider, configuration.credentialRef);
   validateReasoningConfiguration(model, configuration.reasoning);
   const match = matchCapabilityRequirements(model.capabilities, input.requirements ?? []);
-  if (!match.compatible) {
+  if (match.unsupported.length > 0) {
     throw new ProviderControlPlaneError(
       "INCOMPATIBLE_CAPABILITY",
-      "Configured model does not establish required capabilities"
+      "Configured model does not support required capabilities"
+    );
+  }
+  if (match.unknown.length > 0) {
+    throw new ProviderControlPlaneError(
+      "CAPABILITY_STATUS_UNKNOWN",
+      "Configured model required capabilities are unknown"
     );
   }
   return new ResolvedProviderConfigurationValue(configuration, provider, model);
@@ -1414,13 +1439,14 @@ export async function evaluateProviderReadiness(input: {
       configuration: parsed
     });
   } catch (error) {
+    const reason = error instanceof ProviderControlPlaneError
+      ? error.code
+      : "MALFORMED_CONFIGURATION";
     return Object.freeze({
-      state: "MISCONFIGURED",
+      state: reason === "CAPABILITY_STATUS_UNKNOWN" ? "UNKNOWN" : "MISCONFIGURED",
       providerId: parsed.providerId,
       modelId: parsed.modelId,
-      reason: error instanceof ProviderControlPlaneError
-        ? error.code
-        : "MALFORMED_CONFIGURATION"
+      reason
     });
   }
 
@@ -1438,12 +1464,20 @@ export async function evaluateProviderReadiness(input: {
           : "MALFORMED_REQUIREMENTS"
       });
     }
-    if (!match.compatible) {
+    if (match.unsupported.length > 0) {
       return Object.freeze({
         state: "MISCONFIGURED",
         providerId: resolved.provider.id,
         modelId: resolved.model.id,
         reason: "INCOMPATIBLE_CAPABILITY"
+      });
+    }
+    if (match.unknown.length > 0) {
+      return Object.freeze({
+        state: "UNKNOWN",
+        providerId: resolved.provider.id,
+        modelId: resolved.model.id,
+        reason: "CAPABILITY_STATUS_UNKNOWN"
       });
     }
   }

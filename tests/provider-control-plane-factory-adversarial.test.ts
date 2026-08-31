@@ -228,6 +228,45 @@ describe("provider registration snapshot semantics", () => {
         })
       }]
     }))).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+
+    expect(() => defineProvider(providerInput({
+      kind: "REMOTE_API",
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: capabilities({
+          localExecution: "UNSUPPORTED",
+          remoteExecution: "SUPPORTED",
+          dataUse: "LOCAL_ONLY"
+        })
+      }]
+    }))).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+
+    expect(() => defineProvider(providerInput({
+      kind: "LOCAL_PROCESS",
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: capabilities({
+          localExecution: "SUPPORTED",
+          remoteExecution: "UNSUPPORTED",
+          dataUse: "REMOTE_NO_TRAINING"
+        })
+      }]
+    }))).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+
+    expect(() => defineProvider(providerInput({
+      kind: "REMOTE_API",
+      models: [{
+        id: "test-model",
+        displayName: "Test Model",
+        capabilities: capabilities({
+          localExecution: "UNSUPPORTED",
+          remoteExecution: "SUPPORTED",
+          dataUse: "UNKNOWN"
+        })
+      }]
+    }))).not.toThrow();
   });
 });
 

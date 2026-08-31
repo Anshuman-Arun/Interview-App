@@ -169,6 +169,61 @@ describe("provider capability declarations and matching", () => {
     });
   });
 
+  it("keeps unknown capability status distinct from known incompatibility", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createUnknownCapabilityProvider());
+    const configuration = {
+      version: 1,
+      providerId: "uncertain-provider",
+      modelId: "uncertain-model",
+      enabled: true
+    };
+
+    expect(() => resolveProviderConfiguration({
+      registry,
+      configuration,
+      requirements: ["IMAGE_INPUT"]
+    })).toThrow(expect.objectContaining({ code: "CAPABILITY_STATUS_UNKNOWN" }));
+
+    await expect(evaluateProviderReadiness({
+      registry,
+      configuration,
+      requirements: ["IMAGE_INPUT"]
+    })).resolves.toEqual({
+      state: "UNKNOWN",
+      providerId: "uncertain-provider",
+      modelId: "uncertain-model",
+      reason: "CAPABILITY_STATUS_UNKNOWN"
+    });
+  });
+
+  it("reports unknown reasoning support as UNKNOWN readiness while still failing closed", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createUnknownCapabilityProvider());
+    const configuration = {
+      version: 1,
+      providerId: "uncertain-provider",
+      modelId: "uncertain-model",
+      enabled: true,
+      reasoning: { level: "high" }
+    };
+
+    expect(() => resolveProviderConfiguration({
+      registry,
+      configuration
+    })).toThrow(expect.objectContaining({ code: "CAPABILITY_STATUS_UNKNOWN" }));
+
+    await expect(evaluateProviderReadiness({
+      registry,
+      configuration
+    })).resolves.toEqual({
+      state: "UNKNOWN",
+      providerId: "uncertain-provider",
+      modelId: "uncertain-model",
+      reason: "CAPABILITY_STATUS_UNKNOWN"
+    });
+  });
+
   it("rejects incompatible requested capabilities before adapter execution", () => {
     const registry = registerBuiltInProviders();
     expect(() => resolveProviderConfiguration({

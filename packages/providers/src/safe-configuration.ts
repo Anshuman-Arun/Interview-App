@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { redactSecrets } from "../../domain/src/index.js";
 
 const BLOCKED_CONFIGURATION_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 const SECRET_CONFIGURATION_KEYS = new Set([
@@ -27,10 +26,31 @@ const SECRET_CONFIGURATION_KEYS = new Set([
   "credential",
   "credentials",
   "cookie",
-  "setcookie"
+  "setcookie",
+  "authorizationheader",
+  "authheader",
+  "apikeys",
+  "tokens",
+  "accesstokens",
+  "refreshtokens",
+  "clienttokens",
+  "sessiontokens",
+  "authtokens",
+  "bearertokens",
+  "passwords",
+  "passphrases",
+  "secrets",
+  "secretkeys",
+  "privatekeys",
+  "cookies",
+  "setcookies"
 ]);
-const STANDALONE_AUTH_PATTERN = /\b(?:bearer\s+(?=[a-z0-9._~+/-]{16,})(?=[a-z0-9._~+/-]*[0-9._~+/-])[a-z0-9._~+/-]+|basic\s+(?=[a-z0-9+/=]{8,})(?=[a-z0-9+/=]*[0-9+/=])[a-z0-9+/]+={0,2})/iu;
-const COMMON_API_KEY_PATTERN = /\b(?:sk-[a-z0-9_-]{8,}|AIza[a-z0-9_-]{20,})\b/iu;
+const BEARER_AUTH_PATTERN = /\bbearer\s+[a-z0-9._~+/-]{16,}/iu;
+const BASIC_AUTH_CANDIDATE_PATTERN =
+  /\b[Bb][Aa][Ss][Ii][Cc]\s+([A-Za-z0-9+/]+={0,2})/u;
+const COMMON_API_KEY_PATTERN = /\b(?:sk[-_][a-z0-9_-]{8,}|AIza[a-z0-9_-]{20,})\b/iu;
+const SECRET_ASSIGNMENT_PATTERN =
+  /\b(?:authorization|api[-_]?key|access[-_]?token|client[-_]?token|token|secret|password|passphrase|private[-_]?key|credential)\b\s*[:=]\s*["']?([a-z0-9._~+/=-]{12,})["']?/iu;
 const PRIVATE_KEY_PATTERN = /-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----/iu;
 
 export const PROVIDER_CONFIGURATION_LIMITS = Object.freeze({
@@ -89,23 +109,44 @@ function isSecretConfigurationKey(key: string): boolean {
   const normalized = normalizeConfigurationKey(key);
   if (SECRET_CONFIGURATION_KEYS.has(normalized)) return true;
   return normalized.endsWith("token")
+    || normalized.endsWith("tokens")
     || normalized.endsWith("apikey")
+    || normalized.endsWith("apikeys")
     || normalized.endsWith("secret")
+    || normalized.endsWith("secrets")
     || normalized.endsWith("secretkey")
+    || normalized.endsWith("secretkeys")
     || normalized.endsWith("privatekey")
+    || normalized.endsWith("privatekeys")
     || normalized.endsWith("credential")
     || normalized.endsWith("credentials")
     || normalized.endsWith("password")
+    || normalized.endsWith("passwords")
     || normalized.endsWith("passphrase")
-    || normalized.endsWith("cookie");
+    || normalized.endsWith("passphrases")
+    || normalized.endsWith("cookie")
+    || normalized.endsWith("cookies")
+    || normalized.endsWith("authorizationheader")
+    || normalized.endsWith("authheader");
+}
+
+function containsBasicAuthCredential(value: string): boolean {
+  const candidate = BASIC_AUTH_CANDIDATE_PATTERN.exec(value)?.[1];
+  if (candidate === undefined || candidate.length < 8) return false;
+  return (
+    (/[A-Z]/u.test(candidate) && /[a-z]/u.test(candidate))
+    || /[0-9+/=]/u.test(candidate)
+  );
 }
 
 export function containsSecretLikeConfigurationText(value: string): boolean {
   const normalized = value.normalize("NFKC");
-  return redactSecrets(normalized) !== normalized
-    || STANDALONE_AUTH_PATTERN.test(normalized)
+  const assignedValue = SECRET_ASSIGNMENT_PATTERN.exec(normalized)?.[1];
+  return BEARER_AUTH_PATTERN.test(normalized)
+    || containsBasicAuthCredential(normalized)
     || COMMON_API_KEY_PATTERN.test(normalized)
-    || PRIVATE_KEY_PATTERN.test(normalized);
+    || PRIVATE_KEY_PATTERN.test(normalized)
+    || assignedValue !== undefined;
 }
 
 function consumeConfigurationNode(state: ConfigurationInspectionState): void {
@@ -181,6 +222,7 @@ function inspectConfigurationRecord(
   }
 
   const output: Record<string, SafeProviderConfigurationValue> = {};
+  Object.setPrototypeOf(output, null);
   for (const [key, descriptor] of entries.sort(([left], [right]) => compareCodeUnits(left, right))) {
     if (
       key.length === 0
@@ -284,6 +326,7 @@ export const SafeProviderConfigurationRecordSchema: z.ZodType<SafeProviderConfig
       }
       return inspected;
     } catch (error) {
-      return reportSchemaError(error, context);
+      context.addIssue({ code: "custom", message: schemaErrorMessage(error) });
+      return z.NEVER;
     }
   });
