@@ -12,6 +12,7 @@ import {
   VisionImageArtifact,
   VisionImageArtifactMetadataSchema,
   VisionPreprocessingError,
+  type ArtifactSourceBounds,
   type CoordinateTransform,
   type PixelDimensions,
   type VisionImageArtifactKind,
@@ -252,6 +253,7 @@ function artifactId(
   sourceRevision: number,
   parentArtifactId: string | undefined,
   dimensions: PixelDimensions,
+  sourceBounds: ArtifactSourceBounds,
   transform: CoordinateTransform,
   digest: string
 ): string {
@@ -263,6 +265,10 @@ function artifactId(
     parentArtifactId ?? null,
     dimensions.width,
     dimensions.height,
+    sourceBounds.x,
+    sourceBounds.y,
+    sourceBounds.width,
+    sourceBounds.height,
     transform.offsetX,
     transform.offsetY,
     transform.scaleX,
@@ -276,6 +282,7 @@ function encodeArtifact(
   source: VisionRasterSource,
   kind: VisionImageArtifactKind,
   raster: DecodedRaster,
+  sourceBounds: ArtifactSourceBounds,
   transform: CoordinateTransform,
   options: VisionProcessingOptions
 ): VisionImageArtifact {
@@ -304,6 +311,7 @@ function encodeArtifact(
       descriptor.sourceRevision,
       descriptor.parentArtifactId,
       dimensions,
+      sourceBounds,
       transform,
       digest
     ),
@@ -317,6 +325,7 @@ function encodeArtifact(
     encoding: "PNG",
     byteSize: encoded.length,
     contentDigest: digest,
+    sourceBounds,
     coordinateTransform: transform
   });
   return new VisionImageArtifact(metadata, encoded);
@@ -357,7 +366,7 @@ export async function cropImage(
   const cropped = await cropDecodedRaster(decoded, rect, options.signal);
   const descriptor = sourceDescriptor(source);
   const transform = composeCropTransform(descriptor.transform, rect);
-  const artifact = encodeArtifact(source, "CROP", cropped, transform, options);
+  const artifact = encodeArtifact(source, "CROP", cropped, rect, transform, options);
   throwIfAborted(options.signal);
 
   const diagnostics = createVisionProcessingDiagnostics({
@@ -535,7 +544,13 @@ export async function downscaleImage(
     { width: source.metadata.width, height: source.metadata.height },
     { width: plan.resultWidth, height: plan.resultHeight }
   );
-  const artifact = encodeArtifact(source, "RESIZED", resized, transform, options);
+  const resizeSourceBounds = Object.freeze({
+    x: 0,
+    y: 0,
+    width: source.metadata.width,
+    height: source.metadata.height
+  });
+  const artifact = encodeArtifact(source, "RESIZED", resized, resizeSourceBounds, transform, options);
   throwIfAborted(options.signal);
 
   const diagnostics = createVisionProcessingDiagnostics({
@@ -637,7 +652,7 @@ export async function tileImage(
     throwIfAborted(options.signal);
     const raster = await cropDecodedRaster(decoded, item.bounds, options.signal);
     const transform = composeCropTransform(descriptor.transform, item.bounds);
-    const artifact = encodeArtifact(source, "TILE", raster, transform, options);
+    const artifact = encodeArtifact(source, "TILE", raster, item.bounds, transform, options);
     totalOutputBytes += artifact.metadata.byteSize;
     if (!Number.isSafeInteger(totalOutputBytes) || totalOutputBytes > maximumTotalOutputBytes) {
       throw new VisionPreprocessingError(
