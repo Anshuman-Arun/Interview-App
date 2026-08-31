@@ -24,6 +24,10 @@ export const RectCornersSchema = z.object({
 }).strict();
 export type RectCorners = z.infer<typeof RectCornersSchema>;
 
+function assertArrayInput(value: unknown, label: string): void {
+  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
+}
+
 function invalidRect(message: string): never {
   throw new VisionPreprocessingError("INVALID_RECTANGLE", message);
 }
@@ -87,7 +91,7 @@ export function rectsOverlap(left: ImageRect, right: ImageRect): boolean {
 }
 
 export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefined {
-  if (!Array.isArray(rectangles)) throw new TypeError("Rectangle collection must be an array");
+  assertArrayInput(rectangles, "Rectangle collection");
   if (rectangles.length > MAX_GEOMETRY_RECTANGLES) {
     throw new RangeError(`At most ${String(MAX_GEOMETRY_RECTANGLES)} rectangles may be unioned at once`);
   }
