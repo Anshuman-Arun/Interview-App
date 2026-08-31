@@ -1154,16 +1154,31 @@ describe("local worker lifecycle manager", () => {
   it("does not expose direct process signaling through graceful shutdown controls", async () => {
     const runtime = manager();
     let signalExposed = true;
+    let invalidWrite: unknown;
+    let coercions = 0;
+    const hostileData = {
+      toString: () => {
+        coercions += 1;
+        return "shutdown-now\n";
+      }
+    };
     runtime.register(definition("graceful-control", "stdin-shutdown", {
-      gracefulShutdown: (control) => {
+      gracefulShutdown: async (control) => {
         signalExposed = Object.hasOwn(control, "signal");
-        return control.writeStdin("shutdown-now\n");
+        try {
+          await control.writeStdin(hostileData as unknown as string);
+        } catch (error) {
+          invalidWrite = error;
+        }
+        await control.writeStdin("shutdown-now\n");
       }
     }));
 
     await runtime.start("graceful-control");
     await runtime.stop("graceful-control");
     expect(signalExposed).toBe(false);
+    expect(invalidWrite).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(coercions).toBe(0);
   });
 
   it("rejects fields that are invalid for a selected lifecycle mode", () => {
