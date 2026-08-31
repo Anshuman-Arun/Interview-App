@@ -177,6 +177,13 @@ describe("provider configuration secret exclusion", () => {
       "GITHUB_TOKEN=short-private-token",
       "MY_CLIENT_SECRET=abc",
       "MY_AUTH_HEADER=Bearer x",
+      "{\"client_secret\":\"abc\"}",
+      "{\"api_key\":\"abc123\"}",
+      "{\"access_token\":\"short\"}",
+      "{\"password\":\"hunter2\"}",
+      "{\"token\":\"abcdefghijklmnopqrst\"}",
+      "{\"secret\":\"abcdefghijklmnopqrst\"}",
+      "{\"authorization\":\"Bearer x\"}",
       "authorization=Bearer x",
       "Authorization Header: Bearer x",
       "Auth Header = Basic YTpi",
@@ -231,6 +238,9 @@ describe("provider configuration secret exclusion", () => {
       "GEMINI_API_KEY required",
       "DATABASE_PASSWORD policy",
       "GITHUB_TOKEN documentation",
+      "{\"authorization\":\"required\"}",
+      "{\"api_key\":\"placeholder\"}",
+      "{\"access_token\":\"disabled\"}",
       "Basic Configuration)",
       "https://api.example.com/v1/models"
     ]) {
