@@ -39,6 +39,7 @@ export function buildLocalEnvironment(
   const inspectedDefinition = inspectEnvironmentDefinition(definition);
   const environment = Object.create(null) as NodeJS.ProcessEnv;
   const secretValues = new Set<string>();
+  const secretIdentities = new Set<string>();
   const defaults = platform === "win32"
     ? DEFAULT_WINDOWS_INHERITED_ENVIRONMENT_KEYS
     : DEFAULT_POSIX_INHERITED_ENVIRONMENT_KEYS;
@@ -54,7 +55,7 @@ export function buildLocalEnvironment(
     if (parentEntry === undefined) continue;
     environment[parentEntry.key] = parentEntry.value;
     if (SECRET_KEY.test(parentEntry.key)) {
-      addSecretRedactionVariants(secretValues, parentEntry.value);
+      secretIdentities.add(normalizeKey(parentEntry.key, platform));
     }
   }
 
@@ -69,7 +70,7 @@ export function buildLocalEnvironment(
     }
     removeEquivalentKey(environment, key, platform);
     environment[key] = value;
-    if (SECRET_KEY.test(key)) addSecretRedactionVariants(secretValues, value);
+    if (SECRET_KEY.test(key)) secretIdentities.add(identity);
   }
 
   for (const [key, value] of ownDataEntries(inspectedDefinition?.secrets, "environment.secrets")) {
@@ -84,7 +85,14 @@ export function buildLocalEnvironment(
     }
     removeEquivalentKey(environment, key, platform);
     environment[key] = value;
-    addSecretRedactionVariants(secretValues, value);
+    secretIdentities.add(identity);
+  }
+
+  for (const [key, value] of Object.entries(environment)) {
+    if (typeof value !== "string") continue;
+    if (secretIdentities.has(normalizeKey(key, platform))) {
+      addSecretRedactionVariants(secretValues, value);
+    }
   }
 
   return Object.freeze({
