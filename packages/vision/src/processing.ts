@@ -286,6 +286,10 @@ function encodeArtifact(
   transform: CoordinateTransform,
   options: VisionProcessingOptions
 ): VisionImageArtifact {
+  assertRectWithinImage(sourceBounds, {
+    width: source.metadata.width,
+    height: source.metadata.height
+  });
   const maximumOutputBytes = maxOutputBytes(options);
   let encoded: Buffer;
   try {
