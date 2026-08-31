@@ -95,7 +95,13 @@ function isProcessingClock(value: unknown): value is () => number {
 }
 
 function normalizeProcessingOptions(input: unknown): Readonly<VisionProcessingOptions> {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  let isArray: boolean;
+  try {
+    isArray = Array.isArray(input);
+  } catch {
+    throw new TypeError("Vision processing options could not be inspected safely");
+  }
+  if (typeof input !== "object" || input === null || isArray) {
     throw new TypeError("Vision processing options must be an object");
   }
   const options = input;
