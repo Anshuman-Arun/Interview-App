@@ -30,12 +30,9 @@ function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
   }
 }
 
-function cloneOwnDataRecord(value: Record<string, unknown>): Record<string, unknown> {
-  const clone: Record<string, unknown> = {};
+function cloneOwnDataRecord<T extends Record<string, unknown>>(value: T): T {
+  const clone = { ...value };
   Object.setPrototypeOf(clone, null);
-  for (const key of Object.keys(value)) {
-    clone[key] = value[key];
-  }
   return clone;
 }
 
@@ -165,13 +162,13 @@ export const AssetManifestSchema = PlainDataRecordSchema.pipe(z.object({
   license: PlainDataRecordSchema.pipe(z.object({
     name: OptionalMetadataTextSchema,
     url: HttpSourceUrlSchema.optional()
-  }).strict()).optional(),
+  }).strict()).transform(cloneOwnDataRecord).optional(),
   sourceMetadata: PlainDataRecordSchema.pipe(z.object({
     publisher: OptionalMetadataTextSchema.optional(),
     repository: HttpSourceUrlSchema.optional(),
     revision: OptionalMetadataTextSchema.optional()
-  }).strict()).optional()
-}).strict());
+  }).strict()).transform(cloneOwnDataRecord).optional()
+}).strict()).transform(cloneOwnDataRecord);
 export type AssetManifest = z.infer<typeof AssetManifestSchema>;
 
 export const AssetResolutionRequestSchema = PlainDataRecordSchema.pipe(z.object({
@@ -180,14 +177,14 @@ export const AssetResolutionRequestSchema = PlainDataRecordSchema.pipe(z.object(
   platform: AssetPlatformSchema,
   architecture: AssetArchitectureSchema,
   variant: StableAssetIdentifierSchema.optional()
-}).strict());
+}).strict()).transform(cloneOwnDataRecord);
 export type AssetResolutionRequest = z.infer<typeof AssetResolutionRequestSchema>;
 
 const CurrentPlatformResolutionRequestSchema = PlainDataRecordSchema.pipe(z.object({
   familyId: StableAssetIdentifierSchema,
   version: AssetVersionSchema,
   variant: StableAssetIdentifierSchema.optional()
-}).strict());
+}).strict()).transform(cloneOwnDataRecord);
 
 export const AssetDiagnosticMetadataSchema = PlainDataRecordSchema.pipe(z.object({
   artifactId: StableAssetIdentifierSchema,
@@ -196,7 +193,7 @@ export const AssetDiagnosticMetadataSchema = PlainDataRecordSchema.pipe(z.object
   sha256: Sha256DigestSchema,
   status: AssetInstallStatusSchema,
   byteSize: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-}).strict());
+}).strict()).transform(cloneOwnDataRecord);
 export type AssetDiagnosticMetadata = z.infer<typeof AssetDiagnosticMetadataSchema>;
 
 export type ModelAssetErrorCode =
