@@ -169,6 +169,26 @@ switch (mode) {
     }, Number(args[0] ?? 40));
     break;
   }
+  case "tree-crash-once-counter": {
+    const path = args[0];
+    if (!path) throw new Error("counter path required");
+    const attempt = bumpCounter(path);
+    if (attempt > 1) {
+      ready({ attempt });
+      break;
+    }
+    const child = spawn(process.execPath, [import.meta.filename, "ignore-shutdown"], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    if (child.pid === undefined) throw new Error("fixture child did not receive a pid");
+    ready({ attempt, childPid: child.pid });
+    setTimeout(() => {
+      clearInterval(keepAlive);
+      process.exit(17);
+    }, Number(args[1] ?? 40));
+    break;
+  }
   case "delayed-pipe-child":
     setTimeout(() => {
       console.error("delayed-pipe-child-exit");
