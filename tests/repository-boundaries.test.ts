@@ -208,6 +208,34 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "authorized vision constructor module wrapping a capability in a Promise",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport const leak = Promise.resolve(secret);\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module wrapping a capability in a Set",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport const leak = new Set([secret]);\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module returning an awaited dynamic-import capability",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "export async function leak() { return (await import(\"./internal-artifact-construction.js\")).INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION; }\n"
+      }
+    },
+    {
+      name: "authorized vision constructor module exporting a nested capability wrapper",
+      expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
+      files: {
+        "packages/vision/src/processing.ts": "import { INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION as secret } from \"./internal-artifact-construction.js\";\nexport const leak = { nested: { value: Promise.resolve(secret) } };\n"
+      }
+    },
+    {
       name: "authorized vision constructor module exposing capability through an exported class",
       expectedCode: "VISION_INTERNAL_CONSTRUCTION_EXPORT",
       files: {
