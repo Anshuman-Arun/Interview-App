@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { boundedArrayLength } from "./array-validation.js";
 import {
   MAX_GEOMETRY_RECTANGLES,
   clipRectToBounds,
@@ -63,10 +64,6 @@ export type DirtyRegionPlan =
       readonly analyzedArea: number;
       readonly fallbackReason: DirtyRegionFallbackReason;
     };
-
-function assertArrayInput(value: unknown, label: string): void {
-  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
-}
 
 function compareNumber(left: number, right: number): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -149,10 +146,9 @@ function validatedRectsOverlap(left: ImageRect, right: ImageRect): boolean {
 }
 
 export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): readonly ImageRect[] {
-  assertArrayInput(rectangles, "Rectangle collection");
-  if (rectangles.length > MAX_GEOMETRY_RECTANGLES) throw new RangeError(`At most ${String(MAX_GEOMETRY_RECTANGLES)} regions may be coalesced at once`);
+  const rectangleCount = boundedArrayLength(rectangles, MAX_GEOMETRY_RECTANGLES, "Rectangle collection");
   const input: ImageRect[] = [];
-  for (let index = 0; index < rectangles.length; index += 1) {
+  for (let index = 0; index < rectangleCount; index += 1) {
     const rect = rectangles[index];
     if (rect === undefined) {
       throw new VisionPreprocessingError("INVALID_RECTANGLE", "Rectangle collection must not contain missing entries");
@@ -189,29 +185,34 @@ export function planDirtyRegions(
   dimensions: PixelDimensions,
   config?: DirtyRegionPlannerConfig
 ): DirtyRegionPlan {
+  let dirtyRegionCount: number;
   try {
-    assertArrayInput(dirtyRegions, "Dirty-region input");
-  } catch {
-    throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty-region input must be an array");
+    dirtyRegionCount = boundedArrayLength(
+      dirtyRegions,
+      MAX_GEOMETRY_RECTANGLES,
+      "Dirty-region input"
+    );
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw new VisionPreprocessingError(
+        "DIRTY_PLAN_EXCEEDS_BUDGET",
+        "Dirty-region input exceeds the package hard region-count limit"
+      );
+    }
+    throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty-region input must be a bounded array");
   }
+
   const safeDimensions = PixelDimensionsSchema.parse(dimensions);
   const safeConfig = normalizeConfig(config);
   const frame = imageBounds(safeDimensions);
 
-  if (dirtyRegions.length === 0) {
+  if (dirtyRegionCount === 0) {
     const regions: readonly [] = Object.freeze([]);
     return Object.freeze({ mode: "NONE" as const, regions, analyzedArea: 0 as const });
   }
 
-  if (dirtyRegions.length > MAX_GEOMETRY_RECTANGLES) {
-    throw new VisionPreprocessingError(
-      "DIRTY_PLAN_EXCEEDS_BUDGET",
-      "Dirty-region input exceeds the package hard region-count limit"
-    );
-  }
-
   const rasterRegions: ImageRect[] = [];
-  for (let index = 0; index < dirtyRegions.length; index += 1) {
+  for (let index = 0; index < dirtyRegionCount; index += 1) {
     const region = dirtyRegions[index];
     if (region === undefined) {
       throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty-region list must not contain missing entries");
