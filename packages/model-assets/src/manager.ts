@@ -1503,6 +1503,18 @@ export class ModelAssetManager {
           verifiedPayloadIdentity,
           "UNSAFE_PATH"
         );
+
+        const stagedManifestPath = path.join(stagingDirectory, "manifest.json");
+        const stagedManifestRead = await readStoredManifestWithIdentity(stagedManifestPath);
+        const stagedManifest = AssetManifestSchema.safeParse(stagedManifestRead.value);
+        if (!stagedManifest.success
+            || serializeAssetManifest(stagedManifest.data) !== serializeAssetManifest(manifest)) {
+          throw new ModelAssetError(
+            "CORRUPT_INSTALLATION",
+            "Staged artifact manifest changed before atomic publication."
+          );
+        }
+
         await validateCachePaths(paths);
         if (signal.aborted) {
           throw new ModelAssetError(
@@ -1540,6 +1552,24 @@ export class ModelAssetManager {
         }
 
         await atomicRenameDirectory(stagingDirectory, installationDirectory);
+
+        await this.assertArtifactDirectoryShape(
+          installationDirectory,
+          manifest,
+          "CORRUPT_INSTALLATION",
+          stagingIdentity
+        );
+        await this.assertVerifiedPayloadPath(
+          installedPayloadPath(installationDirectory, manifest),
+          verifiedPayloadIdentity,
+          "CORRUPT_INSTALLATION"
+        );
+        await this.assertStoredManifestPath(
+          path.join(installationDirectory, "manifest.json"),
+          stagedManifestRead.identity
+        );
+        await validateCachePaths(paths);
+
         shared.reservedBytes -= reservationBytes;
       });
     });
