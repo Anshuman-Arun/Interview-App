@@ -1680,6 +1680,45 @@ describe("vision diagnostics validation", () => {
   });
 });
 
+  it("rejects diagnostics that exceed package byte or image dimension caps", () => {
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "FAILURE" as never,
+      sourceDimensions: {
+        width: HARD_IMAGE_VALIDATION_LIMITS.maxWidth + 1,
+        height: 1
+      },
+      inputBytes: 1,
+      outputBytes: 0,
+      cropCount: 0,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "FAILURE"
+    } as unknown as Parameters<typeof createVisionProcessingDiagnostics>[0])).toThrow();
+
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "CROP",
+      sourceDimensions: { width: 1, height: 1 },
+      outputDimensions: { width: 1, height: 1 },
+      inputBytes: 1,
+      outputBytes: HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes + 1,
+      cropCount: 1,
+      tileCount: 0,
+      durationMs: 1,
+      outcome: "SUCCESS"
+    })).toThrow();
+
+    expect(() => createVisionProcessingDiagnostics({
+      operation: "TILE",
+      sourceDimensions: { width: 1, height: 1 },
+      inputBytes: HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes + 1,
+      outputBytes: 1,
+      cropCount: 0,
+      tileCount: 1,
+      durationMs: 1,
+      outcome: "FAILURE"
+    })).toThrow();
+  });
+
   it("rejects successful crop/resize diagnostics that exceed source dimensions", () => {
     const base = {
       sourceDimensions: { width: 2, height: 2 },
