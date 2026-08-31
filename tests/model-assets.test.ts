@@ -1254,6 +1254,47 @@ describe("local model asset manager", () => {
     });
   });
 
+  it("rechecks cache growth after reservation before atomic publication", async () => {
+    const payload = Buffer.from("late-cache-growth");
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const fixture = await startFixtureServer(async (_request, response) => {
+      response.writeHead(200, { "Content-Length": String(payload.byteLength) });
+      response.write(payload.subarray(0, 2));
+      started.resolve();
+      await release.promise;
+      response.end(payload.subarray(2));
+    });
+
+    const root = await newRoot();
+    const manifest = manifestFor(payload, fixture.baseUrl + "/artifact", {
+      artifactId: "late-growth"
+    });
+    const manager = managerFor(root, {
+      maxArtifactBytes: payload.byteLength,
+      maxCacheBytes: managedArtifactBytes(manifest)
+    });
+
+    const installation = manager.install(manifest);
+    await started.promise;
+
+    const stale = path.join(
+      root,
+      "tmp",
+      `${"c".repeat(64)}-00000000-0000-4000-8000-000000000000`
+    );
+    await mkdir(stale);
+    await writeFile(path.join(stale, "partial.bin"), "x");
+
+    release.resolve();
+
+    await expect(installation).rejects.toMatchObject({
+      code: "CACHE_LIMIT_EXCEEDED"
+    });
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(stale)).toEqual(["partial.bin"]);
+  });
+
   it("provides standalone bounded file verification", async () => {
     const payload = Buffer.from("verify-me");
     const root = await newRoot();
