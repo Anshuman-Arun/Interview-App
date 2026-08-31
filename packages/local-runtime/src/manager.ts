@@ -799,12 +799,15 @@ export class LocalRuntimeManager {
 
       let response: Response;
       try {
-        response = await awaitWithAbort(
+        const candidate = await awaitWithAbort(
           Promise.resolve().then(() => this.fetchImpl(url, { method: "GET", redirect: "error", signal })),
           signal,
           record.definition.id
         );
-      } catch {
+        response = validateFetchResponse(candidate, record.definition.id);
+      } catch (error) {
+        const runtimeError = localRuntimeErrorOrUndefined(error);
+        if (runtimeError?.code === "READINESS_FAILED") throw runtimeError;
         if (signal.aborted) {
           throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
         }
@@ -2325,6 +2328,31 @@ function awaitWithAbort<T>(
       }
     );
   });
+}
+
+function validateFetchResponse(value: unknown, componentId: string): Response {
+  if (typeof value !== "object" || value === null || utilTypes.isProxy(value)) {
+    throw new LocalRuntimeError(
+      "READINESS_FAILED",
+      `HTTP readiness fetch returned an invalid Response for ${componentId}`
+    );
+  }
+  try {
+    if (!(value instanceof Response)) {
+      throw new LocalRuntimeError(
+        "READINESS_FAILED",
+        `HTTP readiness fetch returned an invalid Response for ${componentId}`
+      );
+    }
+  } catch (error) {
+    const runtimeError = localRuntimeErrorOrUndefined(error);
+    if (runtimeError !== undefined) throw runtimeError;
+    throw new LocalRuntimeError(
+      "READINESS_FAILED",
+      `HTTP readiness fetch returned an invalid Response for ${componentId}`
+    );
+  }
+  return value;
 }
 
 function disposeResponseBody(response: Response): void {
