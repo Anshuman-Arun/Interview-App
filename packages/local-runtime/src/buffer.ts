@@ -232,7 +232,7 @@ export class BoundedLineFramer {
       }
 
       if (newline === -1) return;
-      if (!this.droppingOversizeLine) this.emitPending();
+      if (!this.droppingOversizeLine) this.emitPending(true);
       this.clearPending();
       this.droppingOversizeLine = false;
       offset = newline + 1;
@@ -245,7 +245,12 @@ export class BoundedLineFramer {
       this.droppingOversizeLine = false;
       return;
     }
-    if (this.pendingBytes > 0) this.emitPending();
+    if (this.pendingBytes > this.maxLineBytes) {
+      this.onMalformed();
+      this.clearPending();
+      return;
+    }
+    if (this.pendingBytes > 0) this.emitPending(false);
     this.clearPending();
   }
 
@@ -253,9 +258,11 @@ export class BoundedLineFramer {
     this.pendingBytes = 0;
   }
 
-  private emitPending(): void {
+  private emitPending(stripTerminalCr: boolean): void {
     let lineBuffer = this.pending.subarray(0, this.pendingBytes);
-    if (lineBuffer.at(-1) === 0x0d) lineBuffer = lineBuffer.subarray(0, -1);
+    if (stripTerminalCr && lineBuffer.at(-1) === 0x0d) {
+      lineBuffer = lineBuffer.subarray(0, -1);
+    }
     try {
       const line = new TextDecoder("utf-8", { fatal: true }).decode(lineBuffer);
       this.onLine(line);
