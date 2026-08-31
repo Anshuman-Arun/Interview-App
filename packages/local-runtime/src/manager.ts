@@ -1146,8 +1146,9 @@ function inspectDefinitionArguments(value: unknown): readonly string[] {
     if (!Number.isSafeInteger(index) || index < 0 || index >= rawLength) {
       invalid("args contains an invalid array index");
     }
-    validateCommandPart(descriptor.value as string, "argument");
-    indexed.push({ index, value: descriptor.value as string });
+    if (typeof descriptor.value !== "string") invalid("Invalid argument");
+    validateCommandPart(descriptor.value, "argument");
+    indexed.push({ index, value: descriptor.value });
   }
 
   if (indexed.length !== rawLength) invalid("args must be a dense data-only array");
