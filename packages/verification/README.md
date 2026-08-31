@@ -16,7 +16,7 @@ New math verifiers use stable reason-code prefixes such as `CLAIM_VERIFIED`, `CL
 
 JSON integers are encoded as canonical base-10 strings; leading zeroes, a leading `+`, whitespace, and negative zero are rejected. Operand literals are capped at 256 decimal digits, while explicit claimed-result literals may use the existing 4,096-digit exact-intermediate bound so supported computations can represent their own exact answers. Rationals are `{ numerator, denominator }` string pairs and are normalized with a positive denominator and gcd reduction. Exported rational operations defensively normalize caller-supplied `ExactRational` values and cross-cancel where practical before enforcing intermediate-size bounds. No floating-point comparison is used for verification.
 
-The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility and modular normalization, exact rational arithmetic, finite sums/products, factorial/binomial/permutation/combinations-with-repetition helpers, and finite set/multiset/permutation checks. Direct bigint/expression utility calls retain resource and shape checks instead of relying only on the verifier schemas.
+The shared utility layer provides bounded integer parsing, gcd/lcm, divisibility and modular normalization, exact rational arithmetic, finite sums/products, factorial/binomial/permutation/combinations-with-repetition helpers, and finite set/multiset/permutation checks. Direct bigint helpers and supported expression operations retain resource checks; verifier schemas remain the runtime shape boundary for untrusted structured inputs.
 
 ## Verifiers and protocols
 
