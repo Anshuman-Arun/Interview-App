@@ -82,7 +82,6 @@ async function downloadResponseToFile(
       void (async () => {
         try {
           if (redirectStatus(response.statusCode)) {
-            response.resume();
             const location = response.headers.location;
             if (location === undefined) {
               throw new ModelAssetError("NETWORK_ERROR", "Artifact redirect response is missing a Location header.");
@@ -97,6 +96,7 @@ async function downloadResponseToFile(
             if (!options.allowCrossOriginRedirects && next.origin !== originalOrigin) {
               throw new ModelAssetError("UNSAFE_REDIRECT", "Cross-origin artifact redirect rejected by policy.");
             }
+            response.destroy();
             const result = await downloadResponseToFile(
               next,
               destinationPath,
@@ -112,7 +112,7 @@ async function downloadResponseToFile(
           }
 
           if (response.statusCode !== 200) {
-            response.resume();
+            response.destroy();
             throw new ModelAssetError("HTTP_STATUS", "Artifact server returned a non-success status.");
           }
 
@@ -155,6 +155,7 @@ async function downloadResponseToFile(
             resolvePromise(bytes);
           }
         } catch (error) {
+          response.destroy();
           settleReject(error);
         }
       })();
