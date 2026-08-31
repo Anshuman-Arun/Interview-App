@@ -1823,6 +1823,31 @@ describe("local worker lifecycle manager", () => {
     expect(serialized).toContain("[REDACTED]");
   });
 
+  it("bounds oversized bigint handshake metadata before string conversion", async () => {
+    const runtime = manager();
+    runtime.register(definition("bounded-bigint-metadata", "ready", {
+      readiness: {
+        kind: "CUSTOM_LOCAL",
+        probe: () => ({
+          ready: true,
+          handshake: {
+            componentVersion: "fixture-1",
+            metadata: {
+              small: 123n,
+              huge: 10n ** 5_000n
+            }
+          }
+        })
+      }
+    }));
+
+    const status = await runtime.start("bounded-bigint-metadata");
+    expect(status.handshake?.metadata).toMatchObject({
+      small: "123n",
+      huge: "[TRUNCATED]"
+    });
+  });
+
   it("bounds oversized non-secret handshake metadata before redaction", async () => {
     const oversizedValue = "metadata-value-" + "x".repeat(20_000);
     const oversizedKey = "metadata-key-" + "y".repeat(2_000);
