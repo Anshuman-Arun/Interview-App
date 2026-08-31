@@ -478,6 +478,30 @@ describe("adversarial deterministic math verification", () => {
     expect(result.reason).toContain("CLAIM_CONTRADICTED");
   });
 
+  it("validates a finite distribution before performing potentially expensive expectation arithmetic", async () => {
+    const primes = [
+      2, 3, 5, 7, 11, 13, 17, 19, 23, 29,
+      31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
+      73, 79, 83, 89, 97, 101, 103, 107, 109, 113
+    ];
+    const outcomes = primes.map((prime, index) => ({
+      probability: index === primes.length - 1 ? fraction("1") : fraction("1", "100"),
+      value: fraction("1", (BigInt(prime) ** 120n).toString())
+    }));
+
+    const result = await verifyJson(new ProbabilityArithmeticVerifier(), {
+      protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
+      protocolVersion: PROBABILITY_ARITHMETIC_PROTOCOL_VERSION,
+      claim: {
+        kind: "FINITE_EXPECTATION",
+        outcomes,
+        claimedExpectation: fraction("0")
+      }
+    });
+    expect(result.status).toBe("UNRESOLVED");
+    expect(result.reason).toContain("MALFORMED_INTERPRETATION");
+  });
+
   it("classifies an internally inconsistent finite distribution as malformed rather than false", async () => {
     const result = await verifyJson(new ProbabilityArithmeticVerifier(), {
       protocol: PROBABILITY_ARITHMETIC_PROTOCOL,
