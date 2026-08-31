@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { boundedArrayLength } from "./array-validation.js";
+import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
 import {
   MAX_GEOMETRY_RECTANGLES,
   clipRectToBounds,
@@ -149,7 +149,7 @@ export function coalesceOverlappingRegions(rectangles: readonly ImageRect[]): re
   const rectangleCount = boundedArrayLength(rectangles, MAX_GEOMETRY_RECTANGLES, "Rectangle collection");
   const input: ImageRect[] = [];
   for (let index = 0; index < rectangleCount; index += 1) {
-    const rect = rectangles[index];
+    const rect = readArrayEntry(rectangles, index, "Rectangle collection");
     if (rect === undefined) {
       throw new VisionPreprocessingError("INVALID_RECTANGLE", "Rectangle collection must not contain missing entries");
     }
@@ -223,7 +223,7 @@ export function planDirtyRegions(
 
   const rasterRegions: ImageRect[] = [];
   for (let index = 0; index < dirtyRegionCount; index += 1) {
-    const region = dirtyRegions[index];
+    const region = readArrayEntry(dirtyRegions, index, "Dirty-region input");
     if (region === undefined) {
       throw new VisionPreprocessingError("INVALID_RECTANGLE", "Dirty-region list must not contain missing entries");
     }
