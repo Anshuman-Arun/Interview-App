@@ -12,6 +12,7 @@ import {
   equalRationals,
   factorial,
   gcd,
+  isCanonicalIntegerString,
   isDivisibleBy,
   isPermutationOf,
   lcm,
@@ -29,6 +30,14 @@ import {
 } from "../packages/verification/src/index.js";
 
 describe("deterministic math utilities", () => {
+  it("checks canonical integer syntax without runtime coercion", () => {
+    expect(isCanonicalIntegerString("17")).toBe(true);
+    expect(isCanonicalIntegerString("-17")).toBe(true);
+    expect(isCanonicalIntegerString("-0")).toBe(false);
+    expect(isCanonicalIntegerString(17)).toBe(false);
+    expect(isCanonicalIntegerString(null)).toBe(false);
+  });
+
   it("parses positive, negative, zero, and large bounded integers exactly", () => {
     expect(parseBoundedInteger("0")).toBe(0n);
     expect(parseBoundedInteger("-17")).toBe(-17n);
