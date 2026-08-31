@@ -1240,11 +1240,11 @@ export class ModelAssetManager {
       // Once an operation stops owning its staging directory, capacity scans must
       // count any bytes still present there before the reservation is released.
       shared.activeStagingDirectories.delete(stagingDirectory);
-      if (reservationHeld) {
-        await this.releaseCapacity(paths, reservationBytes);
-      }
       if (!published) {
         await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
+      }
+      if (reservationHeld) {
+        await this.releaseCapacity(paths, reservationBytes);
       }
     }
     } finally {
