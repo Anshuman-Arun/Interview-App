@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -1277,8 +1278,8 @@ async function waitForStatus(
   componentId: string,
   predicate: (status: ReturnType<LocalRuntimeManager["getStatus"]>) => boolean
 ): Promise<void> {
-  const deadline = Date.now() + 3_000;
-  while (Date.now() < deadline) {
+  const deadline = performance.now() + 3_000;
+  while (performance.now() < deadline) {
     if (predicate(runtime.getStatus(componentId))) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
   }
@@ -1295,8 +1296,8 @@ function isPidAlive(pid: number): boolean {
 }
 
 async function waitForPidExit(pid: number): Promise<void> {
-  const deadline = Date.now() + 2_000;
-  while (isPidAlive(pid) && Date.now() < deadline) {
+  const deadline = performance.now() + 2_000;
+  while (isPidAlive(pid) && performance.now() < deadline) {
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
   }
 }
