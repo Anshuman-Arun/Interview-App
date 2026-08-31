@@ -50,6 +50,8 @@ export interface CachePaths {
   readonly root: string;
   readonly artifacts: string;
   readonly temporary: string;
+  readonly rootDevice: number;
+  readonly rootInode: number;
 }
 
 function errnoCode(error: unknown): string | undefined {
@@ -80,7 +82,13 @@ export async function initializeCachePaths(rootInput: string): Promise<CachePath
     const temporary = path.join(canonicalRoot, "tmp");
     await ensureSafeDirectory(canonicalRoot, artifacts);
     await ensureSafeDirectory(canonicalRoot, temporary);
-    return { root: canonicalRoot, artifacts, temporary };
+    return {
+      root: canonicalRoot,
+      artifacts,
+      temporary,
+      rootDevice: rootStat.dev,
+      rootInode: rootStat.ino
+    };
   } catch (error) {
     if (error instanceof ModelAssetError) throw error;
     throw new ModelAssetError("INVALID_CACHE_ROOT", "Unable to initialize the asset cache root.", { cause: error });
@@ -102,6 +110,12 @@ export async function validateCachePaths(paths: CachePaths): Promise<void> {
     throw new ModelAssetError(
       "INVALID_CACHE_ROOT",
       "Configured asset cache root is no longer a regular directory."
+    );
+  }
+  if (rootStat.dev !== paths.rootDevice || rootStat.ino !== paths.rootInode) {
+    throw new ModelAssetError(
+      "INVALID_CACHE_ROOT",
+      "Configured asset cache root was replaced after manager initialization."
     );
   }
 
