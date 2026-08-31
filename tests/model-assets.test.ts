@@ -1046,6 +1046,29 @@ describe("local model asset manager", () => {
     });
   });
 
+  it("preserves policy-limit errors when install refuses destructive repair", async () => {
+    const payload = Buffer.from("policy-install");
+    const root = await newRoot();
+    const sourceRoot = await newRoot();
+    const source = path.join(sourceRoot, "source.bin");
+    await writeFile(source, payload);
+
+    const installingManager = managerFor(root, {
+      maxArtifactBytes: payload.byteLength
+    });
+    const manifest = manifestFor(payload, "https://example.test/policy-install.bin");
+    const installed = await installingManager.importLocal(manifest, source);
+
+    const restrictiveManager = managerFor(root, {
+      maxArtifactBytes: payload.byteLength - 1
+    });
+    await expect(restrictiveManager.install(manifest)).rejects.toMatchObject({
+      code: "ARTIFACT_TOO_LARGE"
+    });
+
+    expect(await readFile(installed)).toEqual(payload);
+  });
+
   it("detects corruption of a previously installed artifact", async () => {
     const payload = Buffer.from("good-bytes");
     const root = await newRoot();
