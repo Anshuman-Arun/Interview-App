@@ -94,15 +94,27 @@ function consumeNode(budget: EvaluationBudget, depth: number): void {
 }
 
 function assertTermCount(terms: readonly IntegerExpression[]): void {
-  if (terms.length < 1 || terms.length > MAX_VARIADIC_EXPRESSION_TERMS) {
-    throw new BoundedMathError("INVALID_EXPRESSION", "Variadic integer expression term count is outside the supported range");
+  if (terms.length < 1) {
+    throw new BoundedMathError("INVALID_EXPRESSION", "Variadic integer expressions require at least one term");
+  }
+  if (terms.length > MAX_VARIADIC_EXPRESSION_TERMS) {
+    throw new BoundedMathError(
+      "INTERMEDIATE_LIMIT_EXCEEDED",
+      "Variadic integer expression exceeds the configured term limit"
+    );
   }
 }
 
 function integerPower(base: bigint, exponent: number): bigint {
   assertIntermediateIntegerBound(base);
-  if (!Number.isInteger(exponent) || exponent < 0 || exponent > MAX_POWER_EXPONENT) {
-    throw new BoundedMathError("INVALID_EXPRESSION", "Integer exponent is outside the supported range");
+  if (!Number.isInteger(exponent) || exponent < 0) {
+    throw new BoundedMathError("INVALID_EXPRESSION", "Integer exponent must be a non-negative integer");
+  }
+  if (exponent > MAX_POWER_EXPONENT) {
+    throw new BoundedMathError(
+      "INTERMEDIATE_LIMIT_EXCEEDED",
+      "Integer exponent exceeds the configured resource limit"
+    );
   }
   if (base === 0n && exponent === 0) {
     throw new BoundedMathError("UNDEFINED_OPERATION", "Zero to the zero power is not verified by this arithmetic grammar");
