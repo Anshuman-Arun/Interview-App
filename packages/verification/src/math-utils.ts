@@ -262,68 +262,20 @@ export function equalRationals(left: ExactRational, right: ExactRational): boole
     && normalizedLeft.denominator === normalizedRight.denominator;
 }
 
-function comparePositiveFractions(
-  leftNumerator: bigint,
-  leftDenominator: bigint,
-  rightNumerator: bigint,
-  rightDenominator: bigint
-): -1 | 0 | 1 {
-  let leftN = leftNumerator;
-  let leftD = leftDenominator;
-  let rightN = rightNumerator;
-  let rightD = rightDenominator;
-  let inverted = false;
-
-  while (true) {
-    const leftQuotient = leftN / leftD;
-    const rightQuotient = rightN / rightD;
-    if (leftQuotient !== rightQuotient) {
-      const comparison = leftQuotient < rightQuotient ? -1 : 1;
-      return inverted ? (comparison === -1 ? 1 : -1) : comparison;
-    }
-
-    const leftRemainder = leftN % leftD;
-    const rightRemainder = rightN % rightD;
-    if (leftRemainder === 0n || rightRemainder === 0n) {
-      const comparison = leftRemainder === rightRemainder
-        ? 0
-        : leftRemainder === 0n
-          ? -1
-          : 1;
-      return inverted && comparison !== 0 ? (comparison === -1 ? 1 : -1) : comparison;
-    }
-
-    leftN = leftD;
-    leftD = leftRemainder;
-    rightN = rightD;
-    rightD = rightRemainder;
-    inverted = !inverted;
-  }
-}
-
 export function compareRationals(left: ExactRational, right: ExactRational): -1 | 0 | 1 {
   const normalizedLeft = normalizeRational(left);
   const normalizedRight = normalizeRational(right);
 
-  if (normalizedLeft.numerator < 0n && normalizedRight.numerator >= 0n) return -1;
-  if (normalizedLeft.numerator >= 0n && normalizedRight.numerator < 0n) return 1;
-
-  if (normalizedLeft.numerator < 0n && normalizedRight.numerator < 0n) {
-    const absoluteComparison = comparePositiveFractions(
-      -normalizedLeft.numerator,
-      normalizedLeft.denominator,
-      -normalizedRight.numerator,
-      normalizedRight.denominator
-    );
-    return absoluteComparison === 0 ? 0 : absoluteComparison === -1 ? 1 : -1;
-  }
-
-  return comparePositiveFractions(
-    normalizedLeft.numerator,
-    normalizedLeft.denominator,
-    normalizedRight.numerator,
-    normalizedRight.denominator
-  );
+  // Comparison-only cross-products are bounded implementation temporaries:
+  // each input component is already capped at 4,096 decimal digits, so each
+  // product is at most about 8,192 digits. Do not apply the reduced
+  // state/result bound to these temporaries. This avoids the pathological
+  // O(number-of-digits) Euclidean quotient loop for consecutive Fibonacci
+  // ratios while preserving exact integer comparison.
+  const leftScaled = normalizedLeft.numerator * normalizedRight.denominator;
+  const rightScaled = normalizedRight.numerator * normalizedLeft.denominator;
+  if (leftScaled === rightScaled) return 0;
+  return leftScaled < rightScaled ? -1 : 1;
 }
 
 function assertFiniteContainerLength(length: number): void {
