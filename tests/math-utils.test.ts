@@ -71,6 +71,10 @@ describe("deterministic math utilities", () => {
     const half = parseRationalInput({ numerator: "-2", denominator: "-4" });
     expect(serializeRational(half)).toEqual({ numerator: "1", denominator: "2" });
     expect(equalRationals(half, parseRationalInput({ numerator: "3", denominator: "6" }))).toBe(true);
+
+    const unreducedNegativeDenominator = { numerator: 2n, denominator: -4n };
+    expect(equalRationals(unreducedNegativeDenominator, rational(-1n, 2n))).toBe(true);
+    expect(compareRationals(unreducedNegativeDenominator, rational(-1n, 3n))).toBe(-1);
   });
 
   it("computes exact finite sums, products, and standard counting formulas", () => {
