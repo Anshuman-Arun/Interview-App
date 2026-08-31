@@ -1904,6 +1904,15 @@ describe("local worker lifecycle manager", () => {
     expect(built.secretValues.some((value) => value.includes("stale-secret-line"))).toBe(false);
   });
 
+  it("prefers longer overlapping secrets even when inputs are unsorted", () => {
+    expect(redactKnownSecrets("abcd", ["ab", "abcd"]))
+      .toBe("[REDACTED]");
+    expect(redactKnownSecrets("x.a+b?y", [".", "a+b?", "x.a+b?"]))
+      .toBe("[REDACTED]y");
+    expect(redactKnownSecrets("line-one\nline-two", ["line-two", "line-one\nline-two"]))
+      .toBe("[REDACTED]");
+  });
+
   it("redacts repeated and overlapping secret matches without cascading", () => {
     expect(redactKnownSecrets("aaaa", ["a", "["])).toBe("[REDACTED]");
     expect(redactKnownSecrets("xaaab", ["xa", "aa"])).toBe("[REDACTED]b");
