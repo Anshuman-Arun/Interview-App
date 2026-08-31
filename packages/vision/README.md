@@ -12,13 +12,14 @@ The initial package supports a deliberately bounded subset of **PNG (`image/png`
 - grayscale, RGB, indexed, grayscale+alpha, and RGBA color types at supported bit depths up to 8 bits per channel;
 - checksum-valid PNG chunks with valid type/reserved bits;
 - bounded/spec-valid `PLTE`, `tRNS`, and `gAMA` structure;
+- no rendering metadata that the current codec cannot preserve faithfully (including ICC/sRGB/chromaticity/HDR-style chunks);
 - consecutive `IDAT` chunks and a terminal empty `IEND`;
 - no trailing bytes after `IEND`;
 - at most 4096 PNG chunks.
 
 16-bit and interlaced PNGs are intentionally rejected. They are not needed for the expected browser/whiteboard capture path and would expand the decoder working set or enter less-bounded decode paths.
 
-PNG bytes are signature/header checked before decode, chunk structure and palette metadata are bounded, every chunk CRC is checked, and actual encoded dimensions are used instead of caller-declared dimensions. Oversized/repeated/forbidden palettes, malformed transparency/gamma metadata, nonconsecutive image-data chunks, unsupported critical chunks, and APNG structures fail closed before full decode. Accepted `gAMA` metadata is preserved when crop/resize/tile outputs are re-encoded. The package uses the pure-JavaScript, zero-dependency `pngjs` codec; no native image library is introduced.
+PNG bytes are signature/header checked before decode, chunk structure and palette metadata are bounded, every chunk CRC is checked, and actual encoded dimensions are used instead of caller-declared dimensions. Oversized/repeated/forbidden palettes, malformed transparency/gamma metadata, rendering metadata the codec cannot faithfully preserve, nonconsecutive image-data chunks, unsupported critical chunks, and APNG structures fail closed before full decode. Accepted `gAMA` metadata is preserved when crop/resize/tile outputs are re-encoded. The package uses the pure-JavaScript, zero-dependency `pngjs` codec; no native image library is introduced.
 
 ## Validation and resource limits
 
@@ -48,7 +49,7 @@ Request budgets may be zero. This lets a caller explicitly prohibit work: fail-c
 
 ## Snapshot, artifact, and provenance model
 
-Validated snapshots are admitted through `createValidatedImageSnapshot`; direct snapshot construction is package-internal. Processed artifacts are also package-generated only. The internal construction capability is not re-exported, and the repository architecture checker rejects production imports/re-exports of it.
+Validated snapshots are admitted through `createValidatedImageSnapshot`; direct snapshot construction is package-internal. Processed artifacts are also package-generated only. The internal construction capability is deliberately not re-exported from the package index; normal callers use the snapshot factory and processing APIs.
 
 A validated snapshot retains:
 
