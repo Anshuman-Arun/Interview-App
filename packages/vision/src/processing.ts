@@ -401,19 +401,48 @@ async function resizeBilinear(
       const x1 = Math.min(source.width - 1, x0 + 1);
       const fx = sourceX - x0;
       const outputIndex = (y * width + x) * 4;
+      const index00 = (y0 * source.width + x0) * 4;
+      const index10 = (y0 * source.width + x1) * 4;
+      const index01 = (y1 * source.width + x0) * 4;
+      const index11 = (y1 * source.width + x1) * 4;
+      const alpha00 = source.data[index00 + 3];
+      const alpha10 = source.data[index10 + 3];
+      const alpha01 = source.data[index01 + 3];
+      const alpha11 = source.data[index11 + 3];
+      if (alpha00 === undefined || alpha10 === undefined || alpha01 === undefined || alpha11 === undefined) {
+        throw new Error("Raster indexing exceeded decoded image bounds");
+      }
 
-      for (let channel = 0; channel < 4; channel += 1) {
-        const p00 = source.data[(y0 * source.width + x0) * 4 + channel];
-        const p10 = source.data[(y0 * source.width + x1) * 4 + channel];
-        const p01 = source.data[(y1 * source.width + x0) * 4 + channel];
-        const p11 = source.data[(y1 * source.width + x1) * 4 + channel];
+      const weight00 = (1 - fx) * (1 - fy);
+      const weight10 = fx * (1 - fy);
+      const weight01 = (1 - fx) * fy;
+      const weight11 = fx * fy;
+      const normalizedAlpha00 = alpha00 / 255;
+      const normalizedAlpha10 = alpha10 / 255;
+      const normalizedAlpha01 = alpha01 / 255;
+      const normalizedAlpha11 = alpha11 / 255;
+      const outputAlpha = normalizedAlpha00 * weight00
+        + normalizedAlpha10 * weight10
+        + normalizedAlpha01 * weight01
+        + normalizedAlpha11 * weight11;
+
+      for (let channel = 0; channel < 3; channel += 1) {
+        const p00 = source.data[index00 + channel];
+        const p10 = source.data[index10 + channel];
+        const p01 = source.data[index01 + channel];
+        const p11 = source.data[index11 + channel];
         if (p00 === undefined || p10 === undefined || p01 === undefined || p11 === undefined) {
           throw new Error("Raster indexing exceeded decoded image bounds");
         }
-        const top = p00 + (p10 - p00) * fx;
-        const bottom = p01 + (p11 - p01) * fx;
-        output[outputIndex + channel] = Math.round(top + (bottom - top) * fy);
+        const premultiplied = p00 * normalizedAlpha00 * weight00
+          + p10 * normalizedAlpha10 * weight10
+          + p01 * normalizedAlpha01 * weight01
+          + p11 * normalizedAlpha11 * weight11;
+        output[outputIndex + channel] = outputAlpha === 0
+          ? 0
+          : Math.round(premultiplied / outputAlpha);
       }
+      output[outputIndex + 3] = Math.round(outputAlpha * 255);
     }
     await cooperativeYield(signal, y + 1);
   }
