@@ -16,6 +16,7 @@ import {
   MAX_POWER_EXPONENT,
   MAX_PROBABILITY_OUTCOMES,
   MAX_RECURRENCE_SEQUENCE_LENGTH,
+  MAX_VARIADIC_EXPRESSION_TERMS,
   MODULAR_ARITHMETIC_PROTOCOL,
   MODULAR_ARITHMETIC_PROTOCOL_VERSION,
   ModularArithmeticVerifier,
@@ -112,13 +113,13 @@ describe("adversarial deterministic math verification", () => {
 
     expect(evaluateIntegerExpression({
       kind: "SUM",
-      terms: Array.from({ length: 128 }, () => integer("1"))
-    })).toBe(128n);
+      terms: Array.from({ length: MAX_VARIADIC_EXPRESSION_TERMS }, () => integer("1"))
+    })).toBe(BigInt(MAX_VARIADIC_EXPRESSION_TERMS));
 
     expect(() => evaluateIntegerExpression({ kind: "SUM", terms: [] })).toThrow(BoundedMathError);
     expect(() => evaluateIntegerExpression({
       kind: "SUM",
-      terms: Array.from({ length: 129 }, () => integer("1"))
+      terms: Array.from({ length: MAX_VARIADIC_EXPRESSION_TERMS + 1 }, () => integer("1"))
     })).toThrow(BoundedMathError);
   });
 
