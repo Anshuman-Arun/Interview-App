@@ -1,0 +1,111 @@
+import { readFileSync, writeFileSync } from "node:fs";
+
+const [mode = "ready", ...args] = process.argv.slice(2);
+let keepAlive = setInterval(() => {}, 1_000);
+process.stdin.resume();
+process.stdin.on("end", () => {
+  if (mode !== "ignore-shutdown") process.exit(0);
+});
+process.on("SIGTERM", () => {
+  if (mode !== "ignore-shutdown") process.exit(0);
+});
+process.on("SIGINT", () => {
+  if (mode !== "ignore-shutdown") process.exit(0);
+});
+
+function ready(extra = {}) {
+  console.log(JSON.stringify({
+    type: "READY",
+    componentVersion: "fixture-1",
+    protocolVersion: 1,
+    capabilities: ["FIXTURE"],
+    ...extra
+  }));
+}
+
+function bumpCounter(path) {
+  let value = 0;
+  try {
+    value = Number.parseInt(readFileSync(path, "utf8"), 10) || 0;
+  } catch {
+    // Missing counter files start at zero.
+  }
+  value += 1;
+  writeFileSync(path, String(value), "utf8");
+  return value;
+}
+
+switch (mode) {
+  case "ready":
+    ready();
+    break;
+  case "delayed-ready":
+    setTimeout(() => ready(), Number(args[0] ?? 250));
+    break;
+  case "never-ready":
+    console.log("not-ready");
+    break;
+  case "malformed-ready":
+    console.log("{not-json");
+    console.log("still-not-json");
+    break;
+  case "crash":
+    console.error("fixture crash");
+    clearInterval(keepAlive);
+    process.exit(7);
+    break;
+  case "crash-counter": {
+    const path = args[0];
+    const failures = Number(args[1] ?? 1);
+    if (!path) throw new Error("counter path required");
+    const attempt = bumpCounter(path);
+    if (attempt <= failures) {
+      console.error(`attempt ${attempt} failed`);
+      clearInterval(keepAlive);
+      process.exit(9);
+    }
+    ready({ attempt });
+    break;
+  }
+  case "always-crash-counter": {
+    const path = args[0];
+    if (!path) throw new Error("counter path required");
+    const attempt = bumpCounter(path);
+    console.error(`attempt ${attempt} failed`);
+    clearInterval(keepAlive);
+    process.exit(11);
+    break;
+  }
+  case "ready-then-crash":
+    ready();
+    setTimeout(() => {
+      console.error("late crash");
+      clearInterval(keepAlive);
+      process.exit(13);
+    }, Number(args[0] ?? 80));
+    break;
+  case "output-env": {
+    const secret = process.env.RUNTIME_ONLY_SECRET ?? null;
+    for (let index = 0; index < 12; index += 1) console.log(`output-${index}`);
+    console.error(`secret-echo=${String(secret)}`);
+    console.error("Authorization: Bearer inline-private-token");
+    ready({
+      publicValue: process.env.EXPLICIT_PUBLIC ?? null,
+      secretValue: secret,
+      forbiddenValue: process.env.FORBIDDEN_PARENT ?? null
+    });
+    break;
+  }
+  case "ignore-shutdown":
+    ready();
+    break;
+  case "stdin-shutdown":
+    ready();
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      if (chunk.includes("shutdown-now")) process.exit(0);
+    });
+    break;
+  default:
+    throw new Error(`unknown fixture mode ${mode}`);
+}
