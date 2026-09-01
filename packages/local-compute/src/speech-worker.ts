@@ -595,6 +595,15 @@ export class SpeechWorkerCore {
       }
     }
 
+    if (!step.falseStart
+        && Math.abs(context.buffer.getDurationMs() - step.utteranceMs) > 0.001) {
+      this.abandonStream(context);
+      throw new SpeechWorkerCoreError(
+        "INTERNAL_ERROR",
+        "VAD utterance duration disagrees with buffered PCM"
+      );
+    }
+
     const events: SpeechWorkerEvent[] = [];
     if (step.falseStart) {
       events.push(this.event(frame.envelope.requestId, frame.envelope.streamId, {
