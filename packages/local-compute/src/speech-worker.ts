@@ -13,6 +13,7 @@ import {
   MAX_SPEECH_CONCURRENT_STREAMS,
   MAX_SPEECH_DIAGNOSTIC_CHARS,
   MAX_SPEECH_DIAGNOSTICS,
+  MAX_SPEECH_IN_FLIGHT_REQUESTS,
   MAX_SPEECH_PRE_SPEECH_DURATION_MS,
   MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
   MAX_SPEECH_REMEMBERED_MESSAGES,
@@ -76,10 +77,18 @@ interface StreamContext {
   recognitionRequestId: RequestId | undefined;
 }
 
-interface RememberedMessage {
-  readonly fingerprint: string;
-  readonly events: readonly SpeechWorkerEvent[];
-}
+type RememberedMessage =
+  | {
+      readonly fingerprint: string;
+      readonly kind: "EVENTS";
+      readonly events: readonly SpeechWorkerEvent[];
+    }
+  | {
+      readonly fingerprint: string;
+      readonly kind: "ERROR";
+      readonly code: SpeechWorkerErrorCode;
+      readonly message: string;
+    };
 
 interface InFlightMessage {
   readonly fingerprint: string;
@@ -93,6 +102,7 @@ export interface SpeechWorkerCoreOptions {
   readonly maxConcurrentStreams?: number;
   readonly maxBufferedPcmBytes?: number;
   readonly maxRememberedMessages?: number;
+  readonly maxInFlightRequests?: number;
   readonly maxPreSpeechDurationMs?: number;
   readonly vadTimeoutMs?: number;
   readonly recognizerTimeoutMs?: number;
@@ -118,6 +128,7 @@ export class SpeechWorkerCore {
   private readonly maxConcurrentStreams: number;
   private readonly maxBufferedPcmBytes: number;
   private readonly maxRememberedMessages: number;
+  private readonly maxInFlightRequests: number;
   private readonly maxPreSpeechDurationMs: number;
   private readonly vadTimeoutMs: number;
   private readonly recognizerTimeoutMs: number;
@@ -142,6 +153,11 @@ export class SpeechWorkerCore {
       options.maxRememberedMessages ?? MAX_SPEECH_REMEMBERED_MESSAGES,
       MAX_SPEECH_REMEMBERED_MESSAGES,
       "maxRememberedMessages"
+    );
+    this.maxInFlightRequests = boundedPositiveSafeInteger(
+      options.maxInFlightRequests ?? MAX_SPEECH_IN_FLIGHT_REQUESTS,
+      MAX_SPEECH_IN_FLIGHT_REQUESTS,
+      "maxInFlightRequests"
     );
     this.maxPreSpeechDurationMs = boundedPositiveSafeInteger(
       options.maxPreSpeechDurationMs ?? MAX_SPEECH_PRE_SPEECH_DURATION_MS,
@@ -259,6 +275,7 @@ export class SpeechWorkerCore {
     const request = parsed.data;
     const fingerprint = fingerprintParts(JSON.stringify(request));
 
+    const useCancellationReserve = this.streams.has(request.streamId);
     return this.runIdempotent(request.requestId, fingerprint, async () => {
       const context = this.streams.get(request.streamId);
       let cancellation: "RUNTIME_ABORT_REQUESTED" | "SUPPRESS_LATE_RESULT_ONLY" | "NOT_RECOGNIZING" = "NOT_RECOGNIZING";
@@ -290,7 +307,7 @@ export class SpeechWorkerCore {
         type: "SPEECH_CANCELLED",
         cancellation
       })];
-    });
+    }, useCancellationReserve);
   }
 
   public shutdown(): Promise<void> {
@@ -669,7 +686,8 @@ export class SpeechWorkerCore {
   private runIdempotent(
     requestId: RequestId,
     fingerprint: string,
-    operation: () => Promise<readonly SpeechWorkerEvent[]>
+    operation: () => Promise<readonly SpeechWorkerEvent[]>,
+    useControlReserve = false
   ): Promise<readonly SpeechWorkerEvent[]> {
     const replay = this.replayMessage(requestId, fingerprint);
     if (replay !== undefined) return Promise.resolve(replay);
@@ -685,13 +703,26 @@ export class SpeechWorkerCore {
       return active.promise.then((events) => cloneEvents(events));
     }
 
+    const capacity = this.maxInFlightRequests + (useControlReserve ? this.maxConcurrentStreams : 0);
+    if (this.inFlightMessages.size >= capacity) {
+      return Promise.reject(new SpeechWorkerCoreError(
+        "RESOURCE_LIMIT",
+        "Maximum in-flight speech request count reached"
+      ));
+    }
+
     const token = {};
     const canonical = Promise.resolve()
       .then(operation)
       .then((events) => {
         const cloned = cloneEvents(events);
-        this.rememberMessage(requestId, fingerprint, cloned);
+        this.rememberEvents(requestId, fingerprint, cloned);
         return cloned;
+      })
+      .catch((error: unknown) => {
+        const normalized = normalizeWorkerError(error);
+        this.rememberError(requestId, fingerprint, normalized);
+        throw normalized;
       })
       .finally(() => {
         if (this.inFlightMessages.get(requestId)?.token === token) this.inFlightMessages.delete(requestId);
@@ -707,11 +738,31 @@ export class SpeechWorkerCore {
     if (remembered.fingerprint !== fingerprint) {
       throw new SpeechWorkerCoreError("REQUEST_ID_CONFLICT", "RequestId was reused with different speech content");
     }
+    if (remembered.kind === "ERROR") {
+      throw new SpeechWorkerCoreError(remembered.code, remembered.message);
+    }
     return cloneEvents(remembered.events);
   }
 
-  private rememberMessage(requestId: RequestId, fingerprint: string, events: readonly SpeechWorkerEvent[]): void {
-    this.messages.set(requestId, { fingerprint, events: cloneEvents(events) });
+  private rememberEvents(requestId: RequestId, fingerprint: string, events: readonly SpeechWorkerEvent[]): void {
+    this.rememberOutcome(requestId, {
+      fingerprint,
+      kind: "EVENTS",
+      events: cloneEvents(events)
+    });
+  }
+
+  private rememberError(requestId: RequestId, fingerprint: string, error: SpeechWorkerCoreError): void {
+    this.rememberOutcome(requestId, {
+      fingerprint,
+      kind: "ERROR",
+      code: error.code,
+      message: error.message
+    });
+  }
+
+  private rememberOutcome(requestId: RequestId, outcome: RememberedMessage): void {
+    this.messages.set(requestId, outcome);
     if (this.messages.size <= this.maxRememberedMessages) return;
     const oldest = this.messages.keys().next().value;
     if (oldest !== undefined) this.messages.delete(oldest);
@@ -825,6 +876,12 @@ function cloneEvents(events: readonly SpeechWorkerEvent[]): SpeechWorkerEvent[] 
 function translatePcmError(error: unknown): SpeechWorkerCoreError {
   if (error instanceof PcmAdmissionError) return new SpeechWorkerCoreError(error.code, error.message);
   return new SpeechWorkerCoreError("INVALID_FRAME", "PCM frame admission failed");
+}
+
+function normalizeWorkerError(error: unknown): SpeechWorkerCoreError {
+  return error instanceof SpeechWorkerCoreError
+    ? new SpeechWorkerCoreError(error.code, error.message)
+    : new SpeechWorkerCoreError("INTERNAL_ERROR", "Speech worker operation failed");
 }
 
 function fingerprintParts(...parts: readonly string[]): string {
