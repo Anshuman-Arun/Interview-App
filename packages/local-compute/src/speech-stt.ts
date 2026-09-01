@@ -214,23 +214,33 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
     if (signal.aborted) throw abortError();
     const rawInput: unknown = input;
     if (!isRecord(rawInput)) throw new Error("Moonshine recognition input must be an object");
-    preflightBoundedString(rawInput.requestId, 128, "Moonshine request ID");
-    preflightBoundedString(rawInput.utteranceId, 128, "Moonshine utterance ID");
-    preflightSourceAudioBasis(rawInput.sourceAudioBasis, "Moonshine source audio basis");
-    const requestId = SpeechRequestIdSchema.parse(rawInput.requestId);
-    const utteranceId = SpeechUtteranceIdSchema.parse(rawInput.utteranceId);
-    const sourceAudioBasis = SourceAudioBasisSchema.parse(rawInput.sourceAudioBasis);
-    if (!(rawInput.pcmBytes instanceof Uint8Array)) {
+    assertAllowedOwnEnumerableKeys(rawInput, RECOGNIZER_AUDIO_INPUT_KEYS, "Moonshine recognition input");
+
+    const rawRequestId = rawInput.requestId;
+    const rawUtteranceId = rawInput.utteranceId;
+    const rawSourceAudioBasis = rawInput.sourceAudioBasis;
+    const rawPcmBytes = rawInput.pcmBytes;
+
+    preflightBoundedString(rawRequestId, 128, "Moonshine request ID");
+    preflightBoundedString(rawUtteranceId, 128, "Moonshine utterance ID");
+    const sourceAudioBasisInput = snapshotSourceAudioBasisInput(
+      rawSourceAudioBasis,
+      "Moonshine source audio basis"
+    );
+    const requestId = SpeechRequestIdSchema.parse(rawRequestId);
+    const utteranceId = SpeechUtteranceIdSchema.parse(rawUtteranceId);
+    const sourceAudioBasis = SourceAudioBasisSchema.parse(sourceAudioBasisInput);
+    if (!(rawPcmBytes instanceof Uint8Array)) {
       throw new Error("Moonshine PCM input must be a Uint8Array");
     }
-    if (isSharedBackingBuffer(rawInput.pcmBytes.buffer)) {
+    if (isSharedBackingBuffer(rawPcmBytes.buffer)) {
       throw new Error("Moonshine PCM input must not use shared mutable backing storage");
     }
     const expectedBytes = sourceAudioBasis.sampleCount * sourceAudioBasis.channels * 4;
-    if (rawInput.pcmBytes.byteLength !== expectedBytes) {
+    if (rawPcmBytes.byteLength !== expectedBytes) {
       throw new Error("Moonshine PCM length does not match its source audio basis");
     }
-    const runtimePcmBytes = new Uint8Array(rawInput.pcmBytes);
+    const runtimePcmBytes = new Uint8Array(rawPcmBytes);
     if (sha256(runtimePcmBytes) !== sourceAudioBasis.pcmSha256) {
       throw new Error("Moonshine PCM bytes do not match the source audio basis");
     }
@@ -279,9 +289,9 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
-    if (!this.supportsAbort || this.cancelRuntime === undefined) return false;
     preflightBoundedString(requestId, 128, "Moonshine cancellation request ID");
     const boundedRequestId = SpeechRequestIdSchema.parse(requestId);
+    if (!this.supportsAbort || this.cancelRuntime === undefined) return false;
     return (await this.cancelRuntime(boundedRequestId)) === true;
   }
 }
@@ -441,6 +451,12 @@ function validateAbortSignal(value: unknown): asserts value is AbortSignal {
   }
 }
 
+const RECOGNIZER_AUDIO_INPUT_KEYS = new Set([
+  "requestId",
+  "utteranceId",
+  "pcmBytes",
+  "sourceAudioBasis"
+]);
 const TRANSCRIPT_CANDIDATE_KEYS = new Set([
   "requestId",
   "utteranceId",
@@ -489,12 +505,28 @@ function preflightModelIdentity(value: unknown, label: string): void {
 }
 
 function preflightSourceAudioBasis(value: unknown, label: string): void {
-  if (!isRecord(value)) return;
+  void snapshotSourceAudioBasisInput(value, label);
+}
+
+function snapshotSourceAudioBasisInput(value: unknown, label: string): Record<string, unknown> {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
   assertAllowedOwnEnumerableKeys(value, SOURCE_AUDIO_BASIS_KEYS, label);
-  preflightBoundedString(value.streamId, 128, `${label} stream ID`);
-  if (typeof value.pcmSha256 !== "string" || value.pcmSha256.length !== 64) {
+  const snapshot: Record<string, unknown> = {
+    streamId: value.streamId,
+    firstSequence: value.firstSequence,
+    lastSequence: value.lastSequence,
+    startTimestampMs: value.startTimestampMs,
+    endTimestampMs: value.endTimestampMs,
+    sampleRate: value.sampleRate,
+    channels: value.channels,
+    sampleCount: value.sampleCount,
+    pcmSha256: value.pcmSha256
+  };
+  preflightBoundedString(snapshot.streamId, 128, `${label} stream ID`);
+  if (typeof snapshot.pcmSha256 !== "string" || snapshot.pcmSha256.length !== 64) {
     throw new Error(`${label} PCM hash must contain exactly 64 characters`);
   }
+  return snapshot;
 }
 
 function preflightBoundedString(value: unknown, maximumLength: number, label: string): void {
