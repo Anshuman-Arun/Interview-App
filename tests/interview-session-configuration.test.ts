@@ -12,12 +12,14 @@ import {
 import { QUANT_TRADER_SCENARIO_VERSION } from "../packages/local-compute/src/index.js";
 import { SessionRuntimeRegistry } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
+import { BrowserCommandClient } from "../apps/web/src/command-client.js";
 import {
   LoopbackCommandServer,
   ServerTurnOrchestrator,
   SessionRecoveryCoordinator,
   listInterviewCatalogEntries,
-  resolveInterviewSessionConfiguration
+  resolveInterviewSessionConfiguration,
+  resolveSessionStateComposition
 } from "../apps/server/src/index.js";
 import {
   getProblemByIdentity,
@@ -111,6 +113,80 @@ describe("generic interview session configuration", () => {
     await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
     expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
     expect(registry.get(sessionId).getState().problem).toBeUndefined();
+  });
+
+  it("supports configured start and catalog discovery through the browser command client", async () => {
+    const client = new BrowserCommandClient({
+      baseUrl: address.url,
+      clientToken: CLIENT_TOKEN,
+      fetchImpl: browserLikeFetch
+    });
+    const catalog = await client.listInterviewCatalog();
+    expect(catalog.some(
+      (entry) => entry.mode === "OXFORD_MATHEMATICS" && entry.id === "oxford-divisibility-chain"
+    )).toBe(true);
+
+    const problem = getProblemByIdentity("oxford-divisibility-chain", "1.0.0");
+    expect(problem).toBeDefined();
+    if (problem === undefined) return;
+    const configuration = oxfordConfiguration(
+      problem.id,
+      problem.version,
+      problem.interviewer.difficulty
+    );
+    const sessionId = newSessionId();
+    const started = await client.startConfiguredSession(sessionId, configuration);
+    expect(started.configuration).toEqual(configuration);
+    expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
+  });
+
+  it("rejects any later attempt to mutate a started session configuration", async () => {
+    const sessionId = newSessionId();
+    const firstConfiguration = oxfordConfiguration(
+      sixPeopleProblem.id,
+      sixPeopleProblem.version,
+      sixPeopleProblem.interviewer.difficulty
+    );
+    const secondProblem = getProblemByIdentity("oxford-divisibility-chain", "1.0.0");
+    expect(secondProblem).toBeDefined();
+    if (secondProblem === undefined) return;
+    const secondConfiguration = oxfordConfiguration(
+      secondProblem.id,
+      secondProblem.version,
+      secondProblem.interviewer.difficulty
+    );
+
+    expect((await postStart(sessionId, firstConfiguration)).status).toBe(200);
+    const mutation = await postStart(sessionId, secondConfiguration);
+    expect(mutation.status).toBe(409);
+    expect(registry.get(sessionId).getState().configuration).toEqual(firstConfiguration);
+    expect(registry.get(sessionId).getState().problem?.id).toBe(sixPeopleProblem.id);
+  });
+
+  it("fails reconstruction when persisted Oxford provenance diverges from configuration", async () => {
+    const sessionId = newSessionId();
+    const configuration = oxfordConfiguration(
+      sixPeopleProblem.id,
+      sixPeopleProblem.version,
+      sixPeopleProblem.interviewer.difficulty
+    );
+    expect((await postStart(sessionId, configuration)).status).toBe(200);
+    const state = registry.get(sessionId).getState();
+    expect(state.problem).toBeDefined();
+    if (state.problem === undefined) return;
+
+    expect(() => resolveSessionStateComposition({
+      ...state,
+      problem: { ...state.problem, prompt: "same-id substituted prompt" }
+    })).toThrow(/does not match/);
+
+    expect(() => resolveSessionStateComposition({
+      ...state,
+      problem: {
+        ...state.problem,
+        providerContextSpecSha256: "0".repeat(64) as typeof state.problem.providerContextSpecSha256
+      }
+    })).toThrow(/provenance/);
   });
 
   it("fails closed when the exact configured Oxford version is unavailable", async () => {
@@ -265,6 +341,15 @@ function oxfordConfiguration(
     difficulty,
     interventionPolicy: "BALANCED"
   });
+}
+
+async function browserLikeFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("origin", CLIENT_ORIGIN);
+  return fetch(input, { ...init, headers });
 }
 
 async function json(response: Response): Promise<unknown> {
