@@ -764,7 +764,7 @@ export class ModelAssetManager {
 
     const key = artifactInstallationKey(manifest);
     let entry = this.inFlight.get(key);
-    if (entry !== undefined && entry.controller.isSignalAborted(signal) && !entry.settled) {
+    if (entry !== undefined && isSignalAborted(entry.controller.signal) && !entry.settled) {
       await this.waitForAbortedEntryToSettle(entry, signal);
       entry = this.inFlight.get(key);
     }
