@@ -122,26 +122,34 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
     const rawRuntime = rawOptions.runtime;
     if (!isRecord(rawRuntime)) throw new Error("Moonshine runtime must be an object");
 
-    this.modelPath = validateLocalPath(rawOptions.modelPath, "Moonshine model path");
-    this.configPath = rawOptions.configPath === undefined
-      ? undefined
-      : validateLocalPath(rawOptions.configPath, "Moonshine config path");
-    validateRuntimeIdentity(rawRuntime.runtimeVersion, "Moonshine runtime version");
-    this.supportsAbort = validateBoolean(rawRuntime.supportsAbort, "Moonshine runtime abort capability");
-    this.transcribeRuntime = bindMoonshineTranscribe(rawRuntime.transcribe, rawRuntime);
-    this.cancelRuntime = bindMoonshineCancel(rawRuntime.cancel, rawRuntime);
-
+    const modelPath = rawOptions.modelPath;
+    const configPath = rawOptions.configPath;
+    const runtimeVersion = rawRuntime.runtimeVersion;
+    const supportsAbort = rawRuntime.supportsAbort;
+    const transcribeRuntime = rawRuntime.transcribe;
+    const cancelRuntime = rawRuntime.cancel;
     const modelName = rawOptions.modelName;
+    const modelVersion = rawOptions.modelVersion;
+
+    this.modelPath = validateLocalPath(modelPath, "Moonshine model path");
+    this.configPath = configPath === undefined
+      ? undefined
+      : validateLocalPath(configPath, "Moonshine config path");
+    validateRuntimeIdentity(runtimeVersion, "Moonshine runtime version");
+    this.supportsAbort = validateBoolean(supportsAbort, "Moonshine runtime abort capability");
+    this.transcribeRuntime = bindMoonshineTranscribe(transcribeRuntime, rawRuntime);
+    this.cancelRuntime = bindMoonshineCancel(cancelRuntime, rawRuntime);
+
     if (modelName !== undefined && typeof modelName !== "string") {
       throw new Error("Moonshine model name must be a string when provided");
     }
-    if (typeof rawOptions.modelVersion !== "string") {
+    if (typeof modelVersion !== "string") {
       throw new Error("Moonshine model version must be a string");
     }
     const name = modelName?.trim() || "moonshine";
     this.modelIdentity = Object.freeze(SpeechModelIdentitySchema.parse({
       name,
-      version: rawOptions.modelVersion.trim()
+      version: modelVersion.trim()
     }));
     this.cancellationCapability = this.supportsAbort ? "RUNTIME_ABORT" : "NONE";
   }
