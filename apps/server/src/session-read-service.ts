@@ -1,8 +1,7 @@
 import {
   SessionIdSchema,
   type InterviewProblem,
-  type SessionId,
-  type StoredSessionSummary
+  type SessionId
 } from "../../../packages/domain/src/index.js";
 import {
   replaySession,
@@ -39,7 +38,9 @@ const HISTORY_TEXT_PREVIEW_LIMIT = 512;
 
 export interface SessionReadSource {
   readonly hasSession: (sessionId: SessionId) => boolean;
-  readonly listSessions: () => readonly StoredSessionSummary[];
+  readonly sessionCount: () => number;
+  readonly listRecentSessionIds: (limit: number) => readonly SessionId[];
+  readonly eventCount: (sessionId: SessionId) => number;
   readonly loadEvents: (sessionId: SessionId) => readonly SessionEvent[];
 }
 
@@ -72,7 +73,6 @@ export function createCatalogSessionProblemResolver(
 }
 
 interface LoadedAuthoritativeSession {
-  readonly summary: StoredSessionSummary;
   readonly events: readonly SessionEvent[];
   readonly state: SessionState;
 }
@@ -106,11 +106,10 @@ function boundedIdentity(value: string | undefined): string | undefined {
   return value;
 }
 
-function historyTruncation(total: number, retained: number): {
-  readonly truncated: boolean;
-  readonly limit: number;
-  readonly remainingCount: number;
-} {
+function historyTruncation(
+  total: number,
+  retained: number
+): SessionHistoryReadResponse["sessionTruncation"] {
   return {
     truncated: retained < total,
     limit: MAX_HISTORY_READ_SESSIONS,
@@ -136,17 +135,9 @@ export class SessionReadService {
     rawSessionId: SessionId
   ): SessionEvaluationReadResponse | null {
     const sessionId = SessionIdSchema.parse(rawSessionId);
-    const known = this.sessionKnown(sessionId);
-    if (known === false) return null;
-    if (known === undefined) {
-      return safeReadFailure(
-        "SESSION_EVALUATION_READ",
-        sessionId,
-        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
-      ) as SessionEvaluationReadResponse;
-    }
-    const summary = this.findSummary(sessionId);
-    if (summary === undefined) {
+    const existence = this.safeHasSession(sessionId);
+    if (existence === false) return null;
+    if (existence === undefined) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
@@ -154,14 +145,15 @@ export class SessionReadService {
       ) as SessionEvaluationReadResponse;
     }
 
-    if (summary.status !== "COMPLETED" && summary.status !== "ARCHIVED") {
+    const eventCount = this.safeEventCount(sessionId);
+    if (eventCount === undefined) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
-        "SESSION_NOT_TERMINAL"
+        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
       ) as SessionEvaluationReadResponse;
     }
-    if (summary.eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
+    if (eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
@@ -169,12 +161,20 @@ export class SessionReadService {
       ) as SessionEvaluationReadResponse;
     }
 
-    const loaded = this.loadAuthoritative(summary);
+    const loaded = this.loadAuthoritative(sessionId, eventCount);
     if (loaded === undefined) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
         "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      ) as SessionEvaluationReadResponse;
+    }
+
+    if (loaded.state.status !== "COMPLETED" && loaded.state.status !== "ARCHIVED") {
+      return safeReadFailure(
+        "SESSION_EVALUATION_READ",
+        sessionId,
+        "SESSION_NOT_TERMINAL"
       ) as SessionEvaluationReadResponse;
     }
 
@@ -206,17 +206,9 @@ export class SessionReadService {
 
   public readReplay(rawSessionId: SessionId): SessionReplayReadResponse | null {
     const sessionId = SessionIdSchema.parse(rawSessionId);
-    const known = this.sessionKnown(sessionId);
-    if (known === false) return null;
-    if (known === undefined) {
-      return safeReadFailure(
-        "SESSION_REPLAY_READ",
-        sessionId,
-        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
-      ) as SessionReplayReadResponse;
-    }
-    const summary = this.findSummary(sessionId);
-    if (summary === undefined) {
+    const existence = this.safeHasSession(sessionId);
+    if (existence === false) return null;
+    if (existence === undefined) {
       return safeReadFailure(
         "SESSION_REPLAY_READ",
         sessionId,
@@ -224,7 +216,15 @@ export class SessionReadService {
       ) as SessionReplayReadResponse;
     }
 
-    if (summary.eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
+    const eventCount = this.safeEventCount(sessionId);
+    if (eventCount === undefined) {
+      return safeReadFailure(
+        "SESSION_REPLAY_READ",
+        sessionId,
+        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      ) as SessionReplayReadResponse;
+    }
+    if (eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
       return safeReadFailure(
         "SESSION_REPLAY_READ",
         sessionId,
@@ -232,13 +232,18 @@ export class SessionReadService {
       ) as SessionReplayReadResponse;
     }
 
+    const loaded = this.loadAuthoritative(sessionId, eventCount);
+    if (loaded === undefined) {
+      return safeReadFailure(
+        "SESSION_REPLAY_READ",
+        sessionId,
+        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      ) as SessionReplayReadResponse;
+    }
+
     let history: ReturnType<typeof projectSessionHistory>;
     try {
-      const events = this.#source.loadEvents(sessionId);
-      if (events.length !== summary.eventCount) {
-        throw new Error("Session event count changed during read");
-      }
-      history = projectSessionHistory(events, {
+      history = projectSessionHistory(loaded.events, {
         bounds: {
           maxEvents: DEFAULT_REPLAY_BOUNDS.maxEvents,
           maxTimelineEntries: HISTORY_TIMELINE_ENTRY_LIMIT,
@@ -278,70 +283,84 @@ export class SessionReadService {
   }
 
   public readHistory(): SessionHistoryReadResponse {
-    const allSummaries = this.#source.listSessions();
-    const candidateSummaries: StoredSessionSummary[] = [];
-
-    for (const summary of allSummaries) {
-      if (candidateSummaries.length >= MAX_HISTORY_READ_SESSIONS) break;
-      if (boundedIdentity(summary.sessionId) === undefined) continue;
-      candidateSummaries.push(summary);
+    const recentSessionIds = this.#source.listRecentSessionIds(
+      MAX_HISTORY_READ_SESSIONS
+    );
+    const totalSessions = this.#source.sessionCount();
+    if (
+      !Number.isSafeInteger(totalSessions)
+      || totalSessions < recentSessionIds.length
+    ) {
+      throw new Error("Persisted session inventory is inconsistent");
     }
 
-    const cards: Array<{
-      sessionId: SessionId;
-      problemId?: string;
-      problemVersion?: string;
-      status: StoredSessionSummary["status"];
-      createdAt: string;
-      updatedAt: string;
-      eventCount: number;
-      readStatus: "AVAILABLE" | "UNAVAILABLE" | "BUDGET_EXCLUDED";
-      replayComplete?: boolean;
-      evaluation?: {
-        compositeScore: number | null;
-        compositeStatus: "FULL" | "PARTIAL" | "NOT_SCORED";
-        supportLevel: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
-      };
-    }> = [];
+    const cards: SessionHistoryReadResponse["sessions"][number][] = [];
     const longitudinalInputs: ReturnType<typeof projectSessionHistory>[] = [];
     let consumedEvents = 0;
 
-    for (const summary of candidateSummaries) {
-      const safeProblemId = boundedIdentity(summary.problemId);
-      const safeProblemVersion = boundedIdentity(summary.problemVersion);
-      const cardBase = {
-        sessionId: summary.sessionId,
-        ...(safeProblemId === undefined ? {} : { problemId: safeProblemId }),
-        ...(safeProblemVersion === undefined
-          ? {}
-          : { problemVersion: safeProblemVersion }),
-        status: summary.status,
-        createdAt: summary.createdAt,
-        updatedAt: summary.updatedAt,
-        eventCount: summary.eventCount
-      };
+    for (const sessionId of recentSessionIds) {
+      if (boundedIdentity(sessionId) === undefined) continue;
 
-      if (
-        summary.eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents
-        || consumedEvents + summary.eventCount > HISTORY_TOTAL_EVENT_BUDGET
-      ) {
+      const eventCount = this.safeEventCount(sessionId);
+      if (eventCount === undefined) {
         cards.push({
-          ...cardBase,
-          readStatus: "BUDGET_EXCLUDED"
-        });
-        continue;
-      }
-
-      consumedEvents += summary.eventCount;
-
-      const loaded = this.loadAuthoritative(summary);
-      if (loaded === undefined) {
-        cards.push({
-          ...cardBase,
+          sessionId,
+          status: "UNKNOWN",
           readStatus: "UNAVAILABLE"
         });
         continue;
       }
+
+      if (
+        eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents
+        || consumedEvents + eventCount > HISTORY_TOTAL_EVENT_BUDGET
+      ) {
+        cards.push({
+          sessionId,
+          status: "UNKNOWN",
+          eventCount,
+          readStatus: "BUDGET_EXCLUDED"
+        });
+        continue;
+      }
+      consumedEvents += eventCount;
+
+      const loaded = this.loadAuthoritative(sessionId, eventCount);
+      if (loaded === undefined) {
+        cards.push({
+          sessionId,
+          status: "UNKNOWN",
+          eventCount,
+          readStatus: "UNAVAILABLE"
+        });
+        continue;
+      }
+
+      const firstEvent = loaded.events[0];
+      const lastEvent = loaded.events.at(-1);
+      if (firstEvent === undefined || lastEvent === undefined) {
+        cards.push({
+          sessionId,
+          status: "UNKNOWN",
+          eventCount,
+          readStatus: "UNAVAILABLE"
+        });
+        continue;
+      }
+
+      const safeProblemId = boundedIdentity(loaded.state.problem?.id);
+      const safeProblemVersion = boundedIdentity(loaded.state.problem?.version);
+      const cardBase = {
+        sessionId,
+        ...(safeProblemId === undefined ? {} : { problemId: safeProblemId }),
+        ...(safeProblemVersion === undefined
+          ? {}
+          : { problemVersion: safeProblemVersion }),
+        status: loaded.state.status,
+        createdAt: firstEvent.wallTime,
+        updatedAt: lastEvent.wallTime,
+        eventCount
+      } as const;
 
       let initialHistory: ReturnType<typeof projectSessionHistory>;
       try {
@@ -361,7 +380,10 @@ export class SessionReadService {
       let history = initialHistory;
       if (
         initialHistory.currentStateAvailable
-        && (loaded.state.status === "COMPLETED" || loaded.state.status === "ARCHIVED")
+        && (
+          loaded.state.status === "COMPLETED"
+          || loaded.state.status === "ARCHIVED"
+        )
       ) {
         const evaluation = this.evaluateLoaded(loaded);
         if (evaluation.available) {
@@ -418,12 +440,12 @@ export class SessionReadService {
       protocolVersion: 1,
       type: "SESSION_HISTORY_READ",
       sessions: cards,
-      sessionTruncation: historyTruncation(allSummaries.length, cards.length),
+      sessionTruncation: historyTruncation(totalSessions, cards.length),
       longitudinal
     });
   }
 
-  private sessionKnown(sessionId: SessionId): boolean | undefined {
+  private safeHasSession(sessionId: SessionId): boolean | undefined {
     try {
       return this.#source.hasSession(sessionId);
     } catch {
@@ -431,30 +453,25 @@ export class SessionReadService {
     }
   }
 
-  private findSummary(sessionId: SessionId): StoredSessionSummary | undefined {
-    let summaries: readonly StoredSessionSummary[];
+  private safeEventCount(sessionId: SessionId): number | undefined {
     try {
-      summaries = this.#source.listSessions();
+      const count = this.#source.eventCount(sessionId);
+      return Number.isSafeInteger(count) && count >= 0 ? count : undefined;
     } catch {
       return undefined;
     }
-    return summaries.find((summary) => summary.sessionId === sessionId);
   }
 
   private loadAuthoritative(
-    summary: StoredSessionSummary
+    sessionId: SessionId,
+    expectedEventCount: number
   ): LoadedAuthoritativeSession | undefined {
     try {
-      const events = this.#source.loadEvents(summary.sessionId);
-      if (events.length !== summary.eventCount) return undefined;
-      const state = replaySession(summary.sessionId, events);
-      if (
-        state.sequence !== summary.sequence
-        || state.status !== summary.status
-      ) {
-        return undefined;
-      }
-      return { summary, events, state };
+      const events = this.#source.loadEvents(sessionId);
+      if (events.length !== expectedEventCount) return undefined;
+      const state = replaySession(sessionId, events);
+      if (state.sequence !== expectedEventCount) return undefined;
+      return { events, state };
     } catch {
       return undefined;
     }
