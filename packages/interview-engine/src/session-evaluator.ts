@@ -1143,7 +1143,7 @@ function evaluateTechnicalCorrectness(
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
   state: Readonly<SessionState>
 ): DimensionComputation {
-  const sampleBySubject = new Map<string, {
+  const sampleByUnit = new Map<string, {
     score: number;
     supportLevel: EvaluationSupportLevel;
     refs: EvaluationEvidenceRef[];
@@ -1234,13 +1234,17 @@ function evaluateTechnicalCorrectness(
       continue;
     }
 
-    sampleBySubject.set(subjectKey(record.key), {
-      score,
-      supportLevel,
-      refs: uniqueRefs([...recordRefs, ...verificationRefs]),
-      positive: score === 100,
-      negative: score < 100
-    });
+    mergeCorrectnessSample(
+      sampleByUnit,
+      correctnessAggregationKey(record, supportingVerifications.length > 0),
+      {
+        score,
+        supportLevel,
+        refs: uniqueRefs([...recordRefs, ...verificationRefs]),
+        positive: score === 100,
+        negative: score < 100
+      }
+    );
   }
 
   for (const [key, requests] of verificationByEvidenceKey) {
@@ -1268,7 +1272,7 @@ function evaluateTechnicalCorrectness(
     if (contradictions.length > 0 && unresolved.length === 0) {
       const representative = contradictions[0];
       if (representative === undefined) continue;
-      sampleBySubject.set(subjectKey(representative.evidenceKey), {
+      mergeCorrectnessSample(sampleByUnit, subjectKey(representative.evidenceKey), {
         score: 0,
         supportLevel: supportFromCount(
           1,
@@ -1292,7 +1296,7 @@ function evaluateTechnicalCorrectness(
     }
   }
 
-  const samples = [...sampleBySubject.values()];
+  const samples = [...sampleByUnit.values()];
   if (samples.length === 0) {
     return {
       result: unsupportedDimension(
@@ -1336,12 +1340,12 @@ function evaluateRigor(
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
   state: Readonly<SessionState>
 ): DimensionComputation {
-  const samples: Array<{
+  const sampleByUnit = new Map<string, {
     score: number;
     confidence: number;
     ambiguous: boolean;
     refs: EvaluationEvidenceRef[];
-  }> = [];
+  }>();
 
   for (const record of activeEvidence.values()) {
     if (record.key.problemId !== problem.id || record.key.dimension !== "JUSTIFICATION") continue;
@@ -1385,7 +1389,7 @@ function evaluateRigor(
       }
     }
 
-    samples.push({
+    const sample = {
       score,
       confidence: minimumNumber([
         record.value.inferenceConfidence,
@@ -1405,9 +1409,25 @@ function evaluateRigor(
           evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
         )
       ])
-    });
+    };
+    const aggregationKey =
+      record.key.subject.kind === "CLAIM"
+        ? claimProvenanceAggregationKey("RIGOR", record)
+        : subjectKey(record.key);
+    const existing = sampleByUnit.get(aggregationKey);
+    if (existing === undefined) {
+      sampleByUnit.set(aggregationKey, sample);
+    } else {
+      sampleByUnit.set(aggregationKey, {
+        score: Math.min(existing.score, sample.score),
+        confidence: Math.min(existing.confidence, sample.confidence),
+        ambiguous: existing.ambiguous || sample.ambiguous,
+        refs: uniqueRefs([...existing.refs, ...sample.refs])
+      });
+    }
   }
 
+  const samples = [...sampleByUnit.values()];
   if (samples.length === 0) {
     return {
       result: unsupportedDimension(
@@ -1795,7 +1815,7 @@ function buildStrengths(
     strengths.push(
       "Authoritative correctness evidence supports " +
       String(correctness.positiveCount ?? 0) +
-      " positively scored subject(s) with no turn-count inference."
+      " positively scored grounded unit(s) with no turn-count inference."
     );
   }
 
@@ -1807,7 +1827,7 @@ function buildStrengths(
     strengths.push(
       "Scoped justification evidence supports the recorded rigor score across " +
       String((rigor.positiveCount ?? 0) + (rigor.negativeCount ?? 0)) +
-      " subject(s)."
+      " grounded unit(s)."
     );
   }
 
@@ -1843,14 +1863,14 @@ function buildImprovementAreas(
   if ((correctness.negativeCount ?? 0) > 0) {
     improvements.push(
       String(correctness.negativeCount) +
-      " scored correctness subject(s) remain locally or structurally contradicted."
+      " scored correctness grounded unit(s) remain locally or structurally contradicted."
     );
   }
 
   if ((rigor.negativeCount ?? 0) > 0) {
     improvements.push(
       String(rigor.negativeCount) +
-      " scoped justification subject(s) remain incomplete, unjustified, or constrained by correctness errors."
+      " scoped justification grounded unit(s) remain incomplete, unjustified, or constrained by correctness errors."
     );
   }
 
@@ -1981,6 +2001,58 @@ function supportingVerificationRequests(
           record.value.evidenceEventIds.includes(eventId)
         )
     );
+}
+
+function claimProvenanceAggregationKey(
+  prefix: string,
+  record: EvidenceRecordState
+): string {
+  const provenance = Array.from(new Set(record.value.evidenceEventIds))
+    .sort(compareStrings);
+  return prefix + ":" + JSON.stringify(provenance);
+}
+
+function correctnessAggregationKey(
+  record: EvidenceRecordState,
+  verifierBacked: boolean
+): string {
+  if (record.key.subject.kind === "CLAIM" && !verifierBacked) {
+    return claimProvenanceAggregationKey("CORRECTNESS", record);
+  }
+  return subjectKey(record.key);
+}
+
+function mergeCorrectnessSample(
+  samples: Map<string, {
+    score: number;
+    supportLevel: EvaluationSupportLevel;
+    refs: EvaluationEvidenceRef[];
+    positive: boolean;
+    negative: boolean;
+  }>,
+  key: string,
+  sample: {
+    score: number;
+    supportLevel: EvaluationSupportLevel;
+    refs: EvaluationEvidenceRef[];
+    positive: boolean;
+    negative: boolean;
+  }
+): void {
+  const existing = samples.get(key);
+  if (existing === undefined) {
+    samples.set(key, sample);
+    return;
+  }
+
+  const score = Math.min(existing.score, sample.score);
+  samples.set(key, {
+    score,
+    supportLevel: minSupport(existing.supportLevel, sample.supportLevel),
+    refs: uniqueRefs([...existing.refs, ...sample.refs]),
+    positive: score === 100,
+    negative: score < 100
+  });
 }
 
 function correctnessRatingScore(value: EvidenceRecordState["value"]["value"]): number | null {

@@ -602,6 +602,93 @@ describe("grounded session evaluator adversarial cases", () => {
     )).toThrow("unknown reasoning-graph approach");
   });
 
+  it("is invariant to unverified claim-ID splitting over identical provenance", () => {
+    const sharedSupport = EventIdSchema.parse("shared_claim_split_support");
+    let baseline = setHistory(
+      boundState(),
+      claimKey("single-correct-claim", "CORRECTNESS"),
+      [{
+        value: "CORRECT",
+        sequence: 10,
+        status: "ACTIVE",
+        evidenceEventIds: [sharedSupport]
+      }]
+    );
+    baseline = setHistory(
+      baseline,
+      claimKey("single-error-claim", "CORRECTNESS"),
+      [{
+        value: "LOCAL_ERROR",
+        sequence: 20,
+        status: "ACTIVE"
+      }]
+    );
+    const baselineEvaluation = evaluateInterviewSession(baseline, sixPeopleProblem);
+
+    let split = baseline;
+    for (let index = 0; index < 20; index += 1) {
+      split = setHistory(
+        split,
+        claimKey("split-correct-" + String(index), "CORRECTNESS"),
+        [{
+          value: "CORRECT",
+          sequence: 30 + index,
+          status: "ACTIVE",
+          evidenceEventIds: [sharedSupport]
+        }]
+      );
+    }
+    const splitEvaluation = evaluateInterviewSession(split, sixPeopleProblem);
+
+    expect(splitEvaluation.scores.technicalCorrectness)
+      .toBe(baselineEvaluation.scores.technicalCorrectness);
+    expect(splitEvaluation.dimensionResults.technicalCorrectness.supportLevel)
+      .toBe(baselineEvaluation.dimensionResults.technicalCorrectness.supportLevel);
+  });
+
+  it("does not let claim-ID splitting manufacture extra rigor weight", () => {
+    const sharedSupport = EventIdSchema.parse("shared_rigor_split_support");
+    let baseline = setHistory(
+      boundState(),
+      claimKey("single-justified", "JUSTIFICATION"),
+      [{
+        value: "JUSTIFIED",
+        sequence: 10,
+        status: "ACTIVE",
+        evidenceEventIds: [sharedSupport]
+      }]
+    );
+    baseline = setHistory(
+      baseline,
+      claimKey("single-unjustified", "JUSTIFICATION"),
+      [{
+        value: "UNJUSTIFIED",
+        sequence: 20,
+        status: "ACTIVE"
+      }]
+    );
+    const baselineEvaluation = evaluateInterviewSession(baseline, sixPeopleProblem);
+
+    let split = baseline;
+    for (let index = 0; index < 20; index += 1) {
+      split = setHistory(
+        split,
+        claimKey("split-justified-" + String(index), "JUSTIFICATION"),
+        [{
+          value: "JUSTIFIED",
+          sequence: 30 + index,
+          status: "ACTIVE",
+          evidenceEventIds: [sharedSupport]
+        }]
+      );
+    }
+    const splitEvaluation = evaluateInterviewSession(split, sixPeopleProblem);
+
+    expect(splitEvaluation.scores.rigor).toBe(baselineEvaluation.scores.rigor);
+    expect(splitEvaluation.dimensionResults.rigor.supportLevel)
+      .toBe(baselineEvaluation.dimensionResults.rigor.supportLevel);
+  });
+
   it("does not promote repeated model-inferred rigor evidence to STRONG support", () => {
     let state = boundState();
     for (const [index, claimId] of ["claim-a", "claim-b", "claim-c"].entries()) {
@@ -756,6 +843,7 @@ function setHistory(
     readonly value: EvidenceRating;
     readonly sequence: number;
     readonly status: EvidenceRecordState["status"];
+    readonly evidenceEventIds?: readonly ReturnType<typeof EventIdSchema.parse>[];
   }[]
 ): SessionState {
   const keyString = evidenceKeyToString(key);
@@ -785,11 +873,13 @@ function setHistory(
       value: {
         value: spec.value,
         inferenceConfidence: 0.95,
-        evidenceEventIds: [
-          EventIdSchema.parse(
-            "support_" + subjectId + "_" + key.dimension + "_" + String(spec.sequence) + "_" + String(index)
-          )
-        ],
+        evidenceEventIds: spec.evidenceEventIds === undefined
+          ? [
+              EventIdSchema.parse(
+                "support_" + subjectId + "_" + key.dimension + "_" + String(spec.sequence) + "_" + String(index)
+              )
+            ]
+          : [...spec.evidenceEventIds],
         lastUpdatedSequence: spec.sequence
       },
       status: spec.status,
