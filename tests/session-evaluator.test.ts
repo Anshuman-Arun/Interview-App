@@ -800,9 +800,13 @@ function withDelivery(
 ): SessionState {
   const generationId = GenerationIdSchema.parse("generation_" + label);
   const deliveryId = DeliveryIdSchema.parse("delivery_" + label);
-  const turnId = TurnIdSchema.parse("turn_" + label);
-  const inputEpisodeId = InputEpisodeIdSchema.parse("episode_" + label);
-  const turnEventId = EventIdSchema.parse("turn_committed_delivery_" + label);
+  const turnId = TurnIdSchema.parse("turn_delivery_basis_" + String(basisSequence));
+  const inputEpisodeId = InputEpisodeIdSchema.parse(
+    "episode_delivery_basis_" + String(basisSequence)
+  );
+  const turnEventId = EventIdSchema.parse(
+    "turn_committed_delivery_basis_" + String(basisSequence)
+  );
   const atom: DeliveryAtom = {
     deliveryId,
     generationId,

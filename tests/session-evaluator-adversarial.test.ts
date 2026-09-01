@@ -848,9 +848,13 @@ function addDelivery(
       : [...disclosureInput];
   const generationId = GenerationIdSchema.parse("generation_adv_" + label);
   const deliveryId = DeliveryIdSchema.parse("delivery_adv_" + label);
-  const turnId = TurnIdSchema.parse("turn_adv_" + label);
-  const inputEpisodeId = InputEpisodeIdSchema.parse("episode_adv_" + label);
-  const turnEventId = EventIdSchema.parse("turn_committed_adv_" + label);
+  const turnId = TurnIdSchema.parse("turn_adv_basis_" + String(basisSequence));
+  const inputEpisodeId = InputEpisodeIdSchema.parse(
+    "episode_adv_basis_" + String(basisSequence)
+  );
+  const turnEventId = EventIdSchema.parse(
+    "turn_committed_adv_basis_" + String(basisSequence)
+  );
   const atom: DeliveryAtom = {
     deliveryId,
     generationId,
