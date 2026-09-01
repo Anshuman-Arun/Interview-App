@@ -195,7 +195,10 @@ function mean(values: readonly number[]): number {
 }
 
 function initialize(definition: QuantResearchScenarioDefinition): InternalState {
-  const rng = new DeterministicRng(definition.seed, definition.family + "@" + definition.version + "@" + definition.rngVersion);
+  const rng = new DeterministicRng(
+    definition.seed,
+    definition.family + "@" + definition.version + "@" + definition.generatorVersion + "@" + definition.rngVersion
+  );
   const common = {
     family: definition.family,
     version: definition.version,
