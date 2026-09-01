@@ -69,6 +69,32 @@ describe("grounded session evaluator adversarial cases", () => {
     expect(evaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
   });
 
+  it("keeps milestone achievement support separate from assistance-timing uncertainty", () => {
+    let state = complete(boundState(), "model-relations", 10);
+    state = complete(state, "choose-vertex", 20);
+    state = setHistory(state, milestoneKey("choose-vertex", "CORRECTNESS"), [
+      { value: "CORRECT", sequence: 21, status: "ACTIVE" }
+    ]);
+    state = setHistory(state, milestoneKey("choose-vertex", "JUSTIFICATION"), [
+      { value: "JUSTIFIED", sequence: 22, status: "ACTIVE" }
+    ]);
+
+    const before = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(findMilestone(before, "choose-vertex").supportLevel).toBe("MODERATE");
+
+    const exposed = addDelivery(
+      state,
+      chooseDisclosure,
+      2,
+      "EXPOSED",
+      5,
+      "support-separation"
+    );
+    const after = evaluateInterviewSession(exposed, sixPeopleProblem);
+    expect(findMilestone(after, "choose-vertex").supportLevel).toBe("MODERATE");
+    expect(after.scores.independence).toBeNull();
+  });
+
   it("attributes a multi-disclosure delivery at each disclosure's problem-defined level", () => {
     let state = complete(boundState(), "choose-vertex", 20);
     state = addDelivery(
