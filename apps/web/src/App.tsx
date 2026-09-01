@@ -102,6 +102,7 @@ export const App: React.FC = () => {
   };
 
   const refreshStoredSessions = (): void => {
+    void session.fetchAvailableSessions();
     historyAbortRef.current?.abort();
     const controller = new AbortController();
     historyAbortRef.current = controller;
@@ -134,7 +135,6 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const boundedSessions = historyRead?.sessions ?? [];
 
   const handleWhiteboardEditorMount = useCallback((editor: TldrawEditor): void => {
     if (editor.getCurrentPageShapes().length > 0) return;
@@ -314,7 +314,7 @@ export const App: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold text-slate-900">Stored Interview Sessions</span>
                 <span className="text-xs text-slate-500 font-mono">
-                  ({boundedSessions.length}{historyRead?.sessionTruncation.truncated ? "+" : ""})
+                  ({session.availableSessions.length})
                 </span>
               </div>
               <button
@@ -401,20 +401,12 @@ export const App: React.FC = () => {
                 </section>
               ) : null}
 
-              {historyLoading && historyRead === null ? (
+              {session.availableSessions.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-xs">
-                  Loading bounded session history…
-                </div>
-              ) : historyError !== null && historyRead === null ? (
-                <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-                  {historyError}
-                </div>
-              ) : boundedSessions.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-xs">
-                  No bounded local sessions found. Start a new session to begin.
+                  No local sessions found. Start a new session to begin.
                 </div>
               ) : (
-                boundedSessions.map((s) => (
+                session.availableSessions.map((s) => (
                   <div
                     key={s.sessionId}
                     className="p-3 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors flex items-center justify-between bg-white shadow-2xs"
@@ -429,19 +421,9 @@ export const App: React.FC = () => {
                       <div className="text-[11px] text-slate-500 flex items-center gap-3">
                         <span>Problem: {s.problemId ?? "Unbound/unknown"}</span>
                         <span>•</span>
-                        <span>Events: {s.eventCount ?? "unknown"}</span>
-                        {s.updatedAt !== undefined ? (
-                          <>
-                            <span>•</span>
-                            <span>Updated: {new Date(s.updatedAt).toLocaleTimeString()}</span>
-                          </>
-                        ) : null}
-                        {s.readStatus !== "AVAILABLE" ? (
-                          <>
-                            <span>•</span>
-                            <span>{s.readStatus}</span>
-                          </>
-                        ) : null}
+                        <span>Events: {s.eventCount}</span>
+                        <span>•</span>
+                        <span>Updated: {new Date(s.updatedAt).toLocaleTimeString()}</span>
                       </div>
                     </div>
                     <button
@@ -463,23 +445,20 @@ s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
                         )
                       }
                       className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
-                        s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
+                        s.status === "ACTIVE"
                           ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
-                          : s.readStatus === "AVAILABLE"
-                            && (s.status === "COMPLETED" || s.status === "ARCHIVED")
+                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
                             ? "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
                             : "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
                       }`}
                     >
-                      {s.readStatus !== "AVAILABLE"
-                        ? "Unavailable"
-                        : s.sessionId === session.sessionId && s.status === "ACTIVE"
-                          ? "Current"
-                          : s.status === "ACTIVE"
-                            ? "Resume"
-                            : s.status === "COMPLETED" || s.status === "ARCHIVED"
-                              ? "Review"
-                              : "Unavailable"}
+                      {s.sessionId === session.sessionId && s.status === "ACTIVE"
+                        ? "Current"
+                        : s.status === "ACTIVE"
+                          ? "Resume"
+                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                            ? "Review"
+                            : "Unavailable"}
                     </button>
                   </div>
                 ))
