@@ -202,7 +202,7 @@ describe("Real tldraw mounted browser integration", () => {
     const secondId = createShapeId("multi-second");
     await act(async () => {
       bridge.getNativeEditor().run(() => {
-        bridge?.getNativeEditor().createShapes([
+        bridge.getNativeEditor().createShapes([
           {
             id: firstId,
             type: "geo",
@@ -226,7 +226,7 @@ describe("Real tldraw mounted browser integration", () => {
 
     await act(async () => {
       bridge.getNativeEditor().run(() => {
-        bridge?.getNativeEditor().updateShapes([
+        bridge.getNativeEditor().updateShapes([
           { id: firstId, type: "geo", x: 15 },
           { id: secondId, type: "geo", x: 45 }
         ]);
@@ -238,7 +238,7 @@ describe("Real tldraw mounted browser integration", () => {
 
     await act(async () => {
       bridge.getNativeEditor().run(() => {
-        bridge?.getNativeEditor().deleteShapes([firstId, secondId]);
+        bridge.getNativeEditor().deleteShapes([firstId, secondId]);
       });
     });
     expect(adapter.getBoardRevision()).toBe(3);
@@ -280,21 +280,21 @@ describe("Real tldraw mounted browser integration", () => {
 
     bridge.getNativeEditor().markHistoryStoppingPoint("before whiteboard move");
     await act(async () => {
-      bridge?.getNativeEditor().updateShapes([{ id, type: "geo", x: 100 }]);
+      bridge.getNativeEditor().updateShapes([{ id, type: "geo", x: 100 }]);
     });
     expect(adapter.getBoardRevision()).toBe(2);
     expect(bridge.getShape(id)?.x).toBe(100);
     expect(bridge.getShape(id)?.meta?.["shapeRevision"]).toBe(2);
 
     await act(async () => {
-      bridge?.getNativeEditor().undo();
+      bridge.getNativeEditor().undo();
     });
     expect(adapter.getBoardRevision()).toBe(3);
     expect(bridge.getShape(id)?.x).toBe(10);
     expect(bridge.getShape(id)?.meta?.["shapeRevision"]).toBe(3);
 
     await act(async () => {
-      bridge?.getNativeEditor().redo();
+      bridge.getNativeEditor().redo();
     });
     expect(adapter.getBoardRevision()).toBe(4);
     expect(bridge.getShape(id)?.x).toBe(100);
@@ -324,7 +324,7 @@ describe("Real tldraw mounted browser integration", () => {
 
     const id = createShapeId("readonly-create");
     await act(async () => {
-      bridge?.getNativeEditor().createShapes([{
+      bridge.getNativeEditor().createShapes([{
         id,
         type: "geo",
         x: 10,
@@ -384,7 +384,7 @@ describe("Real tldraw mounted browser integration", () => {
 
     const secondId = createShapeId("after-remount");
     await act(async () => {
-      bridge?.getNativeEditor().createShapes([{
+      bridge.getNativeEditor().createShapes([{
         id: secondId,
         type: "geo",
         x: 30,
@@ -503,7 +503,7 @@ describe("Real tldraw mounted browser integration", () => {
           y: 10,
           props: { geo: "rectangle", w: 20, h: 20 }
         });
-        bridge?.getNativeEditor().createShapes([{
+        bridge.getNativeEditor().createShapes([{
           id: directId,
           type: "geo",
           x: 40,
