@@ -5,12 +5,12 @@ if (typeof rawTypedArrayPrototype !== "object" || rawTypedArrayPrototype === nul
   throw new Error("TypedArray prototype is unavailable");
 }
 
-const typedArrayByteLengthGetter = Object.getOwnPropertyDescriptor(
+const typedArrayByteLengthDescriptor = Object.getOwnPropertyDescriptor(
   rawTypedArrayPrototype,
   "byteLength"
-)?.get;
-
-if (typedArrayByteLengthGetter === undefined) {
+);
+const typedArrayByteLengthGetter = typedArrayByteLengthDescriptor?.get;
+if (typeof typedArrayByteLengthGetter !== "function") {
   throw new Error("TypedArray byteLength intrinsic is unavailable");
 }
 
