@@ -127,6 +127,24 @@ describe("deterministic Quant Research interview engine", () => {
     }), "INVALID_DEFINITION");
   });
 
+  it("rejects perturbations whose exact optimal action does not change", () => {
+    expectCode(() => new QuantResearchEngine({
+      family: "EXPERIMENTAL_ALLOCATION",
+      version: QUANT_RESEARCH_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION,
+      seed: 12,
+      config: { totalBudget: 5, costA: 1, costB: 2, perturbedCostA: 3, perturbedCostB: 1, noiseA: 1, noiseB: 2 }
+    }), "INVALID_DEFINITION");
+
+    expectCode(() => new QuantResearchEngine({
+      family: "CONSTRAINED_OPTIMIZATION",
+      version: QUANT_RESEARCH_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION,
+      seed: 0,
+      config: { budget: 5, perturbedBudget: 6, maxX: 1, maxY: 1, perturbedPenalty: 1 }
+    }), "INVALID_DEFINITION");
+  });
+
   it.each([
     { actionId: "a", kind: "SUBMIT_PROBABILITY", value: Number.NaN },
     { actionId: "a", kind: "SUBMIT_PROBABILITY", value: Number.POSITIVE_INFINITY },
@@ -290,6 +308,19 @@ describe("deterministic Quant Research interview engine", () => {
     expect(changed).toHaveLength(1);
     engine.applyAction({ actionId: "mc2", kind: "CHOOSE_OPTION", option: "CONSTANT" });
     expect(engine.getResult().metrics.ROBUSTNESS).toBeGreaterThanOrEqual(0);
+  });
+
+  it("classifies optimization domain violations as scenario-level inadmissibility", () => {
+    const engine = new QuantResearchEngine(optimization);
+    expectCode(
+      () => engine.applyAction({ actionId: "wrong-arity", kind: "SUBMIT_PARAMETERS", values: [1] }),
+      "ACTION_NOT_ALLOWED"
+    );
+    expectCode(
+      () => engine.applyAction({ actionId: "fractional", kind: "SUBMIT_PARAMETERS", values: [1.5, 2] }),
+      "ACTION_NOT_ALLOWED"
+    );
+    expect(engine.getAcceptedActions()).toHaveLength(0);
   });
 
   it("optimization checks constraints, objective quality, and adaptation", () => {
