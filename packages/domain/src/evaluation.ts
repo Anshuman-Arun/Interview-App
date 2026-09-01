@@ -155,7 +155,20 @@ export const MilestoneEvaluationSchema = z.object({
   assistanceDisclosureIds: z.array(DisclosureIdSchema),
   approachIds: z.array(z.string().min(1)),
   notAchievedReason: z.string().min(1).optional()
-}).strict();
+}).strict().superRefine((milestone, ctx) => {
+  if (milestone.achieved && milestone.notAchievedReason !== undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Achieved milestone evaluations cannot contain a notAchievedReason"
+    });
+  }
+  if (!milestone.achieved && milestone.notAchievedReason === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Incomplete milestone evaluations require a notAchievedReason"
+    });
+  }
+});
 export type MilestoneEvaluation = z.infer<typeof MilestoneEvaluationSchema>;
 
 export const DisclosedInterventionRecordSchema = z.object({
@@ -165,7 +178,7 @@ export const DisclosedInterventionRecordSchema = z.object({
   disclosureLevel: DisclosureLevelSchema,
   disclosureIds: z.array(DisclosureIdSchema),
   relatedMilestoneIds: z.array(z.string().min(1)),
-  deliveryStatus: z.enum(["EXPOSED", "POSSIBLY_EXPOSED"]),
+  deliveryStatus: z.enum(["EXPOSED", "COMPLETED", "POSSIBLY_EXPOSED"]),
   summary: z.string().min(1)
 }).strict();
 export type DisclosedInterventionRecord = z.infer<typeof DisclosedInterventionRecordSchema>;
@@ -185,8 +198,8 @@ export const SessionEvaluationSchema = z.object({
   unassistedMilestoneCount: z.number().int().nonnegative(),
   assistedMilestoneCount: z.number().int().nonnegative(),
   totalTurns: z.number().int().nonnegative(),
-  keyStrengths: z.array(z.string()),
-  areasForImprovement: z.array(z.string()),
+  keyStrengths: z.array(z.string().min(1)),
+  areasForImprovement: z.array(z.string().min(1)),
   summaryAssessment: z.string().min(1)
 }).strict();
 export type SessionEvaluation = z.infer<typeof SessionEvaluationSchema>;
