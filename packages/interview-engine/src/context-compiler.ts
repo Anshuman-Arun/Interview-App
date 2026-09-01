@@ -100,15 +100,46 @@ export function compileContext(input: {
   readonly realizationRequest: RealizationRequest;
 }): CompiledContext {
   const turn = input.state.turns[input.turnId];
-  if (turn === undefined) throw new Error(`Unknown turn ${input.turnId}`);
+  if (turn === undefined || turn.turnId !== input.turnId) {
+    throw new Error(`Unknown or malformed turn ${input.turnId}`);
+  }
   if (
     input.state.problem === undefined
     || input.state.problem.id !== input.problem.id
     || input.state.problem.version !== input.problem.version
   ) throw new Error("Problem does not match the session's presented problem");
-  const delivered = new Set(input.state.disclosureLedger);
-  const allowed = new Set(input.realizationRequest.allowedDisclosureIds ?? []);
+  if (input.state.problem.providerContextSpecSha256 === undefined) {
+    throw new Error("Problem definition provenance is unavailable for context compilation");
+  }
+  if (input.state.problem.prompt !== input.problem.public.prompt) {
+    throw new Error("Session problem prompt does not match the bound problem definition");
+  }
+  const providerContextSpecSha256 = createProviderContextSpecFingerprintSync(input.problem);
+  if (input.state.problem.providerContextSpecSha256 !== providerContextSpecSha256) {
+    throw new Error("Problem definition does not match the session-bound provider context contract");
+  }
+
+  const request = RealizationRequestSchema.parse(input.realizationRequest);
+  const authoritativeRequest = RealizationRequestSchema.safeParse(
+    input.state.pedagogicalActions[input.turnId]
+  );
+  if (
+    !authoritativeRequest.success
+    || canonicalJson(authoritativeRequest.data) !== canonicalJson(request)
+  ) {
+    throw new Error("Context compilation requires the authoritative pedagogical action for the turn");
+  }
+
   const knownDisclosureIds = new Set(input.problem.interviewer.protectedDisclosures.map((item) => item.id));
+  const delivered = new Set<z.infer<typeof DisclosureIdSchema>>();
+  for (const disclosureId of input.state.disclosureLedger) {
+    if (!knownDisclosureIds.has(disclosureId) || delivered.has(disclosureId)) {
+      throw new Error("Disclosure ledger is inconsistent with the bound problem definition");
+    }
+    delivered.add(disclosureId);
+  }
+
+  const allowed = new Set(request.allowedDisclosureIds ?? []);
   if ([...allowed].some((id) => !knownDisclosureIds.has(id))) {
     throw new Error("Realization request authorizes an unknown protected disclosure");
   }
@@ -116,7 +147,7 @@ export function compileContext(input: {
   return CompiledContextSchema.parse({
     problemPrompt: input.state.problem.prompt,
     recentStudentWork: turn.studentText,
-    realizationRequest: input.realizationRequest,
+    realizationRequest: request,
     deliveredFacts: [...delivered],
     forbiddenDisclosureIds: input.problem.interviewer.protectedDisclosures
       .map((item) => item.id)
