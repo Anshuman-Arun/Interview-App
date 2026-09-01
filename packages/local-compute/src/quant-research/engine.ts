@@ -1025,56 +1025,56 @@ function assertStateInvariants(state: InternalState): void {
 }
 
 export class QuantResearchEngine {
-  private state: InternalState;
-  private applyingAction = false;
+  #state: InternalState;
+  #applyingAction = false;
 
   public constructor(definitionInput: unknown) {
     const definition = parseQuantResearchDefinition(definitionInput);
-    this.state = initialize(definition);
-    assertStateInvariants(this.state);
-    validateGeneratedScenario(this.state);
+    this.#state = initialize(definition);
+    assertStateInvariants(this.#state);
+    validateGeneratedScenario(this.#state);
   }
 
   public applyAction(actionInput: unknown): QuantResearchTransition {
-    if (this.applyingAction) throw new QuantResearchError("ACTION_NOT_ALLOWED", "Reentrant candidate action application is not allowed");
-    this.applyingAction = true;
+    if (this.#applyingAction) throw new QuantResearchError("ACTION_NOT_ALLOWED", "Reentrant candidate action application is not allowed");
+    this.#applyingAction = true;
     try {
-      if (this.state.status === "COMPLETE") throw new QuantResearchError("SCENARIO_COMPLETE", "Scenario is already complete");
-      if (this.state.acceptedActions.length >= MAX_ACTIONS) throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Maximum candidate action count reached");
+      if (this.#state.status === "COMPLETE") throw new QuantResearchError("SCENARIO_COMPLETE", "Scenario is already complete");
+      if (this.#state.acceptedActions.length >= MAX_ACTIONS) throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Maximum candidate action count reached");
       const action = parseQuantResearchAction(actionInput);
-      if (this.state.acceptedActions.some((accepted) => accepted.actionId === action.actionId)) {
+      if (this.#state.acceptedActions.some((accepted) => accepted.actionId === action.actionId)) {
         throw new QuantResearchError("DUPLICATE_ACTION_ID", "Candidate action ID has already been accepted");
       }
-      const next = transition(this.state, action);
+      const next = transition(this.#state, action);
       assertStateInvariants(next);
-      this.state = next;
+      this.#state = next;
       return { accepted: true, actionId: action.actionId, state: this.getState() };
     } finally {
-      this.applyingAction = false;
+      this.#applyingAction = false;
     }
   }
 
   public getState(): QuantResearchPublicState {
-    return clone(publicState(this.state));
+    return clone(publicState(this.#state));
   }
 
   public getResult(): QuantResearchResult {
-    return clone(resultFor(this.state));
+    return clone(resultFor(this.#state));
   }
 
   public getDiagnostics(): QuantResearchDiagnostics {
     return {
-      family: this.state.family,
-      version: this.state.version,
-      status: this.state.status,
-      stage: this.state.stage,
-      acceptedActionCount: this.state.acceptedActions.length,
-      evidenceCount: this.state.evidence.length
+      family: this.#state.family,
+      version: this.#state.version,
+      status: this.#state.status,
+      stage: this.#state.stage,
+      acceptedActionCount: this.#state.acceptedActions.length,
+      evidenceCount: this.#state.evidence.length
     };
   }
 
   public getAcceptedActions(): readonly QuantResearchAction[] {
-    return clone(this.state.acceptedActions);
+    return clone(this.#state.acceptedActions);
   }
 
 }
