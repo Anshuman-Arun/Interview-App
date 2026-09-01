@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   SessionEvaluationSchema,
   isDisclosedStatus,
@@ -509,7 +508,7 @@ function snapshotEvaluationInputWithinReplayBudget(input: unknown): unknown {
   const record = input as Readonly<Record<string, unknown>>;
   let itemCount = 0;
 
-  const snapshotArray = (value: unknown): unknown[] | unknown => {
+  const snapshotArray = (value: unknown): unknown => {
     if (!Array.isArray(value)) return value;
     const length = value.length;
     if (!Number.isSafeInteger(length) || length < 0) {
