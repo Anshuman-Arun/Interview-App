@@ -163,6 +163,13 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
         const episodeId = InputEpisodeIdSchema.parse("ep_001");
         const state = {
           ...initialSessionState(newSessionId()),
+          started: true,
+          status: "ACTIVE" as const,
+          problem: {
+            id: problem.id,
+            version: problem.version,
+            prompt: problem.public.prompt
+          },
           turns: {
             [turnId]: {
               turnId,
@@ -172,10 +179,10 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
             }
           }
         };
-        const action = selectPedagogicalAction(state, turnId);
+        const action = selectPedagogicalAction(state, turnId, problem);
         expect(action.requiredAction).toBe("PROBE_JUSTIFICATION");
         expect(action.maximumDisclosure).toBe(0);
-        expect(action.target).toContain("most recent");
+        expect(action.target).toBe(`turn:${turnId}`);
       }
     });
   });
