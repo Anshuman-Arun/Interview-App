@@ -50,10 +50,9 @@ export class SileroVadBackend implements VadBackend {
   public constructor(runtime: SileroVadRuntime, modelPath: string) {
     this.modelPath = validateLocalModelPath(modelPath, "Silero model path");
     validateRuntimeIdentity(runtime.runtimeVersion, "Silero runtime version");
-    this.scoreRuntime = bindRuntimeFunction<SileroVadRuntime["score"]>(
+    this.scoreRuntime = bindSileroScore(
       (runtime as unknown as { score?: unknown }).score,
-      runtime,
-      "Silero runtime score callback"
+      runtime
     );
   }
 
@@ -378,11 +377,7 @@ function validateRuntimeIdentity(value: unknown, label: string): void {
 }
 
 
-function bindRuntimeFunction<T extends (...args: never[]) => unknown>(
-  value: unknown,
-  owner: unknown,
-  label: string
-): T {
-  if (typeof value !== "function") throw new Error(`${label} is required`);
-  return value.bind(owner) as T;
+function bindSileroScore(value: unknown, owner: unknown): SileroVadRuntime["score"] {
+  if (typeof value !== "function") throw new Error("Silero runtime score callback is required");
+  return value.bind(owner) as SileroVadRuntime["score"];
 }
