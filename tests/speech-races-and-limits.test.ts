@@ -824,6 +824,44 @@ describe("speech worker adversarial races and hard limits", () => {
     }));
   });
 
+  it("fails explicitly when a first speech frame cannot fit inside the configured endpoint maximum", async () => {
+    const subject = worker({
+      vadStateFactory: () => new VoiceActivityStateMachine({
+        onsetThreshold: 0.5,
+        continuationThreshold: 0.5,
+        onsetHysteresisMs: 20
+      }),
+      endpointingFactory: () => new AdaptiveEndpointingPolicy({
+        minimumSpeechMs: 20,
+        minimumSilenceMs: 20,
+        incompleteSilenceMs: 20,
+        maximumPauseMs: 20,
+        maximumUtteranceMs: 50
+      })
+    });
+    const pcm = new Float32Array(1_600);
+    pcm.fill(0.1);
+    await expect(subject.submitFrame({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "oversized-first-onset",
+      sequence: 0,
+      sampleRate: 16_000,
+      channels: 1,
+      sampleFormat: "F32LE",
+      frameSamples: pcm.length,
+      payloadByteLength: pcm.byteLength,
+      timestampMs: 0
+    }, pcm)).rejects.toMatchObject({
+      code: "RESOURCE_LIMIT",
+      message: "PCM frame cannot fit within the configured utterance duration limit"
+    });
+    expect(subject.getActiveStreamCount()).toBe(0);
+    expect(subject.getDiagnostics()).toContainEqual(expect.objectContaining({
+      code: "ENDPOINT_FRAME_RESOURCE_LIMIT"
+    }));
+  });
+
   it("finalizes before a frame that would exceed a configured maximum utterance duration", async () => {
     const subject = worker({
       vadStateFactory: () => new VoiceActivityStateMachine({
