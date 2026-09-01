@@ -373,8 +373,16 @@ export class TurnCoordinator {
       assertSessionActive(state, "begin utterance");
       const invalidations: EventDraft[] = [];
       for (const generation of Object.values(state.generations)) {
-        if (generation.status === "ACTIVE") {
-          invalidations.push({ source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId: generation.generationId, reason: "Speech onset" } });
+        if (
+          generation.status === "ACTIVE"
+          || generation.status === "PROPOSAL_RECEIVED"
+          || generation.status === "VALIDATED"
+        ) {
+          invalidations.push({
+            source: "APPLICATION",
+            type: "MODEL_GENERATION_SUPERSEDED",
+            payload: { generationId: generation.generationId, reason: "Speech onset" }
+          });
         }
       }
       for (const atom of Object.values(state.deliveries)) {
@@ -460,7 +468,11 @@ export class TurnCoordinator {
       return {
         drafts: [
           { source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision, summary } },
-          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "WHITEBOARD", semanticContent: summary } }
+          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "WHITEBOARD", semanticContent: summary } },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative board state changed before delivery"
+          )
         ],
         result: { appended: true, boardRevision }
       };
@@ -778,7 +790,17 @@ export class TurnCoordinator {
     }, CommittedResultSchema, (state) => {
       assertSessionActive(state, "commit board patch");
       return {
-        drafts: [{ source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary } }],
+        drafts: [
+          {
+            source: "USER",
+            type: "BOARD_PATCH_COMMITTED",
+            payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary }
+          },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative board state changed before delivery"
+          )
+        ],
         result: { committed: true }
       };
     });
@@ -822,11 +844,22 @@ export class TurnCoordinator {
           }
         }));
       return {
-        drafts: [{ source: "APPLICATION", type: "TRANSCRIPT_CORRECTED", payload: {
-          transcriptRevision: TranscriptRevisionSchema.parse(state.transcriptRevision + 1),
-          contextEpoch: ContextEpochSchema.parse(state.contextEpoch + 1),
-          correctedText
-        } }, ...invalidations],
+        drafts: [
+          {
+            source: "APPLICATION",
+            type: "TRANSCRIPT_CORRECTED",
+            payload: {
+              transcriptRevision: TranscriptRevisionSchema.parse(state.transcriptRevision + 1),
+              contextEpoch: ContextEpochSchema.parse(state.contextEpoch + 1),
+              correctedText
+            }
+          },
+          ...invalidations,
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative transcript changed before delivery"
+          )
+        ],
         result: { corrected: true }
       };
     });
