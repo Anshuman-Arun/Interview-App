@@ -346,7 +346,7 @@ export const App: React.FC = () => {
                               Composite average: {item.average.compositeScore}
                             </div>
                             <div className="text-slate-500">
-                              {item.scoredSessionCount["compositeScore"] ?? 0} scored / {item.sessionCount} evaluated
+                              {item.scoredSessionCount["compositeScore"]} scored / {item.sessionCount} evaluated
                             </div>
                           </div>
                         ))}
