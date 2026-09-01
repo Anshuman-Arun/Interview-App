@@ -51,7 +51,7 @@ export function snapshotPcmFrame(input: unknown, payload: unknown): PcmFrameSnap
   if (!ArrayBuffer.isView(payload)) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM payload must be a binary ArrayBuffer view");
   }
-  if (payload.buffer instanceof SharedArrayBuffer) {
+  if (isSharedBackingBuffer(payload.buffer)) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM payload must not use shared mutable backing storage");
   }
   if (payload.byteLength !== envelope.payloadByteLength) {
@@ -334,3 +334,8 @@ function validatePcmOrderState(prior: PcmOrderState): void {
   }
 }
 
+
+
+function isSharedBackingBuffer(buffer: ArrayBufferLike): boolean {
+  return typeof SharedArrayBuffer !== "undefined" && buffer instanceof SharedArrayBuffer;
+}
