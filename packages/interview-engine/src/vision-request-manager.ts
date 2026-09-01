@@ -125,6 +125,10 @@ export class VisionRequestManager {
     return this.executionReservations.size;
   }
 
+  private isClosed(): boolean {
+    return this.closed;
+  }
+
   public get tombstoneCount(): number {
     return this.tombstones.size;
   }
@@ -183,7 +187,7 @@ export class VisionRequestManager {
     this.registrationReservations.add(request.requestId);
     try {
       const authority = this.readAuthority(request);
-      if (this.closed) {
+      if (this.isClosed()) {
         return { accepted: false, duplicate: false, outcome: rejected(request.requestId, "MANAGER_SHUTDOWN") };
       }
       if (!authority.ok) {
