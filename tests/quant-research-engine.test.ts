@@ -114,6 +114,7 @@ describe("deterministic Quant Research interview engine", () => {
     { ...experimental, config: { ...experimental.config, totalBudget: 8, costA: 1, costB: 2, perturbedCostA: 3, perturbedCostB: 5 } },
     { ...experimental, config: { ...experimental.config, totalBudget: 10, costA: 4, costB: 4, perturbedCostA: 11, perturbedCostB: 12 } },
     { ...experimental, config: { ...experimental.config, perturbedCostA: experimental.config.costA, perturbedCostB: experimental.config.costB } },
+    { ...model, config: { ...model.config, noiseRadius: 0 } },
     { ...model, config: { ...model.config, outlierShift: 2 * model.config.noiseRadius } },
     { ...model, config: { ...model.config, extra: true } },
     { ...optimization, extra: true }
