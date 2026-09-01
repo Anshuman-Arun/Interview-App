@@ -64,8 +64,11 @@ export class SileroVadBackend implements VadBackend {
 
 export class ScriptedVadBackend implements VadBackend {
   private index = 0;
+  private readonly probabilities: readonly number[];
 
-  public constructor(private readonly probabilities: readonly number[]) {}
+  public constructor(probabilities: readonly number[]) {
+    this.probabilities = [...probabilities];
+  }
 
   public async classify(): Promise<VadObservation> {
     const probability = this.probabilities[this.index] ?? 0;
