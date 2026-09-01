@@ -13,5 +13,5 @@ export * from "./turn-coordinator.js";
 export * from "./vision-freshness.js";
 export * from "./verification-coordinator.js";
 export * from "./session-evaluator.js";
-
 export * from "./evaluation-model-seam.js";
+export * from "./quant-research-coordinator.js";
