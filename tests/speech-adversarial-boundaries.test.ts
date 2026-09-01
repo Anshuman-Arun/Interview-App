@@ -10,7 +10,7 @@ import {
   DeterministicFakeRecognizer,
   type SpeechRecognizer
 } from "../packages/local-compute/src/speech-stt.js";
-import { SpeechWorkerCore } from "../packages/local-compute/src/speech-worker.js";
+import { SpeechWorkerCore, SpeechWorkerCoreError } from "../packages/local-compute/src/speech-worker.js";
 import type { SpeechWorkerEvent } from "../packages/local-compute/src/speech-protocol.js";
 
 function frame(sequence: number, speech = true, streamId = "adversarial-stream") {
@@ -114,6 +114,24 @@ describe("speech worker adversarial callback boundaries", () => {
     await expect(worker.submitFrame(late.envelope, late.pcm)).rejects.toMatchObject({
       code: "STREAM_FINALIZED"
     });
+  });
+
+  it("does not trust worker-error instances thrown by an injected VAD backend", async () => {
+    const vadBackend: VadBackend = {
+      async classify() {
+        throw new SpeechWorkerCoreError("INTERNAL_ERROR", "credential=backend-secret");
+      }
+    };
+    const worker = new SpeechWorkerCore({
+      vadBackend,
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    const fixture = frame(0);
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "VAD_FAILURE",
+      message: "VAD backend failed"
+    });
+    expect(JSON.stringify(worker.getDiagnostics())).not.toContain("backend-secret");
   });
 
   it("rejects extra fields in custom VAD observations as protocol violations", async () => {
