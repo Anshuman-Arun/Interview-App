@@ -20,7 +20,9 @@ import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import {
   listInterviewCatalogEntries,
-  resolveInterviewSessionConfiguration
+  resolveInterviewSessionConfiguration,
+  resolveSessionStateComposition,
+  toInterviewProblemPublicView
 } from "./interview-session-composition.js";
 import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
 
@@ -240,12 +242,17 @@ export class LoopbackCommandServer {
           type: "SESSION_STARTED",
           requestId: command.requestId,
           sessionId: command.sessionId,
-          configuration: composition.configuration
+          configuration: composition.configuration,
+          ...(toInterviewProblemPublicView(composition) === undefined
+            ? {}
+            : { problem: toInterviewProblemPublicView(composition) })
         };
       }
       case "RESUME_SESSION": {
         await new TurnCoordinator(writer).resumeSession(envelope);
         const state = writer.getState();
+        const composition = resolveSessionStateComposition(state);
+        const problem = toInterviewProblemPublicView(composition);
         return {
           protocolVersion: 1,
           ok: true,
@@ -256,6 +263,7 @@ export class LoopbackCommandServer {
           started: state.started,
           status: state.status,
           ...(state.configuration === undefined ? {} : { configuration: state.configuration }),
+          ...(problem === undefined ? {} : { problem }),
           ...(state.problem?.id !== undefined ? { problemId: state.problem.id } : {}),
           ...(state.problem?.version !== undefined ? { problemVersion: state.problem.version } : {}),
           contextEpoch: state.contextEpoch,
@@ -310,6 +318,8 @@ export class LoopbackCommandServer {
       }
       case "GET_SESSION_SUMMARY": {
         const state = writer.getState();
+        const composition = resolveSessionStateComposition(state);
+        const problem = toInterviewProblemPublicView(composition);
         return {
           protocolVersion: 1,
           ok: true,
@@ -320,6 +330,7 @@ export class LoopbackCommandServer {
           started: state.started,
           status: state.status,
           ...(state.configuration === undefined ? {} : { configuration: state.configuration }),
+          ...(problem === undefined ? {} : { problem }),
           ...(state.problem?.id !== undefined ? { problemId: state.problem.id } : {}),
           ...(state.problem?.version !== undefined ? { problemVersion: state.problem.version } : {}),
           contextEpoch: state.contextEpoch,
