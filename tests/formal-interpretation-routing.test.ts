@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   FormalInterpretationRequestSchema,
   InterpretationProviderResultSchema,
+  MAX_FORMAL_INTERPRETATION_CANDIDATES,
+  MAX_FORMAL_INTERPRETATION_PROTOCOLS,
   evidenceKeyIdentity,
   evidenceKeyToString,
   newRequestId,
@@ -1095,6 +1097,80 @@ describe("EvidenceKey authority identity", () => {
         reason: "CANDIDATE_TARGET_MISMATCH"
       });
       expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+});
+
+
+describe("formal interpretation structural preflight bounds", () => {
+  it("rejects oversized request protocol arrays before schema traversal or provider invocation", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const oversized = new Array<FormalProtocolRef>(MAX_FORMAL_INTERPRETATION_PROTOCOLS + 1);
+      Object.defineProperty(oversized, 0, {
+        enumerable: true,
+        get: () => {
+          throw new Error("OVERSIZED_REQUEST_ARRAY_WAS_TRAVERSED");
+        }
+      });
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, []));
+      const coordinator = new InterpretationCoordinator(harness.writer, provider, routingScopes);
+      const result = await coordinator.interpretAndVerify({
+        ...request,
+        allowedProtocols: oversized
+      });
+      expect(result).toMatchObject({ status: "RESOURCE_LIMIT", reason: "RESOURCE_LIMIT" });
+      expect(provider.callCount).toBe(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects oversized provider candidate arrays before candidate traversal", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const oversized = new Array<unknown>(MAX_FORMAL_INTERPRETATION_CANDIDATES + 1);
+      Object.defineProperty(oversized, 0, {
+        enumerable: true,
+        get: () => {
+          throw new Error("OVERSIZED_PROVIDER_ARRAY_WAS_TRAVERSED");
+        }
+      });
+      const provider = {
+        interpret: async () => ({
+          protocolVersion: 1,
+          requestId: request.requestId,
+          candidates: oversized
+        })
+      };
+      const coordinator = new InterpretationCoordinator(harness.writer, provider, routingScopes);
+      const result = await coordinator.interpretAndVerify(request);
+      expect(result).toMatchObject({ status: "RESOURCE_LIMIT", reason: "RESOURCE_LIMIT" });
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects oversized protocol lists in the authoritative request builder before mapping them", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const oversized = new Array<FormalProtocolRef>(MAX_FORMAL_INTERPRETATION_PROTOCOLS + 1);
+      Object.defineProperty(oversized, 0, {
+        enumerable: true,
+        get: () => {
+          throw new Error("OVERSIZED_BUILDER_ARRAY_WAS_TRAVERSED");
+        }
+      });
+      expect(() => createFormalInterpretationRequest(harness.writer, {
+        generationId: harness.generationId,
+        target: claimEvidenceKey,
+        allowedProtocols: oversized
+      })).toThrow(/bounded size/u);
     } finally {
       harness.store.close();
     }
