@@ -101,11 +101,19 @@ function boundedIdentity(value: string | undefined): string | undefined {
     value === undefined
     || value.length === 0
     || value.length > 512
-    || /[\u0000-\u001F\u007F]/u.test(value)
+    || containsControlCharacter(value)
   ) {
     return undefined;
   }
   return value;
+}
+
+function containsControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
 }
 
 function nonnegativeSafeInteger(value: number): boolean {
