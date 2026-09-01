@@ -374,12 +374,7 @@ describe("grounded session evaluator", () => {
       dimension: "CORRECTNESS"
     };
     let state = withVerification(boundState(), key, "VERIFIED", 10, "stale-verified");
-    state = setHistory(state, key, [{
-      value: "CORRECT",
-      sequence: 12,
-      status: "STALE",
-      evidenceEventIds: [EventIdSchema.parse("verification_requested_stale-verified")]
-    }]);
+    state = invalidateActiveEvidence(state, key);
 
     expect(evaluateInterviewSession(state, sixPeopleProblem).scores.technicalCorrectness)
       .toBeNull();
@@ -500,9 +495,13 @@ describe("grounded session evaluator", () => {
     const active = state.evidenceHistory[evidenceKeyToString(key)]?.[0];
     const supportEvent = active?.value.evidenceEventIds[0];
     if (supportEvent === undefined) throw new Error("Expected fixture support event");
+    const supportIndex = state.eventIds.indexOf(supportEvent);
+    if (supportIndex < 0) throw new Error("Expected support event in authoritative history");
+    const eventIds = [...state.eventIds];
+    eventIds[supportIndex] = EventIdSchema.parse("replacement_unrelated_authoritative_event");
     const corrupted: SessionState = {
       ...state,
-      eventIds: state.eventIds.filter((eventId) => eventId !== supportEvent)
+      eventIds
     };
 
     expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem)).toThrow(
@@ -751,7 +750,7 @@ function setHistory(
       String(index)
     )
   );
-  const history: EvidenceRecordState[] = specs.map((spec, index) => {
+  const newHistory: EvidenceRecordState[] = specs.map((spec, index) => {
     const evidenceEventId = recordIds[index];
     if (evidenceEventId === undefined) throw new Error("Fixture evidence ID is unavailable");
     const supersededByEventId = recordIds[index + 1];
@@ -783,6 +782,21 @@ function setHistory(
       ...(spec.status === "STALE" ? { invalidationReason: "stale evidence" } : {})
     };
   });
+  const existingHistory = [...(state.evidenceHistory[keyString] ?? [])];
+  const firstNew = newHistory[0];
+  if (firstNew !== undefined) {
+    const activeIndex = existingHistory.findIndex((record) => record.status === "ACTIVE");
+    if (activeIndex >= 0) {
+      const activeRecord = existingHistory[activeIndex];
+      if (activeRecord === undefined) throw new Error("Fixture active evidence is unavailable");
+      existingHistory[activeIndex] = {
+        ...activeRecord,
+        status: "SUPERSEDED",
+        supersededByEventId: firstNew.evidenceEventId
+      };
+    }
+  }
+  const history = [...existingHistory, ...newHistory];
   const active = history.find((record) => record.status === "ACTIVE");
   const studentEvidence =
     active === undefined
@@ -792,7 +806,7 @@ function setHistory(
       : { ...state.studentEvidence, [keyString]: active.value };
 
   let eventIds = [...state.eventIds];
-  for (const record of history) {
+  for (const record of newHistory) {
     for (const provenanceId of record.value.evidenceEventIds) {
       if (!eventIds.includes(provenanceId)) {
         eventIds = placeEventBeforeSequence(
@@ -814,6 +828,34 @@ function setHistory(
     eventIds,
     studentEvidence,
     evidenceHistory: { ...state.evidenceHistory, [keyString]: history }
+  };
+}
+
+function invalidateActiveEvidence(
+  state: SessionState,
+  key: EvidenceKey,
+  reason = "fixture invalidation"
+): SessionState {
+  const keyString = evidenceKeyToString(key);
+  const history = [...(state.evidenceHistory[keyString] ?? [])];
+  const activeIndex = history.findIndex((record) => record.status === "ACTIVE");
+  if (activeIndex < 0) throw new Error("Fixture invalidation requires active evidence");
+  const active = history[activeIndex];
+  if (active === undefined) throw new Error("Fixture active evidence is unavailable");
+  history[activeIndex] = {
+    ...active,
+    status: "STALE",
+    invalidationReason: reason
+  };
+  return {
+    ...state,
+    studentEvidence: Object.fromEntries(
+      Object.entries(state.studentEvidence).filter(([candidate]) => candidate !== keyString)
+    ),
+    evidenceHistory: {
+      ...state.evidenceHistory,
+      [keyString]: history
+    }
   };
 }
 
@@ -959,61 +1001,37 @@ function withVerification(
   state: SessionState,
   key: EvidenceKey,
   status: "VERIFIED" | "CONTRADICTED" | "UNRESOLVED",
-  basisSequence: number,
+  basisLabel: number,
   label: string
 ): SessionState {
   const requestId = RequestIdSchema.parse("verification_" + label);
-  const turnId = TurnIdSchema.parse("turn_verification_basis_" + String(basisSequence));
+  const turnId = TurnIdSchema.parse("turn_verification_basis_" + String(basisLabel));
   const inputEpisodeId = InputEpisodeIdSchema.parse(
-    "episode_verification_basis_" + String(basisSequence)
+    "episode_verification_basis_" + String(basisLabel)
   );
   const confidence = status === "UNRESOLVED" ? 0.7 : 1;
-  const verificationSupportId = EventIdSchema.parse(
-    "turn_committed_verification_basis_" + String(basisSequence)
-  );
   const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
   const resultEventId = EventIdSchema.parse("verification_result_" + label);
 
-  let eventIds = placeEventAtSequence(
-    [...state.eventIds],
-    verificationSupportId,
-    basisSequence
-  );
-  const requestSequence = Math.max(state.sequence, basisSequence) + 1;
+  const basis = ensureVerificationBasis(state, basisLabel, turnId, inputEpisodeId);
+  let eventIds = basis.eventIds;
+  const requestSequence = basis.sequence + 1;
   eventIds = placeEventAtSequence(eventIds, requestedEventId, requestSequence);
   const resultSequence = requestSequence + 1;
   eventIds = placeEventAtSequence(eventIds, resultEventId, resultSequence);
 
   const next: SessionState = {
-    ...state,
+    ...basis.state,
     sequence: resultSequence,
-    lastCommittedInputSequence: basisSequence,
     eventIds,
-    inputEpisodes: {
-      ...state.inputEpisodes,
-      [inputEpisodeId]: {
-        inputEpisodeId,
-        status: "COMMITTED",
-        inputs: [{ modality: "TYPING", semanticContent: "fixture verification input" }]
-      }
-    },
-    turns: {
-      ...state.turns,
-      [turnId]: {
-        turnId,
-        inputEpisodeId,
-        studentText: "fixture verification input",
-        committedSequence: basisSequence
-      }
-    },
     verificationRequests: {
-      ...state.verificationRequests,
+      ...basis.state.verificationRequests,
       [requestId]: {
         verificationRequestId: requestId,
         verifier: "fixture-verifier",
         basis: {
           contextEpoch: zeroContextEpoch,
-          committedInputSequence: basisSequence,
+          committedInputSequence: basis.committedSequence,
           transcriptRevision: zeroTranscriptRevision,
           boardRevision: zeroBoardRevision,
           problemStateRevision: zeroProblemStateRevision,
@@ -1024,7 +1042,7 @@ function withVerification(
         candidateFormalInterpretation: "fixture",
         interpretationConfidence: confidence,
         evidenceKey: key,
-        evidenceEventIds: [verificationSupportId],
+        evidenceEventIds: [basis.turnEventId],
         requestedEventId,
         status: "ACCEPTED",
         result: {
@@ -1042,39 +1060,111 @@ function withVerification(
     sequence: resultSequence + 1,
     status: "ACTIVE",
     confidence,
-    evidenceEventIds: [verificationSupportId, requestedEventId]
+    evidenceEventIds: [basis.turnEventId, requestedEventId]
   }]);
 }
 
 function withPendingVerification(
   state: SessionState,
   key: EvidenceKey,
-  basisSequence: number,
+  basisLabel: number,
   label: string
 ): SessionState {
   const requestId = RequestIdSchema.parse("verification_" + label);
-  const turnId = TurnIdSchema.parse("turn_verification_basis_" + String(basisSequence));
+  const turnId = TurnIdSchema.parse("turn_verification_basis_" + String(basisLabel));
   const inputEpisodeId = InputEpisodeIdSchema.parse(
-    "episode_verification_basis_" + String(basisSequence)
-  );
-  const verificationSupportId = EventIdSchema.parse(
-    "turn_committed_verification_basis_" + String(basisSequence)
+    "episode_verification_basis_" + String(basisLabel)
   );
   const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
 
-  let eventIds = placeEventAtSequence(
-    [...state.eventIds],
-    verificationSupportId,
-    basisSequence
+  const basis = ensureVerificationBasis(state, basisLabel, turnId, inputEpisodeId);
+  const requestSequence = basis.sequence + 1;
+  const eventIds = placeEventAtSequence(
+    basis.eventIds,
+    requestedEventId,
+    requestSequence
   );
-  const requestSequence = Math.max(state.sequence, basisSequence) + 1;
-  eventIds = placeEventAtSequence(eventIds, requestedEventId, requestSequence);
 
   return {
-    ...state,
+    ...basis.state,
     sequence: requestSequence,
-    lastCommittedInputSequence: basisSequence,
     eventIds,
+    verificationRequests: {
+      ...basis.state.verificationRequests,
+      [requestId]: {
+        verificationRequestId: requestId,
+        verifier: "fixture-verifier",
+        basis: {
+          contextEpoch: zeroContextEpoch,
+          committedInputSequence: basis.committedSequence,
+          transcriptRevision: zeroTranscriptRevision,
+          boardRevision: zeroBoardRevision,
+          problemStateRevision: zeroProblemStateRevision,
+          policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
+          turnId
+        },
+        candidateFormalInterpretation: "fixture",
+        interpretationConfidence: 1,
+        evidenceKey: key,
+        evidenceEventIds: [basis.turnEventId],
+        requestedEventId,
+        status: "PENDING"
+      }
+    }
+  };
+}
+
+function ensureVerificationBasis(
+  state: SessionState,
+  basisLabel: number,
+  turnId: ReturnType<typeof TurnIdSchema.parse>,
+  inputEpisodeId: ReturnType<typeof InputEpisodeIdSchema.parse>
+): {
+  readonly state: SessionState;
+  readonly sequence: number;
+  readonly eventIds: ReturnType<typeof EventIdSchema.parse>[];
+  readonly committedSequence: number;
+  readonly turnEventId: ReturnType<typeof EventIdSchema.parse>;
+} {
+  const existingTurn = state.turns[turnId];
+  const turnEventId = EventIdSchema.parse(
+    "turn_committed_verification_basis_" + String(basisLabel)
+  );
+  if (existingTurn !== undefined) {
+    const eventIndex = state.eventIds.indexOf(turnEventId);
+    if (eventIndex < 0 || eventIndex + 1 !== existingTurn.committedSequence) {
+      throw new Error("Fixture verification basis turn provenance is inconsistent");
+    }
+    return {
+      state,
+      sequence: state.sequence,
+      eventIds: [...state.eventIds],
+      committedSequence: existingTurn.committedSequence,
+      turnEventId
+    };
+  }
+
+  const lowerBound = (state.lastCommittedInputSequence ?? 0) + 1;
+  let committedSequence: number | undefined;
+  for (let sequence = Math.max(lowerBound, 1); sequence <= basisLabel; sequence += 1) {
+    const current = state.eventIds[sequence - 1];
+    if (current === undefined || current.startsWith("fixture_padding_event_")) {
+      committedSequence = sequence;
+    }
+  }
+  committedSequence ??= state.sequence + 1;
+
+  const eventIds = placeEventAtSequence(
+    [...state.eventIds],
+    turnEventId,
+    committedSequence
+  );
+  const nextState: SessionState = {
+    ...state,
+    sequence: Math.max(state.sequence, committedSequence),
+    eventIds,
+    lastCommittedInputSequence: committedSequence,
     inputEpisodes: {
       ...state.inputEpisodes,
       [inputEpisodeId]: {
@@ -1089,32 +1179,16 @@ function withPendingVerification(
         turnId,
         inputEpisodeId,
         studentText: "fixture verification input",
-        committedSequence: basisSequence
-      }
-    },
-    verificationRequests: {
-      ...state.verificationRequests,
-      [requestId]: {
-        verificationRequestId: requestId,
-        verifier: "fixture-verifier",
-        basis: {
-          contextEpoch: zeroContextEpoch,
-          committedInputSequence: basisSequence,
-          transcriptRevision: zeroTranscriptRevision,
-          boardRevision: zeroBoardRevision,
-          problemStateRevision: zeroProblemStateRevision,
-          policyRevision: zeroPolicyRevision,
-          inputEpisodeId,
-          turnId
-        },
-        candidateFormalInterpretation: "fixture",
-        interpretationConfidence: 1,
-        evidenceKey: key,
-        evidenceEventIds: [verificationSupportId],
-        requestedEventId,
-        status: "PENDING"
+        committedSequence
       }
     }
+  };
+  return {
+    state: nextState,
+    sequence: nextState.sequence,
+    eventIds,
+    committedSequence,
+    turnEventId
   };
 }
 
