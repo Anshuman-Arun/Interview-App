@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import {
   CommandFingerprintSchema,
-  EvidenceKeySchema,
   FormalInterpretationRequestSchema,
+  FormalInterpretationTargetSchema,
   FormalProtocolRefSchema,
+  MAX_FORMAL_INTERPRETATION_PROTOCOLS,
+  MAX_FORMAL_INTERPRETATION_SOURCE_CHARACTERS,
   newRequestId,
   type CommandFingerprint,
   type EvidenceKey,
@@ -80,12 +82,25 @@ export function createFormalInterpretationRequest(
     throw new Error("Formal interpretation source event provenance is unavailable");
   }
 
-  const target = EvidenceKeySchema.parse(input.target);
+  const target = FormalInterpretationTargetSchema.parse(input.target);
+  if (
+    input.allowedProtocols.length < 1
+    || input.allowedProtocols.length > MAX_FORMAL_INTERPRETATION_PROTOCOLS
+  ) {
+    throw new Error("Formal interpretation protocol list exceeds the bounded size");
+  }
   const allowedProtocols = input.allowedProtocols.map((protocol) => FormalProtocolRefSchema.parse(protocol));
   const start = input.sourceSpan?.start ?? 0;
   const end = input.sourceSpan?.end ?? turn.studentText.length;
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end > turn.studentText.length || end <= start) {
-    throw new Error("Formal interpretation source span is invalid");
+  if (
+    !Number.isSafeInteger(start)
+    || !Number.isSafeInteger(end)
+    || start < 0
+    || end > turn.studentText.length
+    || end <= start
+    || end - start > MAX_FORMAL_INTERPRETATION_SOURCE_CHARACTERS
+  ) {
+    throw new Error("Formal interpretation source span is invalid or exceeds the bounded size");
   }
 
   return FormalInterpretationRequestSchema.parse({
