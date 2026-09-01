@@ -528,33 +528,74 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
     useState<SessionEvaluationReadResponse | null>(null);
   const [replayResponse, setReplayResponse] =
     useState<SessionReplayReadResponse | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  const [replayError, setReplayError] = useState<string | null>(null);
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
+  const [replayLoading, setReplayLoading] = useState(false);
 
   useEffect(() => {
-    const controller = new AbortController();
     setActiveTab(initialTab);
     setEvaluationResponse(null);
     setReplayResponse(null);
-    setLoadError(null);
-    setLoading(true);
+    setEvaluationError(null);
+    setReplayError(null);
+    setEvaluationLoading(false);
+    setReplayLoading(false);
+  }, [initialTab, sessionId]);
 
-    void Promise.all([
-      readEvaluation(sessionId, controller.signal),
-      readReplay(sessionId, controller.signal)
-    ]).then(([evaluation, replay]) => {
-      if (controller.signal.aborted) return;
-      setEvaluationResponse(evaluation);
-      setReplayResponse(replay);
-      setLoading(false);
-    }).catch(() => {
-      if (controller.signal.aborted) return;
-      setLoadError("The bounded session read could not be loaded.");
-      setLoading(false);
-    });
-
+  useEffect(() => {
+    if (
+      activeTab !== "evaluation"
+      || evaluationResponse !== null
+      || evaluationError !== null
+    ) {
+      return;
+    }
+    const controller = new AbortController();
+    setEvaluationLoading(true);
+    void readEvaluation(sessionId, controller.signal)
+      .then((evaluation) => {
+        if (controller.signal.aborted) return;
+        setEvaluationResponse(evaluation);
+        setEvaluationLoading(false);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setEvaluationError("The bounded evaluation read could not be loaded.");
+        setEvaluationLoading(false);
+      });
     return () => controller.abort();
-  }, [initialTab, readEvaluation, readReplay, sessionId]);
+  }, [
+    activeTab,
+    evaluationError,
+    evaluationResponse,
+    readEvaluation,
+    sessionId
+  ]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "replay"
+      || replayResponse !== null
+      || replayError !== null
+    ) {
+      return;
+    }
+    const controller = new AbortController();
+    setReplayLoading(true);
+    void readReplay(sessionId, controller.signal)
+      .then((replay) => {
+        if (controller.signal.aborted) return;
+        setReplayResponse(replay);
+        setReplayLoading(false);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setReplayError("The bounded replay read could not be loaded.");
+        setReplayLoading(false);
+      });
+    return () => controller.abort();
+  }, [activeTab, readReplay, replayError, replayResponse, sessionId]);
 
   const evaluationAvailable =
     evaluationResponse?.available === true ? evaluationResponse.evaluation : null;
@@ -622,16 +663,16 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {loading ? (
-            <p className="py-12 text-center text-sm text-slate-500">
-              Loading bounded session read…
-            </p>
-          ) : loadError !== null ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-              {loadError}
-            </div>
-          ) : activeTab === "evaluation" ? (
-            evaluationAvailable !== null ? (
+          {activeTab === "evaluation" ? (
+            evaluationLoading ? (
+              <p className="py-12 text-center text-sm text-slate-500">
+                Loading bounded evaluation…
+              </p>
+            ) : evaluationError !== null ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                {evaluationError}
+              </div>
+            ) : evaluationAvailable !== null ? (
               <EvaluationPanel evaluation={evaluationAvailable} />
             ) : evaluationResponse?.available === false ? (
               <div
@@ -644,6 +685,14 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
                 </p>
               </div>
             ) : null
+          ) : replayLoading ? (
+            <p className="py-12 text-center text-sm text-slate-500">
+              Loading bounded replay…
+            </p>
+          ) : replayError !== null ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+              {replayError}
+            </div>
           ) : replayAvailable !== null ? (
             <ReplayPanel response={replayAvailable} />
           ) : replayResponse?.available === false ? (
