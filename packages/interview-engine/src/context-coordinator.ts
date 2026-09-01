@@ -19,6 +19,7 @@ import {
   type CompiledContext
 } from "./context-compiler.js";
 import { createCommandEnvelope } from "./envelopes.js";
+import { selectPedagogicalAction } from "./pedagogical-policy.js";
 import type { SessionWriter } from "./session-writer.js";
 
 const ContextCompilationFailureReasonSchema = z.enum([
@@ -31,6 +32,7 @@ const ContextCompilationFailureReasonSchema = z.enum([
   "PROBLEM_PROVENANCE_UNKNOWN",
   "PROBLEM_DEFINITION_MISMATCH",
   "ACTION_UNAVAILABLE",
+  "ACTION_STALE",
   "HASHING_UNAVAILABLE",
   "STATE_CHANGED_DURING_COMPILATION",
   "MANIFEST_CONFLICT"
@@ -79,6 +81,16 @@ function assessContext(
 
   const realizationRequest = state.pedagogicalActions[generation.basis.turnId];
   if (realizationRequest === undefined) return { ok: false, reason: "ACTION_UNAVAILABLE" };
+
+  const currentRequest = selectPedagogicalAction(
+    state,
+    generation.basis.turnId,
+    problem
+  );
+  if (canonicalJson(realizationRequest) !== canonicalJson(currentRequest)) {
+    return { ok: false, reason: "ACTION_STALE" };
+  }
+
   return {
     ok: true,
     context: compileContext({
