@@ -91,7 +91,7 @@ describe("generic interview session configuration", () => {
       },
       durationMinutes: 45,
       interventionPolicy: "STRICT",
-      providerSelection: { providerId: "mock", modelId: "mock-model" }
+      providerSelection: { providerId: "mock-model", modelId: "mock-default" }
     });
 
     const started = SessionStartedResponseSchema.parse(
@@ -168,8 +168,8 @@ describe("generic interview session configuration", () => {
       problem: { id: sixPeopleProblem.id, version: sixPeopleProblem.version },
       interventionPolicy: "BALANCED",
       providerSelection: {
-        providerId: "mock",
-        modelId: "mock-model",
+        providerId: "mock-model",
+        modelId: "mock-default",
         apiKey: "must-never-persist"
       }
     })).toThrow();
