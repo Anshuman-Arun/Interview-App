@@ -388,7 +388,9 @@ describe("local model asset manager", () => {
     const source = path.join(sourceRoot, "source.bin");
     await writeFile(source, payload);
 
-    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const fixture = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const manager = managerFor(root);
     const imported = manifestFor(payload, "https://example.test/original.bin");
     await manager.importLocal(imported, source);
@@ -406,7 +408,9 @@ describe("local model asset manager", () => {
     const sourceRoot = await newRoot();
     const source = path.join(sourceRoot, "source.bin");
     await writeFile(source, payload);
-    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const fixture = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const manager = managerFor(root);
     const imported = manifestFor(payload, "https://example.test/original.bin");
     const installed = await manager.importLocal(imported, source);
@@ -455,7 +459,9 @@ describe("local model asset manager", () => {
     const sourceRoot = await newRoot();
     const source = path.join(sourceRoot, "source.bin");
     await writeFile(source, payload);
-    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const fixture = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const manager = managerFor(root);
     const imported = manifestFor(payload, "https://example.test/original.bin");
     await manager.importLocal(imported, source);
@@ -474,7 +480,9 @@ describe("local model asset manager", () => {
 
   it("rejects SHA-256 mismatch and never publishes the staged bytes", async () => {
     const payload = Buffer.from("actual bytes");
-    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const fixture = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const root = await newRoot();
     const manager = managerFor(root);
     const manifest = manifestFor(payload, fixture.baseUrl + "/artifact", {
@@ -685,7 +693,9 @@ describe("local model asset manager", () => {
 
   it("does not start network work for an already-cancelled request", async () => {
     const payload = Buffer.from("cancel-before-start");
-    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const fixture = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const root = await newRoot();
     const manager = managerFor(root);
     const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
@@ -831,7 +841,9 @@ describe("local model asset manager", () => {
 
   it("rejects cross-origin redirects by default", async () => {
     const payload = Buffer.from("cross-origin");
-    const target = await startFixtureServer((_request, response) => response.end(payload));
+    const target = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const redirect = await startFixtureServer((_request, response) => {
       response.writeHead(302, { Location: target.baseUrl + "/artifact" });
       response.end();
@@ -846,7 +858,9 @@ describe("local model asset manager", () => {
 
   it("allows an explicitly configured cross-origin redirect", async () => {
     const payload = Buffer.from("allowed-cross-origin");
-    const target = await startFixtureServer((_request, response) => response.end(payload));
+    const target = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const redirect = await startFixtureServer((_request, response) => {
       response.writeHead(302, { Location: target.baseUrl + "/artifact" });
       response.end();
@@ -1605,7 +1619,9 @@ describe("local model asset manager", () => {
 
   it("rejects insufficient cache capacity before opening the network", async () => {
     const payload = Buffer.from("no-network-capacity");
-    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const fixture = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const root = await newRoot();
     const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
     const manager = managerFor(root, {
@@ -1671,7 +1687,9 @@ describe("local model asset manager", () => {
 
   it("fails cache accounting closed on over-wide managed entries without starting HTTP", async () => {
     const payload = Buffer.from("wide-staging");
-    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const fixture = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const root = await newRoot();
     const stale = path.join(
       root,
@@ -1811,7 +1829,9 @@ describe("local model asset manager", () => {
 
   it("rejects malformed runtime cancellation signals before side effects", async () => {
     const payload = Buffer.from("bad-signal");
-    const fixture = await startFixtureServer((_request, response) => response.end(payload));
+    const fixture = await startFixtureServer((_request, response) => {
+      response.end(payload);
+    });
     const root = await newRoot();
     const sourceRoot = await newRoot();
     const source = path.join(sourceRoot, "source.bin");
