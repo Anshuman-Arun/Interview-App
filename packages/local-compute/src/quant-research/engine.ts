@@ -51,7 +51,6 @@ interface SamplingState extends CommonState {
   readonly hiddenPopulation: readonly number[];
   readonly sampleOrder: readonly number[];
   readonly revealed: readonly number[];
-  readonly baselineEstimate?: number;
   readonly outlier?: number;
 }
 
@@ -65,7 +64,6 @@ interface ExperimentalState extends CommonState {
   readonly initialAllocation?: Readonly<{ a: number; b: number }>;
   readonly summaryA?: number;
   readonly summaryB?: number;
-  readonly initialEfficiency?: number;
 }
 
 interface ModelState extends CommonState {
@@ -367,7 +365,6 @@ function transitionSampling(state: SamplingState, action: QuantResearchAction): 
       const outlierDirection = state.hiddenCenter % 2 === 0 ? 1 : -1;
       let next = appendAction(state, action, {
         stage: "OUTLIER_PERTURBATION",
-        baselineEstimate: action.value,
         outlier: state.hiddenCenter + outlierDirection * state.config.outlierShift
       });
       next = appendEvidence(next, [
@@ -380,14 +377,11 @@ function transitionSampling(state: SamplingState, action: QuantResearchAction): 
   }
   if (state.stage === "OUTLIER_PERTURBATION") {
     const submitted = requireAction(state, action, "SUBMIT_NUMERIC_ESTIMATE");
-    if (state.baselineEstimate === undefined) throw new Error("Sampling baseline estimate is missing");
-    const beforeError = Math.abs(state.baselineEstimate - state.hiddenCenter);
     const afterError = Math.abs(submitted.value - state.hiddenCenter);
     const correctness = distanceScore(afterError, Math.max(1, state.config.noiseRadius / 2));
-    const adaptation = afterError <= beforeError + Math.max(1, state.config.noiseRadius / 2) ? 100 : correctness;
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
-      evidence("ADAPTATION", state.stage, adaptation, "The revised estimate was evaluated after a disclosed contamination perturbation."),
+      evidence("ADAPTATION", state.stage, correctness, "Adaptation quality reflects estimation quality under the disclosed contamination perturbation."),
       evidence("ROBUSTNESS", state.stage, correctness, "The final estimate was checked for robustness to the introduced outlier.")
     ]);
     return next;
@@ -406,8 +400,7 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
       stage: "EXPERIMENT_DECISION",
       initialAllocation: { a: allocation.a, b: allocation.b },
       summaryA,
-      summaryB,
-      initialEfficiency: efficiency
+      summaryB
     });
     next = appendEvidence(next, [evidence("SAMPLE_EFFICIENCY", state.stage, efficiency * 100, "Initial sample allocation was scored against the best feasible information allocation.")]);
     return next;
