@@ -74,7 +74,7 @@ const CONTENT_RULES = [
   },
   {
     code: "URL_CREDENTIALS",
-    pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\/\s:@]+:[^@\s/]+@[^\s"'\x60]+/giu,
+    pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^@\s/]+@[^\s"'\x60]+/giu,
     message: "tracked content contains credentials embedded in a URL"
   },
   {
