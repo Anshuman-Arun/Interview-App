@@ -499,6 +499,43 @@ describe("production Socratic policy engine", () => {
     expect(decision.escalationJustified).toBe(true);
   });
 
+  it("keeps exposed assistance bound to the action snapshot that its generation actually used", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "PROGRESS"),
+      "STALLED"
+    );
+    state = withAssistance(state, {
+      target: target("milestone", "choose-vertex"),
+      action: "ASK_FOR_EXAMPLE",
+      maximumDisclosure: 0
+    });
+
+    const historicalGeneration = Object.values(state.generations).find(
+      (generation) => generation.provider === "policy-test"
+    );
+    expect(historicalGeneration?.pedagogicalAction).toBeDefined();
+    if (historicalGeneration === undefined) throw new Error("missing historical generation");
+    const historicalTurnId = historicalGeneration.basis.turnId;
+
+    state = {
+      ...state,
+      pedagogicalActions: {
+        ...state.pedagogicalActions,
+        [historicalTurnId]: {
+          requiredAction: "EXPLICIT_HINT",
+          target: target("milestone", "close-triangle"),
+          maximumDisclosure: 4
+        }
+      }
+    };
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.realizationRequest.requiredAction).toBe("FOCUS_ATTENTION");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(1);
+  });
+
   it("counts POSSIBLY_EXPOSED assistance conservatively", () => {
     const { state: base, turnId } = makeState();
     let state = withEvidence(base, milestoneKey(sixPeopleProblem, "choose-vertex", "PROGRESS"), "STALLED");
