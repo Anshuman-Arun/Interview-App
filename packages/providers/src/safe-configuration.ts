@@ -256,9 +256,10 @@ export class ProviderConfigurationSafetyError extends Error {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of the private-brand checker.
+/* eslint-disable @typescript-eslint/unbound-method -- Capture prevents monkey-patching of the private-brand checker. */
 const isProviderConfigurationSafetyError =
   ProviderConfigurationSafetyError.isSafetyError;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 export type SafeProviderConfigurationPrimitive = string | number | boolean | null;
 export type SafeProviderConfigurationValue =
