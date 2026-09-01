@@ -4,6 +4,7 @@ import {
   QUANT_RESEARCH_FAMILIES,
   QUANT_RESEARCH_GENERATOR_VERSION,
   QUANT_RESEARCH_RNG_VERSION,
+  QUANT_RESEARCH_VERIFIER_VERSION,
   QUANT_RESEARCH_VERSION,
   QuantResearchEngine,
   QuantResearchError,
@@ -337,6 +338,55 @@ describe("deterministic Quant Research interview engine", () => {
     mutable.splice(0, mutable.length);
     expect(engine.getState()).toEqual(second);
     expect(engine.getResult()).toEqual(engine.getResult());
+  });
+
+  it("exposes deterministic grading metadata only through the explicit authoritative persistence snapshot", () => {
+    for (const definition of [bayesian, sampling, experimental, model, optimization]) {
+      const first = new QuantResearchEngine(definition);
+      const second = new QuantResearchEngine(definition);
+      const firstSnapshot = first.getAuthoritativePersistenceSnapshot();
+      const secondSnapshot = second.getAuthoritativePersistenceSnapshot();
+
+      expect(firstSnapshot).toEqual(secondSnapshot);
+      expect(firstSnapshot.family).toBe(definition.family);
+      expect(firstSnapshot.verifierVersion).toBe(QUANT_RESEARCH_VERIFIER_VERSION);
+      expect(Object.isFrozen(firstSnapshot)).toBe(true);
+      expect(Object.isFrozen(firstSnapshot.generatedParameters)).toBe(true);
+      expect(Object.isFrozen(firstSnapshot.gradingData)).toBe(true);
+
+      const serializedPublic = JSON.stringify({
+        state: first.getState(),
+        result: first.getResult(),
+        diagnostics: first.getDiagnostics(),
+        engine: first
+      });
+      expect(serializedPublic).not.toContain(QUANT_RESEARCH_VERIFIER_VERSION);
+      expect(serializedPublic).not.toContain("gradingData");
+      expect(serializedPublic).not.toContain("generatedParameters");
+    }
+  });
+
+  it("returns a deeply frozen authoritative persistence snapshot that cannot mutate engine state", () => {
+    const engine = new QuantResearchEngine(model);
+    const before = engine.getState();
+    const snapshot = engine.getAuthoritativePersistenceSnapshot();
+    if (snapshot.family !== "MODEL_COMPARISON") throw new Error("Expected model snapshot");
+
+    expect(Object.isFrozen(snapshot.generatedParameters.points)).toBe(true);
+    expect(Object.isFrozen(snapshot.generatedParameters.points[0])).toBe(true);
+    const mutable = snapshot as unknown as {
+      generatedParameters: {
+        hiddenIntercept: number;
+        points: Array<{ x: number; y: number }>;
+      };
+    };
+    expect(() => {
+      mutable.generatedParameters.hiddenIntercept += 1;
+    }).toThrow();
+    expect(() => {
+      mutable.generatedParameters.points[0]!.y += 1;
+    }).toThrow();
+    expect(engine.getState()).toEqual(before);
   });
 
   it("public state and diagnostics omit seed, latent truth, hidden arrays, and exact optima", () => {
