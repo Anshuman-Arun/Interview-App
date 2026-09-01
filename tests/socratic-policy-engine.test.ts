@@ -525,6 +525,44 @@ describe("production Socratic policy engine", () => {
     });
   });
 
+  it("fails closed when exposed assistance claims a generation that never reached validation", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    state = withAssistance(state, {
+      target: target("milestone", "choose-vertex"),
+      action: "CHECK_LOCAL_STEP",
+      maximumDisclosure: 0
+    });
+
+    const historicalGeneration = Object.values(state.generations).find(
+      (generation) => generation.provider === "policy-test"
+    );
+    expect(historicalGeneration).toBeDefined();
+    if (historicalGeneration === undefined) throw new Error("missing historical generation");
+
+    state = {
+      ...state,
+      generations: {
+        ...state.generations,
+        [historicalGeneration.generationId]: {
+          ...historicalGeneration,
+          status: "ACTIVE"
+        }
+      }
+    };
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest).toMatchObject({
+      requiredAction: "CLARIFY",
+      maximumDisclosure: 0
+    });
+  });
+
   it("keeps exposed assistance bound to the action snapshot that its generation actually used", () => {
     const { state: base, turnId } = makeState();
     let state = withEvidence(
