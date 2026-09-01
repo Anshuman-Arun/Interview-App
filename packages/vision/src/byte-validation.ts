@@ -5,7 +5,7 @@ if (typeof rawTypedArrayPrototype !== "object" || rawTypedArrayPrototype === nul
   throw new Error("TypedArray prototype is unavailable");
 }
 
-const typedArrayByteLengthGetter: () => unknown = (() => {
+function readTypedArrayByteLength(value: Uint8Array): unknown {
   const descriptor = Object.getOwnPropertyDescriptor(
     rawTypedArrayPrototype,
     "byteLength"
@@ -13,13 +13,13 @@ const typedArrayByteLengthGetter: () => unknown = (() => {
   if (typeof descriptor?.get !== "function") {
     throw new Error("TypedArray byteLength intrinsic is unavailable");
   }
-  return descriptor.get;
-})();
+  return descriptor.get.call(value);
+}
 
 export function actualUint8ArrayByteLength(value: Uint8Array): number {
   let result: unknown;
   try {
-    result = Reflect.apply(typedArrayByteLengthGetter, value, []);
+    result = readTypedArrayByteLength(value);
   } catch {
     throw new TypeError("Value is not a direct readable Uint8Array");
   }
