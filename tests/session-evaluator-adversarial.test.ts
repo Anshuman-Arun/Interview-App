@@ -68,6 +68,42 @@ describe("grounded session evaluator adversarial cases", () => {
     expect(evaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
   });
 
+  it("attributes a multi-disclosure delivery at each disclosure's problem-defined level", () => {
+    let state = complete(boundState(), "choose-vertex", 20);
+    state = addDelivery(
+      state,
+      [chooseDisclosure, triangleDisclosure],
+      4,
+      "EXPOSED",
+      5,
+      "mixed-level"
+    );
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(findMilestone(evaluation, "choose-vertex").assistanceLevel).toBe(2);
+    expect(evaluation.disclosedInterventions[0]?.disclosureLevel).toBe(4);
+    expect(evaluation.scores.independence).toBeNull();
+  });
+
+  it("rejects a disclosure ledger that disagrees with exposed delivery state", () => {
+    const exposed = addDelivery(
+      complete(boundState(), "choose-vertex", 20),
+      chooseDisclosure,
+      2,
+      "EXPOSED",
+      5,
+      "ledger-mismatch"
+    );
+    const inconsistent: SessionState = {
+      ...exposed,
+      disclosureLedger: []
+    };
+
+    expect(() => evaluateInterviewSession(inconsistent, sixPeopleProblem)).toThrow(
+      "disclosure ledger does not match"
+    );
+  });
+
   it("does not penalize a milestone for an unrelated protected disclosure", () => {
     let state = complete(boundState(), "choose-vertex", 20);
     state = addDelivery(state, triangleDisclosure, 4, "EXPOSED", 5, "unrelated");
@@ -560,12 +596,15 @@ function setHistory(
 
 function addDelivery(
   state: SessionState,
-  disclosureId: DisclosureId,
+  disclosureInput: DisclosureId | readonly DisclosureId[],
   level: 0 | 1 | 2 | 3 | 4 | 5,
   status: DeliveryAtom["status"],
   basisSequence: number,
   label: string
 ): SessionState {
+  const disclosureIds = Array.isArray(disclosureInput)
+    ? [...disclosureInput]
+    : [disclosureInput as DisclosureId];
   const generationId = GenerationIdSchema.parse("generation_adv_" + label);
   const deliveryId = DeliveryIdSchema.parse("delivery_adv_" + label);
   const turnId = TurnIdSchema.parse("turn_adv_" + label);
@@ -573,7 +612,7 @@ function addDelivery(
     deliveryId,
     generationId,
     content: { medium: "TEXT", text: "fixture assistance " + label },
-    disclosureIds: [disclosureId],
+    disclosureIds,
     effectiveDisclosureLevel: level,
     status
   };
@@ -602,7 +641,7 @@ function addDelivery(
     },
     disclosureLedger:
       status === "EXPOSED" || status === "COMPLETED" || status === "POSSIBLY_EXPOSED"
-        ? Array.from(new Set([...state.disclosureLedger, disclosureId]))
+        ? Array.from(new Set([...state.disclosureLedger, ...disclosureIds]))
         : state.disclosureLedger
   };
 }
