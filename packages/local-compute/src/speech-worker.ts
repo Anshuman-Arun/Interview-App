@@ -480,6 +480,7 @@ export class SpeechWorkerCore {
         throw new VadBackendProtocolError("VAD backend returned an invalid bounded observation");
       }
     } catch (error) {
+      if (error instanceof SpeechWorkerCoreError) throw error;
       if (context.cancelled || context.terminal || this.shuttingDown) return [];
       if (error instanceof OperationTimeoutError) {
         this.abandonStream(context);
@@ -487,7 +488,6 @@ export class SpeechWorkerCore {
         throw new SpeechWorkerCoreError("VAD_TIMEOUT", "VAD backend timed out");
       }
       if (vadAbort.signal.aborted) return [];
-      if (error instanceof SpeechWorkerCoreError) throw error;
       this.abandonStream(context);
       if (error instanceof VadBackendProtocolError) {
         this.rememberDiagnostic({ code: "VAD_PROTOCOL_ERROR", streamId: context.streamId });
