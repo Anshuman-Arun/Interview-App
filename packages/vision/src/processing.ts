@@ -31,14 +31,16 @@ const HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 128 * 1024 * 1024;
 export const HARD_MAX_TOTAL_TILE_PIXELS = 128 * 1024 * 1024;
 const COOPERATIVE_YIELD_ROWS = 16;
 const MIN_STATIC_PNG_ENCODED_BYTES = 58;
-const abortSignalAbortedDescriptor = Object.getOwnPropertyDescriptor(
-  AbortSignal.prototype,
-  "aborted"
-);
-const abortSignalAbortedGetter = abortSignalAbortedDescriptor?.get;
-if (typeof abortSignalAbortedGetter !== "function") {
-  throw new Error("AbortSignal aborted intrinsic is unavailable");
-}
+const abortSignalAbortedGetter: () => unknown = (() => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    AbortSignal.prototype,
+    "aborted"
+  );
+  if (typeof descriptor?.get !== "function") {
+    throw new Error("AbortSignal aborted intrinsic is unavailable");
+  }
+  return descriptor.get;
+})();
 
 const DownscaleEnvelopeSchema = z.object({
   maxWidth: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
