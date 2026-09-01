@@ -546,6 +546,15 @@ export class SpeechWorkerCore {
       throw new SpeechWorkerCoreError("INTERNAL_ERROR", "VAD state machine returned an invalid state");
     }
 
+    if (step.utteranceMs > context.endpointMaximumMs + 0.001) {
+      this.abandonStream(context);
+      this.rememberDiagnostic({ code: "ENDPOINT_FRAME_RESOURCE_LIMIT", streamId: context.streamId });
+      throw new SpeechWorkerCoreError(
+        "RESOURCE_LIMIT",
+        "PCM frame cannot fit within the configured utterance duration limit"
+      );
+    }
+
     if (!context.speechConfirmed) {
       context.preSpeechElapsedMs += frame.durationMs;
     }
