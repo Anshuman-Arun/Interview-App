@@ -101,13 +101,11 @@ export async function assertAlwaysOnInvariants(
 
     if (atom.status === "EXPOSED" || atom.status === "COMPLETED" || atom.status === "POSSIBLY_EXPOSED") {
       const generation = live.generations[atom.generationId];
-      if (generation !== undefined) {
-        const action = live.pedagogicalActions[generation.basis.turnId];
-        if (action !== undefined) {
-          expect(atom.effectiveDisclosureLevel).toBeLessThanOrEqual(
-            action.maximumDisclosure
-          );
-        }
+      const action = generation?.pedagogicalAction;
+      if (action !== undefined) {
+        expect(atom.effectiveDisclosureLevel).toBeLessThanOrEqual(
+          action.maximumDisclosure
+        );
       }
     }
   }

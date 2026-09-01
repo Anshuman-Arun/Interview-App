@@ -45,10 +45,14 @@ import {
 import type { EventDraft, SessionState } from "../../events/src/index.js";
 import { z } from "zod";
 import { createCommandEnvelope } from "./envelopes.js";
-import { createProviderContextSpecFingerprintSync } from "./context-compiler.js";
+import { canonicalJson, createProviderContextSpecFingerprintSync } from "./context-compiler.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
+import {
+  invalidateGenerationOutput,
+  invalidateUndeliveredPolicyOutput
+} from "./policy-output-invalidation.js";
 import type { DisclosureValidator } from "./disclosure-validator.js";
 import type { SessionWriter } from "./session-writer.js";
 
@@ -84,6 +88,121 @@ function assertSessionActive(state: Readonly<SessionState>, operation: string): 
   if (!state.started || state.status !== "ACTIVE") {
     throw new Error(`Cannot ${operation} in status ${state.status}`);
   }
+}
+
+const MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS = 100_000;
+const MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS = 1_000_000;
+const MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS = 256;
+const MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS = 256;
+const MAX_RUNTIME_ID_CHARACTERS = 512;
+const MAX_EVIDENCE_PROPOSAL_EVENT_IDS = 4_096;
+
+function isRuntimeRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyRuntimeKeys(
+  record: Readonly<Record<string, unknown>>,
+  allowed: ReadonlySet<string>
+): boolean {
+  return Object.keys(record).every((key) => allowed.has(key));
+}
+
+function boundedRuntimeString(value: unknown, maximum = MAX_RUNTIME_ID_CHARACTERS): boolean {
+  return typeof value !== "string" || value.length <= maximum;
+}
+
+function proposalWithinAdmissionBounds(value: unknown): boolean {
+  if (!isRuntimeRecord(value)) return true;
+  if (!hasOnlyRuntimeKeys(
+    value,
+    new Set([
+      "realizedAction",
+      "claimedDisclosureLevel",
+      "claimedDisclosureIds",
+      "speechText",
+      "boardActions"
+    ])
+  )) return false;
+
+  const claimedDisclosureIds = value["claimedDisclosureIds"];
+  if (
+    Array.isArray(claimedDisclosureIds)
+    && (
+      claimedDisclosureIds.length > MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS
+      || claimedDisclosureIds.some((id) => !boundedRuntimeString(id))
+    )
+  ) return false;
+
+  const speechText = value["speechText"];
+  if (
+    typeof speechText === "string"
+    && speechText.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
+  ) return false;
+  let totalTextCharacters = typeof speechText === "string" ? speechText.length : 0;
+  if (totalTextCharacters > MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS) return false;
+
+  const boardActions = value["boardActions"];
+  if (!Array.isArray(boardActions)) return true;
+  if (boardActions.length > MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS) return false;
+  for (const rawAction of boardActions) {
+    if (!isRuntimeRecord(rawAction)) continue;
+    if (!hasOnlyRuntimeKeys(
+      rawAction,
+      new Set([
+        "operation",
+        "layer",
+        "content",
+        "targetShapeId",
+        "expectedShapeRevision",
+        "annotationPurpose"
+      ])
+    )) return false;
+    const content = rawAction["content"];
+    const annotationPurpose = rawAction["annotationPurpose"];
+    if (
+      (typeof content === "string" && content.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS)
+      || (
+        typeof annotationPurpose === "string"
+        && annotationPurpose.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
+      )
+      || !boundedRuntimeString(rawAction["targetShapeId"])
+    ) return false;
+    totalTextCharacters += typeof content === "string" ? content.length : 0;
+    totalTextCharacters += typeof annotationPurpose === "string" ? annotationPurpose.length : 0;
+    if (totalTextCharacters > MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS) return false;
+  }
+  return true;
+}
+
+function evidenceProposalWithinAdmissionBounds(value: unknown): boolean {
+  if (!isRuntimeRecord(value)) return true;
+  if (!hasOnlyRuntimeKeys(
+    value,
+    new Set(["key", "proposedValue", "inferenceConfidence", "evidenceEventIds"])
+  )) return false;
+
+  const evidenceEventIds = value["evidenceEventIds"];
+  if (
+    Array.isArray(evidenceEventIds)
+    && (
+      evidenceEventIds.length > MAX_EVIDENCE_PROPOSAL_EVENT_IDS
+      || evidenceEventIds.some((eventId) => !boundedRuntimeString(eventId))
+    )
+  ) return false;
+
+  const key = value["key"];
+  if (!isRuntimeRecord(key)) return true;
+  if (!hasOnlyRuntimeKeys(key, new Set(["problemId", "subject", "dimension"]))) return false;
+  if (!boundedRuntimeString(key["problemId"])) return false;
+
+  const subject = key["subject"];
+  if (!isRuntimeRecord(subject)) return true;
+  if (Object.keys(subject).length > 2) return false;
+  for (const [subjectKey, subjectValue] of Object.entries(subject)) {
+    if (subjectKey !== "kind" && !boundedRuntimeString(subjectValue)) return false;
+  }
+  return true;
 }
 
 function terminalInvalidationDrafts(
@@ -236,6 +355,10 @@ export class TurnCoordinator {
       }
       return {
         drafts: [
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "New committed student input superseded prior undelivered output"
+          ),
           { source: "USER", type: "INPUT_EPISODE_STARTED", payload: { inputEpisodeId } },
           { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: studentText } },
           { source: "APPLICATION", type: "INPUT_EPISODE_COMMITTED", payload: { inputEpisodeId } },
@@ -257,8 +380,16 @@ export class TurnCoordinator {
       assertSessionActive(state, "begin utterance");
       const invalidations: EventDraft[] = [];
       for (const generation of Object.values(state.generations)) {
-        if (generation.status === "ACTIVE") {
-          invalidations.push({ source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId: generation.generationId, reason: "Speech onset" } });
+        if (
+          generation.status === "ACTIVE"
+          || generation.status === "PROPOSAL_RECEIVED"
+          || generation.status === "VALIDATED"
+        ) {
+          invalidations.push({
+            source: "APPLICATION",
+            type: "MODEL_GENERATION_SUPERSEDED",
+            payload: { generationId: generation.generationId, reason: "Speech onset" }
+          });
         }
       }
       for (const atom of Object.values(state.deliveries)) {
@@ -327,7 +458,16 @@ export class TurnCoordinator {
       assertSessionActive(state, "append typed input");
       const episode = state.inputEpisodes[inputEpisodeId];
       if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
-      return { drafts: [{ source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: text } }], result: { appended: true } };
+      return {
+        drafts: [
+          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: text } },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative typed input changed before delivery"
+          )
+        ],
+        result: { appended: true }
+      };
     });
   }
 
@@ -344,7 +484,11 @@ export class TurnCoordinator {
       return {
         drafts: [
           { source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision, summary } },
-          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "WHITEBOARD", semanticContent: summary } }
+          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "WHITEBOARD", semanticContent: summary } },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative board state changed before delivery"
+          )
         ],
         result: { appended: true, boardRevision }
       };
@@ -364,6 +508,10 @@ export class TurnCoordinator {
       const studentText = episode.inputs.map((item) => item.semanticContent).join(" ");
       return {
         drafts: [
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "New committed input episode superseded prior undelivered output"
+          ),
           { source: "APPLICATION", type: "INPUT_EPISODE_COMMITTED", payload: { inputEpisodeId } },
           { source: "APPLICATION", type: "TURN_COMMITTED", payload: { turnId, inputEpisodeId, studentText } }
         ],
@@ -415,6 +563,9 @@ export class TurnCoordinator {
 
   public async processEvidenceProposal(input: { readonly envelope: CommandEnvelope; readonly proposal: EvidenceProposal }): Promise<z.infer<typeof EvidenceProcessedResultSchema>> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    if (!evidenceProposalWithinAdmissionBounds(input.proposal)) {
+      throw new Error("Evidence proposal exceeds the bounded admission input size");
+    }
     const proposal = EvidenceProposalSchema.parse(input.proposal);
     const key = evidenceKeyToString(proposal.key);
     const result = await this.writer.execute(envelope, {
@@ -423,7 +574,10 @@ export class TurnCoordinator {
     }, EvidenceProcessedResultSchema, (state) => {
       const reasons: string[] = [];
       if (state.problem?.id !== proposal.key.problemId) reasons.push("Evidence is scoped to a different problem");
-      if (!proposal.evidenceEventIds.every((eventId) => state.eventIds.includes(eventId))) reasons.push("Evidence provenance references unknown events");
+      const knownEventIds = new Set(state.eventIds);
+      if (!proposal.evidenceEventIds.every((eventId) => knownEventIds.has(eventId))) {
+        reasons.push("Evidence provenance references unknown events");
+      }
       if (proposal.inferenceConfidence < 0.7) reasons.push("Inference confidence is below the Phase 0 commit threshold");
       if (!isEvidenceValueAllowed(proposal.key, proposal.proposedValue)) reasons.push("Evidence value is invalid for its dimension");
       const proposedDraft: EventDraft = { source: "PROVIDER", type: "EVIDENCE_PROPOSED", payload: { proposal } };
@@ -436,29 +590,72 @@ export class TurnCoordinator {
       });
       const activeEvidence = state.evidenceHistory[key]?.find((record) => record.status === "ACTIVE");
       return {
-        drafts: [proposedDraft, {
-          source: "APPLICATION",
-          type: "STUDENT_EVIDENCE_UPDATED",
-          payload: {
-            key: EvidenceKeySchema.parse(proposal.key),
-            value,
-            ...(activeEvidence === undefined ? {} : { supersedesEventId: activeEvidence.evidenceEventId })
-          }
-        }],
+        drafts: [
+          proposedDraft,
+          {
+            source: "APPLICATION",
+            type: "STUDENT_EVIDENCE_UPDATED",
+            payload: {
+              key: EvidenceKeySchema.parse(proposal.key),
+              value,
+              ...(activeEvidence === undefined ? {} : { supersedesEventId: activeEvidence.evidenceEventId })
+            }
+          },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative student evidence changed before delivery"
+          )
+        ],
         result: { committed: true, key }
       };
     });
     return result.value;
   }
 
-  public async selectAction(turnId: TurnId): Promise<RealizationRequest> {
+  public async selectAction(turnId: TurnId, problem: InterviewProblem): Promise<RealizationRequest> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "pedagogical-policy", turnId });
     const result = await this.writer.execute(envelope, {
       operation: "SELECT_PEDAGOGICAL_ACTION",
-      payload: { turnId }
+      payload: {
+        turnId,
+        problemId: problem.id,
+        problemVersion: problem.version
+      }
     }, RealizationRequestSchema, (state) => {
       assertSessionActive(state, "select pedagogical action");
-      const request = selectPedagogicalAction(state, turnId);
+      if (
+        state.problem === undefined
+        || state.problem.id !== problem.id
+        || state.problem.version !== problem.version
+      ) throw new Error("Problem does not match the session's presented problem");
+      if (state.problem.providerContextSpecSha256 === undefined) {
+        throw new Error("Problem definition provenance is unavailable for pedagogical policy");
+      }
+      const policyProblemFingerprint = createProviderContextSpecFingerprintSync(problem);
+      if (state.problem.providerContextSpecSha256 !== policyProblemFingerprint) {
+        throw new Error("Problem definition does not match the session-bound pedagogical policy contract");
+      }
+      if (state.problem.prompt !== problem.public.prompt) {
+        throw new Error("Problem prompt does not match the session-bound pedagogical policy contract");
+      }
+      const turn = state.turns[turnId];
+      if (
+        turn === undefined
+        || turn.turnId !== turnId
+        || state.lastCommittedInputSequence === undefined
+        || turn.committedSequence !== state.lastCommittedInputSequence
+      ) {
+        throw new Error("Pedagogical action selection requires the latest committed Turn");
+      }
+
+      const request = selectPedagogicalAction(state, turnId, problem);
+      const existing = RealizationRequestSchema.safeParse(state.pedagogicalActions[turnId]);
+      if (
+        existing.success
+        && canonicalJson(existing.data) === canonicalJson(request)
+      ) {
+        return { drafts: [], result: existing.data };
+      }
       return { drafts: [{ source: "APPLICATION", type: "PEDAGOGICAL_ACTION_SELECTED", payload: { turnId, request } }], result: request };
     });
     return result.value;
@@ -473,6 +670,37 @@ export class TurnCoordinator {
     }, GenerationStartedResultSchema, (state) => {
       assertSessionActive(state, "start generation");
       if (state.lastCommittedInputSequence === undefined) throw new Error("No committed input exists");
+      const episode = state.inputEpisodes[inputEpisodeId];
+      const turn = state.turns[turnId];
+      if (episode === undefined || episode.status !== "COMMITTED") {
+        throw new Error("Generation requires a committed InputEpisode");
+      }
+      if (
+        turn === undefined
+        || turn.turnId !== turnId
+        || turn.inputEpisodeId !== inputEpisodeId
+        || turn.committedSequence !== state.lastCommittedInputSequence
+      ) {
+        throw new Error("Generation requires the latest committed Turn and matching InputEpisode");
+      }
+      const pedagogicalAction = RealizationRequestSchema.safeParse(state.pedagogicalActions[turnId]);
+      if (!pedagogicalAction.success) {
+        throw new Error("Generation requires a valid application-selected pedagogical action");
+      }
+      const existingNonterminalGeneration = Object.values(state.generations).find(
+        (generation) =>
+          generation.basis.turnId === turnId
+          && (
+            generation.status === "ACTIVE"
+            || generation.status === "PROPOSAL_RECEIVED"
+            || generation.status === "VALIDATED"
+          )
+      );
+      if (existingNonterminalGeneration !== undefined) {
+        throw new Error(
+          "Generation requires any prior nonterminal generation for the turn to be explicitly superseded"
+        );
+      }
       const basis: GenerationBasis = {
         contextEpoch: state.contextEpoch,
         committedInputSequence: state.lastCommittedInputSequence,
@@ -495,6 +723,9 @@ export class TurnCoordinator {
     readonly validator: DisclosureValidator;
   }): Promise<ProcessProposalResult> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    if (!proposalWithinAdmissionBounds(input.proposal)) {
+      throw new Error("Provider proposal exceeds the bounded admission input size");
+    }
     const proposal = InterviewerProposalSchema.parse(input.proposal);
     const generationId = envelope.generationId;
     if (generationId === undefined) throw new Error("Provider result envelope is missing generationId");
@@ -512,43 +743,103 @@ export class TurnCoordinator {
       const generation = state.generations[generationId];
       if (generation === undefined) return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Unknown generation" } };
       if (generation.status !== "ACTIVE") return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Generation is not active" } };
-      if (state.problem?.providerContextSpecSha256 === undefined) {
-        return rejectDrafts(generationId, proposal, "Problem definition provenance is unavailable");
+      if (envelope.producer !== generation.provider) {
+        return {
+          drafts: [],
+          result: {
+            accepted: false,
+            deliveryAtoms: [],
+            reason: "Provider callback identity does not match the generation provider"
+          }
+        };
+      }
+      if (
+        state.problem === undefined
+        || state.problem.id !== input.problem.id
+        || state.problem.version !== input.problem.version
+        || state.problem.providerContextSpecSha256 === undefined
+      ) {
+        return rejectDrafts(generationId, proposal, "Problem definition provenance is unavailable or mismatched");
       }
       if (state.problem.providerContextSpecSha256 !== providerContextSpecSha256) {
         return rejectDrafts(generationId, proposal, "Problem definition does not match the session-bound provider context contract");
       }
+      if (
+        envelope.inputEpisodeId !== generation.basis.inputEpisodeId
+        || envelope.turnId !== generation.basis.turnId
+        || envelope.contextEpoch !== generation.basis.contextEpoch
+        || envelope.sourceRevision !== generation.basis.committedInputSequence
+      ) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "Provider callback basis does not match the generation basis");
+      }
       const compatibility = isGenerationBasisStillCompatible(generation.basis, state);
       if (compatibility !== "COMPATIBLE") {
-        return {
-          drafts: [
-            { source: "PROVIDER", type: "MODEL_PROPOSAL_RECEIVED", payload: { generationId, proposal } },
-            { source: "APPLICATION", type: "PROPOSAL_REJECTED", payload: { generationId, reason: `Generation compatibility is ${compatibility}` } },
-            { source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId, reason: `Generation compatibility is ${compatibility}` } }
-          ],
-          result: { accepted: false, deliveryAtoms: [], reason: `Generation compatibility is ${compatibility}` }
-        };
+        return rejectAndSupersedeDrafts(generationId, proposal, `Generation compatibility is ${compatibility}`);
       }
-      const request = state.pedagogicalActions[generation.basis.turnId];
-      if (request === undefined) return rejectDrafts(generationId, proposal, "No application-selected pedagogical action");
-      const validation = input.validator.validate({ proposal, request, protectedDisclosures: input.problem.interviewer.protectedDisclosures });
+      const parsedRequest = RealizationRequestSchema.safeParse(
+        state.pedagogicalActions[generation.basis.turnId]
+      );
+      const generationRequest = RealizationRequestSchema.safeParse(generation.pedagogicalAction);
+      if (!parsedRequest.success || !generationRequest.success) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "No valid generation-bound pedagogical action");
+      }
+      if (canonicalJson(parsedRequest.data) !== canonicalJson(generationRequest.data)) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "Pedagogical action changed after generation began");
+      }
+      const currentRequest = selectPedagogicalAction(
+        state,
+        generation.basis.turnId,
+        input.problem
+      );
+      if (canonicalJson(parsedRequest.data) !== canonicalJson(currentRequest)) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "Application-selected pedagogical action is stale");
+      }
+      const validation = input.validator.validate({
+        proposal,
+        request: parsedRequest.data,
+        protectedDisclosures: input.problem.interviewer.protectedDisclosures
+      });
       if (!validation.accepted) return rejectDrafts(generationId, proposal, validation.reason);
       const atoms: DeliveryAtom[] = [];
       if (proposal.speechText !== undefined) {
+        const speechAnalysis = validation.realizations.speech;
+        if (speechAnalysis === null) {
+          return rejectDrafts(
+            generationId,
+            proposal,
+            "Disclosure validation did not attribute the speech realization"
+          );
+        }
         atoms.push(DeliveryAtomSchema.parse({
           deliveryId: newDeliveryId(), generationId,
           content: { medium: "TEXT", text: proposal.speechText },
-          disclosureIds: validation.analysis.effectiveDisclosureIds,
-          effectiveDisclosureLevel: validation.analysis.effectiveDisclosureLevel,
+          disclosureIds: speechAnalysis.effectiveDisclosureIds,
+          effectiveDisclosureLevel: speechAnalysis.effectiveDisclosureLevel,
           status: "VALIDATED"
         }));
       }
-      for (const action of proposal.boardActions ?? []) {
+      const boardActions = proposal.boardActions ?? [];
+      if (validation.realizations.boardActions.length !== boardActions.length) {
+        return rejectDrafts(
+          generationId,
+          proposal,
+          "Disclosure validation did not attribute every board realization"
+        );
+      }
+      for (const [index, action] of boardActions.entries()) {
+        const actionAnalysis = validation.realizations.boardActions[index];
+        if (actionAnalysis === undefined) {
+          return rejectDrafts(
+            generationId,
+            proposal,
+            "Disclosure validation did not attribute every board realization"
+          );
+        }
         atoms.push(DeliveryAtomSchema.parse({
           deliveryId: newDeliveryId(), generationId,
           content: { medium: "WHITEBOARD", action },
-          disclosureIds: validation.analysis.effectiveDisclosureIds,
-          effectiveDisclosureLevel: validation.analysis.effectiveDisclosureLevel,
+          disclosureIds: actionAnalysis.effectiveDisclosureIds,
+          effectiveDisclosureLevel: actionAnalysis.effectiveDisclosureLevel,
           status: "VALIDATED"
         }));
       }
@@ -570,7 +861,17 @@ export class TurnCoordinator {
     }, CommittedResultSchema, (state) => {
       assertSessionActive(state, "commit board patch");
       return {
-        drafts: [{ source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary } }],
+        drafts: [
+          {
+            source: "USER",
+            type: "BOARD_PATCH_COMMITTED",
+            payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary }
+          },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative board state changed before delivery"
+          )
+        ],
         result: { committed: true }
       };
     });
@@ -589,7 +890,7 @@ export class TurnCoordinator {
         throw new Error(`Cannot supersede generation in ${generation.status}`);
       }
       return {
-        drafts: [{ source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId, reason } }],
+        drafts: [...invalidateGenerationOutput(state, generationId, reason)],
         result: { superseded: true }
       };
     });
@@ -614,11 +915,22 @@ export class TurnCoordinator {
           }
         }));
       return {
-        drafts: [{ source: "APPLICATION", type: "TRANSCRIPT_CORRECTED", payload: {
-          transcriptRevision: TranscriptRevisionSchema.parse(state.transcriptRevision + 1),
-          contextEpoch: ContextEpochSchema.parse(state.contextEpoch + 1),
-          correctedText
-        } }, ...invalidations],
+        drafts: [
+          {
+            source: "APPLICATION",
+            type: "TRANSCRIPT_CORRECTED",
+            payload: {
+              transcriptRevision: TranscriptRevisionSchema.parse(state.transcriptRevision + 1),
+              contextEpoch: ContextEpochSchema.parse(state.contextEpoch + 1),
+              correctedText
+            }
+          },
+          ...invalidations,
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative transcript changed before delivery"
+          )
+        ],
         result: { corrected: true }
       };
     });
@@ -632,5 +944,20 @@ function rejectDrafts(generationId: GenerationId, proposal: InterviewerProposal,
       { source: "APPLICATION", type: "PROPOSAL_REJECTED", payload: { generationId, reason } }
     ],
     result: { accepted: false, deliveryAtoms: [], reason }
+  };
+}
+
+function rejectAndSupersedeDrafts(
+  generationId: GenerationId,
+  proposal: InterviewerProposal,
+  reason: string
+): { readonly drafts: readonly EventDraft[]; readonly result: ProcessProposalResult } {
+  const rejected = rejectDrafts(generationId, proposal, reason);
+  return {
+    drafts: [
+      ...rejected.drafts,
+      { source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId, reason } }
+    ],
+    result: rejected.result
   };
 }

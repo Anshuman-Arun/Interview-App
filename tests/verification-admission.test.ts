@@ -17,6 +17,7 @@ import {
   type VerificationWorkItem
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
+import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   AbstainingVerifier,
   TWO_COLOUR_GRAPH_VERIFIER_NAME,
@@ -42,6 +43,26 @@ class VerificationCoordinator extends UnscopedVerificationCoordinator {
 }
 
 describe("deterministic verification admission", () => {
+  it("rejects direct verification for a turn that is no longer the latest committed input", async () => {
+    const harness = await createCoreHarness();
+    const coordinator = new VerificationCoordinator(harness.writer);
+    const eventCountBeforeNewTurn = harness.store.eventCount(harness.sessionId);
+    await harness.turns.commitInput("newer student reasoning supersedes the old verification target");
+    expect(harness.store.eventCount(harness.sessionId)).toBeGreaterThan(eventCountBeforeNewTurn);
+
+    const eventCountBeforeRequest = harness.store.eventCount(harness.sessionId);
+    await expect(coordinator.requestVerification({
+      inputEpisodeId: harness.inputEpisodeId,
+      turnId: harness.turnId,
+      verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+      candidateFormalInterpretation: completeGraphStatement(6, () => "ACQUAINTANCE"),
+      interpretationConfidence: 1,
+      evidenceKey: claimEvidenceKey
+    })).rejects.toThrow(/latest committed Turn/u);
+    expect(harness.store.eventCount(harness.sessionId)).toBe(eventCountBeforeRequest);
+    harness.store.close();
+  });
+
   it("requires an explicit exact verifier-to-evidence authorization before append", async () => {
     const harness = await createCoreHarness();
     const unscoped = new UnscopedVerificationCoordinator(harness.writer);
@@ -112,6 +133,52 @@ describe("deterministic verification admission", () => {
     harness.store.close();
   });
 
+  it("does not let stale verification-derived evidence bypass GenerationBasis freshness", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const coordinator = new VerificationCoordinator(harness.writer);
+      const work = await issue(
+        coordinator,
+        harness,
+        completeGraphStatement(6, () => "ACQUAINTANCE"),
+        1
+      );
+      const verifier = new TwoColourGraphVerifier();
+      const result = await verifier.verify(
+        work.candidateFormalInterpretation,
+        work.interpretationConfidence
+      );
+      const admitted = await coordinator.processResult({
+        envelope: verificationEnvelope(harness, work),
+        result,
+        verifier
+      });
+      expect(admitted.value).toMatchObject({
+        accepted: true,
+        status: "VERIFIED",
+        evidenceCommitted: true
+      });
+
+      const whileFresh = await harness.turns.selectAction(
+        harness.turnId,
+        sixPeopleProblem
+      );
+      expect(whileFresh.requiredAction).toBe("WAIT");
+
+      await harness.turns.commitBoardPatch(
+        "student changed the board after deterministic verification"
+      );
+      const afterBasisChange = await harness.turns.selectAction(
+        harness.turnId,
+        sixPeopleProblem
+      );
+      expect(afterBasisChange.requiredAction).toBe("PROBE_JUSTIFICATION");
+      expect(afterBasisChange.maximumDisclosure).toBe(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("atomically admits a recomputed VERIFIED result and scoped evidence", async () => {
     const harness = await createCoreHarness();
     const coordinator = new VerificationCoordinator(harness.writer);
@@ -127,7 +194,12 @@ describe("deterministic verification admission", () => {
       status: "VERIFIED",
       evidenceCommitted: true
     });
-    expect(admitted.appendedEventCount).toBe(2);
+    expect(admitted.appendedEventCount).toBe(3);
+    expect(harness.store.load(harness.sessionId).slice(-3).map((event) => event.type)).toEqual([
+      "VERIFICATION_RESULT_ACCEPTED",
+      "STUDENT_EVIDENCE_UPDATED",
+      "MODEL_GENERATION_SUPERSEDED"
+    ]);
     expect(harness.writer.getState().verificationRequests[work.verificationRequestId]).toMatchObject({
       status: "ACCEPTED",
       result: { status: "VERIFIED", verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME }
@@ -166,8 +238,48 @@ describe("deterministic verification admission", () => {
     const admitted = await coordinator.processResult({ envelope: verificationEnvelope(harness, work), result, verifier });
 
     expect(admitted.value).toMatchObject({ accepted: true, status: "UNRESOLVED", evidenceCommitted: false });
-    expect(admitted.appendedEventCount).toBe(1);
+    expect(admitted.appendedEventCount).toBe(2);
+    expect(harness.store.load(harness.sessionId).slice(-2).map((event) => event.type)).toEqual([
+      "VERIFICATION_RESULT_ACCEPTED",
+      "MODEL_GENERATION_SUPERSEDED"
+    ]);
     expect(harness.writer.getState().studentEvidence[evidenceKeyToString(claimEvidenceKey)]).toBeUndefined();
+    harness.store.close();
+  });
+
+  it("rejects a verifier that reports a confident status from a low-confidence interpretation", async () => {
+    const harness = await createCoreHarness();
+    const coordinator = new VerificationCoordinator(harness.writer);
+    const work = await issue(
+      coordinator,
+      harness,
+      completeGraphStatement(6, () => "ACQUAINTANCE"),
+      0.6
+    );
+    const invalidLowConfidenceResult: VerificationResult = {
+      status: "CONTRADICTED",
+      interpretationConfidence: 0.6,
+      verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+      reason: "misbehaving verifier should have abstained"
+    };
+    const verifier: DeterministicVerifier = {
+      verify: () => Promise.resolve(invalidLowConfidenceResult)
+    };
+
+    const admitted = await coordinator.processResult({
+      envelope: verificationEnvelope(harness, work),
+      result: invalidLowConfidenceResult,
+      verifier
+    });
+
+    expect(admitted.value).toMatchObject({
+      accepted: false,
+      reason: "VERIFIER_OUTPUT_INVALID"
+    });
+    expect(harness.writer.getState().verificationRequests[work.verificationRequestId]?.status)
+      .toBe("DISCARDED");
+    expect(harness.writer.getState().studentEvidence[evidenceKeyToString(claimEvidenceKey)])
+      .toBeUndefined();
     harness.store.close();
   });
 

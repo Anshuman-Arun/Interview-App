@@ -90,6 +90,8 @@ export interface VerificationRequestState {
   readonly requestedEventId: EventId;
   readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
   readonly result?: VerificationResult;
+  readonly resultEventId?: EventId;
+  readonly resultSequence?: number;
   readonly discardReason?: string;
 }
 export interface EvidenceRecordState {
@@ -111,6 +113,12 @@ export interface GenerationState {
   readonly generationId: GenerationId;
   readonly basis: GenerationBasis;
   readonly provider: string;
+  /** Derived during replay from the application-selected action that existed when generation began. */
+  readonly pedagogicalAction?: RealizationRequest;
+  /** Derived from PROPOSAL_VALIDATED and preserved through later supersession. */
+  readonly interviewerProposalValidated?: true;
+  /** Exact interviewer proposal that was present when application validation succeeded. */
+  readonly validatedInterviewerProposal?: InterviewerProposal;
   readonly status: "ACTIVE" | "PROPOSAL_RECEIVED" | "VALIDATED" | "REJECTED" | "SUPERSEDED";
   readonly contextManifest?: ContextCompilationManifest;
   readonly proposal?: InterviewerProposal;

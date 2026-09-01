@@ -13,6 +13,7 @@ import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
   ProviderCoordinator,
+  createCommandEnvelope,
   SessionRuntimeRegistry,
   TurnCoordinator
 } from "../packages/interview-engine/src/index.js";
@@ -105,17 +106,19 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
-  it("rejects a late proposal when its GenerationBasis becomes stale", async () => {
+  it("rejects a late proposal after a basis-changing mutation proactively supersedes its generation", async () => {
     const harness = await coordinatorHarness();
     try {
       const provider = new DeferredProvider();
       const execution = await harness.coordinator.start(startInput(harness, provider));
       await provider.turnStarted;
       await harness.turns.commitBoardPatch("student replaced the board argument");
+      expect(harness.writer.getState().generations[execution.generationId]?.status).toBe("SUPERSEDED");
+
       provider.release();
       const outcome = await execution.completion;
 
-      expect(outcome).toMatchObject({ status: "REJECTED", reason: "Generation compatibility is INCOMPATIBLE" });
+      expect(outcome).toMatchObject({ status: "REJECTED", reason: "Generation is not active" });
       expect(harness.writer.getState().generations[execution.generationId]?.status).toBe("SUPERSEDED");
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
     } finally {
@@ -138,6 +141,61 @@ describe("application-owned ProviderCoordinator", () => {
       expect(harness.store.load(harness.sessionId).filter((event) => event.type === "MODEL_PROPOSAL_RECEIVED"))
         .toHaveLength(1);
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(1);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("fails before provider use when new evidence makes the stored pedagogical action stale", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      const state = harness.writer.getState();
+      const turn = state.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = state.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "evidence-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+      expect(evidence.committed).toBe(true);
+
+      let verificationCalls = 0;
+      let sessionCreations = 0;
+      const provider = testProvider(async () => {
+        sessionCreations += 1;
+        return proposalSession();
+      }, () => { verificationCalls += 1; });
+
+      const execution = await harness.coordinator.start(startInput(harness, provider));
+      const outcome = await execution.completion;
+
+      expect(outcome).toMatchObject({
+        status: "FAILED",
+        stage: "CONTEXT",
+        code: "ACTION_STALE"
+      });
+      expect(verificationCalls).toBe(0);
+      expect(sessionCreations).toBe(0);
+      expect(harness.writer.getState().generations[execution.generationId]?.status)
+        .toBe("SUPERSEDED");
     } finally {
       harness.store.close();
     }
@@ -284,7 +342,7 @@ async function coordinatorHarness() {
   const turns = new TurnCoordinator(writer);
   await turns.startSession(sixPeopleProblem);
   const { inputEpisodeId, turnId } = await turns.commitInput("I have a claim, but I have not justified it yet.");
-  await turns.selectAction(turnId);
+  await turns.selectAction(turnId, sixPeopleProblem);
   const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([SAFE_PROBE]));
   return {
     store,

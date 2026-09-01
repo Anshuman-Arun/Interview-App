@@ -35,7 +35,7 @@ describe("generation context reproducibility", () => {
     if (!compiled.value.compiled) throw new Error("Expected context compilation");
     expect(compiled.value.manifest).toMatchObject({
       schemaVersion: 1,
-      compilerVersion: "phase0-safe-context@1",
+      compilerVersion: "phase0-safe-context@2",
       hashAlgorithm: "SHA-256",
       generationId: harness.generationId,
       problemId: sixPeopleProblem.id,
@@ -55,6 +55,27 @@ describe("generation context reproducibility", () => {
     expect(serializedEvent).not.toContain(sixPeopleProblem.private.canonicalSolution);
     expect(replaySession(harness.sessionId, harness.store.load(harness.sessionId))).toEqual(harness.writer.getState());
     harness.store.close();
+  });
+
+  it("rejects accessor-backed canonical JSON without executing the accessor", () => {
+    let getterCalls = 0;
+    const value: Record<string, unknown> = {};
+    Object.defineProperty(value, "dangerous", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "must-not-run";
+      }
+    });
+
+    expect(() => canonicalJson(value)).toThrow(/own data properties/u);
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects sparse arrays instead of treating missing elements as implicit data", () => {
+    const sparse = new Array<unknown>(2);
+    sparse[1] = "present";
+    expect(() => canonicalJson(sparse)).toThrow(/own data elements/u);
   });
 
   it("produces stable safe-context and graph hashes independent of object key order and private content", async () => {
@@ -184,7 +205,7 @@ describe("generation context reproducibility", () => {
       generationId: staleHarness.generationId,
       problem: sixPeopleProblem
     });
-    expect(stale.value).toMatchObject({ compiled: false, reason: "COMPATIBILITY_INCOMPATIBLE" });
+    expect(stale.value).toMatchObject({ compiled: false, reason: "GENERATION_NOT_ACTIVE" });
     expect(staleHarness.store.load(staleHarness.sessionId).some((event) => event.type === "GENERATION_CONTEXT_COMPILED"))
       .toBe(false);
     staleHarness.store.close();
@@ -199,16 +220,13 @@ describe("generation context reproducibility", () => {
 
     const compatibilityHarness = await createCoreHarness();
     const missingEpisodeId = newInputEpisodeId();
-    const generation = await compatibilityHarness.turns.startGeneration(
-      missingEpisodeId,
-      compatibilityHarness.turnId,
-      "mock-model"
-    );
-    const compatibility = await new ContextCoordinator(compatibilityHarness.writer).compileForGeneration({
-      generationId: generation.generationId,
-      problem: sixPeopleProblem
-    });
-    expect(compatibility.value).toMatchObject({ compiled: false, reason: "COMPATIBILITY_UNKNOWN" });
+    await expect(
+      compatibilityHarness.turns.startGeneration(
+        missingEpisodeId,
+        compatibilityHarness.turnId,
+        "mock-model"
+      )
+    ).rejects.toThrow(/committed InputEpisode/u);
     compatibilityHarness.store.close();
 
     const mismatchHarness = await createCoreHarness();
@@ -249,7 +267,7 @@ describe("generation context reproducibility", () => {
     await raceHarness.turns.commitBoardPatch("Revision changed while context hashes were computing.");
     releaseHash?.();
     const raced = await pending;
-    expect(raced.value).toMatchObject({ compiled: false, reason: "COMPATIBILITY_INCOMPATIBLE" });
+    expect(raced.value).toMatchObject({ compiled: false, reason: "GENERATION_NOT_ACTIVE" });
     expect(raceHarness.store.load(raceHarness.sessionId).some((event) => event.type === "GENERATION_CONTEXT_COMPILED"))
       .toBe(false);
     raceHarness.store.close();

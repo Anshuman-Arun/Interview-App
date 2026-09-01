@@ -84,7 +84,13 @@ describe("adversarial named regression schedules", () => {
           envelope: createCommandEnvelope({
             sessionId: fixture.sessionId,
             producer: provider.name,
-            generationId: fixture.initialGenerationId
+            generationId: fixture.initialGenerationId,
+            inputEpisodeId: fixture.inputEpisodeId,
+            turnId: fixture.turnId,
+            contextEpoch: fixture.providerEnvelope.contextEpoch,
+            ...(fixture.providerEnvelope.sourceRevision === undefined
+              ? {}
+              : { sourceRevision: fixture.providerEnvelope.sourceRevision })
           }),
           problem: sixPeopleProblem,
           proposal,
@@ -558,7 +564,11 @@ describe("adversarial named regression schedules", () => {
         envelope: createCommandEnvelope({
           sessionId: fixture.sessionId,
           producer: "unknown-provenance-provider",
-          generationId
+          generationId,
+          inputEpisodeId: fixture.inputEpisodeId,
+          turnId: missingTurnId,
+          contextEpoch: basis.contextEpoch,
+          sourceRevision: basis.committedInputSequence
         }),
         problem: sixPeopleProblem,
         proposal: {
@@ -620,14 +630,18 @@ describe("adversarial named regression schedules", () => {
         )
       ).toBe("INCOMPATIBLE");
 
+      expect(
+        fixture.writer.getState().generations[fixture.initialGenerationId]?.status
+      ).toBe("SUPERSEDED");
+      expect(
+        fixture.writer.getState().deliveries[deliveryId]?.status
+      ).toBe("CANCELLED");
+
       const count = fixture.store.eventCount(fixture.sessionId);
       await expect(
         fixture.delivery.markStarted(deliveryId)
       ).rejects.toThrow();
       expect(fixture.store.eventCount(fixture.sessionId)).toBe(count);
-      expect(
-        fixture.writer.getState().deliveries[deliveryId]?.status
-      ).not.toBe("DELIVERING");
     } finally {
       await fixture.close();
     }
