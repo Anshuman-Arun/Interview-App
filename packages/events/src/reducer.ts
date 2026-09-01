@@ -16,7 +16,7 @@ function withDeliveryStatus(state: SessionState, deliveryId: string, status: Del
   const allowed: Readonly<Record<DeliveryAtom["status"], readonly DeliveryAtom["status"][]>> = {
     VALIDATED: ["QUEUED"],
     QUEUED: ["DELIVERING", "CANCELLED"],
-    DELIVERING: ["EXPOSED", "CANCELLED", "POSSIBLY_EXPOSED"],
+    DELIVERING: ["EXPOSED", "POSSIBLY_EXPOSED"],
     EXPOSED: ["COMPLETED"],
     COMPLETED: [],
     CANCELLED: [],
