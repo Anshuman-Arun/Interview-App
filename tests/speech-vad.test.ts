@@ -115,6 +115,15 @@ describe("VAD adapter direct-call boundaries", () => {
     expect(() => new ScriptedVadBackend(null as never)).toThrow(/must be an array/u);
   });
 
+  it("rejects Silero paths whose whitespace or controls would otherwise be normalized away", () => {
+    const runtime = {
+      runtimeVersion: "test-runtime",
+      async score() { return 0.5; }
+    };
+    expect(() => new SileroVadBackend(runtime, "models/silero/model.onnx\n")).toThrow(/invalid/u);
+    expect(() => new SileroVadBackend(runtime, " models/silero/model.onnx")).toThrow(/invalid/u);
+  });
+
   it("short-circuits already-aborted Silero calls before runtime invocation", async () => {
     let scoreCalls = 0;
     const backend = new SileroVadBackend({
