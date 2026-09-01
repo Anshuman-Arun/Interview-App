@@ -17,7 +17,7 @@ import {
 } from "./quant-curated.js";
 import { sixPeopleProblem } from "./six-people.js";
 
-export interface ProblemCatalogMetadata extends CuratedProblemMetadata {}
+export type ProblemCatalogMetadata = CuratedProblemMetadata;
 
 const LEGACY_PROBLEM_METADATA: readonly ProblemCatalogMetadata[] = [
   {
@@ -281,9 +281,10 @@ function assertMetadataStructure(item: ProblemCatalogMetadata): void {
   assertNonBlank(item.id, "Problem metadata id");
   assertNonBlank(item.title, `Problem metadata title for "${item.id}"`);
   assertNonBlank(item.category, `Problem metadata category for "${item.id}"`);
-  if (item.mode !== "OXFORD_MATHEMATICS" && item.mode !== "QUANT") {
+  const mode: unknown = item.mode;
+  if (mode !== "OXFORD_MATHEMATICS" && mode !== "QUANT") {
     throw new Error(
-      `Problem metadata for "${item.id}" has invalid mode "${String(item.mode)}"`
+      `Problem metadata for "${item.id}" has invalid mode "${String(mode)}"`
     );
   }
 
