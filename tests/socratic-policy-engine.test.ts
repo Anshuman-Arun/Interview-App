@@ -328,6 +328,46 @@ function makeBranchScopedProblem(): InterviewProblem {
   };
 }
 
+function makeMergeScopedProblem(): InterviewProblem {
+  const leftId = DisclosureIdSchema.parse("disclosure_merge_left_policy_test");
+  const rightId = DisclosureIdSchema.parse("disclosure_merge_right_policy_test");
+  return {
+    ...sixPeopleProblem,
+    version: "1.0.0-merge-policy-test",
+    interviewer: {
+      ...sixPeopleProblem.interviewer,
+      reasoningGraph: {
+        ...sixPeopleProblem.interviewer.reasoningGraph,
+        version: "1.0.0-merge-policy-test",
+        milestones: sixPeopleProblem.interviewer.reasoningGraph.milestones.map((milestone) => {
+          if (milestone.id === "close-triangle") {
+            return { ...milestone, protectedDisclosureIds: [...milestone.protectedDisclosureIds, leftId] };
+          }
+          if (milestone.id === "complement-case") {
+            return { ...milestone, protectedDisclosureIds: [...milestone.protectedDisclosureIds, rightId] };
+          }
+          return milestone;
+        })
+      },
+      protectedDisclosures: [
+        ...sixPeopleProblem.interviewer.protectedDisclosures,
+        {
+          id: leftId,
+          fact: "Use only the two-colour branch fact.",
+          minimumDisclosureLevel: 1,
+          equivalentFormulations: ["two-colour branch fact"]
+        },
+        {
+          id: rightId,
+          fact: "Use only the complement branch fact.",
+          minimumDisclosureLevel: 1,
+          equivalentFormulations: ["complement branch fact"]
+        }
+      ]
+    }
+  };
+}
+
 describe("production Socratic policy engine", () => {
   it("waits during clear productive progress", () => {
     const { state: base, turnId } = makeState();
@@ -530,6 +570,41 @@ describe("production Socratic policy engine", () => {
     const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
     expect(decision.realizationRequest.requiredAction).not.toBe("EXPLICIT_HINT");
     expect(decision.realizationRequest.maximumDisclosure).toBeLessThan(4);
+  });
+
+  it("does not leak the other branch's protected fact when intervening at a shared merge milestone", () => {
+    const problem = makeMergeScopedProblem();
+    const { state: base, turnId } = makeState(problem);
+    let state = withEvidence(
+      base,
+      milestoneKey(problem, "choose-vertex", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(problem, "close-triangle", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(problem, "verify", "CORRECTNESS"),
+      "STRUCTURAL_ERROR"
+    );
+
+    const decision = decidePedagogicalPolicy(state, turnId, problem);
+    const left = problem.interviewer.protectedDisclosures.find(
+      (item) => item.id === "disclosure_merge_left_policy_test"
+    );
+    const right = problem.interviewer.protectedDisclosures.find(
+      (item) => item.id === "disclosure_merge_right_policy_test"
+    );
+    expect(left).toBeDefined();
+    expect(right).toBeDefined();
+    expect(decision.realizationRequest.requiredAction).toBe("CHANGE_REPRESENTATION");
+    if (left !== undefined && right !== undefined) {
+      expect(decision.realizationRequest.allowedDisclosureIds ?? []).toContain(left.id);
+      expect(decision.realizationRequest.allowedDisclosureIds ?? []).not.toContain(right.id);
+    }
   });
 
   it("does not authorize a protected disclosure from an unrelated branch", () => {
