@@ -881,6 +881,10 @@ export class SpeechWorkerCore {
       if (this.allocatedVadStates.has(vad) || this.allocatedEndpointingPolicies.has(endpointing)) {
         throw new Error("Speech stream factories reused mutable state objects");
       }
+      const initialVadSnapshot = VoiceActivitySnapshotSchema.parse(vad.snapshot());
+      if (initialVadSnapshot.state !== "SILENCE") {
+        throw new Error("Speech VAD state factory must return a fresh silent state");
+      }
       const endpointMaximumMs = endpointing.getMaximumUtteranceMs();
       if (!Number.isFinite(endpointMaximumMs)
           || endpointMaximumMs <= 0
