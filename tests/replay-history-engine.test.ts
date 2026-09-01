@@ -2457,7 +2457,7 @@ describe("longitudinal projection", () => {
     sessionId: SessionId,
     problemId: string,
     version: string,
-    score: number,
+    score: number | null,
     value: "PROGRESSING" | "COMPLETE",
     startedAt = "2026-08-31T19:00:01.000Z",
     skillId = "shared-exact-skill"
@@ -2681,24 +2681,14 @@ describe("longitudinal projection", () => {
       "PROGRESSING",
       "2026-08-31T20:20:01.000Z"
     );
-    const unscoredBase = evaluated(
+    const unscored = evaluated(
       "session-grounded-unscored" as SessionId,
       "grounded-null",
       "1",
-      80,
+      null,
       "PROGRESSING",
       "2026-08-31T20:21:01.000Z"
     );
-    const unscored = {
-      ...unscoredBase,
-      evaluation: groundedEvaluation({
-        sessionId: "session-grounded-unscored" as SessionId,
-        problemId: "grounded-null",
-        problemVersion: "1",
-        score: null,
-        totalTurns: 0
-      })
-    };
 
     const result = projectLongitudinalHistory([scored, unscored]);
     const stats = result.evaluationStatistics[0];
