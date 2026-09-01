@@ -4,6 +4,26 @@ import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import { createCommandEnvelope } from "../packages/interview-engine/src/index.js";
 import { createCoreHarness } from "./harness.js";
 
+function proposalEnvelope(
+  harness: Awaited<ReturnType<typeof createCoreHarness>>,
+  generationId: typeof harness.generationId,
+  producer: string
+) {
+  const generation = harness.writer.getState().generations[generationId];
+  if (generation === undefined) throw new Error("Missing generation basis");
+  return createCommandEnvelope({
+    sessionId: harness.sessionId,
+    producer,
+    generationId,
+    ...(generation.basis.inputEpisodeId === undefined
+      ? {}
+      : { inputEpisodeId: generation.basis.inputEpisodeId }),
+    turnId: generation.basis.turnId,
+    contextEpoch: generation.basis.contextEpoch,
+    sourceRevision: generation.basis.committedInputSequence
+  });
+}
+
 describe("provider lifecycle remains subordinate to application state", () => {
   it("rejects output that arrives after an ignored provider cancellation", async () => {
     const harness = await createCoreHarness();
@@ -17,7 +37,7 @@ describe("provider lifecycle remains subordinate to application state", () => {
       await harness.turns.commitBoardPatch("new user work supersedes the request");
       for await (const proposal of session.sendTurn({ context: {}, generationId: harness.generationId })) {
         const result = await harness.turns.processProposal({
-          envelope: createCommandEnvelope({ sessionId: harness.sessionId, producer: provider.name, generationId: harness.generationId }),
+          envelope: proposalEnvelope(harness, harness.generationId, provider.name),
           problem: sixPeopleProblem,
           proposal,
           validator: harness.validator
@@ -37,13 +57,13 @@ describe("provider lifecycle remains subordinate to application state", () => {
       await harness.turns.supersedeGeneration(harness.generationId, "provider failover");
       const replacement = await harness.turns.startGeneration(harness.inputEpisodeId, harness.turnId, "mock-provider-b");
       const late = await harness.turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId: harness.sessionId, producer: "mock-provider-a", generationId: harness.generationId }),
+        envelope: proposalEnvelope(harness, harness.generationId, "mock-provider-a"),
         problem: sixPeopleProblem,
         proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: harness.safeProbe },
         validator: harness.validator
       });
       const current = await harness.turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId: harness.sessionId, producer: "mock-provider-b", generationId: replacement.generationId }),
+        envelope: proposalEnvelope(harness, replacement.generationId, "mock-provider-b"),
         problem: sixPeopleProblem,
         proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: harness.safeProbe },
         validator: harness.validator
