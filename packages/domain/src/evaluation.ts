@@ -173,7 +173,21 @@ export const EvaluationLifecycleSchema = z.object({
     "ARCHIVED_COMPLETED"
   ]),
   totalTurns: z.number().int().nonnegative()
-}).strict();
+}).strict().superRefine((lifecycle, ctx) => {
+  const valid =
+    (lifecycle.sessionStatus === "CREATED" && lifecycle.completionState === "NOT_STARTED") ||
+    (lifecycle.sessionStatus === "ACTIVE" && lifecycle.completionState === "IN_PROGRESS") ||
+    (lifecycle.sessionStatus === "COMPLETED" && lifecycle.completionState === "COMPLETED") ||
+    (lifecycle.sessionStatus === "ARCHIVED" &&
+      (lifecycle.completionState === "ARCHIVED_INCOMPLETE" ||
+        lifecycle.completionState === "ARCHIVED_COMPLETED"));
+  if (!valid) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Evaluation lifecycle completion state does not match session status"
+    });
+  }
+});
 export type EvaluationLifecycle = z.infer<typeof EvaluationLifecycleSchema>;
 
 export const MilestoneEvaluationSchema = z.object({
@@ -228,6 +242,15 @@ export const MilestoneEvaluationSchema = z.object({
     ctx.addIssue({
       code: "custom",
       message: "Milestone assistance disclosure IDs must be unique"
+    });
+  }
+  if (
+    (milestone.assistanceLevel === 0) !==
+    (milestone.assistanceDisclosureIds.length === 0)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Milestone assistance level and disclosure IDs are internally inconsistent"
     });
   }
   if (new Set(milestone.approachIds).size !== milestone.approachIds.length) {

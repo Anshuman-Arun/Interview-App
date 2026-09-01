@@ -1834,7 +1834,7 @@ function buildStrengths(
   if (unassisted.length > 0 && dimensions.independence.score === 100) {
     strengths.push(
       String(unassisted.length) +
-      " achieved milestone(s) have no attributable protected disclosure in the current exposure ledger."
+      " achieved milestone(s) have no attributable positive-level protected assistance in the current exposure ledger."
     );
   }
 

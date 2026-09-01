@@ -9,7 +9,17 @@ export const FallibleQualitativeEvaluationProposalSchema = z.object({
   score: z.number().min(0).max(100),
   evidenceRefs: z.array(EvaluationEvidenceRefSchema).min(1),
   rationale: z.string().min(1).max(500)
-}).strict();
+}).strict().superRefine((proposal, ctx) => {
+  const unique = new Set(
+    proposal.evidenceRefs.map((ref) => ref.kind + "\u0000" + ref.id)
+  );
+  if (unique.size !== proposal.evidenceRefs.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Qualitative proposal evidence references must be unique"
+    });
+  }
+});
 
 export type FallibleQualitativeEvaluationProposal = z.infer<
   typeof FallibleQualitativeEvaluationProposalSchema
