@@ -430,7 +430,7 @@ export class TranscriptResultGate {
 
   public admit(raw: unknown, expected: TranscriptValidationBasis): TranscriptAdmission {
     const candidate = validateTranscriptCandidate(raw, expected);
-    const fingerprint = JSON.stringify(candidate);
+    const fingerprint = createHash("sha256").update(JSON.stringify(candidate)).digest("hex");
     const prior = this.remembered.get(candidate.requestId);
     if (prior !== undefined) {
       if (prior.fingerprint !== fingerprint) throw new Error("Recognizer reused a result requestId with conflicting content");
