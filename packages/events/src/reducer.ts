@@ -20,7 +20,7 @@ function withDeliveryStatus(state: SessionState, deliveryId: string, status: Del
     EXPOSED: ["COMPLETED"],
     COMPLETED: [],
     CANCELLED: [],
-    POSSIBLY_EXPOSED: []
+    POSSIBLY_EXPOSED: ["EXPOSED"]
   };
   if (!allowed[current.status].includes(status)) {
     throw new Error(`Invalid delivery transition ${current.status} -> ${status}`);
