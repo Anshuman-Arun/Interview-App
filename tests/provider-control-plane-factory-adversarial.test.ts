@@ -248,7 +248,7 @@ describe("provider registration snapshot semantics", () => {
     }
 
     expect(controlCharacterError).toMatchObject({ code: "MALFORMED_DEFINITION" });
-    expect(normalized?.displayName).toBe("Test Provider");
+    expect(normalized.displayName).toBe("Test Provider");
   });
 
   it("rejects control characters in diagnostic-facing provider metadata", () => {
@@ -454,9 +454,11 @@ describe("registry provenance and batch input hardening", () => {
   });
 
   it("does not dispatch captured registry methods through mutable call properties", () => {
+    /* eslint-disable @typescript-eslint/unbound-method -- Hostile method test captures originals for direct descriptor mutation. */
     const getProviderMethod = ProviderRegistry.prototype.getProvider;
     const getModelMethod = ProviderRegistry.prototype.getModel;
     const registerManyMethod = ProviderRegistry.prototype.registerMany;
+    /* eslint-enable @typescript-eslint/unbound-method */
     const originalGetProviderCall = Object.getOwnPropertyDescriptor(getProviderMethod, "call");
     const originalGetModelCall = Object.getOwnPropertyDescriptor(getModelMethod, "call");
     const originalRegisterManyCall = Object.getOwnPropertyDescriptor(registerManyMethod, "call");
@@ -529,8 +531,9 @@ describe("registry provenance and batch input hardening", () => {
   });
 
   it("normalizes non-registry built-in registration failures", () => {
-    expect(() => Reflect.apply(registerBuiltInProviders, undefined, [{}]))
-      .toThrow(expect.objectContaining({ code: "INVALID_REGISTRY" }));
+    expect((): void => {
+      Reflect.apply(registerBuiltInProviders, undefined, [{}]);
+    }).toThrow(expect.objectContaining({ code: "INVALID_REGISTRY" }));
   });
 
   it("registers built-ins with the captured base method even when a subclass overrides registerMany", () => {
@@ -1091,6 +1094,7 @@ describe("adapter factory adversarial boundary", () => {
       configuration: MOCK_CONFIGURATION
     });
     const factory = resolveAdapterFactory(resolved);
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Hostile prototype test captures the original for Reflect.apply and restoration.
     const originalHas = Set.prototype.has;
     let caught: unknown;
 
@@ -1302,12 +1306,14 @@ describe("adapter factory adversarial boundary", () => {
       throw new Error("Resolved configuration constructor is unavailable");
     }
 
-    expect(() => Reflect.construct(constructorValue, [
-      undefined,
-      resolved.configuration,
-      resolved.provider,
-      resolved.model
-    ])).toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
+    expect((): void => {
+      Reflect.construct(constructorValue, [
+        undefined,
+        resolved.configuration,
+        resolved.provider,
+        resolved.model
+      ]);
+    }).toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
   });
 
   it("rejects direct construction through the reachable registered-factory constructor", () => {
@@ -1324,11 +1330,13 @@ describe("adapter factory adversarial boundary", () => {
       throw new Error("Registered factory constructor is unavailable");
     }
 
-    expect(() => Reflect.construct(constructorValue, [
-      undefined,
-      "forged-factory",
-      () => new MockModelAdapter({ proposal: PROPOSAL })
-    ])).toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
+    expect((): void => {
+      Reflect.construct(constructorValue, [
+        undefined,
+        "forged-factory",
+        () => new MockModelAdapter({ proposal: PROPOSAL })
+      ]);
+    }).toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
   });
 
   it("rejects prototype-forged resolutions that would pass plain instanceof checks", () => {
@@ -1338,7 +1346,11 @@ describe("adapter factory adversarial boundary", () => {
       configuration: MOCK_CONFIGURATION
     });
     const forged = { ...resolved };
-    Object.setPrototypeOf(forged, Object.getPrototypeOf(resolved));
+    const resolvedPrototype: unknown = Object.getPrototypeOf(resolved);
+    if (resolvedPrototype !== null && typeof resolvedPrototype !== "object") {
+      throw new Error("Resolved configuration prototype is malformed");
+    }
+    Object.setPrototypeOf(forged, resolvedPrototype);
 
     expect(() => resolveAdapterFactory(forged))
       .toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
@@ -1843,8 +1855,9 @@ describe("adapter factory adversarial boundary", () => {
   it("normalizes revoked Proxy values at private-brand boundaries", async () => {
     const revokedResolution = Proxy.revocable({}, {});
     revokedResolution.revoke();
-    expect(() => Reflect.apply(resolveAdapterFactory, undefined, [revokedResolution.proxy]))
-      .toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
+    expect((): void => {
+      Reflect.apply(resolveAdapterFactory, undefined, [revokedResolution.proxy]);
+    }).toThrow(expect.objectContaining({ code: "INVALID_FACTORY_INPUT" }));
 
     const revokedFactory = Proxy.revocable({}, {});
     revokedFactory.revoke();
@@ -1867,6 +1880,7 @@ describe("adapter factory adversarial boundary", () => {
       adapterFactory: {
         id: "revoked-error-factory",
         createAdapter() {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error -- Deliberately tests provider behavior for a revoked non-Error throw.
           throw thrownProxy.proxy;
         }
       }
@@ -1907,6 +1921,7 @@ describe("adapter factory adversarial boundary", () => {
       adapterFactory: {
         id: "instanceof-factory",
         createAdapter() {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error -- Deliberately tests provider behavior for a hostile non-Error throw.
           throw thrown;
         }
       }
@@ -2422,6 +2437,7 @@ describe("adapter factory adversarial boundary", () => {
 
     expect(Object.getOwnPropertyNames(adapter)).not.toContain("options");
     expect(JSON.stringify(adapter)).not.toContain(secret);
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string -- Explicitly verifies default coercion cannot expose runtime secrets.
     expect(String(adapter)).not.toContain(secret);
   });
 
