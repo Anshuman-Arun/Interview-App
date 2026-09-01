@@ -2035,6 +2035,78 @@ describe("target-scoped disclosure validator", () => {
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
+  it("treats a provider-claimed protected disclosure as effective even when text analysis misses it", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing protected disclosure");
+
+    const validator = new DisclosureValidator({
+      analyze: () => ({
+        status: "SAFE",
+        effectiveDisclosureLevel: 0,
+        effectiveDisclosureIds: [],
+        confidence: 1,
+        reason: "synthetic semantic miss"
+      })
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+        claimedDisclosureIds: [disclosure.id],
+        speechText: "synthetic safe-looking text"
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.analysis?.effectiveDisclosureIds).toContain(disclosure.id);
+    expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+  });
+
+  it("rejects unknown or duplicate provider-claimed disclosure identities", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing protected disclosure");
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["safe probe"]));
+
+    const duplicate = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+        claimedDisclosureIds: [disclosure.id, disclosure.id],
+        speechText: "safe probe"
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: disclosure.minimumDisclosureLevel,
+        allowedDisclosureIds: [disclosure.id]
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(duplicate.accepted).toBe(false);
+
+    const unknownId = DisclosureIdSchema.parse("disclosure_unknown_provider_claim");
+    const unknown = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [unknownId],
+        speechText: "safe probe"
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(unknown.accepted).toBe(false);
+  });
+
   it("does not let a custom analyzer erase an exact protected formulation", () => {
     const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
     expect(disclosure).toBeDefined();
