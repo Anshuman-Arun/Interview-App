@@ -1678,20 +1678,25 @@ export function decidePedagogicalPolicy(
 
   const rawTurn = rawTurns[turnId];
   if (rawTurn === undefined) throw new Error("Unknown turn " + turnId);
+  if (!isRecord(rawTurn)) {
+    return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
+  }
+  const inputEpisodeId = rawTurn["inputEpisodeId"];
+  const committedSequence = rawTurn["committedSequence"];
   if (
-    !isRecord(rawTurn)
-    || rawTurn["turnId"] !== turnId
-    || typeof rawTurn["inputEpisodeId"] !== "string"
-    || rawTurn["inputEpisodeId"].length === 0
-    || !Number.isSafeInteger(rawTurn["committedSequence"])
-    || (rawTurn["committedSequence"] as number) <= 0
+    rawTurn["turnId"] !== turnId
+    || typeof inputEpisodeId !== "string"
+    || inputEpisodeId.length === 0
+    || typeof committedSequence !== "number"
+    || !Number.isSafeInteger(committedSequence)
+    || committedSequence <= 0
   ) {
     return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
   }
-  const rawEpisode = rawEpisodes[rawTurn["inputEpisodeId"]];
+  const rawEpisode = rawEpisodes[inputEpisodeId];
   if (
     !isRecord(rawEpisode)
-    || rawEpisode["inputEpisodeId"] !== rawTurn["inputEpisodeId"]
+    || rawEpisode["inputEpisodeId"] !== inputEpisodeId
     || rawEpisode["status"] !== "COMMITTED"
   ) {
     return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
