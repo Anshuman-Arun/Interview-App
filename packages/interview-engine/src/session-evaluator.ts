@@ -1950,6 +1950,13 @@ function aggregateSampleSupport(
   return supportLevels.length >= 3 ? "STRONG" : "MODERATE";
 }
 
+function maxSupport(
+  left: EvaluationSupportLevel,
+  right: EvaluationSupportLevel
+): EvaluationSupportLevel {
+  return SUPPORT_RANK[left] >= SUPPORT_RANK[right] ? left : right;
+}
+
 function downgradeSupport(level: EvaluationSupportLevel): EvaluationSupportLevel {
   if (level === "STRONG") return "MODERATE";
   if (level === "MODERATE") return "WEAK";
