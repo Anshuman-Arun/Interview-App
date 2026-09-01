@@ -5,6 +5,7 @@ import {
   GenerationBasisSchema,
   newSessionId
 } from "../packages/domain/src/index.js";
+import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
 import { initialSessionState } from "../packages/events/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
@@ -259,6 +260,49 @@ describe("compatibility and disclosure gates", () => {
         .toBe("SUPERSEDED");
       expect(harness.writer.getState().deliveries[atom.deliveryId]?.status)
         .toBe("CANCELLED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("marks in-progress output POSSIBLY_EXPOSED when authoritative evidence invalidates its policy", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+      const state = harness.writer.getState();
+      const turn = state.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = state.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "evidence-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+
+      expect(evidence.committed).toBe(true);
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
     } finally {
       harness.store.close();
     }
