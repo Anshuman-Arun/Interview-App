@@ -849,6 +849,8 @@ function addDelivery(
   const generationId = GenerationIdSchema.parse("generation_adv_" + label);
   const deliveryId = DeliveryIdSchema.parse("delivery_adv_" + label);
   const turnId = TurnIdSchema.parse("turn_adv_" + label);
+  const inputEpisodeId = InputEpisodeIdSchema.parse("episode_adv_" + label);
+  const turnEventId = EventIdSchema.parse("turn_committed_adv_" + label);
   const atom: DeliveryAtom = {
     deliveryId,
     generationId,
@@ -857,8 +859,33 @@ function addDelivery(
     effectiveDisclosureLevel: level,
     status
   };
+  const eventIds = placeEventAtSequence([...state.eventIds], turnEventId, basisSequence);
+  const latestCommittedInputSequence = Math.max(
+    state.lastCommittedInputSequence ?? 0,
+    basisSequence
+  );
   return {
     ...state,
+    sequence: Math.max(state.sequence, basisSequence),
+    eventIds,
+    lastCommittedInputSequence: latestCommittedInputSequence,
+    inputEpisodes: {
+      ...state.inputEpisodes,
+      [inputEpisodeId]: {
+        inputEpisodeId,
+        status: "COMMITTED",
+        inputs: [{ modality: "TYPING", semanticContent: "fixture delivery basis" }]
+      }
+    },
+    turns: {
+      ...state.turns,
+      [turnId]: {
+        turnId,
+        inputEpisodeId,
+        studentText: "fixture delivery basis",
+        committedSequence: basisSequence
+      }
+    },
     generations: {
       ...state.generations,
       [generationId]: {
@@ -870,6 +897,7 @@ function addDelivery(
           boardRevision: zeroBoardRevision,
           problemStateRevision: zeroProblemStateRevision,
           policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
           turnId
         },
         provider: "fixture-provider",
@@ -893,16 +921,43 @@ function addTurns(
   text: string
 ): SessionState {
   const turns: Record<string, SessionState["turns"][string]> = { ...state.turns };
+  const inputEpisodes = { ...state.inputEpisodes };
+  let eventIds = [...state.eventIds];
+  let sequence = state.sequence;
   for (let index = 0; index < count; index += 1) {
-    const turnId = TurnIdSchema.parse("turn_property_" + String(index));
+    sequence += 1;
+    const turnId = TurnIdSchema.parse("turn_property_" + String(sequence) + "_" + String(index));
+    const inputEpisodeId = InputEpisodeIdSchema.parse(
+      "episode_property_" + String(sequence) + "_" + String(index)
+    );
+    eventIds = placeEventAtSequence(
+      eventIds,
+      EventIdSchema.parse("turn_committed_property_" + String(sequence) + "_" + String(index)),
+      sequence
+    );
+    inputEpisodes[inputEpisodeId] = {
+      inputEpisodeId,
+      status: "COMMITTED",
+      inputs: [{
+        modality: "TYPING",
+        semanticContent: text.length === 0 ? "meaningless" : text
+      }]
+    };
     turns[turnId] = {
       turnId,
-      inputEpisodeId: InputEpisodeIdSchema.parse("episode_property_" + String(index)),
+      inputEpisodeId,
       studentText: text.length === 0 ? "meaningless" : text,
-      committedSequence: 1000 + index
+      committedSequence: sequence
     };
   }
-  return { ...state, turns };
+  return {
+    ...state,
+    sequence,
+    eventIds,
+    inputEpisodes,
+    turns,
+    ...(count === 0 ? {} : { lastCommittedInputSequence: sequence })
+  };
 }
 
 function placeEventAtSequence(

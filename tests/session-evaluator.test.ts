@@ -369,18 +369,7 @@ describe("grounded session evaluator", () => {
       10,
       "before-later-input"
     );
-    const later = withTurns(contradicted, 1, "later student work");
-    const laterTurn = later.turns[TurnIdSchema.parse("turn_eval_0")];
-    if (laterTurn === undefined) throw new Error("Expected later fixture turn");
-    const state: SessionState = {
-      ...later,
-      sequence: Math.max(later.sequence, 20),
-      lastCommittedInputSequence: 20,
-      turns: {
-        ...later.turns,
-        [laterTurn.turnId]: { ...laterTurn, committedSequence: 20 }
-      }
-    };
+    const state = withTurns(contradicted, 1, "later student work");
 
     const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
     expect(evaluation.scores.technicalCorrectness).toBeNull();
@@ -760,17 +749,44 @@ function withTurns(
   count: number,
   text: string
 ): SessionState {
-  const turns: Record<string, SessionState["turns"][string]> = {};
+  const turns: Record<string, SessionState["turns"][string]> = { ...state.turns };
+  const inputEpisodes = { ...state.inputEpisodes };
+  let eventIds = [...state.eventIds];
+  let sequence = state.sequence;
   for (let index = 0; index < count; index += 1) {
-    const turnId = TurnIdSchema.parse("turn_eval_" + String(index));
+    const turnId = TurnIdSchema.parse(
+      "turn_eval_" + String(sequence + 1) + "_" + String(index)
+    );
+    const inputEpisodeId = InputEpisodeIdSchema.parse(
+      "episode_eval_" + String(sequence + 1) + "_" + String(index)
+    );
+    sequence += 1;
+    const turnEventId = EventIdSchema.parse(
+      "turn_committed_eval_" + String(sequence) + "_" + String(index)
+    );
+    eventIds = placeEventAtSequence(eventIds, turnEventId, sequence);
+    inputEpisodes[inputEpisodeId] = {
+      inputEpisodeId,
+      status: "COMMITTED",
+      inputs: [{ modality: "TYPING", semanticContent: text }]
+    };
     turns[turnId] = {
       turnId,
-      inputEpisodeId: InputEpisodeIdSchema.parse("episode_eval_" + String(index)),
+      inputEpisodeId,
       studentText: text,
-      committedSequence: index + 1
+      committedSequence: sequence
     };
   }
-  return { ...state, turns };
+  return {
+    ...state,
+    sequence,
+    eventIds,
+    inputEpisodes,
+    turns,
+    ...(count === 0
+      ? {}
+      : { lastCommittedInputSequence: sequence })
+  };
 }
 
 function withDelivery(
@@ -785,6 +801,8 @@ function withDelivery(
   const generationId = GenerationIdSchema.parse("generation_" + label);
   const deliveryId = DeliveryIdSchema.parse("delivery_" + label);
   const turnId = TurnIdSchema.parse("turn_" + label);
+  const inputEpisodeId = InputEpisodeIdSchema.parse("episode_" + label);
+  const turnEventId = EventIdSchema.parse("turn_committed_delivery_" + label);
   const atom: DeliveryAtom = {
     deliveryId,
     generationId,
@@ -794,8 +812,36 @@ function withDelivery(
     status
   };
 
+  let eventIds = placeEventAtSequence([...state.eventIds], turnEventId, basisSequence);
+  const inputEpisodes = {
+    ...state.inputEpisodes,
+    [inputEpisodeId]: {
+      inputEpisodeId,
+      status: "COMMITTED" as const,
+      inputs: [{ modality: "TYPING" as const, semanticContent: "fixture delivery basis" }]
+    }
+  };
+  const turns = {
+    ...state.turns,
+    [turnId]: {
+      turnId,
+      inputEpisodeId,
+      studentText: "fixture delivery basis",
+      committedSequence: basisSequence
+    }
+  };
+  const latestCommittedInputSequence = Math.max(
+    state.lastCommittedInputSequence ?? 0,
+    basisSequence
+  );
+
   return {
     ...state,
+    sequence: Math.max(state.sequence, basisSequence),
+    eventIds,
+    inputEpisodes,
+    turns,
+    lastCommittedInputSequence: latestCommittedInputSequence,
     generations: {
       ...state.generations,
       [generationId]: {
@@ -807,6 +853,7 @@ function withDelivery(
           boardRevision: zeroBoardRevision,
           problemStateRevision: zeroProblemStateRevision,
           policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
           turnId
         },
         provider: "fixture-provider",

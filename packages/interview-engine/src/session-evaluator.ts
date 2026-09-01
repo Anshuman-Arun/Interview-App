@@ -329,14 +329,58 @@ function assertEvaluationStateConsistency(
     throw new Error("Evaluation authoritative event history contains duplicate event identities");
   }
 
+  if (!Number.isSafeInteger(state.sequence) || state.sequence < 0) {
+    throw new Error("Evaluation session sequence is not a nonnegative safe integer");
+  }
+
+  let latestCommittedInputSequence: number | undefined;
+  const committedTurnSequences = new Set<number>();
   for (const [turnId, turn] of Object.entries(state.turns)) {
     if (turn.turnId !== turnId) {
       throw new Error("Evaluation turn identity does not match its state key");
     }
+    if (
+      !Number.isSafeInteger(turn.committedSequence) ||
+      turn.committedSequence <= 0 ||
+      turn.committedSequence > state.sequence
+    ) {
+      throw new Error("Evaluation turn committed sequence is outside authoritative session bounds");
+    }
+    if (committedTurnSequences.has(turn.committedSequence)) {
+      throw new Error("Evaluation turns cannot share an authoritative committed sequence");
+    }
+    committedTurnSequences.add(turn.committedSequence);
+
+    const episode = state.inputEpisodes[turn.inputEpisodeId];
+    if (
+      episode === undefined ||
+      episode.inputEpisodeId !== turn.inputEpisodeId ||
+      episode.status !== "COMMITTED"
+    ) {
+      throw new Error("Evaluation committed turn must reference a committed input episode");
+    }
+    latestCommittedInputSequence =
+      latestCommittedInputSequence === undefined
+        ? turn.committedSequence
+        : Math.max(latestCommittedInputSequence, turn.committedSequence);
   }
+  if (state.lastCommittedInputSequence !== latestCommittedInputSequence) {
+    throw new Error("Evaluation last committed input sequence does not match committed turns");
+  }
+
   for (const [generationId, generation] of Object.entries(state.generations)) {
     if (generation.generationId !== generationId) {
       throw new Error("Evaluation generation identity does not match its state key");
+    }
+    const turn = state.turns[generation.basis.turnId];
+    if (turn === undefined) {
+      throw new Error("Evaluation generation basis references an unknown committed turn");
+    }
+    if (
+      generation.basis.inputEpisodeId !== undefined &&
+      generation.basis.inputEpisodeId !== turn.inputEpisodeId
+    ) {
+      throw new Error("Evaluation generation basis input episode does not match its turn");
     }
   }
   const protectedDisclosureById = new Map(
@@ -520,6 +564,9 @@ function assertEvaluationStateConsistency(
     }
     if (state.generations[delivery.generationId] === undefined) {
       throw new Error("Evaluation delivery references an unknown generation");
+    }
+    if (new Set(delivery.disclosureIds).size !== delivery.disclosureIds.length) {
+      throw new Error("Evaluation delivery contains duplicate disclosure identities");
     }
 
     let minimumRequiredLevel: DisclosureLevel = 0;
