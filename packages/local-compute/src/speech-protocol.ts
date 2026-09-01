@@ -280,7 +280,7 @@ export const SpeechStartedEventSchema = WorkerEventBaseSchema.extend({
 export const SpeechPossibleEndpointEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("POSSIBLE_ENDPOINT"),
   utteranceId: SpeechUtteranceIdSchema,
-  silenceMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS)
+  silenceMs: z.number().positive().max(MAX_SPEECH_UTTERANCE_DURATION_MS)
 }).strict();
 
 export const SpeechUtteranceFinalizedEventSchema = WorkerEventBaseSchema.extend({
@@ -308,7 +308,11 @@ export const SpeechUtteranceDiscardedEventSchema = WorkerEventBaseSchema.extend(
   type: z.literal("UTTERANCE_DISCARDED"),
   utteranceId: SpeechUtteranceIdSchema.optional(),
   reason: SpeechDiscardReasonSchema
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.reason === "FALSE_START" && value.utteranceId === undefined) {
+    context.addIssue({ code: "custom", message: "False-start discard must identify the rejected utterance", path: ["utteranceId"] });
+  }
+});
 
 export const SpeechTranscriptEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("TRANSCRIPT_CANDIDATE"),
