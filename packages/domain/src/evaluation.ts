@@ -200,6 +200,12 @@ export const MilestoneEvaluationSchema = z.object({
       message: "Incomplete milestone evaluations require a notAchievedReason"
     });
   }
+  if (!milestone.achieved && milestone.achievedAtTurnId !== undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Incomplete milestone evaluations cannot contain achievedAtTurnId"
+    });
+  }
   if (milestone.achieved && milestone.supportLevel === "INSUFFICIENT") {
     ctx.addIssue({
       code: "custom",

@@ -1085,13 +1085,21 @@ function evaluateTechnicalCorrectness(
     const unresolved = currentRequests.filter(
       (request) => request.result?.status === "UNRESOLVED"
     );
-    const verificationRefs = currentRequests.map((request) =>
+    const verificationRefs = uniqueRefs([
+      ...supportingVerifications,
+      ...contradictions,
+      ...unresolved
+    ].map((request) =>
       evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
-    );
+    ));
 
     const baseScore = correctnessRatingScore(record.value.value);
     const positiveConflict = baseScore === 100 && contradictions.length > 0;
-    if (positiveConflict) {
+    const unresolvedVerifierConflict =
+      baseScore === null &&
+      contradictions.length > 0 &&
+      unresolved.length > 0;
+    if (positiveConflict || unresolvedVerifierConflict) {
       unresolvedCount += 1;
       unresolvedRefs.push(...recordRefs, ...verificationRefs);
       continue;
@@ -1104,7 +1112,7 @@ function evaluateTechnicalCorrectness(
       supportingVerifications.length > 0
     );
 
-    if (contradictions.length > 0 && score !== null) {
+    if (contradictions.length > 0) {
       score = 0;
       supportLevel = maxSupport(
         supportLevel,
@@ -1158,7 +1166,10 @@ function evaluateTechnicalCorrectness(
     const unresolved = currentRequests.filter(
       (request) => request.result?.status === "UNRESOLVED"
     );
-    const refs = uniqueRefs(currentRequests.map((request) =>
+    const refs = uniqueRefs([
+      ...contradictions,
+      ...unresolved
+    ].map((request) =>
       evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
     ));
 
@@ -1256,16 +1267,17 @@ function evaluateRigor(
       record.key.subject,
       "CORRECTNESS"
     );
-    const requests = currentVerificationRequests(
+    const currentRequests = currentVerificationRequests(
       verificationByEvidenceKey.get(evidenceKeyToString(correctnessKey)) ?? [],
       currentContextEpoch
     );
-    const contradictions = requests.filter(
+    const contradictions = currentRequests.filter(
       (request) => request.result?.status === "CONTRADICTED"
     );
-    const unresolved = requests.filter(
+    const unresolved = currentRequests.filter(
       (request) => request.result?.status === "UNRESOLVED"
     );
+    const conflictRequests = [...contradictions, ...unresolved];
 
     let score = baseScore;
     let ambiguous = unresolved.length > 0;
@@ -1282,13 +1294,13 @@ function evaluateRigor(
 
     samples.push({
       score,
-      confidence: Math.min(
+      confidence: minimumNumber([
         record.value.inferenceConfidence,
         correctness?.value.inferenceConfidence ?? 1,
-        ...requests.map(
+        ...conflictRequests.map(
           (request) => request.result?.interpretationConfidence ?? 1
         )
-      ),
+      ]),
       ambiguous,
       refs: uniqueRefs([
         evaluationRef("EVIDENCE_EVENT", record.evidenceEventId),
@@ -1296,7 +1308,7 @@ function evaluateRigor(
         ...(correctness === undefined
           ? []
           : [evaluationRef("EVIDENCE_EVENT", correctness.evidenceEventId)]),
-        ...requests.map((request) =>
+        ...conflictRequests.map((request) =>
           evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
         )
       ])
