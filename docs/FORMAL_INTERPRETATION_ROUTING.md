@@ -92,6 +92,8 @@ The existing `VerificationCoordinator` also performs an atomic active-session ch
 
 Providers cannot manufacture evidence scope. The request target is application-owned, must be `CLAIM/CORRECTNESS`, must match the exact problem, and must be explicitly authorized for the resolved verifier.
 
+Evidence-key equality and verifier-scope authorization use a collision-free structural identity. The repository's legacy delimiter-form evidence string remains unchanged for compatibility, but it is not used as an authority key in this subsystem.
+
 Accepted candidates are translated into the repository's existing `FormalInterpretationProposal` shape and passed to `VerificationCoordinator.requestVerificationFromProposal`. No parallel verification events or evidence model are introduced.
 
 Verifier results are then sent through `VerificationCoordinator.processResult`, which re-executes the deterministic verifier and compares the supplied result against recomputation. Existing `VERIFIED`, `CONTRADICTED`, and `UNRESOLVED` semantics are preserved. Only the existing coordinator decides whether authoritative correctness evidence is committed.
