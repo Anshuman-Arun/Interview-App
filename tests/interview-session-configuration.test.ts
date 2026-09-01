@@ -9,8 +9,17 @@ import {
   type InterviewSessionConfiguration,
   type SessionId
 } from "../packages/domain/src/index.js";
-import { QUANT_TRADER_SCENARIO_VERSION } from "../packages/local-compute/src/index.js";
-import { SessionRuntimeRegistry } from "../packages/interview-engine/src/index.js";
+import {
+  QUANT_RESEARCH_GENERATOR_VERSION,
+  QUANT_RESEARCH_RNG_VERSION,
+  QUANT_RESEARCH_VERSION,
+  QUANT_TRADER_SCENARIO_VERSION,
+  type QuantResearchScenarioDefinition
+} from "../packages/local-compute/src/index.js";
+import {
+  QuantResearchCoordinator,
+  SessionRuntimeRegistry
+} from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
 import {
@@ -80,6 +89,49 @@ describe("generic interview session configuration", () => {
     expect(registry.get(ramseySession).getState().problem?.id).toBe(sixPeopleProblem.id);
     expect(registry.get(divisibilitySession).getState().problem?.id).toBe(divisibility.id);
     expect(registry.get(divisibilitySession).getState().problem?.version).toBe(divisibility.version);
+  });
+
+  it("initializes Quant Research after generic session start and replays the same generated definition", async () => {
+    const sessionId = newSessionId();
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_RESEARCH",
+      scenario: {
+        id: "MODEL_COMPARISON",
+        version: QUANT_RESEARCH_VERSION
+      },
+      interventionPolicy: "BALANCED"
+    });
+    const definition: QuantResearchScenarioDefinition = {
+      family: "MODEL_COMPARISON",
+      version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION,
+      seed: 2468,
+      config: { observationCount: 10, noiseRadius: 2, outlierShift: 30 }
+    };
+
+    expect((await postStart(sessionId, configuration)).status).toBe(200);
+    const writer = registry.get(sessionId);
+    const initialized = await new QuantResearchCoordinator(writer).initialize(definition);
+    expect(initialized.appendedEventCount).toBe(2);
+    expect(writer.getState().configuration).toEqual(configuration);
+    expect(writer.getState().problem?.id).toBe(definition.family);
+    expect(writer.getState().problem?.version).toBe(definition.version);
+
+    const beforeRestart = new QuantResearchCoordinator(writer).replay();
+    await server.stop();
+    await registry.closeAll();
+
+    registry = new SessionRuntimeRegistry(store);
+    sessions = recoveryCoordinator(registry);
+    server = commandServer(sessions);
+    address = await server.start();
+
+    await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+    const reopened = registry.get(sessionId);
+    expect(resolveSessionStateComposition(reopened.getState()).mode).toBe("QUANT_RESEARCH");
+    expect(new QuantResearchCoordinator(reopened).replay()).toEqual(beforeRestart);
   });
 
   it("starts and recovers a Quant Trading identity without routing it through InterviewProblem", async () => {
