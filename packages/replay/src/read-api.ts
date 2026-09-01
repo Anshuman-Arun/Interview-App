@@ -728,7 +728,7 @@ export const ReplayReadEntrySchema = z.object({
   verification: z.object({
     phase: z.enum(["REQUESTED", "ACCEPTED", "DISCARDED"]),
     verificationRequestId: BoundedIdentifierSchema,
-    verifier: z.string().min(1).max(256).optional(),
+    verifier: BoundedIdentifierSchema.optional(),
     evidenceKey: BoundedEvidenceKeySchema.optional(),
     resultStatus: z.enum(["VERIFIED", "CONTRADICTED", "UNRESOLVED"]).optional(),
     interpretationConfidence: z.number().min(0).max(1).optional()
@@ -971,7 +971,7 @@ export const SessionReplayReadModelSchema = z.object({
       "CURRENT_STATE_UNAVAILABLE"
     ]),
     sequence: NonnegativeSafeIntegerSchema.optional(),
-    eventType: z.string().min(1).max(128).optional()
+    eventType: z.string().min(1).max(160).optional()
   }).strict()).max(32)
 }).strict().superRefine((replay, context) => {
   const issueCodes = new Set(replay.issues.map((issue) => issue.code));
