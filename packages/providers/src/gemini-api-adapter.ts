@@ -115,6 +115,7 @@ export class GeminiApiAdapter implements ReasoningProvider {
           } catch (error) {
             if (controller.signal.aborted) return;
             const message = error instanceof Error ? error.message : String(error);
+            // eslint-disable-next-line preserve-caught-error -- Raw provider errors may contain credentials and must not be retained.
             throw new Error(`Gemini API network error: ${redactSecrets(message)}`);
           }
 
@@ -134,6 +135,7 @@ export class GeminiApiAdapter implements ReasoningProvider {
             responseJson = await response.json();
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            // eslint-disable-next-line preserve-caught-error -- Raw provider responses may contain sensitive content and must not be retained.
             throw new Error(`Failed to parse Gemini response as JSON: ${redactSecrets(message)}`);
           }
 
