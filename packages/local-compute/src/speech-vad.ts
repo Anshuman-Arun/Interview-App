@@ -2,9 +2,10 @@ import { z } from "zod";
 import { MAX_SPEECH_FRAME_DURATION_MS, MAX_SPEECH_UTTERANCE_DURATION_MS } from "./speech-protocol.js";
 import { snapshotPcmFrame, type PcmFrameSnapshot } from "./speech-pcm.js";
 
-export interface VadObservation {
-  readonly speechProbability: number;
-}
+export const VadObservationSchema = z.object({
+  speechProbability: z.number().min(0).max(1)
+}).strict();
+export type VadObservation = z.infer<typeof VadObservationSchema>;
 
 export class VadBackendProtocolError extends Error {}
 
