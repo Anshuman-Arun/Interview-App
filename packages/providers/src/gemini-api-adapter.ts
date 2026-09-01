@@ -115,7 +115,7 @@ export class GeminiApiAdapter implements ReasoningProvider {
           } catch (error) {
             if (controller.signal.aborted) return;
             const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`Gemini API network error: ${redactSecrets(message)}`, { cause: error });
+            throw new Error(`Gemini API network error: ${redactSecrets(message)}`);
           }
 
           if (!response.ok) {
@@ -134,7 +134,7 @@ export class GeminiApiAdapter implements ReasoningProvider {
             responseJson = await response.json();
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`Failed to parse Gemini response as JSON: ${redactSecrets(message)}`, { cause: error });
+            throw new Error(`Failed to parse Gemini response as JSON: ${redactSecrets(message)}`);
           }
 
           const proposalCandidate = extractProposalJson(responseJson);
