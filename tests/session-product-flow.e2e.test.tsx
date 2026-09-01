@@ -41,7 +41,7 @@ async function waitForSelector(selector: string): Promise<Element> {
 
 function findButton(label: string): HTMLButtonElement {
   const button = [...document.querySelectorAll("button")].find(
-    (candidate) => candidate.textContent?.trim() === label
+    (candidate) => candidate.textContent.trim() === label
   );
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`Expected button ${label}`);
