@@ -820,6 +820,7 @@ function collectActiveEvidence(
         || value.value !== "CORRECT"
         || value.inferenceConfidence !== verificationLink.result.interpretationConfidence
         || verificationLink.result.status !== "VERIFIED"
+        || verificationLink.result.interpretationConfidence < 1
         || verificationLink.resultSequence >= value.lastUpdatedSequence
       ) {
         return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
