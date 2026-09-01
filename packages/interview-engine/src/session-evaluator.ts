@@ -117,7 +117,6 @@ export function evaluateInterviewSession(
   const disclosureData = collectDisclosureData(state, problem);
 
   const milestoneFacts = evaluateMilestones(
-    state,
     problem,
     activeEvidence,
     verificationByEvidenceKey,
@@ -427,7 +426,6 @@ function collectDisclosureData(
 }
 
 function evaluateMilestones(
-  state: Readonly<SessionState>,
   problem: InterviewProblem,
   activeEvidence: ReadonlyMap<string, EvidenceRecordState>,
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
@@ -646,8 +644,7 @@ function evaluateTechnicalCorrectness(
   const sampleBySubject = new Map<string, {
     score: number;
     sequence: number;
-    confidence: number;
-    verifierBacked: boolean;
+    supportLevel: EvaluationSupportLevel;
     refs: EvaluationEvidenceRef[];
     positive: boolean;
     negative: boolean;
@@ -662,8 +659,7 @@ function evaluateTechnicalCorrectness(
       sampleBySubject.set(subject, {
         score,
         sequence: record.value.lastUpdatedSequence,
-        confidence: record.value.inferenceConfidence,
-        verifierBacked: false,
+        supportLevel: supportFromCount(1, record.value.inferenceConfidence, false),
         refs: uniqueRefs([
           evaluationRef("EVIDENCE_EVENT", record.evidenceEventId),
           ...record.value.evidenceEventIds.map((id) => evaluationRef("EVIDENCE_EVENT", id))
@@ -691,15 +687,17 @@ function evaluateTechnicalCorrectness(
       sampleBySubject.set(subject, {
         score,
         sequence: verificationSequence,
-        confidence: latest.result.interpretationConfidence,
-        verifierBacked: true,
+        supportLevel: supportFromCount(1, latest.result.interpretationConfidence, true),
         refs: [requestRef],
         positive: score === 100,
         negative: score === 0
       });
     } else {
       existing.refs.push(requestRef);
-      existing.verifierBacked = true;
+      existing.supportLevel = maxSupport(
+        existing.supportLevel,
+        supportFromCount(1, latest.result.interpretationConfidence, true)
+      );
     }
 
   }
@@ -711,8 +709,7 @@ function evaluateTechnicalCorrectness(
       sampleBySubject.set(subject, {
         score: 100,
         sequence: milestone.achievedSequence ?? 0,
-        confidence: milestone.evaluation.supportLevel === "WEAK" ? 0.5 : 0.8,
-        verifierBacked: false,
+        supportLevel: milestone.evaluation.supportLevel,
         refs: milestone.evaluation.evidenceRefs,
         positive: true,
         negative: false
@@ -738,9 +735,7 @@ function evaluateTechnicalCorrectness(
   const score = roundScore(
     samples.reduce((sum, sample) => sum + sample.score, 0) / samples.length
   );
-  const minConfidence = Math.min(...samples.map((sample) => sample.confidence));
-  const verifierBacked = samples.some((sample) => sample.verifierBacked);
-  const supportLevel = supportFromCount(samples.length, minConfidence, verifierBacked);
+  const supportLevel = aggregateSampleSupport(samples.map((sample) => sample.supportLevel));
   const refs = uniqueRefs([
     ...samples.flatMap((sample) => sample.refs),
     ...unresolvedRefs
@@ -1365,6 +1360,30 @@ function supportFromCount(
     return minimumConfidence >= 0.5 ? "MODERATE" : "WEAK";
   }
   return minimumConfidence >= 0.8 || verifierBacked ? "STRONG" : "MODERATE";
+}
+
+function aggregateSampleSupport(
+  supportLevels: readonly EvaluationSupportLevel[]
+): EvaluationSupportLevel {
+  if (supportLevels.length === 0) return "INSUFFICIENT";
+
+  const weakest = supportLevels.reduce<EvaluationSupportLevel>(
+    (current, next) => minSupport(current, next),
+    "STRONG"
+  );
+  if (weakest === "INSUFFICIENT" || weakest === "WEAK") return weakest;
+
+  if (supportLevels.length >= 3 && supportLevels.some((level) => level === "STRONG")) {
+    return "STRONG";
+  }
+  return "MODERATE";
+}
+
+function maxSupport(
+  left: EvaluationSupportLevel,
+  right: EvaluationSupportLevel
+): EvaluationSupportLevel {
+  return SUPPORT_RANK[left] >= SUPPORT_RANK[right] ? left : right;
 }
 
 function downgradeSupport(level: EvaluationSupportLevel): EvaluationSupportLevel {
