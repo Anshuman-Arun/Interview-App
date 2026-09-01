@@ -149,6 +149,9 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
     const rawInput: unknown = input;
     if (!isRecord(rawInput)) throw new Error("Moonshine recognition input must be an object");
+    preflightBoundedString(rawInput.requestId, 128, "Moonshine request ID");
+    preflightBoundedString(rawInput.utteranceId, 128, "Moonshine utterance ID");
+    preflightSourceAudioBasis(rawInput.sourceAudioBasis, "Moonshine source audio basis");
     const requestId = SpeechRequestIdSchema.parse(rawInput.requestId);
     const utteranceId = SpeechUtteranceIdSchema.parse(rawInput.utteranceId);
     const sourceAudioBasis = SourceAudioBasisSchema.parse(rawInput.sourceAudioBasis);
@@ -212,6 +215,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
 
   public async cancel(requestId: RequestId): Promise<boolean> {
     if (!this.supportsAbort || this.cancelRuntime === undefined) return false;
+    preflightBoundedString(requestId, 128, "Moonshine cancellation request ID");
     const boundedRequestId = SpeechRequestIdSchema.parse(requestId);
     return (await this.cancelRuntime(boundedRequestId)) === true;
   }
