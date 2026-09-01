@@ -117,6 +117,13 @@ describe("repository architecture boundary checker", () => {
       }
     },
     {
+      name: "vision preprocessing importing whiteboard state",
+      expectedCode: "DEPENDENCY_DIRECTION",
+      files: {
+        "packages/vision/src/bad.ts": "import \"../../whiteboard/src/index.js\";\n"
+      }
+    },
+    {
       name: "an unmapped new project package",
       expectedCode: "UNMAPPED_PACKAGE",
       files: {
