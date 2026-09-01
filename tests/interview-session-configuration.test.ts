@@ -22,6 +22,7 @@ import {
 import {
   QuantResearchCoordinator,
   SessionRuntimeRegistry,
+  replayQuantResearchSessionState,
   TurnCoordinator,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
@@ -150,6 +151,18 @@ describe("generic interview session configuration", () => {
     expect(writer.getState().configuration).toEqual(configuration);
     expect(writer.getState().problem?.id).toBe(definition.family);
     expect(writer.getState().problem?.version).toBe(definition.version);
+
+    const initializedState = writer.getState();
+    const persistedProblem = initializedState.problem;
+    expect(persistedProblem).toBeDefined();
+    if (persistedProblem === undefined) return;
+    expect(() => replayQuantResearchSessionState({
+      ...initializedState,
+      problem: {
+        ...persistedProblem,
+        prompt: "substituted quant research prompt"
+      }
+    })).toThrow(/public prompt/);
 
     const beforeRestart = new QuantResearchCoordinator(writer).replay();
     await server.stop();
