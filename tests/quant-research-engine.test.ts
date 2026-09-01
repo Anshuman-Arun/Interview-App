@@ -274,4 +274,194 @@ describe("deterministic Quant Research interview engine", () => {
     expect(result.overallScore).toBeGreaterThanOrEqual(0);
     expect(result.overallScore).toBeLessThanOrEqual(100);
   });
+
+  it("withholds scoring evidence until the scenario is complete", () => {
+    const engine = new QuantResearchEngine(model);
+    engine.applyAction({ actionId: "live-1", kind: "CHOOSE_OPTION", option: "CONSTANT" });
+
+    const publicState = engine.getState();
+    expect("evidence" in publicState).toBe(false);
+    expect(engine.getResult()).toEqual({
+      status: "IN_PROGRESS",
+      family: "MODEL_COMPARISON",
+      version: QUANT_RESEARCH_VERSION,
+      acceptedActionCount: 1,
+      overallScore: 0,
+      metrics: {},
+      evidence: []
+    });
+
+    engine.applyAction({ actionId: "live-2", kind: "CHOOSE_OPTION", option: "LINEAR" });
+    expect(engine.getResult().status).toBe("COMPLETE");
+    expect(engine.getResult().evidence.length).toBeGreaterThan(0);
+  });
+
+  it("rejects accessor-backed candidate/config values without invoking them", () => {
+    let actionGetterInvoked = false;
+    const accessorAction: Record<string, unknown> = {
+      actionId: "accessor-action",
+      kind: "SUBMIT_NUMERIC_ESTIMATE"
+    };
+    Object.defineProperty(accessorAction, "value", {
+      enumerable: true,
+      get() {
+        actionGetterInvoked = true;
+        return 0;
+      }
+    });
+    expectCode(() => new QuantResearchEngine(sampling).applyAction(accessorAction), "INVALID_ACTION");
+    expect(actionGetterInvoked).toBe(false);
+
+    let configGetterInvoked = false;
+    const accessorConfig: Record<string, unknown> = { ...sampling.config };
+    Object.defineProperty(accessorConfig, "noiseRadius", {
+      enumerable: true,
+      get() {
+        configGetterInvoked = true;
+        return sampling.config.noiseRadius;
+      }
+    });
+    expectCode(() => new QuantResearchEngine({ ...sampling, config: accessorConfig }), "INVALID_DEFINITION");
+    expect(configGetterInvoked).toBe(false);
+  });
+
+  it("rejects sparse and accessor-backed parameter vectors", () => {
+    const sparse = new Array<number>(2);
+    sparse[1] = 0;
+    expectCode(
+      () => new QuantResearchEngine(optimization).applyAction({ actionId: "sparse", kind: "SUBMIT_PARAMETERS", values: sparse }),
+      "INVALID_ACTION"
+    );
+
+    let vectorGetterInvoked = false;
+    const accessorVector = [0, 0];
+    Object.defineProperty(accessorVector, "1", {
+      enumerable: true,
+      get() {
+        vectorGetterInvoked = true;
+        return 0;
+      }
+    });
+    expectCode(
+      () => new QuantResearchEngine(optimization).applyAction({ actionId: "vector-accessor", kind: "SUBMIT_PARAMETERS", values: accessorVector }),
+      "INVALID_ACTION"
+    );
+    expect(vectorGetterInvoked).toBe(false);
+  });
+
+  it("runtime-validates registry entries rather than trusting TypeScript types", () => {
+    expectCode(
+      () => assertUniqueQuantResearchRegistrations([{ family: "BAYESIAN_UPDATING", version: 1 }]),
+      "INVALID_REGISTRY"
+    );
+    expectCode(
+      () => assertUniqueQuantResearchRegistrations([{ family: "BAYESIAN_UPDATING", version: QUANT_RESEARCH_VERSION, extra: true }]),
+      "INVALID_REGISTRY"
+    );
+
+    let versionGetterInvoked = false;
+    const registration: Record<string, unknown> = { family: "BAYESIAN_UPDATING" };
+    Object.defineProperty(registration, "version", {
+      enumerable: true,
+      get() {
+        versionGetterInvoked = true;
+        return QUANT_RESEARCH_VERSION;
+      }
+    });
+    expectCode(() => assertUniqueQuantResearchRegistrations([registration]), "INVALID_REGISTRY");
+    expect(versionGetterInvoked).toBe(false);
+  });
+
+  it("treats symmetric floating-point tolerance boundaries identically", () => {
+    const complete = (firstProbability: number) => {
+      const engine = new QuantResearchEngine(bayesian);
+      engine.applyAction({ actionId: "t1", kind: "SUBMIT_PROBABILITY", value: firstProbability });
+      const successes = visibleNumber(engine.getState(), "successes");
+      const failures = visibleNumber(engine.getState(), "failures");
+      engine.applyAction({
+        actionId: "t2",
+        kind: "SUBMIT_PROBABILITY",
+        value: (bayesian.config.priorAlpha + successes) /
+          (bayesian.config.priorAlpha + bayesian.config.priorBeta + successes + failures)
+      });
+      engine.applyAction({
+        actionId: "t3",
+        kind: "SUBMIT_PROBABILITY",
+        value: (bayesian.config.perturbedPriorAlpha + successes) /
+          (bayesian.config.perturbedPriorAlpha + bayesian.config.perturbedPriorBeta + successes + failures)
+      });
+      return engine.getResult();
+    };
+
+    expect(complete(0.375).metrics.CALIBRATION).toBe(100);
+    expect(complete(0.425).metrics.CALIBRATION).toBe(100);
+  });
+
+  it("does not award perfect sampling adaptation for preserving a very bad estimate", () => {
+    const engine = new QuantResearchEngine(sampling);
+    engine.applyAction({ actionId: "poor-sample", kind: "REQUEST_OBSERVATION", count: 2 });
+    engine.applyAction({ actionId: "poor-before", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 1_000_000 });
+    engine.applyAction({ actionId: "poor-after", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 1_000_000 });
+
+    expect(engine.getResult().metrics.ADAPTATION).toBe(0);
+    expect(engine.getResult().metrics.ROBUSTNESS).toBe(0);
+  });
+
+  it("requires both experiments in the initial comparison and scores against the same feasible frontier", () => {
+    const rejected = new QuantResearchEngine(experimental);
+    const before = rejected.getState();
+    expectCode(
+      () => rejected.applyAction({ actionId: "one-arm", kind: "ALLOCATE_SAMPLE", a: 8, b: 0 }),
+      "ACTION_NOT_ALLOWED"
+    );
+    expect(rejected.getState()).toEqual(before);
+
+    const engine = new QuantResearchEngine(experimental);
+    engine.applyAction({ actionId: "frontier-1", kind: "ALLOCATE_SAMPLE", a: 8, b: 1 });
+    engine.applyAction({ actionId: "frontier-2", kind: "CHOOSE_OPTION", option: "A" });
+    engine.applyAction({ actionId: "frontier-3", kind: "ALLOCATE_SAMPLE", a: 4, b: 0 });
+    const efficiencyEvidence = engine.getResult().evidence.filter((item) => item.category === "SAMPLE_EFFICIENCY");
+    expect(efficiencyEvidence.map((item) => item.score)).toEqual([100, 100]);
+    expect(engine.getResult().metrics.SAMPLE_EFFICIENCY).toBe(100);
+    expect(engine.getResult().metrics.ADAPTATION).toBe(100);
+  });
+
+  it("does not reward a consistently wrong model conclusion", () => {
+    const engine = new QuantResearchEngine(model);
+    engine.applyAction({ actionId: "wrong-model-1", kind: "CHOOSE_OPTION", option: "CONSTANT" });
+    engine.applyAction({ actionId: "wrong-model-2", kind: "CHOOSE_OPTION", option: "CONSTANT" });
+    expect(engine.getResult().metrics.NUMERICAL_CORRECTNESS).toBe(0);
+    expect(engine.getResult().metrics.ROBUSTNESS).toBe(0);
+    expect(engine.getResult().metrics.CONSISTENCY).toBe(0);
+  });
+
+  it("uses category-level metrics for the composite and never grants false optimization adaptation", () => {
+    const engine = new QuantResearchEngine(optimization);
+    engine.applyAction({ actionId: "zero-base", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
+    engine.applyAction({ actionId: "zero-perturbed", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
+    expect(engine.getResult().metrics).toMatchObject({
+      CONSTRAINT_DISCIPLINE: 100,
+      OBJECTIVE_QUALITY: 0,
+      ADAPTATION: 0
+    });
+    expect(engine.getResult().overallScore).toBe(33);
+  });
+
+  it("distinguishes malformed replay input from an oversized replay", () => {
+    expectCode(() => replayQuantResearch(bayesian, "not-an-array" as unknown as readonly unknown[]), "INVALID_REPLAY");
+    expectCode(() => replayQuantResearch(bayesian, Array.from({ length: 65 }, () => null)), "RESOURCE_LIMIT_EXCEEDED");
+  });
+
+  it("returns detached final results as well as detached public state", () => {
+    const engine = new QuantResearchEngine(model);
+    engine.applyAction({ actionId: "detach-1", kind: "CHOOSE_OPTION", option: "LINEAR" });
+    engine.applyAction({ actionId: "detach-2", kind: "CHOOSE_OPTION", option: "LINEAR" });
+    const baseline = engine.getResult();
+    const mutated = engine.getResult();
+    (mutated.evidence as QuantResearchError[]).splice(0, mutated.evidence.length);
+    const metrics = mutated.metrics as Record<string, number>;
+    metrics.ROBUSTNESS = -999;
+    expect(engine.getResult()).toEqual(baseline);
+  });
+
 });
