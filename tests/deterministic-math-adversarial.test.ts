@@ -818,18 +818,16 @@ describe("adversarial deterministic math verification", () => {
   });
 
   it("fails closed on runtime statement and confidence type violations", async () => {
-    const verifier = new ModularArithmeticVerifier() as {
-      verify(statement: unknown, interpretationConfidence: unknown): Promise<VerificationResult>;
-    };
+    const verifier = new ModularArithmeticVerifier();
 
     for (const statement of [null, undefined, 17, {}, []]) {
-      const result = await verifier.verify(statement, 1);
+      const result = await verifier.verify(statement as string, 1);
       expect(result.status).toBe("UNRESOLVED");
       expect(result.reason).toContain("MALFORMED_INTERPRETATION");
     }
 
     for (const confidence of ["1", null, {}, 1n]) {
-      const result = await verifier.verify("{}", confidence);
+      const result = await verifier.verify("{}", confidence as number);
       expect(result.status).toBe("UNRESOLVED");
       expect(result.reason).toContain("INVALID_INTERPRETATION_CONFIDENCE");
     }
