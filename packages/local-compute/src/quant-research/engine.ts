@@ -299,6 +299,42 @@ function bestObjective(budget: number, maxX: number, maxY: number, coefficientX:
   return best;
 }
 
+function optimalOptimizationPoints(
+  budget: number,
+  maxX: number,
+  maxY: number,
+  coefficientX: number,
+  coefficientY: number,
+  penalty: number
+): readonly Readonly<{ x: number; y: number }>[] {
+  const best = bestObjective(budget, maxX, maxY, coefficientX, coefficientY, penalty);
+  const points: Array<Readonly<{ x: number; y: number }>> = [];
+  for (let x = 0; x <= maxX; x += 1) {
+    for (let y = 0; y <= maxY; y += 1) {
+      if (2 * x + 3 * y > budget) continue;
+      if (objective(x, y, coefficientX, coefficientY, penalty) === best) points.push({ x, y });
+    }
+  }
+  if (points.length === 0) throw new Error("Optimization optimum set is empty");
+  return points;
+}
+
+function hasSharedPair(
+  left: readonly Readonly<{ a: number; b: number }>[],
+  right: readonly Readonly<{ a: number; b: number }>[]
+): boolean {
+  const keys = new Set(left.map((item) => `${String(item.a)}:${String(item.b)}`));
+  return right.some((item) => keys.has(`${String(item.a)}:${String(item.b)}`));
+}
+
+function hasSharedOptimizationPoint(
+  left: readonly Readonly<{ x: number; y: number }>[],
+  right: readonly Readonly<{ x: number; y: number }>[]
+): boolean {
+  const keys = new Set(left.map((item) => `${String(item.x)}:${String(item.y)}`));
+  return right.some((item) => keys.has(`${String(item.x)}:${String(item.y)}`));
+}
+
 function objective(x: number, y: number, coefficientX: number, coefficientY: number, penalty: number): number {
   return coefficientX * x + coefficientY * y - penalty * x * y;
 }
@@ -727,6 +763,92 @@ function resultFor(state: InternalState): QuantResearchResult {
   };
 }
 
+function validateGeneratedScenario(state: InternalState): void {
+  switch (state.family) {
+    case "BAYESIAN_UPDATING": {
+      const prior = rational(state.config.priorAlpha, state.config.priorAlpha + state.config.priorBeta);
+      const posterior = rational(
+        state.config.priorAlpha + state.successes,
+        state.config.priorAlpha + state.config.priorBeta + state.observations.length
+      );
+      const perturbedPosterior = rational(
+        state.config.perturbedPriorAlpha + state.successes,
+        state.config.perturbedPriorAlpha + state.config.perturbedPriorBeta + state.observations.length
+      );
+      if (compareRational(prior, posterior) === 0) {
+        throw new QuantResearchError("INVALID_DEFINITION", "Generated Bayesian observations produce a vacuous posterior update");
+      }
+      const perturbationDistance = Math.abs(rationalToNumber(posterior) - rationalToNumber(perturbedPosterior));
+      if (distanceWithin(perturbationDistance, 0.05)) {
+        throw new QuantResearchError("INVALID_DEFINITION", "Generated Bayesian prior perturbation is not meaningfully score-separable");
+      }
+      break;
+    }
+    case "SAMPLING_ESTIMATION": {
+      const reachable = state.sampleOrder
+        .slice(0, state.config.maxSamples)
+        .map((index) => state.hiddenPopulation[index])
+        .filter((value): value is number => value !== undefined);
+      if (reachable.length !== state.config.maxSamples || new Set(reachable).size < 2) {
+        throw new QuantResearchError("INVALID_DEFINITION", "Generated sampling prefix lacks meaningful observation variation");
+      }
+      break;
+    }
+    case "EXPERIMENTAL_ALLOCATION": {
+      const base = experimentalOptimum(
+        state.config.costA,
+        state.config.costB,
+        state.config.noiseA,
+        state.config.noiseB,
+        state.config.totalBudget
+      );
+      const perturbed = experimentalOptimum(
+        state.config.perturbedCostA,
+        state.config.perturbedCostB,
+        state.config.noiseA,
+        state.config.noiseB,
+        state.config.totalBudget
+      );
+      if (hasSharedPair(base.allocations, perturbed.allocations)) {
+        throw new QuantResearchError("INVALID_DEFINITION", "Experiment cost perturbation leaves an optimal allocation unchanged");
+      }
+      const minA = Math.min(...state.sequenceA);
+      const maxA = Math.max(...state.sequenceA);
+      const minB = Math.min(...state.sequenceB);
+      const maxB = Math.max(...state.sequenceB);
+      const orderingIsUnambiguous = state.hiddenMeanA > state.hiddenMeanB ? minA > maxB : minB > maxA;
+      if (!orderingIsUnambiguous) {
+        throw new Error("Experimental observations can contradict the latent mean ordering");
+      }
+      break;
+    }
+    case "MODEL_COMPARISON":
+      break;
+    case "CONSTRAINED_OPTIMIZATION": {
+      const base = optimalOptimizationPoints(
+        state.config.budget,
+        state.config.maxX,
+        state.config.maxY,
+        state.coefficientX,
+        state.coefficientY,
+        state.basePenalty
+      );
+      const perturbed = optimalOptimizationPoints(
+        state.config.perturbedBudget,
+        state.config.maxX,
+        state.config.maxY,
+        state.coefficientX,
+        state.coefficientY,
+        state.config.perturbedPenalty
+      );
+      if (hasSharedOptimizationPoint(base, perturbed)) {
+        throw new QuantResearchError("INVALID_DEFINITION", "Optimization perturbation leaves an exact optimum unchanged");
+      }
+      break;
+    }
+  }
+}
+
 function assertStateInvariants(state: InternalState): void {
   if ((state.status === "COMPLETE") !== (state.stage === "COMPLETE")) throw new Error("Scenario completion invariant violated");
   if (state.acceptedActions.length > MAX_ACTIONS) throw new Error("Action limit invariant violated");
@@ -855,6 +977,7 @@ export class QuantResearchEngine {
   public constructor(definitionInput: unknown) {
     const definition = parseQuantResearchDefinition(definitionInput);
     this.state = initialize(definition);
+    validateGeneratedScenario(this.state);
     assertStateInvariants(this.state);
   }
 
