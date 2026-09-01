@@ -130,6 +130,14 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
+    historyAbortRef.current?.abort();
+    historyAbortRef.current = null;
+    setHistoryRead(null);
+    setHistoryLoading(false);
+    setHistoryError(null);
+  }, [session.baseUrl]);
+
+  useEffect(() => {
     return () => {
       historyAbortRef.current?.abort();
       historyAbortRef.current = null;
