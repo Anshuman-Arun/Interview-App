@@ -1335,6 +1335,55 @@ describe("replay/history projections", () => {
       expect(String(error)).toContain("Invalid replay bounds");
       expect(String(error)).not.toContain("PRIVATE_REPLAY_BOUNDS_MARKER");
     }
+
+    const throwingTimelineOptions = new Proxy({}, {
+      get: (_target, property): unknown => {
+        if (property === "bounds") {
+          throw new Error("PRIVATE_TIMELINE_OPTIONS_MARKER");
+        }
+        return undefined;
+      }
+    });
+    try {
+      projectReplayTimeline(history, throwingTimelineOptions);
+      throw new Error("Expected throwing timeline options rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RangeError);
+      expect(String(error)).not.toContain("PRIVATE_TIMELINE_OPTIONS_MARKER");
+    }
+
+    const throwingEvaluationOptions = new Proxy({}, {
+      get: (_target, property): unknown => {
+        if (property === "evaluation") {
+          throw new Error("PRIVATE_EVALUATION_OPTIONS_MARKER");
+        }
+        return undefined;
+      }
+    });
+    try {
+      projectSessionHistory(history, throwingEvaluationOptions);
+      throw new Error("Expected throwing evaluation options rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ReplayProjectionError);
+      expect(error).toMatchObject({ code: "EVALUATION_MISMATCH" });
+      expect(String(error)).not.toContain("PRIVATE_EVALUATION_OPTIONS_MARKER");
+    }
+
+    const throwingLongitudinalOptions = new Proxy({}, {
+      get: (_target, property): unknown => {
+        if (property === "bounds") {
+          throw new Error("PRIVATE_LONGITUDINAL_OPTIONS_MARKER");
+        }
+        return undefined;
+      }
+    });
+    try {
+      projectLongitudinalHistory([], throwingLongitudinalOptions);
+      throw new Error("Expected throwing longitudinal options rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RangeError);
+      expect(String(error)).not.toContain("PRIVATE_LONGITUDINAL_OPTIONS_MARKER");
+    }
   });
 
   it("rejects event sources that cannot author the claimed authoritative transition", async () => {

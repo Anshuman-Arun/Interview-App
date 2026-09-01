@@ -426,7 +426,12 @@ export function projectLongitudinalHistory(
   sessionSummaries: readonly unknown[],
   options: LongitudinalHistoryOptions = {}
 ): LongitudinalHistoryProjection {
-  const bounds = resolveReplayBounds(options.bounds);
+  let bounds: ReplayBounds;
+  try {
+    bounds = resolveReplayBounds(options.bounds);
+  } catch {
+    throw new RangeError("Invalid replay bounds");
+  }
   if (!Array.isArray(sessionSummaries)) {
     throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
   }

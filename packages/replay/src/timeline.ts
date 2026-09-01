@@ -512,7 +512,12 @@ export function projectReplayTimeline(
   rawEvents: readonly unknown[],
   options: ReplayTimelineOptions = {}
 ): ReplayTimelineProjection {
-  const bounds = resolveReplayBounds(options.bounds);
+  let bounds: ReplayBounds;
+  try {
+    bounds = resolveReplayBounds(options.bounds);
+  } catch {
+    throw new RangeError("Invalid replay bounds");
+  }
   const normalized = normalizeReplayEvents(rawEvents, bounds);
   return projectReplayTimelineFromNormalized(normalized, bounds);
 }

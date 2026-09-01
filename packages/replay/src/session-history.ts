@@ -672,7 +672,18 @@ export function projectSessionHistory(
   rawEvents: readonly unknown[],
   options: SessionHistoryOptions = {}
 ): SessionHistoryProjection {
-  const bounds = resolveReplayBounds(options.bounds);
+  let bounds: ReplayBounds;
+  let evaluationInput: unknown;
+  try {
+    bounds = resolveReplayBounds(options.bounds);
+  } catch {
+    throw new RangeError("Invalid replay bounds");
+  }
+  try {
+    evaluationInput = options.evaluation;
+  } catch {
+    throw new ReplayProjectionError("EVALUATION_MISMATCH");
+  }
   const normalized = normalizeReplayEvents(rawEvents, bounds);
   const semanticItems = normalized.events.filter((item) =>
     normalized.firstUnknownSequence === undefined
@@ -755,7 +766,7 @@ export function projectSessionHistory(
   };
   const verificationSummary = verificationSummaryFrom(semanticItems);
   const highestDisclosureUsed = state === undefined ? undefined : disclosedHighest(state);
-  const evaluation = validateEvaluation(options.evaluation, normalized.sessionId, problem, state);
+  const evaluation = validateEvaluation(evaluationInput, normalized.sessionId, problem, state);
 
   return {
     sessionId: normalized.sessionId,
