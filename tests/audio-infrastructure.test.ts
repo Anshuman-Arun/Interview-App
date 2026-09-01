@@ -2353,6 +2353,49 @@ describe("microphone capture lifecycle", () => {
     expect(context.closeCount).toBe(1);
   });
 
+  it("registers cleanup before browser teardown can reentrantly start replacement capture", async () => {
+    const setup = fixture();
+    const capture = new BrowserMicrophoneCapture(setup.environment);
+    await capture.start({ onFrame: () => undefined });
+
+    const firstContext = setup.contexts[0];
+    const firstTrack = setup.media.streams[0]?.track;
+    if (firstContext === undefined || firstTrack === undefined) {
+      throw new Error("Initial capture resources were not created");
+    }
+
+    let releaseClose: (() => void) | undefined;
+    firstContext.closeGate = new Promise<void>((resolve) => {
+      releaseClose = resolve;
+    });
+
+    const originalStop = firstTrack.stop.bind(firstTrack);
+    let replacementStart: Promise<void> | undefined;
+    firstTrack.stop = () => {
+      originalStop();
+      if (replacementStart === undefined) {
+        replacementStart = capture.start({ onFrame: () => undefined });
+      }
+    };
+
+    const stopping = capture.stop();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstContext.closeCount).toBe(1);
+    expect(setup.media.streams).toHaveLength(1);
+
+    if (releaseClose === undefined) throw new Error("Deferred close resolver was not installed");
+    releaseClose();
+    await stopping;
+    if (replacementStart === undefined) throw new Error("Reentrant replacement start was not requested");
+    await replacementStart;
+
+    expect(setup.media.streams).toHaveLength(2);
+    expect(capture.state).toBe("CAPTURING");
+    await capture.dispose();
+  });
+
   it("does not let stop resolve while post-permission setup still owns resources", async () => {
     const media = new FakeMediaDevices();
     const context = new FakeCaptureContext();

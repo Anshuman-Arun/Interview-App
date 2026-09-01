@@ -251,7 +251,7 @@ export class BrowserMicrophoneCapture {
       this.throwIfOperationSuperseded(operation);
       const contextReady = await ensureCaptureContextRunning(context, startAbort.signal);
       if (!contextReady || !this.isCurrent(operation)) {
-        await this.trackCleanup(releaseCaptureParts(tracks, undefined, context, undefined, undefined));
+        await this.trackCleanup(() => releaseCaptureParts(tracks, undefined, context, undefined, undefined));
         return;
       }
 
@@ -313,7 +313,7 @@ export class BrowserMicrophoneCapture {
       }
 
       if (!this.isCurrent(operation)) {
-        await this.trackCleanup(releaseCaptureParts(tracks, trackEnded, context, source, processor));
+        await this.trackCleanup(() => releaseCaptureParts(tracks, trackEnded, context, source, processor));
         return;
       }
 
@@ -386,7 +386,7 @@ export class BrowserMicrophoneCapture {
       if (stream !== undefined) {
         stopStreamAudioTracks(stream, tracks);
       }
-      await this.trackCleanup(releaseCaptureParts(tracks, trackEnded, context, source, processor));
+      await this.trackCleanup(() => releaseCaptureParts(tracks, trackEnded, context, source, processor));
       if (!this.isCurrent(operation)) return;
 
       const mapped = mapCaptureError(error);
@@ -763,10 +763,32 @@ export class BrowserMicrophoneCapture {
     );
   }
 
-  private trackCleanup(cleanup: Promise<void>): Promise<void> {
+  private trackCleanup(cleanup: () => Promise<void>): Promise<void> {
     const previous = this.cleanupTail.catch(() => undefined);
-    const guardedCleanup = cleanup.catch(() => undefined);
-    this.cleanupTail = Promise.all([previous, guardedCleanup]).then(() => undefined);
+
+    let releaseCleanup: (() => void) | undefined;
+    const current = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+
+    // Publish this cleanup before invoking browser-owned teardown. Reentrant
+    // lifecycle calls from track.stop()/disconnect()/close() must observe it.
+    this.cleanupTail = Promise.all([previous, current]).then(() => undefined);
+
+    let cleanupPromise: Promise<void>;
+    try {
+      cleanupPromise = cleanup();
+    } catch {
+      releaseCleanup?.();
+      return this.cleanupTail;
+    }
+
+    void cleanupPromise
+      .catch(() => undefined)
+      .finally(() => {
+        releaseCleanup?.();
+      });
+
     return this.cleanupTail;
   }
 
