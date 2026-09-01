@@ -249,10 +249,9 @@ export class RealTldrawEditorBridge implements TldrawEditor {
         if (source !== "user") return next;
 
         const previousMeta = metadata(previous.meta);
-        const previousLayer = previousMeta["layer"];
+        const previousLayer = effectiveNativeLayer(previous);
         if (
-          previousLayer !== undefined
-          && previousLayer !== STUDENT_LAYER
+          previousLayer !== STUDENT_LAYER
           && this.protectedMutationDepth === 0
         ) {
           return previous;
@@ -284,8 +283,8 @@ export class RealTldrawEditorBridge implements TldrawEditor {
       cleanups.push(
         this.nativeEditor.sideEffects.registerBeforeDeleteHandler("shape", (shape, source) => {
           if (source !== "user" || this.protectedMutationDepth > 0) return;
-          const layer = metadata(shape.meta)["layer"];
-          if (layer !== undefined && layer !== STUDENT_LAYER) return false;
+          const layer = effectiveNativeLayer(shape);
+          if (layer !== STUDENT_LAYER) return false;
           this.options.assertStudentMutationCanAdvance?.();
           return;
         })
