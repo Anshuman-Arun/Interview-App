@@ -55,7 +55,7 @@ const QuantResearchFamilySchema = z.enum([
 ]);
 const QuantResearchScoreSchema = z.number().int().min(0).max(100);
 const QuantResearchActionIdSchema = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/u);
-const QuantResearchFiniteInputSchema = z.number().finite().min(-1_000_000).max(1_000_000);
+const QuantResearchFiniteInputSchema = z.number().min(-1_000_000).max(1_000_000);
 const QuantResearchRationalSchema = z.object({
   numerator: SafeIntegerSchema,
   denominator: PositiveSafeIntegerSchema
@@ -152,7 +152,7 @@ export const QuantResearchActionEventSchema = z.discriminatedUnion("kind", [
   z.object({
     actionId: QuantResearchActionIdSchema,
     kind: z.literal("SUBMIT_PROBABILITY"),
-    value: z.number().finite().min(0).max(1)
+    value: z.number().min(0).max(1)
   }).strict(),
   z.object({
     actionId: QuantResearchActionIdSchema,
