@@ -94,7 +94,7 @@ export class BrowserSessionReadClient {
     signal?: AbortSignal
   ): Promise<SessionEvaluationReadResponse> {
     const result = await this.read(
-      `/v1/read/sessions/${encodeURIComponent(sessionId)}/evaluation`,
+      `/v1/read/sessions/${encodeReadSessionId(sessionId)}/evaluation`,
       (value) => SessionEvaluationReadResponseSchema.parse(value),
       signal
     );
@@ -109,7 +109,7 @@ export class BrowserSessionReadClient {
     signal?: AbortSignal
   ): Promise<SessionReplayReadResponse> {
     const result = await this.read(
-      `/v1/read/sessions/${encodeURIComponent(sessionId)}/replay`,
+      `/v1/read/sessions/${encodeReadSessionId(sessionId)}/replay`,
       (value) => SessionReplayReadResponseSchema.parse(value),
       signal
     );
@@ -302,4 +302,23 @@ async function readBoundedResponseText(
   } finally {
     reader.releaseLock();
   }
+}
+
+
+function encodeReadSessionId(sessionId: SessionId): string {
+  if (
+    sessionId.length === 0
+    || sessionId.length > 512
+    || sessionId === "."
+    || sessionId === ".."
+  ) {
+    throw new Error("Session ID cannot be addressed by the bounded read transport");
+  }
+  for (const character of sessionId) {
+    const code = character.charCodeAt(0);
+    if (character === "/" || character === "\\" || code <= 31 || code === 127) {
+      throw new Error("Session ID cannot be addressed by the bounded read transport");
+    }
+  }
+  return encodeURIComponent(sessionId);
 }
