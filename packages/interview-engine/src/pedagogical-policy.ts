@@ -758,14 +758,28 @@ function findCompletedApproaches(
   evidence: readonly ActiveEvidenceSignal[],
   graph: GraphContext
 ): readonly string[] {
-  const completed = completedMilestoneIds(evidence);
+  const completedMilestones = completedMilestoneIds(evidence);
+  const directlyCompletedApproaches = new Set(
+    evidence
+      .filter(
+        (signal) =>
+          signal.key.subject.kind === "APPROACH"
+          && signal.key.dimension === "PROGRESS"
+          && signal.value.value === "COMPLETE"
+      )
+      .map((signal) => signal.key.subject.kind === "APPROACH" ? signal.key.subject.approachId : "")
+      .filter((id) => id.length > 0)
+  );
+
   return graph.problem.interviewer.reasoningGraph.approaches
     .map((approach) => approach.id)
     .filter((approachId) => {
+      if (directlyCompletedApproaches.has(approachId)) return true;
       const requiredMilestones = graph.problem.interviewer.reasoningGraph.milestones
         .filter((milestone) => milestone.approachIds.includes(approachId))
         .map((milestone) => milestone.id);
-      return requiredMilestones.length > 0 && requiredMilestones.every((id) => completed.has(id));
+      return requiredMilestones.length > 0
+        && requiredMilestones.every((id) => completedMilestones.has(id));
     });
 }
 
@@ -999,15 +1013,14 @@ function targetDisclosureAuthorization(
   target: PolicyTarget,
   level: DisclosureLevel,
   graph: GraphContext,
-  completed: ReadonlySet<string>,
-  alreadyDisclosed: ReadonlySet<DisclosureId>
+  completed: ReadonlySet<string>
 ): readonly DisclosureId[] {
-  const allowed = new Set<DisclosureId>(alreadyDisclosed);
-  if (level === 0 || target.kind !== "MILESTONE") return [...allowed].sort();
+  const allowed = new Set<DisclosureId>();
+  if (level === 0 || target.kind !== "MILESTONE") return [];
 
   const milestone = graph.problem.interviewer.reasoningGraph.milestones.find((item) => item.id === target.id);
   if (milestone === undefined || !milestoneReady(milestone.id, graph, completed)) {
-    return [...allowed].sort();
+    return [];
   }
 
   const byId = disclosureMap(graph);
@@ -1302,8 +1315,7 @@ export function decidePedagogicalPolicy(
     classification.target,
     plan.requestedDisclosure,
     graph,
-    completeMilestones,
-    ledgerResult.value
+    completeMilestones
   );
 
   const request = RealizationRequestSchema.parse({
