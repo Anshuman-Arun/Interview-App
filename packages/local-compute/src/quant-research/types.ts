@@ -293,7 +293,7 @@ function parseBayesianConfig(value: unknown): BayesianUpdatingConfig {
 function parseSamplingConfig(value: unknown): SamplingEstimationConfig {
   const record = asRecord(value, "Sampling config", failDefinition);
   assertExactKeys(record, ["maxSamples", "populationSize", "centerMin", "centerMax", "noiseRadius", "outlierShift"], "Sampling config", failDefinition);
-  const maxSamples = boundedInteger(record.maxSamples, 2, 32, "maxSamples", failDefinition);
+  const maxSamples = boundedInteger(record.maxSamples, 3, 32, "maxSamples", failDefinition);
   const populationSize = boundedInteger(record.populationSize, 8, 128, "populationSize", failDefinition);
   if (maxSamples > populationSize) failDefinition("maxSamples cannot exceed populationSize");
   const centerMin = boundedInteger(record.centerMin, -100, 100, "centerMin", failDefinition);
@@ -313,6 +313,18 @@ function parseSamplingConfig(value: unknown): SamplingEstimationConfig {
   };
 }
 
+function hasMultipleTwoArmAllocations(costA: number, costB: number, budget: number): boolean {
+  let feasibleCount = 0;
+  for (let a = 1; a <= budget; a += 1) {
+    for (let b = 1; b <= budget; b += 1) {
+      if (a * costA + b * costB > budget) continue;
+      feasibleCount += 1;
+      if (feasibleCount >= 2) return true;
+    }
+  }
+  return false;
+}
+
 function parseExperimentalConfig(value: unknown): ExperimentalAllocationConfig {
   const record = asRecord(value, "Experimental allocation config", failDefinition);
   assertExactKeys(record, ["totalBudget", "costA", "costB", "perturbedCostA", "perturbedCostB", "noiseA", "noiseB"], "Experimental allocation config", failDefinition);
@@ -321,8 +333,12 @@ function parseExperimentalConfig(value: unknown): ExperimentalAllocationConfig {
   const costB = boundedInteger(record.costB, 1, 20, "costB", failDefinition);
   const perturbedCostA = boundedInteger(record.perturbedCostA, 1, 20, "perturbedCostA", failDefinition);
   const perturbedCostB = boundedInteger(record.perturbedCostB, 1, 20, "perturbedCostB", failDefinition);
-  if (costA + costB > totalBudget) failDefinition("Initial budget must allow at least one sample from each experiment");
-  if (perturbedCostA + perturbedCostB > totalBudget) failDefinition("Perturbed budget must allow at least one sample from each experiment");
+  if (!hasMultipleTwoArmAllocations(costA, costB, totalBudget)) {
+    failDefinition("Initial experiment budget must permit multiple two-arm allocations");
+  }
+  if (!hasMultipleTwoArmAllocations(perturbedCostA, perturbedCostB, totalBudget)) {
+    failDefinition("Perturbed experiment budget must permit multiple two-arm allocations");
+  }
   if (costA === perturbedCostA && costB === perturbedCostB) failDefinition("Perturbed experiment costs must differ from the initial costs");
   return {
     totalBudget,
