@@ -3131,6 +3131,10 @@ describe("queued browser audio playback", () => {
     setup.elements[0]?.emit("ended");
     expect(await first.result).toEqual({ id: "a", status: "COMPLETED" });
     expect(setup.playback.snapshot().currentId).toBe("b");
+    await waitForTestCondition(
+      () => setup.elements[1] !== undefined,
+      "second queued playback element setup"
+    );
 
     setup.elements[1]?.emit("playing");
     expect(await second.started).toBe(true);
@@ -3452,7 +3456,7 @@ describe("queued browser audio playback", () => {
     expect(cancelled).toBe(0);
   });
 
-  it("rejects element reuse while the previous setup coroutine is still unwinding", async () => {
+  it("serializes element reuse until the previous setup coroutine has unwound", async () => {
     const element = new FakeAudioElement();
     element.play = () => new Promise<void>(() => undefined);
     const playback = new BrowserAudioPlayback(() => element);
@@ -3465,16 +3469,20 @@ describe("queued browser audio playback", () => {
     element.emit("ended");
     expect((await first.result).status).toBe("COMPLETED");
 
-    expect(await second.started).toBe(false);
-    const secondOutcome = await second.result;
-    expect(secondOutcome.status).toBe("FAILED");
-    expect(secondOutcome.error?.code).toBe("PLAYBACK_FAILED");
+    // Logical ownership advances immediately, but the reused browser element
+    // is not touched until the first setup coroutine has completed its cleanup.
+    expect(playback.snapshot().currentId).toBe("second");
+    await waitForTestCondition(
+      () => element.src === "/second.wav",
+      "serialized reused-element setup"
+    );
 
-    await Promise.resolve();
-    await Promise.resolve();
+    element.emit("playing");
+    expect(await second.started).toBe(true);
+    element.emit("ended");
+    expect((await second.result).status).toBe("COMPLETED");
     expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
   });
-
   it("does not start the next item reentrantly before active element teardown finishes", async () => {
     const elements: FakeAudioElement[] = [];
     const playback = new BrowserAudioPlayback(() => {
@@ -3496,6 +3504,10 @@ describe("queued browser audio playback", () => {
     elements[0]?.emit("ended");
     expect((await first.result).status).toBe("COMPLETED");
 
+    await waitForTestCondition(
+      () => elements.length === 2,
+      "reentrant next-item setup after teardown"
+    );
     expect(elements).toHaveLength(2);
     if (second === undefined) throw new Error("Reentrant enqueue did not run");
     second.cancel();
@@ -3528,6 +3540,10 @@ describe("queued browser audio playback", () => {
     setup.elements[0]?.emit("playing");
     setup.elements[0]?.emit("ended");
     await blocker.result;
+    await waitForTestCondition(
+      () => setup.elements[1]?.src === "/original.wav",
+      "queued snapshot playback setup"
+    );
 
     expect(setup.elements[1]?.src).toBe("/original.wav");
     setup.elements[1]?.emit("playing");
@@ -3549,6 +3565,10 @@ describe("queued browser audio playback", () => {
     first.cancel();
 
     expect(setup.playback.snapshot().currentId).toBe("same");
+    await waitForTestCondition(
+      () => setup.elements[1] !== undefined,
+      "same-id replacement playback setup"
+    );
     setup.elements[1]?.emit("playing");
     expect(await second.started).toBe(true);
     second.cancel();
