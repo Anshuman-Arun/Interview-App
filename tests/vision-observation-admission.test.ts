@@ -683,8 +683,7 @@ describe("VisionRequestManager cancellation, idempotency, and resource bounds", 
     const req = request();
     const nested = request({ sessionId: req.sessionId });
     let nestedRegistration: ReturnType<VisionRequestManager["register"]> | undefined;
-    let manager!: VisionRequestManager;
-    manager = new VisionRequestManager({
+    const manager = new VisionRequestManager({
       maxInFlight: 1,
       authority: (candidate) => {
         if (candidate.requestId === req.requestId) {
@@ -706,8 +705,7 @@ describe("VisionRequestManager cancellation, idempotency, and resource bounds", 
 
   it("fails closed when authority shuts the manager down during registration", () => {
     const req = request();
-    let manager!: VisionRequestManager;
-    manager = new VisionRequestManager({
+    const manager = new VisionRequestManager({
       authority: (candidate) => {
         manager.shutdown();
         return authorityFor(candidate);
