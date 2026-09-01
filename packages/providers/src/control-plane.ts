@@ -1075,9 +1075,10 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
 
 // eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of private-brand validation.
 const isRegisteredProviderAdapterFactory = RegisteredProviderAdapterFactory.isRegistered;
-// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of factory ownership validation.
+/* eslint-disable @typescript-eslint/unbound-method -- Capture prevents monkey-patching of factory ownership validation. */
 const registeredProviderAdapterFactoryBelongsTo =
   RegisteredProviderAdapterFactory.belongsToProvider;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 function normalizeFactory(
   factory: unknown,
