@@ -43,8 +43,10 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
   private readonly cancelled = new Set<RequestId>();
   private readonly maxCancelledIds = 1_024;
 
+  private readonly responseFactory: (input: RecognizerAudioInput) => unknown;
+
   public constructor(
-    private readonly responseFactory: (input: RecognizerAudioInput) => unknown = (input) => ({
+    responseFactory: (input: RecognizerAudioInput) => unknown = (input) => ({
       requestId: input.requestId,
       utteranceId: input.utteranceId,
       text: "deterministic transcript",
@@ -52,7 +54,10 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
       model: { name: "deterministic-fake", version: "1" },
       sourceAudioBasis: input.sourceAudioBasis
     })
-  ) {}
+  ) {
+    if (typeof responseFactory !== "function") throw new Error("Fake recognizer response factory must be a function");
+    this.responseFactory = responseFactory;
+  }
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
     if (signal.aborted || this.cancelled.has(input.requestId)) throw abortError();
@@ -62,7 +67,8 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
-    this.cancelled.add(requestId);
+    const boundedRequestId = SpeechRequestIdSchema.parse(requestId);
+    this.cancelled.add(boundedRequestId);
     while (this.cancelled.size > this.maxCancelledIds) {
       const oldest = this.cancelled.values().next().value;
       if (oldest === undefined) break;
@@ -111,43 +117,52 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   private readonly cancelRuntime: MoonshineRuntime["cancel"];
 
   public constructor(options: MoonshineRecognizerOptions) {
-    this.modelPath = validateLocalPath(options.modelPath, "Moonshine model path");
-    this.configPath = options.configPath === undefined
+    const rawOptions: unknown = options;
+    if (!isRecord(rawOptions)) throw new Error("Moonshine recognizer options must be an object");
+    const rawRuntime = rawOptions.runtime;
+    if (!isRecord(rawRuntime)) throw new Error("Moonshine runtime must be an object");
+
+    this.modelPath = validateLocalPath(rawOptions.modelPath, "Moonshine model path");
+    this.configPath = rawOptions.configPath === undefined
       ? undefined
-      : validateLocalPath(options.configPath, "Moonshine config path");
-    validateRuntimeIdentity(options.runtime.runtimeVersion, "Moonshine runtime version");
-    this.supportsAbort = validateBoolean(options.runtime.supportsAbort, "Moonshine runtime abort capability");
-    this.transcribeRuntime = bindMoonshineTranscribe(
-      (options.runtime as unknown as { transcribe?: unknown }).transcribe,
-      options.runtime
-    );
-    this.cancelRuntime = bindMoonshineCancel(
-      (options.runtime as unknown as { cancel?: unknown }).cancel,
-      options.runtime
-    );
-    const name = options.modelName?.trim() || "moonshine";
+      : validateLocalPath(rawOptions.configPath, "Moonshine config path");
+    validateRuntimeIdentity(rawRuntime.runtimeVersion, "Moonshine runtime version");
+    this.supportsAbort = validateBoolean(rawRuntime.supportsAbort, "Moonshine runtime abort capability");
+    this.transcribeRuntime = bindMoonshineTranscribe(rawRuntime.transcribe, rawRuntime);
+    this.cancelRuntime = bindMoonshineCancel(rawRuntime.cancel, rawRuntime);
+
+    const modelName = rawOptions.modelName;
+    if (modelName !== undefined && typeof modelName !== "string") {
+      throw new Error("Moonshine model name must be a string when provided");
+    }
+    if (typeof rawOptions.modelVersion !== "string") {
+      throw new Error("Moonshine model version must be a string");
+    }
+    const name = modelName?.trim() || "moonshine";
     this.modelIdentity = Object.freeze(SpeechModelIdentitySchema.parse({
       name,
-      version: options.modelVersion.trim()
+      version: rawOptions.modelVersion.trim()
     }));
     this.cancellationCapability = this.supportsAbort ? "RUNTIME_ABORT" : "NONE";
   }
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
-    const requestId = SpeechRequestIdSchema.parse(input.requestId);
-    const utteranceId = SpeechUtteranceIdSchema.parse(input.utteranceId);
-    const sourceAudioBasis = SourceAudioBasisSchema.parse(input.sourceAudioBasis);
-    if (!(input.pcmBytes instanceof Uint8Array)) {
+    const rawInput: unknown = input;
+    if (!isRecord(rawInput)) throw new Error("Moonshine recognition input must be an object");
+    const requestId = SpeechRequestIdSchema.parse(rawInput.requestId);
+    const utteranceId = SpeechUtteranceIdSchema.parse(rawInput.utteranceId);
+    const sourceAudioBasis = SourceAudioBasisSchema.parse(rawInput.sourceAudioBasis);
+    if (!(rawInput.pcmBytes instanceof Uint8Array)) {
       throw new Error("Moonshine PCM input must be a Uint8Array");
     }
-    if (isSharedBackingBuffer(input.pcmBytes.buffer)) {
+    if (isSharedBackingBuffer(rawInput.pcmBytes.buffer)) {
       throw new Error("Moonshine PCM input must not use shared mutable backing storage");
     }
     const expectedBytes = sourceAudioBasis.sampleCount * sourceAudioBasis.channels * 4;
-    if (input.pcmBytes.byteLength !== expectedBytes) {
+    if (rawInput.pcmBytes.byteLength !== expectedBytes) {
       throw new Error("Moonshine PCM length does not match its source audio basis");
     }
-    const runtimePcmBytes = new Uint8Array(input.pcmBytes);
+    const runtimePcmBytes = new Uint8Array(rawInput.pcmBytes);
     if (sha256(runtimePcmBytes) !== sourceAudioBasis.pcmSha256) {
       throw new Error("Moonshine PCM bytes do not match the source audio basis");
     }
@@ -324,7 +339,8 @@ function containsUnpairedSurrogate(value: string): boolean {
   return false;
 }
 
-function validateLocalPath(value: string, label: string): string {
+function validateLocalPath(value: unknown, label: string): string {
+  if (typeof value !== "string") throw new Error(`${label} is invalid`);
   const path = value.trim();
   if (path.length === 0 || path.length > 1_024) throw new Error(`${label} is invalid`);
   const windowsDrivePath = /^[A-Za-z]:[\\/]/u.test(path);
