@@ -551,8 +551,8 @@ describe("production Socratic policy engine", () => {
     expect(historicalGeneration).toBeDefined();
     if (historicalGeneration === undefined) throw new Error("missing historical generation");
 
-    const { interviewerProposalValidated: _validated, ...withoutValidationProof } =
-      historicalGeneration;
+    const withoutValidationProof = { ...historicalGeneration };
+    delete withoutValidationProof.interviewerProposalValidated;
     state = {
       ...state,
       generations: {
