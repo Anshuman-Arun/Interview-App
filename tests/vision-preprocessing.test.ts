@@ -148,6 +148,25 @@ function expectCode(error: unknown, code: VisionPreprocessingError["code"]): voi
   expect((error as VisionPreprocessingError).code).toBe(code);
 }
 
+function createObjectWithPrototype(
+  prototype: object | null,
+  properties?: PropertyDescriptorMap
+): object {
+  const created: unknown = properties === undefined
+    ? Object.create(prototype)
+    : Object.create(prototype, properties);
+  if (typeof created !== "object" || created === null) {
+    throw new Error("Object.create unexpectedly returned a non-object");
+  }
+  return created;
+}
+
+function getObjectPrototype(value: object): object | null {
+  const prototype: unknown = Object.getPrototypeOf(value);
+  if (prototype === null || typeof prototype === "object") return prototype;
+  throw new Error("Object.getPrototypeOf unexpectedly returned a non-object");
+}
+
 function rgbaAt(bytes: Uint8Array, x: number, y: number): readonly number[] {
   const decoded = PNG.sync.read(Buffer.from(bytes));
   const offset = (y * decoded.width + x) * 4;
@@ -478,7 +497,7 @@ describe("vision snapshot validation and hashing", () => {
           sourceRevision: BoardRevisionSchema.parse(0),
           capturedAtMs: 0,
           mimeType: "image/png" as const,
-          encodedBytes: encodedBytes as Uint8Array
+          encodedBytes
         });
         throw new Error("Expected proxied byte rejection");
       } catch (error) {
@@ -748,7 +767,7 @@ describe("vision snapshot validation and hashing", () => {
   });
 
   it("rejects inherited snapshot input fields instead of trusting the prototype chain", () => {
-    const inherited = Object.create({
+    const inherited = createObjectWithPrototype({
       snapshotId: "inherited",
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
@@ -1049,7 +1068,7 @@ describe("vision geometry", () => {
 
   it("rejects inherited numeric geometry entries instead of trusting the prototype chain", () => {
     const inherited = new Array<{ x: number; y: number; width: number; height: number }>(1);
-    const prototype = Object.create(Array.prototype);
+    const prototype = createObjectWithPrototype(Array.prototype);
     Object.defineProperty(prototype, "0", {
       value: { x: 0, y: 0, width: 1, height: 1 },
       enumerable: true
@@ -1059,7 +1078,7 @@ describe("vision geometry", () => {
   });
 
   it("rejects inherited geometry fields instead of trusting the prototype chain", () => {
-    const inheritedDimensions = Object.create({ width: 1, height: 1 });
+    const inheritedDimensions = createObjectWithPrototype({ width: 1, height: 1 });
     expect(() => imageBounds(
       inheritedDimensions as unknown as Parameters<typeof imageBounds>[0]
     )).toThrow(VisionPreprocessingError);
@@ -1279,7 +1298,7 @@ describe("dirty-region planning", () => {
   });
 
   it("ignores inherited dirty planner overrides and uses only own configuration fields", () => {
-    const inheritedConfig = Object.create({ paddingPixels: 0 });
+    const inheritedConfig = createObjectWithPrototype({ paddingPixels: 0 });
     const plan = planDirtyRegions(
       [{ x: 50, y: 50, width: 1, height: 1 }],
       { width: 100, height: 100 },
@@ -1438,7 +1457,7 @@ describe("crop, resize, tiling, and cancellation", () => {
 
   it("ignores inherited processing options instead of trusting the prototype chain", async () => {
     const source = snapshot(makePng(2, 2));
-    const inheritedOptions = Object.create({ maxOutputEncodedBytes: 0 });
+    const inheritedOptions = createObjectWithPrototype({ maxOutputEncodedBytes: 0 });
     const result = await cropImage(
       source,
       { x: 0, y: 0, width: 1, height: 1 },
@@ -1944,8 +1963,8 @@ describe("crop, resize, tiling, and cancellation", () => {
 
     const mutatedController = new AbortController();
     const mutatedSignal = mutatedController.signal;
-    const originalPrototype = Object.getPrototypeOf(mutatedSignal);
-    const lyingPrototype = Object.create(originalPrototype, {
+    const originalPrototype = getObjectPrototype(mutatedSignal);
+    const lyingPrototype = createObjectWithPrototype(originalPrototype, {
       aborted: {
         configurable: true,
         get() {
@@ -2040,7 +2059,7 @@ describe("crop, resize, tiling, and cancellation", () => {
 
 describe("vision runtime schema boundaries", () => {
   it("makes the exported diagnostics schema use the same own-property boundary as the factory", () => {
-    const inherited = Object.create({
+    const inherited = createObjectWithPrototype({
       operation: "CROP",
       sourceDimensions: { width: 1, height: 1 },
       outputDimensions: { width: 1, height: 1 },
@@ -2077,7 +2096,7 @@ describe("vision runtime schema boundaries", () => {
   });
 
   it("rejects inherited diagnostics fields instead of trusting the prototype chain", () => {
-    const inherited = Object.create({
+    const inherited = createObjectWithPrototype({
       operation: "CROP",
       sourceDimensions: { width: 1, height: 1 },
       outputDimensions: { width: 1, height: 1 },
@@ -2094,7 +2113,7 @@ describe("vision runtime schema boundaries", () => {
   });
 
   it("rejects inherited or hostile nested diagnostic dimensions", () => {
-    const inheritedDimensions = Object.create({ width: 1, height: 1 });
+    const inheritedDimensions = createObjectWithPrototype({ width: 1, height: 1 });
     expect(() => createVisionProcessingDiagnostics({
       operation: "CROP",
       sourceDimensions: inheritedDimensions as { width: number; height: number },
@@ -2400,7 +2419,7 @@ describe("provider-neutral request preparation and budgeting", () => {
     const source = snapshot(makePng(1, 1));
     const prepared = prepareVisionImageRequest(source, "guard");
 
-    const inherited = Object.create({ payload: prepared.payload });
+    const inherited = createObjectWithPrototype({ payload: prepared.payload });
     expect(requestPayloadIsSafeReference(inherited)).toBe(false);
 
     const accessor = Object.defineProperty({}, "payload", {
@@ -2515,7 +2534,7 @@ describe("provider-neutral request preparation and budgeting", () => {
 
   it("rejects prototype-forged raster instances that never ran a validating constructor", () => {
     const real = snapshot(makePng(2, 2));
-    const forged = Object.create(ImageSnapshot.prototype) as Record<string, unknown>;
+    const forged = createObjectWithPrototype(ImageSnapshot.prototype) as Record<string, unknown>;
     Object.defineProperty(forged, "metadata", { value: real.metadata, enumerable: true });
     Object.defineProperty(forged, "readBytes", { value: () => real.readBytes() });
 
@@ -2627,7 +2646,7 @@ describe("provider-neutral request preparation and budgeting", () => {
   it("rejects inherited request candidates instead of trusting the prototype chain", () => {
     const source = snapshot(makePng(1, 1));
     const inherited = new Array<ImageSnapshot>(1);
-    const prototype = Object.create(Array.prototype);
+    const prototype = createObjectWithPrototype(Array.prototype);
     Object.defineProperty(prototype, "0", { value: source, enumerable: true });
     Object.setPrototypeOf(inherited, prototype);
 
@@ -2676,7 +2695,7 @@ describe("provider-neutral request preparation and budgeting", () => {
   });
 
   it("rejects inherited request-budget fields instead of trusting the prototype chain", () => {
-    const inheritedBudget = Object.create({
+    const inheritedBudget = createObjectWithPrototype({
       maxImages: 1,
       maxTotalBytes: 1_000_000,
       maxTotalPixels: 1_000_000,
