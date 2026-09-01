@@ -79,6 +79,8 @@ interface ModelState extends CommonState {
   readonly family: "MODEL_COMPARISON";
   readonly config: ModelComparisonConfig;
   readonly hiddenModel: "CONSTANT" | "LINEAR";
+  readonly hiddenIntercept: number;
+  readonly hiddenSlope: number;
   readonly points: readonly Readonly<{ x: number; y: number }>[];
   readonly perturbedPoints: readonly Readonly<{ x: number; y: number }>[];
   readonly firstChoice?: "CONSTANT" | "LINEAR";
@@ -293,6 +295,8 @@ function initialize(definition: QuantResearchScenarioDefinition): InternalState 
         stage: "INITIAL_MODEL_CHOICE",
         config: definition.config,
         hiddenModel,
+        hiddenIntercept: intercept,
+        hiddenSlope: slope,
         points,
         perturbedPoints
       };
@@ -1033,6 +1037,18 @@ function assertStateInvariants(state: InternalState): void {
     }
     case "MODEL_COMPARISON": {
       if (!["INITIAL_MODEL_CHOICE", "OUTLIER_MODEL_CHOICE", "COMPLETE"].includes(state.stage)) throw new Error("Model stage invariant violated");
+      if (
+        !Number.isSafeInteger(state.hiddenIntercept) ||
+        state.hiddenIntercept < -10 ||
+        state.hiddenIntercept > 10 ||
+        !Number.isSafeInteger(state.hiddenSlope) ||
+        (state.hiddenModel === "CONSTANT"
+          ? state.hiddenSlope !== 0
+          : Math.abs(state.hiddenSlope) < state.config.noiseRadius + 2 ||
+            Math.abs(state.hiddenSlope) > state.config.noiseRadius + 5)
+      ) {
+        throw new Error("Model generated-parameter invariant violated");
+      }
       if (state.points.length !== state.config.observationCount || state.perturbedPoints.length !== state.config.observationCount) {
         throw new Error("Model observation-count invariant violated");
       }
@@ -1043,7 +1059,11 @@ function assertStateInvariants(state: InternalState): void {
         if (original === undefined || perturbed === undefined || original.x !== index || perturbed.x !== index) {
           throw new Error("Model observation-index invariant violated");
         }
-        if (!Number.isFinite(original.y) || !Number.isFinite(perturbed.y)) throw new Error("Model numeric invariant violated");
+        if (!Number.isSafeInteger(original.y) || !Number.isSafeInteger(perturbed.y)) throw new Error("Model numeric invariant violated");
+        const expectedTrend = state.hiddenIntercept + state.hiddenSlope * original.x;
+        if (Math.abs(original.y - expectedTrend) > state.config.noiseRadius) {
+          throw new Error("Model baseline noise-bound invariant violated");
+        }
         if (original.y !== perturbed.y) {
           changedPoints += 1;
           if (index !== state.points.length - 1 || Math.abs(original.y - perturbed.y) !== state.config.outlierShift) {
