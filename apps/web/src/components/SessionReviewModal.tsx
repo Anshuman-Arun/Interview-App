@@ -102,7 +102,7 @@ function SupportBadge({
   );
 }
 
-function EvaluationPanel({
+export function EvaluationPanel({
   evaluation
 }: {
   readonly evaluation: GroundedEvaluationReadModel;
@@ -333,7 +333,7 @@ function EvaluationPanel({
   );
 }
 
-function ReplayPanel({
+export function ReplayPanel({
   response
 }: {
   readonly response: Extract<SessionReplayReadResponse, { available: true }>;
