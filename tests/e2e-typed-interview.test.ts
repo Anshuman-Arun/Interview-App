@@ -833,7 +833,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
       const turns = new TurnCoordinator(writer);
       await turns.startSession(sixPeopleProblem);
       const { inputEpisodeId, turnId } = await turns.commitInput("Input for delivery");
-      await turns.selectAction(turnId);
+      await turns.selectAction(turnId, sixPeopleProblem);
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock-model");
 
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["Socratic prompt"]));
@@ -928,7 +928,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
       const turns = new TurnCoordinator(writer);
       await turns.startSession(sixPeopleProblem);
       const { inputEpisodeId, turnId } = await turns.commitInput("Input");
-      await turns.selectAction(turnId);
+      await turns.selectAction(turnId, sixPeopleProblem);
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["prompt"]));
       const processed = await turns.processProposal({
@@ -973,7 +973,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
       const turns = new TurnCoordinator(writer);
       await turns.startSession(sixPeopleProblem);
       const { inputEpisodeId, turnId } = await turns.commitInput("Input");
-      await turns.selectAction(turnId);
+      await turns.selectAction(turnId, sixPeopleProblem);
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["safe"]));
       const processed = await turns.processProposal({
@@ -1085,7 +1085,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
       await turns.startSession(sixPeopleProblem);
 
       const { turnId } = await turns.commitInput("We model the 6 people as vertices of K_6 with red and blue edges.");
-      const action = await turns.selectAction(turnId);
+      const action = await turns.selectAction(turnId, sixPeopleProblem);
       expect(action).toBeDefined();
     });
 
@@ -1099,7 +1099,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
 
       await turns.commitInput("K_6 setup");
       const { turnId } = await turns.commitInput("Choose any vertex v. There are 5 incident edges from v.");
-      const action = await turns.selectAction(turnId);
+      const action = await turns.selectAction(turnId, sixPeopleProblem);
       expect(action).toBeDefined();
     });
 
@@ -1112,7 +1112,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
       await turns.startSession(sixPeopleProblem);
 
       const { turnId } = await turns.commitInput("By Pigeonhole Principle ceil(5/2) = 3, so at least 3 incident edges share a colour (say red).");
-      const action = await turns.selectAction(turnId);
+      const action = await turns.selectAction(turnId, sixPeopleProblem);
       expect(action).toBeDefined();
     });
 
@@ -1127,7 +1127,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
       const { turnId } = await turns.commitInput(
         "Let the 3 neighbours be u, w, x with red edges to v. If any edge among {u,w,x} is red, it forms a red triangle with v. Otherwise, all edges between u,w,x are blue, forming a blue triangle. Thus R(3,3) <= 6."
       );
-      const action = await turns.selectAction(turnId);
+      const action = await turns.selectAction(turnId, sixPeopleProblem);
       expect(action).toBeDefined();
     });
 
@@ -1779,7 +1779,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       const turns = new TurnCoordinator(writer);
       await turns.startSession(sixPeopleProblem);
       const { inputEpisodeId, turnId } = await turns.commitInput("Input");
-      await turns.selectAction(turnId);
+      await turns.selectAction(turnId, sixPeopleProblem);
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["text"]));
       const processed = await turns.processProposal({
@@ -1805,7 +1805,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       const turns = new TurnCoordinator(writer);
       await turns.startSession(sixPeopleProblem);
       const { inputEpisodeId, turnId } = await turns.commitInput("Input");
-      await turns.selectAction(turnId);
+      await turns.selectAction(turnId, sixPeopleProblem);
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["text"]));
       const processed = await turns.processProposal({
@@ -1832,7 +1832,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       const turns = new TurnCoordinator(writer);
       await turns.startSession(sixPeopleProblem);
       const { inputEpisodeId, turnId } = await turns.commitInput("Input");
-      await turns.selectAction(turnId);
+      await turns.selectAction(turnId, sixPeopleProblem);
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["text"]));
       const processed = await turns.processProposal({
@@ -1896,7 +1896,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
 
       for (let i = 0; i < 10; i++) {
         const { inputEpisodeId, turnId } = await turns.commitInput(`Turn ${String(i)}`);
-        await turns.selectAction(turnId);
+        await turns.selectAction(turnId, sixPeopleProblem);
         const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
         const processed = await turns.processProposal({
           envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
@@ -2024,7 +2024,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       await turns.startSession(sixPeopleProblem);
 
       const { turnId } = await turns.commitInput("I assume acquaintance is transitive across all 6 people.");
-      const action = await turns.selectAction(turnId);
+      const action = await turns.selectAction(turnId, sixPeopleProblem);
       expect(action).toBeDefined();
     });
 
@@ -2037,7 +2037,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       await turns.startSession(sixPeopleProblem);
 
       const { inputEpisodeId, turnId } = await turns.commitInput("First step claim");
-      await turns.selectAction(turnId);
+      await turns.selectAction(turnId, sixPeopleProblem);
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
 
       // Closed world validator with disclosure fact
@@ -2091,7 +2091,7 @@ describe("Tier 3: Cross-Feature Combinations", () => {
 
     const writer = runtime.sessions.getWriter(sessionId);
     const turns = new TurnCoordinator(writer);
-    await turns.selectAction(committed.turnId);
+    await turns.selectAction(committed.turnId, sixPeopleProblem);
     const { generationId } = await turns.startGeneration(committed.inputEpisodeId, committed.turnId, "mock");
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["Socratic prompt"]));
     const processed = await turns.processProposal({
@@ -2136,7 +2136,7 @@ describe("Tier 3: Cross-Feature Combinations", () => {
     const turns = new TurnCoordinator(writer);
     await turns.startSession(sixPeopleProblem);
     const { inputEpisodeId, turnId } = await turns.commitInput("Input");
-    await turns.selectAction(turnId);
+    await turns.selectAction(turnId, sixPeopleProblem);
     const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["prompt"]));
     const processed = await turns.processProposal({
@@ -2185,7 +2185,7 @@ describe("Tier 3: Cross-Feature Combinations", () => {
     await turns.startSession(sixPeopleProblem);
 
     const { inputEpisodeId, turnId } = await turns.commitInput("Student turn text");
-    await turns.selectAction(turnId);
+    await turns.selectAction(turnId, sixPeopleProblem);
 
     const safeProbe = "How do you know deg(v) = 5?";
     const provider = new TestGeminiApiAdapter(() => ({
@@ -2249,7 +2249,7 @@ describe("Tier 3: Cross-Feature Combinations", () => {
     const writer = runtime.sessions.getWriter(sessionId);
     const turns = new TurnCoordinator(writer);
     const { inputEpisodeId, turnId } = await turns.commitInput("Input");
-    await turns.selectAction(turnId);
+    await turns.selectAction(turnId, sixPeopleProblem);
     const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["prompt"]));
     const processed = await turns.processProposal({
@@ -2451,7 +2451,7 @@ describe("Tier 4: Real-World Application Scenarios", () => {
 
     // Turn 1 committed and delivered
     const { inputEpisodeId, turnId } = await turns.commitInput("Step 1 reasoning");
-    await turns.selectAction(turnId);
+    await turns.selectAction(turnId, sixPeopleProblem);
     const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["Socratic question"]));
     const processed = await turns.processProposal({
