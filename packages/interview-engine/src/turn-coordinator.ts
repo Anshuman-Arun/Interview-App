@@ -571,7 +571,10 @@ export class TurnCoordinator {
     }, EvidenceProcessedResultSchema, (state) => {
       const reasons: string[] = [];
       if (state.problem?.id !== proposal.key.problemId) reasons.push("Evidence is scoped to a different problem");
-      if (!proposal.evidenceEventIds.every((eventId) => state.eventIds.includes(eventId))) reasons.push("Evidence provenance references unknown events");
+      const knownEventIds = new Set(state.eventIds);
+      if (!proposal.evidenceEventIds.every((eventId) => knownEventIds.has(eventId))) {
+        reasons.push("Evidence provenance references unknown events");
+      }
       if (proposal.inferenceConfidence < 0.7) reasons.push("Inference confidence is below the Phase 0 commit threshold");
       if (!isEvidenceValueAllowed(proposal.key, proposal.proposedValue)) reasons.push("Evidence value is invalid for its dimension");
       const proposedDraft: EventDraft = { source: "PROVIDER", type: "EVIDENCE_PROPOSED", payload: { proposal } };
