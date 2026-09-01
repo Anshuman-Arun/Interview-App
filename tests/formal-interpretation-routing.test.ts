@@ -953,3 +953,49 @@ describe("formal interpretation session authority", () => {
     }
   });
 });
+
+
+describe("provider cancellation capacity release", () => {
+  it("settles a cancelled hung provider request and releases the in-flight slot", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const firstRequest = formalRequest(harness);
+      const secondRequest = formalRequest(harness);
+      let signalProviderStarted: (() => void) | undefined;
+      const providerStarted = new Promise<void>((resolve) => {
+        signalProviderStarted = resolve;
+      });
+      const neverSettles = new Promise<unknown>(() => undefined);
+      const provider = new DeterministicFormalInterpretationProvider((request) => {
+        if (request.requestId === firstRequest.requestId) {
+          if (signalProviderStarted === undefined) {
+            throw new Error("Provider start signal was not initialized");
+          }
+          signalProviderStarted();
+          return neverSettles;
+        }
+        return providerResultFor(request, [candidate(request)]);
+      });
+      const coordinator = new InterpretationCoordinator(
+        harness.writer,
+        provider,
+        routingScopes,
+        { maxInFlight: 1 }
+      );
+
+      const firstExecution = coordinator.interpretAndVerify(firstRequest);
+      await providerStarted;
+      expect(coordinator.cancel(firstRequest.requestId)).toBe(true);
+      expect(await firstExecution).toMatchObject({ status: "STALE", reason: "CANCELLED" });
+
+      const secondExecution = await coordinator.interpretAndVerify(secondRequest);
+      expect(secondExecution).toMatchObject({
+        status: "ACCEPTED",
+        verificationStatus: "VERIFIED"
+      });
+      expect(provider.callCount).toBe(2);
+    } finally {
+      harness.store.close();
+    }
+  });
+});
