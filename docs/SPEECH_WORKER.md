@@ -69,7 +69,7 @@ It supports:
 
 `SPEECH_STARTED.atTimestampMs` reports the timestamp of the first accepted onset-candidate frame rather than the later hysteresis-confirmation frame.
 
-The state machine consumes a bounded probability observation rather than depending on one specific model. `DeterministicEnergyVadBackend` and `ScriptedVadBackend` exist for self-contained tests. `SileroVadBackend` is a production seam around an injected runtime and an explicitly supplied local model path. It performs no model download.
+The state machine consumes a bounded probability observation rather than depending on one specific model. `DeterministicEnergyVadBackend` and `ScriptedVadBackend` exist for self-contained tests. `SileroVadBackend` is a production seam around an injected runtime and an explicitly supplied local model path. It performs no model download. The validated `streamId` is passed into the Silero runtime callback so a recurrent/stateful implementation can isolate state between simultaneous streams; a runtime that keeps recurrent state must keep that state bounded and stream-scoped rather than sharing one hidden state across callers.
 
 ## Adaptive endpointing
 
@@ -83,7 +83,9 @@ Endpointing is separate from raw VAD. `AdaptiveEndpointingPolicy` receives VAD d
 - explicit flush;
 - too-short discard.
 
-The linguistic hint is deliberately just an input seam. Later partial-STT or application activity signals can compute it without moving authority into the VAD state machine. Endpoint inputs are runtime validated even when called directly from TypeScript, and the worker finalizes before admitting a frame that would cross the configured maximum utterance duration.
+The linguistic hint is deliberately just an input seam. Later partial-STT or application activity signals can compute it without moving authority into the VAD state machine. Endpoint inputs and configuration are runtime validated even when called directly from JavaScript/TypeScript.
+
+When a frame would cross the configured maximum utterance duration, that frame acts only as the trigger to finalize the already-admitted utterance; its PCM is **not** included in that utterance's `SourceAudioBasis`. A future capture adapter must carry/reframe that PCM into a fresh stream (sequence zero with a new stream identity) if it represents continuing user speech. Dropping the trigger frame would otherwise lose up to one bounded frame of audio.
 
 ## STT and Moonshine seam
 
@@ -98,7 +100,7 @@ The deterministic fake recognizer is the normal CI backend.
 - model/version identity;
 - an injected `MoonshineRuntime` implementation.
 
-URLs, control/format-character path abuse, and malformed runtime identities are rejected. The adapter contains no downloader or model-cache ownership; that responsibility belongs to the asset layer. The adapter validates its request/utterance IDs, source-audio basis, exact PCM byte count, and raw runtime result before constructing a transcript candidate.
+URLs, control/format-character path abuse, malformed runtime identities, incomplete/typoed option bags, malformed callbacks, and malformed direct recognition input are rejected. The adapter contains no downloader or model-cache ownership; that responsibility belongs to the asset layer. The adapter validates its request/utterance IDs, source-audio basis, exact PCM byte count, and raw runtime result before constructing a transcript candidate. Bounded string/array preflights run before deeper regex or per-entry validation so an already-oversized callback does not force unnecessary full traversal at the admission boundary.
 
 The adapter also reports cancellation honestly:
 
@@ -132,14 +134,14 @@ Cancellation is safe even when compute cannot be stopped immediately.
 Once a stream is cancelled or the worker is shutting down:
 
 - the stream is marked closed/tombstoned immediately, including cancellation before its first PCM frame;
-- buffered PCM is released;
+- the worker-owned buffered PCM store is released;
 - in-flight VAD and recognition `AbortSignal`s are triggered;
-- runtime cancellation is requested only if honestly supported;
-- the optional runtime cancellation hook is time-bounded;
+- `RUNTIME_ABORT_REQUESTED` means the advertised abort-capable runtime received its aborted signal;
+- an optional explicit runtime cancellation hook is additional best-effort work and is separately time-bounded;
 - all not-yet-returned results from cancelled work are suppressed, including a finalized observation that was built immediately before STT began;
 - late underlying compute may still finish when the injected runtime ignores abort, but its result is never re-admitted by this core.
 
-VAD and recognizer calls themselves are time-bounded. A timeout releases worker-owned state and suppresses any later callback; it does **not** falsely claim that an uncooperative native/runtime computation was physically stopped.
+VAD and recognizer calls themselves are time-bounded. A timeout releases ordinary stream state and suppresses any later callback; it does **not** falsely claim that an uncooperative native/runtime computation was physically stopped. An abort-ignoring underlying promise may therefore retain the isolated frame/utterance input until it actually settles. Such lingering VAD and STT work remains counted against a hard underlying-operation budget, so repeated cancellation/timeouts cannot create unbounded native work. If an underlying callback never settles, availability deliberately fails closed at that bound until the runtime is restarted or the operation actually finishes.
 
 The cancellation result distinguishes:
 
@@ -160,7 +162,7 @@ Request IDs are reserved globally while work is in flight rather than only after
 - successful and stable failed outcomes are remembered in one bounded replay cache;
 - a valid request that failed cannot later reuse the same ID with different content.
 
-The number of in-flight/queued requests is hard-bounded. Active-stream cancellation gets a small reserve equal to the maximum stream count so frame backpressure cannot prevent cancellation. Within each stream, frame/VAD/endpoint operations remain serialized through one promise chain.
+The number of in-flight/queued requests is hard-bounded. Cancellation gets a reserve only for an active stream or a stream with an actually admitted in-flight frame, so nonexistent stream IDs cannot steal emergency cancellation capacity. Cancellation reserve is bounded by the maximum stream count, and shutdown has one separate dedicated reserve slot. Within each stream, frame/VAD/endpoint operations remain serialized through one promise chain.
 
 Closed stream IDs are retained in a bounded tombstone set so recent late frames fail as `STREAM_FINALIZED` rather than accidentally creating a new utterance with the same identity. Stream IDs are still required to be unique; the application remains the authority for stale callback admission outside this bounded worker replay window.
 
@@ -174,11 +176,13 @@ Current hard defaults:
 |---|---:|
 | Frame duration | 100 ms |
 | Utterance duration | 60 s |
-| Pre-speech/silence-only stream lifetime | 10 s |
+| Unconfirmed pre-speech/silence-only stream lifetime | 10 s |
 | PCM timestamp drift from sample time | 250 ms |
 | PCM buffered per stream | 12 MiB |
 | Concurrent streams | 4 |
-| In-flight/queued requests | 64 (+ up to 4 active-stream cancellation reserve) |
+| In-flight/queued requests | 64 ordinary + up to 4 admitted-stream cancellation reserve + 1 shutdown reserve |
+| Underlying VAD operations | at most concurrent-stream bound (4 default) until actual promise settlement |
+| Underlying recognizer operations | at most concurrent-stream bound (4 default) until actual promise settlement |
 | Remembered request outcomes | 1,024 |
 | Closed-stream tombstones | 1,024 |
 | Transcript text | 20,000 chars |
@@ -200,7 +204,7 @@ Diagnostics contain only bounded stable metadata such as failure code and stream
 
 No code in this subsystem imports the open infrastructure branches.
 
-After **PR #32 (local audio capture/playback)** merges, add a thin adapter that converts captured browser/native PCM buffers into the metadata envelope + binary payload contract. AEC remains outside this core and is still required before production microphone use.
+After **PR #32 (local audio capture/playback)** merges, add a thin adapter that converts captured browser/native PCM buffers into the metadata envelope + binary payload contract. That adapter must also preserve a max-duration trigger frame by moving/reframing it into the next stream rather than silently dropping PCM that was not included in the finalized source basis. AEC remains outside this core and is still required before production microphone use.
 
 After **PR #35 (local worker lifecycle manager)** merges, choose the concrete process topology and launch/supervise the speech runtime through that manager. The VAD/endpoint/STT contracts should not change.
 
