@@ -25,23 +25,85 @@ export type CompiledContext = z.infer<typeof CompiledContextSchema>;
 
 export const CONTEXT_COMPILER_VERSION = "phase0-safe-context@1" as const;
 
-export function canonicalJson(value: unknown): string {
+const MAX_CANONICAL_JSON_DEPTH = 64;
+const MAX_CANONICAL_JSON_NODES = 100_000;
+const MAX_CANONICAL_JSON_STRING_CHARACTERS = 1_000_000;
+const MAX_CANONICAL_JSON_TOTAL_TEXT_CHARACTERS = 5_000_000;
+
+interface CanonicalJsonBudget {
+  nodes: number;
+  textCharacters: number;
+}
+
+function consumeCanonicalNode(budget: CanonicalJsonBudget): void {
+  budget.nodes += 1;
+  if (budget.nodes > MAX_CANONICAL_JSON_NODES) {
+    throw new Error("Canonical JSON exceeds the bounded node budget");
+  }
+}
+
+function consumeCanonicalText(budget: CanonicalJsonBudget, text: string): void {
+  if (text.length > MAX_CANONICAL_JSON_STRING_CHARACTERS) {
+    throw new Error("Canonical JSON string exceeds the bounded per-string size");
+  }
+  budget.textCharacters += text.length;
+  if (budget.textCharacters > MAX_CANONICAL_JSON_TOTAL_TEXT_CHARACTERS) {
+    throw new Error("Canonical JSON exceeds the bounded aggregate text size");
+  }
+}
+
+function canonicalJsonBounded(
+  value: unknown,
+  depth: number,
+  budget: CanonicalJsonBudget
+): string {
+  if (depth > MAX_CANONICAL_JSON_DEPTH) {
+    throw new Error("Canonical JSON exceeds the bounded nesting depth");
+  }
+  consumeCanonicalNode(budget);
+
   if (value === null) return "null";
-  if (typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+  if (typeof value === "string") {
+    consumeCanonicalText(budget, value);
+    return JSON.stringify(value);
+  }
+  if (typeof value === "boolean") return JSON.stringify(value);
   if (typeof value === "number") {
     if (!Number.isFinite(value)) throw new Error("Canonical JSON cannot encode a non-finite number");
     return JSON.stringify(value);
   }
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  if (Array.isArray(value)) {
+    if (value.length > MAX_CANONICAL_JSON_NODES) {
+      throw new Error("Canonical JSON array exceeds the bounded node budget");
+    }
+    const items: string[] = [];
+    for (const item of value) {
+      items.push(canonicalJsonBounded(item, depth + 1, budget));
+    }
+    return `[${items.join(",")}]`;
+  }
   if (typeof value === "object") {
     const record = value as Readonly<Record<string, unknown>>;
-    const entries = Object.keys(record)
-      .filter((key) => record[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
+    const keys: string[] = [];
+    for (const key in record) {
+      if (!Object.prototype.hasOwnProperty.call(record, key) || record[key] === undefined) continue;
+      consumeCanonicalText(budget, key);
+      keys.push(key);
+      if (keys.length > MAX_CANONICAL_JSON_NODES) {
+        throw new Error("Canonical JSON object exceeds the bounded node budget");
+      }
+    }
+    keys.sort();
+    const entries = keys.map(
+      (key) => `${JSON.stringify(key)}:${canonicalJsonBounded(record[key], depth + 1, budget)}`
+    );
     return `{${entries.join(",")}}`;
   }
   throw new Error("Canonical JSON accepts only JSON-compatible values");
+}
+
+export function canonicalJson(value: unknown): string {
+  return canonicalJsonBounded(value, 0, { nodes: 0, textCharacters: 0 });
 }
 
 export function sha256CanonicalJsonSync(value: unknown): string {
