@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { newRequestId, newUtteranceId } from "../packages/domain/src/index.js";
 import {
+  MAX_SPEECH_TIMESTAMP_MS,
   MAX_SPEECH_WORD_TIMINGS,
+  SourceAudioBasisSchema,
   SpeechPcmFrameEnvelopeSchema,
   TranscriptCandidateSchema,
   type SourceAudioBasis
@@ -46,9 +48,15 @@ describe("speech protocol hard bounds", () => {
     expect(SpeechPcmFrameEnvelopeSchema.safeParse({ ...base, sampleRate: -16_000 }).success).toBe(false);
     expect(SpeechPcmFrameEnvelopeSchema.safeParse({ ...base, sampleRate: 44_100 }).success).toBe(false);
     expect(SpeechPcmFrameEnvelopeSchema.safeParse({ ...base, payloadByteLength: 1_276 }).success).toBe(false);
+    expect(SpeechPcmFrameEnvelopeSchema.safeParse({ ...base, timestampMs: MAX_SPEECH_TIMESTAMP_MS + 1 }).success).toBe(false);
   });
 
-  it("rejects transcript timing metadata above the fixed entry bound", () => {
+  it("rejects malformed source-basis duration/drift and transcript timing metadata above hard bounds", () => {
+    expect(SourceAudioBasisSchema.safeParse(sourceBasis(960_001)).success).toBe(false);
+    expect(SourceAudioBasisSchema.safeParse({
+      ...sourceBasis(),
+      endTimestampMs: 1_000
+    }).success).toBe(false);
     const basis = sourceBasis();
     const words = Array.from({ length: MAX_SPEECH_WORD_TIMINGS + 1 }, (_, index) => ({
       word: "x",
@@ -104,6 +112,8 @@ describe("speech protocol hard bounds", () => {
       async score() { return 1.1; }
     };
     expect(() => new SileroVadBackend(runtime, "https://example.invalid/silero.onnx")).toThrow(/local path/u);
+    expect(() => new SileroVadBackend(runtime, "models/silero/model.onnx\nother")).toThrow(/safe local path/u);
+    expect(() => new SileroVadBackend({ ...runtime, runtimeVersion: "bad\nruntime" }, "models/silero/model.onnx")).toThrow(/runtime version/u);
 
     const backend = new SileroVadBackend(runtime, "models/silero/silero.onnx");
     const pcm = new Float32Array(320);
