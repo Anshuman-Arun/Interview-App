@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { newRequestId, newUtteranceId } from "../packages/domain/src/index.js";
 import {
@@ -11,16 +12,18 @@ import {
 import type { SourceAudioBasis } from "../packages/local-compute/src/speech-protocol.js";
 
 function basis(overrides: Partial<SourceAudioBasis> = {}): SourceAudioBasis {
+  const sampleCount = overrides.sampleCount ?? 3_200;
+  const sampleRate = overrides.sampleRate ?? 16_000;
   return {
     streamId: "stream-stt",
     firstSequence: 0,
     lastSequence: 9,
     startTimestampMs: 100,
-    endTimestampMs: 300,
-    sampleRate: 16_000,
+    endTimestampMs: 100 + sampleCount / sampleRate * 1_000,
+    sampleRate,
     channels: 1,
-    sampleCount: 3_200,
-    pcmSha256: "a".repeat(64),
+    sampleCount,
+    pcmSha256: sha256(new Uint8Array(sampleCount * 4)),
     ...overrides
   };
 }
@@ -53,6 +56,7 @@ describe("transcript validation", () => {
     expect(normalizeTranscriptText("  hello\u0000   world\nnext  ")).toBe("hello world next");
     expect(normalizeTranscriptText("left\u202Eevil\u2069 right")).toBe("left evil right");
     expect(normalizeTranscriptText("zero\u200Bwidth")).toBe("zero width");
+    expect(normalizeTranscriptText("left\u200Eright\u061Cdone")).toBe("left right done");
   });
 
   it("rejects oversized or invalid-Unicode transcripts", () => {
@@ -75,6 +79,22 @@ describe("transcript validation", () => {
     expect(() => validateTranscriptCandidate({ ...valid, requestId: newRequestId() }, input)).toThrow(/requestId/u);
     expect(() => validateTranscriptCandidate({ ...valid, utteranceId: newUtteranceId() }, input)).toThrow(/utteranceId/u);
     expect(() => validateTranscriptCandidate({ ...valid, sourceAudioBasis: basis({ pcmSha256: "b".repeat(64) }) }, input)).toThrow(/audio basis/u);
+  });
+
+  it("runtime-validates the expected callback basis instead of trusting typed callers", () => {
+    const input = recognizerInput();
+    const raw = {
+      requestId: input.requestId,
+      utteranceId: input.utteranceId,
+      text: "candidate",
+      isFinal: true,
+      model: { name: "fake", version: "1" },
+      sourceAudioBasis: input.sourceAudioBasis
+    };
+    expect(() => validateTranscriptCandidate(raw, {
+      ...input,
+      sourceAudioBasis: { ...input.sourceAudioBasis, sampleCount: Number.NaN }
+    })).toThrow();
   });
 
   it("rejects malformed or overlapping timing metadata", () => {
@@ -187,6 +207,43 @@ describe("Moonshine-compatible adapter seam", () => {
     )).rejects.toThrow(/PCM length/u);
   });
 
+  it("rejects PCM whose bytes do not match the claimed source hash", async () => {
+    const input = recognizerInput();
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime: {
+        runtimeVersion: "test-runtime",
+        supportsAbort: false,
+        async transcribe() { return { text: "should not run" }; }
+      },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    const tampered = new Uint8Array(input.pcmBytes);
+    tampered[0] = 1;
+    await expect(recognizer.recognize(
+      { ...input, pcmBytes: tampered },
+      new AbortController().signal
+    )).rejects.toThrow(/do not match the source audio basis/u);
+  });
+
+  it("rejects runtimes that mutate the PCM buffer they were given", async () => {
+    const input = recognizerInput();
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime: {
+        runtimeVersion: "test-runtime",
+        supportsAbort: false,
+        async transcribe(value: { readonly pcmBytes: Uint8Array }) {
+          value.pcmBytes[0] = 1;
+          return { text: "mutated" };
+        }
+      },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    await expect(recognizer.recognize(input, new AbortController().signal)).rejects.toThrow(/mutated PCM/u);
+    expect(input.pcmBytes[0]).toBe(0);
+  });
+
   it("reports honest cancellation capability and exposes model identity", async () => {
     let signalWasProvided = false;
     const runtime = {
@@ -211,3 +268,8 @@ describe("Moonshine-compatible adapter seam", () => {
     expect(candidate.text).toBe("moonshine transcript");
   });
 });
+
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
