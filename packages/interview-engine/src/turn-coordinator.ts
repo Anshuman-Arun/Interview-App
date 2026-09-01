@@ -687,6 +687,20 @@ export class TurnCoordinator {
       if (!pedagogicalAction.success) {
         throw new Error("Generation requires a valid application-selected pedagogical action");
       }
+      const existingNonterminalGeneration = Object.values(state.generations).find(
+        (generation) =>
+          generation.basis.turnId === turnId
+          && (
+            generation.status === "ACTIVE"
+            || generation.status === "PROPOSAL_RECEIVED"
+            || generation.status === "VALIDATED"
+          )
+      );
+      if (existingNonterminalGeneration !== undefined) {
+        throw new Error(
+          "Generation requires any prior nonterminal generation for the turn to be explicitly superseded"
+        );
+      }
       const basis: GenerationBasis = {
         contextEpoch: state.contextEpoch,
         committedInputSequence: state.lastCommittedInputSequence,
