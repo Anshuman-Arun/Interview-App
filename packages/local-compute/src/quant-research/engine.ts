@@ -812,6 +812,24 @@ function validateGeneratedScenario(state: InternalState): void {
       if (hasSharedPair(base.allocations, perturbed.allocations)) {
         throw new QuantResearchError("INVALID_DEFINITION", "Experiment cost perturbation leaves an optimal allocation unchanged");
       }
+      for (const allocation of base.allocations) {
+        const remainsFeasible =
+          allocation.a * state.config.perturbedCostA + allocation.b * state.config.perturbedCostB <= state.config.totalBudget;
+        if (
+          remainsFeasible &&
+          boundedScore(allocationEfficiency(
+            allocation.a,
+            allocation.b,
+            state.config.perturbedCostA,
+            state.config.perturbedCostB,
+            state.config.noiseA,
+            state.config.noiseB,
+            state.config.totalBudget
+          ) * 100) === 100
+        ) {
+          throw new QuantResearchError("INVALID_DEFINITION", "Experiment perturbation does not require adaptation for full credit");
+        }
+      }
       const minA = Math.min(...state.sequenceA);
       const maxA = Math.max(...state.sequenceA);
       const minB = Math.min(...state.sequenceB);
@@ -843,6 +861,20 @@ function validateGeneratedScenario(state: InternalState): void {
       );
       if (hasSharedOptimizationPoint(base, perturbed)) {
         throw new QuantResearchError("INVALID_DEFINITION", "Optimization perturbation leaves an exact optimum unchanged");
+      }
+      for (const point of base) {
+        if (!isFeasible(point.x, point.y, state.config.perturbedBudget, state.config.maxX, state.config.maxY)) continue;
+        const perturbedValue = objective(
+          point.x,
+          point.y,
+          state.coefficientX,
+          state.coefficientY,
+          state.config.perturbedPenalty
+        );
+        const perturbedQuality = objectiveQuality(perturbedValue, state.perturbedBestObjective);
+        if (boundedScore(perturbedQuality * 100) === 100) {
+          throw new QuantResearchError("INVALID_DEFINITION", "Optimization perturbation does not require adaptation for full credit");
+        }
       }
       break;
     }
