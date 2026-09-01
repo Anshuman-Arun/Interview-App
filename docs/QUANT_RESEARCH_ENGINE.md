@@ -74,7 +74,7 @@ The candidate allocates a bounded budget between two noisy experiments, with eve
 
 ### Model comparison
 
-The candidate distinguishes a constant versus linear latent data-generating family from deterministic noisy observations and reassesses after a single disclosed outlier perturbation. Linear instances are generated with a disclosed minimum slope magnitude relative to the ordinary noise radius, making the baseline families deterministically distinguishable; after perturbation, the public state preserves both baseline and perturbed observations. Evidence captures initial correctness, robustness, and consistency.
+The candidate distinguishes a constant versus linear latent data-generating family from deterministic noisy observations and reassesses after a single disclosed outlier perturbation. The generated intercept and slope remain private authoritative parameters. Initialization validates their generator bounds and verifies every baseline point lies within the disclosed additive-noise radius of that exact latent trend; linear instances also use the disclosed minimum slope magnitude, making the baseline families deterministically distinguishable. After perturbation, the public state preserves both baseline and perturbed observations. Evidence captures initial correctness, robustness, and consistency.
 
 ### Constrained optimization
 
