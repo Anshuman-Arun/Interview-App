@@ -1381,24 +1381,24 @@ function evaluateErrorRecovery(
 
   const positiveByDimension = new Map<
     EvidenceKey["dimension"],
+    ReturnType<typeof buildApproachRecoveryIndex>
+  >();
+  const groupedPositives = new Map<
+    EvidenceKey["dimension"],
     typeof positiveApproachRecords
   >();
   for (const record of positiveApproachRecords) {
-    const current = positiveByDimension.get(record.dimension) ?? [];
+    const current = groupedPositives.get(record.dimension) ?? [];
     current.push(record);
-    positiveByDimension.set(record.dimension, current);
+    groupedPositives.set(record.dimension, current);
   }
-  for (const records of positiveByDimension.values()) {
-    records.sort(
-      (left, right) =>
-        left.sequence - right.sequence ||
-        compareStrings(left.approachId, right.approachId)
-    );
+  for (const [dimension, records] of groupedPositives) {
+    positiveByDimension.set(dimension, buildApproachRecoveryIndex(records));
   }
 
   for (const error of unresolvedApproachErrors) {
     const switched = findApproachSwitchRecovery(
-      positiveByDimension.get(error.dimension) ?? [],
+      positiveByDimension.get(error.dimension),
       error.approachId,
       error.sequence
     );
@@ -1439,23 +1439,47 @@ function evaluateErrorRecovery(
   };
 }
 
+interface ApproachRecoveryCandidate {
+  readonly approachId: string;
+  readonly sequence: number;
+  readonly confidence: number;
+  readonly refs: readonly EvaluationEvidenceRef[];
+}
+
+interface ApproachRecoveryIndex {
+  readonly records: readonly ApproachRecoveryCandidate[];
+  readonly nextDifferentIndex: readonly number[];
+}
+
+function buildApproachRecoveryIndex(
+  input: readonly ApproachRecoveryCandidate[]
+): ApproachRecoveryIndex {
+  const records = [...input].sort(
+    (left, right) =>
+      left.sequence - right.sequence ||
+      compareStrings(left.approachId, right.approachId)
+  );
+  const nextDifferentIndex = new Array<number>(records.length).fill(-1);
+  for (let index = records.length - 2; index >= 0; index -= 1) {
+    const current = records[index];
+    const next = records[index + 1];
+    if (current === undefined || next === undefined) continue;
+    nextDifferentIndex[index] =
+      next.approachId !== current.approachId
+        ? index + 1
+        : nextDifferentIndex[index + 1] ?? -1;
+  }
+  return { records, nextDifferentIndex };
+}
+
 function findApproachSwitchRecovery(
-  records: readonly {
-    readonly approachId: string;
-    readonly sequence: number;
-    readonly confidence: number;
-    readonly refs: readonly EvaluationEvidenceRef[];
-  }[],
+  index: ApproachRecoveryIndex | undefined,
   excludedApproachId: string,
   afterSequence: number
-):
-  | {
-      readonly approachId: string;
-      readonly sequence: number;
-      readonly confidence: number;
-      readonly refs: readonly EvaluationEvidenceRef[];
-    }
-  | undefined {
+): ApproachRecoveryCandidate | undefined {
+  if (index === undefined) return undefined;
+  const { records, nextDifferentIndex } = index;
+
   let low = 0;
   let high = records.length;
   while (low < high) {
@@ -1468,18 +1492,12 @@ function findApproachSwitchRecovery(
     }
   }
 
-  if (low >= records.length) return undefined;
   const first = records[low];
   if (first === undefined) return undefined;
   if (first.approachId !== excludedApproachId) return first;
 
-  for (let index = low + 1; index < records.length; index += 1) {
-    const candidate = records[index];
-    if (candidate !== undefined && candidate.approachId !== excludedApproachId) {
-      return candidate;
-    }
-  }
-  return undefined;
+  const nextIndex = nextDifferentIndex[low] ?? -1;
+  return nextIndex < 0 ? undefined : records[nextIndex];
 }
 
 function computeComposite(
