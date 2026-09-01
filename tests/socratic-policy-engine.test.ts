@@ -635,7 +635,7 @@ describe("production Socratic policy engine", () => {
     });
   });
 
-  it("fails closed when exposed assistance has VALIDATED status but no recorded proposal", () => {
+  it("fails closed when VALIDATED history has no exact validated proposal snapshot", () => {
     const { state: base, turnId } = makeState();
     let state = withEvidence(
       base,
@@ -653,14 +653,15 @@ describe("production Socratic policy engine", () => {
     );
     expect(historicalGeneration).toBeDefined();
     if (historicalGeneration === undefined) throw new Error("missing historical generation");
-    const withoutProposal = { ...historicalGeneration };
-    delete withoutProposal.proposal;
+    const withoutValidatedSnapshot = { ...historicalGeneration };
+    delete withoutValidatedSnapshot.proposal;
+    delete withoutValidatedSnapshot.validatedInterviewerProposal;
 
     state = {
       ...state,
       generations: {
         ...state.generations,
-        [historicalGeneration.generationId]: withoutProposal
+        [historicalGeneration.generationId]: withoutValidatedSnapshot
       }
     };
 
