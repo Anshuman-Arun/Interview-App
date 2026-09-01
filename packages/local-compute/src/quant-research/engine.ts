@@ -114,6 +114,22 @@ function rationalToNumber(value: Rational): number {
   return value.numerator / value.denominator;
 }
 
+function compareRational(left: Rational, right: Rational): number {
+  const leftScaled = left.numerator * right.denominator;
+  const rightScaled = right.numerator * left.denominator;
+  if (!Number.isSafeInteger(leftScaled) || !Number.isSafeInteger(rightScaled)) {
+    throw new Error("Unsafe rational comparison");
+  }
+  return leftScaled < rightScaled ? -1 : leftScaled > rightScaled ? 1 : 0;
+}
+
+function rationalRatioToNumber(numerator: Rational, denominator: Rational): number {
+  if (denominator.numerator === 0) throw new Error("Rational ratio denominator is zero");
+  const top = numerator.numerator * denominator.denominator;
+  const bottom = numerator.denominator * denominator.numerator;
+  return rationalToNumber(rational(top, bottom));
+}
+
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
@@ -208,7 +224,7 @@ function initialize(definition: QuantResearchScenarioDefinition): InternalState 
     case "EXPERIMENTAL_ALLOCATION": {
       const midpoint = rng.nextInt(35, 65);
       const direction = rng.nextInt(0, 1) === 0 ? -1 : 1;
-      const gap = rng.nextInt(2, 8);
+      const gap = definition.config.noiseA + definition.config.noiseB + rng.nextInt(1, 6);
       const hiddenMeanA = midpoint;
       const hiddenMeanB = midpoint + direction * gap;
       const sequenceLength = Math.min(100, definition.config.totalBudget);
@@ -287,16 +303,39 @@ function objective(x: number, y: number, coefficientX: number, coefficientY: num
   return coefficientX * x + coefficientY * y - penalty * x * y;
 }
 
-function discreteUniformNoiseVariance(radius: number): number {
-  return radius * (radius + 1) / 3;
+interface ExperimentalOptimum {
+  readonly variance: Rational;
+  readonly allocations: readonly Readonly<{ a: number; b: number }>[];
 }
 
-function allocationInformation(a: number, b: number, noiseA: number, noiseB: number): number {
-  if (a <= 0 || b <= 0) return 0;
-  const varianceA = discreteUniformNoiseVariance(noiseA);
-  const varianceB = discreteUniformNoiseVariance(noiseB);
-  const differenceVariance = varianceA / a + varianceB / b;
-  return differenceVariance <= 0 ? 0 : 1 / differenceVariance;
+function allocationVariance(a: number, b: number, noiseA: number, noiseB: number): Rational {
+  if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a <= 0 || b <= 0) {
+    throw new Error("Allocation variance requires positive integer sample counts");
+  }
+  const varianceFactorA = noiseA * (noiseA + 1);
+  const varianceFactorB = noiseB * (noiseB + 1);
+  return rational(varianceFactorA * b + varianceFactorB * a, 3 * a * b);
+}
+
+function experimentalOptimum(costA: number, costB: number, noiseA: number, noiseB: number, budget: number): ExperimentalOptimum {
+  let bestVariance: Rational | undefined;
+  let allocations: Array<Readonly<{ a: number; b: number }>> = [];
+  for (let candidateA = 1; candidateA <= budget; candidateA += 1) {
+    for (let candidateB = 1; candidateB <= budget; candidateB += 1) {
+      if (candidateA * costA + candidateB * costB > budget) continue;
+      const variance = allocationVariance(candidateA, candidateB, noiseA, noiseB);
+      if (bestVariance === undefined || compareRational(variance, bestVariance) < 0) {
+        bestVariance = variance;
+        allocations = [{ a: candidateA, b: candidateB }];
+      } else if (compareRational(variance, bestVariance) === 0) {
+        allocations.push({ a: candidateA, b: candidateB });
+      }
+    }
+  }
+  if (bestVariance === undefined || allocations.length === 0) {
+    throw new Error("Experimental allocation scenario has no feasible two-arm allocation");
+  }
+  return { variance: bestVariance, allocations };
 }
 
 function allocationEfficiency(
@@ -308,15 +347,9 @@ function allocationEfficiency(
   noiseB: number,
   budget: number
 ): number {
-  const information = allocationInformation(a, b, noiseA, noiseB);
-  let best = 0;
-  for (let candidateA = 1; candidateA <= 100; candidateA += 1) {
-    for (let candidateB = 1; candidateB <= 100; candidateB += 1) {
-      if (candidateA * costA + candidateB * costB > budget) continue;
-      best = Math.max(best, allocationInformation(candidateA, candidateB, noiseA, noiseB));
-    }
-  }
-  return best === 0 ? 0 : Math.min(1, information / best);
+  const candidateVariance = allocationVariance(a, b, noiseA, noiseB);
+  const optimum = experimentalOptimum(costA, costB, noiseA, noiseB, budget);
+  return Math.max(0, Math.min(1, rationalRatioToNumber(optimum.variance, candidateVariance)));
 }
 
 function transition(state: InternalState, action: QuantResearchAction): InternalState {
@@ -509,11 +542,11 @@ function transitionOptimization(state: OptimizationState, action: QuantResearchA
 }
 
 function parseOptimizationParameters(values: readonly number[]): readonly [number, number] {
-  if (values.length !== 2) throw new QuantResearchError("INVALID_ACTION", "Optimization scenarios require exactly two parameters");
+  if (values.length !== 2) throw new QuantResearchError("ACTION_NOT_ALLOWED", "Optimization scenarios require exactly two parameters");
   const x = values[0];
   const y = values[1];
   if (x === undefined || y === undefined || !Number.isSafeInteger(x) || !Number.isSafeInteger(y) || x < 0 || y < 0) {
-    throw new QuantResearchError("INVALID_ACTION", "Optimization parameters must be nonnegative safe integers");
+    throw new QuantResearchError("ACTION_NOT_ALLOWED", "Optimization parameters must be nonnegative safe integers");
   }
   return [x, y];
 }
@@ -877,11 +910,12 @@ function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
     throw new QuantResearchError("INVALID_REPLAY", "Replay actions could not be safely inspected");
   }
   if (!isArray) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be an array");
+  const replayActions = actionsInput as unknown[];
   let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
-    keys = Reflect.ownKeys(actionsInput);
-    lengthDescriptor = Object.getOwnPropertyDescriptor(actionsInput, "length");
+    keys = Reflect.ownKeys(replayActions);
+    lengthDescriptor = Object.getOwnPropertyDescriptor(replayActions, "length");
   } catch {
     throw new QuantResearchError("INVALID_REPLAY", "Replay actions could not be safely inspected");
   }
@@ -906,7 +940,7 @@ function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
   for (let index = 0; index < length; index += 1) {
     let descriptor: PropertyDescriptor | undefined;
     try {
-      descriptor = Object.getOwnPropertyDescriptor(actionsInput, String(index));
+      descriptor = Object.getOwnPropertyDescriptor(replayActions, String(index));
     } catch {
       throw new QuantResearchError("INVALID_REPLAY", "Replay actions could not be safely inspected");
     }
