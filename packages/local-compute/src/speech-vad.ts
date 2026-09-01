@@ -449,12 +449,14 @@ export class AdaptiveEndpointingPolicy {
   }
 
   public decide(input: EndpointingInput): EndpointingDecision {
-    let boundedInput: z.infer<typeof EndpointingInputSchema>;
+    let parsed: ReturnType<typeof EndpointingInputSchema.safeParse>;
     try {
-      boundedInput = EndpointingInputSchema.parse(input);
+      parsed = EndpointingInputSchema.safeParse(input);
     } catch {
       throw new Error("Endpointing input is invalid");
     }
+    if (!parsed.success) throw parsed.error;
+    const boundedInput = parsed.data;
     if (boundedInput.state === "FINALIZED" || boundedInput.state === "CANCELLED") {
       throw new Error("Endpointing cannot advance a terminal VAD state");
     }
