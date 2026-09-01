@@ -237,6 +237,7 @@ function withAssistance(
           turnId
         },
         provider: "policy-test",
+        pedagogicalAction: request,
         status: "VALIDATED"
       }
     },
