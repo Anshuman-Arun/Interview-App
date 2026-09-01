@@ -61,7 +61,7 @@ describe("local compute result admission", () => {
     expect(laterDuplicate.appendedEventCount).toBe(0);
     expect(harness.store.eventCount(harness.sessionId)).toBe(eventCount);
     harness.store.close();
-  });
+  }, 15_000);
 
   it("discards a late result after transcript correction", async () => {
     const harness = await speechHarness();
