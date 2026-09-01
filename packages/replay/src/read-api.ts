@@ -10,6 +10,7 @@ import {
   type EvaluationDimensionName,
   type SessionEvaluation
 } from "../../domain/src/index.js";
+import type { EventType } from "../../events/src/index.js";
 import {
   MAX_REPLAY_IDENTIFIER_CHARS,
   previewText,
@@ -392,6 +393,102 @@ export const ReplayReadCategorySchema = z.enum([
 ]);
 export type ReplayReadCategory = z.infer<typeof ReplayReadCategorySchema>;
 
+const SAFE_REPLAY_SUMMARY_BY_KIND = {
+  SESSION_STARTED: "Session started",
+  PROBLEM_PRESENTED: "Problem presented",
+  QUANT_RESEARCH_SCENARIO_INITIALIZED: "Quant Research scenario initialized",
+  QUANT_RESEARCH_ACTION_ACCEPTED: "Quant Research action accepted",
+  QUANT_RESEARCH_SCENARIO_COMPLETED: "Quant Research scenario completed",
+  UTTERANCE_STARTED: "Speech utterance started",
+  UTTERANCE_DISCARDED: "Speech utterance discarded",
+  INPUT_EPISODE_STARTED: "Input episode started",
+  INPUT_EPISODE_UPDATED: "Input episode updated",
+  INPUT_EPISODE_COMMITTED: "Input episode committed",
+  TURN_COMMITTED: "Turn committed",
+  TRANSCRIPT_FINALIZED: "Transcript finalized",
+  TRANSCRIPT_CORRECTED: "Transcript corrected",
+  BOARD_PATCH_COMMITTED: "Whiteboard changed",
+  VISION_REQUESTED: "Vision verification requested",
+  VISION_RESULT_ACCEPTED: "Vision result accepted",
+  VISION_RESULT_DISCARDED: "Vision result discarded",
+  LOCAL_COMPUTE_REQUESTED: "Local compute requested",
+  LOCAL_COMPUTE_RESULT_ACCEPTED: "Local compute result accepted",
+  LOCAL_COMPUTE_RESULT_DISCARDED: "Local compute result discarded",
+  VERIFICATION_REQUESTED: "Verification requested",
+  VERIFICATION_RESULT_ACCEPTED: "Verification result accepted",
+  VERIFICATION_RESULT_DISCARDED: "Verification result discarded",
+  EVIDENCE_PROPOSED: "Evidence proposed",
+  STUDENT_EVIDENCE_UPDATED: "Evidence updated",
+  STUDENT_EVIDENCE_INVALIDATED: "Evidence marked stale",
+  PEDAGOGICAL_ACTION_SELECTED: "Pedagogical policy decision",
+  MODEL_GENERATION_STARTED: "Generation started",
+  GENERATION_CONTEXT_COMPILED: "Generation context compiled",
+  MODEL_PROPOSAL_RECEIVED: "Generated proposal persisted",
+  FORMAL_INTERPRETATION_PROPOSAL_RECEIVED: "Formal interpretation proposal persisted",
+  FORMAL_INTERPRETATION_PROPOSAL_REJECTED: "Formal interpretation proposal rejected",
+  MODEL_GENERATION_SUPERSEDED: "Generation superseded",
+  PROPOSAL_VALIDATED: "Generated proposal authorized",
+  PROPOSAL_REJECTED: "Generated proposal rejected",
+  DELIVERY_QUEUED: "Delivery authorized and queued",
+  DELIVERY_STARTED: "Delivery started",
+  DELIVERY_EXPOSED: "Delivery exposed",
+  DELIVERY_COMPLETED: "Delivery completed",
+  DELIVERY_CANCELLED: "Delivery cancelled before known exposure",
+  DELIVERY_POSSIBLY_EXPOSED: "Delivery possibly exposed",
+  POLICY_REVISION_CHANGED: "Policy revision changed",
+  PROBLEM_STATE_REVISION_CHANGED: "Problem-state revision changed",
+  SESSION_COMPLETED: "Session completed",
+  SESSION_ARCHIVED: "Session archived",
+  SESSION_RESUMED: "Session resumed",
+  UNKNOWN_EVENT: "Unknown authoritative event; payload intentionally withheld"
+} as const satisfies Readonly<Record<EventType | "UNKNOWN_EVENT", string>>;
+
+function expectedReplayReadCategory(
+  kind: string,
+  source: string
+): ReplayReadCategory {
+  if (
+    kind === "TURN_COMMITTED"
+    || kind === "UTTERANCE_STARTED"
+    || kind === "UTTERANCE_DISCARDED"
+    || kind === "INPUT_EPISODE_STARTED"
+    || kind === "INPUT_EPISODE_UPDATED"
+    || kind === "INPUT_EPISODE_COMMITTED"
+    || kind === "TRANSCRIPT_FINALIZED"
+    || kind === "TRANSCRIPT_CORRECTED"
+  ) return "STUDENT";
+  if (kind === "BOARD_PATCH_COMMITTED") return "WHITEBOARD";
+  if (
+    kind === "VERIFICATION_REQUESTED"
+    || kind === "VERIFICATION_RESULT_ACCEPTED"
+    || kind === "VERIFICATION_RESULT_DISCARDED"
+  ) return "VERIFICATION";
+  if (
+    kind === "STUDENT_EVIDENCE_UPDATED"
+    || kind === "STUDENT_EVIDENCE_INVALIDATED"
+  ) return "EVIDENCE";
+  if (
+    kind === "DELIVERY_QUEUED"
+    || kind === "DELIVERY_STARTED"
+    || kind === "DELIVERY_EXPOSED"
+    || kind === "DELIVERY_COMPLETED"
+    || kind === "DELIVERY_CANCELLED"
+    || kind === "DELIVERY_POSSIBLY_EXPOSED"
+  ) {
+    return kind === "DELIVERY_POSSIBLY_EXPOSED" && source === "RECOVERY"
+      ? "RECOVERY"
+      : "INTERVIEWER_DELIVERY";
+  }
+  if (kind === "SESSION_RESUMED") return "RECOVERY";
+  if (
+    kind === "SESSION_STARTED"
+    || kind === "PROBLEM_PRESENTED"
+    || kind === "SESSION_COMPLETED"
+    || kind === "SESSION_ARCHIVED"
+  ) return "LIFECYCLE";
+  return "SYSTEM";
+}
+
 const REPLAY_DELIVERY_EVENT_KINDS = new Set([
   "DELIVERY_QUEUED",
   "DELIVERY_STARTED",
@@ -460,6 +557,20 @@ export const ReplayReadEntrySchema = z.object({
     inferenceConfidence: z.number().min(0).max(1).optional()
   }).strict().optional()
 }).strict().superRefine((entry, context) => {
+  const safeSummary = SAFE_REPLAY_SUMMARY_BY_KIND[
+    entry.kind as keyof typeof SAFE_REPLAY_SUMMARY_BY_KIND
+  ];
+  if (
+    safeSummary === undefined
+    || entry.summary !== safeSummary
+    || entry.category !== expectedReplayReadCategory(entry.kind, entry.source)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay label metadata is inconsistent with its authoritative event kind"
+    });
+  }
+
   const textMayBeRendered =
     entry.kind === "TURN_COMMITTED"
     || entry.kind === "BOARD_PATCH_COMMITTED"
@@ -1005,46 +1116,7 @@ export function projectGroundedEvaluationReadModel(
 }
 
 function replayCategory(entry: ReplayTimelineEntry): ReplayReadCategory {
-  if (entry.kind === "TURN_COMMITTED") return "STUDENT";
-  if (entry.kind === "BOARD_PATCH_COMMITTED") return "WHITEBOARD";
-  if (
-    entry.kind === "VERIFICATION_REQUESTED"
-    || entry.kind === "VERIFICATION_RESULT_ACCEPTED"
-    || entry.kind === "VERIFICATION_RESULT_DISCARDED"
-  ) {
-    return "VERIFICATION";
-  }
-  if (
-    entry.kind === "STUDENT_EVIDENCE_UPDATED"
-    || entry.kind === "STUDENT_EVIDENCE_INVALIDATED"
-  ) {
-    return "EVIDENCE";
-  }
-  if (
-    entry.kind === "DELIVERY_QUEUED"
-    || entry.kind === "DELIVERY_STARTED"
-    || entry.kind === "DELIVERY_EXPOSED"
-    || entry.kind === "DELIVERY_COMPLETED"
-    || entry.kind === "DELIVERY_CANCELLED"
-    || entry.kind === "DELIVERY_POSSIBLY_EXPOSED"
-  ) {
-    if (
-      entry.kind === "DELIVERY_POSSIBLY_EXPOSED"
-      && entry.provenance.source === "RECOVERY"
-    ) {
-      return "RECOVERY";
-    }
-    return "INTERVIEWER_DELIVERY";
-  }
-  if (entry.kind === "SESSION_RESUMED") return "RECOVERY";
-  if (
-    entry.kind === "SESSION_STARTED"
-    || entry.kind === "SESSION_COMPLETED"
-    || entry.kind === "SESSION_ARCHIVED"
-  ) {
-    return "LIFECYCLE";
-  }
-  return "SYSTEM";
+  return expectedReplayReadCategory(entry.kind, entry.provenance.source);
 }
 
 function safeReplayText(entry: ReplayTimelineEntry): ReplayTimelineEntry["text"] | undefined {
