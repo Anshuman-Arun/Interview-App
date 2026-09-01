@@ -896,7 +896,7 @@ function collectExposedAssistance(
       disclosedIds.add(disclosureId);
     }
 
-    const turnSequence = rawTurn["committedSequence"] as number;
+    const turnSequence = rawTurn["committedSequence"];
     const current = byGeneration.get(delivery.data.generationId);
     const record: AssistanceRecord = {
       generationId: delivery.data.generationId,
@@ -1670,8 +1670,32 @@ export function decidePedagogicalPolicy(
   turnId: string,
   problem: InterviewProblem
 ): PolicyDecision {
-  const turn = state.turns[turnId];
-  if (turn === undefined) throw new Error("Unknown turn " + turnId);
+  const rawTurns: unknown = state.turns;
+  const rawEpisodes: unknown = state.inputEpisodes;
+  if (!isRecord(rawTurns) || !isRecord(rawEpisodes)) {
+    return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
+  }
+
+  const rawTurn = rawTurns[turnId];
+  if (rawTurn === undefined) throw new Error("Unknown turn " + turnId);
+  if (
+    !isRecord(rawTurn)
+    || rawTurn["turnId"] !== turnId
+    || typeof rawTurn["inputEpisodeId"] !== "string"
+    || rawTurn["inputEpisodeId"].length === 0
+    || !Number.isSafeInteger(rawTurn["committedSequence"])
+    || (rawTurn["committedSequence"] as number) <= 0
+  ) {
+    return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
+  }
+  const rawEpisode = rawEpisodes[rawTurn["inputEpisodeId"]];
+  if (
+    !isRecord(rawEpisode)
+    || rawEpisode["inputEpisodeId"] !== rawTurn["inputEpisodeId"]
+    || rawEpisode["status"] !== "COMMITTED"
+  ) {
+    return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
+  }
 
   const graphResult = validateGraphContext(problem);
   if (!graphResult.ok) return failClosedDecision(turnId, graphResult.reasonCode);
@@ -1686,6 +1710,9 @@ export function decidePedagogicalPolicy(
   }
   if (state.problem.providerContextSpecSha256 === undefined) {
     return failClosedDecision(turnId, "PROBLEM_PROVENANCE_UNKNOWN");
+  }
+  if (state.problem.prompt !== problem.public.prompt) {
+    return failClosedDecision(turnId, "PROBLEM_DEFINITION_MISMATCH");
   }
   let policyProblemFingerprint: string;
   try {
