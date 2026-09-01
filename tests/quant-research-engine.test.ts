@@ -127,7 +127,7 @@ describe("deterministic Quant Research interview engine", () => {
       version: QUANT_RESEARCH_VERSION,
       generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
-      seed: 0,
+      seed: 3,
       config: { priorAlpha: 1, priorBeta: 1, observationCount: 2, perturbedPriorAlpha: 2, perturbedPriorBeta: 2 }
     }), "INVALID_DEFINITION");
 
@@ -136,7 +136,7 @@ describe("deterministic Quant Research interview engine", () => {
       version: QUANT_RESEARCH_VERSION,
       generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
-      seed: 3,
+      seed: 0,
       config: { priorAlpha: 1, priorBeta: 1, observationCount: 2, perturbedPriorAlpha: 1, perturbedPriorBeta: 2 }
     }), "INVALID_DEFINITION");
 
@@ -195,7 +195,7 @@ describe("deterministic Quant Research interview engine", () => {
       version: QUANT_RESEARCH_VERSION,
       generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
-      seed: 28,
+      seed: 10,
       config: { budget: 52, perturbedBudget: 49, maxX: 24, maxY: 55, perturbedPenalty: 0 }
     };
     const optimizationEngine = new QuantResearchEngine(optimizationDefinition);
