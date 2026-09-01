@@ -36,7 +36,10 @@ import {
   ReplayPanel
 } from "../apps/web/src/components/SessionReviewModal.js";
 import { createAndStartServer } from "../apps/server/src/server.js";
-import { SessionReadService } from "../apps/server/src/session-read-service.js";
+import {
+  SessionReadService,
+  createCatalogSessionProblemResolver
+} from "../apps/server/src/session-read-service.js";
 
 const TOKEN = "grounded_read_product_test_token_0000000000000001";
 const ORIGIN = "http://127.0.0.1:5173";
@@ -713,6 +716,34 @@ describe("grounded evaluation/replay product surface", () => {
     await reads.getReplay(sessionId);
     await reads.getEvaluation(sessionId);
     expect(server.store.eventCount(sessionId)).toBe(before);
+  });
+
+  it("rejects ambiguous exact-problem catalogs instead of silently choosing a duplicate", () => {
+    expect(() => createCatalogSessionProblemResolver([
+      sixPeopleProblem,
+      sixPeopleProblem
+    ])).toThrow("duplicate id/version");
+  });
+
+  it("does not expose session identities that cannot be addressed safely by the read route", () => {
+    const unsafeId = SessionIdSchema.parse("session/unsafe");
+    const reads = new SessionReadService({
+      source: {
+        hasSession: () => true,
+        sessionCount: () => 1,
+        listRecentSessionIds: () => [unsafeId],
+        eventCount: () => 0,
+        loadEvents: () => []
+      }
+    });
+
+    const history = reads.readHistory();
+    expect(history.sessions).toEqual([]);
+    expect(history.sessionTruncation).toEqual({
+      truncated: true,
+      limit: 100,
+      remainingCount: 1
+    });
   });
 
   it("returns a structured exact-problem failure instead of evaluating against a substitute", async () => {
