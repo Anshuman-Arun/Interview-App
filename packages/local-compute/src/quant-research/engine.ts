@@ -894,7 +894,7 @@ function validateGeneratedScenario(state: InternalState): void {
       const maxB = Math.max(...state.sequenceB);
       const orderingIsUnambiguous = state.hiddenMeanA > state.hiddenMeanB ? minA > maxB : minB > maxA;
       if (!orderingIsUnambiguous) {
-        throw new Error("Experimental observations can contradict the latent mean ordering");
+        throw new QuantResearchError("INVALID_DEFINITION", "Generated experimental observations do not preserve a meaningful latent ordering");
       }
       break;
     }
@@ -955,6 +955,13 @@ function assertExactEvidenceHistory(
 }
 
 function assertStateInvariants(state: InternalState): void {
+  if (
+    state.version !== QUANT_RESEARCH_VERSION ||
+    state.generatorVersion !== QUANT_RESEARCH_GENERATOR_VERSION ||
+    state.rngVersion !== QUANT_RESEARCH_RNG_VERSION
+  ) {
+    throw new Error("Scenario compatibility invariant violated");
+  }
   if ((state.status === "COMPLETE") !== (state.stage === "COMPLETE")) throw new Error("Scenario completion invariant violated");
   if (state.acceptedActions.length > MAX_ACTIONS) throw new Error("Action limit invariant violated");
   const ids = new Set(state.acceptedActions.map((action) => action.actionId));
