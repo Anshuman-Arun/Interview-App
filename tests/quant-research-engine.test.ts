@@ -308,6 +308,16 @@ describe("deterministic Quant Research interview engine", () => {
     }
   });
 
+  it("keeps authoritative hidden state runtime-private, not merely TypeScript-private", () => {
+    for (const definition of [bayesian, sampling, experimental, model, optimization]) {
+      const engine = new QuantResearchEngine(definition);
+      expect(Reflect.ownKeys(engine)).not.toContain("state");
+      expect(Reflect.ownKeys(engine)).not.toContain("applyingAction");
+      expect((engine as unknown as Record<string, unknown>).state).toBeUndefined();
+      expect(JSON.stringify(engine)).toBe("{}");
+    }
+  });
+
   it("rejected actions do not reveal hidden answers in errors or mutate state", () => {
     const engine = new QuantResearchEngine(sampling);
     const before = engine.getState();
