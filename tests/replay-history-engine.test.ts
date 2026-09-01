@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
+  BoardActionSchema,
   DeliveryAtomSchema,
   EvidenceValueSchema,
   SessionEvaluationSchema,
@@ -42,7 +43,12 @@ import {
 } from "../packages/replay/src/index.js";
 import { MAX_REPLAY_EVALUATION_COLLECTION_ITEMS } from "../packages/replay/src/bounds.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
-import { authorizeSafeProbe, createCoreHarness, type CoreHarness } from "./harness.js";
+import {
+  authorizeSafeProbe,
+  createCoreHarness,
+  providerEnvelope,
+  type CoreHarness
+} from "./harness.js";
 
 const evidenceKey: EvidenceKey = {
   problemId: sixPeopleProblem.id,
@@ -241,27 +247,25 @@ async function queueAudio(harness: CoreHarness) {
 }
 
 async function queueWhiteboard(harness: CoreHarness, action: unknown) {
-  await authorizeSafeProbe(harness);
-  const atom = DeliveryAtomSchema.parse({
-    deliveryId: newDeliveryId(),
-    generationId: harness.generationId,
-    content: {
-      medium: "WHITEBOARD",
-      action
+  const boardAction = BoardActionSchema.parse(action);
+  const result = await harness.turns.processProposal({
+    envelope: providerEnvelope(harness),
+    problem: sixPeopleProblem,
+    proposal: {
+      realizedAction: "PROBE_JUSTIFICATION",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: [],
+      boardActions: [boardAction]
     },
-    disclosureIds: [],
-    effectiveDisclosureLevel: 0,
-    status: "VALIDATED"
+    validator: harness.validator
   });
-  await harness.writer.execute(
-    createCommandEnvelope({ sessionId: harness.sessionId, producer: "replay-whiteboard-test" }),
-    { operation: "QUEUE_REPLAY_WHITEBOARD", payload: { deliveryId: atom.deliveryId } },
-    z.object({ queued: z.literal(true) }).strict(),
-    () => ({
-      drafts: [{ source: "APPLICATION", type: "DELIVERY_QUEUED", payload: { atom } }],
-      result: { queued: true as const }
-    })
+  if (!result.accepted) {
+    throw new Error(`Whiteboard proposal rejected: ${result.reason ?? "unknown"}`);
+  }
+  const atom = result.deliveryAtoms.find((candidate) =>
+    candidate.content.medium === "WHITEBOARD"
   );
+  if (atom === undefined) throw new Error("Whiteboard proposal produced no board delivery");
   return atom;
 }
 
@@ -1860,7 +1864,7 @@ describe("replay/history projections", () => {
     ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
-  it("fails sanitized on oversized replay identifiers without changing authoritative schemas", async () => {
+  it("fails sanitized on oversized replay identifiers at the earliest validation boundary", async () => {
     const oversized = "x".repeat(513);
     const metadataSessionId = "session-oversized-metadata" as SessionId;
     const metadataHistory = base(metadataSessionId, "oversized-metadata").map(
@@ -1886,7 +1890,7 @@ describe("replay/history projections", () => {
           : item
       );
       expect(() => projectSessionHistory(oversizedProvider))
-        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SCHEMA" }));
     } finally {
       harness.store.close();
     }
