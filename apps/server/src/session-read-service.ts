@@ -198,6 +198,7 @@ export class SessionReadService {
     rawSessionId: SessionId
   ): SessionEvaluationReadResponse | null {
     const sessionId = SessionIdSchema.parse(rawSessionId);
+    if (boundedSessionIdentity(sessionId) === undefined) return null;
     const known = this.sessionKnown(sessionId);
     if (known === false) return null;
     if (known === undefined) {
@@ -271,6 +272,7 @@ export class SessionReadService {
 
   public readReplay(rawSessionId: SessionId): SessionReplayReadResponse | null {
     const sessionId = SessionIdSchema.parse(rawSessionId);
+    if (boundedSessionIdentity(sessionId) === undefined) return null;
     const known = this.sessionKnown(sessionId);
     if (known === false) return null;
     if (known === undefined) {
