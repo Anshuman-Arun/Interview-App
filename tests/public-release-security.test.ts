@@ -67,6 +67,11 @@ describe("public-release hygiene checker", () => {
       files: { ".env": "EXAMPLE=value\n" }
     },
     {
+      name: "mixed-case tracked environment file",
+      expectedCode: "SENSITIVE_FILE",
+      files: { ".Env.production": "EXAMPLE=value\n" }
+    },
+    {
       name: "local Windows user path",
       expectedCode: "LOCAL_USER_PATH",
       files: { "README.md": "path=" + "C:" + "\\Users\\alice\\private\\file.txt\n" }
