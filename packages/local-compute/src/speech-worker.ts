@@ -320,7 +320,7 @@ export class SpeechWorkerCore {
     const request = parsed.data;
     const fingerprint = fingerprintParts(JSON.stringify(request));
 
-    const cancellationReserveKey = this.streams.has(request.streamId) ? `cancel:${request.streamId}` : undefined;
+    const cancellationReserveKey = `cancel:${request.streamId}`;
     return this.runIdempotent(request.requestId, fingerprint, async () => {
       const context = this.streams.get(request.streamId);
       let cancellation: "RUNTIME_ABORT_REQUESTED" | "SUPPRESS_LATE_RESULT_ONLY" | "NOT_RECOGNIZING" = "NOT_RECOGNIZING";
@@ -479,7 +479,9 @@ export class SpeechWorkerCore {
     }
 
     if (step.speechStarted) context.speechConfirmed = true;
-    if (!context.speechConfirmed && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
+    if (!context.speechConfirmed
+        && step.state === "SILENCE"
+        && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
       const events = [this.event(frame.envelope.requestId, frame.envelope.streamId, {
         type: "UTTERANCE_DISCARDED",
         ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
