@@ -49,7 +49,10 @@ import { canonicalJson, createProviderContextSpecFingerprintSync } from "./conte
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
-import { invalidateUndeliveredPolicyOutput } from "./policy-output-invalidation.js";
+import {
+  invalidateGenerationOutput,
+  invalidateUndeliveredPolicyOutput
+} from "./policy-output-invalidation.js";
 import type { DisclosureValidator } from "./disclosure-validator.js";
 import type { SessionWriter } from "./session-writer.js";
 
@@ -839,7 +842,7 @@ export class TurnCoordinator {
         throw new Error(`Cannot supersede generation in ${generation.status}`);
       }
       return {
-        drafts: [{ source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId, reason } }],
+        drafts: [...invalidateGenerationOutput(state, generationId, reason)],
         result: { superseded: true }
       };
     });
