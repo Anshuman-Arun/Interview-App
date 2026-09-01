@@ -34,12 +34,10 @@ export class DeterministicRng {
     const output = [...input];
     for (let index = output.length - 1; index > 0; index -= 1) {
       const target = this.nextInt(0, index);
-      const left = output[index];
-      const right = output[target];
-      if (left !== undefined && right !== undefined) {
-        output[index] = right;
-        output[target] = left;
-      }
+      const left = output[index] as T;
+      const right = output[target] as T;
+      output[index] = right;
+      output[target] = left;
     }
     return output;
   }
