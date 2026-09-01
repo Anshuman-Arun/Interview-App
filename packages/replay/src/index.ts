@@ -20,4 +20,3 @@ export * from "./types.js";
 
 export * from "./read-api.js";
 
-export * from "./product-surface.js";
