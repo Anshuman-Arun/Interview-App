@@ -126,6 +126,37 @@ describe("speech worker adversarial races and hard limits", () => {
     await expect(pending).resolves.toEqual([]);
   });
 
+  it("does not let nonexistent streams steal cancellation reserve from admitted work", async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const vadBackend: VadBackend = {
+      async classify() {
+        await gate;
+        return { speechProbability: 0 };
+      }
+    };
+    const subject = worker({ vadBackend, maxInFlightRequests: 1, maxConcurrentStreams: 1 });
+    const fixture = frame(0, false, "real-reserve");
+    const pending = subject.submitFrame(fixture.envelope, fixture.pcm);
+
+    await expect(subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "nonexistent-reserve",
+      type: "CANCEL_SPEECH"
+    })).rejects.toMatchObject({ code: "RESOURCE_LIMIT" });
+
+    await expect(subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "real-reserve",
+      type: "CANCEL_SPEECH"
+    })).resolves.toContainEqual(expect.objectContaining({ type: "SPEECH_CANCELLED" }));
+
+    release?.();
+    await expect(pending).resolves.toEqual([]);
+  });
+
   it("hard-bounds queued frame requests while preserving cancellation reserve", async () => {
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => { release = resolve; });
