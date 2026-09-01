@@ -325,6 +325,20 @@ describe("deterministic Quant Research interview engine", () => {
     expect(configGetterInvoked).toBe(false);
   });
 
+  it("maps revoked proxies to bounded validation errors", () => {
+    const actionProxy = Proxy.revocable({ actionId: "revoked", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 0 }, {});
+    actionProxy.revoke();
+    expectCode(() => new QuantResearchEngine(sampling).applyAction(actionProxy.proxy), "INVALID_ACTION");
+
+    const registryProxy = Proxy.revocable([{ family: "BAYESIAN_UPDATING", version: QUANT_RESEARCH_VERSION }], {});
+    registryProxy.revoke();
+    expectCode(() => assertUniqueQuantResearchRegistrations(registryProxy.proxy), "INVALID_REGISTRY");
+
+    const replayProxy = Proxy.revocable([], {});
+    replayProxy.revoke();
+    expectCode(() => replayQuantResearch(bayesian, replayProxy.proxy), "INVALID_REPLAY");
+  });
+
   it("rejects sparse and accessor-backed parameter vectors", () => {
     const sparse = new Array<number>(2);
     sparse[1] = 0;
