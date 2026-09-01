@@ -36,7 +36,7 @@ tests/**/*.test.tsx
 
 Therefore desktop tests, replay tests, property tests, adversarial tests, browser tests, quant tests, verification tests, speech/TTS tests, and `tests/e2e-typed-interview.test.ts` are all covered by full-suite discovery.
 
-CI deliberately reruns the named desktop/replay/property/typed-E2E scripts as focused secondary gates. This both gives focused failure signal and validates those package-script contracts themselves. `pnpm test:property` uses Vitest's path filter on the `.property.test.` naming convention, so it does not rely on a stale hand-maintained list. These focused gates supplement rather than replace the full suite.
+CI deliberately reruns the named desktop/replay/property/typed-E2E scripts as focused secondary gates. This both gives focused failure signal and validates those package-script contracts themselves. `pnpm test:property` uses Vitest's path filter on the `.property.test.` naming convention and one worker, so it does not rely on a stale hand-maintained list and SQLite/subprocess-heavy adversarial property files do not resource-contend with one another. These focused gates supplement rather than replace the full suite.
 
 ## Local aggregate
 

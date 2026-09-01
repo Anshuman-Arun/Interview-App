@@ -53,7 +53,7 @@ CI and `pnpm check` intentionally rerun these focused scripts after the full-sui
 
 - `pnpm test:desktop`
 - `pnpm test:replay`
-- `pnpm test:property` — all files following the `.property.test.` naming convention;
+- `pnpm test:property` — all files following the `.property.test.` naming convention, serialized with one Vitest worker so SQLite/subprocess-heavy adversarial property files do not resource-contend with one another;
 - `pnpm test:e2e`
 
 They are also useful for local iteration. A focused gate passing is never sufficient evidence that the repository is merge-ready; full-suite discovery remains authoritative for repository-wide coverage. Running them in CI additionally prevents the named package scripts from silently becoming stale or broken.
