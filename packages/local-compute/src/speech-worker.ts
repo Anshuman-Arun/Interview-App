@@ -658,10 +658,19 @@ export class SpeechWorkerCore {
       }
     } catch (error) {
       if (context.cancelled || context.terminal || this.shuttingDown) return [];
-      if (error instanceof OperationTimeoutError) {
+      const pcmWasMutated = sha256(pcmBytes) !== basis.pcmSha256;
+      if (pcmWasMutated) {
+        events.push(this.errorEvent(
+          requestId,
+          context.streamId,
+          "RECOGNIZER_PROTOCOL_ERROR",
+          "Recognizer mutated bounded PCM input"
+        ));
+        this.rememberDiagnostic({ code: "RECOGNIZER_PROTOCOL_ERROR", streamId: context.streamId });
+      } else if (error instanceof OperationTimeoutError) {
         events.push(this.errorEvent(requestId, context.streamId, "RECOGNIZER_TIMEOUT", "Recognizer timed out"));
         this.rememberDiagnostic({ code: "RECOGNIZER_TIMEOUT", streamId: context.streamId });
-      } else if (error instanceof SpeechRecognizerProtocolError || sha256(pcmBytes) !== basis.pcmSha256) {
+      } else if (error instanceof SpeechRecognizerProtocolError) {
         events.push(this.errorEvent(
           requestId,
           context.streamId,
