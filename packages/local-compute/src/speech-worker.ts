@@ -139,6 +139,7 @@ export class SpeechWorkerCore {
   private readonly diagnostics: SpeechWorkerDiagnostic[] = [];
   private readonly vadOperations = new Set<Promise<unknown>>();
   private readonly recognizerOperations = new Set<Promise<unknown>>();
+  private readonly cancellationOperations = new Set<Promise<unknown>>();
   private readonly transcriptGate = new TranscriptResultGate();
   private readonly allocatedVadStates = new WeakSet<VoiceActivityStateMachine>();
   private readonly allocatedEndpointingPolicies = new WeakSet<AdaptiveEndpointingPolicy>();
@@ -1012,9 +1013,15 @@ export class SpeechWorkerCore {
   private async attemptRecognizerCancel(requestId: RequestId, streamId: SpeechStreamId): Promise<boolean> {
     const cancelRecognition = this.cancelRecognition;
     if (cancelRecognition === undefined) return false;
+    if (this.cancellationOperations.size >= this.maxConcurrentStreams) {
+      this.rememberDiagnostic({ code: "CANCELLATION_RESOURCE_LIMIT", streamId });
+      return false;
+    }
+    const cancellationOperation = Promise.resolve().then(async () => cancelRecognition(requestId));
+    this.trackUnderlyingOperation(this.cancellationOperations, cancellationOperation);
     try {
       const result = await withTimeout(
-        Promise.resolve().then(async () => cancelRecognition(requestId)),
+        cancellationOperation,
         this.cancellationTimeoutMs,
         () => undefined
       );
