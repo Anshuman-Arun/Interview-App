@@ -780,11 +780,17 @@ export const SafeProviderConfigurationValueSchema: z.ZodType<SafeProviderConfigu
     }
   });
 
+function isSafeProviderConfigurationRecord(
+  value: SafeProviderConfigurationValue
+): value is SafeProviderConfigurationRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export const SafeProviderConfigurationRecordSchema: z.ZodType<SafeProviderConfigurationRecord> =
   z.unknown().transform((value, context) => {
     try {
       const inspected = inspectSafeProviderConfigurationValue(value);
-      if (typeof inspected !== "object" || inspected === null || Array.isArray(inspected)) {
+      if (!isSafeProviderConfigurationRecord(inspected)) {
         context.addIssue({ code: "custom", message: "MALFORMED_CONFIGURATION" });
         return z.NEVER;
       }
