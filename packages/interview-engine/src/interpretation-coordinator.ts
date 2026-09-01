@@ -65,6 +65,7 @@ export const InterpretationRejectionReasonSchema = z.enum([
   "REQUEST_ID_CONFLICT",
   "IN_FLIGHT_LIMIT",
   "WRITER_CLOSED",
+  "SESSION_MISMATCH",
   "SESSION_NOT_ACTIVE",
   "UNKNOWN_GENERATION",
   "GENERATION_NOT_ACTIVE",
@@ -691,6 +692,9 @@ export class InterpretationCoordinator {
     }
 
     const state = this.writer.getState();
+    if (request.sessionId !== state.sessionId) {
+      return failed("SOURCE_MISMATCH", "SESSION_MISMATCH", candidateCount, request.requestId);
+    }
     if (!state.started || state.status !== "ACTIVE") {
       return failed("STALE", "SESSION_NOT_ACTIVE", candidateCount, request.requestId);
     }
