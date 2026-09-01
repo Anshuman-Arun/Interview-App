@@ -966,27 +966,38 @@ function inferActiveApproachId(
   evidence: readonly ActiveEvidenceSignal[],
   graph: GraphContext
 ): string | undefined {
-  const direct = evidence.find(
-    (signal) =>
-      signal.key.subject.kind === "APPROACH"
-      && signal.key.dimension === "PROGRESS"
-      && (signal.value.value === "PROGRESSING" || signal.value.value === "COMPLETE")
-  );
-  if (direct?.key.subject.kind === "APPROACH") return direct.key.subject.approachId;
+  for (const signal of evidence) {
+    if (signal.key.subject.kind === "APPROACH") {
+      return signal.key.subject.approachId;
+    }
+    if (signal.key.subject.kind !== "MILESTONE") continue;
 
-  const milestoneSignal = evidence.find(
-    (signal) =>
-      signal.key.subject.kind === "MILESTONE"
-      && signal.key.dimension === "PROGRESS"
-      && (signal.value.value === "PROGRESSING" || signal.value.value === "COMPLETE")
-  );
-  if (milestoneSignal?.key.subject.kind !== "MILESTONE") return undefined;
-  const milestoneId = milestoneSignal.key.subject.milestoneId;
-  const milestone = graph.problem.interviewer.reasoningGraph.milestones.find(
-    (item) => item.id === milestoneId
-  );
-  if (milestone === undefined || milestone.approachIds.length !== 1) return undefined;
-  return milestone.approachIds[0];
+    const milestone = graph.problem.interviewer.reasoningGraph.milestones.find(
+      (item) => item.id === signal.key.subject.milestoneId
+    );
+    if (milestone === undefined) continue;
+    if (milestone.approachIds.length === 1) return milestone.approachIds[0];
+  }
+  return undefined;
+}
+
+function evidenceForActiveApproach(
+  evidence: readonly ActiveEvidenceSignal[],
+  graph: GraphContext
+): readonly ActiveEvidenceSignal[] {
+  const activeApproachId = inferActiveApproachId(evidence, graph);
+  if (activeApproachId === undefined) return evidence;
+
+  return evidence.filter((signal) => {
+    if (signal.key.subject.kind === "APPROACH") {
+      return signal.key.subject.approachId === activeApproachId;
+    }
+    if (signal.key.subject.kind !== "MILESTONE") return true;
+    const milestone = graph.problem.interviewer.reasoningGraph.milestones.find(
+      (item) => item.id === signal.key.subject.milestoneId
+    );
+    return milestone?.approachIds.includes(activeApproachId) ?? false;
+  });
 }
 
 function selectNextMilestoneTarget(
@@ -1053,7 +1064,30 @@ function classifyProgress(
   graph: GraphContext,
   turnId: string
 ): ClassificationResult {
-  const conflictTarget = findConflictTarget(evidence, verification);
+  const actionable = evidence.filter(
+    (signal) => signal.value.inferenceConfidence >= MIN_ACTIONABLE_EVIDENCE_CONFIDENCE
+  );
+  const latestActionableSequence = actionable[0]?.value.lastUpdatedSequence ?? 0;
+  const latestVerificationSequence = verification[0]?.sequence ?? 0;
+  const latestLowConfidence = evidence.find(
+    (signal) => signal.value.inferenceConfidence < MIN_ACTIONABLE_EVIDENCE_CONFIDENCE
+  );
+  if (
+    latestLowConfidence !== undefined
+    && latestLowConfidence.value.lastUpdatedSequence > Math.max(
+      latestActionableSequence,
+      latestVerificationSequence
+    )
+  ) {
+    return {
+      classification: "AMBIGUOUS_STATEMENT",
+      reasonCode: "STATEMENT_AMBIGUOUS",
+      target: latestLowConfidence.target
+    };
+  }
+
+  const scopedEvidence = evidenceForActiveApproach(actionable, graph);
+  const conflictTarget = findConflictTarget(scopedEvidence, verification);
   if (conflictTarget !== undefined) {
     return {
       classification: "AMBIGUOUS_STATEMENT",
@@ -1062,34 +1096,7 @@ function classifyProgress(
     };
   }
 
-  const completedApproaches = findCompletedApproaches(evidence, graph);
-  const completionSequence = evidence
-    .filter((signal) => signal.value.value === "COMPLETE")
-    .reduce((maximum, signal) => Math.max(maximum, signal.value.lastUpdatedSequence), 0);
-  const laterProgress = evidence.find(
-    (signal) =>
-      signal.key.dimension === "PROGRESS"
-      && signal.value.value === "PROGRESSING"
-      && signal.value.lastUpdatedSequence > completionSequence
-  );
-  if (completedApproaches.length > 0 && laterProgress === undefined) {
-    const completedApproachId = completedApproaches[0];
-    const alternateApproachId = graph.problem.interviewer.reasoningGraph.approaches
-      .map((approach) => approach.id)
-      .filter((approachId) => !completedApproaches.includes(approachId))
-      .sort()[0];
-    return {
-      classification: "COMPLETED_PRIMARY_APPROACH",
-      reasonCode: "PRIMARY_APPROACH_COMPLETE",
-      target: alternateApproachId === undefined
-        ? { kind: "APPROACH", id: completedApproachId ?? graph.problem.interviewer.reasoningGraph.approaches[0]?.id ?? "completed" }
-        : { kind: "APPROACH", id: alternateApproachId },
-      ...(completedApproachId === undefined ? {} : { completedApproachId }),
-      ...(alternateApproachId === undefined ? {} : { alternateApproachId })
-    };
-  }
-
-  const structural = findSignal(evidence, "CORRECTNESS", new Set(["STRUCTURAL_ERROR"]));
+  const structural = findSignal(scopedEvidence, "CORRECTNESS", new Set(["STRUCTURAL_ERROR"]));
   if (structural !== undefined) {
     return {
       classification: "STRUCTURAL_ERROR",
@@ -1098,7 +1105,7 @@ function classifyProgress(
     };
   }
 
-  const misunderstood = findSignal(evidence, "UNDERSTANDING", new Set(["MISUNDERSTOOD_PROBLEM"]));
+  const misunderstood = findSignal(scopedEvidence, "UNDERSTANDING", new Set(["MISUNDERSTOOD_PROBLEM"]));
   if (misunderstood !== undefined) {
     return {
       classification: "MISUNDERSTANDING",
@@ -1107,7 +1114,7 @@ function classifyProgress(
     };
   }
 
-  const local = findSignal(evidence, "CORRECTNESS", new Set(["LOCAL_ERROR"]));
+  const local = findSignal(scopedEvidence, "CORRECTNESS", new Set(["LOCAL_ERROR"]));
   if (local !== undefined) {
     return {
       classification: "LOCAL_ERROR",
@@ -1126,7 +1133,7 @@ function classifyProgress(
     };
   }
 
-  const unsupported = findSignal(evidence, "JUSTIFICATION", new Set(["UNJUSTIFIED", "INCOMPLETE"]));
+  const unsupported = findSignal(scopedEvidence, "JUSTIFICATION", new Set(["UNJUSTIFIED", "INCOMPLETE"]));
   if (unsupported !== undefined) {
     const relatedVerification = verification.find((signal) => sameTarget(signal.target, unsupported.target));
     return {
@@ -1139,7 +1146,7 @@ function classifyProgress(
     };
   }
 
-  const stalled = findSignal(evidence, "PROGRESS", new Set(["STALLED", "REGRESSING"]));
+  const stalled = findSignal(scopedEvidence, "PROGRESS", new Set(["STALLED", "REGRESSING"]));
   if (stalled !== undefined) {
     return {
       classification: "TRUE_STAGNATION",
@@ -1148,21 +1155,58 @@ function classifyProgress(
     };
   }
 
-  const progressing = findSignal(evidence, "PROGRESS", new Set(["PROGRESSING"]));
+  const progressing = findSignal(scopedEvidence, "PROGRESS", new Set(["PROGRESSING"]));
   if (progressing !== undefined) {
-    const nextTarget = selectNextMilestoneTarget(evidence, graph);
-    const target = nextTarget ?? progressing.target;
+    const nextTarget = selectNextMilestoneTarget(scopedEvidence, graph);
+    const selectedTarget = nextTarget ?? progressing.target;
     if (isUnexpectedApproachTarget(progressing.target, graph)) {
       return {
         classification: "UNEXPECTED_VALID_APPROACH",
         reasonCode: "ALTERNATE_APPROACH_PROGRESS",
-        target
+        target: selectedTarget
       };
     }
     return {
       classification: "PRODUCTIVE_PROGRESS",
       reasonCode: "PROGRESS_CONTINUES",
-      target
+      target: selectedTarget
+    };
+  }
+
+  const completedApproaches = findCompletedApproaches(scopedEvidence, graph);
+  if (completedApproaches.length > 0) {
+    const completedApproachId = completedApproaches[0];
+    const alternateApproachId = graph.problem.interviewer.reasoningGraph.approaches
+      .map((approach) => approach.id)
+      .filter((approachId) => !completedApproaches.includes(approachId))
+      .sort()[0];
+    return {
+      classification: "COMPLETED_PRIMARY_APPROACH",
+      reasonCode: "PRIMARY_APPROACH_COMPLETE",
+      target: alternateApproachId === undefined
+        ? {
+            kind: "APPROACH",
+            id: completedApproachId
+              ?? graph.problem.interviewer.reasoningGraph.approaches[0]?.id
+              ?? "completed"
+          }
+        : { kind: "APPROACH", id: alternateApproachId },
+      ...(completedApproachId === undefined ? {} : { completedApproachId }),
+      ...(alternateApproachId === undefined ? {} : { alternateApproachId })
+    };
+  }
+
+  const completedMilestone = findSignal(scopedEvidence, "PROGRESS", new Set(["COMPLETE"]));
+  if (completedMilestone !== undefined) {
+    const nextTarget = selectNextMilestoneTarget(scopedEvidence, graph);
+    return {
+      classification: isUnexpectedApproachTarget(completedMilestone.target, graph)
+        ? "UNEXPECTED_VALID_APPROACH"
+        : "PRODUCTIVE_PROGRESS",
+      reasonCode: isUnexpectedApproachTarget(completedMilestone.target, graph)
+        ? "ALTERNATE_APPROACH_PROGRESS"
+        : "PROGRESS_CONTINUES",
+      target: nextTarget ?? completedMilestone.target
     };
   }
 
@@ -1186,7 +1230,20 @@ function classifyProgress(
     };
   }
 
-  const ambiguous = evidence.find(
+  const positive = scopedEvidence.find((signal) =>
+    (signal.key.dimension === "CORRECTNESS" && signal.value.value === "CORRECT")
+    || (signal.key.dimension === "UNDERSTANDING" && signal.value.value === "UNDERSTANDS")
+    || (signal.key.dimension === "JUSTIFICATION" && signal.value.value === "JUSTIFIED")
+  );
+  if (positive !== undefined) {
+    return {
+      classification: "PRODUCTIVE_PROGRESS",
+      reasonCode: "PROGRESS_CONTINUES",
+      target: positive.target
+    };
+  }
+
+  const ambiguous = scopedEvidence.find(
     (signal) =>
       signal.value.value === "UNKNOWN"
       || (signal.key.dimension === "STUDENT_CONFIDENCE" && signal.value.value === "UNCERTAIN")
@@ -1199,7 +1256,15 @@ function classifyProgress(
     };
   }
 
-  if (evidence.length === 0) {
+  if (actionable.length === 0) {
+    const latest = evidence[0];
+    if (latest !== undefined) {
+      return {
+        classification: "AMBIGUOUS_STATEMENT",
+        reasonCode: "STATEMENT_AMBIGUOUS",
+        target: latest.target
+      };
+    }
     return {
       classification: "INSUFFICIENT_EVIDENCE",
       reasonCode: "NO_CURRENT_EVIDENCE",
@@ -1207,7 +1272,7 @@ function classifyProgress(
     };
   }
 
-  const latest = evidence[0];
+  const latest = scopedEvidence[0] ?? actionable[0];
   return {
     classification: "AMBIGUOUS_STATEMENT",
     reasonCode: "STATEMENT_AMBIGUOUS",
@@ -1268,7 +1333,8 @@ function targetDisclosureAuthorization(
   target: PolicyTarget,
   level: DisclosureLevel,
   graph: GraphContext,
-  completed: ReadonlySet<string>
+  completed: ReadonlySet<string>,
+  alreadyDisclosed: ReadonlySet<DisclosureId>
 ): readonly DisclosureId[] {
   const allowed = new Set<DisclosureId>();
   if (level === 0 || target.kind !== "MILESTONE") return [];
@@ -1281,7 +1347,11 @@ function targetDisclosureAuthorization(
   const byId = disclosureMap(graph);
   for (const disclosureId of milestone.protectedDisclosureIds) {
     const disclosure = byId.get(disclosureId);
-    if (disclosure !== undefined && disclosure.minimumDisclosureLevel <= level) {
+    if (
+      disclosure !== undefined
+      && !alreadyDisclosed.has(disclosureId)
+      && disclosure.minimumDisclosureLevel <= level
+    ) {
       allowed.add(disclosureId);
     }
   }
@@ -1316,6 +1386,26 @@ function chooseActionPlan(
   targetAssistance: readonly AssistanceRecord[],
   hintLevel: DisclosureLevel | undefined
 ): ActionPlan {
+  if (
+    classification.classification === "PRODUCTIVE_PROGRESS"
+    || classification.classification === "UNEXPECTED_VALID_APPROACH"
+  ) {
+    return {
+      action: "WAIT",
+      requestedDisclosure: 0,
+      stage: "OBSERVE",
+      escalationJustified: false
+    };
+  }
+  if (classification.classification === "COMPLETED_PRIMARY_APPROACH") {
+    return {
+      action: classification.alternateApproachId === undefined ? "GENERALIZE" : "ASK_ALTERNATE_SOLUTION",
+      requestedDisclosure: 0,
+      stage: "OBSERVE",
+      escalationJustified: false
+    };
+  }
+
   const assistanceCount = targetAssistance.length;
   const assistanceSaturated = targetAssistance.some(
     (record) => record.action === "EXPLICIT_HINT" || record.effectiveDisclosureLevel >= 4
@@ -1331,14 +1421,6 @@ function chooseActionPlan(
   }
 
   switch (classification.classification) {
-    case "PRODUCTIVE_PROGRESS":
-    case "UNEXPECTED_VALID_APPROACH":
-      return {
-        action: "WAIT",
-        requestedDisclosure: 0,
-        stage: "OBSERVE",
-        escalationJustified: false
-      };
     case "INSUFFICIENT_EVIDENCE":
       return {
         action: "PROBE_JUSTIFICATION",
@@ -1377,11 +1459,27 @@ function chooseActionPlan(
           escalationJustified: true
         };
       }
+      if (assistanceCount === 2) {
+        return {
+          action: "DIRECTIONAL_NUDGE",
+          requestedDisclosure: 2,
+          stage: "NUDGE",
+          escalationJustified: true
+        };
+      }
+      if (hintLevel !== undefined) {
+        return {
+          action: "EXPLICIT_HINT",
+          requestedDisclosure: hintLevel,
+          stage: "HINT",
+          escalationJustified: true
+        };
+      }
       return {
-        action: "DIRECTIONAL_NUDGE",
-        requestedDisclosure: 2,
-        stage: "NUDGE",
-        escalationJustified: true
+        action: "FOCUS_ATTENTION",
+        requestedDisclosure: 1,
+        stage: "FOCUS",
+        escalationJustified: false
       };
     case "STRUCTURAL_ERROR":
       if (assistanceCount === 0) {
@@ -1501,13 +1599,10 @@ function chooseActionPlan(
         stage: "FOCUS",
         escalationJustified: false
       };
+    case "PRODUCTIVE_PROGRESS":
+    case "UNEXPECTED_VALID_APPROACH":
     case "COMPLETED_PRIMARY_APPROACH":
-      return {
-        action: classification.alternateApproachId === undefined ? "GENERALIZE" : "ASK_ALTERNATE_SOLUTION",
-        requestedDisclosure: 0,
-        stage: "OBSERVE",
-        escalationJustified: false
-      };
+      throw new Error("Progress classifications must be handled before intervention escalation");
   }
 }
 
@@ -1582,7 +1677,8 @@ export function decidePedagogicalPolicy(
     classification.target,
     plan.requestedDisclosure,
     graph,
-    completeMilestones
+    completeMilestones,
+    ledgerResult.value
   );
 
   const request = RealizationRequestSchema.parse({
