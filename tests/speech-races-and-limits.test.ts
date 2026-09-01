@@ -634,10 +634,17 @@ describe("speech worker adversarial races and hard limits", () => {
 
   it("hard-bounds lingering recognizer cancel hooks after timeout", async () => {
     let cancelCalls = 0;
+    let recognitionCount = 0;
+    const recognitionStarted = [
+      deferredSignal(),
+      deferredSignal()
+    ];
     const recognizer: SpeechRecognizer = {
       modelIdentity: { name: "cancel-hook-budget", version: "1" },
       cancellationCapability: "RUNTIME_ABORT",
       async recognize(_input, signal) {
+        recognitionStarted[recognitionCount]?.resolve();
+        recognitionCount += 1;
         return new Promise((_resolve, reject) => {
           signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
         });
@@ -655,14 +662,16 @@ describe("speech worker adversarial races and hard limits", () => {
       recognizerTimeoutMs: 200
     });
 
-    for (const streamId of ["cancel-budget-a", "cancel-budget-b"]) {
+    const streamIds = ["cancel-budget-a", "cancel-budget-b"];
+    for (let index = 0; index < streamIds.length; index += 1) {
+      const streamId = streamIds[index]!;
       for (let sequence = 0; sequence < 3; sequence += 1) {
         const fixture = frame(sequence, true, streamId);
         await subject.submitFrame(fixture.envelope, fixture.pcm);
       }
       const endpoint = frame(3, false, streamId);
       const finalizing = subject.submitFrame(endpoint.envelope, endpoint.pcm);
-      await Promise.resolve();
+      await recognitionStarted[index]!.promise;
       await subject.cancel({
         protocolVersion: 1,
         requestId: newRequestId(),
@@ -975,5 +984,15 @@ function deferredRecognizerWithHangingCancel() {
     recognizer,
     started,
     resolve(value: unknown) { resultResolve?.(value); }
+  };
+}
+
+
+function deferredSignal(): { promise: Promise<void>; resolve: () => void } {
+  let resolvePromise: (() => void) | undefined;
+  const promise = new Promise<void>((resolve) => { resolvePromise = resolve; });
+  return {
+    promise,
+    resolve() { resolvePromise?.(); }
   };
 }
