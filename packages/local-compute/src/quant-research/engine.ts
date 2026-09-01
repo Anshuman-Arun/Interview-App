@@ -411,9 +411,9 @@ function transitionSampling(state: SamplingState, action: QuantResearchAction): 
 function transitionExperimental(state: ExperimentalState, action: QuantResearchAction): ExperimentalState {
   if (state.stage === "INITIAL_ALLOCATION") {
     const allocation = requireAction(state, action, "ALLOCATE_SAMPLE");
-    validateExperimentalAllocation(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.totalBudget, true);
-    const summaryA = allocation.a === 0 ? 0 : mean(state.sequenceA.slice(0, allocation.a));
-    const summaryB = allocation.b === 0 ? 0 : mean(state.sequenceB.slice(0, allocation.b));
+    validateExperimentalAllocation(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.totalBudget);
+    const summaryA = mean(state.sequenceA.slice(0, allocation.a));
+    const summaryB = mean(state.sequenceB.slice(0, allocation.b));
     const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
     let next = appendAction(state, action, {
       stage: "EXPERIMENT_DECISION",
@@ -434,7 +434,7 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
   }
   if (state.stage === "PERTURBED_ALLOCATION") {
     const allocation = requireAction(state, action, "ALLOCATE_SAMPLE");
-    validateExperimentalAllocation(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.totalBudget, true);
+    validateExperimentalAllocation(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.totalBudget);
     const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
@@ -446,9 +446,9 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
   return notAllowed(state, action);
 }
 
-function validateExperimentalAllocation(a: number, b: number, costA: number, costB: number, budget: number, requireBothExperiments: boolean): void {
-  if (requireBothExperiments && (a === 0 || b === 0)) {
-    throw new QuantResearchError("ACTION_NOT_ALLOWED", "Initial allocation must sample both experiments before experiment comparison");
+function validateExperimentalAllocation(a: number, b: number, costA: number, costB: number, budget: number): void {
+  if (a === 0 || b === 0) {
+    throw new QuantResearchError("ACTION_NOT_ALLOWED", "Allocation must sample both experiments for a mean comparison");
   }
   if (a * costA + b * costB > budget) throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Sample allocation exceeds the public experiment budget");
 }
