@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { MAX_SPEECH_FRAME_DURATION_MS, MAX_SPEECH_UTTERANCE_DURATION_MS } from "./speech-protocol.js";
+import {
+  MAX_SPEECH_FRAME_DURATION_MS,
+  MAX_SPEECH_UTTERANCE_DURATION_MS,
+  type SpeechStreamId
+} from "./speech-protocol.js";
 import { snapshotPcmFrame, type PcmFrameSnapshot } from "./speech-pcm.js";
 
 export const VadObservationSchema = z.object({
@@ -39,6 +43,7 @@ export interface SileroVadRuntime {
   score(input: {
     readonly pcmBytes: Uint8Array;
     readonly sampleRate: number;
+    readonly streamId: SpeechStreamId;
     readonly modelPath: string;
     readonly signal?: AbortSignal;
   }): Promise<unknown>;
@@ -61,6 +66,7 @@ export class SileroVadBackend implements VadBackend {
     const rawProbability = await this.scoreRuntime({
       pcmBytes: boundedFrame.bytes,
       sampleRate: boundedFrame.envelope.sampleRate,
+      streamId: boundedFrame.envelope.streamId,
       modelPath: this.modelPath,
       ...(signal === undefined ? {} : { signal })
     });
