@@ -78,6 +78,7 @@ export class BrowserAudioPlayback {
   private readonly elementSinkStates = new WeakMap<object, string | null>();
   private readonly elementSinkOperations = new WeakMap<object, Promise<void>>();
   private current: PendingPlayback | undefined;
+  private setupInFlight = false;
   private disposed = false;
   private cancellingAll = false;
   private clearingQueued = false;
@@ -314,6 +315,7 @@ export class BrowserAudioPlayback {
       || this.cancellingAll
       || this.clearingQueued
       || this.current !== undefined
+      || this.setupInFlight
     ) return;
     const next = this.queue.shift();
     if (next === undefined) return;
@@ -322,6 +324,7 @@ export class BrowserAudioPlayback {
   }
 
   private async startCurrent(pending: PendingPlayback): Promise<void> {
+    this.setupInFlight = true;
     let element: BrowserAudioElementLike | undefined;
     let elementSetupKey: object | undefined;
     try {
@@ -583,6 +586,8 @@ export class BrowserAudioPlayback {
       ) {
         this.elementSetupOwners.delete(elementSetupKey);
       }
+      this.setupInFlight = false;
+      this.drain();
     }
   }
 
