@@ -133,6 +133,47 @@ describe("speech worker adversarial races and hard limits", () => {
     await expect(second).resolves.toEqual([]);
   });
 
+  it("does not let duplicate cancellation requests consume every overflow reserve slot", async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const vadBackend: VadBackend = {
+      async classify() {
+        await gate;
+        return { speechProbability: 0 };
+      }
+    };
+    const subject = worker({ vadBackend, maxInFlightRequests: 1, maxConcurrentStreams: 2 });
+    const left = frame(0, false, "reserve-left");
+    const right = frame(0, false, "reserve-right");
+    const first = subject.submitFrame(left.envelope, left.pcm);
+    const rightStart = subject.submitFrame(right.envelope, right.pcm).catch(() => []);
+
+    const cancelLeft = subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "reserve-left",
+      type: "CANCEL_SPEECH"
+    });
+    await expect(subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "reserve-left",
+      type: "CANCEL_SPEECH"
+    })).rejects.toMatchObject({ code: "RESOURCE_LIMIT" });
+
+    await expect(subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "reserve-right",
+      type: "CANCEL_SPEECH"
+    })).resolves.toContainEqual(expect.objectContaining({ type: "SPEECH_CANCELLED" }));
+
+    release?.();
+    await cancelLeft;
+    await first;
+    await rightStart;
+  });
+
   it("remembers stable failures so a failed RequestId cannot later be reused with different content", async () => {
     const subject = worker();
     const requestId = newRequestId();
@@ -214,7 +255,7 @@ describe("speech worker adversarial races and hard limits", () => {
     await expect(pending).resolves.toEqual([]);
   });
 
-  it("does not expire an active onset candidate merely because hysteresis exceeds the silence timeout", async () => {
+  it("does not let a long onset candidate bypass the hard pre-speech lifetime", async () => {
     const subject = worker({
       maxPreSpeechDurationMs: 60,
       vadStateFactory: () => new VoiceActivityStateMachine({
@@ -224,15 +265,76 @@ describe("speech worker adversarial races and hard limits", () => {
       })
     });
     const events: SpeechWorkerEvent[] = [];
-    for (let sequence = 0; sequence < 5; sequence += 1) {
+    for (let sequence = 0; sequence < 3; sequence += 1) {
       const fixture = frame(sequence, true, "long-onset");
       events.push(...await subject.submitFrame(fixture.envelope, fixture.pcm));
     }
     expect(events).toContainEqual(expect.objectContaining({
-      type: "SPEECH_STARTED",
-      atTimestampMs: 0
+      type: "UTTERANCE_DISCARDED",
+      reason: "NO_SPEECH_TIMEOUT"
     }));
-    expect(events.some((event) => event.type === "UTTERANCE_DISCARDED" && event.reason === "NO_SPEECH_TIMEOUT")).toBe(false);
+    expect(events.some((event) => event.type === "SPEECH_STARTED")).toBe(false);
+    expect(subject.getActiveStreamCount()).toBe(0);
+  });
+
+  it("isolates canonical PCM from a VAD backend that mutates its input bytes", async () => {
+    const observedFirstSamples: number[] = [];
+    const vadBackend: VadBackend = {
+      async classify(input) {
+        input.bytes.fill(0);
+        return { speechProbability: 1 };
+      }
+    };
+    const recognizer: SpeechRecognizer = {
+      modelIdentity: { name: "capture", version: "1" },
+      cancellationCapability: "NONE",
+      async recognize(input) {
+        observedFirstSamples.push(new DataView(
+          input.pcmBytes.buffer,
+          input.pcmBytes.byteOffset,
+          input.pcmBytes.byteLength
+        ).getFloat32(0, true));
+        return validRaw(input, "capture");
+      }
+    };
+    const subject = worker({
+      vadBackend,
+      recognizer,
+      endpointingFactory: shortEndpointing
+    });
+
+    for (let sequence = 0; sequence < 4; sequence += 1) {
+      const fixture = frame(sequence, sequence < 3, "vad-mutation");
+      await subject.submitFrame(fixture.envelope, fixture.pcm);
+    }
+    expect(observedFirstSamples).toEqual([0.1]);
+  });
+
+  it("rejects a recognizer that mutates its PCM or expected-basis copy", async () => {
+    const recognizer: SpeechRecognizer = {
+      modelIdentity: { name: "mutating", version: "1" },
+      cancellationCapability: "NONE",
+      async recognize(input) {
+        input.pcmBytes[0] = 1;
+        input.sourceAudioBasis.pcmSha256 = "f".repeat(64);
+        return validRaw(input, "mutating");
+      }
+    };
+    const subject = worker({
+      recognizer,
+      endpointingFactory: shortEndpointing
+    });
+    const events: SpeechWorkerEvent[] = [];
+    for (let sequence = 0; sequence < 4; sequence += 1) {
+      const fixture = frame(sequence, sequence < 3, "recognizer-mutation");
+      events.push(...await subject.submitFrame(fixture.envelope, fixture.pcm));
+    }
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "SPEECH_WORKER_ERROR",
+      code: "RECOGNIZER_PROTOCOL_ERROR",
+      message: "Recognizer mutated bounded PCM input"
+    }));
+    expect(events.some((event) => event.type === "TRANSCRIPT_CANDIDATE")).toBe(false);
   });
 
   it("times out a hung recognizer without leaving the stream or request pending forever", async () => {
