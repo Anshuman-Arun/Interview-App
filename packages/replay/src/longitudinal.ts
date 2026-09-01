@@ -192,6 +192,10 @@ function parseSelectedSessionSummary(value: unknown): LongitudinalSessionInput {
       && (
         session.validatedThroughSequence !== session.observedThroughSequence
         || session.observedThroughSequence !== session.totalEventCount
+        || session.totalEventCount > DEFAULT_REPLAY_BOUNDS.maxEvents
+        || session.counts.turns > session.totalEventCount
+        || session.counts.exposedInterventions > session.totalEventCount
+        || session.counts.possiblyExposedInterventions > session.totalEventCount
       ))
     || session.currentEvidenceTruncation.limit
       > DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries

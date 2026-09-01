@@ -151,8 +151,10 @@ cleanup/callback paths that the application intentionally permits (such as a lat
 vision result, discarding a still-capturing utterance, or acknowledging completion
 of an already EXPOSED delivery) may finish. This preserves real serialized races
 without reopening the session or inventing a blanket terminal rule that current
-producers do not enforce. Session
-resumption is counted from `SESSION_RESUMED`; `RECOVERY`-source
+producers do not enforce. Terminal event classification is compile-time exhaustive
+across the current `EventType` union, so a newly added authoritative event cannot
+silently default to post-terminal permission. Session resumption is counted from
+`SESSION_RESUMED`; `RECOVERY`-source
 `DELIVERY_POSSIBLY_EXPOSED` events are counted separately without assuming that
 every such event proves an application crash. Empty, active,
 completed, archived, resumed, and crash-recovered streams are supported.
@@ -195,7 +197,12 @@ not call or duplicate `session-evaluator.ts`, recompute scores, or fabricate an
 
 ## Longitudinal comparability
 
-Cross-session aggregation is conservative:
+Cross-session aggregation is conservative. A supplied summary claiming
+`currentStateAvailable: true` must fit the same complete-projection envelope that
+`projectSessionHistory` can actually produce: its event count cannot exceed the
+replay hard limit, and its turn/exposure counts cannot exceed its authoritative
+event count. This keeps aggregate integer arithmetic inside the range of genuine
+projections.
 
 - repeated attempts and evaluation deltas require exact problem ID **and version**;
 - evidence patterns require exact structured evidence-key identity;

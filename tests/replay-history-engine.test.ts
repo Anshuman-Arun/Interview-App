@@ -2394,6 +2394,23 @@ describe("longitudinal projection", () => {
           }
     }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
 
+    expect(() => projectLongitudinalHistory([{
+      ...first,
+      evaluation: undefined,
+      totalEventCount: DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
+      observedThroughSequence: DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
+      validatedThroughSequence: DEFAULT_REPLAY_BOUNDS.maxEvents + 1
+    }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
+    expect(() => projectLongitudinalHistory([{
+      ...first,
+      evaluation: undefined,
+      counts: {
+        ...first.counts,
+        exposedInterventions: first.totalEventCount + 1
+      }
+    }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
     expect(() => projectLongitudinalHistory([projectSessionHistory([])]))
       .toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
   });
