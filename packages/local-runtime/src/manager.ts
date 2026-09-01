@@ -859,8 +859,19 @@ export class LocalRuntimeManager {
 
       let candidate: unknown;
       let fetchClaimed = false;
-      const fetchPromise = Promise.resolve()
-        .then(() => this.fetchImpl(url, { method: "GET", redirect: "error", signal }));
+      let fetchPromise: Promise<Response>;
+      try {
+        // Call the injected fetch directly. Wrapping it in additional Promise
+        // resolution layers would assimilate a hostile response value repeatedly
+        // before application-owned Response admission can reject it.
+        fetchPromise = this.fetchImpl(url, { method: "GET", redirect: "error", signal });
+      } catch {
+        if (signal.aborted) {
+          throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
+        }
+        await abortableDelay(intervalMs, signal, record.definition.id);
+        continue;
+      }
       void fetchPromise.then(
         (lateCandidate) => {
           if (!fetchClaimed && signal.aborted) disposeLateFetchCandidate(lateCandidate);
