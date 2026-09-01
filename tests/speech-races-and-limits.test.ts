@@ -690,6 +690,114 @@ describe("speech worker adversarial races and hard limits", () => {
     )).rejects.toMatchObject({ code: "INVALID_FRAME" });
   });
 
+  it("keeps an abort-ignoring cancelled VAD operation inside the hard compute budget until it really settles", async () => {
+    let startedResolve: (() => void) | undefined;
+    let resultResolve: ((value: { speechProbability: number }) => void) | undefined;
+    const started = new Promise<void>((resolve) => { startedResolve = resolve; });
+    const heldResult = new Promise<{ speechProbability: number }>((resolve) => { resultResolve = resolve; });
+    let classifyCount = 0;
+    const vadBackend: VadBackend = {
+      async classify() {
+        classifyCount += 1;
+        if (classifyCount === 1) {
+          startedResolve?.();
+          return heldResult;
+        }
+        return { speechProbability: 0 };
+      }
+    };
+    const subject = worker({ vadBackend, maxConcurrentStreams: 1, vadTimeoutMs: 200 });
+    const firstFixture = frame(0, false, "held-vad");
+    const first = subject.submitFrame(firstFixture.envelope, firstFixture.pcm);
+    await started;
+
+    await subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "held-vad",
+      type: "CANCEL_SPEECH"
+    });
+
+    const blocked = frame(0, false, "blocked-vad");
+    await expect(subject.submitFrame(blocked.envelope, blocked.pcm)).rejects.toMatchObject({
+      code: "RESOURCE_LIMIT",
+      message: "Maximum underlying VAD operation count reached"
+    });
+    expect(classifyCount).toBe(1);
+
+    resultResolve?.({ speechProbability: 0 });
+    await expect(first).resolves.toEqual([]);
+
+    const recovered = frame(0, false, "recovered-vad");
+    await expect(subject.submitFrame(recovered.envelope, recovered.pcm)).resolves.toEqual([]);
+    expect(classifyCount).toBe(2);
+  });
+
+  it("keeps cancelled recognizer work inside the hard compute budget until the underlying promise settles", async () => {
+    let firstStartedResolve: ((input: RecognizerAudioInput) => void) | undefined;
+    let firstResolve: ((value: unknown) => void) | undefined;
+    const firstStarted = new Promise<RecognizerAudioInput>((resolve) => { firstStartedResolve = resolve; });
+    const firstResult = new Promise<unknown>((resolve) => { firstResolve = resolve; });
+    let recognizeCount = 0;
+    const recognizer: SpeechRecognizer = {
+      modelIdentity: { name: "operation-budget", version: "1" },
+      cancellationCapability: "NONE",
+      async recognize(input) {
+        recognizeCount += 1;
+        if (recognizeCount === 1) {
+          firstStartedResolve?.(input);
+          return firstResult;
+        }
+        return validRaw(input, "operation-budget");
+      }
+    };
+    const subject = worker({
+      recognizer,
+      endpointingFactory: shortEndpointing,
+      maxConcurrentStreams: 1,
+      recognizerTimeoutMs: 200
+    });
+
+    for (let sequence = 0; sequence < 3; sequence += 1) {
+      const fixture = frame(sequence, true, "held-recognition");
+      await subject.submitFrame(fixture.envelope, fixture.pcm);
+    }
+    const firstEndpoint = frame(3, false, "held-recognition");
+    const firstFinalizing = subject.submitFrame(firstEndpoint.envelope, firstEndpoint.pcm);
+    const firstInput = await firstStarted;
+
+    await subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "held-recognition",
+      type: "CANCEL_SPEECH"
+    });
+
+    const blockedEvents: SpeechWorkerEvent[] = [];
+    for (let sequence = 0; sequence < 4; sequence += 1) {
+      const fixture = frame(sequence, sequence < 3, "blocked-recognition");
+      blockedEvents.push(...await subject.submitFrame(fixture.envelope, fixture.pcm));
+    }
+    expect(blockedEvents).toContainEqual(expect.objectContaining({
+      type: "SPEECH_WORKER_ERROR",
+      code: "RESOURCE_LIMIT",
+      message: "Maximum underlying recognizer operation count reached"
+    }));
+    expect(blockedEvents.some((event) => event.type === "TRANSCRIPT_CANDIDATE")).toBe(false);
+    expect(recognizeCount).toBe(1);
+
+    firstResolve?.(validRaw(firstInput, "operation-budget"));
+    await expect(firstFinalizing).resolves.toEqual([]);
+
+    const recoveredEvents: SpeechWorkerEvent[] = [];
+    for (let sequence = 0; sequence < 4; sequence += 1) {
+      const fixture = frame(sequence, sequence < 3, "recovered-recognition");
+      recoveredEvents.push(...await subject.submitFrame(fixture.envelope, fixture.pcm));
+    }
+    expect(recoveredEvents).toContainEqual(expect.objectContaining({ type: "TRANSCRIPT_CANDIDATE" }));
+    expect(recognizeCount).toBe(2);
+  });
+
   it("does not allow configuration to raise the protocol hard limits", () => {
     expect(() => worker({ maxConcurrentStreams: MAX_SPEECH_CONCURRENT_STREAMS + 1 })).toThrow();
     expect(() => worker({ maxBufferedPcmBytes: MAX_SPEECH_BUFFERED_PCM_BYTES + 1 })).toThrow();
