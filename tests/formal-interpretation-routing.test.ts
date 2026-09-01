@@ -199,6 +199,17 @@ describe("formal interpretation request and provider validation", () => {
           span: { start: 0, end: 4097, text: "x".repeat(4097) }
         }
       }).success).toBe(false);
+      expect(FormalInterpretationRequestSchema.safeParse({
+        ...request,
+        requestId: "r".repeat(257)
+      }).success).toBe(false);
+      expect(FormalInterpretationRequestSchema.safeParse({
+        ...request,
+        target: {
+          ...request.target,
+          subject: { kind: "CLAIM", claimId: "c".repeat(257) }
+        }
+      }).success).toBe(false);
     } finally {
       harness.store.close();
     }
@@ -209,6 +220,25 @@ describe("formal interpretation request and provider validation", () => {
     try {
       const request = formalRequest(harness);
       const base = candidate(request);
+      expect(InterpretationProviderResultSchema.safeParse({
+        protocolVersion: 1,
+        requestId: request.requestId,
+        candidates: [{
+          ...base,
+          source: { ...base.source, eventIds: ["e".repeat(257)] }
+        }]
+      }).success).toBe(false);
+      expect(InterpretationProviderResultSchema.safeParse({
+        protocolVersion: 1,
+        requestId: request.requestId,
+        candidates: [{
+          ...base,
+          target: {
+            ...base.target,
+            subject: { kind: "CLAIM", claimId: "c".repeat(257) }
+          }
+        }]
+      }).success).toBe(false);
       expect(InterpretationProviderResultSchema.safeParse({
         protocolVersion: 1,
         requestId: request.requestId,
