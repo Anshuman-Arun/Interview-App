@@ -679,6 +679,49 @@ describe("vision freshness", () => {
 });
 
 describe("VisionRequestManager cancellation, idempotency, and resource bounds", () => {
+  it("reserves capacity across re-entrant authority callbacks", () => {
+    const req = request();
+    const nested = request({ sessionId: req.sessionId });
+    let nestedRegistration: ReturnType<VisionRequestManager["register"]> | undefined;
+    let manager!: VisionRequestManager;
+    manager = new VisionRequestManager({
+      maxInFlight: 1,
+      authority: (candidate) => {
+        if (candidate.requestId === req.requestId) {
+          nestedRegistration = manager.register(nested, BACKEND);
+        }
+        return authorityFor(candidate);
+      }
+    });
+
+    const outer = manager.register(req, BACKEND);
+    expect(outer.accepted).toBe(true);
+    expect(nestedRegistration).toMatchObject({
+      accepted: false,
+      duplicate: false,
+      outcome: { reason: "RESOURCE_LIMIT" }
+    });
+    expect(manager.inFlightCount).toBe(1);
+  });
+
+  it("fails closed when authority shuts the manager down during registration", () => {
+    const req = request();
+    let manager!: VisionRequestManager;
+    manager = new VisionRequestManager({
+      authority: (candidate) => {
+        manager.shutdown();
+        return authorityFor(candidate);
+      }
+    });
+
+    expect(manager.register(req, BACKEND)).toMatchObject({
+      accepted: false,
+      duplicate: false,
+      outcome: { reason: "MANAGER_SHUTDOWN" }
+    });
+    expect(manager.inFlightCount).toBe(0);
+  });
+
   it("bounds callback request IDs before map lookup", () => {
     const req = request();
     const manager = new VisionRequestManager({ authority: () => authorityFor(req) });
