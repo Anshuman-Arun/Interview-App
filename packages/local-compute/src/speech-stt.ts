@@ -201,10 +201,19 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
     if (typeof modelVersion !== "string") {
       throw new Error("Moonshine model version must be a string");
     }
-    const name = modelName?.trim() || "moonshine";
+    if (modelName !== undefined && /[\p{Cc}\p{Cf}\p{Cs}]/u.test(modelName)) {
+      throw new Error("Moonshine model name contains unsafe characters");
+    }
+    if (/[\p{Cc}\p{Cf}\p{Cs}]/u.test(modelVersion)) {
+      throw new Error("Moonshine model version contains unsafe characters");
+    }
+    const name = modelName === undefined ? "moonshine" : modelName.trim();
+    if (name.length === 0) throw new Error("Moonshine model name must not be blank");
+    const version = modelVersion.trim();
+    if (version.length === 0) throw new Error("Moonshine model version must not be blank");
     this.modelIdentity = Object.freeze(SpeechModelIdentitySchema.parse({
       name,
-      version: modelVersion.trim()
+      version
     }));
     this.cancellationCapability = this.supportsAbort ? "RUNTIME_ABORT" : "NONE";
   }
@@ -458,12 +467,17 @@ function containsUnpairedSurrogate(value: string): boolean {
 
 function validateLocalPath(value: unknown, label: string): string {
   if (typeof value !== "string") throw new Error(`${label} is invalid`);
-  const path = value.trim();
-  if (path.length === 0 || path.length > 1_024) throw new Error(`${label} is invalid`);
+  if (value.length === 0
+      || value.length > 1_024
+      || value !== value.trim()
+      || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(value)) {
+    throw new Error(`${label} is invalid`);
+  }
+  const path = value;
   const windowsDrivePath = /^[A-Za-z]:[\\/]/u.test(path);
   const uriLikePath = /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(path);
   const uncLikePath = /^(?:\\\\|\/\/)/u.test(path);
-  if ((uriLikePath && !windowsDrivePath) || uncLikePath || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(path)) {
+  if ((uriLikePath && !windowsDrivePath) || uncLikePath) {
     throw new Error(`${label} must be an explicitly supplied safe local filesystem path`);
   }
   return path;
