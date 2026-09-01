@@ -11,10 +11,16 @@ import {
   type StoredSessionSummary
 } from "../../../../packages/domain/src/index.js";
 import { sixPeopleProblem } from "../../../../packages/problems/src/index.js";
+import type {
+  SessionEvaluationReadResponse,
+  SessionHistoryReadResponse,
+  SessionReplayReadResponse
+} from "../../../../packages/replay/src/index.js";
 import {
   BrowserCommandClient,
   BrowserCommandProtocolError
 } from "../command-client.js";
+import { BrowserSessionReadClient } from "../session-read-client.js";
 import {
   RendererClient,
   RendererPresentationNotExposedError,
@@ -54,6 +60,17 @@ export interface UseInterviewSessionResult {
   readonly isTransportManaged: boolean;
   readonly setBaseUrl: (url: string) => void;
   readonly fetchAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
+  readonly readSessionEvaluation: (
+    sessionId: SessionId,
+    signal?: AbortSignal
+  ) => Promise<SessionEvaluationReadResponse>;
+  readonly readSessionReplay: (
+    sessionId: SessionId,
+    signal?: AbortSignal
+  ) => Promise<SessionReplayReadResponse>;
+  readonly readSessionHistory: (
+    signal?: AbortSignal
+  ) => Promise<SessionHistoryReadResponse>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
   readonly recoverSession: (sessionId: SessionId) => Promise<void>;
   readonly completeSession: (summary?: string) => Promise<void>;
@@ -292,6 +309,36 @@ export function useInterviewSession(
       fetchImpl
     });
   }, [baseUrl, desktopBootstrap, fetchImpl]);
+
+  const getSessionReadClient = useCallback((): BrowserSessionReadClient => {
+    return new BrowserSessionReadClient({
+      baseUrl,
+      ...(desktopBootstrap !== undefined
+        ? { externalAuthenticationHeaderValue: desktopBootstrap.authentication.headerValue }
+        : { clientToken: clientTokenRef.current }),
+      fetchImpl
+    });
+  }, [baseUrl, desktopBootstrap, fetchImpl]);
+
+  const readSessionEvaluation = useCallback((
+    targetSessionId: SessionId,
+    signal?: AbortSignal
+  ): Promise<SessionEvaluationReadResponse> => {
+    return getSessionReadClient().getEvaluation(targetSessionId, signal);
+  }, [getSessionReadClient]);
+
+  const readSessionReplay = useCallback((
+    targetSessionId: SessionId,
+    signal?: AbortSignal
+  ): Promise<SessionReplayReadResponse> => {
+    return getSessionReadClient().getReplay(targetSessionId, signal);
+  }, [getSessionReadClient]);
+
+  const readSessionHistory = useCallback((
+    signal?: AbortSignal
+  ): Promise<SessionHistoryReadResponse> => {
+    return getSessionReadClient().getHistory(signal);
+  }, [getSessionReadClient]);
 
   const fetchAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
     try {
@@ -656,6 +703,9 @@ export function useInterviewSession(
     isTransportManaged: desktopBootstrap !== undefined,
     setBaseUrl,
     fetchAvailableSessions,
+    readSessionEvaluation,
+    readSessionReplay,
+    readSessionHistory,
     startSession,
     recoverSession,
     completeSession,
