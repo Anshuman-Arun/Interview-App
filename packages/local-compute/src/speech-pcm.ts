@@ -49,6 +49,9 @@ export function snapshotPcmFrame(input: unknown, payload: unknown): PcmFrameSnap
   if (!ArrayBuffer.isView(payload)) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM payload must be a binary ArrayBuffer view");
   }
+  if (payload.buffer instanceof SharedArrayBuffer) {
+    throw new PcmAdmissionError("INVALID_FRAME", "PCM payload must not use shared mutable backing storage");
+  }
   if (payload.byteLength !== envelope.payloadByteLength) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM payload length does not match declared length");
   }
