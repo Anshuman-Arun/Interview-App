@@ -238,7 +238,8 @@ function isAbortSignal(value: unknown): value is AbortSignal {
       "aborted"
     )?.get;
     if (abortedGetter === undefined) return false;
-    return typeof abortedGetter.call(value) === "boolean";
+    const readAborted = abortedGetter.bind(value);
+    return typeof readAborted() === "boolean";
   } catch {
     return false;
   }
@@ -253,6 +254,10 @@ function validateOptionalAbortSignal(value: unknown): AbortSignal | undefined {
     );
   }
   return value;
+}
+
+function isSignalAborted(signal: AbortSignal | undefined): boolean {
+  return isSignalAborted(signal);
 }
 
 function modelAssetErrorCode(error: unknown): ModelAssetErrorCode {
@@ -747,7 +752,7 @@ export class ModelAssetManager {
       setStage: (stage: "DOWNLOADING" | "VERIFYING") => void
     ) => Promise<string>
   ): Promise<string> {
-    if (signal?.aborted === true) {
+    if (isSignalAborted(signal)) {
       throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
     }
     if (manifest.sizeBytes > this.maxArtifactBytes) {
@@ -759,7 +764,7 @@ export class ModelAssetManager {
 
     const key = artifactInstallationKey(manifest);
     let entry = this.inFlight.get(key);
-    if (entry !== undefined && entry.controller.signal.aborted && !entry.settled) {
+    if (entry !== undefined && entry.controller.isSignalAborted(signal) && !entry.settled) {
       await this.waitForAbortedEntryToSettle(entry, signal);
       entry = this.inFlight.get(key);
     }
@@ -813,7 +818,7 @@ export class ModelAssetManager {
       };
 
       signal?.addEventListener("abort", abortListener, { once: true });
-      if (signal?.aborted === true) {
+      if (isSignalAborted(signal)) {
         abortListener();
         return;
       }
@@ -825,7 +830,15 @@ export class ModelAssetManager {
       }, (error: unknown) => {
         if (completed) return;
         finish();
-        rejectPromise(error);
+        rejectPromise(
+          error instanceof Error
+            ? error
+            : new ModelAssetError(
+                "IO_ERROR",
+                "In-flight artifact installation rejected with a non-Error value.",
+                { cause: error }
+              )
+        );
       });
     });
   }
@@ -834,7 +847,7 @@ export class ModelAssetManager {
     entry: InFlightEntry,
     signal?: AbortSignal
   ): Promise<void> {
-    if (signal?.aborted === true) {
+    if (isSignalAborted(signal)) {
       throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
     }
 
@@ -856,7 +869,7 @@ export class ModelAssetManager {
       };
 
       signal?.addEventListener("abort", abortListener, { once: true });
-      if (signal?.aborted === true) {
+      if (isSignalAborted(signal)) {
         abortListener();
         return;
       }
@@ -1139,7 +1152,7 @@ export class ModelAssetManager {
     signal: AbortSignal
   ): Promise<string | undefined> {
     return await this.withMutationGate(paths, async () => {
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
       const current = await this.checkInstallation(manifest, signal);
@@ -1219,7 +1232,7 @@ export class ModelAssetManager {
     const initial = await this.checkInstallation(manifest, signal);
     if (initial.status === "INSTALLED" && initial.path !== undefined) return initial.path;
     this.rejectTransientInstallationFailure(initial);
-    if (signal.aborted) {
+    if (isSignalAborted(signal)) {
       throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
     }
     const serializedManifest = serializeAssetManifest(manifest);
@@ -1241,11 +1254,11 @@ export class ModelAssetManager {
     let reservationHeld = true;
 
     try {
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled.");
       }
       await validateCachePaths(paths);
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled.");
       }
       await ensureSafeDirectory(paths.root, stagingDirectory);
@@ -1277,7 +1290,7 @@ export class ModelAssetManager {
           { cause: error }
         );
       }
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation was cancelled after transfer.");
       }
       await this.assertSafeStagingDirectory(paths, stagingDirectory, stagingIdentity);
@@ -1294,7 +1307,7 @@ export class ModelAssetManager {
         "UNSAFE_PATH",
         stagingIdentity
       );
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError(
           "CANCELLED",
           "Artifact installation was cancelled before publication."
@@ -1317,7 +1330,7 @@ export class ModelAssetManager {
         verification.identity,
         "UNSAFE_PATH"
       );
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError(
           "CANCELLED",
           "Artifact installation was cancelled before publication."
@@ -1327,7 +1340,7 @@ export class ModelAssetManager {
       const existing = await this.reconcileDestinationForInstall(paths, manifest, signal);
       if (existing !== undefined) {
         await this.removeManagedEntry(paths, stagingDirectory);
-        if (signal.aborted) {
+        if (isSignalAborted(signal)) {
           throw new ModelAssetError(
             "CANCELLED",
             "Artifact installation request was cancelled."
@@ -1370,7 +1383,7 @@ export class ModelAssetManager {
         const raced = await this.checkInstallation(manifest, signal);
         if (raced.status === "INSTALLED" && raced.path !== undefined) {
           await this.removeManagedEntry(paths, stagingDirectory);
-          if (signal.aborted) {
+          if (isSignalAborted(signal)) {
             throw new ModelAssetError(
               "CANCELLED",
               "Artifact installation request was cancelled."
@@ -1448,7 +1461,7 @@ export class ModelAssetManager {
         verification.identity,
         "CORRUPT_INSTALLATION"
       );
-      if (signal?.aborted === true) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact integrity inspection was cancelled.");
       }
       await validateCachePaths(paths);
@@ -1571,7 +1584,7 @@ export class ModelAssetManager {
   ): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
       await this.withMutationGate(paths, async () => {
-        if (signal.aborted) {
+        if (isSignalAborted(signal)) {
           throw new ModelAssetError(
             "CANCELLED",
             "Artifact installation was cancelled before publication."
@@ -1602,7 +1615,7 @@ export class ModelAssetManager {
         }
 
         await validateCachePaths(paths);
-        if (signal.aborted) {
+        if (isSignalAborted(signal)) {
           throw new ModelAssetError(
             "CANCELLED",
             "Artifact installation was cancelled before publication."
@@ -1691,11 +1704,11 @@ export class ModelAssetManager {
     signal: AbortSignal
   ): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
       await validateCachePaths(paths);
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
       if (shared.stagingReservations.has(stagingDirectory)) {
@@ -1713,7 +1726,7 @@ export class ModelAssetManager {
       }
 
       const existingCommitment = await this.stagingCommitmentBytes(shared);
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
 
@@ -1725,7 +1738,7 @@ export class ModelAssetManager {
       }
       if (effectiveMaxCacheBytes !== undefined) {
         const usedBytes = await this.managedCacheBytes(paths);
-        if (signal.aborted) {
+        if (isSignalAborted(signal)) {
           throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
         }
         const projected = usedBytes + existingCommitment.committedBytes + requestedBytes;
@@ -1745,7 +1758,7 @@ export class ModelAssetManager {
         );
       }
       const available = await availableDiskBytes(paths.temporary);
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
       if (available !== undefined && available < BigInt(outstandingReservation)) {
@@ -1755,7 +1768,7 @@ export class ModelAssetManager {
         );
       }
       await validateCachePaths(paths);
-      if (signal.aborted) {
+      if (isSignalAborted(signal)) {
         throw new ModelAssetError("CANCELLED", "Artifact installation request was cancelled.");
       }
       shared.reservedBytes = reservedProjection;
