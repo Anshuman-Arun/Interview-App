@@ -415,6 +415,17 @@ describe("generic interview session configuration", () => {
 
     expect(() => InterviewSessionConfigurationSchema.parse({
       configurationVersion: 1,
+      mode: "OXFORD_MATHEMATICS",
+      problem: { id: sixPeopleProblem.id, version: sixPeopleProblem.version },
+      interventionPolicy: "BALANCED",
+      providerSelection: {
+        providerId: "sk-abcdefghijklmnop",
+        modelId: "mock-default"
+      }
+    })).toThrow(/credential material/);
+
+    expect(() => InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
       mode: "QUANT_TRADING",
       scenario: { id: "BASIC_MARKET_MAKING", version: QUANT_TRADER_SCENARIO_VERSION },
       durationMinutes: 10_000,
