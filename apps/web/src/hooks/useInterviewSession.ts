@@ -20,6 +20,12 @@ import {
   BrowserCommandClient,
   BrowserCommandProtocolError
 } from "../command-client.js";
+import { BrowserReadClient } from "../read-client.js";
+import type {
+  SessionEvaluationReadResponse,
+  SessionHistoryReadResponse,
+  SessionReplayReadResponse
+} from "../../../../packages/replay/src/index.js";
 import { BrowserSessionReadClient } from "../session-read-client.js";
 import {
   RendererClient,
@@ -339,6 +345,33 @@ export function useInterviewSession(
   ): Promise<SessionHistoryReadResponse> => {
     return getSessionReadClient().getHistory(signal);
   }, [getSessionReadClient]);
+
+  const getReadClient = useCallback((): BrowserReadClient => {
+    return new BrowserReadClient({
+      baseUrl,
+      ...(desktopBootstrap !== undefined
+        ? { externalAuthenticationHeaderValue: desktopBootstrap.authentication.headerValue }
+        : { clientToken: clientTokenRef.current }),
+      fetchImpl
+    });
+  }, [baseUrl, desktopBootstrap, fetchImpl]);
+
+  const readEvaluation = useCallback(
+    (targetSessionId: SessionId): Promise<SessionEvaluationReadResponse> =>
+      getReadClient().getEvaluation(targetSessionId),
+    [getReadClient]
+  );
+
+  const readReplay = useCallback(
+    (targetSessionId: SessionId): Promise<SessionReplayReadResponse> =>
+      getReadClient().getReplay(targetSessionId),
+    [getReadClient]
+  );
+
+  const readHistory = useCallback(
+    (): Promise<SessionHistoryReadResponse> => getReadClient().getHistory(),
+    [getReadClient]
+  );
 
   const fetchAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
     try {
