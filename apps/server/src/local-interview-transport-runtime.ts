@@ -10,6 +10,7 @@ import {
   type BoundRendererStreamAddress
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import { SessionReadService } from "./session-read-service.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 
 export interface LocalInterviewTransportRuntimeOptions {
@@ -22,6 +23,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererConnectionsPerSession?: number;
   readonly maxRendererMessageBytes?: number;
   readonly orchestrator?: ServerTurnOrchestrator;
+  readonly readService?: SessionReadService;
 }
 
 export interface BoundLocalInterviewTransport {
@@ -33,6 +35,7 @@ export interface BoundLocalInterviewTransport {
 export class LocalInterviewTransportRuntime {
   public readonly sessions: SessionRecoveryCoordinator;
   public readonly orchestrator: ServerTurnOrchestrator;
+  public readonly readService: SessionReadService;
   public readonly commandServer: LoopbackCommandServer;
   public readonly rendererStreamServer: RendererStreamServer;
   private bound: BoundLocalInterviewTransport | undefined;
@@ -48,9 +51,20 @@ export class LocalInterviewTransportRuntime {
       options.orchestrator ??
       new ServerTurnOrchestrator(this.sessions, () => this.rendererStreamServer);
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
+    this.readService = options.readService ?? new SessionReadService({
+      source: {
+        hasSession: (sessionId) =>
+          options.store?.hasSession(sessionId) ?? options.registry.hasSession(sessionId),
+        listSessions: () =>
+          options.store?.listSessions() ?? options.registry.listSessions(),
+        loadEvents: (sessionId) =>
+          options.store?.load(sessionId) ?? options.registry.loadEvents(sessionId)
+      }
+    });
     this.commandServer = new LoopbackCommandServer({
       security: options.security,
       sessions: this.sessions,
+      reads: this.readService,
       orchestrator: this.orchestrator,
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })
     });
