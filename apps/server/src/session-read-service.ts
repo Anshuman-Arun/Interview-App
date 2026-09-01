@@ -457,24 +457,23 @@ export class SessionReadService {
       });
     }
 
-    let longitudinal;
-    try {
-      longitudinal = projectLongitudinalReadModel(
-        projectLongitudinalHistory(longitudinalInputs, {
-          bounds: {
-            maxSessions: MAX_HISTORY_READ_SESSIONS
-          }
-        })
-      );
-    } catch {
-      longitudinal = projectLongitudinalReadModel(
-        projectLongitudinalHistory([], {
-          bounds: {
-            maxSessions: MAX_HISTORY_READ_SESSIONS
-          }
-        })
-      );
+    const projectedLongitudinal = projectLongitudinalReadModel(
+      projectLongitudinalHistory(longitudinalInputs, {
+        bounds: {
+          maxSessions: MAX_HISTORY_READ_SESSIONS
+        }
+      })
+    );
+    if (projectedLongitudinal.includedSessionCount !== longitudinalInputs.length) {
+      throw new Error("Longitudinal projection coverage does not match admitted session histories");
     }
+    const longitudinal = {
+      ...projectedLongitudinal,
+      sessionTruncation: historyTruncation(
+        inventory.totalSessionCount,
+        projectedLongitudinal.includedSessionCount
+      )
+    };
 
     return SessionHistoryReadResponseSchema.parse({
       protocolVersion: 1,
