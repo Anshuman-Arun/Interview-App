@@ -383,8 +383,10 @@ describe("deterministic Quant Research interview engine", () => {
     expect(() => {
       mutable.generatedParameters.hiddenIntercept += 1;
     }).toThrow();
+    const firstPoint = mutable.generatedParameters.points[0];
+    if (firstPoint === undefined) throw new Error("Expected persisted model point");
     expect(() => {
-      mutable.generatedParameters.points[0]!.y += 1;
+      firstPoint.y += 1;
     }).toThrow();
     expect(engine.getState()).toEqual(before);
   });
