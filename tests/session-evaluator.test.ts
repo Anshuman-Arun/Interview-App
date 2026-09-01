@@ -308,6 +308,36 @@ describe("grounded session evaluator", () => {
       });
   });
 
+  it("does not treat a partial verifier citation as verifier-backed evidence", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "partial-verifier-provenance" },
+      dimension: "CORRECTNESS"
+    };
+    const verified = withVerification(
+      boundState(),
+      key,
+      "VERIFIED",
+      10,
+      "partial-verifier"
+    );
+    const partial = setHistory(verified, key, [{
+      value: "CORRECT",
+      sequence: 20,
+      status: "ACTIVE",
+      evidenceEventIds: [EventIdSchema.parse("verification_requested_partial-verifier")]
+    }]);
+
+    const evaluation = evaluateInterviewSession(partial, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBe(100);
+    expect(evaluation.dimensionResults.technicalCorrectness.supportLevel).toBe("WEAK");
+    expect(evaluation.dimensionResults.technicalCorrectness.evidenceRefs)
+      .not.toContainEqual({
+        kind: "VERIFICATION_REQUEST",
+        id: "verification_partial-verifier"
+      });
+  });
+
   it("does not resurrect invalidated verified evidence from historical verifier state", () => {
     const key: EvidenceKey = {
       problemId: sixPeopleProblem.id,
@@ -793,7 +823,7 @@ function withVerification(
     sequence: basisSequence + 2,
     status: "ACTIVE",
     confidence,
-    evidenceEventIds: [requestedEventId]
+    evidenceEventIds: [verificationSupportId, requestedEventId]
   }]);
 }
 

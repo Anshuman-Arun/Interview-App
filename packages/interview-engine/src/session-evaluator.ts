@@ -422,19 +422,20 @@ function assertEvaluationStateConsistency(
         }
       }
 
-      if (record.key.problemId === problem.id) {
-        if (
-          record.key.subject.kind === "MILESTONE" &&
-          !milestoneIds.has(record.key.subject.milestoneId)
-        ) {
-          throw new Error("Evaluation evidence references an unknown reasoning-graph milestone");
-        }
-        if (
-          record.key.subject.kind === "APPROACH" &&
-          !approachIds.has(record.key.subject.approachId)
-        ) {
-          throw new Error("Evaluation evidence references an unknown reasoning-graph approach");
-        }
+      if (record.key.problemId !== problem.id) {
+        throw new Error("Evaluation evidence is scoped to a different session problem");
+      }
+      if (
+        record.key.subject.kind === "MILESTONE" &&
+        !milestoneIds.has(record.key.subject.milestoneId)
+      ) {
+        throw new Error("Evaluation evidence references an unknown reasoning-graph milestone");
+      }
+      if (
+        record.key.subject.kind === "APPROACH" &&
+        !approachIds.has(record.key.subject.approachId)
+      ) {
+        throw new Error("Evaluation evidence references an unknown reasoning-graph approach");
       }
 
       if (record.status === "ACTIVE") {
@@ -485,13 +486,14 @@ function assertEvaluationStateConsistency(
     } else if (request.result !== undefined) {
       throw new Error("Evaluation non-accepted verification request cannot contain an accepted result");
     }
-    if (request.evidenceKey.problemId === problem.id) {
-      if (
-        request.evidenceKey.subject.kind !== "CLAIM" ||
-        request.evidenceKey.dimension !== "CORRECTNESS"
-      ) {
-        throw new Error("Evaluation verification evidence must be scoped to claim correctness");
-      }
+    if (request.evidenceKey.problemId !== problem.id) {
+      throw new Error("Evaluation verification request is scoped to a different session problem");
+    }
+    if (
+      request.evidenceKey.subject.kind !== "CLAIM" ||
+      request.evidenceKey.dimension !== "CORRECTNESS"
+    ) {
+      throw new Error("Evaluation verification evidence must be scoped to claim correctness");
     }
   }
 
@@ -1882,7 +1884,12 @@ function supportingVerificationRequests(
       (request) =>
         request.status === "ACCEPTED" &&
         request.result?.status === "VERIFIED" &&
-        record.value.evidenceEventIds.includes(request.requestedEventId)
+        record.value.value === "CORRECT" &&
+        record.value.inferenceConfidence === request.result.interpretationConfidence &&
+        record.value.evidenceEventIds.includes(request.requestedEventId) &&
+        request.evidenceEventIds.every((eventId) =>
+          record.value.evidenceEventIds.includes(eventId)
+        )
     );
 }
 
