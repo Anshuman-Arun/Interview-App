@@ -11,6 +11,8 @@ import {
   type ProviderDefinitionInput
 } from "./control-plane.js";
 
+const REFLECT_APPLY_INTRINSIC = Reflect.apply;
+
 const registerProviderDefinitions = ProviderRegistry.prototype.registerMany;
 const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
 
@@ -38,16 +40,16 @@ const SET_ADD_INTRINSIC = Set.prototype.add;
 const STRING_TRIM_INTRINSIC = String.prototype.trim;
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
-  const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(SET_HAS_INTRINSIC, set, [value]);
   return result === true;
 }
 
 function setAdd<T>(set: Set<T>, value: T): void {
-  Reflect.apply(SET_ADD_INTRINSIC, set, [value]);
+  REFLECT_APPLY_INTRINSIC(SET_ADD_INTRINSIC, set, [value]);
 }
 
 function trimBuiltInCredential(value: string): string {
-  const result: unknown = Reflect.apply(STRING_TRIM_INTRINSIC, value, []);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(STRING_TRIM_INTRINSIC, value, []);
   if (typeof result !== "string") {
     throw new ProviderControlPlaneError(
       "CREDENTIAL_RESOLUTION_FAILED",
@@ -360,7 +362,7 @@ export function registerBuiltInProviders(
   registry: ProviderRegistry = new ProviderRegistry()
 ): ProviderRegistry {
   try {
-    Reflect.apply(
+    REFLECT_APPLY_INTRINSIC(
       registerProviderDefinitions,
       registry,
       [[MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT]]

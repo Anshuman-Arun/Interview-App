@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const REFLECT_APPLY_INTRINSIC = Reflect.apply;
+
 const OBJECT_FREEZE_INTRINSIC = Object.freeze;
 const OBJECT_SET_PROTOTYPE_OF_INTRINSIC = Object.setPrototypeOf;
 const OBJECT_DEFINE_PROPERTY_INTRINSIC = Object.defineProperty;
@@ -156,29 +158,29 @@ const STRING_TO_LOWER_CASE_INTRINSIC = String.prototype.toLowerCase;
 const STRING_CHAR_CODE_AT_INTRINSIC = String.prototype.charCodeAt;
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
-  const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(SET_HAS_INTRINSIC, set, [value]);
   return result === true;
 }
 
 function setAdd<T>(set: Set<T>, value: T): void {
-  Reflect.apply(SET_ADD_INTRINSIC, set, [value]);
+  REFLECT_APPLY_INTRINSIC(SET_ADD_INTRINSIC, set, [value]);
 }
 
 function weakSetHas(set: WeakSet<object>, value: object): boolean {
-  const result: unknown = Reflect.apply(WEAK_SET_HAS_INTRINSIC, set, [value]);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(WEAK_SET_HAS_INTRINSIC, set, [value]);
   return result === true;
 }
 
 function weakSetAdd(set: WeakSet<object>, value: object): void {
-  Reflect.apply(WEAK_SET_ADD_INTRINSIC, set, [value]);
+  REFLECT_APPLY_INTRINSIC(WEAK_SET_ADD_INTRINSIC, set, [value]);
 }
 
 function weakSetDelete(set: WeakSet<object>, value: object): void {
-  Reflect.apply(WEAK_SET_DELETE_INTRINSIC, set, [value]);
+  REFLECT_APPLY_INTRINSIC(WEAK_SET_DELETE_INTRINSIC, set, [value]);
 }
 
 function regexpExec(pattern: RegExp, value: string): readonly unknown[] | null {
-  const result: unknown = Reflect.apply(REGEXP_EXEC_INTRINSIC, pattern, [value]);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(REGEXP_EXEC_INTRINSIC, pattern, [value]);
   if (result === null) return null;
   if (!Array.isArray(result)) failMalformedConfiguration();
   const output: unknown[] = [];
@@ -190,25 +192,25 @@ function regexpExec(pattern: RegExp, value: string): readonly unknown[] | null {
 }
 
 function normalizeUnicode(value: string): string {
-  const result: unknown = Reflect.apply(STRING_NORMALIZE_INTRINSIC, value, ["NFKC"]);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(STRING_NORMALIZE_INTRINSIC, value, ["NFKC"]);
   if (typeof result !== "string") return failMalformedConfiguration();
   return result;
 }
 
 function trimString(value: string): string {
-  const result: unknown = Reflect.apply(STRING_TRIM_INTRINSIC, value, []);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(STRING_TRIM_INTRINSIC, value, []);
   if (typeof result !== "string") return failMalformedConfiguration();
   return result;
 }
 
 function lowerCaseString(value: string): string {
-  const result: unknown = Reflect.apply(STRING_TO_LOWER_CASE_INTRINSIC, value, []);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(STRING_TO_LOWER_CASE_INTRINSIC, value, []);
   if (typeof result !== "string") return failMalformedConfiguration();
   return result;
 }
 
 function stringCharCodeAt(value: string, index: number): number {
-  const result: unknown = Reflect.apply(STRING_CHAR_CODE_AT_INTRINSIC, value, [index]);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(STRING_CHAR_CODE_AT_INTRINSIC, value, [index]);
   if (typeof result !== "number" || !Number.isFinite(result)) return -1;
   return result;
 }

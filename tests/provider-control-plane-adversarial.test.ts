@@ -11,6 +11,7 @@ import {
   defineProvider,
   evaluateProviderReadiness,
   matchCapabilityRequirements,
+  registerBuiltInProviders,
   resolveProviderConfiguration,
   validateProviderConfiguration,
   type ProviderCapabilityKey,
@@ -746,6 +747,47 @@ describe("control-plane own-property intrinsic hardening", () => {
     } finally {
       Object.defineProperty(Object, "hasOwn", originalHasOwn);
     }
+  });
+});
+
+describe("provider Reflect.apply intrinsic hardening", () => {
+  it("keeps validation and registration deterministic when Reflect.apply is overridden", () => {
+    const originalApply = Reflect.apply;
+    let secretError: unknown;
+    let duplicateError: unknown;
+    let builtInIds: readonly string[] = [];
+
+    try {
+      Reflect.set(Reflect, "apply", () => {
+        throw new Error("Live Reflect.apply must not be used");
+      });
+
+      try {
+        validateProviderConfiguration(settingsConfiguration({
+          authorization: "Bearer abcdefghijklmnop"
+        }));
+      } catch (error) {
+        secretError = error;
+      }
+
+      const registry = new ProviderRegistry();
+      registry.register(createSettingsProviderInput());
+      try {
+        registry.register(createSettingsProviderInput());
+      } catch (error) {
+        duplicateError = error;
+      }
+
+      builtInIds = registerBuiltInProviders()
+        .enumerateProviders()
+        .map((provider) => provider.id);
+    } finally {
+      Reflect.set(Reflect, "apply", originalApply);
+    }
+
+    expect(secretError).toMatchObject({ code: "SECRET_IN_CONFIGURATION" });
+    expect(duplicateError).toMatchObject({ code: "DUPLICATE_PROVIDER" });
+    expect(builtInIds).toEqual(["gemini-api", "mock-model"]);
   });
 });
 

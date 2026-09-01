@@ -16,6 +16,8 @@ import {
   type SafeProviderConfigurationValue
 } from "./safe-configuration.js";
 
+const REFLECT_APPLY_INTRINSIC = Reflect.apply;
+
 const OBJECT_FREEZE_INTRINSIC = Object.freeze;
 const OBJECT_SET_PROTOTYPE_OF_INTRINSIC = Object.setPrototypeOf;
 const OBJECT_HAS_OWN_INTRINSIC = Object.hasOwn;
@@ -131,12 +133,12 @@ const REGEXP_TEST_INTRINSIC = RegExp.prototype.test;
 const STRING_TRIM_INTRINSIC = String.prototype.trim;
 
 function controlPlaneRegExpTest(pattern: RegExp, value: string): boolean {
-  const result: unknown = Reflect.apply(REGEXP_TEST_INTRINSIC, pattern, [value]);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(REGEXP_TEST_INTRINSIC, pattern, [value]);
   return result === true;
 }
 
 function trimControlPlaneText(value: string): string {
-  const result: unknown = Reflect.apply(STRING_TRIM_INTRINSIC, value, []);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(STRING_TRIM_INTRINSIC, value, []);
   if (typeof result !== "string") {
     throw new ProviderControlPlaneError(
       "MALFORMED_DEFINITION",
@@ -514,12 +516,12 @@ const SET_HAS_INTRINSIC = Set.prototype.has;
 const SET_ADD_INTRINSIC = Set.prototype.add;
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
-  const result: unknown = Reflect.apply(SET_HAS_INTRINSIC, set, [value]);
+  const result: unknown = REFLECT_APPLY_INTRINSIC(SET_HAS_INTRINSIC, set, [value]);
   return result === true;
 }
 
 function setAdd<T>(set: Set<T>, value: T): void {
-  Reflect.apply(SET_ADD_INTRINSIC, set, [value]);
+  REFLECT_APPLY_INTRINSIC(SET_ADD_INTRINSIC, set, [value]);
 }
 
 function providerMapHas(
@@ -528,7 +530,7 @@ function providerMapHas(
 ): boolean {
   let result: unknown;
   try {
-    result = Reflect.apply(MAP_HAS_INTRINSIC, map, [providerId]);
+    result = REFLECT_APPLY_INTRINSIC(MAP_HAS_INTRINSIC, map, [providerId]);
   } catch {
     throw new ProviderControlPlaneError(
       "INVALID_REGISTRY",
@@ -561,7 +563,7 @@ function providerMapGet(
 ): ProviderDefinition | undefined {
   let result: unknown;
   try {
-    result = Reflect.apply(MAP_GET_INTRINSIC, map, [providerId]);
+    result = REFLECT_APPLY_INTRINSIC(MAP_GET_INTRINSIC, map, [providerId]);
   } catch {
     throw new ProviderControlPlaneError(
       "INVALID_REGISTRY",
@@ -584,7 +586,7 @@ function providerMapSet(
   definition: ProviderDefinition
 ): void {
   try {
-    Reflect.apply(MAP_SET_INTRINSIC, map, [providerId, definition]);
+    REFLECT_APPLY_INTRINSIC(MAP_SET_INTRINSIC, map, [providerId, definition]);
   } catch {
     throw new ProviderControlPlaneError(
       "INVALID_REGISTRY",
@@ -861,7 +863,7 @@ function normalizeFactorySecretResolver(
     assertRequestMatches(request);
     let result: unknown;
     try {
-      result = await Reflect.apply(resolveSecretCandidate, value, [expectedRequest]);
+      result = await REFLECT_APPLY_INTRINSIC(resolveSecretCandidate, value, [expectedRequest]);
     } catch {
       throw new ProviderControlPlaneError(
         "CREDENTIAL_RESOLUTION_FAILED",
@@ -886,7 +888,7 @@ function normalizeFactorySecretResolver(
     assertRequestMatches(request);
     let result: unknown;
     try {
-      result = await Reflect.apply(hasSecretCandidate, value, [expectedRequest]);
+      result = await REFLECT_APPLY_INTRINSIC(hasSecretCandidate, value, [expectedRequest]);
     } catch {
       throw new ProviderControlPlaneError(
         "CREDENTIAL_RESOLUTION_FAILED",
@@ -1131,7 +1133,7 @@ function readAdapterMember(
       const getter = descriptor.get;
       if (getter === undefined) return undefined;
       try {
-        const member: unknown = Reflect.apply(getter, value, []);
+        const member: unknown = REFLECT_APPLY_INTRINSIC(getter, value, []);
         return member;
       } catch {
         throw adapterDefinitionMismatch();
@@ -1656,7 +1658,7 @@ export class ProviderRegistry {
   public enumerateProviders(): readonly ProviderDefinition[] {
     const values: ProviderDefinition[] = [];
     try {
-      Reflect.apply(MAP_FOR_EACH_INTRINSIC, this.#providers, [
+      REFLECT_APPLY_INTRINSIC(MAP_FOR_EACH_INTRINSIC, this.#providers, [
         (definition: ProviderDefinition, providerId: ProviderId) => {
           if (!isStoredProviderDefinition(definition, providerId)) {
             throw new ProviderControlPlaneError(
@@ -1744,8 +1746,8 @@ function resolveRegistrySelection(
     );
   }
   try {
-    const provider = Reflect.apply(providerRegistryGetProvider, registry, [providerId]);
-    const model = Reflect.apply(providerRegistryGetModel, registry, [providerId, modelId]);
+    const provider = REFLECT_APPLY_INTRINSIC(providerRegistryGetProvider, registry, [providerId]);
+    const model = REFLECT_APPLY_INTRINSIC(providerRegistryGetModel, registry, [providerId, modelId]);
     return freezeNullPrototype({ provider, model });
   } catch (error) {
     if (isProviderControlPlaneError(error)) throw error;
@@ -2340,7 +2342,7 @@ export async function evaluateProviderReadiness(input: {
     }
     let available: unknown;
     try {
-      available = await Reflect.apply(hasSecret, secretResolver, [freezeNullPrototype({
+      available = await REFLECT_APPLY_INTRINSIC(hasSecret, secretResolver, [freezeNullPrototype({
         providerId: resolved.provider.id,
         reference
       })]);
