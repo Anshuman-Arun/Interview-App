@@ -67,16 +67,10 @@ const HINT_LEVELS: readonly CuratedHintLevel[] = [1, 2, 3, 4, 5];
 
 export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEntry {
   assertCanonicalIdentifier(spec.id, "Problem id");
-  const title = canonicalMetadata(spec.title, `Problem "${spec.id}" title`);
-  const category = canonicalMetadata(spec.category, `Problem "${spec.id}" category`);
-  const followUps = canonicalUniqueMetadataList(
-    spec.followUps,
-    `Problem "${spec.id}" follow-up`
-  );
-  const topics = compileTopics(category, spec.topics);
+
   const mode: unknown = spec.mode;
   if (mode !== "OXFORD_MATHEMATICS" && mode !== "QUANT") {
-    throw new Error(`Problem "${spec.id}" has invalid mode "${String(mode)}"`);
+    throw new Error(`Problem "${spec.id}" has invalid mode`);
   }
   const requestedReviewStatus: unknown = spec.reviewStatus;
   if (
@@ -86,9 +80,18 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
   ) {
     throw new Error(`Problem "${spec.id}" has invalid review status`);
   }
-  if (spec.hints.length !== HINT_LEVELS.length) {
+  if (!Array.isArray(spec.hints) || spec.hints.length !== HINT_LEVELS.length) {
     throw new Error(`Problem "${spec.id}" must define exactly five hint stages`);
   }
+
+  const title = canonicalMetadata(spec.title, `Problem "${spec.id}" title`);
+  const category = canonicalMetadata(spec.category, `Problem "${spec.id}" category`);
+  const followUps = canonicalUniqueMetadataList(
+    spec.followUps,
+    `Problem "${spec.id}" follow-up`
+  );
+  const topics = compileTopics(category, spec.topics);
+
   const reviewStatus = spec.reviewStatus ?? "ready";
   let reviewNotes: string | undefined;
   if (reviewStatus === "expert-review") {
