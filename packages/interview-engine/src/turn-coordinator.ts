@@ -352,6 +352,10 @@ export class TurnCoordinator {
       }
       return {
         drafts: [
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "New committed student input superseded prior undelivered output"
+          ),
           { source: "USER", type: "INPUT_EPISODE_STARTED", payload: { inputEpisodeId } },
           { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: studentText } },
           { source: "APPLICATION", type: "INPUT_EPISODE_COMMITTED", payload: { inputEpisodeId } },
@@ -451,7 +455,16 @@ export class TurnCoordinator {
       assertSessionActive(state, "append typed input");
       const episode = state.inputEpisodes[inputEpisodeId];
       if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
-      return { drafts: [{ source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: text } }], result: { appended: true } };
+      return {
+        drafts: [
+          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "TYPING", semanticContent: text } },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative typed input changed before delivery"
+          )
+        ],
+        result: { appended: true }
+      };
     });
   }
 
@@ -492,6 +505,10 @@ export class TurnCoordinator {
       const studentText = episode.inputs.map((item) => item.semanticContent).join(" ");
       return {
         drafts: [
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "New committed input episode superseded prior undelivered output"
+          ),
           { source: "APPLICATION", type: "INPUT_EPISODE_COMMITTED", payload: { inputEpisodeId } },
           { source: "APPLICATION", type: "TURN_COMMITTED", payload: { turnId, inputEpisodeId, studentText } }
         ],
