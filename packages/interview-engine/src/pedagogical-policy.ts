@@ -238,7 +238,10 @@ function failClosedDecision(
   reasonCode: PolicyReasonCode,
   action: SocraticAction = "CLARIFY"
 ): PolicyDecision {
-  const target: PolicyTarget = { kind: "TURN", id: turnId };
+  const safeTurnId = boundedString(turnId, MAX_POLICY_ID_CHARACTERS)
+    ? turnId
+    : "invalid-turn";
+  const target: PolicyTarget = { kind: "TURN", id: safeTurnId };
   return {
     classification: reasonCode === "NO_CURRENT_EVIDENCE" || reasonCode === "MISSING_PROBLEM_CONTEXT"
       ? "INSUFFICIENT_EVIDENCE"
@@ -1752,13 +1755,19 @@ export function decidePedagogicalPolicy(
   turnId: string,
   problem: InterviewProblem
 ): PolicyDecision {
+  if (!boundedString(turnId, MAX_POLICY_ID_CHARACTERS)) {
+    return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
+  }
+
   const rawTurns: unknown = state.turns;
   const rawEpisodes: unknown = state.inputEpisodes;
   if (!isRecord(rawTurns) || !isRecord(rawEpisodes)) {
     return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
   }
 
-  const rawTurn = rawTurns[turnId];
+  const rawTurn = Object.prototype.hasOwnProperty.call(rawTurns, turnId)
+    ? rawTurns[turnId]
+    : undefined;
   if (rawTurn === undefined || !isRecord(rawTurn)) {
     return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
   }
@@ -1780,7 +1789,9 @@ export function decidePedagogicalPolicy(
   ) {
     return failClosedDecision(turnId, "STALE_TURN_CONTEXT");
   }
-  const rawEpisode = rawEpisodes[inputEpisodeId];
+  const rawEpisode = Object.prototype.hasOwnProperty.call(rawEpisodes, inputEpisodeId)
+    ? rawEpisodes[inputEpisodeId]
+    : undefined;
   if (
     !isRecord(rawEpisode)
     || rawEpisode["inputEpisodeId"] !== inputEpisodeId
