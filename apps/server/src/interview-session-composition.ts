@@ -123,7 +123,7 @@ export function resolveSessionStateComposition(
   // Legacy streams predate authoritative session configuration. Recover only
   // when their already-persisted exact identity maps unambiguously.
   if (state.quantResearch !== undefined) {
-    return resolveInterviewSessionConfiguration({
+    const composition = resolveInterviewSessionConfiguration({
       configurationVersion: 1,
       mode: "QUANT_RESEARCH",
       scenario: {
@@ -132,6 +132,8 @@ export function resolveSessionStateComposition(
       },
       interventionPolicy: "BALANCED"
     });
+    assertPersistedCompositionMatchesState(composition, state, false);
+    return composition;
   }
 
   if (state.problem !== undefined) {
@@ -197,7 +199,8 @@ function assertPersistedCompositionMatchesState(
     if (
       persistedResearch.definition.family !== composition.configuration.scenario.id
       || persistedResearch.definition.version !== composition.configuration.scenario.version
-      || state.problem?.id !== composition.configuration.scenario.id
+      || state.problem === undefined
+      || state.problem.id !== composition.configuration.scenario.id
       || state.problem.version !== composition.configuration.scenario.version
     ) {
       throw new Error("Persisted Quant Research identity does not match session configuration");
