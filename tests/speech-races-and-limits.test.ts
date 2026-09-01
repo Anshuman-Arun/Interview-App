@@ -434,6 +434,47 @@ describe("speech worker adversarial races and hard limits", () => {
     expect(subject.getActiveStreamCount()).toBe(0);
   });
 
+  it("reports an abort request when an abort-capable recognizer receives its cancelled signal without a cancel hook", async () => {
+    let startedResolve: ((input: RecognizerAudioInput) => void) | undefined;
+    let resultResolve: ((value: unknown) => void) | undefined;
+    let observedSignal: AbortSignal | undefined;
+    const started = new Promise<RecognizerAudioInput>((resolve) => { startedResolve = resolve; });
+    const result = new Promise<unknown>((resolve) => { resultResolve = resolve; });
+    const recognizer: SpeechRecognizer = {
+      modelIdentity: { name: "abort-signal", version: "1" },
+      cancellationCapability: "RUNTIME_ABORT",
+      async recognize(input, signal) {
+        observedSignal = signal;
+        startedResolve?.(input);
+        return result;
+      }
+    };
+    const subject = worker({ recognizer, endpointingFactory: shortEndpointing });
+
+    for (let sequence = 0; sequence < 3; sequence += 1) {
+      const fixture = frame(sequence, true, "abort-signal");
+      await subject.submitFrame(fixture.envelope, fixture.pcm);
+    }
+    const endpoint = frame(3, false, "abort-signal");
+    const finalizing = subject.submitFrame(endpoint.envelope, endpoint.pcm);
+    const recognitionInput = await started;
+
+    const cancelled = await subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "abort-signal",
+      type: "CANCEL_SPEECH"
+    });
+    expect(cancelled).toContainEqual(expect.objectContaining({
+      type: "SPEECH_CANCELLED",
+      cancellation: "RUNTIME_ABORT_REQUESTED"
+    }));
+    expect(observedSignal?.aborted).toBe(true);
+
+    resultResolve?.(validRaw(recognitionInput, "abort-signal"));
+    expect(await finalizing).toEqual([]);
+  });
+
   it("bounds a hanging runtime cancellation callback and still suppresses the late recognition", async () => {
     const deferred = deferredRecognizerWithHangingCancel();
     const subject = worker({
@@ -459,7 +500,7 @@ describe("speech worker adversarial races and hard limits", () => {
     });
     expect(cancelled).toContainEqual(expect.objectContaining({
       type: "SPEECH_CANCELLED",
-      cancellation: "SUPPRESS_LATE_RESULT_ONLY"
+      cancellation: "RUNTIME_ABORT_REQUESTED"
     }));
     expect(subject.getDiagnostics()).toContainEqual(expect.objectContaining({ code: "CANCELLATION_TIMEOUT" }));
 
