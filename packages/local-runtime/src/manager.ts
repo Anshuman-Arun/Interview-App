@@ -447,8 +447,9 @@ export class LocalRuntimeManager {
         throw new LocalRuntimeError("SPAWN_FAILED", `Component ${record.definition.id} did not receive a process id`);
       }
       const remainingMs = remainingStartupTimeout(record.definition.startupTimeoutMs, attemptStartedAt);
-      const readiness = earlyReadiness
-        ?? await this.waitForReadiness(record, child, attemptController.signal, remainingMs);
+      const readiness = earlyReadiness === undefined
+        ? await this.waitForReadiness(record, child, attemptController.signal, remainingMs)
+        : await earlyReadiness;
       if (signal.aborted || record.expectedStop || record.state !== "STARTING") {
         throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
       }
@@ -1891,27 +1892,33 @@ function normalizeReportedHandshake(
     fail
   );
 
-  const componentVersion = dataDescriptorValue(descriptors, "componentVersion", fail);
-  if (componentVersion !== undefined) {
-    if (typeof componentVersion !== "string"
-        || componentVersion.length === 0
-        || componentVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+  const rawComponentVersion = dataDescriptorValue(descriptors, "componentVersion", fail);
+  let componentVersion: string | undefined;
+  if (rawComponentVersion !== undefined) {
+    if (typeof rawComponentVersion !== "string"
+        || rawComponentVersion.length === 0
+        || rawComponentVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
       fail("componentVersion must be a non-empty bounded string");
     }
+    componentVersion = rawComponentVersion;
   }
 
-  const protocolVersion = dataDescriptorValue(descriptors, "protocolVersion", fail);
-  if (protocolVersion !== undefined) {
-    validateVersionValue(protocolVersion, "protocolVersion", fail);
+  const rawProtocolVersion = dataDescriptorValue(descriptors, "protocolVersion", fail);
+  let protocolVersion: string | number | undefined;
+  if (rawProtocolVersion !== undefined) {
+    validateVersionValue(rawProtocolVersion, "protocolVersion", fail);
+    protocolVersion = rawProtocolVersion as string | number;
   }
 
-  const modelVersionOrHash = dataDescriptorValue(descriptors, "modelVersionOrHash", fail);
-  if (modelVersionOrHash !== undefined) {
-    if (typeof modelVersionOrHash !== "string"
-        || modelVersionOrHash.length === 0
-        || modelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+  const rawModelVersionOrHash = dataDescriptorValue(descriptors, "modelVersionOrHash", fail);
+  let modelVersionOrHash: string | undefined;
+  if (rawModelVersionOrHash !== undefined) {
+    if (typeof rawModelVersionOrHash !== "string"
+        || rawModelVersionOrHash.length === 0
+        || rawModelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
       fail("modelVersionOrHash must be a non-empty bounded string");
     }
+    modelVersionOrHash = rawModelVersionOrHash;
   }
 
   const rawCapabilities = dataDescriptorValue(descriptors, "capabilities", fail);
@@ -1933,7 +1940,7 @@ function normalizeReportedHandshake(
 
   return Object.freeze({
     ...(componentVersion === undefined ? {} : { componentVersion }),
-    ...(protocolVersion === undefined ? {} : { protocolVersion: protocolVersion as string | number }),
+    ...(protocolVersion === undefined ? {} : { protocolVersion }),
     ...(modelVersionOrHash === undefined ? {} : { modelVersionOrHash }),
     ...(capabilities === undefined ? {} : { capabilities }),
     ...(metadata === undefined ? {} : { metadata: metadata as Readonly<Record<string, unknown>> })
