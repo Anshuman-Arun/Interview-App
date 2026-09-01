@@ -8,8 +8,7 @@ import {
   LocalRuntimeError,
   LocalRuntimeManager,
   buildLocalEnvironment,
-  type LocalComponentDefinition,
-  type LocalComponentHandshake
+  type LocalComponentDefinition
 } from "../packages/local-runtime/src/index.js";
 import { BoundedLineBuffer, BoundedLineFramer, redactKnownSecrets } from "../packages/local-runtime/src/buffer.js";
 
