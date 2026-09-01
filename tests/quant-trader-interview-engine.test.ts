@@ -869,8 +869,10 @@ describe("standalone Quant Trader interview engine", () => {
       fairValueUpdates: [{ round: 2, fairValue: 105, label: "PUBLIC_NEWS" }]
     };
     const engine = createQuantTraderScenario(mutableConfig);
-    mutableConfig.fairValueUpdates[0]!.fairValue = 999;
-    mutableConfig.fairValueUpdates[0]!.label = "MUTATED";
+    const mutableUpdate = mutableConfig.fairValueUpdates[0];
+    if (mutableUpdate === undefined) throw new Error("Expected fair-value update fixture");
+    mutableUpdate.fairValue = 999;
+    mutableUpdate.label = "MUTATED";
 
     const mutableQuote = { bidPrice: 99, bidSize: 1, askPrice: 101, askSize: 1 };
     engine.submitAction({ type: "QUOTE", quote: mutableQuote });
