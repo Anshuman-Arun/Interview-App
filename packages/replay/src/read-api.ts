@@ -656,21 +656,19 @@ export const SessionReplayReadModelSchema = z.object({
       message: "Replay validated/observed sequence bounds are inconsistent"
     });
   }
-  let previousSequence = 0;
   const eventIds = new Set<string>();
-  for (const entry of replay.entries) {
+  for (const [index, entry] of replay.entries.entries()) {
     if (
-      entry.sequence <= previousSequence
+      entry.sequence !== index + 1
       || entry.sequence > replay.observedThroughSequence
       || eventIds.has(entry.eventId)
     ) {
       context.addIssue({
         code: "custom",
-        message: "Replay entries must have unique identities in strict sequence order"
+        message: "Replay entries must be a unique contiguous authoritative prefix"
       });
       break;
     }
-    previousSequence = entry.sequence;
     eventIds.add(entry.eventId);
   }
   if (
@@ -680,6 +678,9 @@ export const SessionReplayReadModelSchema = z.object({
       || replay.eventTruncation.truncated
       || replay.timelineTruncation.truncated
       || replay.issues.length > 0
+      || replay.entries.length !== replay.totalEventCount
+      || replay.validatedThroughSequence !== replay.totalEventCount
+      || replay.observedThroughSequence !== replay.totalEventCount
     )
   ) {
     context.addIssue({
