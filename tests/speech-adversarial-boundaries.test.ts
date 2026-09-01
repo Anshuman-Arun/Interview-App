@@ -211,8 +211,8 @@ describe("speech worker adversarial callback boundaries", () => {
 
   it("rejects VAD duration claims that exceed worker-owned buffered PCM time", async () => {
     class ForgedDurationVad extends VoiceActivityStateMachine {
-      private current = {
-        state: "SILENCE" as const,
+      private current: ReturnType<VoiceActivityStateMachine["snapshot"]> = {
+        state: "SILENCE",
         speechMs: 0,
         silenceMs: 0,
         utteranceMs: 0
