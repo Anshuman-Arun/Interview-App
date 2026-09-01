@@ -859,6 +859,7 @@ describe("local worker lifecycle manager", () => {
     });
     runtime.register(definition("redirect-health", "ready", {
       restartPolicy: { mode: "ON_FAILURE", maxRetries: 2, backoffMs: 5 },
+      terminationTimeoutMs: process.platform === "win32" ? 500 : 150,
       readiness: {
         kind: "HTTP_LOOPBACK",
         url: "http://127.0.0.1:43199/health",
@@ -2561,7 +2562,7 @@ describe("local worker lifecycle manager", () => {
     let writeFailure: unknown;
     runtime.register(definition("closed-graceful-stdin", "ignore-shutdown", {
       shutdownTimeoutMs: 20,
-      terminationTimeoutMs: 100,
+      terminationTimeoutMs: process.platform === "win32" ? 500 : 100,
       gracefulShutdown: async (control) => {
         control.endStdin();
         try {

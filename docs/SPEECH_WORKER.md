@@ -202,15 +202,16 @@ Finalized audio is recognized inline; there is no finalized-utterance queue in t
 
 Diagnostics contain only bounded stable metadata such as failure code and stream identity. They never include raw PCM, full transcripts, credentials, arbitrary recognizer exception text, or arbitrary model/runtime error objects.
 
-## Deferred integration after open infrastructure PRs merge
+## Current integration status and remaining wiring
 
-No code in this subsystem imports the open infrastructure branches.
+Browser audio capture/playback infrastructure and the local worker lifecycle manager are now present in the repository, and a bounded local model-asset manager also exists. This speech core intentionally remains decoupled from those packages; their presence does not mean live speech is product-wired.
 
-After **PR #32 (local audio capture/playback)** merges, add a thin adapter that converts captured browser/native PCM buffers into the metadata envelope + binary payload contract. That adapter must also preserve a max-duration trigger frame by moving/reframing it into the next stream rather than silently dropping PCM that was not included in the finalized source basis. AEC remains outside this core and is still required before production microphone use.
+Remaining integration work is to:
 
-After **PR #35 (local worker lifecycle manager)** merges, choose the concrete process topology and launch/supervise the speech runtime through that manager. The VAD/endpoint/STT contracts should not change.
-
-After **PR #37 (local model asset/cache manager)** merges, pass resolved local Silero/Moonshine model paths into the existing adapter seams. Do not add download/cache ownership to speech code.
+- add a thin adapter that converts captured browser/native PCM buffers into the metadata envelope + binary payload contract, preserving a max-duration trigger frame by moving/reframing it into the next stream rather than silently dropping PCM outside the finalized source basis;
+- choose the concrete process topology and launch/supervise the speech runtime through the local lifecycle manager without changing the VAD/endpoint/STT contracts;
+- resolve integrity-checked local Silero/Moonshine model paths through the model-asset boundary and pass trusted explicit paths into the existing adapter seams rather than moving download/cache ownership into speech code;
+- provide production AEC before real microphone use.
 
 Application integration still must:
 

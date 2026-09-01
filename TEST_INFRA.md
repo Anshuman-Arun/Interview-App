@@ -1,51 +1,95 @@
-# E2E Test Infra: Phase 1 Typed Interview MVP
+# Test infrastructure
 
-## Test Philosophy
-- Requirement-driven, opaque-box testing derived from `ORIGINAL_REQUEST.md`.
-- No reliance on internal implementation details; tests interact through public interfaces (`BrowserCommandClient`, `RendererClient`, `GeminiApiAdapter`, `TldrawWhiteboardAdapter`, React UI DOM components, and loopback HTTP/SSE endpoints).
-- Methodology: 4-tier testing hierarchy (Feature Coverage, Boundary/Corner, Cross-Feature Combinations, Real-World Application Scenarios).
+## Philosophy
 
-## Feature Inventory
-| # | Feature | Source (Requirement) | Tier 1 | Tier 2 | Tier 3 |
-|---|---------|---------------------|:------:|:------:|:------:|
-| 1 | `GeminiApiAdapter` & Capabilities | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ |
-| 2 | No-Metered Billing Proof & Fail-Closed Gating | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ |
-| 3 | Provider Session Admission & Redaction | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ |
-| 4 | Whiteboard Shape Layer Isolation | ORIGINAL_REQUEST §R2 | 5 | 5 | ✓ |
-| 5 | Non-Destructive AI Overlay Actions | ORIGINAL_REQUEST §R2 | 5 | 5 | ✓ |
-| 6 | Shape Revision & Stale Reference Guard | ORIGINAL_REQUEST §R2 | 5 | 5 | ✓ |
-| 7 | KaTeX Math Rendering Engine | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ |
-| 8 | Problem Statement & Formulation Display | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ |
-| 9 | Student Typed Input Lifecycle | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ |
-| 10 | Socratic Response Streaming & Badges | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ |
-| 11 | Session Start & Recovery | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ |
-| 12 | Architecture Invariants & Quality Gates | ORIGINAL_REQUEST §R4 | 5 | 5 | ✓ |
-| 13 | End-to-End Ramsey $R(3,3)$ Verification | ORIGINAL_REQUEST §AC | 5 | 5 | ✓ |
+The repository uses layered automated validation rather than a single legacy Phase 1 E2E checklist.
 
-## Test Architecture
-- Test Runner: `vitest run`
-- Quality Checkers:
-  - `tsc -p tsconfig.json --noEmit`
-  - `eslint .`
-  - `node scripts/check-architecture-boundaries.mjs`
-- Test Files Layout:
-  - `tests/gemini-api-adapter.test.ts` (Provider adapter, capabilities, billing proof, cancellation, redaction)
-  - `tests/whiteboard-adapter.test.ts` (Whiteboard adapter, shape isolation, 7 overlay actions, immutability)
-  - `tests/ui-shell.test.ts` (KaTeX parser/renderer, input lifecycle, transcript badges, session hook)
-  - `tests/e2e-typed-interview.test.ts` (End-to-end Ramsey $R(3,3)$ typed interview flow with mock and loopback)
+Tests should verify observable contracts and authoritative invariants, with adversarial cases around stale revisions, replay, cancellation, malformed external output, security boundaries, process failures, and cross-platform behavior. Test-only seams must not be documented as live product integrations.
 
-## Real-World Application Scenarios (Tier 4)
-| # | Scenario | Features Exercised | Complexity |
-|---|----------|--------------------|------------|
-| 1 | Full Oxford Ramsey $R(3,3)$ proof progression: $K_6$ node selection, degree calculation $\deg(v)=5$, Pigeonhole Principle partition (3 same color), monochromatic triangle $K_3$ completion. | F1-F13 | High |
-| 2 | Whiteboard sketch & AI overlay coordination: Student draws 6 vertices and monochromatic edges; AI overlays circle around vertex $v_1$ and highlights incident edges without mutating student strokes. | F4-F6, F8-F10 | High |
-| 3 | Session disconnect and recovery mid-interview: Network drops during streaming Socratic probe; client reconnects, recovers delivery status map, marks unacked deliveries `POSSIBLY_EXPOSED`, and resumes transcript. | F9-F11 | High |
-| 4 | Metered usage attack attempt / Fail-closed preflight: Adapter configured with metered billing account while `allowMeteredUsage=false`; session admission fails closed before network dispatch. | F1-F3, F12 | Medium |
-| 5 | Complex LaTeX formula drafting and Socratic rendering: Student submits expressions like $\lceil (6-1)/2 \rceil = 3$ and $R(s,t) \le R(s-1,t) + R(s,t-1)$; UI renders KaTeX cleanly with no syntax crashes. | F7-F10 | Medium |
+## Runner and discovery
 
-## Coverage Thresholds
-- Tier 1: ≥5 per feature (Total ≥ 65 tests)
-- Tier 2: ≥5 per feature where boundaries exist (Total ≥ 65 tests)
-- Tier 3: Pairwise coverage of major feature interactions (Total ≥ 13 tests)
-- Tier 4: ≥5 realistic application scenarios (Total ≥ 5 tests)
-- Total minimum: ≥ 148 test cases across all test suites
+Vitest is the repository test runner. The authoritative full suite is:
+
+```bash
+corepack pnpm test
+```
+
+`vitest.config.ts` discovers all:
+
+```text
+tests/**/*.test.ts
+tests/**/*.test.tsx
+```
+
+At the 2026-09-01 audit this matched 109 files.
+
+CI uses `pnpm test:ci` for the same full discovery with one worker. This deliberately serializes the authoritative suite so subprocess-heavy repository/security tests cannot starve real local-worker integration tests on GitHub-hosted Windows; it does not change which files or assertions are discovered. The normal local `pnpm test` command keeps Vitest's default worker selection.
+
+## Validation layers
+
+### Static/release gates
+
+- `pnpm security:public` — current tracked-working-tree hygiene and accidental sensitive/local-data checks. It does **not** audit Git history, GitHub issues/metadata, Actions artifacts, or dependency registries; those are separate public-release review surfaces.
+- `node scripts/check-architecture-boundaries.mjs` — frozen project dependency and authority-boundary enforcement.
+- `pnpm typecheck` — strict TypeScript validation.
+- `pnpm lint` — ESLint.
+- `pnpm build:web` — production Vite/browser build.
+- `pnpm build:desktop` — Electron desktop TypeScript build.
+
+### Full behavior gate
+
+- `pnpm test` — every discovered Vitest file for normal local use.
+- `pnpm test:ci` — the same discovery with one worker for the authoritative CI/check profile.
+
+The tree contains unit, integration, adversarial, property, replay, browser, desktop, worker, quant, verification, persistence, transport, and typed E2E tests.
+
+### Smoke gate
+
+- `pnpm demo` — deterministic synthetic interview path through the admitted orchestration stack.
+
+## Focused secondary gates
+
+CI and `pnpm check` intentionally rerun these focused scripts after the full-suite gate:
+
+- `pnpm test:desktop`
+- `pnpm test:replay`
+- `pnpm test:property` — all files following the `.property.test.` naming convention;
+- `pnpm test:e2e`
+
+They are also useful for local iteration. A focused gate passing is never sufficient evidence that the repository is merge-ready; full-suite discovery remains authoritative for repository-wide coverage. Running them in CI additionally prevents the named package scripts from silently becoming stale or broken.
+
+## Major tested surfaces
+
+Representative current surfaces include:
+
+| Area | Representative coverage |
+| --- | --- |
+| Core authority | session writer, durable lifecycle, idempotency, state/reducer, restart recovery |
+| Delivery | delivery lifecycle, crash handling, renderer streaming, deduplication, acknowledgements |
+| Security | public-release checks, secret redaction, loopback CORS/auth, provider execution safety |
+| Browser/UI | typed session shell, KaTeX, browser command client, real tldraw mounted integration |
+| Desktop | Electron bootstrap, production/runtime boundaries, desktop hook/bootstrap behavior |
+| Whiteboard/vision | shape normalization/revisions, dirty regions, preprocessing, freshness/admission |
+| Speech/audio | browser audio infrastructure, VAD/STT core, TTS worker core, race/limit tests |
+| Local runtime | local compute worker protocol/admission and child-process lifecycle supervision |
+| Providers | Gemini seam tests, policy/billing admission, provider control plane and lifecycle |
+| Formal reasoning | formal interpretation admission/routing and deterministic verifier families |
+| Evaluation/replay | grounded session evaluator, replay/history projections, longitudinal/property checks |
+| Quant | market-maker/trader engine, Quant Research engine and persistence/property tests |
+| Problems | fixture integrity, provenance, expanded Oxford/quant catalogs |
+| E2E/smoke | typed interview E2E and synthetic interview demo |
+
+## Cross-platform CI
+
+GitHub Actions runs the required validation on:
+
+- `ubuntu-latest`
+- `windows-latest`
+
+for pull-request and `main`-push events.
+
+The workflow uses `fail-fast: false` so one operating system failing does not hide the other platform's result. Superseded first-attempt PR runs may be cancelled. Main pushes and reruns use SHA/attempt-scoped concurrency so newly queued validation does not replace unrelated pending or running validation. Branch protection is not currently configured, and GitHub-level skip/manual-cancel behavior is outside this workflow guarantee.
+
+## Quantitative claims
+
+Do not encode old fixed totals such as “50 suites / 628 tests” as current readiness criteria. The repository changes quickly and those numbers were already stale. When counts are needed, derive them from the current tree or current test output and label the baseline date.
