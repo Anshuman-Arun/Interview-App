@@ -101,6 +101,31 @@ describe("speech worker adversarial races and hard limits", () => {
     await expect(first).resolves.toEqual([]);
   });
 
+  it("preserves cancellation reserve even before the admitted frame creates its stream context", async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const vadBackend: VadBackend = {
+      async classify() {
+        await gate;
+        return { speechProbability: 0 };
+      }
+    };
+    const subject = worker({ vadBackend, maxInFlightRequests: 1 });
+    const fixture = frame(0, false, "pre-context-cancel");
+
+    const pending = subject.submitFrame(fixture.envelope, fixture.pcm);
+    const cancelled = subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "pre-context-cancel",
+      type: "CANCEL_SPEECH"
+    });
+
+    await expect(cancelled).resolves.toContainEqual(expect.objectContaining({ type: "SPEECH_CANCELLED" }));
+    release?.();
+    await expect(pending).resolves.toEqual([]);
+  });
+
   it("hard-bounds queued frame requests while preserving cancellation reserve", async () => {
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => { release = resolve; });
@@ -298,7 +323,7 @@ describe("speech worker adversarial races and hard limits", () => {
     await expect(pending).resolves.toEqual([]);
   });
 
-  it("does not let a long onset candidate bypass the hard pre-speech lifetime", async () => {
+  it("does not misclassify a sustained onset candidate as silence-only timeout", async () => {
     const subject = worker({
       maxPreSpeechDurationMs: 60,
       vadStateFactory: () => new VoiceActivityStateMachine({
@@ -308,16 +333,16 @@ describe("speech worker adversarial races and hard limits", () => {
       })
     });
     const events: SpeechWorkerEvent[] = [];
-    for (let sequence = 0; sequence < 3; sequence += 1) {
+    for (let sequence = 0; sequence < 5; sequence += 1) {
       const fixture = frame(sequence, true, "long-onset");
       events.push(...await subject.submitFrame(fixture.envelope, fixture.pcm));
     }
     expect(events).toContainEqual(expect.objectContaining({
-      type: "UTTERANCE_DISCARDED",
-      reason: "NO_SPEECH_TIMEOUT"
+      type: "SPEECH_STARTED",
+      atTimestampMs: 0
     }));
-    expect(events.some((event) => event.type === "SPEECH_STARTED")).toBe(false);
-    expect(subject.getActiveStreamCount()).toBe(0);
+    expect(events.some((event) => event.type === "UTTERANCE_DISCARDED" && event.reason === "NO_SPEECH_TIMEOUT")).toBe(false);
+    expect(subject.getActiveStreamCount()).toBe(1);
   });
 
   it("isolates canonical PCM from a VAD backend that mutates its input bytes", async () => {
