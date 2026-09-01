@@ -3,6 +3,7 @@ import {
   FormalInterpretationRequestSchema,
   InterpretationProviderResultSchema,
   newRequestId,
+  newSessionId,
   type EvidenceKey,
   type FormalInterpretationCandidate,
   type FormalInterpretationRequest,
@@ -922,6 +923,31 @@ describe("interpretation cancellation linearization", () => {
         verificationStatus: "VERIFIED",
         evidenceCommitted: true
       });
+    } finally {
+      harness.store.close();
+    }
+  });
+});
+
+
+describe("formal interpretation session authority", () => {
+  it("rejects a forged session identity before provider invocation", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const forged = FormalInterpretationRequestSchema.parse({
+        ...request,
+        sessionId: newSessionId()
+      });
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(forged, []));
+      const result = await new InterpretationCoordinator(harness.writer, provider, routingScopes)
+        .interpretAndVerify(forged);
+      expect(result).toMatchObject({
+        status: "SOURCE_MISMATCH",
+        reason: "SESSION_MISMATCH"
+      });
+      expect(provider.callCount).toBe(0);
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
     } finally {
       harness.store.close();
     }
