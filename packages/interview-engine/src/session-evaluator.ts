@@ -841,9 +841,6 @@ function evaluateMilestones(
       milestoneId: milestone.id,
       description: milestone.description,
       achieved: baseResult.achieved,
-      ...(baseResult.achievedAtTurnId === undefined
-        ? {}
-        : { achievedAtTurnId: baseResult.achievedAtTurnId }),
       assistanceLevel,
       supportLevel,
       evidenceRefs: uniqueRefs([
