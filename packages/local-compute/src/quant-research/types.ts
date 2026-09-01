@@ -293,6 +293,7 @@ function parseSamplingConfig(value: unknown): SamplingEstimationConfig {
   if (centerMin > centerMax) failDefinition("centerMin cannot exceed centerMax");
   const noiseRadius = boundedInteger(record.noiseRadius, 0, 20, "noiseRadius", failDefinition);
   const outlierShift = boundedInteger(record.outlierShift, 1, 50, "outlierShift", failDefinition);
+  if (centerMin === centerMax && noiseRadius === 0) failDefinition("Sampling config must permit seed-dependent variation");
   if (outlierShift <= noiseRadius) failDefinition("outlierShift must exceed the ordinary sampling noise radius");
   return {
     maxSamples,
