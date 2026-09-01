@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { newRequestId } from "../packages/domain/src/index.js";
+import { newRequestId, newUtteranceId } from "../packages/domain/src/index.js";
 import {
   AdaptiveEndpointingPolicy,
   DeterministicEnergyVadBackend,
+  VoiceActivityStateMachine,
   type VadBackend
 } from "../packages/local-compute/src/speech-vad.js";
 import {
@@ -101,6 +102,41 @@ describe("speech worker adversarial callback boundaries", () => {
       message: "Speech stream configuration could not be initialized"
     });
     expect(JSON.stringify(worker.getDiagnostics())).not.toContain("stream-factory-secret");
+  });
+
+  it("rejects a state factory that reuses one mutable VAD instance across streams", async () => {
+    const sharedVad = new VoiceActivityStateMachine();
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      vadStateFactory: () => sharedVad
+    });
+    const first = frame(0, false, "shared-vad-left");
+    await worker.submitFrame(first.envelope, first.pcm);
+    const second = frame(0, false, "shared-vad-right");
+    await expect(worker.submitFrame(second.envelope, second.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "Speech stream configuration could not be initialized"
+    });
+  });
+
+  it("rejects recent utterance identity reuse after a false start", async () => {
+    const repeatedUtteranceId = newUtteranceId();
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      utteranceIdFactory: () => repeatedUtteranceId
+    });
+    const onset = frame(0, true, "duplicate-utterance");
+    await worker.submitFrame(onset.envelope, onset.pcm);
+    const falseStart = frame(1, false, "duplicate-utterance");
+    await worker.submitFrame(falseStart.envelope, falseStart.pcm);
+    const repeatedOnset = frame(2, true, "duplicate-utterance");
+    await expect(worker.submitFrame(repeatedOnset.envelope, repeatedOnset.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "Speech worker could not create a valid utterance identity"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
   });
 
   it("snapshots recognizer identity/cancellation metadata instead of trusting later mutation", async () => {
