@@ -344,18 +344,38 @@ export class SessionReadService {
       if (boundedIdentity(sessionId) === undefined) continue;
 
       const expectedEventCount = this.readEventCount(sessionId);
+      if (expectedEventCount === undefined || expectedEventCount === 0) {
+        cards.push({
+          sessionId,
+          status: "UNKNOWN",
+          readStatus: "UNAVAILABLE"
+        });
+        continue;
+      }
       if (
-        expectedEventCount === undefined
-        || expectedEventCount === 0
-        || expectedEventCount > DEFAULT_REPLAY_BOUNDS.maxEvents
+        expectedEventCount > DEFAULT_REPLAY_BOUNDS.maxEvents
         || consumedEvents + expectedEventCount > HISTORY_TOTAL_EVENT_BUDGET
       ) {
+        cards.push({
+          sessionId,
+          status: "UNKNOWN",
+          eventCount: expectedEventCount,
+          readStatus: "BUDGET_EXCLUDED"
+        });
         continue;
       }
       consumedEvents += expectedEventCount;
 
       const loaded = this.loadAuthoritative(sessionId, expectedEventCount);
-      if (loaded === undefined) continue;
+      if (loaded === undefined) {
+        cards.push({
+          sessionId,
+          status: "UNKNOWN",
+          eventCount: expectedEventCount,
+          readStatus: "UNAVAILABLE"
+        });
+        continue;
+      }
 
       const summary = loaded.summary;
       const safeProblemId = boundedIdentity(summary.problemId);
