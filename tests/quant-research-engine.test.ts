@@ -537,7 +537,11 @@ describe("deterministic Quant Research interview engine", () => {
     const acceptedFirst = accepted[0];
     expect(acceptedFirst).toBeDefined();
     if (acceptedFirst === undefined) throw new Error("Expected one accepted action");
-    acceptedFirst.actionId = "external-mutation";
+    expect(Object.isFrozen(accepted)).toBe(true);
+    expect(Object.isFrozen(acceptedFirst)).toBe(true);
+    expect(() => {
+      acceptedFirst.actionId = "external-mutation";
+    }).toThrow();
     expect(engine.getAcceptedActions()[0]?.actionId).toBe("alias-action");
 
     const state = engine.getState();
