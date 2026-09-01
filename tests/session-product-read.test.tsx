@@ -17,14 +17,20 @@ import {
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   DEFAULT_REPLAY_BOUNDS,
+  GroundedEvaluationReadModelSchema,
   ReplayReadEntrySchema,
+  SessionHistoryReadResponseSchema,
+  SessionReplayReadModelSchema,
   SessionReplayReadResponseSchema,
   projectGroundedEvaluationReadModel,
   projectSessionReplayReadModel,
   type SessionHistoryProjection
 } from "../packages/replay/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
-import { BrowserSessionReadClient } from "../apps/web/src/session-read-client.js";
+import {
+  BrowserSessionReadClient,
+  MAX_SESSION_READ_RESPONSE_BYTES
+} from "../apps/web/src/session-read-client.js";
 import {
   EvaluationPanel,
   ReplayPanel
@@ -189,9 +195,9 @@ describe("grounded evaluation/replay product surface", () => {
         },
         currentStateAvailable: true,
         complete: true,
-        validatedThroughSequence: 3,
-        observedThroughSequence: 3,
-        totalEventCount: 3,
+        validatedThroughSequence: 2,
+        observedThroughSequence: 2,
+        totalEventCount: 2,
         counts: {
           turns: 1,
           deliveries: 1,
@@ -291,6 +297,212 @@ describe("grounded evaluation/replay product surface", () => {
         contentWithheld: true
       }
     }).success).toBe(false);
+  });
+
+  it("enforces code-point text bounds and nested replay identifier bounds", () => {
+    const emoji = "😀";
+    expect(ReplayReadEntrySchema.safeParse({
+      sequence: 1,
+      eventId: "event_unicode",
+      occurredAt: "2026-09-01T17:00:00.000Z",
+      kind: "TURN_COMMITTED",
+      summary: "Turn committed",
+      category: "STUDENT",
+      stateValidation: "VALIDATED",
+      source: "APPLICATION",
+      relations: { turnId: "turn_unicode" },
+      text: {
+        text: emoji.repeat(512),
+        originalLength: 512,
+        truncated: false
+      }
+    }).success).toBe(true);
+
+    expect(ReplayReadEntrySchema.safeParse({
+      sequence: 1,
+      eventId: "event_oversized_evidence",
+      occurredAt: "2026-09-01T17:00:00.000Z",
+      kind: "STUDENT_EVIDENCE_UPDATED",
+      summary: "Evidence updated",
+      category: "EVIDENCE",
+      stateValidation: "VALIDATED",
+      source: "APPLICATION",
+      relations: {},
+      evidence: {
+        transition: "UPDATED",
+        key: {
+          problemId: "p",
+          subject: { kind: "CLAIM", claimId: "x".repeat(513) },
+          dimension: "CORRECTNESS"
+        },
+        value: "CORRECT",
+        inferenceConfidence: 0.9
+      }
+    }).success).toBe(false);
+  });
+
+  it("rejects internally contradictory replay and longitudinal DTOs", () => {
+    expect(ReplayReadEntrySchema.safeParse({
+      sequence: 1,
+      eventId: "event_bad_delivery",
+      occurredAt: "2026-09-01T17:00:00.000Z",
+      kind: "DELIVERY_POSSIBLY_EXPOSED",
+      summary: "Delivery possibly exposed",
+      category: "RECOVERY",
+      stateValidation: "VALIDATED",
+      source: "RECOVERY",
+      relations: { deliveryId: "delivery_bad" },
+      delivery: {
+        medium: "TEXT",
+        status: "COMPLETED",
+        presentationState: "PRESENTED",
+        effectiveDisclosureLevel: 2,
+        disclosureIdCount: 1,
+        contentWithheld: true
+      }
+    }).success).toBe(false);
+
+    expect(SessionReplayReadModelSchema.safeParse({
+      sessionId: "session_bad_prefix",
+      lifecycle: {
+        status: "ACTIVE",
+        historyComplete: true,
+        started: true,
+        completed: false,
+        archived: false,
+        resumedCount: 0,
+        recoveryOriginPossiblyExposedCount: 0
+      },
+      currentStateAvailable: true,
+      complete: false,
+      validatedThroughSequence: 2,
+      observedThroughSequence: 2,
+      totalEventCount: 2,
+      counts: {
+        turns: 1,
+        deliveries: 0,
+        exposedInterventions: 0,
+        possiblyExposedInterventions: 0,
+        cancelledInterventions: 0
+      },
+      evidenceSummary: {
+        recordedUpdates: 0,
+        recordedInvalidations: 0,
+        currentActive: 0,
+        superseded: 0,
+        stale: 0
+      },
+      verificationSummary: {
+        statusIsCurrent: true,
+        pending: 0,
+        verified: 0,
+        contradicted: 0,
+        unresolved: 0,
+        discarded: 0
+      },
+      entries: [{
+        sequence: 2,
+        eventId: "event_gap",
+        occurredAt: "2026-09-01T17:00:00.000Z",
+        kind: "TURN_COMMITTED",
+        summary: "Turn committed",
+        category: "STUDENT",
+        stateValidation: "VALIDATED",
+        source: "APPLICATION",
+        relations: { turnId: "turn_gap" }
+      }],
+      eventTruncation: { truncated: false, limit: 20_000, remainingCount: 0 },
+      timelineTruncation: { truncated: true, limit: 1, remainingCount: 1 },
+      issues: [{ code: "TIMELINE_LIMIT_REACHED" }]
+    }).success).toBe(false);
+
+    expect(SessionHistoryReadResponseSchema.safeParse({
+      protocolVersion: 1,
+      type: "SESSION_HISTORY_READ",
+      sessions: [],
+      sessionTruncation: { truncated: false, limit: 100, remainingCount: 0 },
+      longitudinal: {
+        includedSessionCount: 1,
+        sessionTruncation: { truncated: false, limit: 100, remainingCount: 0 },
+        completedSessions: 1,
+        problemsAttempted: 1,
+        repeatedProblems: [],
+        repeatedProblemsTruncation: { truncated: false, limit: 100, remainingCount: 0 },
+        evaluationStatistics: [{
+          problemId: "problem",
+          problemVersion: "1",
+          sessionCount: 1,
+          scoredSessionCount: {
+            technicalCorrectness: 0,
+            rigor: 0,
+            independence: 0,
+            communication: 0,
+            hintResponsiveness: 0,
+            errorRecovery: 0,
+            compositeScore: 0
+          },
+          average: {
+            technicalCorrectness: null,
+            rigor: null,
+            independence: null,
+            communication: null,
+            hintResponsiveness: null,
+            errorRecovery: null,
+            compositeScore: 50
+          },
+          median: {
+            technicalCorrectness: null,
+            rigor: null,
+            independence: null,
+            communication: null,
+            hintResponsiveness: null,
+            errorRecovery: null,
+            compositeScore: 50
+          }
+        }],
+        evaluationStatisticsTruncation: { truncated: false, limit: 100, remainingCount: 0 },
+        improvement: [],
+        improvementTruncation: { truncated: false, limit: 100, remainingCount: 0 },
+        improvementComparisonsSkipped: 0,
+        comparability: {
+          problems: "EXACT_PROBLEM_ID_AND_VERSION",
+          evidence: "EXACT_EVIDENCE_KEY_ONLY",
+          skillTaxonomyAvailable: false
+        }
+      }
+    }).success).toBe(false);
+  });
+
+  it("rejects inconsistent grounded evaluation coverage metadata", () => {
+    const projected = projectGroundedEvaluationReadModel(evaluationFixture());
+    expect(GroundedEvaluationReadModelSchema.safeParse({
+      ...projected,
+      composite: {
+        ...projected.composite,
+        includedDimensions: [
+          ...projected.composite.includedDimensions,
+          "communication"
+        ]
+      }
+    }).success).toBe(false);
+  });
+
+  it("rejects an oversized response before JSON parsing", async () => {
+    const client = new BrowserSessionReadClient({
+      baseUrl: "http://127.0.0.1:43123",
+      clientToken: TOKEN,
+      fetchImpl: async () => new Response("{}", {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "content-length": String(MAX_SESSION_READ_RESPONSE_BYTES + 1)
+        }
+      })
+    });
+
+    await expect(client.getHistory()).rejects.toMatchObject({
+      reason: "BODY_TOO_LARGE"
+    });
   });
 
   it("fails closed if an upstream replay object accidentally carries uncertain delivery text", () => {
