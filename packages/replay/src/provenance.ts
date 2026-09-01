@@ -51,7 +51,7 @@ const SafeEventMetadataSchema = z.object({
   causationId: RequestIdSchema,
   correlationId: RequestIdSchema,
   type: z.string().min(1).max(160)
-}).loose();
+});
 
 type SafeEventMetadata = z.infer<typeof SafeEventMetadataSchema>;
 

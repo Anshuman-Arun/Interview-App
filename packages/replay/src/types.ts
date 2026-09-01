@@ -383,7 +383,7 @@ export interface LongitudinalHistoryProjection {
   readonly evaluationStatistics: readonly LongitudinalEvaluationStatistics[];
   readonly improvement: readonly LongitudinalImprovementRecord[];
   readonly evidencePatterns: readonly LongitudinalEvidencePattern[];
-  readonly excludedIncompleteSessions: number;
+  readonly sessionsWithIncompleteProjection: number;
   readonly comparability: {
     readonly problems: "EXACT_PROBLEM_ID_AND_VERSION";
     readonly evidence: "EXACT_EVIDENCE_KEY_ONLY";

@@ -3,7 +3,11 @@ import type {
   DeliveryStatus,
   GenerationId
 } from "../../domain/src/index.js";
-import type { EventType, SessionEvent } from "../../events/src/index.js";
+import {
+  replaySession,
+  type EventType,
+  type SessionEvent
+} from "../../events/src/index.js";
 import {
   previewText,
   resolveReplayBounds,
@@ -13,6 +17,7 @@ import {
 } from "./bounds.js";
 import {
   normalizeReplayEvents,
+  ReplayProjectionError,
   type NormalizedReplayEvent
 } from "./provenance.js";
 import type {
@@ -526,6 +531,19 @@ export function projectReplayTimeline(
 ): ReplayTimelineProjection {
   const bounds = resolveReplayBounds(options.bounds);
   const normalized = normalizeReplayEvents(rawEvents, bounds);
+
+  if (normalized.sessionId !== null && !normalized.hasUnknownEvents) {
+    const replayable = normalized.events.map((item) => {
+      if (item.event === undefined) throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
+      return item.event;
+    });
+    try {
+      replaySession(normalized.sessionId, replayable);
+    } catch {
+      throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
+    }
+  }
+
   const timelineSelected = normalized.events.slice(0, bounds.maxTimelineEntries);
   const queuedAtoms = new Map<string, DeliveryAtom>();
   const supersededGenerations = new Set<GenerationId>();

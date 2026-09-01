@@ -17,6 +17,7 @@ The workspace uses pnpm, strict TypeScript, Zod at persisted/external boundaries
 | Event store | `packages/persistence/src/sqlite-event-store.ts` | `SqliteEventStore`, atomic `appendIdempotent`, fingerprint-bound `processed_requests`, `session_index` projection, `listSessions`, `rebuildSessionIndex`, strict sequence validation, `CorruptEventStreamError`, `RequestIdConflictError` | events, `node:sqlite` | 0 durable local session repository implemented |
 | Upcasters | `packages/events/src/upcasters.ts` | `EventUpcaster`, monotonic `EventUpcasterRegistry`, built-in v1→v2 path | event schemas | 0 |
 | State reducer | `packages/events/src/reducer.ts` | `reduceSessionEvent`, `replaySession` | state, schemas | 0 |
+| Replay/history read models | `packages/replay/src/` | `projectReplayTimeline`, `projectSessionHistory`, `projectLongitudinalHistory`, bounded provenance/evidence/verification/generation projections | domain, events/upcasters | 6 backend foundation implemented; replay UI deferred |
 | Snapshots | `packages/persistence/src/snapshots.ts` (deferred) | disposable `SessionSnapshot` cache | event store | post-0 optimization |
 | Turn Coordinator | `packages/interview-engine/src/turn-coordinator.ts`, `provider-coordinator.ts` | `TurnCoordinator` authoritative lifecycle transitions; `ProviderCoordinator` disposable generation execution, cancellation, provider switching, and one-final-proposal admission | writer, context compiler, admitted providers, delivery | 0 executable orchestration implemented |
 | InputEpisode lifecycle | domain types + `turn-coordinator.ts` + event schemas | utterance onset/discard/finalize; speech/typing/board episode updates; Turn commit | domain, events | 0 |
@@ -72,6 +73,10 @@ persistence --------------------------> events
                                           v
                                         domain
 
+replay --------------------------------> events
+   |                                      |
+   +------------------------------------> domain
+
 verification --------------------------> domain
 whiteboard ----------------------------> domain
 local-compute -------------------------> domain
@@ -86,6 +91,7 @@ Rules:
 - `domain` imports no project package.
 - `events` imports only `domain`.
 - `persistence` imports `events` and `domain`; it never calls interview policy.
+- `replay` imports only `events` and `domain`; it is a pure read-model layer with no persistence or writer dependency.
 - `providers`, `problems`, `verification`, and `whiteboard` import only `domain` (providers may return proposals but never events).
 - `delivery` may create event drafts but cannot mutate session state or append independently; all drafts go through `SessionWriter`.
 - `local-compute` imports domain schemas only. It and `workers/python` cannot import events or persistence, open SQLite, or commit authoritative state.

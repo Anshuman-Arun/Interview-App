@@ -252,7 +252,7 @@ export function projectLongitudinalHistory(
     evaluationStatistics,
     improvement,
     evidencePatterns,
-    excludedIncompleteSessions: included.filter((session) => !session.currentStateAvailable).length,
+    sessionsWithIncompleteProjection: included.filter((session) => !session.currentStateAvailable).length,
     comparability: {
       problems: "EXACT_PROBLEM_ID_AND_VERSION",
       evidence: "EXACT_EVIDENCE_KEY_ONLY",

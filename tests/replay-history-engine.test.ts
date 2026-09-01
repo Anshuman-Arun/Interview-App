@@ -444,6 +444,8 @@ describe("replay/history projections", () => {
     ];
     expect(() => projectSessionHistory(duplicate))
       .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    expect(() => projectReplayTimeline(duplicate))
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
   it("handles lifecycle states, mixed v1/v2 upcasts, future events, and explicit bounds safely", () => {
