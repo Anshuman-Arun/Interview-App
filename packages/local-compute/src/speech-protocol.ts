@@ -241,7 +241,37 @@ export const TranscriptCandidateSchema = z.object({
   words: BoundedTranscriptWordsSchema.optional(),
   model: SpeechModelIdentitySchema,
   sourceAudioBasis: SourceAudioBasisSchema
-}).strict();
+}).strict().superRefine((value, context) => {
+  const words = value.words ?? [];
+  if (value.text.length === 0 && words.length > 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Empty transcript cannot carry word timing metadata",
+      path: ["words"]
+    });
+  }
+
+  const audioDurationMs = value.sourceAudioBasis.sampleCount / value.sourceAudioBasis.sampleRate * 1_000;
+  let previousEndMs = 0;
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index]!;
+    if (word.endMs > audioDurationMs + 1) {
+      context.addIssue({
+        code: "custom",
+        message: "Word timing exceeds transcript audio duration",
+        path: ["words", index, "endMs"]
+      });
+    }
+    if (word.startMs + 0.001 < previousEndMs) {
+      context.addIssue({
+        code: "custom",
+        message: "Word timings overlap or reverse",
+        path: ["words", index, "startMs"]
+      });
+    }
+    previousEndMs = word.endMs;
+  }
+});
 export type TranscriptCandidate = z.infer<typeof TranscriptCandidateSchema>;
 
 export const SpeechWorkerErrorCodeSchema = z.enum([
