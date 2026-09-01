@@ -56,7 +56,7 @@ const PositiveSafeIntegerSchema = z.number().refine(
   { message: "Expected a positive safe integer" }
 );
 const BoundedSessionIdSchema = SessionIdSchema.superRefine((value, context) => {
-  if (value.length > MAX_REPLAY_IDENTIFIER_CHARS) {
+  if (value.length > MAX_REPLAY_IDENTIFIER_CHARS || value === "." || value === "..") {
     context.addIssue({
       code: "custom",
       message: "Session identifier exceeds the read-model limit"
