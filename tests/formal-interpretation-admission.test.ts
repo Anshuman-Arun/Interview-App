@@ -205,7 +205,7 @@ describe("formal interpretation proposal admission", () => {
       verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
       evidenceKey: claimEvidenceKey
     });
-    expect(stale.value).toMatchObject({ accepted: false, reason: "COMPATIBILITY_INCOMPATIBLE" });
+    expect(stale.value).toMatchObject({ accepted: false, reason: "GENERATION_NOT_ACTIVE" });
     expect(staleHarness.writer.getState().generations[staleHarness.generationId]?.status).toBe("SUPERSEDED");
     staleHarness.store.close();
 
