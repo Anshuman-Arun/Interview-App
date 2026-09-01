@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { newRequestId, newUtteranceId } from "../packages/domain/src/index.js";
 import {
@@ -19,16 +20,17 @@ import {
 import { SileroVadBackend } from "../packages/local-compute/src/speech-vad.js";
 
 function sourceBasis(sampleCount = 3_200): SourceAudioBasis {
+  const sampleRate = 16_000;
   return {
     streamId: "bounds-stream",
     firstSequence: 0,
-    lastSequence: 0,
+    lastSequence: Math.ceil(sampleCount / (sampleRate / 10)) - 1,
     startTimestampMs: 0,
-    endTimestampMs: sampleCount / 16_000 * 1_000,
-    sampleRate: 16_000,
+    endTimestampMs: sampleCount / sampleRate * 1_000,
+    sampleRate,
     channels: 1,
     sampleCount,
-    pcmSha256: "c".repeat(64)
+    pcmSha256: sha256(new Uint8Array(sampleCount * 4))
   };
 }
 
@@ -127,6 +129,25 @@ describe("speech protocol hard bounds", () => {
     const buffer = new BoundedPcmBuffer();
     buffer.append(first, false);
     expect(() => buffer.append(second, false)).toThrow(/sample rate/u);
+
+    const skippedPcm = new Float32Array(320);
+    const skipped = snapshotPcmFrame({
+      ...first.envelope,
+      requestId: newRequestId(),
+      sequence: 2,
+      timestampMs: 40
+    }, skippedPcm);
+    expect(() => buffer.append(skipped, false)).toThrow(/sequence/u);
+
+    const otherStream = snapshotPcmFrame({
+      ...first.envelope,
+      requestId: newRequestId(),
+      streamId: "other-stream",
+      sequence: 1,
+      timestampMs: 20
+    }, skippedPcm);
+    expect(() => buffer.append(otherStream, false)).toThrow(/stream identity/u);
+    expect(() => buffer.sourceBasis("other-stream")).toThrow(/stream identity/u);
   });
 
   it("enforces the global utterance-duration limit before Moonshine runtime invocation", async () => {
@@ -182,3 +203,8 @@ describe("speech protocol hard bounds", () => {
     await expect(backend.classify(frame)).rejects.toThrow(/within \[0, 1\]/u);
   });
 });
+
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
