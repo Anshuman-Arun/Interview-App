@@ -450,13 +450,7 @@ export class LocalRuntimeManager {
       const readiness = earlyReadiness === undefined
         ? await this.waitForReadiness(record, child, attemptController.signal, remainingMs)
         : await earlyReadiness;
-      const expectedStopAfterReadiness: unknown = record.expectedStop;
-      const stateAfterReadiness: unknown = record.state;
-      if (
-        signal.aborted
-        || expectedStopAfterReadiness === true
-        || stateAfterReadiness !== "STARTING"
-      ) {
+      if (startWasCancelledAfterAwait(record, signal)) {
         throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
       }
       if (child.exitCode !== null || child.signalCode !== null || record.child !== child) {
@@ -1402,6 +1396,13 @@ function outputLimitsForValues(output: LocalComponentDefinition["output"]): Effe
 function remainingStartupTimeout(totalMs: number, startedAt: number): number {
   const elapsedMs = performance.now() - startedAt;
   return Math.max(0, Math.ceil(totalMs - elapsedMs));
+}
+
+function startWasCancelledAfterAwait(
+  record: ComponentRecord,
+  signal: AbortSignal
+): boolean {
+  return signal.aborted || record.expectedStop || record.state !== "STARTING";
 }
 
 function isRetryableStartFailure(error: LocalRuntimeError): boolean {
