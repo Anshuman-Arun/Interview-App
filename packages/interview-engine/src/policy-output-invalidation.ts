@@ -24,12 +24,23 @@ export function invalidateUndeliveredPolicyOutput(
   }
 
   for (const atom of Object.values(state.deliveries)) {
-    if (atom.status !== "QUEUED" || !staleGenerationIds.has(atom.generationId)) continue;
-    drafts.push({
-      source: "APPLICATION",
-      type: "DELIVERY_CANCELLED",
-      payload: { deliveryId: atom.deliveryId, reason }
-    });
+    if (!staleGenerationIds.has(atom.generationId)) continue;
+    if (atom.status === "QUEUED") {
+      drafts.push({
+        source: "APPLICATION",
+        type: "DELIVERY_CANCELLED",
+        payload: { deliveryId: atom.deliveryId, reason }
+      });
+    } else if (atom.status === "DELIVERING") {
+      drafts.push({
+        source: "RECOVERY",
+        type: "DELIVERY_POSSIBLY_EXPOSED",
+        payload: {
+          deliveryId: atom.deliveryId,
+          reason: `${reason}; physical exposure was already in progress`
+        }
+      });
+    }
   }
 
   return drafts;
