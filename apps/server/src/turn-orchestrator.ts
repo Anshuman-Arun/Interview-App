@@ -1,11 +1,11 @@
 import type {
   InputEpisodeId,
+  InterviewProblem,
   InterviewerProposal,
   RealizationRequest,
   SessionId,
   TurnId
 } from "../../../packages/domain/src/index.js";
-import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
 import { MockModelAdapter } from "../../../packages/providers/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
@@ -15,19 +15,12 @@ import {
 } from "../../../packages/interview-engine/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { RendererStreamServer } from "./renderer-stream-server.js";
+import { resolveSessionStateComposition } from "./interview-session-composition.js";
 
-const CHOOSE_PERSON_REALIZATION =
-  "Why must at least three edges share the same color from vertex A?";
-const COMPLETE_TRIANGLE_REALIZATION =
-  "Consider the three endpoints connected to vertex A by edges of the same color. What happens if any edge between them shares that color, and what happens if none of them do?";
-
-const DEFAULT_REVIEWED_REALIZATIONS = [
-  "What relations exist between vertex A and the other five people?",
+const GENERIC_REVIEWED_REALIZATIONS = [
   "Why must that step be true?",
-  "Why must that claim hold?",
-  "Can you formalize the two cases for the edges among those three vertices?",
-  CHOOSE_PERSON_REALIZATION,
-  COMPLETE_TRIANGLE_REALIZATION
+  "Can you make that step more precise?",
+  "What would you try next?"
 ] as const;
 
 export interface TurnOrchestrationInput {
@@ -46,7 +39,9 @@ export class ServerTurnOrchestrator {
     private readonly getRendererStreamServer: () => RendererStreamServer | undefined,
     validator?: DisclosureValidator
   ) {
-    this.validator = validator ?? new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(DEFAULT_REVIEWED_REALIZATIONS));
+    this.validator = validator ?? new DisclosureValidator(
+      new ClosedWorldDisclosureAnalyzer(GENERIC_REVIEWED_REALIZATIONS)
+    );
   }
 
   public async orchestrateTurn(input: TurnOrchestrationInput): Promise<void> {
@@ -72,6 +67,11 @@ export class ServerTurnOrchestrator {
     const writer = this.sessions.getWriter(sessionId);
     const state = writer.getState();
     if (!state.started || state.status !== "ACTIVE") {
+      return;
+    }
+
+    const composition = resolveSessionStateComposition(state);
+    if (composition.mode !== "OXFORD_MATHEMATICS") {
       return;
     }
 
@@ -139,19 +139,21 @@ export class ServerTurnOrchestrator {
       return;
     }
 
+    const composition = resolveSessionStateComposition(currentState);
+    if (composition.mode !== "OXFORD_MATHEMATICS") {
+      return;
+    }
+    const problem = composition.problem;
     const turns = new TurnCoordinator(writer);
 
     // 1. Pedagogical policy selects (or refreshes) the required action
-    const realizationRequest = await turns.selectAction(input.turnId, sixPeopleProblem);
+    const realizationRequest = await turns.selectAction(input.turnId, problem);
     if (realizationRequest.requiredAction === "WAIT") {
       return;
     }
 
     // 2. Realize only wording/content already authorized by application policy
-    const proposal = this.createInterviewerProposal(
-      authoritativeTurn.studentText,
-      realizationRequest
-    );
+    const proposal = this.createInterviewerProposal(problem, realizationRequest);
 
     // 3. MockModelAdapter with zero metered spend
     const provider = new MockModelAdapter({ proposal });
@@ -167,7 +169,7 @@ export class ServerTurnOrchestrator {
         maximumDataUse: "LOCAL_ONLY",
         billingVerificationMaxAgeMs: 60_000
       },
-      problem: sixPeopleProblem,
+      problem,
       validator: this.validator
     });
 
@@ -190,38 +192,22 @@ export class ServerTurnOrchestrator {
   }
 
   private createInterviewerProposal(
-    studentText: string,
+    problem: InterviewProblem,
     request: RealizationRequest
   ): InterviewerProposal {
-    const text = studentText.toLowerCase();
     const allowedDisclosureIds = new Set(request.allowedDisclosureIds ?? []);
+    const authorizedDisclosure = problem.interviewer.protectedDisclosures.find(
+      (disclosure) =>
+        allowedDisclosureIds.has(disclosure.id)
+        && disclosure.minimumDisclosureLevel <= request.maximumDisclosure
+    );
 
-    const completeTriangle = sixPeopleProblem.interviewer.protectedDisclosures[1];
-    if (
-      request.maximumDisclosure >= 4
-      && completeTriangle !== undefined
-      && allowedDisclosureIds.has(completeTriangle.id)
-      && (text.includes("pigeonhole") || text.includes("3") || text.includes("three") || text.includes("same color") || text.includes("same colour"))
-    ) {
+    if (authorizedDisclosure !== undefined) {
       return {
         realizedAction: request.requiredAction,
-        claimedDisclosureLevel: 4,
-        claimedDisclosureIds: [completeTriangle.id],
-        speechText: COMPLETE_TRIANGLE_REALIZATION
-      };
-    }
-
-    const choosePerson = sixPeopleProblem.interviewer.protectedDisclosures[0];
-    if (
-      request.maximumDisclosure >= 2
-      && choosePerson !== undefined
-      && allowedDisclosureIds.has(choosePerson.id)
-    ) {
-      return {
-        realizedAction: request.requiredAction,
-        claimedDisclosureLevel: 2,
-        claimedDisclosureIds: [choosePerson.id],
-        speechText: CHOOSE_PERSON_REALIZATION
+        claimedDisclosureLevel: authorizedDisclosure.minimumDisclosureLevel,
+        claimedDisclosureIds: [authorizedDisclosure.id],
+        speechText: authorizedDisclosure.fact
       };
     }
 
@@ -229,7 +215,8 @@ export class ServerTurnOrchestrator {
       realizedAction: request.requiredAction,
       claimedDisclosureLevel: 0,
       claimedDisclosureIds: [],
-      speechText: "What relations exist between vertex A and the other five people?"
+      speechText: "Why must that step be true?"
     };
   }
+
 }
