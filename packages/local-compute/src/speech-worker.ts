@@ -11,7 +11,9 @@ import {
   MAX_SPEECH_DIAGNOSTICS,
   SpeechCancelRequestSchema,
   SpeechFlushRequestSchema,
+  SpeechFrameHeuristicsSchema,
   SpeechWorkerEventSchema,
+  type SpeechFrameHeuristics,
   type SpeechStreamId,
   type SpeechWorkerErrorCode,
   type SpeechWorkerEvent
@@ -74,10 +76,6 @@ export interface SpeechWorkerCoreOptions {
   readonly vadStateFactory?: () => VoiceActivityStateMachine;
 }
 
-export interface SpeechFrameHeuristics {
-  readonly appearsIncomplete?: boolean;
-}
-
 export interface SpeechWorkerDiagnostic {
   readonly code: string;
   readonly streamId?: SpeechStreamId;
@@ -112,9 +110,11 @@ export class SpeechWorkerCore {
   public async submitFrame(
     envelopeInput: unknown,
     payload: ArrayBufferView,
-    heuristics: SpeechFrameHeuristics = {}
+    heuristicsInput: unknown = {}
   ): Promise<readonly SpeechWorkerEvent[]> {
     if (this.shuttingDown) throw new SpeechWorkerCoreError("SHUTTING_DOWN", "Speech worker is shutting down");
+    const heuristics = SpeechFrameHeuristicsSchema.safeParse(heuristicsInput);
+    if (!heuristics.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech frame heuristics are invalid");
 
     let frame: PcmFrameSnapshot;
     try {
@@ -122,7 +122,7 @@ export class SpeechWorkerCore {
     } catch (error) {
       throw translatePcmError(error);
     }
-    const fingerprint = fingerprintParts(JSON.stringify(frame.envelope), frame.fingerprint, JSON.stringify(heuristics));
+    const fingerprint = fingerprintParts(JSON.stringify(frame.envelope), frame.fingerprint, JSON.stringify(heuristics.data));
     const replay = this.replayMessage(frame.envelope.requestId, fingerprint);
     if (replay !== undefined) return replay;
     if (this.closedStreams.has(frame.envelope.streamId)) {
@@ -139,7 +139,7 @@ export class SpeechWorkerCore {
       if (context.finalizationStarted) {
         throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream finalization has already started");
       }
-      return this.processFrame(context, frame, heuristics, fingerprint);
+      return this.processFrame(context, frame, heuristics.data, fingerprint);
     });
   }
 
@@ -249,14 +249,19 @@ export class SpeechWorkerCore {
     }
 
     const stateBefore = context.vad.snapshot().state;
-    const observation = await this.options.vadBackend.classify(frame);
+    let observation;
+    try {
+      observation = await this.options.vadBackend.classify(frame);
+    } catch {
+      throw new SpeechWorkerCoreError("VAD_FAILURE", "VAD backend failed");
+    }
     if (context.cancelled || this.shuttingDown) return [];
 
     let step;
     try {
       step = context.vad.step(observation.speechProbability, frame.durationMs);
     } catch {
-      throw new SpeechWorkerCoreError("INVALID_FRAME", "VAD backend returned an invalid observation");
+      throw new SpeechWorkerCoreError("VAD_PROTOCOL_ERROR", "VAD backend returned an invalid observation");
     }
 
     if (context.utteranceId === undefined && (step.state === "POSSIBLE_SPEECH" || step.speechStarted)) {
@@ -363,7 +368,8 @@ export class SpeechWorkerCore {
         const { candidate } = this.transcriptGate.admit(raw, {
           requestId,
           utteranceId,
-          sourceAudioBasis: basis
+          sourceAudioBasis: basis,
+          modelIdentity: this.options.recognizer.modelIdentity
         });
         events.push(this.event(requestId, context.streamId, {
           type: "TRANSCRIPT_CANDIDATE",
