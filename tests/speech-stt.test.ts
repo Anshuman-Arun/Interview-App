@@ -148,7 +148,7 @@ describe("Moonshine-compatible adapter seam", () => {
       runtime,
       modelPath: "https://example.invalid/model",
       modelVersion: "test"
-    })).toThrow(/local path/u);
+    })).toThrow(/local filesystem path/u);
     expect(() => new MoonshineSpeechRecognizer({
       runtime,
       modelPath: "models/moonshine/model.bin\nother",
