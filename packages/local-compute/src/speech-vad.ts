@@ -45,18 +45,17 @@ export interface SileroVadRuntime {
 
 export class SileroVadBackend implements VadBackend {
   private readonly modelPath: string;
+  private readonly scoreRuntime: SileroVadRuntime["score"];
 
-  public constructor(
-    private readonly runtime: SileroVadRuntime,
-    modelPath: string
-  ) {
+  public constructor(runtime: SileroVadRuntime, modelPath: string) {
     this.modelPath = validateLocalModelPath(modelPath, "Silero model path");
     validateRuntimeIdentity(runtime.runtimeVersion, "Silero runtime version");
+    this.scoreRuntime = runtime.score.bind(runtime);
   }
 
   public async classify(frame: PcmFrameSnapshot, signal?: AbortSignal): Promise<VadObservation> {
     const boundedFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
-    const rawProbability = await this.runtime.score({
+    const rawProbability = await this.scoreRuntime({
       pcmBytes: boundedFrame.bytes,
       sampleRate: boundedFrame.envelope.sampleRate,
       modelPath: this.modelPath,
