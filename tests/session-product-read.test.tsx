@@ -646,7 +646,7 @@ describe("grounded evaluation/replay product surface", () => {
             causationId: "request_uncertain",
             correlationId: "request_uncertain"
           },
-          relations: { deliveryId: "delivery_uncertain" },
+          relations: { deliveryId: "delivery_uncertain", generationId: "generation_uncertain" },
           delivery: {
             deliveryId: "delivery_uncertain",
             generationId: "generation_uncertain",
