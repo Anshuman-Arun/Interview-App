@@ -326,6 +326,9 @@ export class BrowserAudioPlayback {
     let elementSetupKey: object | undefined;
     try {
       element = this.createAudio();
+      if (pending.settled || this.current !== pending) {
+        return;
+      }
       if (typeof element !== "object" || element === null) {
         throw new AudioInfrastructureError(
           "PLAYBACK_FAILED",

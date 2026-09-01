@@ -3451,6 +3451,36 @@ describe("queued browser audio playback", () => {
     expect((await second.result).status).toBe("CANCELLED");
   });
 
+  it("does not inspect the returned element after the factory already cancelled playback", async () => {
+    const base = new FakeAudioElement();
+    let pauseReads = 0;
+    const element = new Proxy(base, {
+      get(target, property, receiver) {
+        if (property === "pause") {
+          pauseReads += 1;
+          throw new Error("pause should not be read after factory cancellation");
+        }
+        return Reflect.get(target, property, receiver);
+      }
+    });
+    let playback!: BrowserAudioPlayback;
+    playback = new BrowserAudioPlayback(() => {
+      playback.cancel("factory-cancel-no-inspect");
+      return element;
+    });
+
+    const handle = playback.enqueue({
+      id: "factory-cancel-no-inspect",
+      source: "/a.wav"
+    });
+
+    expect(await handle.started).toBe(false);
+    expect((await handle.result).status).toBe("CANCELLED");
+    expect(pauseReads).toBe(0);
+    expect(base.listenerCount()).toBe(0);
+    expect(base.src).toBe("");
+  });
+
   it("does not lose a same-id cancellation fired reentrantly by the element factory", async () => {
     const element = new FakeAudioElement();
     let playback!: BrowserAudioPlayback;
