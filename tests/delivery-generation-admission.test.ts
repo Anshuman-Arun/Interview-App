@@ -13,7 +13,7 @@ import { createCommandEnvelope } from "../packages/interview-engine/src/index.js
 import { authorizeSafeProbe, createCoreHarness } from "./harness.js";
 
 describe("delivery generation admission", () => {
-  it("rejects both start and reconnect when a queued generation basis becomes stale", async () => {
+  it("cancels queued output immediately when its generation basis becomes stale", async () => {
     const harness = await createCoreHarness();
     try {
       const atom = await authorizeSafeProbe(harness);
@@ -21,16 +21,22 @@ describe("delivery generation admission", () => {
       const generation = harness.writer.getState().generations[atom.generationId];
       if (generation === undefined) throw new Error("Missing generation fixture");
       expect(isGenerationBasisStillCompatible(generation.basis, harness.writer.getState())).toBe("INCOMPATIBLE");
+      expect(generation.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("CANCELLED");
+
       const delivery = new DeliveryCoordinator(harness.writer);
       const eventCount = harness.store.eventCount(harness.sessionId);
-
-      await expect(delivery.markStarted(atom.deliveryId)).rejects.toThrow(/compatibility is INCOMPATIBLE/u);
-      await expect(delivery.reconnect(atom.deliveryId, createCommandEnvelope({
+      await expect(delivery.markStarted(atom.deliveryId)).rejects.toThrow(/queued delivery/u);
+      const reconnected = await delivery.reconnect(atom.deliveryId, createCommandEnvelope({
         sessionId: harness.sessionId,
         producer: "stale-reconnect-test"
-      }))).rejects.toThrow(/compatibility is INCOMPATIBLE/u);
+      }));
+      expect(reconnected).toMatchObject({
+        deliveryId: atom.deliveryId,
+        status: "CANCELLED"
+      });
+      expect(reconnected.command).toBeUndefined();
       expect(harness.store.eventCount(harness.sessionId)).toBe(eventCount);
-      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
     } finally {
       harness.store.close();
     }
@@ -98,17 +104,18 @@ describe("delivery generation admission", () => {
     }
   });
 
-  it("rejects a queued atom after its generation is explicitly superseded", async () => {
+  it("cancels queued atoms when their generation is explicitly superseded", async () => {
     const harness = await createCoreHarness();
     try {
       const atom = await authorizeSafeProbe(harness);
       await harness.turns.supersedeGeneration(atom.generationId, "Newer student input");
+      expect(harness.writer.getState().generations[atom.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("CANCELLED");
       const eventCount = harness.store.eventCount(harness.sessionId);
 
       await expect(new DeliveryCoordinator(harness.writer).markStarted(atom.deliveryId))
-        .rejects.toThrow(/SUPERSEDED/u);
+        .rejects.toThrow(/queued delivery/u);
       expect(harness.store.eventCount(harness.sessionId)).toBe(eventCount);
-      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
     } finally {
       harness.store.close();
     }
