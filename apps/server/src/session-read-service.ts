@@ -407,38 +407,41 @@ export class SessionReadService {
         eventCount: summary.eventCount
       };
 
-      let initialHistory: ReturnType<typeof projectSessionHistory>;
+      const evaluation =
+        loaded.state.status === "COMPLETED" || loaded.state.status === "ARCHIVED"
+          ? this.evaluateLoaded(loaded)
+          : undefined;
+      const evaluationValue =
+        evaluation?.available === true ? evaluation.value : undefined;
+
+      let history: ReturnType<typeof projectSessionHistory>;
       try {
-        initialHistory = projectSessionHistory(loaded.events, {
+        history = projectSessionHistory(loaded.events, {
           bounds: {
             maxTimelineEntries: HISTORY_TIMELINE_ENTRY_LIMIT
-          }
+          },
+          ...(evaluationValue === undefined ? {} : { evaluation: evaluationValue })
         });
       } catch {
-        cards.push({
-          ...cardBase,
-          readStatus: "UNAVAILABLE"
-        });
-        continue;
-      }
-
-      let history = initialHistory;
-      if (
-        initialHistory.currentStateAvailable
-        && (loaded.state.status === "COMPLETED" || loaded.state.status === "ARCHIVED")
-      ) {
-        const evaluation = this.evaluateLoaded(loaded);
-        if (evaluation.available) {
-          try {
-            history = projectSessionHistory(loaded.events, {
-              bounds: {
-                maxTimelineEntries: HISTORY_TIMELINE_ENTRY_LIMIT
-              },
-              evaluation: evaluation.value
-            });
-          } catch {
-            history = initialHistory;
-          }
+        if (evaluationValue === undefined) {
+          cards.push({
+            ...cardBase,
+            readStatus: "UNAVAILABLE"
+          });
+          continue;
+        }
+        try {
+          history = projectSessionHistory(loaded.events, {
+            bounds: {
+              maxTimelineEntries: HISTORY_TIMELINE_ENTRY_LIMIT
+            }
+          });
+        } catch {
+          cards.push({
+            ...cardBase,
+            readStatus: "UNAVAILABLE"
+          });
+          continue;
         }
       }
 
