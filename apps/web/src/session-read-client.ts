@@ -4,6 +4,7 @@ import {
   type SessionId
 } from "../../../packages/domain/src/index.js";
 import {
+  MAX_REPLAY_IDENTIFIER_CHARS,
   SessionEvaluationReadResponseSchema,
   SessionHistoryReadResponseSchema,
   SessionReplayReadResponseSchema,
@@ -308,7 +309,7 @@ async function readBoundedResponseText(
 function encodeReadSessionId(sessionId: SessionId): string {
   if (
     sessionId.length === 0
-    || sessionId.length > 512
+    || sessionId.length > MAX_REPLAY_IDENTIFIER_CHARS
     || sessionId === "."
     || sessionId === ".."
   ) {
