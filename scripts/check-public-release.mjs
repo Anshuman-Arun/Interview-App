@@ -19,7 +19,8 @@ const SENSITIVE_BASENAMES = new Set([
   "service_account.json",
   "application_default_credentials.json",
   ".netrc",
-  ".git-credentials"
+  ".git-credentials",
+  ".envrc"
 ]);
 
 const SENSITIVE_RELATIVE_PATHS = new Set([
@@ -30,6 +31,8 @@ const SENSITIVE_RELATIVE_PATHS = new Set([
 ]);
 
 const SENSITIVE_EXTENSIONS = new Set([
+  ".env",
+  ".envrc",
   ".pem",
   ".key",
   ".p12",
