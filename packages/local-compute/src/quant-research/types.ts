@@ -166,18 +166,30 @@ function failAction(message: string): never {
 
 function asRecord(value: unknown, context: string, fail: (message: string) => never): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) fail(context + " must be an object");
-  const prototype = Object.getPrototypeOf(value) as object | null;
+  let prototype: object | null;
+  let descriptors: PropertyDescriptorMap;
+  try {
+    prototype = Object.getPrototypeOf(value) as object | null;
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    fail(context + " could not be safely inspected");
+  }
   if (prototype !== Object.prototype && prototype !== null) fail(context + " must be a plain object");
-  for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(value))) {
+  for (const descriptor of Object.values(descriptors)) {
     if (descriptor.get !== undefined || descriptor.set !== undefined) fail(context + " must not contain accessor properties");
   }
   return value as Record<string, unknown>;
 }
 
 function assertExactKeys(record: Record<string, unknown>, expected: readonly string[], context: string, fail: (message: string) => never): void {
-  const actual = Reflect.ownKeys(record);
+  let actual: readonly PropertyKey[];
+  try {
+    actual = Reflect.ownKeys(record);
+  } catch {
+    fail(context + " could not be safely inspected");
+  }
   if (actual.some((key) => typeof key !== "string")) fail(context + " contains an unsupported property key");
-  const actualStrings = actual as string[];
+  const actualStrings = actual as readonly string[];
   if (actualStrings.length !== expected.length || expected.some((key) => !Object.prototype.hasOwnProperty.call(record, key))) {
     fail(context + " contains missing or unknown fields");
   }
