@@ -518,6 +518,31 @@ describe("deterministic Quant Research interview engine", () => {
     expect(engine.getResult().status).toBe("COMPLETE");
   });
 
+  it("replays Bayesian updates with identical versioned evidence", () => {
+    const engine = new QuantResearchEngine(bayesian);
+    const prior = bayesian.config.priorAlpha / (bayesian.config.priorAlpha + bayesian.config.priorBeta);
+    engine.applyAction({ actionId: "rb1", kind: "SUBMIT_PROBABILITY", value: prior });
+    const successes = visibleNumber(engine.getState(), "successes");
+    const failures = visibleNumber(engine.getState(), "failures");
+    engine.applyAction({
+      actionId: "rb2",
+      kind: "SUBMIT_PROBABILITY",
+      value: (bayesian.config.priorAlpha + successes) /
+        (bayesian.config.priorAlpha + bayesian.config.priorBeta + successes + failures)
+    });
+    engine.applyAction({
+      actionId: "rb3",
+      kind: "SUBMIT_PROBABILITY",
+      value: (bayesian.config.perturbedPriorAlpha + successes) /
+        (bayesian.config.perturbedPriorAlpha + bayesian.config.perturbedPriorBeta + successes + failures)
+    });
+
+    const replayed = replayQuantResearch(bayesian, engine.getAcceptedActions());
+    expect(replayed.state).toEqual(engine.getState());
+    expect(replayed.result).toEqual(engine.getResult());
+    expect(replayed.acceptedActions).toEqual(engine.getAcceptedActions());
+  });
+
   it("replay reconstructs byte-for-byte equivalent public state and result", () => {
     const engine = new QuantResearchEngine(experimental);
     engine.applyAction({ actionId: "r1", kind: "ALLOCATE_SAMPLE", a: 6, b: 2 });
