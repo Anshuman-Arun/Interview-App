@@ -21,14 +21,30 @@ import type {
   SessionHistoryProjection
 } from "./types.js";
 
-export const MAX_EVALUATION_READ_MILESTONES = 500;
-export const MAX_EVALUATION_READ_INTERVENTIONS = 500;
-export const MAX_EVALUATION_READ_EVIDENCE_REFS = 128;
+export const MAX_EVALUATION_READ_MILESTONES = 100;
+export const MAX_EVALUATION_READ_INTERVENTIONS = 100;
+export const MAX_EVALUATION_READ_EVIDENCE_REFS = 32;
+export const MAX_EVALUATION_READ_RELATED_MILESTONES = 32;
 export const MAX_HISTORY_READ_SESSIONS = 100;
 export const MAX_HISTORY_READ_STATISTICS = 100;
 export const MAX_HISTORY_READ_IMPROVEMENTS = 100;
 export const MAX_REPLAY_READ_ENTRIES = 1_000;
 export const MAX_READ_TEXT_CHARS = 1_000;
+
+const DIMENSION_ORDER = [
+  "technicalCorrectness",
+  "rigor",
+  "independence",
+  "communication",
+  "hintResponsiveness",
+  "errorRecovery"
+] as const satisfies readonly EvaluationDimensionName[];
+
+function codePointLength(value: string): number {
+  let length = 0;
+  for (const _character of value) length += 1;
+  return length;
+}
 
 const NonnegativeSafeIntegerSchema = z.number().refine(
   (value) => Number.isSafeInteger(value) && value >= 0,
@@ -43,8 +59,30 @@ const BoundedSessionIdSchema = SessionIdSchema.refine(
   { message: "Session identifier exceeds the read-model limit" }
 );
 const BoundedIdentifierSchema = z.string().min(1).max(MAX_REPLAY_IDENTIFIER_CHARS);
-const BoundedTextSchema = z.string().max(MAX_READ_TEXT_CHARS);
+const BoundedTextSchema = z.string().refine(
+  (value) => codePointLength(value) <= MAX_READ_TEXT_CHARS,
+  { message: "Text exceeds the read-model code-point limit" }
+);
 const NullableScoreSchema = z.number().min(0).max(100).nullable();
+
+const BoundedEvidenceKeySchema = EvidenceKeySchema.superRefine((key, context) => {
+  const subjectId = key.subject.kind === "CLAIM"
+    ? key.subject.claimId
+    : key.subject.kind === "MILESTONE"
+      ? key.subject.milestoneId
+      : key.subject.kind === "SKILL"
+        ? key.subject.skillId
+        : key.subject.approachId;
+  if (
+    key.problemId.length > MAX_REPLAY_IDENTIFIER_CHARS
+    || subjectId.length > MAX_REPLAY_IDENTIFIER_CHARS
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Evidence key identifier exceeds the read-model limit"
+    });
+  }
+});
 
 export const ReadTruncationSchema = z.object({
   truncated: z.boolean(),
@@ -192,10 +230,33 @@ export const SessionEvaluationReadResponseSchema = z.discriminatedUnion("availab
 export type SessionEvaluationReadResponse = z.infer<typeof SessionEvaluationReadResponseSchema>;
 
 const TextPreviewReadSchema = z.object({
-  text: z.string().max(512),
+  text: z.string().refine(
+    (value) => codePointLength(value) <= 512,
+    { message: "Text preview exceeds the read-model code-point limit" }
+  ),
   originalLength: NonnegativeSafeIntegerSchema,
   truncated: z.boolean()
-}).strict();
+}).strict().superRefine((preview, context) => {
+  const visibleLength = codePointLength(preview.text);
+  if (preview.originalLength < visibleLength) {
+    context.addIssue({
+      code: "custom",
+      message: "Text preview original length is smaller than rendered content"
+    });
+  }
+  if (preview.truncated && preview.originalLength <= visibleLength) {
+    context.addIssue({
+      code: "custom",
+      message: "Truncated text preview must omit at least one code point"
+    });
+  }
+  if (!preview.truncated && preview.originalLength !== visibleLength) {
+    context.addIssue({
+      code: "custom",
+      message: "Untruncated text preview length is inconsistent"
+    });
+  }
+});
 
 const ReplayRelationsReadSchema = z.object({
   utteranceId: BoundedIdentifierSchema.optional(),
@@ -246,7 +307,6 @@ export const ReplayReadEntrySchema = z.object({
   delivery: z.object({
     medium: z.enum(["TEXT", "AUDIO", "WHITEBOARD"]),
     status: z.enum([
-      "VALIDATED",
       "QUEUED",
       "DELIVERING",
       "EXPOSED",
@@ -276,13 +336,13 @@ export const ReplayReadEntrySchema = z.object({
     phase: z.enum(["REQUESTED", "ACCEPTED", "DISCARDED"]),
     verificationRequestId: BoundedIdentifierSchema,
     verifier: z.string().min(1).max(256).optional(),
-    evidenceKey: EvidenceKeySchema.optional(),
+    evidenceKey: BoundedEvidenceKeySchema.optional(),
     resultStatus: z.enum(["VERIFIED", "CONTRADICTED", "UNRESOLVED"]).optional(),
     interpretationConfidence: z.number().min(0).max(1).optional()
   }).strict().optional(),
   evidence: z.object({
     transition: z.enum(["UPDATED", "INVALIDATED"]),
-    key: EvidenceKeySchema,
+    key: BoundedEvidenceKeySchema,
     value: z.string().min(1).max(128).optional(),
     inferenceConfidence: z.number().min(0).max(1).optional()
   }).strict().optional()
@@ -308,17 +368,110 @@ export const ReplayReadEntrySchema = z.object({
     });
   }
 
-  if (
-    entry.kind !== "DELIVERY_EXPOSED"
-    && entry.delivery !== undefined
-    && (
-      !entry.delivery.contentWithheld
-      || entry.delivery.boardAction !== undefined
-    )
+  const deliveryExpectation = entry.kind === "DELIVERY_QUEUED"
+    ? { status: "QUEUED", presentationState: "AUTHORIZED" }
+    : entry.kind === "DELIVERY_STARTED"
+      ? { status: "DELIVERING", presentationState: "DELIVERING" }
+      : entry.kind === "DELIVERY_EXPOSED"
+        ? { status: "EXPOSED", presentationState: "PRESENTED" }
+        : entry.kind === "DELIVERY_COMPLETED"
+          ? { status: "COMPLETED", presentationState: "PRESENTED" }
+          : entry.kind === "DELIVERY_CANCELLED"
+            ? { status: "CANCELLED", presentationState: "CANCELLED" }
+            : entry.kind === "DELIVERY_POSSIBLY_EXPOSED"
+              ? { status: "POSSIBLY_EXPOSED", presentationState: "POSSIBLY_PRESENTED" }
+              : undefined;
+
+  if (entry.delivery !== undefined) {
+    if (
+      deliveryExpectation === undefined
+      || entry.delivery.status !== deliveryExpectation.status
+      || entry.delivery.presentationState !== deliveryExpectation.presentationState
+      || entry.relations.deliveryId === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Replay delivery metadata is inconsistent with its authoritative event"
+      });
+    }
+    if (
+      entry.kind !== "DELIVERY_EXPOSED"
+      && (
+        !entry.delivery.contentWithheld
+        || entry.delivery.boardAction !== undefined
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Non-exposed delivery content must remain withheld"
+      });
+    }
+    if (entry.kind === "DELIVERY_EXPOSED" && entry.delivery.contentWithheld) {
+      context.addIssue({
+        code: "custom",
+        message: "Authoritatively exposed delivery content cannot be marked withheld"
+      });
+    }
+  } else if (
+    deliveryExpectation !== undefined
+    && entry.stateValidation !== "UNAVAILABLE_AFTER_UNKNOWN"
   ) {
     context.addIssue({
       code: "custom",
-      message: "Non-exposed delivery content must remain withheld"
+      message: "Validated delivery events require bounded delivery metadata"
+    });
+  }
+
+  const verificationPhase = entry.kind === "VERIFICATION_REQUESTED"
+    ? "REQUESTED"
+    : entry.kind === "VERIFICATION_RESULT_ACCEPTED"
+      ? "ACCEPTED"
+      : entry.kind === "VERIFICATION_RESULT_DISCARDED"
+        ? "DISCARDED"
+        : undefined;
+  if (entry.verification !== undefined) {
+    if (
+      verificationPhase === undefined
+      || entry.verification.phase !== verificationPhase
+      || entry.relations.requestId !== entry.verification.verificationRequestId
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Replay verification metadata is inconsistent with its authoritative event"
+      });
+    }
+  } else if (
+    verificationPhase !== undefined
+    && entry.stateValidation !== "UNAVAILABLE_AFTER_UNKNOWN"
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Validated verification events require bounded verification metadata"
+    });
+  }
+
+  const evidenceTransition = entry.kind === "STUDENT_EVIDENCE_UPDATED"
+    ? "UPDATED"
+    : entry.kind === "STUDENT_EVIDENCE_INVALIDATED"
+      ? "INVALIDATED"
+      : undefined;
+  if (entry.evidence !== undefined) {
+    if (
+      evidenceTransition === undefined
+      || entry.evidence.transition !== evidenceTransition
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Replay evidence metadata is inconsistent with its authoritative event"
+      });
+    }
+  } else if (
+    evidenceTransition !== undefined
+    && entry.stateValidation !== "UNAVAILABLE_AFTER_UNKNOWN"
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Validated evidence events require bounded evidence metadata"
     });
   }
 });
@@ -380,7 +533,54 @@ export const SessionReplayReadModelSchema = z.object({
     sequence: NonnegativeSafeIntegerSchema.optional(),
     eventType: z.string().min(1).max(128).optional()
   }).strict()).max(32)
-}).strict();
+}).strict().superRefine((replay, context) => {
+  if (
+    replay.validatedThroughSequence > replay.observedThroughSequence
+    || replay.observedThroughSequence > replay.totalEventCount
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay validated/observed sequence bounds are inconsistent"
+    });
+  }
+  let previousSequence = 0;
+  const eventIds = new Set<string>();
+  for (const entry of replay.entries) {
+    if (
+      entry.sequence <= previousSequence
+      || entry.sequence > replay.observedThroughSequence
+      || eventIds.has(entry.eventId)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Replay entries must have unique identities in strict sequence order"
+      });
+      break;
+    }
+    previousSequence = entry.sequence;
+    eventIds.add(entry.eventId);
+  }
+  if (
+    replay.complete
+    && (
+      !replay.currentStateAvailable
+      || replay.eventTruncation.truncated
+      || replay.timelineTruncation.truncated
+      || replay.issues.length > 0
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "A complete replay cannot carry truncation, issues, or unavailable current state"
+    });
+  }
+  if (replay.eventTruncation.truncated && replay.currentStateAvailable) {
+    context.addIssue({
+      code: "custom",
+      message: "Event-truncated replay cannot claim current authoritative state"
+    });
+  }
+});
 export type SessionReplayReadModel = z.infer<typeof SessionReplayReadModelSchema>;
 
 export const SessionReplayReadResponseSchema = z.discriminatedUnion("available", [
@@ -465,6 +665,28 @@ export const SessionHistoryCardSchema = z.object({
       message: "Unavailable history cards cannot carry evaluation summaries"
     });
   }
+  if (
+    card.evaluation !== undefined
+    && card.status !== "COMPLETED"
+    && card.status !== "ARCHIVED"
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Only terminal history cards may carry evaluation summaries"
+    });
+  }
+  if (
+    card.evaluation !== undefined
+    && (
+      (card.evaluation.compositeScore === null)
+      !== (card.evaluation.compositeStatus === "NOT_SCORED")
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "History evaluation score/status are inconsistent"
+    });
+  }
 });
 
 export const LongitudinalReadModelSchema = z.object({
@@ -485,7 +707,29 @@ export const LongitudinalReadModelSchema = z.object({
     scoredSessionCount: ScoredSessionCountSchema,
     average: ScoreBreakdownReadSchema,
     median: ScoreBreakdownReadSchema
-  }).strict()).max(MAX_HISTORY_READ_STATISTICS),
+  }).strict().superRefine((statistics, context) => {
+    for (const name of Object.keys(statistics.scoredSessionCount) as Array<
+      keyof typeof statistics.scoredSessionCount
+    >) {
+      const scoredCount = statistics.scoredSessionCount[name];
+      if (scoredCount > statistics.sessionCount) {
+        context.addIssue({
+          code: "custom",
+          message: "Scored-session count exceeds the evaluated-session count"
+        });
+      }
+      const shouldBeNull = scoredCount === 0;
+      if (
+        (statistics.average[name] === null) !== shouldBeNull
+        || (statistics.median[name] === null) !== shouldBeNull
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Longitudinal score nullability does not match its denominator"
+        });
+      }
+    }
+  })).max(MAX_HISTORY_READ_STATISTICS),
   evaluationStatisticsTruncation: ReadTruncationSchema,
   improvement: z.array(z.object({
     problemId: BoundedIdentifierSchema,
@@ -510,17 +754,16 @@ export const SessionHistoryReadResponseSchema = z.object({
   sessions: z.array(SessionHistoryCardSchema).max(MAX_HISTORY_READ_SESSIONS),
   sessionTruncation: ReadTruncationSchema,
   longitudinal: LongitudinalReadModelSchema
-}).strict();
+}).strict().superRefine((history, context) => {
+  const sessionIds = new Set(history.sessions.map((session) => session.sessionId));
+  if (sessionIds.size !== history.sessions.length) {
+    context.addIssue({
+      code: "custom",
+      message: "History read response contains duplicate session identities"
+    });
+  }
+});
 export type SessionHistoryReadResponse = z.infer<typeof SessionHistoryReadResponseSchema>;
-
-const DIMENSION_ORDER = [
-  "technicalCorrectness",
-  "rigor",
-  "independence",
-  "communication",
-  "hintResponsiveness",
-  "errorRecovery"
-] as const satisfies readonly EvaluationDimensionName[];
 
 function boundedText(value: string): string {
   return previewText(value, MAX_READ_TEXT_CHARS).text;
@@ -597,7 +840,7 @@ export function projectGroundedEvaluationReadModel(
     MAX_EVALUATION_READ_INTERVENTIONS
   );
   const projectedInterventions = interventions.values.map((intervention) => {
-    const related = takeBounded(intervention.relatedMilestoneIds, 64);
+    const related = takeBounded(intervention.relatedMilestoneIds, MAX_EVALUATION_READ_RELATED_MILESTONES);
     return {
       deliveryId: intervention.deliveryId,
       ...(intervention.turnId === undefined ? {} : { turnId: intervention.turnId }),
