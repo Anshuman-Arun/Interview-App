@@ -265,6 +265,6 @@ export function compileContext(input: {
     deliveredFacts: [...delivered],
     forbiddenDisclosureIds: input.problem.interviewer.protectedDisclosures
       .map((item) => item.id)
-      .filter((id) => !delivered.has(id) && !allowed.has(id))
+      .filter((id) => !allowed.has(id))
   });
 }
