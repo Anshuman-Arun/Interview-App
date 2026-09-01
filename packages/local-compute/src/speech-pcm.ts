@@ -109,6 +109,9 @@ export function advancePcmOrder(
   if (envelope.streamId !== prior.streamId) {
     throw new PcmAdmissionError("STREAM_CONFLICT", "PCM stream identity changed while advancing order state");
   }
+  if (envelope.streamId !== prior.streamId) {
+    throw new PcmAdmissionError("STREAM_CONFLICT", "PCM stream identity changed within an ordering sequence");
+  }
   if (envelope.sampleRate !== prior.sampleRate
       || envelope.channels !== prior.channels
       || envelope.sampleFormat !== prior.sampleFormat) {
@@ -314,7 +317,9 @@ function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
 
 
 function validatePcmOrderState(prior: PcmOrderState): void {
-  if ((prior.sampleRate !== 16_000 && prior.sampleRate !== 48_000)
+  const streamId = SpeechStreamIdSchema.safeParse(prior.streamId);
+  if (!streamId.success
+      || (prior.sampleRate !== 16_000 && prior.sampleRate !== 48_000)
       || prior.channels !== 1
       || prior.sampleFormat !== "F32LE"
       || !Number.isSafeInteger(prior.lastSequence)
