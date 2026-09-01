@@ -10,6 +10,7 @@ import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
   assessVisionFreshness,
+  createCommandEnvelope,
   isGenerationBasisStillCompatible
 } from "../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
@@ -108,6 +109,116 @@ describe("compatibility and disclosure gates", () => {
     expect(result.accepted).toBe(false);
     if (result.accepted) throw new Error("Expected uncertain proposal rejection");
     expect(result.reason).toMatch(/uncertain/i);
+  });
+
+  it("refuses to stamp an older turn with the latest committed generation basis", async () => {
+    const harness = await createCoreHarness();
+    try {
+      await harness.turns.commitInput("A newer student turn supersedes the old response target.");
+      await expect(
+        harness.turns.startGeneration(
+          harness.inputEpisodeId,
+          harness.turnId,
+          "stale-turn-provider"
+        )
+      ).rejects.toThrow(/latest committed Turn/u);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects and supersedes a provider callback whose envelope does not match its generation basis", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const basis = harness.writer.getState().generations[harness.generationId]?.basis;
+      expect(basis).toBeDefined();
+      if (basis === undefined) throw new Error("missing generation basis");
+
+      const result = await harness.turns.processProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "mock-model",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId,
+          generationId: harness.generationId,
+          contextEpoch: basis.contextEpoch,
+          sourceRevision: basis.committedInputSequence + 1
+        }),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: harness.safeProbe
+        },
+        validator: harness.validator
+      });
+
+      expect(result.accepted).toBe(false);
+      expect(result.reason).toMatch(/callback basis/u);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects an otherwise compatible proposal when new authoritative evidence makes its selected action stale", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const state = harness.writer.getState();
+      const turn = state.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = state.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "evidence-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+      expect(evidence.committed).toBe(true);
+
+      const result = await harness.turns.processProposal({
+        envelope: providerEnvelope(harness),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: harness.safeProbe
+        },
+        validator: harness.validator
+      });
+
+      expect(result.accepted).toBe(false);
+      expect(result.reason).toMatch(/action is stale/u);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+
+      const refreshed = await harness.turns.selectAction(harness.turnId, sixPeopleProblem);
+      expect(refreshed.requiredAction).toBe("WAIT");
+      expect(harness.writer.getState().pedagogicalActions[harness.turnId]?.requiredAction)
+        .toBe("WAIT");
+    } finally {
+      harness.store.close();
+    }
   });
 
   it("runtime validation prevents AI mutation of the student layer", () => {
