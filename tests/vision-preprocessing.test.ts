@@ -136,7 +136,7 @@ function snapshot(
     sourceRevision: BoardRevisionSchema.parse(options.revision ?? 3),
     capturedAtMs: 1234,
     captureSequence: 7,
-    mimeType: "image/png",
+    mimeType: "image/png" as const,
     ...(options.declaredWidth === undefined ? {} : { declaredWidth: options.declaredWidth }),
     ...(options.declaredHeight === undefined ? {} : { declaredHeight: options.declaredHeight }),
     encodedBytes: bytes
@@ -163,7 +163,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceRevision: 3,
       width: 5,
       height: 4,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encoding: "PNG",
       byteSize: bytes.length
     });
@@ -187,7 +187,7 @@ describe("vision snapshot validation and hashing", () => {
       expect(value.metadata).toMatchObject({
         width: 1,
         height: 1,
-        mimeType: "image/png",
+        mimeType: "image/png" as const,
         encoding: "PNG"
       });
       expect(value.metadata.contentDigest).toBe(sha256ImageBytes(bytes));
@@ -243,7 +243,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       declaredWidth: HARD_IMAGE_VALIDATION_LIMITS.maxWidth + 1,
       encodedBytes: makePng(1, 1)
     }).success).toBe(false);
@@ -253,7 +253,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: new Uint8Array()
     }).success).toBe(false);
 
@@ -370,7 +370,7 @@ describe("vision snapshot validation and hashing", () => {
   it("rejects artifact construction without the package's internal capability", async () => {
     const source = snapshot(makePng(4, 4));
     const crop = (await cropImage(source, { x: 1, y: 1, width: 2, height: 2 })).artifact;
-    const invalidToken = Symbol("not-the-package-token") as unknown as typeof INTERNAL_VISION_ARTIFACT_CONSTRUCTION;
+    const invalidToken = Symbol("not-the-package-token") as never;
 
     expect(() => new VisionImageArtifact(
       invalidToken,
@@ -382,7 +382,7 @@ describe("vision snapshot validation and hashing", () => {
 
   it("rejects direct snapshot construction without the package admission capability", () => {
     const admitted = snapshot(makePng(2, 2));
-    const invalidToken = Symbol("not-the-snapshot-token") as unknown as typeof INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION;
+    const invalidToken = Symbol("not-the-snapshot-token") as never;
 
     expect(() => new ImageSnapshot(
       invalidToken,
@@ -445,7 +445,7 @@ describe("vision snapshot validation and hashing", () => {
         sourceType: "WHITEBOARD_SNAPSHOT",
         sourceRevision: BoardRevisionSchema.parse(1),
         capturedAtMs: 1,
-        mimeType: "image/png",
+        mimeType: "image/png" as const,
         encodedBytes: bytes
       });
       throw new Error("Expected detached byte rejection");
@@ -460,7 +460,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(0),
       capturedAtMs: 0,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: "not-bytes" as unknown as Uint8Array
     })).toThrowError(VisionPreprocessingError);
   });
@@ -477,7 +477,7 @@ describe("vision snapshot validation and hashing", () => {
           sourceType: "WHITEBOARD_SNAPSHOT",
           sourceRevision: BoardRevisionSchema.parse(0),
           capturedAtMs: 0,
-          mimeType: "image/png",
+          mimeType: "image/png" as const,
           encodedBytes: encodedBytes as Uint8Array
         });
         throw new Error("Expected proxied byte rejection");
@@ -552,7 +552,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: unsafeRevision,
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: makePng(1, 1)
     })).toThrowError(VisionPreprocessingError);
   });
@@ -727,7 +727,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "BROWSER_SCREENSHOT" as const,
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: bytes
     };
 
@@ -753,7 +753,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: makePng(1, 1)
     });
 
@@ -773,7 +773,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT" as const,
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: makePng(1, 1)
     };
     const revoked = Proxy.revocable({}, {});
@@ -802,7 +802,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT" as const,
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: makePng(1, 1)
     };
     const hostileLimits = new Proxy({}, {
@@ -823,7 +823,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: makePng(1, 1)
     };
     Object.defineProperty(input, "unexpected", {
@@ -846,7 +846,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: makePng(1, 1)
     }, null as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrowError(RangeError);
   });
@@ -858,7 +858,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: bytes,
       unexpectedField: true
     } as unknown as Parameters<typeof createValidatedImageSnapshot>[0])).toThrowError(VisionPreprocessingError);
@@ -868,7 +868,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: bytes
     }, {
       maxEncodedBytes: bytes.length,
@@ -899,7 +899,7 @@ describe("vision snapshot validation and hashing", () => {
       sourceType: "WHITEBOARD_SNAPSHOT",
       sourceRevision: BoardRevisionSchema.parse(1),
       capturedAtMs: 1,
-      mimeType: "image/png",
+      mimeType: "image/png" as const,
       encodedBytes: underreported
     }, {
       maxEncodedBytes: 50
@@ -910,7 +910,7 @@ describe("vision snapshot validation and hashing", () => {
         sourceType: "WHITEBOARD_SNAPSHOT",
         sourceRevision: BoardRevisionSchema.parse(1),
         capturedAtMs: 1,
-        mimeType: "image/png",
+        mimeType: "image/png" as const,
         encodedBytes: underreported
       }, {
         maxEncodedBytes: 50
@@ -2131,7 +2131,7 @@ describe("vision runtime schema boundaries", () => {
       diagnostics[`extra${String(index)}`] = index;
     }
     expect(() => createVisionProcessingDiagnostics(
-      diagnostics as Parameters<typeof createVisionProcessingDiagnostics>[0]
+      diagnostics as unknown as Parameters<typeof createVisionProcessingDiagnostics>[0]
     )).toThrow();
   });
 
@@ -2166,7 +2166,7 @@ describe("vision diagnostics validation", () => {
     });
 
     expect(() => createVisionProcessingDiagnostics(
-      diagnostic as Parameters<typeof createVisionProcessingDiagnostics>[0]
+      diagnostic as unknown as Parameters<typeof createVisionProcessingDiagnostics>[0]
     )).toThrow();
     expect(getterCalls).toBe(0);
   });
@@ -2193,7 +2193,7 @@ describe("vision diagnostics validation", () => {
     });
 
     expect(() => createVisionProcessingDiagnostics(
-      diagnostic as Parameters<typeof createVisionProcessingDiagnostics>[0]
+      diagnostic as unknown as Parameters<typeof createVisionProcessingDiagnostics>[0]
     )).toThrow();
     expect(getterCalls).toBe(0);
   });
