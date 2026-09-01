@@ -400,6 +400,13 @@ describe("speech worker adversarial races and hard limits", () => {
     await expect(payloadSubject.submitFrame(valid.envelope, { byteLength: valid.pcm.byteLength })).rejects.toMatchObject({
       code: "INVALID_FRAME"
     });
+
+    const sharedSubject = worker();
+    const shared = new Float32Array(new SharedArrayBuffer(valid.pcm.byteLength));
+    await expect(sharedSubject.submitFrame(
+      { ...valid.envelope, requestId: newRequestId(), streamId: "shared-payload" },
+      shared
+    )).rejects.toMatchObject({ code: "INVALID_FRAME" });
   });
 
   it("does not allow configuration to raise the protocol hard limits", () => {
