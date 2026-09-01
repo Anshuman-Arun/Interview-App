@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   InterviewCatalogResponseSchema,
   InterviewSessionConfigurationSchema,
+  OxfordInterviewSessionConfigurationSchema,
   ProtocolErrorResponseSchema,
   SessionStartedResponseSchema,
   newRequestId,
@@ -506,8 +507,8 @@ function oxfordConfiguration(
   id: string,
   version: string,
   difficulty: string
-): InterviewSessionConfiguration {
-  return InterviewSessionConfigurationSchema.parse({
+): Extract<InterviewSessionConfiguration, { readonly mode: "OXFORD_MATHEMATICS" }> {
+  return OxfordInterviewSessionConfigurationSchema.parse({
     configurationVersion: 1,
     mode: "OXFORD_MATHEMATICS",
     problem: { id, version },
