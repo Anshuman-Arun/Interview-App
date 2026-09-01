@@ -6,6 +6,7 @@ import {
   type InterviewSessionConfiguration
 } from "../../../packages/domain/src/index.js";
 import type { SessionState } from "../../../packages/events/src/index.js";
+import { createProviderContextSpecFingerprintSync } from "../../../packages/interview-engine/src/context-compiler.js";
 import {
   QUANT_TRADER_SCENARIO_VERSION,
   QuantTraderScenarioFamilySchema,
@@ -114,7 +115,9 @@ export function resolveSessionStateComposition(
     throw new Error("Cannot compose an interview session before it starts");
   }
   if (state.configuration !== undefined) {
-    return resolveInterviewSessionConfiguration(state.configuration);
+    const composition = resolveInterviewSessionConfiguration(state.configuration);
+    assertPersistedCompositionMatchesState(composition, state, true);
+    return composition;
   }
 
   // Legacy streams predate authoritative session configuration. Recover only
@@ -141,16 +144,70 @@ export function resolveSessionStateComposition(
     ) {
       throw new Error("Legacy session problem identity is no longer available");
     }
-    return resolveInterviewSessionConfiguration({
+    const composition = resolveInterviewSessionConfiguration({
       configurationVersion: 1,
       mode: "OXFORD_MATHEMATICS",
       problem: { id: problem.id, version: problem.version },
       difficulty: problem.interviewer.difficulty,
       interventionPolicy: "BALANCED"
     });
+    assertPersistedCompositionMatchesState(composition, state, false);
+    return composition;
   }
 
   throw new Error("Session has no authoritative interview identity");
+}
+
+function assertPersistedCompositionMatchesState(
+  composition: InterviewSessionComposition,
+  state: Readonly<SessionState>,
+  configuredStream: boolean
+): void {
+  if (composition.mode === "OXFORD_MATHEMATICS") {
+    const persistedProblem = state.problem;
+    if (
+      persistedProblem === undefined
+      || persistedProblem.id !== composition.problem.id
+      || persistedProblem.version !== composition.problem.version
+      || persistedProblem.prompt !== composition.problem.public.prompt
+    ) {
+      throw new Error("Persisted Oxford problem does not match the authoritative session configuration");
+    }
+    const expectedFingerprint = createProviderContextSpecFingerprintSync(composition.problem);
+    if (
+      (configuredStream && persistedProblem.providerContextSpecSha256 === undefined)
+      || (
+        persistedProblem.providerContextSpecSha256 !== undefined
+        && persistedProblem.providerContextSpecSha256 !== expectedFingerprint
+      )
+    ) {
+      throw new Error("Persisted Oxford problem provenance does not match the authoritative definition");
+    }
+    return;
+  }
+
+  if (composition.mode === "QUANT_RESEARCH") {
+    const persistedResearch = state.quantResearch;
+    if (persistedResearch === undefined) {
+      if (state.problem !== undefined) {
+        throw new Error("Quant Research problem is presented without authoritative scenario state");
+      }
+      return;
+    }
+    if (
+      persistedResearch.definition.family !== composition.configuration.scenario.id
+      || persistedResearch.definition.version !== composition.configuration.scenario.version
+      || state.problem?.id !== composition.configuration.scenario.id
+      || state.problem.version !== composition.configuration.scenario.version
+    ) {
+      throw new Error("Persisted Quant Research identity does not match session configuration");
+    }
+    return;
+  }
+
+  if (state.quantResearch !== undefined) {
+    throw new Error("Quant Research state cannot be attached to a Quant Trading session");
+  }
 }
 
 export function listInterviewCatalogEntries(): readonly InterviewCatalogEntry[] {
