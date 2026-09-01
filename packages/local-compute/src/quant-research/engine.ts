@@ -1337,7 +1337,7 @@ export class QuantResearchEngine {
   }
 
   public getAcceptedActions(): readonly QuantResearchAction[] {
-    return clone(this.#state.acceptedActions);
+    return Object.freeze(this.#state.acceptedActions.map((action) => parseQuantResearchAction(action)));
   }
 
 }
