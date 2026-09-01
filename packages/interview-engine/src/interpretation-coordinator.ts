@@ -176,6 +176,7 @@ export class DeterministicFormalInterpretationProvider implements FormalInterpre
 interface RequestRecord {
   readonly fingerprint: string;
   cancelled: boolean;
+  dispatchStarted: boolean;
   settled: boolean;
   promise: Promise<InterpretationExecutionOutcome>;
 }
@@ -305,7 +306,7 @@ export class InterpretationCoordinator {
     const parsed = RequestIdSchema.safeParse(requestIdInput);
     if (!parsed.success) return false;
     const record = this.records.get(parsed.data);
-    if (record === undefined || record.settled) return false;
+    if (record === undefined || record.settled || record.dispatchStarted) return false;
     record.cancelled = true;
     this.addDiagnostic({
       requestId: parsed.data,
@@ -345,6 +346,7 @@ export class InterpretationCoordinator {
     const record: RequestRecord = {
       fingerprint,
       cancelled: false,
+      dispatchStarted: false,
       settled: false,
       promise: Promise.resolve(failed("INVALID_REQUEST", "MALFORMED_REQUEST", 0, request.requestId))
     };
@@ -522,6 +524,7 @@ export class InterpretationCoordinator {
       ));
     }
 
+    record.dispatchStarted = true;
     this.addDiagnostic({
       requestId: request.requestId,
       state: "VERIFICATION_PENDING",
