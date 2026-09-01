@@ -42,6 +42,24 @@ describe("deterministic voice activity state machine", () => {
     expect(vad.snapshot().state).toBe("SILENCE");
   });
 
+  it("snapshots VAD configuration so caller mutation cannot change thresholds mid-stream", () => {
+    const config = {
+      onsetThreshold: 0.8,
+      continuationThreshold: 0.4,
+      onsetHysteresisMs: 40
+    };
+    const vad = new VoiceActivityStateMachine(config);
+    config.onsetThreshold = 0.1;
+    expect(vad.step(0.5, 20).state).toBe("SILENCE");
+  });
+
+  it("does not allow cancellation to rewrite an already finalized terminal state", () => {
+    const vad = new VoiceActivityStateMachine();
+    vad.finalize();
+    expect(() => vad.cancel()).toThrow(/Finalized/u);
+    expect(vad.snapshot().state).toBe("FINALIZED");
+  });
+
   it("snapshots scripted backend inputs so caller mutation cannot change results", async () => {
     const probabilities = [1, 0];
     const backend = new ScriptedVadBackend(probabilities);
@@ -85,6 +103,57 @@ describe("adaptive endpointing policy", () => {
       silenceMs: 0,
       utteranceMs: 200
     })).toThrow(/Speech duration/u);
+  });
+
+  it("snapshots endpoint configuration so caller mutation cannot change policy mid-stream", () => {
+    const config = {
+      minimumSpeechMs: 120,
+      minimumSilenceMs: 500,
+      incompleteSilenceMs: 900,
+      maximumPauseMs: 1_500,
+      maximumUtteranceMs: 60_000
+    };
+    const stable = new AdaptiveEndpointingPolicy(config);
+    config.minimumSilenceMs = 1;
+    expect(stable.decide({
+      state: "POSSIBLE_END",
+      speechMs: 400,
+      silenceMs: 100,
+      utteranceMs: 500
+    })).toEqual({ kind: "CONTINUE" });
+  });
+
+  it("uses maximum pause as an absolute cap for incomplete-utterance extension", () => {
+    const capped = new AdaptiveEndpointingPolicy({
+      minimumSpeechMs: 120,
+      minimumSilenceMs: 500,
+      incompleteSilenceMs: 5_000,
+      maximumPauseMs: 1_500,
+      maximumUtteranceMs: 60_000
+    });
+    expect(capped.decide({
+      state: "POSSIBLE_END",
+      speechMs: 400,
+      silenceMs: 1_499,
+      utteranceMs: 1_899,
+      appearsIncomplete: true
+    })).toEqual({ kind: "CONTINUE" });
+    expect(capped.decide({
+      state: "POSSIBLE_END",
+      speechMs: 400,
+      silenceMs: 1_500,
+      utteranceMs: 1_900,
+      appearsIncomplete: true
+    })).toEqual({ kind: "FINALIZE", reason: "SILENCE" });
+  });
+
+  it("rejects endpoint decisions against terminal VAD states", () => {
+    expect(() => policy.decide({
+      state: "CANCELLED",
+      speechMs: 400,
+      silenceMs: 500,
+      utteranceMs: 900
+    })).toThrow(/terminal/u);
   });
 
   it("does not finalize on a brief pause", () => {
