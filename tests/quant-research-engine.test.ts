@@ -468,6 +468,30 @@ describe("deterministic Quant Research interview engine", () => {
     expect(nestedReplayCode).toBe("INVALID_REPLAY");
   });
 
+  it("returns a runtime-frozen canonical definition for authoritative replay persistence", () => {
+    const canonical = parseQuantResearchDefinition({
+      ...sampling,
+      config: { ...sampling.config }
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(Object.isFrozen(canonical.config)).toBe(true);
+
+    const mutableCanonical = canonical as unknown as {
+      seed: number;
+      config: { maxSamples: number };
+    };
+    expect(() => {
+      mutableCanonical.seed = 999;
+    }).toThrow();
+    expect(() => {
+      mutableCanonical.config.maxSamples = 32;
+    }).toThrow();
+
+    const engine = new QuantResearchEngine(canonical);
+    engine.applyAction({ actionId: "canonical-sample", kind: "REQUEST_OBSERVATION", count: 2 });
+    expect(replayQuantResearch(canonical, engine.getAcceptedActions()).state).toEqual(engine.getState());
+  });
+
   it("does not retain mutable caller aliases for definitions, actions, or returned snapshots", () => {
     const mutableDefinition = {
       family: "SAMPLING_ESTIMATION",
