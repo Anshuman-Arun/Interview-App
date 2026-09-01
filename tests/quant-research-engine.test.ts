@@ -146,8 +146,8 @@ describe("deterministic Quant Research interview engine", () => {
       version: QUANT_RESEARCH_VERSION,
       generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
-      seed: 4,
-      config: { maxSamples: 4, populationSize: 8, centerMin: -5, centerMax: 5, noiseRadius: 0, outlierShift: 2 }
+      seed: 33,
+      config: { maxSamples: 3, populationSize: 8, centerMin: 0, centerMax: 0, noiseRadius: 1, outlierShift: 2 }
     }), "INVALID_DEFINITION");
   });
 
