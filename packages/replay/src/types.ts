@@ -297,7 +297,23 @@ export interface ReplaySessionCounts {
   readonly exposedInterventions: number;
   readonly possiblyExposedInterventions: number;
   readonly cancelledInterventions: number;
-  readonly inFlightDeliveries: number;
+  readonly inFlightDeliveries?: number;
+}
+
+export interface ReplayEvidenceSummary {
+  readonly recordedUpdates: number;
+  readonly recordedInvalidations: number;
+  readonly currentActive?: number;
+  readonly superseded?: number;
+  readonly stale?: number;
+}
+
+export interface ReplayVerificationSummary {
+  readonly pending: number;
+  readonly verified: number;
+  readonly contradicted: number;
+  readonly unresolved: number;
+  readonly discarded: number;
 }
 
 export interface SessionHistoryProjection {
@@ -317,8 +333,10 @@ export interface SessionHistoryProjection {
   readonly evidenceHistoryTruncation: TruncationInfo;
   readonly currentEvidence: readonly ReplayCurrentEvidence[];
   readonly currentEvidenceTruncation: TruncationInfo;
+  readonly evidenceSummary: ReplayEvidenceSummary;
   readonly verificationHistory: readonly ReplayVerificationHistoryEntry[];
   readonly verificationTruncation: TruncationInfo;
+  readonly verificationSummary: ReplayVerificationSummary;
   readonly generationHistory: readonly ReplayGenerationHistoryEntry[];
   readonly generationTruncation: TruncationInfo;
   readonly evaluation?: ReplayEvaluationSummary;

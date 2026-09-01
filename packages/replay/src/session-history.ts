@@ -1,6 +1,5 @@
 import {
   SessionEvaluationSchema,
-  evidenceKeyToString,
   isDisclosedStatus,
   type DeliveryAtom,
   type EvidenceKey,
@@ -527,12 +526,36 @@ export function projectSessionHistory(
   };
 
   const inFlightDeliveries = state === undefined
-    ? 0
+    ? undefined
     : Object.values(state.deliveries).filter((delivery: DeliveryAtom) =>
         delivery.status === "VALIDATED"
         || delivery.status === "QUEUED"
         || delivery.status === "DELIVERING"
       ).length;
+
+  const evidenceStateRecords = state === undefined
+    ? undefined
+    : Object.values(state.evidenceHistory).flatMap((records) => [...records]);
+  const evidenceSummary = {
+    recordedUpdates: events.filter((event) => event.type === "STUDENT_EVIDENCE_UPDATED").length,
+    recordedInvalidations: events.filter((event) => event.type === "STUDENT_EVIDENCE_INVALIDATED").length,
+    ...(evidenceStateRecords === undefined
+      ? {}
+      : {
+          currentActive: evidenceStateRecords.filter((record) => record.status === "ACTIVE").length,
+          superseded: evidenceStateRecords.filter((record) => record.status === "SUPERSEDED").length,
+          stale: evidenceStateRecords.filter((record) => record.status === "STALE").length
+        })
+  };
+  const verificationSummary = {
+    pending: verification.values.filter((entry) => entry.status === "PENDING").length,
+    verified: verification.values.filter((entry) => entry.result?.status === "VERIFIED").length,
+    contradicted: verification.values.filter((entry) => entry.result?.status === "CONTRADICTED").length,
+    unresolved: verification.values.filter((entry) => entry.result?.status === "UNRESOLVED").length,
+    discarded: verification.values.filter((entry) => entry.status === "DISCARDED").length
+  };
+  const highestDisclosureUsed = state === undefined ? undefined : disclosedHighest(state);
+  const evaluation = validateEvaluation(options.evaluation, normalized.sessionId, problem);
 
   const projection: SessionHistoryProjection = {
     sessionId: normalized.sessionId,
@@ -543,9 +566,9 @@ export function projectSessionHistory(
       exposedInterventions: directCounts.exposed,
       possiblyExposedInterventions: directCounts.possible,
       cancelledInterventions: directCounts.cancelled,
-      inFlightDeliveries
+      ...(inFlightDeliveries === undefined ? {} : { inFlightDeliveries })
     },
-    ...(state === undefined ? {} : { highestDisclosureUsed: disclosedHighest(state) }),
+    ...(highestDisclosureUsed === undefined ? {} : { highestDisclosureUsed }),
     currentStateAvailable: state !== undefined,
     knownThroughSequence: lastKnownSequence(normalized.events),
     totalEventCount: normalized.totalEventCount,
@@ -554,13 +577,13 @@ export function projectSessionHistory(
     evidenceHistoryTruncation: evidence.truncation,
     currentEvidence: currentEvidence.values,
     currentEvidenceTruncation: currentEvidence.truncation,
+    evidenceSummary,
     verificationHistory: verification.values,
     verificationTruncation: verification.truncation,
+    verificationSummary,
     generationHistory: generations.values,
     generationTruncation: generations.truncation,
-    ...(validateEvaluation(options.evaluation, normalized.sessionId, problem) === undefined
-      ? {}
-      : { evaluation: validateEvaluation(options.evaluation, normalized.sessionId, problem) })
+    ...(evaluation === undefined ? {} : { evaluation })
   };
 
   return projection;

@@ -1,7 +1,6 @@
 import type {
   DeliveryAtom,
   DeliveryStatus,
-  EventId,
   GenerationId
 } from "../../domain/src/index.js";
 import type { EventType, SessionEvent } from "../../events/src/index.js";
@@ -354,8 +353,10 @@ function entryForKnownEvent(
     case "MODEL_GENERATION_STARTED":
       relations = {
         generationId: event.payload.generationId,
-        inputEpisodeId: event.payload.basis.inputEpisodeId,
-        turnId: event.payload.basis.turnId
+        turnId: event.payload.basis.turnId,
+        ...(event.payload.basis.inputEpisodeId === undefined
+          ? {}
+          : { inputEpisodeId: event.payload.basis.inputEpisodeId })
       };
       generation = {
         generationId: event.payload.generationId,

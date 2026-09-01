@@ -11,15 +11,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:replay": "vitest run tests/replay.test.ts tests/vertical-slice.test.ts",
-    "test:property": "vitest run tests/concurrency.property.test.ts",
+    "test:replay": "vitest run tests/replay.test.ts tests/replay-history-engine.test.ts tests/vertical-slice.test.ts",
+    "test:property": "vitest run tests/concurrency.property.test.ts tests/replay-history.property.test.ts",
     "test:e2e": "vitest run tests/e2e-typed-interview.test.ts",
     "dev:web": "vite apps/web",
     "build:web": "vite build apps/web",
     "dev:server": "tsx apps/server/src/server.ts",
     "start:server": "tsx apps/server/src/server.ts",
     "demo": "tsx apps/server/src/run-synthetic.ts",
-    "check": "node scripts/check-public-release.mjs && tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts",
+    "check": "node scripts/check-public-release.mjs && node scripts/check-architecture-boundaries.mjs && tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/replay-history-engine.test.ts tests/vertical-slice.test.ts",
     "security:public": "node scripts/check-public-release.mjs"
   },
   "dependencies": {
