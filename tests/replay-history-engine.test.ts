@@ -182,6 +182,188 @@ describe("replay/history projections", () => {
     }
   });
 
+  it("withholds unexposed delivery and internal model/verifier text from replay surfaces", async () => {
+    const queuedHarness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(queuedHarness);
+      const queued = projectReplayTimeline(
+        queuedHarness.store.load(queuedHarness.sessionId)
+      );
+      expect(
+        queued.entries.find((entry) =>
+          entry.kind === "DELIVERY_QUEUED"
+          && entry.delivery?.deliveryId === atom.deliveryId
+        )?.delivery?.text
+      ).toBeUndefined();
+      expect(JSON.stringify(queued)).not.toContain(queuedHarness.safeProbe);
+
+      await new DeliveryCoordinator(queuedHarness.writer)
+        .cancelBeforeExposure(atom.deliveryId, "cancel before exposure");
+      const cancelled = projectSessionHistory(
+        queuedHarness.store.load(queuedHarness.sessionId)
+      );
+      expect(JSON.stringify(cancelled)).not.toContain(queuedHarness.safeProbe);
+    } finally {
+      queuedHarness.store.close();
+    }
+
+    const exposedHarness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(exposedHarness);
+      const coordinator = new DeliveryCoordinator(exposedHarness.writer);
+      await coordinator.markStarted(atom.deliveryId);
+      await coordinator.acknowledgeExposed(atom.deliveryId);
+      expect(JSON.stringify(projectReplayTimeline(
+        exposedHarness.store.load(exposedHarness.sessionId)
+      ))).toContain(exposedHarness.safeProbe);
+    } finally {
+      exposedHarness.store.close();
+    }
+
+    const boardHarness = await createCoreHarness();
+    try {
+      const outcome = await boardHarness.turns.processProposal({
+        envelope: createCommandEnvelope({
+          sessionId: boardHarness.sessionId,
+          producer: "mock-model",
+          inputEpisodeId: boardHarness.inputEpisodeId,
+          turnId: boardHarness.turnId,
+          generationId: boardHarness.generationId
+        }),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          boardActions: [{
+            operation: "circle",
+            layer: "AI_ANNOTATION",
+            targetShapeId: "student-shape-private-purpose",
+            annotationPurpose: boardHarness.safeProbe
+          }]
+        },
+        validator: boardHarness.validator
+      });
+      const atom = outcome.deliveryAtoms[0];
+      if (atom === undefined) throw new Error("Expected board delivery");
+      const coordinator = new DeliveryCoordinator(boardHarness.writer);
+      await coordinator.markStarted(atom.deliveryId);
+      await coordinator.acknowledgeExposed(atom.deliveryId);
+      const replay = projectReplayTimeline(
+        boardHarness.store.load(boardHarness.sessionId)
+      );
+      expect(JSON.stringify(replay)).not.toContain(boardHarness.safeProbe);
+      expect(replay.entries.find((entry) =>
+        entry.kind === "DELIVERY_EXPOSED"
+      )?.delivery?.boardAction).toMatchObject({
+        operation: "circle",
+        targetShapeId: "student-shape-private-purpose"
+      });
+    } finally {
+      boardHarness.store.close();
+    }
+
+    const internalHarness = await createCoreHarness();
+    try {
+      const marker = "INTERNAL_REPLAY_MARKER_MUST_STAY_PRIVATE";
+      const baseEvents = internalHarness.store.load(internalHarness.sessionId);
+      const generation = internalHarness.writer.getState()
+        .generations[internalHarness.generationId];
+      const turn = baseEvents.find((item) => item.type === "TURN_COMMITTED");
+      if (generation === undefined || turn?.type !== "TURN_COMMITTED") {
+        throw new Error("Missing internal replay fixture provenance");
+      }
+
+      const policyRedacted = baseEvents.map((item) =>
+        item.type === "PEDAGOGICAL_ACTION_SELECTED"
+          ? SessionEventSchema.parse({
+              ...item,
+              payload: {
+                ...item.payload,
+                request: { ...item.payload.request, target: marker }
+              }
+            })
+          : item
+      );
+      expect(JSON.stringify(projectReplayTimeline(policyRedacted)))
+        .not.toContain(marker);
+
+      const proposalRequestId = "request-private-formal";
+      const formalHistory = [
+        ...baseEvents,
+        event(internalHarness.sessionId, baseEvents.length + 1,
+          "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED", {
+            generationId: internalHarness.generationId,
+            proposalRequestId,
+            proposal: {
+              candidateFormalInterpretation: marker,
+              interpretationConfidence: 0.8
+            }
+          }, "PROVIDER"),
+        event(internalHarness.sessionId, baseEvents.length + 2,
+          "FORMAL_INTERPRETATION_PROPOSAL_REJECTED", {
+            generationId: internalHarness.generationId,
+            reason: "formal proposal rejected"
+          })
+      ];
+      expect(JSON.stringify(projectSessionHistory(formalHistory)))
+        .not.toContain(marker);
+
+      const verificationHistory = [
+        ...baseEvents,
+        event(internalHarness.sessionId, baseEvents.length + 1,
+          "VERIFICATION_REQUESTED", {
+            verificationRequestId: "request-private-verification",
+            verifier: "deterministic-verifier",
+            basis: generation.basis,
+            candidateFormalInterpretation: marker,
+            interpretationConfidence: 0.8,
+            evidenceKey: {
+              problemId: sixPeopleProblem.id,
+              subject: { kind: "CLAIM", claimId: "private-replay-claim" },
+              dimension: "CORRECTNESS"
+            },
+            evidenceEventIds: [turn.eventId]
+          }),
+        event(internalHarness.sessionId, baseEvents.length + 2,
+          "VERIFICATION_RESULT_ACCEPTED", {
+            verificationRequestId: "request-private-verification",
+            result: {
+              status: "UNRESOLVED",
+              interpretationConfidence: 0.8,
+              verifier: "deterministic-verifier",
+              reason: marker
+            }
+          })
+      ];
+      expect(JSON.stringify(projectSessionHistory(verificationHistory)))
+        .not.toContain(marker);
+
+      const claimedIdHistory = [
+        ...baseEvents,
+        event(internalHarness.sessionId, baseEvents.length + 1,
+          "MODEL_PROPOSAL_RECEIVED", {
+            generationId: internalHarness.generationId,
+            proposal: {
+              realizedAction: "PROBE_JUSTIFICATION",
+              claimedDisclosureLevel: 0,
+              claimedDisclosureIds: [marker],
+              speechText: internalHarness.safeProbe
+            }
+          }, "PROVIDER"),
+        event(internalHarness.sessionId, baseEvents.length + 2,
+          "PROPOSAL_REJECTED", {
+            generationId: internalHarness.generationId,
+            reason: "proposal rejected"
+          })
+      ];
+      expect(JSON.stringify(projectReplayTimeline(claimedIdHistory)))
+        .not.toContain(marker);
+    } finally {
+      internalHarness.store.close();
+    }
+  });
+
   it("distinguishes exposed, cancelled, possibly exposed, audio, and whiteboard deliveries", async () => {
     const exposedHarness = await createCoreHarness();
     try {
@@ -705,6 +887,221 @@ describe("replay/history projections", () => {
     expect(() => projectSessionHistory(history, {
       bounds: { maxTextPreviewChars: 0 }
     })).toThrow(RangeError);
+  });
+
+  it("rejects event sources that cannot author the claimed authoritative transition", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const coordinator = new DeliveryCoordinator(harness.writer);
+      await coordinator.markStarted(atom.deliveryId);
+      await coordinator.acknowledgeExposed(atom.deliveryId);
+      const authoritative = harness.store.load(harness.sessionId);
+      const forged = authoritative.map((item) =>
+        item.type === "DELIVERY_EXPOSED"
+          ? SessionEventSchema.parse({ ...item, source: "APPLICATION" })
+          : item
+      );
+      expect(() => projectReplayTimeline(forged))
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("accepts rejected evidence proposals but rejects evidence updates with no authoritative origin", () => {
+    const sessionId = "session-evidence-origin" as SessionId;
+    const history = base(sessionId, "evidence-origin");
+    const rejectedProposal = event(sessionId, 3, "EVIDENCE_PROPOSED", {
+      proposal: {
+        key: {
+          problemId: "different-problem",
+          subject: { kind: "SKILL", skillId: "untrusted-skill" },
+          dimension: "PROGRESS"
+        },
+        proposedValue: "COMPLETE",
+        inferenceConfidence: 0.2,
+        evidenceEventIds: ["missing-support"]
+      }
+    }, "PROVIDER");
+    const rejected = projectSessionHistory([...history, rejectedProposal]);
+    expect(rejected.evidenceSummary.recordedUpdates).toBe(0);
+    expect(rejected.currentEvidence).toEqual([]);
+
+    const key: EvidenceKey = {
+      problemId: "evidence-origin",
+      subject: { kind: "SKILL", skillId: "forged-skill" },
+      dimension: "PROGRESS"
+    };
+    const forgedValue = EvidenceValueSchema.parse({
+      value: "COMPLETE",
+      inferenceConfidence: 1,
+      evidenceEventIds: [history[1]?.eventId],
+      lastUpdatedSequence: 3
+    });
+    expect(() => projectSessionHistory([
+      ...history,
+      event(sessionId, 3, "STUDENT_EVIDENCE_UPDATED", {
+        key,
+        value: forgedValue
+      })
+    ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+  });
+
+  it("rejects turn text that is not the committed InputEpisode semantic content", () => {
+    const sessionId = "session-turn-mismatch" as SessionId;
+    const events = [
+      ...base(sessionId, "turn-mismatch"),
+      event(sessionId, 3, "INPUT_EPISODE_STARTED", {
+        inputEpisodeId: "episode-turn-mismatch"
+      }, "USER"),
+      event(sessionId, 4, "INPUT_EPISODE_UPDATED", {
+        inputEpisodeId: "episode-turn-mismatch",
+        modality: "TYPING",
+        semanticContent: "authoritative student input"
+      }, "USER"),
+      event(sessionId, 5, "INPUT_EPISODE_COMMITTED", {
+        inputEpisodeId: "episode-turn-mismatch"
+      }),
+      event(sessionId, 6, "TURN_COMMITTED", {
+        turnId: "turn-mismatch",
+        inputEpisodeId: "episode-turn-mismatch",
+        studentText: "different invented turn text"
+      })
+    ];
+    expect(() => projectSessionHistory(events))
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+  });
+
+  it("requires barge-in onset to invalidate already active output before unrelated transitions", async () => {
+    const activeHarness = await createCoreHarness();
+    try {
+      const authoritative = activeHarness.store.load(activeHarness.sessionId);
+      const sequence = authoritative.length + 1;
+      expect(() => projectReplayTimeline([
+        ...authoritative,
+        event(activeHarness.sessionId, sequence, "UTTERANCE_STARTED", {
+          utteranceId: "utterance-barge-active"
+        }, "USER"),
+        event(activeHarness.sessionId, sequence + 1, "SESSION_RESUMED", {
+          resumedAt: "2026-08-31T19:30:00.000Z"
+        })
+      ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      activeHarness.store.close();
+    }
+
+    const queuedHarness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(queuedHarness);
+      const authoritative = queuedHarness.store.load(queuedHarness.sessionId);
+      const sequence = authoritative.length + 1;
+      expect(() => projectReplayTimeline([
+        ...authoritative,
+        event(queuedHarness.sessionId, sequence, "UTTERANCE_STARTED", {
+          utteranceId: "utterance-barge-queued"
+        }, "USER"),
+        event(queuedHarness.sessionId, sequence + 1, "DELIVERY_STARTED", {
+          deliveryId: atom.deliveryId
+        })
+      ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      queuedHarness.store.close();
+    }
+  });
+
+  it("validates accepted vision and local-compute payloads against their authoritative requests", () => {
+    const visionSessionId = "session-vision-validation" as SessionId;
+    const visionEvents = [
+      ...base(visionSessionId, "vision-validation"),
+      event(visionSessionId, 3, "VISION_REQUESTED", {
+        visionRequestId: "vision-request",
+        sourceBoardRevision: 0,
+        regionId: "region-a",
+        relevantShapeIds: ["shape-a"]
+      }),
+      event(visionSessionId, 4, "VISION_RESULT_ACCEPTED", {
+        visionRequestId: "vision-request",
+        observation: {
+          regionId: "region-a",
+          sourceBoardRevision: 0,
+          relevantShapeIds: ["shape-a"],
+          bounds: { x: 0, y: 0, width: 10, height: 10 },
+          interpretation: "worker observation",
+          confidence: 0.9
+        }
+      }, "WORKER")
+    ];
+    expect(projectSessionHistory(visionEvents).currentStateAvailable).toBe(true);
+    expect(() => projectSessionHistory([
+      ...visionEvents.slice(0, -1),
+      event(visionSessionId, 4, "VISION_RESULT_ACCEPTED", {
+        visionRequestId: "vision-request",
+        observation: {
+          regionId: "different-region",
+          sourceBoardRevision: 0,
+          relevantShapeIds: ["shape-a"],
+          bounds: { x: 0, y: 0, width: 10, height: 10 },
+          interpretation: "fabricated stale observation",
+          confidence: 0.9
+        }
+      }, "WORKER")
+    ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+
+    const computeSessionId = "session-compute-validation" as SessionId;
+    const speechText = "  alpha   beta ";
+    const computeEvents = [
+      ...base(computeSessionId, "compute-validation"),
+      event(computeSessionId, 3, "UTTERANCE_STARTED", {
+        utteranceId: "utterance-compute"
+      }, "USER"),
+      event(computeSessionId, 4, "INPUT_EPISODE_STARTED", {
+        inputEpisodeId: "episode-compute"
+      }),
+      event(computeSessionId, 5, "TRANSCRIPT_FINALIZED", {
+        utteranceId: "utterance-compute",
+        inputEpisodeId: "episode-compute",
+        transcriptRevision: 1,
+        text: speechText
+      }, "WORKER"),
+      event(computeSessionId, 6, "INPUT_EPISODE_UPDATED", {
+        inputEpisodeId: "episode-compute",
+        modality: "SPEECH",
+        semanticContent: speechText
+      }),
+      event(computeSessionId, 7, "INPUT_EPISODE_COMMITTED", {
+        inputEpisodeId: "episode-compute"
+      }),
+      event(computeSessionId, 8, "TURN_COMMITTED", {
+        turnId: "turn-compute",
+        inputEpisodeId: "episode-compute",
+        studentText: speechText
+      }),
+      event(computeSessionId, 9, "LOCAL_COMPUTE_REQUESTED", {
+        computeRequestId: "compute-request",
+        operation: "ANALYZE_TRANSCRIPT",
+        inputEpisodeId: "episode-compute",
+        sourceTranscriptRevision: 1
+      }),
+      event(computeSessionId, 10, "LOCAL_COMPUTE_RESULT_ACCEPTED", {
+        computeRequestId: "compute-request",
+        operation: "ANALYZE_TRANSCRIPT",
+        sourceTranscriptRevision: 1,
+        normalizedText: "alpha beta",
+        tokenCount: 2
+      })
+    ];
+    expect(projectReplayTimeline(computeEvents).complete).toBe(true);
+    expect(() => projectReplayTimeline([
+      ...computeEvents.slice(0, -1),
+      event(computeSessionId, 10, "LOCAL_COMPUTE_RESULT_ACCEPTED", {
+        computeRequestId: "compute-request",
+        operation: "ANALYZE_TRANSCRIPT",
+        sourceTranscriptRevision: 1,
+        normalizedText: "wrong",
+        tokenCount: 1
+      })
+    ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
   it("rejects reducer-valid delivery transitions that violate generation and exposure authority", async () => {

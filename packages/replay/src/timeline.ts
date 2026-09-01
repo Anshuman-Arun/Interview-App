@@ -1,6 +1,7 @@
-import type {
-  DeliveryAtom,
-  DeliveryStatus
+import {
+  isDisclosedStatus,
+  type DeliveryAtom,
+  type DeliveryStatus
 } from "../../domain/src/index.js";
 import type { EventType } from "../../events/src/index.js";
 import {
@@ -115,6 +116,8 @@ function deliveryDetail(
     }
   } as const;
 
+  if (!isDisclosedStatus(status)) return base;
+
   if (atom.content.medium === "TEXT") {
     return {
       ...base,
@@ -134,7 +137,6 @@ function deliveryDetail(
     ...base,
     boardAction: {
       operation: action.operation,
-      annotationPurpose: previewText(action.annotationPurpose, bounds.maxTextPreviewChars),
       ...(action.content === undefined
         ? {}
         : { content: previewText(action.content, bounds.maxTextPreviewChars) }),
@@ -217,7 +219,6 @@ function entryForKnownEvent(
       break;
     case "VISION_RESULT_ACCEPTED":
       relations = { requestId: event.payload.visionRequestId };
-      text = previewText(event.payload.observation.interpretation, bounds.maxTextPreviewChars);
       revisions = { boardRevision: event.payload.observation.sourceBoardRevision };
       break;
     case "VISION_RESULT_DISCARDED":
@@ -253,10 +254,7 @@ function entryForKnownEvent(
         verifier: event.payload.verifier,
         evidenceKey: event.payload.evidenceKey,
         basis: event.payload.basis,
-        candidateFormalInterpretation: previewText(
-          event.payload.candidateFormalInterpretation,
-          bounds.maxTextPreviewChars
-        ),
+        candidateFormalInterpretationPersisted: true,
         interpretationConfidence: event.payload.interpretationConfidence,
         ...(event.payload.sourceGenerationId === undefined
           ? {}
@@ -273,8 +271,7 @@ function entryForKnownEvent(
         verificationRequestId: event.payload.verificationRequestId,
         verifier: event.payload.result.verifier,
         interpretationConfidence: event.payload.result.interpretationConfidence,
-        resultStatus: event.payload.result.status,
-        reason: previewText(event.payload.result.reason, bounds.maxTextPreviewChars)
+        resultStatus: event.payload.result.status
       };
       break;
     case "VERIFICATION_RESULT_DISCARDED":
@@ -331,9 +328,7 @@ function entryForKnownEvent(
       policy = {
         requiredAction: event.payload.request.requiredAction,
         maximumDisclosure: event.payload.request.maximumDisclosure,
-        ...(event.payload.request.target === undefined
-          ? {}
-          : { target: previewText(event.payload.request.target, bounds.maxTextPreviewChars) })
+        targetPersisted: event.payload.request.target !== undefined
       };
       break;
     case "MODEL_GENERATION_STARTED":
@@ -369,24 +364,18 @@ function entryForKnownEvent(
         }
       };
       break;
-    case "MODEL_PROPOSAL_RECEIVED": {
+    case "MODEL_PROPOSAL_RECEIVED":
       relations = { generationId: event.payload.generationId };
-      const bounded = takeBounded(
-        event.payload.proposal.claimedDisclosureIds,
-        bounds.maxDisclosureIds
-      );
       generation = {
         generationId: event.payload.generationId,
         phase: "PROPOSAL_RECEIVED",
         realizedAction: event.payload.proposal.realizedAction,
         claimedDisclosureLevel: event.payload.proposal.claimedDisclosureLevel,
-        claimedDisclosureIds: bounded.values,
-        claimedDisclosureIdsTruncation: bounded.truncation,
+        claimedDisclosureIdCount: event.payload.proposal.claimedDisclosureIds.length,
         proposalTextPersisted: event.payload.proposal.speechText !== undefined,
         proposalBoardActionCount: event.payload.proposal.boardActions?.length ?? 0
       };
       break;
-    }
     case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
       relations = {
         generationId: event.payload.generationId,
@@ -395,10 +384,7 @@ function entryForKnownEvent(
       generation = {
         generationId: event.payload.generationId,
         phase: "FORMAL_INTERPRETATION_RECEIVED",
-        formalInterpretation: previewText(
-          event.payload.proposal.candidateFormalInterpretation,
-          bounds.maxTextPreviewChars
-        )
+        formalInterpretationPersisted: true
       };
       break;
     case "FORMAL_INTERPRETATION_PROPOSAL_REJECTED":

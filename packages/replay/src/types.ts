@@ -66,7 +66,6 @@ export interface ReplayDisclosureSummary {
 
 export interface ReplayBoardActionDetail {
   readonly operation: string;
-  readonly annotationPurpose: TextPreview;
   readonly content?: TextPreview;
   readonly targetShapeId?: string;
   readonly expectedShapeRevision?: number;
@@ -99,8 +98,7 @@ export interface ReplayGenerationDetail {
   readonly basis?: GenerationBasis;
   readonly realizedAction?: SocraticAction;
   readonly claimedDisclosureLevel?: DisclosureLevel;
-  readonly claimedDisclosureIds?: readonly string[];
-  readonly claimedDisclosureIdsTruncation?: TruncationInfo;
+  readonly claimedDisclosureIdCount?: number;
   readonly proposalTextPersisted?: boolean;
   readonly proposalBoardActionCount?: number;
   readonly contextManifest?: {
@@ -111,7 +109,7 @@ export interface ReplayGenerationDetail {
     readonly reasoningGraphSha256: string;
   };
   readonly reason?: TextPreview;
-  readonly formalInterpretation?: TextPreview;
+  readonly formalInterpretationPersisted?: boolean;
 }
 
 export interface ReplayEvidenceDetail {
@@ -132,7 +130,7 @@ export interface ReplayVerificationDetail {
   readonly verifier?: string;
   readonly evidenceKey?: EvidenceKey;
   readonly basis?: GenerationBasis;
-  readonly candidateFormalInterpretation?: TextPreview;
+  readonly candidateFormalInterpretationPersisted?: boolean;
   readonly interpretationConfidence?: number;
   readonly resultStatus?: VerificationStatus;
   readonly reason?: TextPreview;
@@ -143,7 +141,7 @@ export interface ReplayVerificationDetail {
 export interface ReplayPolicyDetail {
   readonly requiredAction: SocraticAction;
   readonly maximumDisclosure: DisclosureLevel;
-  readonly target?: TextPreview;
+  readonly targetPersisted: boolean;
 }
 
 export interface ReplayRevisionDetail {
@@ -223,7 +221,7 @@ export interface ReplayVerificationHistoryEntry {
   readonly evidenceKey: EvidenceKey;
   readonly evidenceEventIds: readonly EventId[];
   readonly evidenceEventIdsTruncation: TruncationInfo;
-  readonly candidateFormalInterpretation: TextPreview;
+  readonly candidateFormalInterpretationPersisted: boolean;
   readonly interpretationConfidence: number;
   readonly sourceGenerationId?: GenerationId;
   readonly sourceProposalRequestId?: string;
@@ -233,7 +231,6 @@ export interface ReplayVerificationHistoryEntry {
     readonly status: VerificationStatus;
     readonly verifier: string;
     readonly interpretationConfidence: number;
-    readonly reason: TextPreview;
     readonly provenance: ReplayEventProvenance;
   };
   readonly discard?: {
@@ -252,15 +249,14 @@ export interface ReplayGenerationHistoryEntry {
   readonly proposalMetadata?: {
     readonly realizedAction: SocraticAction;
     readonly claimedDisclosureLevel: DisclosureLevel;
-    readonly claimedDisclosureIds: readonly string[];
-    readonly disclosureIdsTruncation: TruncationInfo;
+    readonly claimedDisclosureIdCount: number;
     readonly speechTextPersisted: boolean;
     readonly boardActionCount: number;
     readonly provenance: ReplayEventProvenance;
   };
   readonly formalInterpretation?: {
     readonly proposalRequestId: string;
-    readonly preview: TextPreview;
+    readonly candidateFormalInterpretationPersisted: boolean;
     readonly provenance: ReplayEventProvenance;
   };
   readonly superseded?: {

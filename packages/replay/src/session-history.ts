@@ -176,7 +176,7 @@ interface MutableVerificationHistory {
   evidenceKey: EvidenceKey;
   evidenceEventIds: readonly EventId[];
   evidenceEventIdsTruncation: ReplayVerificationHistoryEntry["evidenceEventIdsTruncation"];
-  candidateFormalInterpretation: ReplayVerificationHistoryEntry["candidateFormalInterpretation"];
+  candidateFormalInterpretationPersisted: boolean;
   interpretationConfidence: number;
   sourceGenerationId?: GenerationId;
   sourceProposalRequestId?: string;
@@ -209,10 +209,7 @@ function verificationHistoryFrom(
             evidenceEventIdsTruncation: evidenceEventIds.truncation
           };
         })(),
-        candidateFormalInterpretation: previewText(
-          event.payload.candidateFormalInterpretation,
-          bounds.maxTextPreviewChars
-        ),
+        candidateFormalInterpretationPersisted: true,
         interpretationConfidence: event.payload.interpretationConfidence,
         ...(event.payload.sourceGenerationId === undefined
           ? {}
@@ -243,7 +240,6 @@ function verificationHistoryFrom(
         status: event.payload.result.status,
         verifier: event.payload.result.verifier,
         interpretationConfidence: event.payload.result.interpretationConfidence,
-        reason: previewText(event.payload.result.reason, bounds.maxTextPreviewChars),
         provenance: item.provenance
       };
     } else {
@@ -264,7 +260,7 @@ function verificationHistoryFrom(
       evidenceKey: entry.evidenceKey,
       evidenceEventIds: entry.evidenceEventIds,
       evidenceEventIdsTruncation: entry.evidenceEventIdsTruncation,
-      candidateFormalInterpretation: entry.candidateFormalInterpretation,
+      candidateFormalInterpretationPersisted: entry.candidateFormalInterpretationPersisted,
       interpretationConfidence: entry.interpretationConfidence,
       ...(entry.sourceGenerationId === undefined ? {} : { sourceGenerationId: entry.sourceGenerationId }),
       ...(entry.sourceProposalRequestId === undefined ? {} : { sourceProposalRequestId: entry.sourceProposalRequestId }),
@@ -341,29 +337,20 @@ function generationHistoryFrom(
           reasoningGraphSha256: event.payload.manifest.reasoningGraphSha256
         };
         break;
-      case "MODEL_PROPOSAL_RECEIVED": {
-        const boundedIds = takeBounded(
-          event.payload.proposal.claimedDisclosureIds,
-          bounds.maxDisclosureIds
-        );
+      case "MODEL_PROPOSAL_RECEIVED":
         current.proposalMetadata = {
           realizedAction: event.payload.proposal.realizedAction,
           claimedDisclosureLevel: event.payload.proposal.claimedDisclosureLevel,
-          claimedDisclosureIds: boundedIds.values,
-          disclosureIdsTruncation: boundedIds.truncation,
+          claimedDisclosureIdCount: event.payload.proposal.claimedDisclosureIds.length,
           speechTextPersisted: event.payload.proposal.speechText !== undefined,
           boardActionCount: event.payload.proposal.boardActions?.length ?? 0,
           provenance: item.provenance
         };
         break;
-      }
       case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
         current.formalInterpretation = {
           proposalRequestId: event.payload.proposalRequestId,
-          preview: previewText(
-            event.payload.proposal.candidateFormalInterpretation,
-            bounds.maxTextPreviewChars
-          ),
+          candidateFormalInterpretationPersisted: true,
           provenance: item.provenance
         };
         break;

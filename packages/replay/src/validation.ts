@@ -5,6 +5,7 @@ import {
   type DeliveryAtom,
   type DisclosureAnalysis,
   type EvidenceKey,
+  type EvidenceValue,
   type EventId,
   type FormalInterpretationProposal,
   type GenerationId,
@@ -34,11 +35,7 @@ type GenerationProposalKind = "INTERVIEWER" | "FORMAL";
 
 interface ExpectedEvidenceUpdate {
   readonly key: EvidenceKey;
-  readonly value: SessionEvent extends infer TEvent
-    ? TEvent extends { readonly type: "STUDENT_EVIDENCE_UPDATED" }
-      ? TEvent["payload"]["value"]
-      : never
-    : never;
+  readonly value: EvidenceValue;
   readonly supersedesEventId?: EventId;
 }
 
