@@ -8,7 +8,10 @@ import {
   type InterviewSessionConfiguration
 } from "../../../packages/domain/src/index.js";
 import type { SessionState } from "../../../packages/events/src/index.js";
-import { createProviderContextSpecFingerprintSync } from "../../../packages/interview-engine/src/context-compiler.js";
+import {
+  createProviderContextSpecFingerprintSync,
+  replayQuantResearchSessionState
+} from "../../../packages/interview-engine/src/index.js";
 import {
   QUANT_TRADER_SCENARIO_VERSION,
   QuantTraderScenarioFamilySchema,
@@ -198,6 +201,7 @@ function assertPersistedCompositionMatchesState(
     ) {
       throw new Error("Persisted Quant Research identity does not match session configuration");
     }
+    replayQuantResearchSessionState(state);
     return;
   }
 
