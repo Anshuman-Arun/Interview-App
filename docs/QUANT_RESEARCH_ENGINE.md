@@ -23,7 +23,7 @@ Every scenario is created from an explicit definition:
 }
 ```
 
-Definitions are strict runtime-validated plain objects. Unknown fields, accessor-backed values, unsupported scenario/RNG versions, unsafe seeds, malformed bounds, deadlocked experiment budgets, no-op perturbations, non-meaningful outlier settings, zero-noise sampling configurations, and oversized configurations are rejected before scenario generation. Generated hidden state is then checked against family-specific invariants before use, including meaningful Bayesian updates, non-degenerate reachable samples, unambiguous experimental evidence, and perturbations that actually change the exact optimal allocation/solution.
+Definitions are strict runtime-validated plain objects. Unknown fields, accessor-backed values, unsupported scenario/RNG versions, unsafe seeds, malformed bounds, deadlocked experiment budgets, no-op perturbations, non-meaningful outlier settings, zero-noise sampling/model configurations, and oversized configurations are rejected before scenario generation. Generated hidden state is then checked against family-specific invariants before use, including meaningful Bayesian updates, non-degenerate reachable samples, unambiguous experimental evidence, and perturbations that actually change the exact optimal allocation/solution.
 
 ## Deterministic seed semantics
 
