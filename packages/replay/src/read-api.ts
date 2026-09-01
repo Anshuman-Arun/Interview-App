@@ -6,7 +6,9 @@ import {
   EvaluationEvidenceRefSchema,
   EvaluationSupportLevelSchema,
   EvidenceKeySchema,
+  EvidenceRatingSchema,
   SessionIdSchema,
+  isEvidenceValueAllowed,
   type EvaluationDimensionName,
   type SessionEvaluation
 } from "../../domain/src/index.js";
@@ -736,7 +738,7 @@ export const ReplayReadEntrySchema = z.object({
   evidence: z.object({
     transition: z.enum(["UPDATED", "INVALIDATED"]),
     key: BoundedEvidenceKeySchema,
-    value: z.string().min(1).max(128).optional(),
+    value: EvidenceRatingSchema.optional(),
     inferenceConfidence: z.number().min(0).max(1).optional()
   }).strict().optional()
 }).strict().superRefine((entry, context) => {
@@ -852,6 +854,25 @@ export const ReplayReadEntrySchema = z.object({
         message: "Authoritatively exposed delivery content cannot be marked withheld"
       });
     }
+    if (entry.relations.generationId === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Replay delivery metadata requires its generation relation"
+      });
+    }
+    if (
+      entry.kind === "DELIVERY_EXPOSED"
+      && (
+        entry.delivery.medium === "WHITEBOARD"
+          ? entry.delivery.boardAction === undefined || entry.text !== undefined
+          : entry.delivery.boardAction !== undefined || entry.text === undefined
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Exposed delivery content does not match its delivery medium"
+      });
+    }
   } else if (
     deliveryExpectation !== undefined
     && entry.stateValidation !== "UNAVAILABLE_AFTER_UNKNOWN"
@@ -880,6 +901,49 @@ export const ReplayReadEntrySchema = z.object({
         message: "Replay verification metadata is inconsistent with its authoritative event"
       });
     }
+
+    if (
+      entry.verification.phase === "REQUESTED"
+      && (
+        entry.verification.verifier === undefined
+        || entry.verification.evidenceKey === undefined
+        || entry.verification.interpretationConfidence === undefined
+        || entry.verification.resultStatus !== undefined
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Verification request read metadata is incomplete"
+      });
+    }
+    if (
+      entry.verification.phase === "ACCEPTED"
+      && (
+        entry.verification.verifier === undefined
+        || entry.verification.resultStatus === undefined
+        || entry.verification.interpretationConfidence === undefined
+        || entry.verification.evidenceKey !== undefined
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Accepted verification read metadata is inconsistent"
+      });
+    }
+    if (
+      entry.verification.phase === "DISCARDED"
+      && (
+        entry.verification.verifier !== undefined
+        || entry.verification.evidenceKey !== undefined
+        || entry.verification.resultStatus !== undefined
+        || entry.verification.interpretationConfidence !== undefined
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Discarded verification read metadata must remain content-free"
+      });
+    }
   } else if (
     verificationPhase !== undefined
     && entry.stateValidation !== "UNAVAILABLE_AFTER_UNKNOWN"
@@ -903,6 +967,31 @@ export const ReplayReadEntrySchema = z.object({
       context.addIssue({
         code: "custom",
         message: "Replay evidence metadata is inconsistent with its authoritative event"
+      });
+    }
+    if (
+      entry.evidence.transition === "UPDATED"
+      && (
+        entry.evidence.value === undefined
+        || entry.evidence.inferenceConfidence === undefined
+        || !isEvidenceValueAllowed(entry.evidence.key, entry.evidence.value)
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Updated evidence read metadata is incomplete or invalid for its dimension"
+      });
+    }
+    if (
+      entry.evidence.transition === "INVALIDATED"
+      && (
+        entry.evidence.value !== undefined
+        || entry.evidence.inferenceConfidence !== undefined
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Invalidated evidence read metadata cannot carry a current value"
       });
     }
   } else if (
