@@ -21,6 +21,7 @@ import {
   SpeechCancelRequestSchema,
   SpeechFlushRequestSchema,
   SpeechFrameHeuristicsSchema,
+  SourceAudioBasisSchema,
   SpeechModelIdentitySchema,
   SpeechUtteranceIdSchema,
   SpeechWorkerEventSchema,
@@ -521,21 +522,30 @@ export class SpeechWorkerCore {
 
     let basis;
     let pcmBytes;
+    let durationMs;
+    let speechFrameCount;
     try {
       context.vad.finalize();
       basis = context.buffer.sourceBasis(context.streamId);
+      durationMs = context.buffer.getDurationMs();
+      speechFrameCount = context.buffer.getSpeechFrameCount();
       pcmBytes = context.buffer.materialize();
+      context.buffer.clear();
     } catch {
       this.abandonStream(context);
       throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Speech worker could not finalize the bounded audio basis");
     }
 
-    const durationMs = context.buffer.getDurationMs();
+    if (sha256(pcmBytes) !== basis.pcmSha256) {
+      this.abandonStream(context);
+      throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Finalized PCM did not match its audio basis");
+    }
+
     const events: SpeechWorkerEvent[] = [this.event(requestId, context.streamId, {
       type: "UTTERANCE_FINALIZED",
       utteranceId,
       finalizationReason: reason,
-      speechFrameCount: context.buffer.getSpeechFrameCount(),
+      speechFrameCount,
       durationMs,
       sourceAudioBasis: basis
     })];
@@ -545,17 +555,28 @@ export class SpeechWorkerCore {
     const abortController = new AbortController();
     context.recognitionAbort = abortController;
     try {
+      const recognizerBasis = SourceAudioBasisSchema.parse(basis);
       const raw = await withTimeout(
         Promise.resolve().then(async () => this.options.recognizer.recognize({
           requestId,
           utteranceId,
           pcmBytes,
-          sourceAudioBasis: basis
+          sourceAudioBasis: recognizerBasis
         }, abortController.signal)),
         this.recognizerTimeoutMs,
         () => abortController.abort()
       );
       if (context.cancelled || context.terminal || abortController.signal.aborted || this.shuttingDown) return [];
+      if (sha256(pcmBytes) !== basis.pcmSha256) {
+        events.push(this.errorEvent(
+          requestId,
+          context.streamId,
+          "RECOGNIZER_PROTOCOL_ERROR",
+          "Recognizer mutated bounded PCM input"
+        ));
+        this.rememberDiagnostic({ code: "RECOGNIZER_PROTOCOL_ERROR", streamId: context.streamId });
+        return events;
+      }
       try {
         const { candidate } = this.transcriptGate.admit(raw, {
           requestId,
@@ -801,7 +822,7 @@ export class SpeechWorkerCore {
         this.cancellationTimeoutMs,
         () => undefined
       );
-      return result;
+      return result === true;
     } catch (error) {
       this.rememberDiagnostic({
         code: error instanceof OperationTimeoutError ? "CANCELLATION_TIMEOUT" : "CANCELLATION_FAILURE",
@@ -906,6 +927,10 @@ function normalizeWorkerError(error: unknown): SpeechWorkerCoreError {
   return error instanceof SpeechWorkerCoreError
     ? new SpeechWorkerCoreError(error.code, error.message)
     : new SpeechWorkerCoreError("INTERNAL_ERROR", "Speech worker operation failed");
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function fingerprintParts(...parts: readonly string[]): string {
