@@ -64,6 +64,7 @@ export const InterpretationRejectionReasonSchema = z.enum([
   "MALFORMED_REQUEST",
   "REQUEST_ID_CONFLICT",
   "IN_FLIGHT_LIMIT",
+  "PROVIDER_IN_FLIGHT_LIMIT",
   "WRITER_CLOSED",
   "SESSION_MISMATCH",
   "SESSION_NOT_ACTIVE",
@@ -280,6 +281,7 @@ export class InterpretationCoordinator {
   private readonly maxCachedRequests: number;
   private readonly records = new Map<RequestId, RequestRecord>();
   private readonly diagnostics: InterpretationDiagnostic[] = [];
+  private activeProviderInvocations = 0;
 
   public constructor(
     private readonly writer: SessionWriter,
@@ -382,6 +384,15 @@ export class InterpretationCoordinator {
       return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
     }
 
+    if (this.activeProviderInvocations >= this.maxInFlight) {
+      return this.finishFailure(failed(
+        "RESOURCE_LIMIT",
+        "PROVIDER_IN_FLIGHT_LIMIT",
+        0,
+        request.requestId
+      ));
+    }
+    this.activeProviderInvocations += 1;
     this.addDiagnostic({
       requestId: request.requestId,
       state: "PROVIDER_PENDING",
@@ -393,7 +404,10 @@ export class InterpretationCoordinator {
       .then(
         (value) => ({ kind: "RESULT" as const, value }),
         () => ({ kind: "ERROR" as const })
-      );
+      )
+      .finally(() => {
+        this.activeProviderInvocations -= 1;
+      });
     const providerRace = await Promise.race([
       providerWork,
       record.cancelSignal.then(() => ({ kind: "CANCELLED" as const }))
