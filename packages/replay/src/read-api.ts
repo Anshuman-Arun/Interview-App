@@ -27,6 +27,7 @@ export const MAX_EVALUATION_READ_EVIDENCE_REFS = 128;
 export const MAX_HISTORY_READ_SESSIONS = 100;
 export const MAX_HISTORY_READ_STATISTICS = 100;
 export const MAX_HISTORY_READ_IMPROVEMENTS = 100;
+export const MAX_REPLAY_READ_ENTRIES = 1_000;
 export const MAX_READ_TEXT_CHARS = 1_000;
 
 const NonnegativeSafeIntegerSchema = z.number().refine(
@@ -314,7 +315,7 @@ export const SessionReplayReadModelSchema = z.object({
     unresolved: NonnegativeSafeIntegerSchema,
     discarded: NonnegativeSafeIntegerSchema
   }).strict(),
-  entries: z.array(ReplayReadEntrySchema).max(1_000),
+  entries: z.array(ReplayReadEntrySchema).max(MAX_REPLAY_READ_ENTRIES),
   eventTruncation: ReadTruncationSchema,
   timelineTruncation: ReadTruncationSchema,
   issues: z.array(z.object({
@@ -359,14 +360,24 @@ const ScoreBreakdownReadSchema = z.object({
   compositeScore: NullableScoreSchema
 }).strict();
 
+const ScoredSessionCountSchema = z.object({
+  technicalCorrectness: NonnegativeSafeIntegerSchema,
+  rigor: NonnegativeSafeIntegerSchema,
+  independence: NonnegativeSafeIntegerSchema,
+  communication: NonnegativeSafeIntegerSchema,
+  hintResponsiveness: NonnegativeSafeIntegerSchema,
+  errorRecovery: NonnegativeSafeIntegerSchema,
+  compositeScore: NonnegativeSafeIntegerSchema
+}).strict();
+
 export const SessionHistoryCardSchema = z.object({
   sessionId: BoundedSessionIdSchema,
   problemId: BoundedIdentifierSchema.optional(),
   problemVersion: BoundedIdentifierSchema.optional(),
-  status: z.enum(["CREATED", "ACTIVE", "COMPLETED", "ARCHIVED"]),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-  eventCount: NonnegativeSafeIntegerSchema,
+  status: z.enum(["CREATED", "ACTIVE", "COMPLETED", "ARCHIVED", "UNKNOWN"]),
+  createdAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime().optional(),
+  eventCount: NonnegativeSafeIntegerSchema.optional(),
   readStatus: z.enum(["AVAILABLE", "UNAVAILABLE", "BUDGET_EXCLUDED"]),
   replayComplete: z.boolean().optional(),
   evaluation: z.object({
@@ -374,7 +385,29 @@ export const SessionHistoryCardSchema = z.object({
     compositeStatus: z.enum(["FULL", "PARTIAL", "NOT_SCORED"]),
     supportLevel: EvaluationSupportLevelSchema
   }).strict().optional()
-}).strict();
+}).strict().superRefine((card, context) => {
+  if (
+    card.readStatus === "AVAILABLE"
+    && (
+      card.status === "UNKNOWN"
+      || card.createdAt === undefined
+      || card.updatedAt === undefined
+      || card.eventCount === undefined
+      || card.replayComplete === undefined
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Available history cards require complete bounded metadata"
+    });
+  }
+  if (card.readStatus !== "AVAILABLE" && card.evaluation !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "Unavailable history cards cannot carry evaluation summaries"
+    });
+  }
+});
 
 export const LongitudinalReadModelSchema = z.object({
   includedSessionCount: NonnegativeSafeIntegerSchema,
@@ -391,7 +424,7 @@ export const LongitudinalReadModelSchema = z.object({
     problemId: BoundedIdentifierSchema,
     problemVersion: BoundedIdentifierSchema,
     sessionCount: PositiveSafeIntegerSchema,
-    scoredSessionCount: z.record(z.string(), NonnegativeSafeIntegerSchema),
+    scoredSessionCount: ScoredSessionCountSchema,
     average: ScoreBreakdownReadSchema,
     median: ScoreBreakdownReadSchema
   }).strict()).max(MAX_HISTORY_READ_STATISTICS),
@@ -675,12 +708,38 @@ function projectReplayEntry(entry: ReplayTimelineEntry): ReplayReadEntry {
   });
 }
 
+function combineReadTruncation(
+  upstream: TruncationInfo,
+  local: TruncationInfo
+): TruncationInfo {
+  const remainingCount = upstream.remainingCount + local.remainingCount;
+  return {
+    truncated: remainingCount > 0,
+    limit: Math.min(upstream.limit, local.limit),
+    remainingCount
+  };
+}
+
 export function projectSessionReplayReadModel(
   history: SessionHistoryProjection
 ): SessionReplayReadModel {
   if (history.sessionId === null) {
     throw new Error("Replay read model requires a session identity");
   }
+
+  const entryWindow = takeBounded(
+    history.timeline.entries,
+    MAX_REPLAY_READ_ENTRIES
+  );
+  const combinedTimelineTruncation = combineReadTruncation(
+    history.timeline.timelineTruncation,
+    entryWindow.truncation
+  );
+  const issueValues = entryWindow.truncation.truncated
+    && !history.timeline.issues.some((issue) => issue.code === "TIMELINE_LIMIT_REACHED")
+      ? [...history.timeline.issues, { code: "TIMELINE_LIMIT_REACHED" as const }]
+      : [...history.timeline.issues];
+  const issues = takeBounded(issueValues, 32).values;
 
   return SessionReplayReadModelSchema.parse({
     sessionId: history.sessionId,
@@ -696,7 +755,7 @@ export function projectSessionReplayReadModel(
         history.lifecycle.recoveryOriginPossiblyExposedCount
     },
     currentStateAvailable: history.currentStateAvailable,
-    complete: history.timeline.complete,
+    complete: history.timeline.complete && !entryWindow.truncation.truncated,
     validatedThroughSequence: history.validatedThroughSequence,
     observedThroughSequence: history.observedThroughSequence,
     totalEventCount: history.totalEventCount,
@@ -709,10 +768,10 @@ export function projectSessionReplayReadModel(
     },
     evidenceSummary: history.evidenceSummary,
     verificationSummary: history.verificationSummary,
-    entries: history.timeline.entries.map(projectReplayEntry),
+    entries: entryWindow.values.map(projectReplayEntry),
     eventTruncation: history.timeline.eventTruncation,
-    timelineTruncation: history.timeline.timelineTruncation,
-    issues: history.timeline.issues
+    timelineTruncation: combinedTimelineTruncation,
+    issues
   });
 }
 
