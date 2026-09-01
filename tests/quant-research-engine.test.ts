@@ -8,6 +8,8 @@ import {
   QuantResearchError,
   assertUniqueQuantResearchRegistrations,
   getQuantResearchRegistry,
+  parseQuantResearchAction,
+  parseQuantResearchDefinition,
   replayQuantResearch,
   type QuantResearchScenarioDefinition
 } from "../packages/local-compute/src/index.js";
@@ -382,6 +384,82 @@ describe("deterministic Quant Research interview engine", () => {
     expect(nestedCode).toBe("ACTION_NOT_ALLOWED");
     expect(engine.getAcceptedActions().map((action) => action.actionId)).toEqual(["outer"]);
     expect(engine.getState().acceptedActionCount).toBe(1);
+  });
+
+  it("bounds reentrant parser, registry, and replay traps with domain errors", () => {
+    let nestedDefinitionCode: QuantResearchError["code"] | undefined;
+    const definitionTarget = { ...sampling, config: { ...sampling.config } };
+    let definitionProxy: typeof definitionTarget;
+    definitionProxy = new Proxy(definitionTarget, {
+      getPrototypeOf(value) {
+        try {
+          parseQuantResearchDefinition(definitionProxy);
+        } catch (error) {
+          if (error instanceof QuantResearchError) nestedDefinitionCode = error.code;
+          else throw error;
+        }
+        return Reflect.getPrototypeOf(value);
+      }
+    });
+    expect(parseQuantResearchDefinition(definitionProxy)).toEqual(sampling);
+    expect(nestedDefinitionCode).toBe("INVALID_DEFINITION");
+
+    let nestedActionCode: QuantResearchError["code"] | undefined;
+    const actionTarget = { actionId: "reentrant-parser", kind: "REQUEST_OBSERVATION", count: 2 } as const;
+    let actionProxy: typeof actionTarget;
+    actionProxy = new Proxy(actionTarget, {
+      ownKeys(value) {
+        try {
+          parseQuantResearchAction(actionProxy);
+        } catch (error) {
+          if (error instanceof QuantResearchError) nestedActionCode = error.code;
+          else throw error;
+        }
+        return Reflect.ownKeys(value);
+      }
+    });
+    expect(parseQuantResearchAction(actionProxy)).toEqual(actionTarget);
+    expect(nestedActionCode).toBe("INVALID_ACTION");
+
+    const registration = {
+      family: "BAYESIAN_UPDATING",
+      version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION
+    } as const;
+    let nestedRegistryCode: QuantResearchError["code"] | undefined;
+    let registryProxy: typeof registration[];
+    const registryTarget = [registration];
+    registryProxy = new Proxy(registryTarget, {
+      ownKeys(value) {
+        try {
+          assertUniqueQuantResearchRegistrations(registryProxy);
+        } catch (error) {
+          if (error instanceof QuantResearchError) nestedRegistryCode = error.code;
+          else throw error;
+        }
+        return Reflect.ownKeys(value);
+      }
+    });
+    expect(() => assertUniqueQuantResearchRegistrations(registryProxy)).not.toThrow();
+    expect(nestedRegistryCode).toBe("INVALID_REGISTRY");
+
+    let nestedReplayCode: QuantResearchError["code"] | undefined;
+    let replayProxy: unknown[];
+    const replayTarget: unknown[] = [];
+    replayProxy = new Proxy(replayTarget, {
+      ownKeys(value) {
+        try {
+          replayQuantResearch(bayesian, replayProxy);
+        } catch (error) {
+          if (error instanceof QuantResearchError) nestedReplayCode = error.code;
+          else throw error;
+        }
+        return Reflect.ownKeys(value);
+      }
+    });
+    expect(replayQuantResearch(bayesian, replayProxy).acceptedActions).toEqual([]);
+    expect(nestedReplayCode).toBe("INVALID_REPLAY");
   });
 
   it("does not retain mutable caller aliases for definitions, actions, or returned snapshots", () => {
