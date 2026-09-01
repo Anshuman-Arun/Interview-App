@@ -51,6 +51,62 @@ describe("provider lifecycle remains subordinate to application state", () => {
     }
   });
 
+  it("rejects a callback from the wrong provider identity without killing the valid generation", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const generation = harness.writer.getState().generations[harness.generationId];
+      expect(generation).toBeDefined();
+      if (generation === undefined) throw new Error("missing generation");
+      const before = harness.store.eventCount(harness.sessionId);
+
+      const wrongProvider = await harness.turns.processProposal({
+        envelope: proposalEnvelope(
+          harness,
+          harness.generationId,
+          "different-provider"
+        ),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: harness.safeProbe
+        },
+        validator: harness.validator
+      });
+
+      expect(wrongProvider).toMatchObject({
+        accepted: false,
+        deliveryAtoms: [],
+        reason: "Provider callback identity does not match the generation provider"
+      });
+      expect(harness.store.eventCount(harness.sessionId)).toBe(before);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("ACTIVE");
+
+      const correctProvider = await harness.turns.processProposal({
+        envelope: proposalEnvelope(
+          harness,
+          harness.generationId,
+          generation.provider
+        ),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: harness.safeProbe
+        },
+        validator: harness.validator
+      });
+
+      expect(correctProvider.accepted).toBe(true);
+      expect(correctProvider.deliveryAtoms).toHaveLength(1);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("admits at most one nonterminal generation for a turn under concurrent starts", async () => {
     const harness = await createCoreHarness();
     try {
