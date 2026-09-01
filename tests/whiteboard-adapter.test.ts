@@ -811,8 +811,7 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
         0,
         -1,
         1.5,
-        Number.MAX_SAFE_INTEGER + 1,
-        Number.POSITIVE_INFINITY
+        Number.MAX_SAFE_INTEGER + 1
       ]) {
         await expect(adapter.applyAiOverlayAction({
           operation: "circle",
@@ -822,6 +821,14 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
           annotationPurpose: "test"
         })).rejects.toThrow(/positive safe integer/u);
       }
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        targetShapeId: "shape:target",
+        expectedShapeRevision: Number.POSITIVE_INFINITY,
+        annotationPurpose: "test"
+      })).rejects.toThrow();
 
       await expect(adapter.applyAiOverlayAction({
         operation: "circle",
