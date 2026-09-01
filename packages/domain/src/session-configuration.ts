@@ -78,6 +78,21 @@ export type InterviewSessionConfiguration = z.infer<typeof InterviewSessionConfi
 
 const CatalogTitleSchema = z.string().min(1).max(160);
 const CatalogCategorySchema = z.string().min(1).max(80);
+const PublicProblemTextSchema = z.string().min(1).max(20_000);
+const PublicProblemMetadataTextSchema = z.string().min(1).max(256);
+
+export const InterviewProblemPublicViewSchema = z.object({
+  id: SessionTargetIdentitySchema.shape.id,
+  version: SessionTargetIdentitySchema.shape.version,
+  title: CatalogTitleSchema,
+  category: CatalogCategorySchema,
+  difficulty: z.string().min(1).max(64),
+  prompt: PublicProblemTextSchema,
+  givenInformation: z.array(PublicProblemTextSchema).max(64),
+  topics: z.array(PublicProblemMetadataTextSchema).max(64)
+}).strict();
+export type InterviewProblemPublicView = z.infer<typeof InterviewProblemPublicViewSchema>;
+
 
 export const InterviewCatalogEntrySchema = z.discriminatedUnion("mode", [
   z.object({
