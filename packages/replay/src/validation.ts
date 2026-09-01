@@ -205,6 +205,8 @@ type ClassifiedTerminalEventType =
   | ActiveSessionRequiredEventType
   | typeof POST_TERMINAL_ALLOWED_EVENT_TYPE_VALUES[number];
 
+void POST_TERMINAL_ALLOWED_EVENT_TYPE_VALUES;
+
 const terminalEventPolicyIsExhaustive:
   Exclude<EventType, ClassifiedTerminalEventType> extends never ? true : never
   = true;
