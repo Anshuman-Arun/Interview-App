@@ -10,6 +10,14 @@ import {
   newSessionId,
   type SessionId
 } from "../packages/domain/src/index.js";
+import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
+import {
+  ClosedWorldDisclosureAnalyzer,
+  DisclosureValidator,
+  TurnCoordinator,
+  createCommandEnvelope
+} from "../packages/interview-engine/src/index.js";
+import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   SessionReplayReadResponseSchema,
   projectGroundedEvaluationReadModel
@@ -283,7 +291,38 @@ describe("grounded evaluation/replay product surface", () => {
 
     const sessionId: SessionId = newSessionId();
     await command.startSession(sessionId);
-    await command.completeSession(sessionId);
+
+    const writer = server.registry.get(sessionId);
+    const turns = new TurnCoordinator(writer);
+    await turns.commitInput(
+      "A grounded claim with an explicit justification for evaluation."
+    );
+    const supportingEvent = writer.getState().eventIds.at(-1);
+    if (supportingEvent === undefined) throw new Error("Expected committed turn provenance");
+
+    for (const [dimension, proposedValue] of [
+      ["CORRECTNESS", "CORRECT"],
+      ["JUSTIFICATION", "JUSTIFIED"]
+    ] as const) {
+      const result = await turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId,
+          producer: "grounded-read-product-test"
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "CLAIM", claimId: "grounded-read-claim" },
+            dimension
+          },
+          proposedValue,
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [supportingEvent]
+        }
+      });
+      expect(result.committed).toBe(true);
+    }
+    await turns.completeSession();
 
     const before = server.store.eventCount(sessionId);
     const evaluation = await reads.getEvaluation(sessionId);
@@ -293,11 +332,22 @@ describe("grounded evaluation/replay product surface", () => {
 
     expect(evaluation.available).toBe(true);
     if (evaluation.available) {
+      const correctness = evaluation.evaluation.dimensions.find(
+        (item) => item.name === "technicalCorrectness"
+      );
+      const rigor = evaluation.evaluation.dimensions.find(
+        (item) => item.name === "rigor"
+      );
       const communication = evaluation.evaluation.dimensions.find(
         (item) => item.name === "communication"
       );
+      expect(correctness?.score).toBe(100);
+      expect(correctness?.supportLevel).not.toBe("INSUFFICIENT");
+      expect(rigor?.score).toBe(100);
+      expect(rigor?.supportLevel).not.toBe("INSUFFICIENT");
       expect(communication?.score).toBeNull();
       expect(communication?.supportLevel).toBe("INSUFFICIENT");
+      expect(communication?.notScoredReason).toBeDefined();
     }
     expect(replay.available).toBe(true);
     expect(history.sessions.some((item) => item.sessionId === sessionId)).toBe(true);
