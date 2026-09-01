@@ -244,13 +244,13 @@ describe("deterministic Quant Research interview engine", () => {
   it("pins version-1 deterministic generation with golden instances", () => {
     const bayesEngine = new QuantResearchEngine(bayesian);
     bayesEngine.applyAction({ actionId: "gold-b", kind: "SUBMIT_PROBABILITY", value: 0.4 });
-    expect(visibleNumber(bayesEngine.getState(), "successes")).toBe(3);
-    expect(visibleNumber(bayesEngine.getState(), "failures")).toBe(5);
+    expect(visibleNumber(bayesEngine.getState(), "successes")).toBe(6);
+    expect(visibleNumber(bayesEngine.getState(), "failures")).toBe(2);
 
     const samplingEngine = new QuantResearchEngine(sampling);
     samplingEngine.applyAction({ actionId: "gold-s", kind: "REQUEST_OBSERVATION", count: 4 });
     expect(samplingEngine.getState().visibleData.find((item) => item.key === "observations")?.value)
-      .toEqual([16, 23, 22, 20]);
+      .toEqual([-18, -21, -15, -18]);
 
     const experimentEngine = new QuantResearchEngine(experimental);
     experimentEngine.applyAction({ actionId: "gold-e", kind: "ALLOCATE_SAMPLE", a: 2, b: 4 });
@@ -259,11 +259,11 @@ describe("deterministic Quant Research interview engine", () => {
 
     const modelEngine = new QuantResearchEngine(model);
     expect(modelEngine.getState().visibleData.find((item) => item.key === "y")?.value)
-      .toEqual([6, 10, 13, 21, 22, 28, 33, 40, 44, 47]);
+      .toEqual([11, 15, 18, 24, 29, 33, 39, 45, 49, 52]);
 
     const optimizationEngine = new QuantResearchEngine(optimization);
     expect(optimizationEngine.getState().visibleData.find((item) => item.key === "objective")?.value)
-      .toBe("12*x + 10*y - 0*x*y");
+      .toBe("8*x + 8*y - 3*x*y");
   });
 
   it("same seed/config produces identical public progression and result", () => {
@@ -412,6 +412,23 @@ describe("deterministic Quant Research interview engine", () => {
     expect(engine.getState().stage).toBe("PRIOR_PERTURBATION");
     engine.applyAction({ actionId: "p3", kind: "SUBMIT_PROBABILITY", value: (5 + successes) / (7 + successes + failures) });
     expect(engine.getResult()).toMatchObject({ status: "COMPLETE", overallScore: 100 });
+  });
+
+  it("gives stale Bayesian references zero update/adaptation credit", () => {
+    const engine = new QuantResearchEngine(bayesian);
+    const prior = bayesian.config.priorAlpha / (bayesian.config.priorAlpha + bayesian.config.priorBeta);
+    engine.applyAction({ actionId: "stale-b1", kind: "SUBMIT_PROBABILITY", value: prior });
+    const successes = visibleNumber(engine.getState(), "successes");
+    const failures = visibleNumber(engine.getState(), "failures");
+    const basePosterior = (bayesian.config.priorAlpha + successes) /
+      (bayesian.config.priorAlpha + bayesian.config.priorBeta + successes + failures);
+
+    engine.applyAction({ actionId: "stale-b2", kind: "SUBMIT_PROBABILITY", value: prior });
+    engine.applyAction({ actionId: "stale-b3", kind: "SUBMIT_PROBABILITY", value: basePosterior });
+
+    expect(engine.getResult().metrics.NUMERICAL_CORRECTNESS).toBe(0);
+    expect(engine.getResult().metrics.ADAPTATION).toBe(0);
+    expect(engine.getResult().metrics.CONSISTENCY).toBe(0);
   });
 
   it("sampling enforces observation budget and supports contamination adaptation", () => {
