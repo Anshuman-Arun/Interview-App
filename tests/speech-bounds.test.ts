@@ -42,6 +42,7 @@ describe("speech protocol hard bounds", () => {
       timestampMs: 0
     } as const;
 
+    expect(SpeechPcmFrameEnvelopeSchema.safeParse({ ...base, requestId: "r".repeat(129) }).success).toBe(false);
     expect(SpeechPcmFrameEnvelopeSchema.safeParse({ ...base, sampleRate: -16_000 }).success).toBe(false);
     expect(SpeechPcmFrameEnvelopeSchema.safeParse({ ...base, sampleRate: 44_100 }).success).toBe(false);
     expect(SpeechPcmFrameEnvelopeSchema.safeParse({ ...base, payloadByteLength: 1_276 }).success).toBe(false);
@@ -62,6 +63,14 @@ describe("speech protocol hard bounds", () => {
       model: { name: "fake", version: "1" },
       sourceAudioBasis: basis,
       words
+    }).success).toBe(false);
+    expect(TranscriptCandidateSchema.safeParse({
+      requestId: newRequestId(),
+      utteranceId: newUtteranceId(),
+      text: "x",
+      isFinal: true,
+      model: { name: "fake\nmodel", version: "1" },
+      sourceAudioBasis: basis
     }).success).toBe(false);
   });
 
