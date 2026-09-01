@@ -37,7 +37,7 @@ const chooseDisclosure = DisclosureIdSchema.parse("disclosure_choose_person_pige
 describe("grounded session evaluator", () => {
   it("abstains for an empty session instead of fabricating a score", () => {
     const evaluation = evaluateInterviewSession(
-      boundState(),
+      initialSessionState(newSessionId()),
       sixPeopleProblem,
       {},
       { evaluatedAt: "2026-08-31T20:00:00.000Z" }
@@ -377,6 +377,8 @@ describe("grounded session evaluator", () => {
 function boundState(): SessionState {
   return {
     ...initialSessionState(newSessionId()),
+    started: true,
+    status: "ACTIVE",
     problem: {
       id: sixPeopleProblem.id,
       version: sixPeopleProblem.version,
@@ -418,10 +420,33 @@ function setHistory(
   }[]
 ): SessionState {
   const keyString = evidenceKeyToString(key);
+  const subjectId =
+    key.subject.kind === "CLAIM"
+      ? key.subject.claimId
+      : key.subject.kind === "MILESTONE"
+        ? key.subject.milestoneId
+        : key.subject.kind === "SKILL"
+          ? key.subject.skillId
+          : key.subject.approachId;
+  const recordIds = specs.map((spec, index) =>
+    EventIdSchema.parse(
+      "evidence_" +
+      subjectId +
+      "_" +
+      key.dimension +
+      "_" +
+      String(spec.sequence) +
+      "_" +
+      String(index)
+    )
+  );
   const history: EvidenceRecordState[] = specs.map((spec, index) => {
-    const evidenceEventId = EventIdSchema.parse(
-      "evidence_" + String(spec.sequence) + "_" + String(index) + "_" + key.subject.kind
-    );
+    const evidenceEventId = recordIds[index];
+    if (evidenceEventId === undefined) throw new Error("Fixture evidence ID is unavailable");
+    const supersededByEventId = recordIds[index + 1];
+    if (spec.status === "SUPERSEDED" && supersededByEventId === undefined) {
+      throw new Error("Fixture superseded evidence requires a replacement");
+    }
     return {
       evidenceEventId,
       key,
@@ -429,11 +454,21 @@ function setHistory(
         value: spec.value,
         inferenceConfidence: spec.confidence ?? 0.95,
         evidenceEventIds: spec.evidenceEventIds === undefined
-          ? [EventIdSchema.parse("support_" + String(spec.sequence) + "_" + String(index))]
+          ? [EventIdSchema.parse(
+              "support_" +
+              subjectId +
+              "_" +
+              key.dimension +
+              "_" +
+              String(spec.sequence) +
+              "_" +
+              String(index)
+            )]
           : [...spec.evidenceEventIds],
         lastUpdatedSequence: spec.sequence
       },
       status: spec.status,
+      ...(spec.status === "SUPERSEDED" ? { supersededByEventId } : {}),
       ...(spec.status === "STALE" ? { invalidationReason: "stale evidence" } : {})
     };
   });

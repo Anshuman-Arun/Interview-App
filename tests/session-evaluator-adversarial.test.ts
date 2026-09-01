@@ -478,6 +478,8 @@ describe("grounded session evaluator adversarial cases", () => {
 function boundState(): SessionState {
   return {
     ...initialSessionState(newSessionId()),
+    started: true,
+    status: "ACTIVE",
     problem: {
       id: sixPeopleProblem.id,
       version: sixPeopleProblem.version,
@@ -557,24 +559,36 @@ function setHistory(
         : key.subject.kind === "SKILL"
           ? key.subject.skillId
           : key.subject.approachId;
-  const history: EvidenceRecordState[] = specs.map((spec, index) => ({
-    evidenceEventId: EventIdSchema.parse(
+  const recordIds = specs.map((spec, index) =>
+    EventIdSchema.parse(
       "eval_" + subjectId + "_" + key.dimension + "_" + String(spec.sequence) + "_" + String(index)
-    ),
-    key,
-    value: {
-      value: spec.value,
-      inferenceConfidence: 0.95,
-      evidenceEventIds: [
-        EventIdSchema.parse(
-          "support_" + subjectId + "_" + key.dimension + "_" + String(spec.sequence) + "_" + String(index)
-        )
-      ],
-      lastUpdatedSequence: spec.sequence
-    },
-    status: spec.status,
-    ...(spec.status === "STALE" ? { invalidationReason: "fixture invalidation" } : {})
-  }));
+    )
+  );
+  const history: EvidenceRecordState[] = specs.map((spec, index) => {
+    const evidenceEventId = recordIds[index];
+    if (evidenceEventId === undefined) throw new Error("Fixture evidence ID is unavailable");
+    const supersededByEventId = recordIds[index + 1];
+    if (spec.status === "SUPERSEDED" && supersededByEventId === undefined) {
+      throw new Error("Fixture superseded evidence requires a replacement");
+    }
+    return {
+      evidenceEventId,
+      key,
+      value: {
+        value: spec.value,
+        inferenceConfidence: 0.95,
+        evidenceEventIds: [
+          EventIdSchema.parse(
+            "support_" + subjectId + "_" + key.dimension + "_" + String(spec.sequence) + "_" + String(index)
+          )
+        ],
+        lastUpdatedSequence: spec.sequence
+      },
+      status: spec.status,
+      ...(spec.status === "SUPERSEDED" ? { supersededByEventId } : {}),
+      ...(spec.status === "STALE" ? { invalidationReason: "fixture invalidation" } : {})
+    };
+  });
 
   const active = history.find((record) => record.status === "ACTIVE");
   const studentEvidence = active === undefined
