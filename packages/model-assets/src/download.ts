@@ -10,6 +10,10 @@ export const MAX_DOWNLOAD_REDIRECTS = 20;
 const MAX_ARTIFACT_URL_LENGTH = 2_048;
 const MAX_RESPONSE_HEADER_BYTES = 16 * 1024;
 
+function isSignalAborted(signal: AbortSignal): boolean {
+  return signal.aborted;
+}
+
 export interface ArtifactDownloadOptions {
   readonly maxBytes: number;
   readonly expectedBytes: number;
@@ -107,7 +111,7 @@ async function downloadResponseToFile(
   redirectCount: number,
   originalOrigin: string
 ): Promise<number> {
-  if (options.signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
+  if (isSignalAborted(options.signal)) throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
 
   return await new Promise<number>((resolvePromise, rejectPromise) => {
     let settled = false;
@@ -116,7 +120,7 @@ async function downloadResponseToFile(
       settled = true;
       if (error instanceof ModelAssetError) {
         rejectPromise(error);
-      } else if (options.signal.aborted) {
+      } else if (isSignalAborted(options.signal)) {
         rejectPromise(new ModelAssetError("CANCELLED", "Artifact download was cancelled.", { cause: error }));
       } else {
         rejectPromise(classifyTransferError(error));
@@ -245,14 +249,15 @@ export async function downloadHttpArtifact(
   if (options.expectedBytes > options.maxBytes) {
     throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Manifest artifact size exceeds the configured download limit.");
   }
-  if (options.signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
+  if (isSignalAborted(options.signal)) throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
 
   const source = parseUrl(sourceUrl);
   const controller = new AbortController();
   let timedOut = false;
+  const didTimeOut = (): boolean => timedOut;
   const externalAbort = (): void => controller.abort(options.signal.reason);
   options.signal.addEventListener("abort", externalAbort, { once: true });
-  if (options.signal.aborted) {
+  if (isSignalAborted(options.signal)) {
     controller.abort(options.signal.reason);
   }
   const timer = setTimeout(() => {
@@ -266,18 +271,18 @@ export async function downloadHttpArtifact(
       ...options,
       signal: controller.signal
     }, 0, source.origin);
-    if (options.signal.aborted) {
+    if (isSignalAborted(options.signal)) {
       throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
     }
-    if (timedOut) {
+    if (didTimeOut()) {
       throw new ModelAssetError("DOWNLOAD_TIMEOUT", "Artifact download exceeded the configured timeout.");
     }
     return bytes;
   } catch (error) {
-    if (options.signal.aborted) {
+    if (isSignalAborted(options.signal)) {
       throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.", { cause: error });
     }
-    if (timedOut) {
+    if (didTimeOut()) {
       throw new ModelAssetError("DOWNLOAD_TIMEOUT", "Artifact download exceeded the configured timeout.", { cause: error });
     }
     throw error;
