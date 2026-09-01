@@ -85,6 +85,22 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
     throw new Error(`Problem "${spec.id}" must define exactly five hint stages`);
   }
 
+  const hintByLevel = new Map<CuratedHintLevel, CuratedHintSpec>();
+  for (const hint of spec.hints) {
+    if (!HINT_LEVELS.includes(hint.level)) {
+      throw new Error(`Problem "${spec.id}" defines invalid hint stage ${String(hint.level)}`);
+    }
+    if (hintByLevel.has(hint.level)) {
+      throw new Error(`Problem "${spec.id}" defines duplicate hint level ${String(hint.level)}`);
+    }
+    hintByLevel.set(hint.level, hint);
+  }
+  for (const level of HINT_LEVELS) {
+    if (!hintByLevel.has(level)) {
+      throw new Error(`Problem "${spec.id}" must define hint level ${String(level)}`);
+    }
+  }
+
   const title = canonicalMetadata(spec.title, `Problem "${spec.id}" title`);
   const category = canonicalMetadata(spec.category, `Problem "${spec.id}" category`);
   const followUps = canonicalUniqueMetadataList(
@@ -107,22 +123,6 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
     throw new Error(
       `Problem "${spec.id}" cannot include review notes unless marked expert-review`
     );
-  }
-
-  const hintByLevel = new Map<CuratedHintLevel, CuratedHintSpec>();
-  for (const hint of spec.hints) {
-    if (!HINT_LEVELS.includes(hint.level)) {
-      throw new Error(`Problem "${spec.id}" defines invalid hint stage ${String(hint.level)}`);
-    }
-    if (hintByLevel.has(hint.level)) {
-      throw new Error(`Problem "${spec.id}" defines duplicate hint level ${String(hint.level)}`);
-    }
-    hintByLevel.set(hint.level, hint);
-  }
-  for (const level of HINT_LEVELS) {
-    if (!hintByLevel.has(level)) {
-      throw new Error(`Problem "${spec.id}" must define hint level ${String(level)}`);
-    }
   }
 
   const disclosureIds = new Map(
