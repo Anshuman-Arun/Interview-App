@@ -745,8 +745,8 @@ export class InterpretationCoordinator {
     const turnEventId = state.eventIds[turn.committedSequence - 1];
     if (
       turnEventId === undefined
-      || !request.source.eventIds.includes(turnEventId)
-      || request.source.eventIds.some((eventId) => !state.eventIds.includes(eventId))
+      || request.source.eventIds.length !== 1
+      || request.source.eventIds[0] !== turnEventId
     ) {
       return failed("PROVENANCE_UNAVAILABLE", "SOURCE_EVENT_MISMATCH", candidateCount, request.requestId);
     }
