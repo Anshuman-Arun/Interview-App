@@ -111,7 +111,11 @@ function boundedIdentity(value: string | undefined): string | undefined {
 }
 
 function boundedSessionIdentity(value: SessionId): SessionId | undefined {
-  if (boundedIdentity(value) === undefined) return undefined;
+  if (
+    boundedIdentity(value) === undefined
+    || value === "."
+    || value === ".."
+  ) return undefined;
   for (const character of value) {
     if (character === "/" || character === "\\") return undefined;
   }
