@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
+  QUANT_RESEARCH_GENERATOR_VERSION,
   QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
   QuantResearchEngine,
@@ -12,6 +13,7 @@ import {
 const modelDefinition = (seed: number): QuantResearchScenarioDefinition => ({
   family: "MODEL_COMPARISON",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed,
   config: { observationCount: 12, noiseRadius: 3, outlierShift: 20 }
@@ -20,6 +22,7 @@ const modelDefinition = (seed: number): QuantResearchScenarioDefinition => ({
 const samplingDefinition = (seed: number): QuantResearchScenarioDefinition => ({
   family: "SAMPLING_ESTIMATION",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed,
   config: { maxSamples: 12, populationSize: 48, centerMin: -50, centerMax: 50, noiseRadius: 6, outlierShift: 30 }
@@ -28,6 +31,7 @@ const samplingDefinition = (seed: number): QuantResearchScenarioDefinition => ({
 const experimentalDefinition = (seed: number): QuantResearchScenarioDefinition => ({
   family: "EXPERIMENTAL_ALLOCATION",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed,
   config: { totalBudget: 20, costA: 2, costB: 4, perturbedCostA: 5, perturbedCostB: 2, noiseA: 2, noiseB: 5 }
@@ -36,6 +40,7 @@ const experimentalDefinition = (seed: number): QuantResearchScenarioDefinition =
 const optimizationDefinition = (seed: number): QuantResearchScenarioDefinition => ({
   family: "CONSTRAINED_OPTIMIZATION",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed,
   config: { budget: 30, perturbedBudget: 24, maxX: 15, maxY: 10, perturbedPenalty: 5 }
