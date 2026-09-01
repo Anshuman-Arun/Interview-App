@@ -8,6 +8,7 @@ import {
   type EvidenceValue,
   type EventId,
   type FormalInterpretationProposal,
+  type GenerationBasis,
   type GenerationId,
   type InterviewerProposal,
   type SessionId
@@ -21,6 +22,7 @@ import {
   type SessionEvent,
   type SessionState
 } from "../../events/src/index.js";
+import { MAX_REPLAY_IDENTIFIER_CHARS } from "./bounds.js";
 import { replayEvidenceIdentity } from "./identity.js";
 import { ReplayProjectionError } from "./provenance.js";
 
@@ -140,6 +142,44 @@ const ALLOWED_SOURCES = {
 
 function fail(): never {
   throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
+}
+
+function assertBoundedIdentifier(value: string | undefined): void {
+  if (value !== undefined && value.length > MAX_REPLAY_IDENTIFIER_CHARS) fail();
+}
+
+function assertEvidenceKeyIdentifiers(key: EvidenceKey): void {
+  assertBoundedIdentifier(key.problemId);
+  switch (key.subject.kind) {
+    case "CLAIM":
+      assertBoundedIdentifier(key.subject.claimId);
+      break;
+    case "MILESTONE":
+      assertBoundedIdentifier(key.subject.milestoneId);
+      break;
+    case "SKILL":
+      assertBoundedIdentifier(key.subject.skillId);
+      break;
+    case "APPROACH":
+      assertBoundedIdentifier(key.subject.approachId);
+      break;
+  }
+}
+
+function assertGenerationBasisIdentifiers(basis: GenerationBasis): void {
+  assertBoundedIdentifier(basis.turnId);
+  assertBoundedIdentifier(basis.inputEpisodeId);
+}
+
+function assertDeliveryIdentifiers(atom: DeliveryAtom): void {
+  assertBoundedIdentifier(atom.deliveryId);
+  assertBoundedIdentifier(atom.generationId);
+  for (const disclosureId of atom.disclosureIds) {
+    assertBoundedIdentifier(disclosureId);
+  }
+  if (atom.content.medium === "WHITEBOARD") {
+    assertBoundedIdentifier(atom.content.action.targetShapeId);
+  }
 }
 
 function assertEventSource(event: SessionEvent): void {
@@ -460,11 +500,14 @@ export function validateKnownReplayPrefix(
           break;
 
         case "PROBLEM_PRESENTED":
+          assertBoundedIdentifier(event.payload.problemId);
+          assertBoundedIdentifier(event.payload.problemVersion);
           if (problemPresented) fail();
           problemPresented = true;
           break;
 
         case "UTTERANCE_STARTED": {
+          assertBoundedIdentifier(event.payload.utteranceId);
           if (state.utterances[event.payload.utteranceId] !== undefined) fail();
           requiredFollowUps = [
             ...Object.values(state.generations)
@@ -492,9 +535,11 @@ export function validateKnownReplayPrefix(
         }
 
         case "UTTERANCE_DISCARDED":
+          assertBoundedIdentifier(event.payload.utteranceId);
           break;
 
         case "INPUT_EPISODE_STARTED":
+          assertBoundedIdentifier(event.payload.inputEpisodeId);
           if (state.inputEpisodes[event.payload.inputEpisodeId] !== undefined) fail();
           if (event.source === "APPLICATION") {
             pendingNext = {
@@ -505,9 +550,11 @@ export function validateKnownReplayPrefix(
           break;
 
         case "INPUT_EPISODE_UPDATED":
+          assertBoundedIdentifier(event.payload.inputEpisodeId);
           break;
 
         case "INPUT_EPISODE_COMMITTED": {
+          assertBoundedIdentifier(event.payload.inputEpisodeId);
           const episode = state.inputEpisodes[event.payload.inputEpisodeId];
           if (
             episode === undefined
@@ -522,6 +569,8 @@ export function validateKnownReplayPrefix(
         }
 
         case "TURN_COMMITTED": {
+          assertBoundedIdentifier(event.payload.turnId);
+          assertBoundedIdentifier(event.payload.inputEpisodeId);
           if (state.turns[event.payload.turnId] !== undefined) fail();
           const episode = state.inputEpisodes[event.payload.inputEpisodeId];
           if (episode === undefined || episode.status !== "COMMITTED") fail();
@@ -535,6 +584,8 @@ export function validateKnownReplayPrefix(
         }
 
         case "TRANSCRIPT_FINALIZED": {
+          assertBoundedIdentifier(event.payload.utteranceId);
+          assertBoundedIdentifier(event.payload.inputEpisodeId);
           if (event.payload.transcriptRevision !== state.transcriptRevision + 1) fail();
           const episode = state.inputEpisodes[event.payload.inputEpisodeId];
           const utterance = state.utterances[event.payload.utteranceId];
@@ -573,6 +624,7 @@ export function validateKnownReplayPrefix(
           break;
 
         case "VISION_REQUESTED":
+          assertBoundedIdentifier(event.payload.visionRequestId);
           if (
             state.visionRequests[event.payload.visionRequestId] !== undefined
             || event.payload.sourceBoardRevision !== state.boardRevision
@@ -580,6 +632,7 @@ export function validateKnownReplayPrefix(
           break;
 
         case "VISION_RESULT_ACCEPTED": {
+          assertBoundedIdentifier(event.payload.visionRequestId);
           const request = state.visionRequests[event.payload.visionRequestId];
           const observation = event.payload.observation;
           if (
@@ -597,9 +650,12 @@ export function validateKnownReplayPrefix(
         }
 
         case "VISION_RESULT_DISCARDED":
+          assertBoundedIdentifier(event.payload.visionRequestId);
           break;
 
         case "LOCAL_COMPUTE_REQUESTED":
+          assertBoundedIdentifier(event.payload.computeRequestId);
+          assertBoundedIdentifier(event.payload.inputEpisodeId);
           if (
             state.localComputeRequests[event.payload.computeRequestId] !== undefined
             || event.payload.sourceTranscriptRevision !== state.transcriptRevision
@@ -608,6 +664,7 @@ export function validateKnownReplayPrefix(
           break;
 
         case "LOCAL_COMPUTE_RESULT_ACCEPTED": {
+          assertBoundedIdentifier(event.payload.computeRequestId);
           const request = state.localComputeRequests[event.payload.computeRequestId];
           if (
             request === undefined
@@ -626,9 +683,19 @@ export function validateKnownReplayPrefix(
         }
 
         case "LOCAL_COMPUTE_RESULT_DISCARDED":
+          assertBoundedIdentifier(event.payload.computeRequestId);
           break;
 
         case "VERIFICATION_REQUESTED": {
+          assertBoundedIdentifier(event.payload.verificationRequestId);
+          assertBoundedIdentifier(event.payload.verifier);
+          assertGenerationBasisIdentifiers(event.payload.basis);
+          assertEvidenceKeyIdentifiers(event.payload.evidenceKey);
+          for (const evidenceEventId of event.payload.evidenceEventIds) {
+            assertBoundedIdentifier(evidenceEventId);
+          }
+          assertBoundedIdentifier(event.payload.sourceGenerationId);
+          assertBoundedIdentifier(event.payload.sourceProposalRequestId);
           if (
             state.problem?.id !== event.payload.evidenceKey.problemId
             || event.payload.evidenceKey.subject.kind !== "CLAIM"
@@ -674,6 +741,8 @@ export function validateKnownReplayPrefix(
         }
 
         case "VERIFICATION_RESULT_ACCEPTED": {
+          assertBoundedIdentifier(event.payload.verificationRequestId);
+          assertBoundedIdentifier(event.payload.result.verifier);
           const request = state.verificationRequests[event.payload.verificationRequestId];
           if (
             request === undefined
@@ -695,9 +764,14 @@ export function validateKnownReplayPrefix(
         }
 
         case "VERIFICATION_RESULT_DISCARDED":
+          assertBoundedIdentifier(event.payload.verificationRequestId);
           break;
 
         case "EVIDENCE_PROPOSED": {
+          assertEvidenceKeyIdentifiers(event.payload.proposal.key);
+          for (const evidenceEventId of event.payload.proposal.evidenceEventIds) {
+            assertBoundedIdentifier(evidenceEventId);
+          }
           const expected = expectedEvidenceFromProposal(state, event);
           if (expected !== undefined) {
             pendingNext = {
@@ -709,6 +783,11 @@ export function validateKnownReplayPrefix(
         }
 
         case "STUDENT_EVIDENCE_UPDATED":
+          assertEvidenceKeyIdentifiers(event.payload.key);
+          for (const evidenceEventId of event.payload.value.evidenceEventIds) {
+            assertBoundedIdentifier(evidenceEventId);
+          }
+          assertBoundedIdentifier(event.payload.supersedesEventId);
           if (consumedPendingKind !== "EVIDENCE_UPDATE") fail();
           if (
             state.problem?.id !== event.payload.key.problemId
@@ -721,16 +800,22 @@ export function validateKnownReplayPrefix(
           break;
 
         case "STUDENT_EVIDENCE_INVALIDATED":
+          assertEvidenceKeyIdentifiers(event.payload.key);
+          assertBoundedIdentifier(event.payload.invalidatesEventId);
           if (consumedRequiredKind !== "INVALIDATE_EVIDENCE") fail();
           if (state.problem?.id !== event.payload.key.problemId) fail();
           registerEvidenceIdentity(evidenceAliases, event.payload.key);
           break;
 
         case "PEDAGOGICAL_ACTION_SELECTED":
+          assertBoundedIdentifier(event.payload.turnId);
           if (state.turns[event.payload.turnId] === undefined) fail();
           break;
 
         case "MODEL_GENERATION_STARTED":
+          assertBoundedIdentifier(event.payload.generationId);
+          assertBoundedIdentifier(event.payload.provider);
+          assertGenerationBasisIdentifiers(event.payload.basis);
           if (
             state.generations[event.payload.generationId] !== undefined
             || isGenerationBasisStillCompatible(event.payload.basis, state)
@@ -740,6 +825,11 @@ export function validateKnownReplayPrefix(
           break;
 
         case "GENERATION_CONTEXT_COMPILED": {
+          assertBoundedIdentifier(event.payload.generationId);
+          assertBoundedIdentifier(event.payload.manifest.compilerVersion);
+          assertBoundedIdentifier(event.payload.manifest.problemId);
+          assertBoundedIdentifier(event.payload.manifest.problemVersion);
+          assertGenerationBasisIdentifiers(event.payload.manifest.generationBasis);
           if (generationPhase(generationPhases, event.payload.generationId) !== "ACTIVE") fail();
           if (
             state.problem === undefined
@@ -750,6 +840,7 @@ export function validateKnownReplayPrefix(
         }
 
         case "MODEL_PROPOSAL_RECEIVED":
+          assertBoundedIdentifier(event.payload.generationId);
           if (generationPhase(generationPhases, event.payload.generationId) !== "ACTIVE") fail();
           generationProposalKinds.set(event.payload.generationId, "INTERVIEWER");
           generationPhases.set(event.payload.generationId, "PROPOSAL_RECEIVED");
@@ -760,6 +851,8 @@ export function validateKnownReplayPrefix(
           break;
 
         case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
+          assertBoundedIdentifier(event.payload.generationId);
+          assertBoundedIdentifier(event.payload.proposalRequestId);
           if (generationPhase(generationPhases, event.payload.generationId) !== "ACTIVE") fail();
           if (formalProposals.has(event.payload.proposalRequestId)) fail();
           formalProposals.set(event.payload.proposalRequestId, {
@@ -776,6 +869,7 @@ export function validateKnownReplayPrefix(
           break;
 
         case "FORMAL_INTERPRETATION_PROPOSAL_REJECTED":
+          assertBoundedIdentifier(event.payload.generationId);
           if (
             consumedPendingKind !== "FORMAL_PROPOSAL_OUTCOME"
             || generationPhase(generationPhases, event.payload.generationId)
@@ -786,6 +880,7 @@ export function validateKnownReplayPrefix(
           break;
 
         case "MODEL_GENERATION_SUPERSEDED": {
+          assertBoundedIdentifier(event.payload.generationId);
           const phase = generationPhase(generationPhases, event.payload.generationId);
           if (
             phase !== "ACTIVE"
@@ -798,6 +893,7 @@ export function validateKnownReplayPrefix(
         }
 
         case "PROPOSAL_VALIDATED": {
+          assertBoundedIdentifier(event.payload.generationId);
           if (
             consumedPendingKind !== "MODEL_PROPOSAL_OUTCOME"
             || generationPhase(generationPhases, event.payload.generationId)
@@ -834,6 +930,7 @@ export function validateKnownReplayPrefix(
         }
 
         case "PROPOSAL_REJECTED":
+          assertBoundedIdentifier(event.payload.generationId);
           if (
             consumedPendingKind !== "MODEL_PROPOSAL_OUTCOME"
             || generationPhase(generationPhases, event.payload.generationId)
@@ -845,6 +942,7 @@ export function validateKnownReplayPrefix(
           break;
 
         case "DELIVERY_QUEUED": {
+          assertDeliveryIdentifiers(event.payload.atom);
           if (state.deliveries[event.payload.atom.deliveryId] !== undefined) fail();
           if (
             generationPhase(generationPhases, event.payload.atom.generationId)
@@ -870,12 +968,14 @@ export function validateKnownReplayPrefix(
         }
 
         case "DELIVERY_CANCELLED": {
+          assertBoundedIdentifier(event.payload.deliveryId);
           const delivery = state.deliveries[event.payload.deliveryId];
           if (delivery === undefined || delivery.status !== "QUEUED") fail();
           break;
         }
 
         case "DELIVERY_STARTED": {
+          assertBoundedIdentifier(event.payload.deliveryId);
           const delivery = state.deliveries[event.payload.deliveryId];
           if (delivery === undefined) fail();
           if (generationPhase(generationPhases, delivery.generationId) !== "VALIDATED") fail();
@@ -890,9 +990,11 @@ export function validateKnownReplayPrefix(
 
         case "DELIVERY_EXPOSED":
         case "DELIVERY_COMPLETED":
+          assertBoundedIdentifier(event.payload.deliveryId);
           break;
 
         case "DELIVERY_POSSIBLY_EXPOSED":
+          assertBoundedIdentifier(event.payload.deliveryId);
           if (
             event.source === "APPLICATION"
             && consumedRequiredKind !== "POSSIBLY_EXPOSE_DELIVERY"

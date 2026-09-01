@@ -89,7 +89,10 @@ without exposing protected-fact identifiers that were never presented.
 Evidence projection keeps every authoritative update and invalidation, plus the
 latest ACTIVE evidence when complete replay is available. Superseded and stale
 records therefore remain inspectable rather than being flattened into the final
-value.
+value. Provider `EVIDENCE_PROPOSED` payloads are not exposed in the timeline:
+rejected proposals are non-authoritative, and successful proposals become
+inspectable only through the resulting authoritative `STUDENT_EVIDENCE_UPDATED`
+event.
 
 Verification projection links each request to its verifier, GenerationBasis,
 evidence scope, interpretation provenance, and accepted/discarded callback. VERIFIED,
@@ -114,7 +117,11 @@ completed, archived, resumed, and crash-recovered streams are supported.
 When an unknown future event or event-limit truncation prevents a complete
 authoritative replay, `currentStateAvailable` is false and current-state-only
 fields are omitted. Known prefix history remains available with explicit
-`complete: false` / truncation metadata.
+`complete: false` / truncation metadata. `validatedThroughSequence` reports the
+last sequence whose semantics were validated; `observedThroughSequence` reports
+the last normalized event metadata retained in the bounded projection. The latter
+may extend beyond an unknown semantic boundary and must not be interpreted as
+validated state.
 
 ## Event versions and unknown future events
 
@@ -122,7 +129,10 @@ Known legacy/current events go through the repository's existing
 `EventUpcasterRegistry`. The projection never mutates persisted historical events.
 
 Future/unknown events retain only safe bounded metadata and appear as
-`UNKNOWN_EVENT`; their payload is intentionally withheld. The first unknown event
+`UNKNOWN_EVENT`; their payload is intentionally withheld. Normalized replay
+entries do not retain a second reference to the raw event after upcasting/metadata
+extraction, so unknown/private payloads are not unnecessarily kept alive by the
+read model. The first unknown event
 is a semantic boundary: later known event payloads are also withheld because their
 meaning may depend on state transitions this version cannot understand. The
 timeline is marked incomplete. Malformed known events, unsupported legacy versions,
@@ -161,6 +171,7 @@ views, but may not raise them above the package defaults:
 | timeline entries | 5,000 |
 | sessions in one longitudinal query | 500 |
 | text preview | 512 Unicode code points |
+| identifier / label accepted at replay boundary | 512 code units |
 | disclosure IDs per entry | 64 |
 | provenance/event IDs per entry | 128 |
 | evidence-history entries | 2,000 |
@@ -168,7 +179,10 @@ views, but may not raise them above the package defaults:
 | generation entries | 1,000 |
 
 Every bounded collection reports `truncated`, `limit`, and
-`remainingCount`. Summary counts are computed over the full validated event prefix
+`remainingCount`. The 512-character identifier limit is a replay/import safety
+limit only; it does not alter authoritative domain schemas or writer contracts.
+Oversized imported identifiers fail with sanitized projection errors rather than
+being truncated into ambiguous identities. Summary counts are computed over the full validated event prefix
 rather than the bounded display rows. History is never silently dropped. The
 normalizer may still scan supplied event metadata to recover authoritative sequence
 order; the event cap bounds semantic upcasting/materialization and output state.

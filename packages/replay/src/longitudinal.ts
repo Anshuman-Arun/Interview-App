@@ -9,6 +9,8 @@ import {
   type SessionId
 } from "../../domain/src/index.js";
 import {
+  DEFAULT_REPLAY_BOUNDS,
+  MAX_REPLAY_IDENTIFIER_CHARS,
   resolveReplayBounds,
   truncationInfo,
   type ReplayBounds
@@ -60,7 +62,7 @@ const TruncationSchema = z.object({
 const ReplayEvidenceValueInputSchema = z.object({
   value: EvidenceRatingSchema,
   inferenceConfidence: z.number().min(0).max(1),
-  evidenceEventIds: z.array(EventIdSchema),
+  evidenceEventIds: z.array(EventIdSchema).max(DEFAULT_REPLAY_BOUNDS.maxProvenanceIds),
   evidenceEventIdsTruncation: TruncationSchema,
   lastUpdatedSequence: SafePositiveIntegerSchema
 }).strict();
@@ -70,7 +72,7 @@ const EvaluationInputSchema = z.object({
   sessionId: SessionIdSchema,
   problemId: z.string().min(1),
   problemVersion: z.string().min(1),
-  evaluatedAt: z.string().min(1),
+  evaluatedAt: z.iso.datetime(),
   scores: z.object({
     technicalCorrectness: ScoreSchema,
     rigor: ScoreSchema,
@@ -106,17 +108,38 @@ const LongitudinalSessionInputSchema = z.object({
   }),
   countsComplete: z.boolean(),
   currentStateAvailable: z.boolean(),
+  validatedThroughSequence: SafeNonnegativeIntegerSchema,
+  observedThroughSequence: SafeNonnegativeIntegerSchema,
+  totalEventCount: SafeNonnegativeIntegerSchema,
   currentEvidenceTruncation: TruncationSchema,
   currentEvidence: z.array(z.object({
     keyString: z.string(),
     key: EvidenceKeySchema,
     value: ReplayEvidenceValueInputSchema,
     evidenceEventId: EventIdSchema
-  }).strict()),
+  }).strict()).max(DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries),
   evaluation: EvaluationInputSchema.optional()
 });
 
 type LongitudinalSessionInput = z.infer<typeof LongitudinalSessionInputSchema>;
+
+function identifierWithinReplayLimit(value: string): boolean {
+  return value.length <= MAX_REPLAY_IDENTIFIER_CHARS;
+}
+
+function evidenceKeyIdentifiersWithinReplayLimit(key: EvidenceKey): boolean {
+  if (!identifierWithinReplayLimit(key.problemId)) return false;
+  switch (key.subject.kind) {
+    case "CLAIM":
+      return identifierWithinReplayLimit(key.subject.claimId);
+    case "MILESTONE":
+      return identifierWithinReplayLimit(key.subject.milestoneId);
+    case "SKILL":
+      return identifierWithinReplayLimit(key.subject.skillId);
+    case "APPROACH":
+      return identifierWithinReplayLimit(key.subject.approachId);
+  }
+}
 
 function truncationMatchesLength(
   truncation: z.infer<typeof TruncationSchema>,
@@ -139,10 +162,26 @@ function parseSessionSummaries(
 
     const session = result.data;
     if (
-      session.currentStateAvailable !== session.lifecycle.historyComplete
+      !identifierWithinReplayLimit(session.sessionId)
+      || (session.problem !== undefined
+        && (
+          !identifierWithinReplayLimit(session.problem.problemId)
+          || !identifierWithinReplayLimit(session.problem.problemVersion)
+        ))
+      || session.currentStateAvailable !== session.lifecycle.historyComplete
       || session.currentStateAvailable !== session.countsComplete
       || (session.lifecycle.historyComplete && session.lifecycle.completed === null)
-      || (session.currentStateAvailable && session.problem === undefined)
+      || (session.currentStateAvailable
+        && (session.problem === undefined || session.lifecycle.startedAt === undefined))
+      || session.validatedThroughSequence > session.observedThroughSequence
+      || session.observedThroughSequence > session.totalEventCount
+      || (session.currentStateAvailable
+        && (
+          session.validatedThroughSequence !== session.observedThroughSequence
+          || session.observedThroughSequence !== session.totalEventCount
+        ))
+      || session.currentEvidenceTruncation.limit
+        > DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries
       || (!session.currentStateAvailable && session.currentEvidence.length !== 0)
       || !truncationMatchesLength(
         session.currentEvidenceTruncation,
@@ -157,6 +196,9 @@ function parseSessionSummaries(
         !session.currentStateAvailable
         || session.lifecycle.completed !== true
         || session.problem === undefined
+        || !identifierWithinReplayLimit(session.evaluation.sessionId)
+        || !identifierWithinReplayLimit(session.evaluation.problemId)
+        || !identifierWithinReplayLimit(session.evaluation.problemVersion)
         || session.evaluation.sessionId !== session.sessionId
         || session.evaluation.problemId !== session.problem.problemId
         || session.evaluation.problemVersion !== session.problem.problemVersion
@@ -178,6 +220,14 @@ function parseSessionSummaries(
       const identity = replayEvidenceIdentity(evidence.key);
       if (
         session.problem === undefined
+        || !identifierWithinReplayLimit(evidence.evidenceEventId)
+        || !evidenceKeyIdentifiersWithinReplayLimit(evidence.key)
+        || evidence.value.evidenceEventIds.some((eventId) =>
+          !identifierWithinReplayLimit(eventId)
+        )
+        || evidence.value.evidenceEventIdsTruncation.limit
+          > DEFAULT_REPLAY_BOUNDS.maxProvenanceIds
+        || evidence.value.lastUpdatedSequence > session.validatedThroughSequence
         || evidence.key.problemId !== session.problem.problemId
         || evidence.keyString !== evidenceKeyToString(evidence.key)
         || evidenceIdentities.has(identity)

@@ -1,3 +1,5 @@
+export const MAX_REPLAY_IDENTIFIER_CHARS = 512;
+
 export interface ReplayBounds {
   readonly maxEvents: number;
   readonly maxTimelineEntries: number;

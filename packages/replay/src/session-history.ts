@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   SessionEvaluationSchema,
   isDisclosedStatus,
@@ -50,7 +51,7 @@ function knownEvents(
   return items.flatMap((item) => item.event === undefined ? [] : [item.event]);
 }
 
-function lastKnownSequence(items: readonly NormalizedReplayEvent[]): number {
+function lastObservedSequence(items: readonly NormalizedReplayEvent[]): number {
   return items.at(-1)?.metadata.sequence ?? 0;
 }
 
@@ -78,8 +79,9 @@ function lifecycleFrom(
     : undefined;
 
   let activeElapsedDurationMs: number | undefined;
-  if (started !== undefined && completed !== undefined) {
-    const difference = completed.metadata.elapsedMs - started.metadata.elapsedMs;
+  const activeEnd = completed ?? archived;
+  if (started !== undefined && activeEnd !== undefined) {
+    const difference = activeEnd.metadata.elapsedMs - started.metadata.elapsedMs;
     if (difference >= 0 && Number.isSafeInteger(difference)) {
       activeElapsedDurationMs = difference;
     }
@@ -428,6 +430,20 @@ function evaluationSummary(evaluation: SessionEvaluation): ReplayEvaluationSumma
   };
 }
 
+function interventionIdentity(input: {
+  readonly turnId: string;
+  readonly disclosureLevel: number;
+  readonly disclosureIds: readonly string[];
+  readonly deliveryStatus: "EXPOSED" | "POSSIBLY_EXPOSED";
+}): string {
+  return JSON.stringify([
+    input.turnId,
+    input.disclosureLevel,
+    input.disclosureIds,
+    input.deliveryStatus
+  ]);
+}
+
 function validateEvaluation(
   input: unknown,
   sessionId: SessionId | null,
@@ -438,11 +454,14 @@ function validateEvaluation(
   const parsed = SessionEvaluationSchema.safeParse(input);
   if (!parsed.success) throw new ReplayProjectionError("EVALUATION_MISMATCH");
 
+  const evaluatedAt = z.iso.datetime().safeParse(parsed.data.evaluatedAt);
   if (
-    sessionId === null
+    !evaluatedAt.success
+    || sessionId === null
     || state === undefined
     || state.completedAt === undefined
     || (state.status !== "COMPLETED" && state.status !== "ARCHIVED")
+    || Date.parse(evaluatedAt.data) < Date.parse(state.completedAt)
     || parsed.data.sessionId !== sessionId
     || problem === undefined
     || parsed.data.problemId !== problem.problemId
@@ -472,16 +491,46 @@ function validateEvaluation(
     }
   }
 
+  const authoritativeInterventions = new Map<string, number>();
+  for (const delivery of Object.values(state.deliveries)) {
+    if (!isDisclosedStatus(delivery.status)) continue;
+    const generation = state.generations[delivery.generationId];
+    if (generation === undefined) {
+      throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    }
+    const identity = interventionIdentity({
+      turnId: generation.basis.turnId,
+      disclosureLevel: delivery.effectiveDisclosureLevel,
+      disclosureIds: delivery.disclosureIds,
+      deliveryStatus:
+        delivery.status === "POSSIBLY_EXPOSED"
+          ? "POSSIBLY_EXPOSED"
+          : "EXPOSED"
+    });
+    authoritativeInterventions.set(
+      identity,
+      (authoritativeInterventions.get(identity) ?? 0) + 1
+    );
+  }
+
+  for (const intervention of parsed.data.disclosedInterventions) {
+    if (state.turns[intervention.turnId] === undefined) {
+      throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    }
+    const identity = interventionIdentity(intervention);
+    const remaining = authoritativeInterventions.get(identity) ?? 0;
+    if (remaining <= 0) throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    if (remaining === 1) {
+      authoritativeInterventions.delete(identity);
+    } else {
+      authoritativeInterventions.set(identity, remaining - 1);
+    }
+  }
+
   if (
     parsed.data.unassistedMilestoneCount !== unassisted
     || parsed.data.assistedMilestoneCount !== assisted
-    || parsed.data.disclosedInterventions.length
-      !== Object.values(state.deliveries).filter((delivery) =>
-        isDisclosedStatus(delivery.status)
-      ).length
-    || parsed.data.disclosedInterventions.some((intervention) =>
-      state.turns[intervention.turnId] === undefined
-    )
+    || authoritativeInterventions.size !== 0
   ) {
     throw new ReplayProjectionError("EVALUATION_MISMATCH");
   }
@@ -648,7 +697,7 @@ export function projectSessionHistory(
     ...(highestDisclosureUsed === undefined ? {} : { highestDisclosureUsed }),
     currentStateAvailable: state !== undefined,
     validatedThroughSequence: validated?.validatedThroughSequence ?? 0,
-    knownThroughSequence: lastKnownSequence(normalized.events),
+    observedThroughSequence: lastObservedSequence(normalized.events),
     countsComplete: historyComplete,
     totalEventCount: normalized.totalEventCount,
     timeline,

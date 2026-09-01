@@ -290,21 +290,11 @@ function entryForKnownEvent(
         reason: previewText(event.payload.reason, bounds.maxTextPreviewChars)
       };
       break;
-    case "EVIDENCE_PROPOSED": {
-      const supporting = takeBounded(
-        event.payload.proposal.evidenceEventIds,
-        bounds.maxProvenanceIds
-      );
-      evidence = {
-        transition: "PROPOSED",
-        key: event.payload.proposal.key,
-        value: event.payload.proposal.proposedValue,
-        inferenceConfidence: event.payload.proposal.inferenceConfidence,
-        supportingEventIds: supporting.values,
-        supportingEventIdsTruncation: supporting.truncation
-      };
+    case "EVIDENCE_PROPOSED":
+      // Provider-proposed evidence is not authoritative student evidence. Keep only
+      // event provenance in replay; a committed STUDENT_EVIDENCE_UPDATED event
+      // carries the inspectable evidence state if admission succeeded.
       break;
-    }
     case "STUDENT_EVIDENCE_UPDATED": {
       const supporting = takeBounded(
         event.payload.value.evidenceEventIds,

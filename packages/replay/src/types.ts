@@ -344,7 +344,7 @@ export interface SessionHistoryProjection {
   readonly highestDisclosureUsed?: DisclosureLevel;
   readonly currentStateAvailable: boolean;
   readonly validatedThroughSequence: number;
-  readonly knownThroughSequence: number;
+  readonly observedThroughSequence: number;
   readonly countsComplete: boolean;
   readonly totalEventCount: number;
   readonly timeline: ReplayTimelineProjection;

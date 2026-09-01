@@ -11,7 +11,10 @@ import {
   type SessionEvent
 } from "../../events/src/index.js";
 import type { ReplayBounds, TruncationInfo } from "./bounds.js";
-import { truncationInfo } from "./bounds.js";
+import {
+  MAX_REPLAY_IDENTIFIER_CHARS,
+  truncationInfo
+} from "./bounds.js";
 import type { ReplayEventProvenance } from "./types.js";
 
 export type ReplayProjectionErrorCode =
@@ -42,16 +45,26 @@ const NonnegativeSafeIntegerSchema = z.number().refine(
   { message: "Expected a non-negative safe integer" }
 );
 
+const BoundedEventIdSchema = EventIdSchema.refine(
+  (value) => value.length <= MAX_REPLAY_IDENTIFIER_CHARS
+);
+const BoundedSessionIdSchema = SessionIdSchema.refine(
+  (value) => value.length <= MAX_REPLAY_IDENTIFIER_CHARS
+);
+const BoundedRequestIdSchema = RequestIdSchema.refine(
+  (value) => value.length <= MAX_REPLAY_IDENTIFIER_CHARS
+);
+
 const SafeEventMetadataSchema = z.object({
-  eventId: EventIdSchema,
-  sessionId: SessionIdSchema,
+  eventId: BoundedEventIdSchema,
+  sessionId: BoundedSessionIdSchema,
   sequence: PositiveSafeIntegerSchema,
   schemaVersion: PositiveSafeIntegerSchema,
   source: z.string().min(1).max(64),
   wallTime: z.iso.datetime(),
   elapsedMs: NonnegativeSafeIntegerSchema,
-  causationId: RequestIdSchema,
-  correlationId: RequestIdSchema,
+  causationId: BoundedRequestIdSchema,
+  correlationId: BoundedRequestIdSchema,
   type: z.string().min(1).max(160)
 });
 
@@ -106,7 +119,6 @@ const KNOWN_EVENT_TYPE_MAP = {
 const KNOWN_EVENT_TYPES = new Set<string>(Object.keys(KNOWN_EVENT_TYPE_MAP));
 
 export interface NormalizedReplayEvent {
-  readonly raw: unknown;
   readonly metadata: SafeEventMetadata;
   readonly provenance: ReplayEventProvenance;
   readonly event?: SessionEvent;
@@ -199,7 +211,6 @@ export function normalizeReplayEvents(
       hasUnknownEvents = true;
       firstUnknownSequence ??= metadata.sequence;
       events.push({
-        raw: item.raw,
         metadata,
         provenance: provenanceFor(metadata)
       });
@@ -221,7 +232,6 @@ export function normalizeReplayEvents(
         throw new ReplayProjectionError("INVALID_EVENT_SCHEMA");
       }
       events.push({
-        raw: item.raw,
         metadata,
         event,
         provenance: provenanceFor(metadata, event)
@@ -237,7 +247,6 @@ export function normalizeReplayEvents(
       hasUnknownEvents = true;
       firstUnknownSequence ??= metadata.sequence;
       events.push({
-        raw: item.raw,
         metadata,
         provenance: provenanceFor(metadata)
       });

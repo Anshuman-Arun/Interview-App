@@ -805,6 +805,15 @@ describe("replay/history projections", () => {
     expect(projectSessionHistory(completed).lifecycle.status).toBe("COMPLETED");
     expect(projectSessionHistory(archived).lifecycle.status).toBe("ARCHIVED");
 
+    const archivedDirectly = [
+      ...active,
+      event(sessionId, 3, "SESSION_ARCHIVED", {
+        archivedAt: "2026-08-31T19:01:30.000Z"
+      })
+    ];
+    expect(projectSessionHistory(archivedDirectly).lifecycle.activeElapsedDurationMs)
+      .toBe(20);
+
     const mixed = [{ ...active[0], schemaVersion: 1 }, active[1]];
     const before = JSON.stringify(mixed);
     const upcast = projectSessionHistory(mixed);
@@ -1035,6 +1044,11 @@ describe("replay/history projections", () => {
     const rejected = projectSessionHistory([...history, rejectedProposal]);
     expect(rejected.evidenceSummary.recordedUpdates).toBe(0);
     expect(rejected.currentEvidence).toEqual([]);
+    const rejectedTimeline = projectReplayTimeline([...history, rejectedProposal]);
+    expect(rejectedTimeline.entries.find((entry) =>
+      entry.kind === "EVIDENCE_PROPOSED"
+    )?.evidence).toBeUndefined();
+    expect(JSON.stringify(rejectedTimeline)).not.toContain("untrusted-skill");
 
     const key: EvidenceKey = {
       problemId: "evidence-origin",
@@ -1212,6 +1226,38 @@ describe("replay/history projections", () => {
     ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
+  it("fails sanitized on oversized replay identifiers without changing authoritative schemas", async () => {
+    const oversized = "x".repeat(513);
+    const metadataSessionId = "session-oversized-metadata" as SessionId;
+    const metadataHistory = base(metadataSessionId, "oversized-metadata").map(
+      (item, index) => index === 0 ? { ...item, eventId: oversized } : item
+    );
+    try {
+      projectReplayTimeline(metadataHistory);
+      throw new Error("Expected oversized metadata rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ReplayProjectionError);
+      expect(error).toMatchObject({ code: "INVALID_EVENT_METADATA" });
+      expect(String(error)).not.toContain(oversized);
+    }
+
+    const harness = await createCoreHarness();
+    try {
+      const oversizedProvider = harness.store.load(harness.sessionId).map((item) =>
+        item.type === "MODEL_GENERATION_STARTED"
+          ? SessionEventSchema.parse({
+              ...item,
+              payload: { ...item.payload, provider: oversized }
+            })
+          : item
+      );
+      expect(() => projectSessionHistory(oversizedProvider))
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("rejects reducer-valid delivery transitions that violate generation and exposure authority", async () => {
     const harness = await createCoreHarness();
     try {
@@ -1302,7 +1348,7 @@ describe("replay/history projections", () => {
 
     expect(history.currentStateAvailable).toBe(false);
     expect(history.validatedThroughSequence).toBe(2);
-    expect(history.knownThroughSequence).toBe(4);
+    expect(history.observedThroughSequence).toBe(4);
     expect(history.lifecycle.status).toBe("UNKNOWN");
     expect(history.lifecycle.completed).toBeNull();
     expect(history.countsComplete).toBe(false);
@@ -1484,6 +1530,70 @@ describe("replay/history projections", () => {
     })).toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
   });
 });
+
+  it("rejects attached evaluations whose disclosure provenance disagrees with authoritative delivery", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const coordinator = new DeliveryCoordinator(harness.writer);
+      await coordinator.markStarted(atom.deliveryId);
+      await coordinator.acknowledgeExposed(atom.deliveryId);
+      await harness.turns.completeSession();
+
+      const evaluation = SessionEvaluationSchema.parse({
+        sessionId: harness.sessionId,
+        problemId: sixPeopleProblem.id,
+        problemVersion: sixPeopleProblem.version,
+        evaluatedAt: "2099-01-01T00:00:00.000Z",
+        scores: {
+          technicalCorrectness: 50,
+          rigor: 50,
+          independence: 50,
+          communication: 50,
+          hintResponsiveness: 50,
+          errorRecovery: 50,
+          compositeScore: 50
+        },
+        milestones: [],
+        disclosedInterventions: [{
+          turnId: harness.turnId,
+          disclosureLevel: atom.effectiveDisclosureLevel,
+          disclosureIds: [...atom.disclosureIds],
+          deliveryStatus: "EXPOSED",
+          summary: "bounded evaluation fixture"
+        }],
+        unassistedMilestoneCount: 0,
+        assistedMilestoneCount: 0,
+        totalTurns: 1,
+        keyStrengths: ["fixture"],
+        areasForImprovement: ["fixture"],
+        summaryAssessment: "fixture"
+      });
+
+      const events = harness.store.load(harness.sessionId);
+      expect(projectSessionHistory(events, { evaluation }).evaluation)
+        .toMatchObject({ disclosedInterventionCount: 1, totalTurns: 1 });
+
+      expect(() => projectSessionHistory(events, {
+        evaluation: {
+          ...evaluation,
+          disclosedInterventions: evaluation.disclosedInterventions.map((item) => ({
+            ...item,
+            deliveryStatus: "POSSIBLY_EXPOSED"
+          }))
+        }
+      })).toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
+
+      expect(() => projectSessionHistory(events, {
+        evaluation: {
+          ...evaluation,
+          evaluatedAt: "2000-01-01T00:00:00.000Z"
+        }
+      })).toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
+    } finally {
+      harness.store.close();
+    }
+  });
 
 describe("longitudinal projection", () => {
   function evaluated(
