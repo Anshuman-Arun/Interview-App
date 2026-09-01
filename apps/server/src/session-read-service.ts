@@ -274,13 +274,18 @@ export class SessionReadService {
       ) as SessionReplayReadResponse;
     }
 
+    const loaded = this.loadAuthoritative(sessionId, expectedEventCount);
+    if (loaded === undefined) {
+      return safeReadFailure(
+        "SESSION_REPLAY_READ",
+        sessionId,
+        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      ) as SessionReplayReadResponse;
+    }
+
     let history: ReturnType<typeof projectSessionHistory>;
     try {
-      const events = this.#source.loadEvents(sessionId);
-      if (events.length !== expectedEventCount) {
-        throw new Error("Session event count changed during read");
-      }
-      history = projectSessionHistory(events, {
+      history = projectSessionHistory(loaded.events, {
         bounds: {
           maxEvents: DEFAULT_REPLAY_BOUNDS.maxEvents,
           maxTimelineEntries: HISTORY_TIMELINE_ENTRY_LIMIT,
@@ -321,22 +326,7 @@ export class SessionReadService {
 
   public readHistory(): SessionHistoryReadResponse {
     const inventory = this.readInventory();
-    const cards: Array<{
-      sessionId: SessionId;
-      problemId?: string;
-      problemVersion?: string;
-      status: StoredSessionSummary["status"] | "UNKNOWN";
-      createdAt: string;
-      updatedAt: string;
-      eventCount: number;
-      readStatus: "AVAILABLE" | "UNAVAILABLE" | "BUDGET_EXCLUDED";
-      replayComplete?: boolean;
-      evaluation?: {
-        compositeScore: number | null;
-        compositeStatus: "FULL" | "PARTIAL" | "NOT_SCORED";
-        supportLevel: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
-      };
-    }> = [];
+    const cards: SessionHistoryReadResponse["sessions"][number][] = [];
     const longitudinalInputs: ReturnType<typeof projectSessionHistory>[] = [];
     let consumedEvents = 0;
 
