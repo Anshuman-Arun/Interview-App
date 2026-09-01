@@ -141,13 +141,14 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
     if (durationMs > MAX_SPEECH_UTTERANCE_DURATION_MS + 0.001) {
       throw new Error("Moonshine input exceeds maximum utterance duration");
     }
-    const runtimeResult = MoonshineRuntimeResultSchema.parse(await this.options.runtime.transcribe({
+    const rawRuntimeResult = await this.options.runtime.transcribe({
       pcmBytes: runtimePcmBytes,
       sampleRate: sourceAudioBasis.sampleRate,
       modelPath: this.modelPath,
       ...(this.configPath === undefined ? {} : { configPath: this.configPath }),
       ...(this.supportsAbort ? { signal } : {})
-    }));
+    });
+    const runtimeResult = parseMoonshineRuntimeResult(rawRuntimeResult);
     if (sha256(runtimePcmBytes) !== sourceAudioBasis.pcmSha256) {
       throw new Error("Moonshine runtime mutated PCM input");
     }
@@ -180,6 +181,18 @@ const MoonshineRuntimeResultSchema = z.object({
   confidence: z.number().min(0).max(1).optional(),
   words: z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS).optional()
 }).strict();
+
+function parseMoonshineRuntimeResult(raw: unknown): z.infer<typeof MoonshineRuntimeResultSchema> {
+  if (!isRecord(raw)) throw new Error("Moonshine runtime result must be an object");
+  if (typeof raw.text !== "string") throw new Error("Moonshine runtime transcript must be text");
+  if (raw.text.length > MAX_SPEECH_TRANSCRIPT_CHARS) {
+    throw new Error("Moonshine runtime transcript exceeds maximum length");
+  }
+  if (Array.isArray(raw.words) && raw.words.length > MAX_SPEECH_WORD_TIMINGS) {
+    throw new Error("Moonshine runtime word timings exceed maximum entry count");
+  }
+  return MoonshineRuntimeResultSchema.parse(raw);
+}
 
 export interface TranscriptValidationBasis {
   readonly requestId: RequestId;
@@ -287,7 +300,7 @@ function validateLocalPath(value: string, label: string): string {
 }
 
 function validateRuntimeIdentity(value: unknown, label: string): void {
-  if (typeof value !== "string" || value.length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
     throw new Error(`${label} is invalid`);
   }
 }
