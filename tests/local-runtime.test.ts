@@ -1198,7 +1198,10 @@ describe("local worker lifecycle manager", () => {
     }
 
     await waitForStatus(runtime, "crash-tail", (status) =>
-      status.state === "FAILED" && status.restartCount === 1 && status.lastExit?.code === 14
+      status.state === "FAILED"
+        && status.restartCount === 1
+        && status.lastExit?.code === 14
+        && status.lastExit.stderrTail.some((line) => line.includes("crash-attempt-2"))
     );
     const status = runtime.getStatus("crash-tail");
     expect(status.lastExit?.stderrTail.join(" ")).toContain("crash-attempt-2");
