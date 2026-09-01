@@ -292,8 +292,12 @@ describe("recognition cancellation, races, and diagnostics", () => {
       ...validRaw(input),
       requestId: newRequestId()
     }));
-    const malformedEvents = await feedNormalUtterance(core({ recognizer: malformed }), "malformed");
+    const malformedWorker = core({ recognizer: malformed });
+    const malformedEvents = await feedNormalUtterance(malformedWorker, "malformed");
     expect(malformedEvents).toContainEqual(expect.objectContaining({ type: "SPEECH_WORKER_ERROR", code: "RECOGNIZER_PROTOCOL_ERROR" }));
+    expect(malformedWorker.getDiagnostics()).toContainEqual(expect.objectContaining({
+      code: "RECOGNIZER_PROTOCOL_ERROR"
+    }));
   });
 
   it("bounds diagnostics under repeated recognizer failures", async () => {
