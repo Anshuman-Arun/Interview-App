@@ -6,7 +6,7 @@ import {
   type StoredSessionSummary
 } from "../../../packages/domain/src/index.js";
 import { DeliveryCoordinator } from "../../../packages/delivery/src/index.js";
-import { replaySession, type SessionEvent } from "../../../packages/events/src/index.js";
+import { replaySession } from "../../../packages/events/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
 import {
   type SessionRuntimeRegistry,
@@ -38,15 +38,10 @@ export class SessionRecoveryCoordinator {
     return this.store?.hasSession(sessionId) ?? this.registry.hasSession(sessionId);
   }
 
-  public loadEvents(sessionId: SessionId): readonly SessionEvent[] {
-    if (!this.hasSession(sessionId)) return [];
-    return this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
-  }
-
   public getHistory(sessionId: SessionId): readonly SessionHistoryEntry[] {
     if (!this.hasSession(sessionId)) return [];
 
-    const events = this.loadEvents(sessionId);
+    const events = this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
     const state = replaySession(sessionId, events);
     const queuedContent = new Map<DeliveryId, { readonly text: string }>();
     const history: SessionHistoryEntry[] = [];
