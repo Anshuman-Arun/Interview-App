@@ -4,6 +4,7 @@ export interface ReplayBounds {
   readonly maxSessions: number;
   readonly maxTextPreviewChars: number;
   readonly maxDisclosureIds: number;
+  readonly maxProvenanceIds: number;
   readonly maxEvidenceHistoryEntries: number;
   readonly maxVerificationEntries: number;
   readonly maxGenerationEntries: number;
@@ -15,6 +16,7 @@ export const DEFAULT_REPLAY_BOUNDS: ReplayBounds = Object.freeze({
   maxSessions: 500,
   maxTextPreviewChars: 512,
   maxDisclosureIds: 64,
+  maxProvenanceIds: 128,
   maxEvidenceHistoryEntries: 2_000,
   maxVerificationEntries: 1_000,
   maxGenerationEntries: 1_000
@@ -54,6 +56,10 @@ export function resolveReplayBounds(overrides: Partial<ReplayBounds> = {}): Repl
     maxDisclosureIds: positiveSafeInteger(
       "maxDisclosureIds",
       overrides.maxDisclosureIds ?? DEFAULT_REPLAY_BOUNDS.maxDisclosureIds
+    ),
+    maxProvenanceIds: positiveSafeInteger(
+      "maxProvenanceIds",
+      overrides.maxProvenanceIds ?? DEFAULT_REPLAY_BOUNDS.maxProvenanceIds
     ),
     maxEvidenceHistoryEntries: positiveSafeInteger(
       "maxEvidenceHistoryEntries",

@@ -8,10 +8,9 @@ import {
   type SessionEvaluation,
   type SessionId
 } from "../../domain/src/index.js";
-import {
-  replaySession,
-  type SessionEvent,
-  type SessionState
+import type {
+  SessionEvent,
+  SessionState
 } from "../../events/src/index.js";
 import {
   previewText,
@@ -25,10 +24,12 @@ import {
   type NormalizedReplayEvent
 } from "./provenance.js";
 import { projectReplayTimeline } from "./timeline.js";
+import { validateKnownReplayPrefix } from "./validation.js";
 import type {
   ReplayCurrentEvidence,
   ReplayEvaluationSummary,
   ReplayEvidenceHistoryEntry,
+  ReplayEvidenceValue,
   ReplayEventProvenance,
   ReplayGenerationHistoryEntry,
   ReplaySessionLifecycle,
@@ -51,20 +52,10 @@ function lastKnownSequence(items: readonly NormalizedReplayEvent[]): number {
   return items.at(-1)?.metadata.sequence ?? 0;
 }
 
-function safeReplay(
-  sessionId: SessionId,
-  events: readonly SessionEvent[]
-): SessionState {
-  try {
-    return replaySession(sessionId, events);
-  } catch {
-    throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
-  }
-}
-
 function lifecycleFrom(
   items: readonly NormalizedReplayEvent[],
-  state: SessionState | undefined
+  state: SessionState | undefined,
+  historyComplete: boolean
 ): ReplaySessionLifecycle {
   const started = items.find((item) => item.event?.type === "SESSION_STARTED");
   const completed = items.findLast((item) => item.event?.type === "SESSION_COMPLETED");
@@ -93,13 +84,13 @@ function lifecycleFrom(
   }
 
   return {
-    status: state?.status ?? (items.length === 0 ? "CREATED" : "UNKNOWN"),
-    started: started !== undefined,
-    completed: completed !== undefined,
-    archived: archived !== undefined,
+    status: state?.status ?? "UNKNOWN",
+    historyComplete,
+    started: started !== undefined ? true : historyComplete ? false : null,
+    completed: completed !== undefined ? true : historyComplete ? false : null,
+    archived: archived !== undefined ? true : historyComplete ? false : null,
     resumedCount,
     conservativeRecoveryCount,
-    ...(items[0] === undefined ? {} : { createdAt: items[0].metadata.wallTime }),
     ...(startedAt === undefined ? {} : { startedAt }),
     ...(completedAt === undefined ? {} : { completedAt }),
     ...(archivedAt === undefined ? {} : { archivedAt }),
@@ -107,9 +98,23 @@ function lifecycleFrom(
   };
 }
 
+function projectEvidenceValue(
+  value: SessionState["studentEvidence"][string],
+  bounds: ReplayBounds
+): ReplayEvidenceValue {
+  const evidenceIds = takeBounded([...value.evidenceEventIds], bounds.maxProvenanceIds);
+  return {
+    value: value.value,
+    inferenceConfidence: value.inferenceConfidence,
+    evidenceEventIds: evidenceIds.values,
+    evidenceEventIdsTruncation: evidenceIds.truncation,
+    lastUpdatedSequence: value.lastUpdatedSequence
+  };
+}
+
 function currentEvidenceFromState(
   state: SessionState,
-  limit: number
+  bounds: ReplayBounds
 ): {
   readonly values: readonly ReplayCurrentEvidence[];
   readonly truncation: ReturnType<typeof takeBounded<ReplayCurrentEvidence>>["truncation"];
@@ -123,11 +128,11 @@ function currentEvidenceFromState(
     current.push({
       keyString,
       key: active.key,
-      value: active.value,
+      value: projectEvidenceValue(active.value, bounds),
       evidenceEventId: active.evidenceEventId
     });
   }
-  return takeBounded(current, limit);
+  return takeBounded(current, bounds.maxEvidenceHistoryEntries);
 }
 
 function evidenceHistoryFrom(
@@ -143,7 +148,7 @@ function evidenceHistoryFrom(
         evidenceEventId: event.eventId,
         transition: "UPDATED",
         key: event.payload.key,
-        value: event.payload.value,
+        value: projectEvidenceValue(event.payload.value, bounds),
         ...(event.payload.supersedesEventId === undefined
           ? {}
           : { supersedesEventId: event.payload.supersedesEventId }),
@@ -170,6 +175,7 @@ interface MutableVerificationHistory {
   basis: ReplayVerificationHistoryEntry["basis"];
   evidenceKey: EvidenceKey;
   evidenceEventIds: readonly EventId[];
+  evidenceEventIdsTruncation: ReplayVerificationHistoryEntry["evidenceEventIdsTruncation"];
   candidateFormalInterpretation: ReplayVerificationHistoryEntry["candidateFormalInterpretation"];
   interpretationConfidence: number;
   sourceGenerationId?: GenerationId;
@@ -193,7 +199,14 @@ function verificationHistoryFrom(
         verifier: event.payload.verifier,
         basis: event.payload.basis,
         evidenceKey: event.payload.evidenceKey,
-        evidenceEventIds: [...event.payload.evidenceEventIds],
+        evidenceEventIds: takeBounded(
+          [...event.payload.evidenceEventIds],
+          bounds.maxProvenanceIds
+        ).values,
+        evidenceEventIdsTruncation: takeBounded(
+          [...event.payload.evidenceEventIds],
+          bounds.maxProvenanceIds
+        ).truncation,
         candidateFormalInterpretation: previewText(
           event.payload.candidateFormalInterpretation,
           bounds.maxTextPreviewChars
@@ -248,6 +261,7 @@ function verificationHistoryFrom(
       basis: entry.basis,
       evidenceKey: entry.evidenceKey,
       evidenceEventIds: entry.evidenceEventIds,
+      evidenceEventIdsTruncation: entry.evidenceEventIdsTruncation,
       candidateFormalInterpretation: entry.candidateFormalInterpretation,
       interpretationConfidence: entry.interpretationConfidence,
       ...(entry.sourceGenerationId === undefined ? {} : { sourceGenerationId: entry.sourceGenerationId }),
@@ -389,8 +403,6 @@ function generationHistoryFrom(
       const authoritative = state.generations[current.generationId];
       if (authoritative !== undefined) current.status = authoritative.status;
     }
-  } else {
-    for (const current of byGeneration.values()) current.status = "UNKNOWN";
   }
 
   const ordered = [...byGeneration.values()]
@@ -405,14 +417,27 @@ function generationHistoryFrom(
       ...(entry.proposalMetadata === undefined ? {} : { proposalMetadata: entry.proposalMetadata }),
       ...(entry.formalInterpretation === undefined ? {} : { formalInterpretation: entry.formalInterpretation }),
       ...(entry.superseded === undefined ? {} : { superseded: entry.superseded }),
-      deliveryIds: [...entry.deliveryIds].sort((left, right) => left.localeCompare(right)),
-      lateEventAfterSupersession: entry.lateEventAfterSupersession
+      ...(() => {
+        const deliveryIds = takeBounded(
+          [...entry.deliveryIds].sort((left, right) => left.localeCompare(right)),
+          bounds.maxProvenanceIds
+        );
+        return {
+          deliveryIds: deliveryIds.values,
+          deliveryIdsTruncation: deliveryIds.truncation
+        };
+      })(),
+      lateEventAfterSupersession: entry.lateEventAfterSupersession,
+      statusIsCurrent: state !== undefined
     }));
   return takeBounded(ordered, bounds.maxGenerationEntries);
 }
 
 function evaluationSummary(evaluation: SessionEvaluation): ReplayEvaluationSummary {
   return {
+    sessionId: evaluation.sessionId,
+    problemId: evaluation.problemId,
+    problemVersion: evaluation.problemVersion,
     evaluatedAt: evaluation.evaluatedAt,
     scores: { ...evaluation.scores },
     milestoneCount: evaluation.milestones.length,
@@ -427,7 +452,8 @@ function evaluationSummary(evaluation: SessionEvaluation): ReplayEvaluationSumma
 function validateEvaluation(
   input: unknown,
   sessionId: SessionId | null,
-  problem: SessionHistoryProjection["problem"]
+  problem: SessionHistoryProjection["problem"],
+  state: SessionState | undefined
 ): ReplayEvaluationSummary | undefined {
   if (input === undefined) return undefined;
   const parsed = SessionEvaluationSchema.safeParse(input);
@@ -438,6 +464,7 @@ function validateEvaluation(
     || problem === undefined
     || parsed.data.problemId !== problem.problemId
     || parsed.data.problemVersion !== problem.problemVersion
+    || (state !== undefined && parsed.data.totalTurns !== Object.keys(state.turns).length)
   ) {
     throw new ReplayProjectionError("EVALUATION_MISMATCH");
   }
@@ -476,15 +503,26 @@ export function projectSessionHistory(
 ): SessionHistoryProjection {
   const bounds = resolveReplayBounds(options.bounds);
   const normalized = normalizeReplayEvents(rawEvents, bounds);
-  const events = knownEvents(normalized.events);
-  const state =
-    normalized.sessionId === null
-    || normalized.hasUnknownEvents
-    || normalized.eventTruncation.truncated
-      ? undefined
-      : safeReplay(normalized.sessionId, events);
+  const semanticItems = normalized.events.filter((item) =>
+    normalized.firstUnknownSequence === undefined
+      ? item.event !== undefined
+      : item.metadata.sequence < normalized.firstUnknownSequence && item.event !== undefined
+  );
+  const events = knownEvents(semanticItems);
+  const validated = normalized.sessionId === null || events.length === 0
+    ? undefined
+    : validateKnownReplayPrefix(normalized.sessionId, events, {
+        completeHistory:
+          !normalized.eventTruncation.truncated
+          && !normalized.hasUnknownEvents
+      });
+  const historyComplete =
+    normalized.sessionId !== null
+    && !normalized.hasUnknownEvents
+    && !normalized.eventTruncation.truncated;
+  const state = historyComplete ? validated?.state : undefined;
 
-  const problemEvent = [...normalized.events].reverse()
+  const problemEvent = [...semanticItems].reverse()
     .find((item) => item.event?.type === "PROBLEM_PRESENTED");
   const problem = state?.problem === undefined
     ? problemEvent?.event?.type === "PROBLEM_PRESENTED"
@@ -499,12 +537,12 @@ export function projectSessionHistory(
       };
 
   const timeline = projectReplayTimeline(rawEvents, { bounds });
-  const evidence = evidenceHistoryFrom(normalized.events, bounds);
+  const evidence = evidenceHistoryFrom(semanticItems, bounds);
   const currentEvidence = state === undefined
     ? takeBounded<ReplayCurrentEvidence>([], bounds.maxEvidenceHistoryEntries)
-    : currentEvidenceFromState(state, bounds.maxEvidenceHistoryEntries);
-  const verification = verificationHistoryFrom(normalized.events, bounds);
-  const generations = generationHistoryFrom(normalized.events, state, bounds);
+    : currentEvidenceFromState(state, bounds);
+  const verification = verificationHistoryFrom(semanticItems, bounds);
+  const generations = generationHistoryFrom(semanticItems, state, bounds);
   const directCounts = directDeliveryCounts(events);
   const eventCounts = {
     turns: events.filter((event) => event.type === "TURN_COMMITTED").length,
@@ -544,12 +582,12 @@ export function projectSessionHistory(
     discarded: verification.values.filter((entry) => entry.status === "DISCARDED").length
   };
   const highestDisclosureUsed = state === undefined ? undefined : disclosedHighest(state);
-  const evaluation = validateEvaluation(options.evaluation, normalized.sessionId, problem);
+  const evaluation = validateEvaluation(options.evaluation, normalized.sessionId, problem, state);
 
-  const projection: SessionHistoryProjection = {
+  return {
     sessionId: normalized.sessionId,
     ...(problem === undefined ? {} : { problem }),
-    lifecycle: lifecycleFrom(normalized.events, state),
+    lifecycle: lifecycleFrom(semanticItems, state, historyComplete),
     counts: {
       ...eventCounts,
       exposedInterventions: directCounts.exposed,
@@ -559,21 +597,24 @@ export function projectSessionHistory(
     },
     ...(highestDisclosureUsed === undefined ? {} : { highestDisclosureUsed }),
     currentStateAvailable: state !== undefined,
+    validatedThroughSequence: validated?.validatedThroughSequence ?? 0,
     knownThroughSequence: lastKnownSequence(normalized.events),
+    countsComplete: historyComplete,
     totalEventCount: normalized.totalEventCount,
     timeline,
     evidenceHistory: evidence.values,
     evidenceHistoryTruncation: evidence.truncation,
+    evidenceHistoryComplete: historyComplete && !evidence.truncation.truncated,
     currentEvidence: currentEvidence.values,
     currentEvidenceTruncation: currentEvidence.truncation,
     evidenceSummary,
     verificationHistory: verification.values,
     verificationTruncation: verification.truncation,
+    verificationHistoryComplete: historyComplete && !verification.truncation.truncated,
     verificationSummary,
     generationHistory: generations.values,
     generationTruncation: generations.truncation,
+    generationHistoryComplete: historyComplete && !generations.truncation.truncated,
     ...(evaluation === undefined ? {} : { evaluation })
   };
-
-  return projection;
 }

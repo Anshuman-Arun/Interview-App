@@ -121,6 +121,7 @@ export interface ReplayEvidenceDetail {
   readonly value?: string;
   readonly inferenceConfidence?: number;
   readonly supportingEventIds?: readonly EventId[];
+  readonly supportingEventIdsTruncation?: TruncationInfo;
   readonly supersedesEventId?: EventId;
   readonly invalidatesEventId?: EventId;
   readonly reason?: TextPreview;

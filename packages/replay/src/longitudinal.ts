@@ -1,9 +1,22 @@
-import type { SessionId } from "../../domain/src/index.js";
+import { z } from "zod";
+import {
+  EvidenceKeySchema,
+  EvidenceRatingSchema,
+  EventIdSchema,
+  SessionIdSchema,
+  evidenceKeyToString,
+  type EvidenceKey,
+  type SessionId
+} from "../../domain/src/index.js";
 import {
   resolveReplayBounds,
   truncationInfo,
   type ReplayBounds
 } from "./bounds.js";
+import {
+  replayEvidenceIdentity,
+  replayProblemIdentity
+} from "./identity.js";
 import { ReplayProjectionError } from "./provenance.js";
 import type {
   LongitudinalEvaluationStatistics,
@@ -19,24 +32,143 @@ export interface LongitudinalHistoryOptions {
   readonly bounds?: Partial<ReplayBounds>;
 }
 
-function sessionSortKey(session: SessionHistoryProjection): string {
-  return session.lifecycle.startedAt
-    ?? session.lifecycle.createdAt
-    ?? "";
+const SafeNonnegativeIntegerSchema = z.number().refine(
+  (value) => Number.isSafeInteger(value) && value >= 0,
+  { message: "Expected a non-negative safe integer" }
+);
+const SafePositiveIntegerSchema = z.number().refine(
+  (value) => Number.isSafeInteger(value) && value > 0,
+  { message: "Expected a positive safe integer" }
+);
+
+const TruncationSchema = z.object({
+  truncated: z.boolean(),
+  limit: SafePositiveIntegerSchema,
+  remainingCount: SafeNonnegativeIntegerSchema
+}).strict().superRefine((value, context) => {
+  if (
+    (value.truncated && value.remainingCount === 0)
+    || (!value.truncated && value.remainingCount !== 0)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Truncation metadata is internally inconsistent"
+    });
+  }
+});
+
+const ReplayEvidenceValueInputSchema = z.object({
+  value: EvidenceRatingSchema,
+  inferenceConfidence: z.number().min(0).max(1),
+  evidenceEventIds: z.array(EventIdSchema),
+  evidenceEventIdsTruncation: TruncationSchema,
+  lastUpdatedSequence: SafePositiveIntegerSchema
+}).strict();
+
+const ScoreSchema = z.number().min(0).max(100);
+const EvaluationInputSchema = z.object({
+  sessionId: SessionIdSchema,
+  problemId: z.string().min(1),
+  problemVersion: z.string().min(1),
+  evaluatedAt: z.string().min(1),
+  scores: z.object({
+    technicalCorrectness: ScoreSchema,
+    rigor: ScoreSchema,
+    independence: ScoreSchema,
+    communication: ScoreSchema,
+    hintResponsiveness: ScoreSchema,
+    errorRecovery: ScoreSchema,
+    compositeScore: ScoreSchema
+  }).strict(),
+  milestoneCount: SafeNonnegativeIntegerSchema,
+  achievedMilestoneCount: SafeNonnegativeIntegerSchema,
+  unassistedMilestoneCount: SafeNonnegativeIntegerSchema,
+  assistedMilestoneCount: SafeNonnegativeIntegerSchema,
+  disclosedInterventionCount: SafeNonnegativeIntegerSchema,
+  totalTurns: SafeNonnegativeIntegerSchema
+}).strict();
+
+const LongitudinalSessionInputSchema = z.object({
+  sessionId: SessionIdSchema,
+  problem: z.object({
+    problemId: z.string().min(1),
+    problemVersion: z.string().min(1)
+  }).strict().optional(),
+  lifecycle: z.object({
+    startedAt: z.iso.datetime().optional(),
+    completed: z.boolean().nullable()
+  }).strict(),
+  counts: z.object({
+    exposedInterventions: SafeNonnegativeIntegerSchema,
+    possiblyExposedInterventions: SafeNonnegativeIntegerSchema
+  }).strict(),
+  currentStateAvailable: z.boolean(),
+  currentEvidenceTruncation: TruncationSchema,
+  currentEvidence: z.array(z.object({
+    keyString: z.string(),
+    key: EvidenceKeySchema,
+    value: ReplayEvidenceValueInputSchema,
+    evidenceEventId: EventIdSchema
+  }).strict()),
+  evaluation: EvaluationInputSchema.optional()
+}).strip();
+
+type LongitudinalSessionInput = z.infer<typeof LongitudinalSessionInputSchema>;
+
+function parseSessionSummaries(
+  values: readonly unknown[]
+): readonly LongitudinalSessionInput[] {
+  if (!Array.isArray(values)) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+
+  const parsed: LongitudinalSessionInput[] = [];
+  for (const value of values) {
+    const result = LongitudinalSessionInputSchema.safeParse(value);
+    if (!result.success) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+
+    const session = result.data;
+    if (
+      session.evaluation !== undefined
+      && (
+        session.problem === undefined
+        || session.evaluation.sessionId !== session.sessionId
+        || session.evaluation.problemId !== session.problem.problemId
+        || session.evaluation.problemVersion !== session.problem.problemVersion
+      )
+    ) {
+      throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+    }
+
+    for (const evidence of session.currentEvidence) {
+      if (
+        session.problem === undefined
+        || evidence.key.problemId !== session.problem.problemId
+        || evidence.keyString !== evidenceKeyToString(evidence.key)
+      ) {
+        throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+      }
+    }
+
+    parsed.push(session);
+  }
+  return parsed;
+}
+
+function sessionSortKey(session: LongitudinalSessionInput): string {
+  return session.lifecycle.startedAt ?? "";
 }
 
 function compareSessions(
-  left: SessionHistoryProjection,
-  right: SessionHistoryProjection
+  left: LongitudinalSessionInput,
+  right: LongitudinalSessionInput
 ): number {
   const timeOrder = sessionSortKey(left).localeCompare(sessionSortKey(right));
   if (timeOrder !== 0) return timeOrder;
-  return (left.sessionId ?? "").localeCompare(right.sessionId ?? "");
+  return left.sessionId.localeCompare(right.sessionId);
 }
 
-function exactProblemKey(session: SessionHistoryProjection): string | undefined {
+function exactProblemKey(session: LongitudinalSessionInput): string | undefined {
   if (session.problem === undefined) return undefined;
-  return `${session.problem.problemId}\u0000${session.problem.problemVersion}`;
+  return replayProblemIdentity(session.problem.problemId, session.problem.problemVersion);
 }
 
 function average(values: readonly number[]): number {
@@ -93,23 +225,24 @@ function aggregateScores(
 }
 
 export function projectLongitudinalHistory(
-  sessionSummaries: readonly SessionHistoryProjection[],
+  sessionSummaries: readonly unknown[],
   options: LongitudinalHistoryOptions = {}
 ): LongitudinalHistoryProjection {
   const bounds = resolveReplayBounds(options.bounds);
+  const parsedSessions = parseSessionSummaries(sessionSummaries);
   const seenSessionIds = new Set<SessionId>();
-  for (const session of sessionSummaries) {
-    if (session.sessionId === null) continue;
+  for (const session of parsedSessions) {
     if (seenSessionIds.has(session.sessionId)) {
       throw new ReplayProjectionError("DUPLICATE_SESSION");
     }
     seenSessionIds.add(session.sessionId);
   }
 
-  const ordered = [...sessionSummaries].sort(compareSessions);
+  const ordered = [...parsedSessions].sort(compareSessions);
   const included = ordered.slice(0, bounds.maxSessions);
-  const problemGroups = new Map<string, SessionHistoryProjection[]>();
+  const problemGroups = new Map<string, LongitudinalSessionInput[]>();
   const evidenceGroups = new Map<string, {
+    key: EvidenceKey;
     sessionIds: Set<string>;
     values: Map<string, number>;
   }>();
@@ -126,20 +259,22 @@ export function projectLongitudinalHistory(
       !session.currentStateAvailable
       || session.currentEvidenceTruncation.truncated
     ) continue;
+
     for (const evidence of session.currentEvidence) {
-      const group = evidenceGroups.get(evidence.keyString) ?? {
+      const identity = replayEvidenceIdentity(evidence.key);
+      const group = evidenceGroups.get(identity) ?? {
+        key: evidence.key,
         sessionIds: new Set<string>(),
         values: new Map<string, number>()
       };
-      const sessionIdentity = session.sessionId ?? `anonymous:${String(session.knownThroughSequence)}`;
-      if (!group.sessionIds.has(sessionIdentity)) {
-        group.sessionIds.add(sessionIdentity);
+      if (!group.sessionIds.has(session.sessionId)) {
+        group.sessionIds.add(session.sessionId);
         group.values.set(
           evidence.value.value,
           (group.values.get(evidence.value.value) ?? 0) + 1
         );
       }
-      evidenceGroups.set(evidence.keyString, group);
+      evidenceGroups.set(identity, group);
     }
   }
 
@@ -160,14 +295,12 @@ export function projectLongitudinalHistory(
       });
     }
 
-    const evaluated = exact.filter((session) =>
-      session.evaluation !== undefined
-      && session.sessionId !== null
-    );
+    const evaluated = exact.filter((session): session is LongitudinalSessionInput & {
+      readonly evaluation: z.infer<typeof EvaluationInputSchema>;
+    } => session.evaluation !== undefined);
+
     if (evaluated.length > 0) {
-      const evaluations = evaluated.flatMap((session) =>
-        session.evaluation === undefined ? [] : [session.evaluation]
-      );
+      const evaluations: ReplayEvaluationSummary[] = evaluated.map((session) => session.evaluation);
       const scores = aggregateScores(evaluations);
       evaluationStatistics.push({
         problemId: first.problem.problemId,
@@ -180,14 +313,7 @@ export function projectLongitudinalHistory(
       for (let index = 1; index < evaluated.length; index += 1) {
         const previous = evaluated[index - 1];
         const current = evaluated[index];
-        if (
-          previous?.sessionId === null
-          || current?.sessionId === null
-          || previous?.evaluation === undefined
-          || current?.evaluation === undefined
-        ) {
-          continue;
-        }
+        if (previous === undefined || current === undefined) continue;
         improvement.push({
           problemId: first.problem.problemId,
           problemVersion: first.problem.problemVersion,
@@ -203,8 +329,8 @@ export function projectLongitudinalHistory(
 
   const evidencePatterns: LongitudinalEvidencePattern[] = [...evidenceGroups.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([keyString, group]) => ({
-      keyString,
+    .map(([, group]) => ({
+      key: group.key,
       sessionCount: group.sessionIds.size,
       observedValues: Object.fromEntries(
         [...group.values.entries()].sort(([left], [right]) => left.localeCompare(right))
@@ -243,7 +369,8 @@ export function projectLongitudinalHistory(
     totalInputSessions: sessionSummaries.length,
     includedSessionCount: included.length,
     sessionTruncation: truncationInfo(sessionSummaries.length, bounds.maxSessions),
-    completedSessions: included.filter((session) => session.lifecycle.completed).length,
+    completedSessions: included.filter((session) => session.lifecycle.completed === true).length,
+    sessionsWithUnknownCompletion: included.filter((session) => session.lifecycle.completed === null).length,
     problemsAttempted: exactProblems.size,
     assistanceEligibleSessionCount: assistanceEligible.length,
     sessionsWithAssistance: assistanceEligible.filter((session) =>

@@ -3,10 +3,9 @@ import type {
   DeliveryStatus,
   GenerationId
 } from "../../domain/src/index.js";
-import {
-  replaySession,
-  type EventType,
-  type SessionEvent
+import type {
+  EventType,
+  SessionEvent
 } from "../../events/src/index.js";
 import {
   previewText,
@@ -17,9 +16,9 @@ import {
 } from "./bounds.js";
 import {
   normalizeReplayEvents,
-  ReplayProjectionError,
   type NormalizedReplayEvent
 } from "./provenance.js";
+import { validateKnownReplayPrefix } from "./validation.js";
 import type {
   ReplayDeliveryDetail,
   ReplayEvidenceDetail,
@@ -316,27 +315,39 @@ function entryForKnownEvent(
         reason: previewText(event.payload.reason, bounds.maxTextPreviewChars)
       };
       break;
-    case "EVIDENCE_PROPOSED":
+    case "EVIDENCE_PROPOSED": {
+      const supporting = takeBounded(
+        [...event.payload.proposal.evidenceEventIds],
+        bounds.maxProvenanceIds
+      );
       evidence = {
         transition: "PROPOSED",
         key: event.payload.proposal.key,
         value: event.payload.proposal.proposedValue,
         inferenceConfidence: event.payload.proposal.inferenceConfidence,
-        supportingEventIds: [...event.payload.proposal.evidenceEventIds]
+        supportingEventIds: supporting.values,
+        supportingEventIdsTruncation: supporting.truncation
       };
       break;
-    case "STUDENT_EVIDENCE_UPDATED":
+    }
+    case "STUDENT_EVIDENCE_UPDATED": {
+      const supporting = takeBounded(
+        [...event.payload.value.evidenceEventIds],
+        bounds.maxProvenanceIds
+      );
       evidence = {
         transition: "UPDATED",
         key: event.payload.key,
         value: event.payload.value.value,
         inferenceConfidence: event.payload.value.inferenceConfidence,
-        supportingEventIds: [...event.payload.value.evidenceEventIds],
+        supportingEventIds: supporting.values,
+        supportingEventIdsTruncation: supporting.truncation,
         ...(event.payload.supersedesEventId === undefined
           ? {}
           : { supersedesEventId: event.payload.supersedesEventId })
       };
       break;
+    }
     case "STUDENT_EVIDENCE_INVALIDATED":
       evidence = {
         transition: "INVALIDATED",
@@ -513,6 +524,7 @@ function entryForKnownEvent(
   return {
     kind: event.type,
     summary: summaryFor(event.type),
+    stateValidation: "VALIDATED",
     provenance: item.provenance,
     relations,
     ...(text === undefined ? {} : { text }),
@@ -531,17 +543,25 @@ export function projectReplayTimeline(
 ): ReplayTimelineProjection {
   const bounds = resolveReplayBounds(options.bounds);
   const normalized = normalizeReplayEvents(rawEvents, bounds);
-
-  if (normalized.sessionId !== null && !normalized.hasUnknownEvents) {
-    const replayable = normalized.events.map((item) => {
-      if (item.event === undefined) throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
-      return item.event;
-    });
-    try {
-      replaySession(normalized.sessionId, replayable);
-    } catch {
-      throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
+  const semanticBoundarySequence = normalized.firstUnknownSequence;
+  const validatedItems = normalized.events.filter((item) =>
+    semanticBoundarySequence === undefined
+      ? item.event !== undefined
+      : item.metadata.sequence < semanticBoundarySequence && item.event !== undefined
+  );
+  const validatedEvents = validatedItems.map((item) => {
+    if (item.event === undefined) {
+      throw new Error("Validated replay prefix unexpectedly contains an unknown event");
     }
+    return item.event;
+  });
+
+  if (normalized.sessionId !== null && validatedEvents.length > 0) {
+    validateKnownReplayPrefix(normalized.sessionId, validatedEvents, {
+      completeHistory:
+        !normalized.eventTruncation.truncated
+        && !normalized.hasUnknownEvents
+    });
   }
 
   const timelineSelected = normalized.events.slice(0, bounds.maxTimelineEntries);
@@ -556,6 +576,9 @@ export function projectReplayTimeline(
   }
   if (normalized.events.length > bounds.maxTimelineEntries) {
     issues.push({ code: "TIMELINE_LIMIT_REACHED" });
+  }
+  if (normalized.eventTruncation.truncated || normalized.hasUnknownEvents) {
+    issues.push({ code: "CURRENT_STATE_UNAVAILABLE" });
   }
 
   const firstUnknown = normalized.events.find((item) => item.event === undefined);
@@ -572,12 +595,27 @@ export function projectReplayTimeline(
       entries.push({
         kind: "UNKNOWN_EVENT",
         summary: "Unknown authoritative event; payload intentionally withheld",
+        stateValidation: "UNKNOWN_EVENT",
         provenance: item.provenance,
         relations: {},
         unknown: {
           eventType: item.metadata.type,
           schemaVersion: item.metadata.schemaVersion
         }
+      });
+      continue;
+    }
+
+    if (
+      semanticBoundarySequence !== undefined
+      && item.metadata.sequence > semanticBoundarySequence
+    ) {
+      entries.push({
+        kind: item.event.type,
+        summary: "Known event after unknown semantic boundary; payload intentionally withheld",
+        stateValidation: "UNAVAILABLE_AFTER_UNKNOWN",
+        provenance: item.provenance,
+        relations: {}
       });
       continue;
     }
