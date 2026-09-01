@@ -1,8 +1,19 @@
 import {
   type OrderFill,
   type PositionRiskLimits,
+  OrderFillSchema,
   PositionRiskLimitsSchema
 } from "../../domain/src/index.js";
+
+interface PortfolioTrackerCheckpoint {
+  readonly cash: number;
+  readonly position: number;
+  readonly totalCostBasis: number;
+  readonly realizedPnL: number;
+  readonly peakPortfolioValue: number;
+  readonly maxDrawdown: number;
+  readonly fills: readonly OrderFill[];
+}
 
 export interface PortfolioSnapshot {
   readonly cash: number;
@@ -27,6 +38,9 @@ export class PortfolioTracker {
   private readonly riskLimits: PositionRiskLimits;
 
   public constructor(initialCash = 1000, riskLimits?: Partial<PositionRiskLimits>) {
+    if (!Number.isFinite(initialCash)) {
+      throw new RangeError("Initial cash must be finite");
+    }
     this.currentCash = initialCash;
     this.peakPortfolioValue = initialCash;
     this.riskLimits = PositionRiskLimitsSchema.parse({
@@ -47,74 +61,174 @@ export class PortfolioTracker {
   }
 
   public get fills(): readonly OrderFill[] {
-    return [...this.fillsHistory];
+    return this.fillsHistory.map((fill) => ({ ...fill }));
   }
 
-  public applyFill(fill: OrderFill): void {
-    this.fillsHistory.push(fill);
+  /** @internal Transaction rollback support for scenario orchestration. */
+  public checkpoint(): PortfolioTrackerCheckpoint {
+    return {
+      cash: this.currentCash,
+      position: this.currentPosition,
+      totalCostBasis: this.totalCostBasis,
+      realizedPnL: this.currentRealizedPnL,
+      peakPortfolioValue: this.peakPortfolioValue,
+      maxDrawdown: this.currentMaxDrawdown,
+      fills: this.fillsHistory.map((fill) => ({ ...fill }))
+    };
+  }
+
+  /** @internal Transaction rollback support for scenario orchestration. */
+  public restore(checkpoint: PortfolioTrackerCheckpoint): void {
+    for (const [name, value] of [
+      ["cash", checkpoint.cash],
+      ["total cost basis", checkpoint.totalCostBasis],
+      ["realized PnL", checkpoint.realizedPnL],
+      ["peak portfolio value", checkpoint.peakPortfolioValue],
+      ["max drawdown", checkpoint.maxDrawdown]
+    ] as const) {
+      if (!Number.isFinite(value)) throw new Error(`Invalid portfolio checkpoint ${name}`);
+    }
+    if (!Number.isSafeInteger(checkpoint.position)) {
+      throw new Error("Invalid portfolio checkpoint position");
+    }
+    if (checkpoint.maxDrawdown < 0) {
+      throw new Error("Invalid portfolio checkpoint max drawdown");
+    }
+
+    this.currentCash = checkpoint.cash;
+    this.currentPosition = checkpoint.position;
+    this.totalCostBasis = checkpoint.totalCostBasis;
+    this.currentRealizedPnL = checkpoint.realizedPnL;
+    this.peakPortfolioValue = checkpoint.peakPortfolioValue;
+    this.currentMaxDrawdown = checkpoint.maxDrawdown;
+    this.fillsHistory = checkpoint.fills.map((fill) => OrderFillSchema.parse({ ...fill }));
+  }
+
+  public applyFill(fillInput: OrderFill): void {
+    const fill = OrderFillSchema.parse(fillInput);
+    const notional = fill.price * fill.size;
+    if (!Number.isFinite(notional)) {
+      throw new RangeError("Fill notional must remain finite");
+    }
+
+    let nextCash = this.currentCash;
+    let nextPosition = this.currentPosition;
+    let nextCostBasis = this.totalCostBasis;
+    let nextRealizedPnL = this.currentRealizedPnL;
 
     if (fill.side === "BUY") {
-      this.currentCash -= fill.price * fill.size;
+      nextCash -= notional;
 
       if (this.currentPosition >= 0) {
-        // Adding to long position
-        this.totalCostBasis += fill.price * fill.size;
-        this.currentPosition += fill.size;
+        nextCostBasis += notional;
+        nextPosition += fill.size;
       } else {
-        // Covering short position
         const coverSize = Math.min(fill.size, Math.abs(this.currentPosition));
         const avgShortPrice = this.totalCostBasis / Math.abs(this.currentPosition);
         const pnl = (avgShortPrice - fill.price) * coverSize;
-        this.currentRealizedPnL += pnl;
+        nextRealizedPnL += pnl;
 
-        this.currentPosition += fill.size;
-        if (this.currentPosition < 0) {
-          this.totalCostBasis = avgShortPrice * Math.abs(this.currentPosition);
+        nextPosition += fill.size;
+        if (nextPosition < 0) {
+          nextCostBasis = avgShortPrice * Math.abs(nextPosition);
         } else {
           const remainder = fill.size - coverSize;
-          this.totalCostBasis = remainder * fill.price;
+          nextCostBasis = remainder * fill.price;
         }
       }
     } else {
-      // SELL fill
-      this.currentCash += fill.price * fill.size;
+      nextCash += notional;
 
       if (this.currentPosition <= 0) {
-        // Adding to short position
-        this.totalCostBasis += fill.price * fill.size;
-        this.currentPosition -= fill.size;
+        nextCostBasis += notional;
+        nextPosition -= fill.size;
       } else {
-        // Closing long position
         const closeSize = Math.min(fill.size, this.currentPosition);
         const avgLongPrice = this.totalCostBasis / this.currentPosition;
         const pnl = (fill.price - avgLongPrice) * closeSize;
-        this.currentRealizedPnL += pnl;
+        nextRealizedPnL += pnl;
 
-        this.currentPosition -= fill.size;
-        if (this.currentPosition > 0) {
-          this.totalCostBasis = avgLongPrice * this.currentPosition;
+        nextPosition -= fill.size;
+        if (nextPosition > 0) {
+          nextCostBasis = avgLongPrice * nextPosition;
         } else {
           const remainder = fill.size - closeSize;
-          this.totalCostBasis = remainder * fill.price;
+          nextCostBasis = remainder * fill.price;
         }
       }
     }
+
+    if (!Number.isSafeInteger(nextPosition)) {
+      throw new RangeError("Portfolio position must remain a safe integer");
+    }
+    for (const [name, value] of [
+      ["cash", nextCash],
+      ["cost basis", nextCostBasis],
+      ["realized PnL", nextRealizedPnL]
+    ] as const) {
+      if (!Number.isFinite(value)) {
+        throw new RangeError(`Portfolio ${name} must remain finite`);
+      }
+    }
+
+    this.currentCash = nextCash;
+    this.currentPosition = nextPosition;
+    this.totalCostBasis = nextCostBasis;
+    this.currentRealizedPnL = nextRealizedPnL;
+    this.fillsHistory.push({ ...fill });
   }
 
   public getUnrealizedPnL(markPrice: number): number {
+    assertFiniteMarkPrice(markPrice);
     if (this.currentPosition === 0) return 0;
     const avgCost = this.totalCostBasis / Math.abs(this.currentPosition);
-    return this.currentPosition > 0
+    const unrealized = this.currentPosition > 0
       ? (markPrice - avgCost) * this.currentPosition
       : (avgCost - markPrice) * Math.abs(this.currentPosition);
+    if (!Number.isFinite(unrealized)) {
+      throw new RangeError("Unrealized PnL must remain finite");
+    }
+    return unrealized;
   }
 
   public getTotalPnL(markPrice: number): number {
-    return this.currentRealizedPnL + this.getUnrealizedPnL(markPrice);
+    const total = this.currentRealizedPnL + this.getUnrealizedPnL(markPrice);
+    if (!Number.isFinite(total)) {
+      throw new RangeError("Total PnL must remain finite");
+    }
+    return total;
   }
 
   public getPortfolioValue(markPrice: number): number {
-    return this.currentCash + this.currentPosition * markPrice;
+    assertFiniteMarkPrice(markPrice);
+    const value = this.currentCash + this.currentPosition * markPrice;
+    if (!Number.isFinite(value)) {
+      throw new RangeError("Portfolio value must remain finite");
+    }
+    return value;
+  }
+
+  public getSnapshot(markPrice: number): PortfolioSnapshot {
+    const portfolioVal = this.getPortfolioValue(markPrice);
+    const unrealized = this.getUnrealizedPnL(markPrice);
+    const avgCost =
+      this.currentPosition !== 0 ? this.totalCostBasis / Math.abs(this.currentPosition) : 0;
+    const totalPnL = this.currentRealizedPnL + unrealized;
+    if (!Number.isFinite(avgCost) || !Number.isFinite(totalPnL)) {
+      throw new RangeError("Portfolio snapshot accounting must remain finite");
+    }
+
+    return {
+      cash: this.currentCash,
+      position: this.currentPosition,
+      realizedPnL: this.currentRealizedPnL,
+      unrealizedPnL: unrealized,
+      totalPnL,
+      portfolioValue: portfolioVal,
+      averageCostBasis: avgCost,
+      maxDrawdown: this.currentMaxDrawdown,
+      tradeCount: this.fillsHistory.length
+    };
   }
 
   public updateMarkPrice(markPrice: number): PortfolioSnapshot {
@@ -124,25 +238,14 @@ export class PortfolioTracker {
     }
 
     const drawdown = Math.max(0, this.peakPortfolioValue - portfolioVal);
+    if (!Number.isFinite(drawdown)) {
+      throw new RangeError("Portfolio drawdown must remain finite");
+    }
     if (drawdown > this.currentMaxDrawdown) {
       this.currentMaxDrawdown = drawdown;
     }
 
-    const unrealized = this.getUnrealizedPnL(markPrice);
-    const avgCost =
-      this.currentPosition !== 0 ? this.totalCostBasis / Math.abs(this.currentPosition) : 0;
-
-    return {
-      cash: this.currentCash,
-      position: this.currentPosition,
-      realizedPnL: this.currentRealizedPnL,
-      unrealizedPnL: unrealized,
-      totalPnL: this.currentRealizedPnL + unrealized,
-      portfolioValue: portfolioVal,
-      averageCostBasis: avgCost,
-      maxDrawdown: this.currentMaxDrawdown,
-      tradeCount: this.fillsHistory.length
-    };
+    return this.getSnapshot(markPrice);
   }
 
   public checkRiskLimits(markPrice: number): { readonly breached: boolean; readonly reason?: string } {
@@ -162,6 +265,9 @@ export class PortfolioTracker {
     }
 
     const drawdown = Math.max(0, this.peakPortfolioValue - this.getPortfolioValue(markPrice));
+    if (!Number.isFinite(drawdown)) {
+      throw new RangeError("Portfolio drawdown must remain finite");
+    }
     if (drawdown > this.riskLimits.maxDrawdown) {
       return {
         breached: true,
@@ -170,5 +276,12 @@ export class PortfolioTracker {
     }
 
     return { breached: false };
+  }
+}
+
+
+function assertFiniteMarkPrice(markPrice: number): void {
+  if (!Number.isFinite(markPrice)) {
+    throw new RangeError("Mark price must be finite");
   }
 }

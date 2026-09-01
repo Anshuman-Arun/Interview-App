@@ -18,6 +18,64 @@ export interface SimulatedRoundAction {
   readonly tradeSize?: number;
 }
 
+export interface MarketMakerSimulatorRuntime {
+  readonly random?: () => number;
+}
+
+export interface MarketMakingScoreInput {
+  readonly totalPnL: number;
+  readonly averageSpread: number;
+  readonly maxDrawdown: number;
+  readonly riskBreaches?: number;
+  readonly quoteParticipationRate?: number;
+}
+
+export function calculateMarketMakingScore(input: MarketMakingScoreInput): number {
+  for (const [name, value] of [
+    ["totalPnL", input.totalPnL],
+    ["averageSpread", input.averageSpread],
+    ["maxDrawdown", input.maxDrawdown]
+  ] as const) {
+    if (!Number.isFinite(value)) {
+      throw new RangeError(`${name} must be finite`);
+    }
+  }
+  if (input.averageSpread < 0 || input.maxDrawdown < 0) {
+    throw new RangeError("averageSpread and maxDrawdown must be non-negative");
+  }
+  if (
+    input.riskBreaches !== undefined
+    && (!Number.isSafeInteger(input.riskBreaches) || input.riskBreaches < 0)
+  ) {
+    throw new RangeError("riskBreaches must be a non-negative safe integer");
+  }
+  if (
+    input.quoteParticipationRate !== undefined
+    && (
+      !Number.isFinite(input.quoteParticipationRate)
+      || input.quoteParticipationRate < 0
+      || input.quoteParticipationRate > 1
+    )
+  ) {
+    throw new RangeError("quoteParticipationRate must be between 0 and 1");
+  }
+
+  let score = 50;
+
+  if (input.totalPnL > 0) score += Math.min(25, Math.round(input.totalPnL * 2));
+  else score -= Math.min(30, Math.round(Math.abs(input.totalPnL) * 2));
+
+  if (input.averageSpread > 0 && input.averageSpread <= 4.0) score += 15;
+  else if (input.averageSpread > 10.0) score -= 20;
+
+  if (input.maxDrawdown < 50) score += 10;
+  else score -= Math.min(20, Math.round(input.maxDrawdown / 10));
+
+  score -= Math.min(30, (input.riskBreaches ?? 0) * 15);
+  score -= Math.round(Math.max(0, 1 - (input.quoteParticipationRate ?? 1)) * 20);
+  return Math.max(0, Math.min(100, score));
+}
+
 export class MarketMakerSimulator {
   private readonly config: TradingGameConfig;
   private readonly orderBook = new LimitOrderBook();
@@ -25,10 +83,12 @@ export class MarketMakerSimulator {
   private roundsHistory: SimulatedRoundAction[] = [];
   private totalSpreadSum = 0;
   private validQuoteRounds = 0;
+  private readonly random: () => number;
 
-  public constructor(configInput: TradingGameConfig) {
+  public constructor(configInput: TradingGameConfig, runtime: MarketMakerSimulatorRuntime = {}) {
     this.config = TradingGameConfigSchema.parse(configInput);
     this.portfolio = new PortfolioTracker(this.config.initialCash, this.config.riskLimits);
+    this.random = runtime.random ?? (() => Math.random());
   }
 
   public get fairValue(): number {
@@ -40,8 +100,24 @@ export class MarketMakerSimulator {
   }
 
   public playRound(studentQuoteInput: QuotePair): SimulatedRoundAction {
+    if (this.roundsHistory.length >= this.config.rounds) {
+      throw new Error("Market-making game has already completed its configured rounds");
+    }
     const studentQuote = QuotePairSchema.parse(studentQuoteInput);
     const roundNumber = this.currentRound;
+    const orderBookCheckpoint = this.orderBook.checkpoint();
+    const portfolioCheckpoint = this.portfolio.checkpoint();
+    const historyLength = this.roundsHistory.length;
+    const totalSpreadBefore = this.totalSpreadSum;
+    const validQuoteRoundsBefore = this.validQuoteRounds;
+
+    try {
+    // Validate all randomness required by this path before mutating round state.
+    const random = this.nextRandom();
+    const noiseBuyRoll = random >= this.config.informedTraderProbability
+      && random < this.config.informedTraderProbability + this.config.noiseTraderProbability
+      ? this.nextRandom()
+      : undefined;
 
     this.validQuoteRounds += 1;
     const currentSpread = studentQuote.askPrice - studentQuote.bidPrice;
@@ -50,8 +126,6 @@ export class MarketMakerSimulator {
     // Set student quotes on order book
     this.orderBook.setQuotes("STUDENT", studentQuote);
 
-    // Simulate order arrival based on probabilities
-    const random = Math.random();
     let orderFlowType: "INFORMED" | "NOISE" | "NO_TRADE" = "NO_TRADE";
     let tradeSide: "BUY" | "SELL" | undefined;
     let tradePrice: number | undefined;
@@ -85,7 +159,8 @@ export class MarketMakerSimulator {
     } else if (random < this.config.informedTraderProbability + this.config.noiseTraderProbability) {
       // Noise trader executes randomly with equal probability if spread is reasonable
       orderFlowType = "NOISE";
-      const noiseBuy = Math.random() < 0.5;
+      if (noiseBuyRoll === undefined) throw new Error("Noise flow is missing its validated random draw");
+      const noiseBuy = noiseBuyRoll < 0.5;
 
       if (noiseBuy && currentSpread <= 10) {
         const fills = this.orderBook.executeMarketOrder("BUY", 1, "NOISE_TRADER");
@@ -119,6 +194,22 @@ export class MarketMakerSimulator {
 
     this.roundsHistory.push(roundAction);
     return roundAction;
+    } catch (error) {
+      this.orderBook.restore(orderBookCheckpoint);
+      this.portfolio.restore(portfolioCheckpoint);
+      this.roundsHistory.splice(historyLength);
+      this.totalSpreadSum = totalSpreadBefore;
+      this.validQuoteRounds = validQuoteRoundsBefore;
+      throw error;
+    }
+  }
+
+  private nextRandom(): number {
+    const value = this.random();
+    if (!Number.isFinite(value) || value < 0 || value >= 1) {
+      throw new RangeError("Market-maker random source must return a finite value in [0, 1)");
+    }
+    return value;
   }
 
   public finishGame(): TradingGameResult {
@@ -126,31 +217,11 @@ export class MarketMakerSimulator {
     const avgSpread = this.validQuoteRounds > 0 ? this.totalSpreadSum / this.validQuoteRounds : 0;
     const complianceRate = this.validQuoteRounds / this.config.rounds;
 
-    // Calculate score (0-100):
-    // - Profitability: +50 base for positive total PnL
-    // - Spread discipline: +25 for maintaining reasonable tight spreads (<= 4.0)
-    // - Risk limit discipline: +25 for zero stop-loss breaches and low drawdown
-    let score = 50;
-
-    if (markSnapshot.totalPnL > 0) {
-      score += Math.min(25, Math.round(markSnapshot.totalPnL * 2));
-    } else {
-      score -= Math.min(30, Math.round(Math.abs(markSnapshot.totalPnL) * 2));
-    }
-
-    if (avgSpread > 0 && avgSpread <= 4.0) {
-      score += 15;
-    } else if (avgSpread > 10.0) {
-      score -= 20; // Penalize excessively wide non-competitive quotes
-    }
-
-    if (markSnapshot.maxDrawdown < 50) {
-      score += 10;
-    } else {
-      score -= Math.min(20, Math.round(markSnapshot.maxDrawdown / 10));
-    }
-
-    const boundedScore = Math.max(0, Math.min(100, score));
+    const boundedScore = calculateMarketMakingScore({
+      totalPnL: markSnapshot.totalPnL,
+      averageSpread: avgSpread,
+      maxDrawdown: markSnapshot.maxDrawdown
+    });
 
     return TradingGameResultSchema.parse({
       gameType: this.config.gameType,

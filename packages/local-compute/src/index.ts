@@ -13,3 +13,5 @@ export * from "./tts-worker.js";
 export * from "./portfolio-tracker.js";
 export * from "./market-maker.js";
 export * from "./quant-research/index.js";
+export * from "./seeded-random.js";
+export * from "./quant-trader-interview.js";
