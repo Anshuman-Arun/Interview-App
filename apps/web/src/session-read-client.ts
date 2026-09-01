@@ -273,7 +273,7 @@ async function readBoundedResponseText(
   if (response.body === null) return "";
 
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   let totalBytes = 0;
   let text = "";
   try {
@@ -296,9 +296,23 @@ async function readBoundedResponseText(
           response.status
         );
       }
-      text += decoder.decode(result.value, { stream: true });
+      try {
+        text += decoder.decode(result.value, { stream: true });
+      } catch {
+        throw new BrowserSessionReadResponseError(
+          "MALFORMED_JSON",
+          response.status
+        );
+      }
     }
-    text += decoder.decode();
+    try {
+      text += decoder.decode();
+    } catch {
+      throw new BrowserSessionReadResponseError(
+        "MALFORMED_JSON",
+        response.status
+      );
+    }
     return text;
   } finally {
     reader.releaseLock();
