@@ -1177,9 +1177,18 @@ describe("local model asset manager", () => {
     const totalLimit = firstReservation
       + managedArtifactBytes(second)
       + managedArtifactBytes(third);
-    const managerOne = managerFor(root, { maxCacheBytes: totalLimit });
-    const managerTwo = managerFor(root, { maxCacheBytes: totalLimit });
-    const managerThree = managerFor(root, { maxCacheBytes: totalLimit });
+    const managerOne = managerFor(root, {
+      maxCacheBytes: totalLimit,
+      downloadTimeoutMs: 15_000
+    });
+    const managerTwo = managerFor(root, {
+      maxCacheBytes: totalLimit,
+      downloadTimeoutMs: 15_000
+    });
+    const managerThree = managerFor(root, {
+      maxCacheBytes: totalLimit,
+      downloadTimeoutMs: 15_000
+    });
 
     const firstInstall = managerOne.install(first);
     const secondInstall = managerTwo.install(second);
