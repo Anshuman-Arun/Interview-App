@@ -1082,10 +1082,14 @@ function assertStateInvariants(state: InternalState): void {
       if (!["INITIAL_ALLOCATION", "EXPERIMENT_DECISION", "PERTURBED_ALLOCATION", "COMPLETE"].includes(state.stage)) {
         throw new Error("Experimental stage invariant violated");
       }
+      const generatedGap = Math.abs(state.hiddenMeanA - state.hiddenMeanB);
       if (
         !Number.isSafeInteger(state.hiddenMeanA) ||
         !Number.isSafeInteger(state.hiddenMeanB) ||
-        state.hiddenMeanA === state.hiddenMeanB
+        state.hiddenMeanA < 35 ||
+        state.hiddenMeanA > 65 ||
+        generatedGap < state.config.noiseA + state.config.noiseB + 1 ||
+        generatedGap > state.config.noiseA + state.config.noiseB + 6
       ) {
         throw new Error("Experimental hidden-mean invariant violated");
       }
@@ -1148,6 +1152,16 @@ function assertStateInvariants(state: InternalState): void {
       const experimentalStage = state.stage as keyof typeof experimentalKinds;
       assertExactActionHistory(state, experimentalKinds[experimentalStage], "Experimental");
       assertExactEvidenceHistory(state, experimentalEvidence[experimentalStage], "Experimental");
+      if (state.initialAllocation !== undefined) {
+        const initialAction = state.acceptedActions[0];
+        if (
+          initialAction?.kind !== "ALLOCATE_SAMPLE" ||
+          initialAction.a !== state.initialAllocation.a ||
+          initialAction.b !== state.initialAllocation.b
+        ) {
+          throw new Error("Experimental allocation-history invariant violated");
+        }
+      }
       break;
     }
     case "MODEL_COMPARISON": {
@@ -1215,6 +1229,12 @@ function assertStateInvariants(state: InternalState): void {
       const modelStage = state.stage as keyof typeof modelKinds;
       assertExactActionHistory(state, modelKinds[modelStage], "Model");
       assertExactEvidenceHistory(state, modelEvidence[modelStage], "Model");
+      if (state.firstChoice !== undefined) {
+        const firstAction = state.acceptedActions[0];
+        if (firstAction?.kind !== "CHOOSE_OPTION" || firstAction.option !== state.firstChoice) {
+          throw new Error("Model choice-history invariant violated");
+        }
+      }
       break;
     }
     case "CONSTRAINED_OPTIMIZATION": {
