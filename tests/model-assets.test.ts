@@ -152,11 +152,7 @@ describe("local model asset manager", () => {
       platform: "linux",
       architecture: "x64"
     }) as unknown;
-    const UnsafeResolver = resolveAssetManifest as unknown as (
-      manifests: readonly unknown[],
-      request: unknown
-    ) => AssetManifest;
-    expect(() => UnsafeResolver([manifest], inheritedRequest)).toThrow(
+    expect(() => resolveAssetManifest([manifest], inheritedRequest)).toThrow(
       expect.objectContaining({ code: "INVALID_MANIFEST" })
     );
   });
@@ -580,8 +576,8 @@ describe("local model asset manager", () => {
 
   it("supports cancellation and removes the incomplete staging directory", async () => {
     const payload = Buffer.from("cancel-me");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(payload.byteLength) });
       response.write(payload.subarray(0, 2));
@@ -607,8 +603,8 @@ describe("local model asset manager", () => {
     if (process.platform === "win32") return;
 
     const payload = Buffer.from("topology-change");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(payload.byteLength) });
       response.write(payload.subarray(0, 2));
@@ -636,8 +632,8 @@ describe("local model asset manager", () => {
 
   it("rejects replacement of the staging directory during transfer", async () => {
     const payload = Buffer.from("staging-replacement");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(payload.byteLength) });
       response.write(payload.subarray(0, 2));
@@ -894,8 +890,8 @@ describe("local model asset manager", () => {
 
   it("keeps partial bytes invisible until atomic publication", async () => {
     const payload = Buffer.from("atomic-publish");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(payload.byteLength) });
       response.write(payload.subarray(0, 3));
@@ -963,8 +959,8 @@ describe("local model asset manager", () => {
 
   it("coalesces duplicate installs and lets one waiter cancel without aborting another", async () => {
     const payload = Buffer.from("coalesced");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(payload.byteLength) });
       response.write(payload.subarray(0, 2));
@@ -991,8 +987,8 @@ describe("local model asset manager", () => {
 
   it("starts fresh after the last waiter cancels an in-flight install", async () => {
     const payload = Buffer.from("retry-after-cancel");
-    const firstStarted = deferred<void>();
-    const releaseFirstHandler = deferred<void>();
+    const firstStarted = deferred();
+    const releaseFirstHandler = deferred();
     let requestNumber = 0;
     const fixture = await startFixtureServer(async (_request, response) => {
       requestNumber += 1;
@@ -1047,8 +1043,8 @@ describe("local model asset manager", () => {
   it("keeps different artifacts independent under concurrent cache reservations", async () => {
     const remotePayload = Buffer.from("12345");
     const localPayload = Buffer.from("abcde");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(remotePayload.byteLength) });
       response.write(remotePayload.subarray(0, 2));
@@ -1086,8 +1082,8 @@ describe("local model asset manager", () => {
   it("shares cache reservations across manager instances using the same root", async () => {
     const firstPayload = Buffer.from("shared-root-one");
     const secondPayload = Buffer.from("shared-root-two");
-    const firstStarted = deferred<void>();
-    const releaseFirst = deferred<void>();
+    const firstStarted = deferred();
+    const releaseFirst = deferred();
     const fixture = await startFixtureServer(async (request, response) => {
       if (request.url === "/first") {
         response.writeHead(200, { "Content-Length": String(firstPayload.byteLength) });
@@ -1127,10 +1123,10 @@ describe("local model asset manager", () => {
     const firstPayload = Buffer.alloc(64, 1);
     const secondPayload = Buffer.alloc(64, 2);
     const thirdPayload = Buffer.alloc(64, 3);
-    const firstStarted = deferred<void>();
-    const secondStarted = deferred<void>();
-    const releaseFirst = deferred<void>();
-    const releaseSecond = deferred<void>();
+    const firstStarted = deferred();
+    const secondStarted = deferred();
+    const releaseFirst = deferred();
+    const releaseSecond = deferred();
     const fixture = await startFixtureServer(async (request, response) => {
       if (request.url === "/first") {
         response.writeHead(200, { "Content-Length": String(firstPayload.byteLength) });
@@ -1198,8 +1194,8 @@ describe("local model asset manager", () => {
   it("uses the strictest active cache limit across shared-root managers", async () => {
     const firstPayload = Buffer.from("strict-shared-one");
     const secondPayload = Buffer.from("strict-shared-two");
-    const firstStarted = deferred<void>();
-    const releaseFirst = deferred<void>();
+    const firstStarted = deferred();
+    const releaseFirst = deferred();
     const fixture = await startFixtureServer(async (request, response) => {
       if (request.url === "/first") {
         response.writeHead(200, { "Content-Length": String(firstPayload.byteLength) });
@@ -1239,8 +1235,8 @@ describe("local model asset manager", () => {
 
   it("blocks shared-root cleanup and removal while another manager is installing", async () => {
     const payload = Buffer.from("shared-root-busy");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(payload.byteLength) });
       response.write(payload.subarray(0, 2));
@@ -1276,8 +1272,8 @@ describe("local model asset manager", () => {
 
   it("refuses removal while the same artifact is installing", async () => {
     const payload = Buffer.from("busy-remove");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(payload.byteLength) });
       response.write(payload.subarray(0, 2));
@@ -1717,8 +1713,8 @@ describe("local model asset manager", () => {
 
   it("rechecks cache growth after reservation before atomic publication", async () => {
     const payload = Buffer.from("late-cache-growth");
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred();
+    const release = deferred();
     const fixture = await startFixtureServer(async (_request, response) => {
       response.writeHead(200, { "Content-Length": String(payload.byteLength) });
       response.write(payload.subarray(0, 2));
@@ -2472,19 +2468,19 @@ async function startFixtureServer(handler: FixtureHandler): Promise<FixtureServe
   };
 }
 
-function deferred<T>(): {
-  readonly promise: Promise<T>;
-  readonly resolve: (value: T) => void;
+function deferred(): {
+  readonly promise: Promise<void>;
+  readonly resolve: () => void;
 } {
-  let resolvePromise: ((value: T) => void) | undefined;
-  const promise = new Promise<T>((resolve) => {
+  let resolvePromise: (() => void) | undefined;
+  const promise = new Promise<void>((resolve) => {
     resolvePromise = resolve;
   });
   return {
     promise,
-    resolve: (value: T) => {
+    resolve: () => {
       if (resolvePromise === undefined) throw new Error("Deferred promise is not initialized.");
-      resolvePromise(value);
+      resolvePromise();
     }
   };
 }
