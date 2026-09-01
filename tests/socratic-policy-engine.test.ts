@@ -1569,6 +1569,38 @@ describe("target-scoped disclosure validator", () => {
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
+  it("does not let a custom analyzer erase an exact protected formulation", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing protected disclosure");
+
+    const validator = new DisclosureValidator({
+      analyze: () => ({
+        status: "SAFE",
+        effectiveDisclosureLevel: 0,
+        effectiveDisclosureIds: [],
+        confidence: 1,
+        reason: "synthetic semantic miss"
+      })
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "PROBE_JUSTIFICATION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: disclosure.fact
+      },
+      request: {
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
+  });
+
   it("enforces the protected metadata level even if a custom analyzer understates it", () => {
     const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[1];
     expect(disclosure).toBeDefined();
