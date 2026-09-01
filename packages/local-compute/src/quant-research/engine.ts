@@ -85,7 +85,6 @@ interface OptimizationState extends CommonState {
   readonly basePenalty: number;
   readonly baseBestObjective: number;
   readonly perturbedBestObjective: number;
-  readonly baseQuality?: number;
 }
 
 type InternalState = BayesianState | SamplingState | ExperimentalState | ModelState | OptimizationState;
@@ -246,7 +245,10 @@ function initialize(definition: QuantResearchScenarioDefinition): InternalState 
     case "CONSTRAINED_OPTIMIZATION": {
       const coefficientX = rng.nextInt(4, 12);
       const coefficientY = rng.nextInt(4, 12);
-      const basePenalty = rng.nextInt(0, 4);
+      const basePenaltyCandidates = [0, 1, 2, 3, 4].filter((value) => value !== definition.config.perturbedPenalty);
+      const basePenaltyIndex = rng.nextInt(0, basePenaltyCandidates.length - 1);
+      const basePenalty = basePenaltyCandidates[basePenaltyIndex];
+      if (basePenalty === undefined) throw new Error("Optimization penalty generation failed");
       const baseBestObjective = bestObjective(definition.config.budget, definition.config.maxX, definition.config.maxY, coefficientX, coefficientY, basePenalty);
       const perturbedBestObjective = bestObjective(definition.config.perturbedBudget, definition.config.maxX, definition.config.maxY, coefficientX, coefficientY, definition.config.perturbedPenalty);
       return {
@@ -365,7 +367,7 @@ function transitionSampling(state: SamplingState, action: QuantResearchAction): 
       });
       next = appendEvidence(next, [
         evidence("NUMERICAL_CORRECTNESS", state.stage, score, "The estimate was evaluated against the latent population center."),
-        evidence("SAMPLE_EFFICIENCY", state.stage, score === 0 ? efficiency * 0.5 : efficiency, "Sampling efficiency reflects observation use before the first committed estimate.")
+        evidence("SAMPLE_EFFICIENCY", state.stage, efficiency, "Sampling efficiency reflects observation use before the first committed estimate.")
       ]);
       return next;
     }
@@ -391,7 +393,7 @@ function transitionSampling(state: SamplingState, action: QuantResearchAction): 
 function transitionExperimental(state: ExperimentalState, action: QuantResearchAction): ExperimentalState {
   if (state.stage === "INITIAL_ALLOCATION") {
     const allocation = requireAction(state, action, "ALLOCATE_SAMPLE");
-    validateExperimentalAllocation(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.totalBudget);
+    validateExperimentalAllocation(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.totalBudget, true);
     const summaryA = allocation.a === 0 ? 0 : mean(state.sequenceA.slice(0, allocation.a));
     const summaryB = allocation.b === 0 ? 0 : mean(state.sequenceB.slice(0, allocation.b));
     const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
@@ -415,12 +417,11 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
   }
   if (state.stage === "PERTURBED_ALLOCATION") {
     const allocation = requireAction(state, action, "ALLOCATE_SAMPLE");
-    validateExperimentalAllocation(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.totalBudget);
+    validateExperimentalAllocation(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.totalBudget, false);
     const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
-    const initialEfficiency = state.initialEfficiency ?? 0;
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
-      evidence("ADAPTATION", state.stage, efficiency >= initialEfficiency - 0.05 ? 100 : efficiency * 100, "Allocation was re-optimized under changed experiment costs."),
+      evidence("ADAPTATION", state.stage, efficiency * 100, "Adaptation quality reflects allocation efficiency under the changed experiment costs."),
       evidence("SAMPLE_EFFICIENCY", state.stage, efficiency * 100, "Perturbed allocation was scored against the new feasible information frontier.")
     ]);
     return next;
@@ -428,8 +429,13 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
   return notAllowed(state, action);
 }
 
-function validateExperimentalAllocation(a: number, b: number, costA: number, costB: number, budget: number): void {
-  if (a === 0 && b === 0) throw new QuantResearchError("ACTION_NOT_ALLOWED", "At least one experiment must receive samples");
+function validateExperimentalAllocation(a: number, b: number, costA: number, costB: number, budget: number, requireBothExperiments: boolean): void {
+  if (requireBothExperiments && (a === 0 || b === 0)) {
+    throw new QuantResearchError("ACTION_NOT_ALLOWED", "Initial allocation must sample both experiments before model comparison");
+  }
+  if (!requireBothExperiments && a === 0 && b === 0) {
+    throw new QuantResearchError("ACTION_NOT_ALLOWED", "At least one experiment must receive samples");
+  }
   if (a * costA + b * costB > budget) throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Sample allocation exceeds the public experiment budget");
 }
 
@@ -462,7 +468,7 @@ function transitionOptimization(state: OptimizationState, action: QuantResearchA
     const feasible = isFeasible(x, y, state.config.budget, state.config.maxX, state.config.maxY);
     const value = feasible ? objective(x, y, state.coefficientX, state.coefficientY, state.basePenalty) : 0;
     const quality = feasible ? objectiveQuality(value, state.baseBestObjective) : 0;
-    let next = appendAction(state, action, { stage: "PERTURBED_OPTIMIZATION", baseQuality: quality });
+    let next = appendAction(state, action, { stage: "PERTURBED_OPTIMIZATION" });
     next = appendEvidence(next, [
       evidence("CONSTRAINT_DISCIPLINE", state.stage, feasible ? 100 : 0, "Submitted parameters were checked against all stated constraints."),
       evidence("OBJECTIVE_QUALITY", state.stage, quality * 100, "Objective quality was measured against the exact best feasible application-owned objective.")
@@ -475,12 +481,11 @@ function transitionOptimization(state: OptimizationState, action: QuantResearchA
     const feasible = isFeasible(x, y, state.config.perturbedBudget, state.config.maxX, state.config.maxY);
     const value = feasible ? objective(x, y, state.coefficientX, state.coefficientY, state.config.perturbedPenalty) : 0;
     const quality = feasible ? objectiveQuality(value, state.perturbedBestObjective) : 0;
-    const baseQuality = state.baseQuality ?? 0;
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
       evidence("CONSTRAINT_DISCIPLINE", state.stage, feasible ? 100 : 0, "Revised parameters were checked against the perturbed constraints."),
       evidence("OBJECTIVE_QUALITY", state.stage, quality * 100, "Perturbed objective quality was compared with the new exact optimum."),
-      evidence("ADAPTATION", state.stage, quality >= baseQuality - 0.05 ? 100 : quality * 100, "The candidate's solution quality was evaluated after the objective/constraint perturbation.")
+      evidence("ADAPTATION", state.stage, quality * 100, "Adaptation quality reflects objective quality under the changed constraint and loss function.")
     ]);
     return next;
   }
@@ -488,11 +493,11 @@ function transitionOptimization(state: OptimizationState, action: QuantResearchA
 }
 
 function parseOptimizationParameters(values: readonly number[]): readonly [number, number] {
-  if (values.length !== 2) throw new QuantResearchError("ACTION_NOT_ALLOWED", "Optimization scenarios require exactly two parameters");
+  if (values.length !== 2) throw new QuantResearchError("INVALID_ACTION", "Optimization scenarios require exactly two parameters");
   const x = values[0];
   const y = values[1];
   if (x === undefined || y === undefined || !Number.isSafeInteger(x) || !Number.isSafeInteger(y) || x < 0 || y < 0) {
-    throw new QuantResearchError("ACTION_NOT_ALLOWED", "Optimization parameters must be nonnegative safe integers");
+    throw new QuantResearchError("INVALID_ACTION", "Optimization parameters must be nonnegative safe integers");
   }
   return [x, y];
 }
@@ -515,8 +520,7 @@ function publicState(state: InternalState): QuantResearchPublicState {
     prompt: publicPrompt(state),
     visibleData: publicData(state),
     acceptedActionCount: state.acceptedActions.length,
-    actionLimit: MAX_ACTIONS,
-    evidence: clone(state.evidence)
+    actionLimit: MAX_ACTIONS
   };
 }
 
@@ -615,6 +619,17 @@ function publicData(state: InternalState): readonly QuantResearchPublicDatum[] {
 }
 
 function resultFor(state: InternalState): QuantResearchResult {
+  if (state.status !== "COMPLETE") {
+    return {
+      status: state.status,
+      family: state.family,
+      version: state.version,
+      acceptedActionCount: state.acceptedActions.length,
+      overallScore: 0,
+      metrics: {},
+      evidence: []
+    };
+  }
   const sums = new Map<QuantResearchEvidenceCategory, { total: number; count: number }>();
   for (const item of state.evidence) {
     const current = sums.get(item.category) ?? { total: 0, count: 0 };
@@ -635,6 +650,7 @@ function resultFor(state: InternalState): QuantResearchResult {
 }
 
 function assertStateInvariants(state: InternalState): void {
+  if ((state.status === "COMPLETE") !== (state.stage === "COMPLETE")) throw new Error("Scenario completion invariant violated");
   if (state.acceptedActions.length > MAX_ACTIONS) throw new Error("Action limit invariant violated");
   const ids = new Set(state.acceptedActions.map((action) => action.actionId));
   if (ids.size !== state.acceptedActions.length) throw new Error("Accepted action IDs are not unique");
