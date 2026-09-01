@@ -134,6 +134,9 @@ export class SpeechWorkerCore {
   private readonly cancellationReserveClaims = new Set<SpeechStreamId>();
   private readonly diagnostics: SpeechWorkerDiagnostic[] = [];
   private readonly transcriptGate = new TranscriptResultGate();
+  private readonly allocatedVadStates = new WeakSet<VoiceActivityStateMachine>();
+  private readonly allocatedEndpointingPolicies = new WeakSet<AdaptiveEndpointingPolicy>();
+  private readonly seenUtteranceIds = new Set<UtteranceId>();
   private rememberedResultChars = 0;
   private readonly recognizerModelIdentity: SpeechModelIdentity;
   private readonly recognizerCancellationCapability: RecognizerCancellationCapability;
@@ -701,11 +704,22 @@ export class SpeechWorkerCore {
     }
     let context: StreamContext;
     try {
+      const vad = this.options.vadStateFactory?.() ?? new VoiceActivityStateMachine();
+      const endpointing = this.options.endpointingFactory?.() ?? new AdaptiveEndpointingPolicy();
+      if (!(vad instanceof VoiceActivityStateMachine) || !(endpointing instanceof AdaptiveEndpointingPolicy)) {
+        throw new Error("Speech stream factories returned invalid state objects");
+      }
+      if (this.allocatedVadStates.has(vad) || this.allocatedEndpointingPolicies.has(endpointing)) {
+        throw new Error("Speech stream factories reused mutable state objects");
+      }
+      const buffer = new BoundedPcmBuffer(this.maxBufferedPcmBytes);
+      this.allocatedVadStates.add(vad);
+      this.allocatedEndpointingPolicies.add(endpointing);
       context = {
         streamId,
-        vad: this.options.vadStateFactory?.() ?? new VoiceActivityStateMachine(),
-        endpointing: this.options.endpointingFactory?.() ?? new AdaptiveEndpointingPolicy(),
-        buffer: new BoundedPcmBuffer(this.maxBufferedPcmBytes),
+        vad,
+        endpointing,
+        buffer,
         processingTail: Promise.resolve(),
         order: undefined,
         utteranceId: undefined,
@@ -744,7 +758,17 @@ export class SpeechWorkerCore {
   }
 
   private createUtteranceId(): UtteranceId {
-    return SpeechUtteranceIdSchema.parse(this.options.utteranceIdFactory?.() ?? newUtteranceId());
+    const utteranceId = SpeechUtteranceIdSchema.parse(this.options.utteranceIdFactory?.() ?? newUtteranceId());
+    if (this.seenUtteranceIds.has(utteranceId)) {
+      throw new Error("Utterance identity was reused");
+    }
+    this.seenUtteranceIds.add(utteranceId);
+    while (this.seenUtteranceIds.size > MAX_SPEECH_REMEMBERED_MESSAGES) {
+      const oldest = this.seenUtteranceIds.values().next().value;
+      if (oldest === undefined) break;
+      this.seenUtteranceIds.delete(oldest);
+    }
+    return utteranceId;
   }
 
   private runIdempotent(
