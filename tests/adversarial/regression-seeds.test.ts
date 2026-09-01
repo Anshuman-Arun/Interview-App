@@ -88,7 +88,9 @@ describe("adversarial named regression schedules", () => {
             inputEpisodeId: fixture.inputEpisodeId,
             turnId: fixture.turnId,
             contextEpoch: fixture.providerEnvelope.contextEpoch,
-            sourceRevision: fixture.providerEnvelope.sourceRevision
+            ...(fixture.providerEnvelope.sourceRevision === undefined
+              ? {}
+              : { sourceRevision: fixture.providerEnvelope.sourceRevision })
           }),
           problem: sixPeopleProblem,
           proposal,

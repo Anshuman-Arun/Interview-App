@@ -131,6 +131,15 @@ function protectedMetadataCharacterCount(
   return total;
 }
 
+function protectedMetadataFormulationCount(
+  protectedDisclosures: readonly ProtectedDisclosure[]
+): number {
+  return protectedDisclosures.reduce(
+    (total, disclosure) => total + 1 + disclosure.equivalentFormulations.length,
+    0
+  );
+}
+
 export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
   private readonly safeTexts: ReadonlySet<string>;
 
@@ -246,7 +255,11 @@ export class DisclosureValidator {
       return { accepted: false, reason: "Proposal exceeds the bounded aggregate disclosure-validation input size" };
     }
     const metadataCharacters = protectedMetadataCharacterCount(input.protectedDisclosures);
-    if (texts.length * metadataCharacters > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS) {
+    const formulationCount = protectedMetadataFormulationCount(input.protectedDisclosures);
+    if (
+      texts.length * metadataCharacters > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
+      || totalProposalTextCharacters * formulationCount > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
+    ) {
       return { accepted: false, reason: "Proposal exceeds the bounded disclosure-analysis work budget" };
     }
 
@@ -307,9 +320,28 @@ export class DisclosureValidator {
       };
     }
 
+    if (
+      new Set(input.proposal.claimedDisclosureIds).size
+      !== input.proposal.claimedDisclosureIds.length
+    ) {
+      return {
+        accepted: false,
+        reason: "Model claimed duplicate protected disclosure identities"
+      };
+    }
+    for (const disclosureId of input.proposal.claimedDisclosureIds) {
+      if (!disclosureById.has(disclosureId)) {
+        return {
+          accepted: false,
+          reason: "Model claimed an unknown protected disclosure identity"
+        };
+      }
+    }
+
     const effectiveIds = Array.from(new Set([
       ...deterministicIds,
-      ...analyses.flatMap((item) => item.effectiveDisclosureIds)
+      ...analyses.flatMap((item) => item.effectiveDisclosureIds),
+      ...input.proposal.claimedDisclosureIds
     ]));
     let metadataFloor: DisclosureLevel = deterministicLevel;
     for (const disclosureId of effectiveIds) {
