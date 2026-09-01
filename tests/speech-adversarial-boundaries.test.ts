@@ -10,6 +10,7 @@ import {
   type SpeechRecognizer
 } from "../packages/local-compute/src/speech-stt.js";
 import { SpeechWorkerCore } from "../packages/local-compute/src/speech-worker.js";
+import type { SpeechWorkerEvent } from "../packages/local-compute/src/speech-protocol.js";
 
 function frame(sequence: number, speech = true, streamId = "adversarial-stream") {
   const pcm = new Float32Array(320);
@@ -113,7 +114,7 @@ describe("speech worker adversarial callback boundaries", () => {
       })
     });
 
-    const events = [];
+    const events: SpeechWorkerEvent[] = [];
     for (let sequence = 0; sequence < 4; sequence += 1) {
       const fixture = frame(sequence, sequence < 3, "model-spoof");
       events.push(...await worker.submitFrame(fixture.envelope, fixture.pcm));
