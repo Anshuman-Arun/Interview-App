@@ -501,7 +501,7 @@ describe("deterministic Quant Research interview engine", () => {
     observations[0] = 999_999;
     expect(engine.getState().visibleData.find((item) => item.key === "observations")?.value).not.toContain(999_999);
 
-    const registry = getQuantResearchRegistry() as Array<{ family: string; version: string }>;
+    const registry = getQuantResearchRegistry() as unknown as Array<{ family: string; version: string }>;
     const registryFirst = registry[0];
     expect(registryFirst).toBeDefined();
     if (registryFirst === undefined) throw new Error("Expected a registry entry");
