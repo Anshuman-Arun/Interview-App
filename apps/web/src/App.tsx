@@ -105,6 +105,7 @@ export const App: React.FC = () => {
     historyAbortRef.current?.abort();
     const controller = new AbortController();
     historyAbortRef.current = controller;
+    setHistoryRead(null);
     setHistoryLoading(true);
     setHistoryError(null);
 
@@ -462,7 +463,7 @@ s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
                         )
                       }
                       className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
-s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
+                        s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
                           ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
                           : s.readStatus === "AVAILABLE"
                             && (s.status === "COMPLETED" || s.status === "ARCHIVED")
