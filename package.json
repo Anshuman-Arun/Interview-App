@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:ci": "vitest run --maxWorkers=2",
+    "test:ci": "vitest run --maxWorkers=1",
     "test:replay": "vitest run tests/replay.test.ts tests/replay-history-engine.test.ts tests/vertical-slice.test.ts tests/quant-research-engine.test.ts tests/quant-research-persistence.test.ts",
     "test:property": "vitest run .property.test.",
     "test:e2e": "vitest run tests/e2e-typed-interview.test.ts",
