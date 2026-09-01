@@ -231,6 +231,12 @@ export interface TranscriptValidationBasis {
 }
 
 export function validateTranscriptCandidate(raw: unknown, expected: TranscriptValidationBasis): TranscriptCandidate {
+  preflightBoundedString(expected.requestId, 128, "Expected recognizer request ID");
+  preflightBoundedString(expected.utteranceId, 128, "Expected recognizer utterance ID");
+  preflightSourceAudioBasis(expected.sourceAudioBasis, "Expected recognizer source audio basis");
+  if (expected.modelIdentity !== undefined) {
+    preflightModelIdentity(expected.modelIdentity, "Expected recognizer model identity");
+  }
   const expectedRequestId = SpeechRequestIdSchema.parse(expected.requestId);
   const expectedUtteranceId = SpeechUtteranceIdSchema.parse(expected.utteranceId);
   const expectedSourceAudioBasis = SourceAudioBasisSchema.parse(expected.sourceAudioBasis);
@@ -239,9 +245,11 @@ export function validateTranscriptCandidate(raw: unknown, expected: TranscriptVa
     : SpeechModelIdentitySchema.parse(expected.modelIdentity);
   if (!isRecord(raw)) throw new Error("Recognizer result must be an object");
   assertAllowedOwnEnumerableKeys(raw, TRANSCRIPT_CANDIDATE_KEYS, "Recognizer result");
+  preflightBoundedString(raw.requestId, 128, "Recognizer request ID");
+  preflightBoundedString(raw.utteranceId, 128, "Recognizer utterance ID");
   preflightWordTimings(raw.words, "Recognizer word timing metadata");
-  preflightNestedRecord(raw.model, MODEL_IDENTITY_KEYS, "Recognizer model identity");
-  preflightNestedRecord(raw.sourceAudioBasis, SOURCE_AUDIO_BASIS_KEYS, "Recognizer source audio basis");
+  preflightModelIdentity(raw.model, "Recognizer model identity");
+  preflightSourceAudioBasis(raw.sourceAudioBasis, "Recognizer source audio basis");
   const normalizedText = normalizeTranscriptText(raw.text);
   const candidate = TranscriptCandidateSchema.parse({
     requestId: raw.requestId,
@@ -378,16 +386,25 @@ function preflightWordTimings(value: unknown, label: string): void {
   }
 }
 
-function preflightNestedRecord(value: unknown, allowed: ReadonlySet<string>, label: string): void {
+function preflightModelIdentity(value: unknown, label: string): void {
   if (!isRecord(value)) return;
-  assertAllowedOwnEnumerableKeys(value, allowed, label);
-  if (label === "Recognizer model identity") {
-    if (typeof value.name !== "string" || value.name.length === 0 || value.name.length > 100) {
-      throw new Error("Recognizer model name exceeds bounded metadata limits");
-    }
-    if (typeof value.version !== "string" || value.version.length === 0 || value.version.length > 100) {
-      throw new Error("Recognizer model version exceeds bounded metadata limits");
-    }
+  assertAllowedOwnEnumerableKeys(value, MODEL_IDENTITY_KEYS, label);
+  preflightBoundedString(value.name, 100, `${label} name`);
+  preflightBoundedString(value.version, 100, `${label} version`);
+}
+
+function preflightSourceAudioBasis(value: unknown, label: string): void {
+  if (!isRecord(value)) return;
+  assertAllowedOwnEnumerableKeys(value, SOURCE_AUDIO_BASIS_KEYS, label);
+  preflightBoundedString(value.streamId, 128, `${label} stream ID`);
+  if (typeof value.pcmSha256 !== "string" || value.pcmSha256.length !== 64) {
+    throw new Error(`${label} PCM hash must contain exactly 64 characters`);
+  }
+}
+
+function preflightBoundedString(value: unknown, maximumLength: number, label: string): void {
+  if (typeof value !== "string" || value.length === 0 || value.length > maximumLength) {
+    throw new Error(`${label} exceeds bounded string limits`);
   }
 }
 
