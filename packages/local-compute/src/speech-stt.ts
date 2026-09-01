@@ -80,6 +80,8 @@ export interface MoonshineRuntime {
   readonly runtimeVersion: string;
   readonly supportsAbort: boolean;
   transcribe(input: {
+    readonly requestId: RequestId;
+    readonly utteranceId: UtteranceId;
     readonly pcmBytes: Uint8Array;
     readonly sampleRate: number;
     readonly modelPath: string;
@@ -142,6 +144,8 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       throw new Error("Moonshine input exceeds maximum utterance duration");
     }
     const rawRuntimeResult = await this.options.runtime.transcribe({
+      requestId,
+      utteranceId,
       pcmBytes: runtimePcmBytes,
       sampleRate: sourceAudioBasis.sampleRate,
       modelPath: this.modelPath,
