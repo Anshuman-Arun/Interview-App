@@ -19,6 +19,7 @@ import {
 const OBJECT_FREEZE_INTRINSIC = Object.freeze;
 const OBJECT_SET_PROTOTYPE_OF_INTRINSIC = Object.setPrototypeOf;
 const OBJECT_HAS_OWN_INTRINSIC = Object.hasOwn;
+const OBJECT_DEFINE_PROPERTY_INTRINSIC = Object.defineProperty;
 
 function objectFreeze<T extends object>(value: T): Readonly<T> {
   return OBJECT_FREEZE_INTRINSIC(value);
@@ -75,7 +76,7 @@ export class ProviderControlPlaneError extends Error {
     message: string
   ) {
     super(message);
-    Object.defineProperty(this, "code", {
+    OBJECT_DEFINE_PROPERTY_INTRINSIC(this, "code", {
       configurable: false,
       enumerable: true,
       writable: false,

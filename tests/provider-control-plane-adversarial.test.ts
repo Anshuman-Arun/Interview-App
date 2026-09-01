@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PROVIDER_CONFIGURATION_LIMITS,
   ProviderConfigurationSchema,
+  ProviderControlPlaneError,
   ProviderModelCapabilitiesSchema,
   ProviderModelDefinitionSchema,
   ProviderRegistry,
@@ -745,6 +746,47 @@ describe("control-plane own-property intrinsic hardening", () => {
     } finally {
       Object.defineProperty(Object, "hasOwn", originalHasOwn);
     }
+  });
+});
+
+describe("provider error intrinsic hardening", () => {
+  it("keeps branded error codes immutable when Object.defineProperty is overridden", () => {
+    const originalDefineProperty = Object.defineProperty;
+    let controlError: ProviderControlPlaneError | undefined;
+    let safetyError: ProviderConfigurationSafetyError | undefined;
+    let controlMutation = true;
+    let safetyMutation = true;
+
+    try {
+      Reflect.set(Object, "defineProperty", () => {
+        throw new Error("Live Object.defineProperty must not be used");
+      });
+
+      controlError = new ProviderControlPlaneError(
+        "CREDENTIALS_REQUIRED",
+        "fixed control-plane error"
+      );
+      safetyError = new ProviderConfigurationSafetyError(
+        "SECRET_IN_CONFIGURATION"
+      );
+      controlMutation = Reflect.set(
+        controlError,
+        "code",
+        "ADAPTER_FACTORY_FAILED"
+      );
+      safetyMutation = Reflect.set(
+        safetyError,
+        "code",
+        "MALFORMED_CONFIGURATION"
+      );
+    } finally {
+      Reflect.set(Object, "defineProperty", originalDefineProperty);
+    }
+
+    expect(controlMutation).toBe(false);
+    expect(safetyMutation).toBe(false);
+    expect(controlError?.code).toBe("CREDENTIALS_REQUIRED");
+    expect(safetyError?.code).toBe("SECRET_IN_CONFIGURATION");
   });
 });
 

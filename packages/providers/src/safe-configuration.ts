@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const OBJECT_FREEZE_INTRINSIC = Object.freeze;
 const OBJECT_SET_PROTOTYPE_OF_INTRINSIC = Object.setPrototypeOf;
+const OBJECT_DEFINE_PROPERTY_INTRINSIC = Object.defineProperty;
 
 function objectFreeze<T extends object>(value: T): Readonly<T> {
   return OBJECT_FREEZE_INTRINSIC(value);
@@ -232,6 +233,12 @@ export class ProviderConfigurationSafetyError extends Error {
     super(code === "SECRET_IN_CONFIGURATION"
       ? "Provider configuration contains credential-like material"
       : "Provider configuration is malformed");
+    OBJECT_DEFINE_PROPERTY_INTRINSIC(this, "code", {
+      configurable: false,
+      enumerable: true,
+      writable: false,
+      value: code
+    });
     this.name = "ProviderConfigurationSafetyError";
   }
 
