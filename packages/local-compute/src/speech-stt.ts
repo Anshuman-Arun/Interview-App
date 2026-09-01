@@ -38,7 +38,7 @@ export interface SpeechRecognizer {
 }
 
 export class DeterministicFakeRecognizer implements SpeechRecognizer {
-  public readonly modelIdentity = { name: "deterministic-fake", version: "1" } as const;
+  public readonly modelIdentity = Object.freeze({ name: "deterministic-fake", version: "1" } as const);
   public readonly cancellationCapability: RecognizerCancellationCapability = "RUNTIME_ABORT";
   private readonly cancelled = new Set<RequestId>();
   private readonly maxCancelledIds = 1_024;
@@ -117,13 +117,21 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       : validateLocalPath(options.configPath, "Moonshine config path");
     validateRuntimeIdentity(options.runtime.runtimeVersion, "Moonshine runtime version");
     this.supportsAbort = validateBoolean(options.runtime.supportsAbort, "Moonshine runtime abort capability");
-    this.transcribeRuntime = options.runtime.transcribe.bind(options.runtime);
-    this.cancelRuntime = options.runtime.cancel?.bind(options.runtime);
+    this.transcribeRuntime = bindRequiredRuntimeFunction<MoonshineRuntime["transcribe"]>(
+      (options.runtime as unknown as { transcribe?: unknown }).transcribe,
+      options.runtime,
+      "Moonshine runtime transcribe callback"
+    );
+    this.cancelRuntime = bindOptionalRuntimeFunction<MoonshineRuntime["cancel"]>(
+      (options.runtime as unknown as { cancel?: unknown }).cancel,
+      options.runtime,
+      "Moonshine runtime cancel callback"
+    );
     const name = options.modelName?.trim() || "moonshine";
-    this.modelIdentity = SpeechModelIdentitySchema.parse({
+    this.modelIdentity = Object.freeze(SpeechModelIdentitySchema.parse({
       name,
       version: options.modelVersion.trim()
-    });
+    }));
     this.cancellationCapability = this.supportsAbort ? "RUNTIME_ABORT" : "NONE";
   }
 
@@ -454,4 +462,24 @@ export class TranscriptResultGate {
     }
     return { duplicate: false, candidate };
   }
+}
+
+
+function bindRequiredRuntimeFunction<T extends (...args: never[]) => unknown>(
+  value: unknown,
+  owner: unknown,
+  label: string
+): T {
+  if (typeof value !== "function") throw new Error(`${label} is required`);
+  return value.bind(owner) as T;
+}
+
+function bindOptionalRuntimeFunction<T extends (...args: never[]) => unknown>(
+  value: unknown,
+  owner: unknown,
+  label: string
+): T | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "function") throw new Error(`${label} must be a function when provided`);
+  return value.bind(owner) as T;
 }
