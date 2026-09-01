@@ -71,3 +71,31 @@ export const InterviewSessionConfigurationSchema = z.discriminatedUnion("mode", 
   QuantResearchSessionConfigurationSchema
 ]);
 export type InterviewSessionConfiguration = z.infer<typeof InterviewSessionConfigurationSchema>;
+
+
+const CatalogTitleSchema = z.string().min(1).max(160);
+const CatalogCategorySchema = z.string().min(1).max(80);
+
+export const InterviewCatalogEntrySchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("OXFORD_MATHEMATICS"),
+    id: SessionTargetIdentitySchema.shape.id,
+    version: SessionTargetIdentitySchema.shape.version,
+    title: CatalogTitleSchema,
+    category: CatalogCategorySchema,
+    difficulty: z.string().min(1).max(64)
+  }).strict(),
+  z.object({
+    mode: z.literal("QUANT_TRADING"),
+    id: SessionTargetIdentitySchema.shape.id,
+    version: SessionTargetIdentitySchema.shape.version,
+    title: CatalogTitleSchema
+  }).strict(),
+  z.object({
+    mode: z.literal("QUANT_RESEARCH"),
+    id: SessionTargetIdentitySchema.shape.id,
+    version: SessionTargetIdentitySchema.shape.version,
+    title: CatalogTitleSchema
+  }).strict()
+]);
+export type InterviewCatalogEntry = z.infer<typeof InterviewCatalogEntrySchema>;
