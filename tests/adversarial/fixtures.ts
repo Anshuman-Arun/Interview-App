@@ -178,7 +178,7 @@ export class AdversarialFixture {
       text: "I would prove both cases."
     });
     const turnId = await turns.commitInputEpisode(finalized.inputEpisodeId);
-    const selected = await turns.selectAction(turnId);
+    const selected = await turns.selectAction(turnId, sixPeopleProblem);
     const generation = await turns.startGeneration(
       finalized.inputEpisodeId,
       turnId,
