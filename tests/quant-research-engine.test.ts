@@ -112,6 +112,7 @@ describe("deterministic Quant Research interview engine", () => {
     expectCode(() => new QuantResearchEngine({
       family: "BAYESIAN_UPDATING",
       version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
       seed: 0,
       config: { priorAlpha: 1, priorBeta: 1, observationCount: 2, perturbedPriorAlpha: 2, perturbedPriorBeta: 2 }
@@ -120,6 +121,7 @@ describe("deterministic Quant Research interview engine", () => {
     expectCode(() => new QuantResearchEngine({
       family: "BAYESIAN_UPDATING",
       version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
       seed: 3,
       config: { priorAlpha: 1, priorBeta: 1, observationCount: 2, perturbedPriorAlpha: 1, perturbedPriorBeta: 2 }
@@ -128,6 +130,7 @@ describe("deterministic Quant Research interview engine", () => {
     expectCode(() => new QuantResearchEngine({
       family: "SAMPLING_ESTIMATION",
       version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
       seed: 4,
       config: { maxSamples: 4, populationSize: 8, centerMin: -5, centerMax: 5, noiseRadius: 0, outlierShift: 2 }
@@ -138,6 +141,7 @@ describe("deterministic Quant Research interview engine", () => {
     expectCode(() => new QuantResearchEngine({
       family: "EXPERIMENTAL_ALLOCATION",
       version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
       seed: 12,
       config: { totalBudget: 5, costA: 1, costB: 2, perturbedCostA: 3, perturbedCostB: 1, noiseA: 1, noiseB: 2 }
@@ -146,26 +150,81 @@ describe("deterministic Quant Research interview engine", () => {
     expectCode(() => new QuantResearchEngine({
       family: "CONSTRAINED_OPTIMIZATION",
       version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
       seed: 0,
       config: { budget: 5, perturbedBudget: 6, maxX: 1, maxY: 1, perturbedPenalty: 1 }
     }), "INVALID_DEFINITION");
 
-    expectCode(() => new QuantResearchEngine({
+  });
+
+  it("reserves perfect scores for exact optima instead of rounded near-optima", () => {
+    const experimentDefinition: QuantResearchScenarioDefinition = {
       family: "EXPERIMENTAL_ALLOCATION",
       version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
       seed: 22,
       config: { totalBudget: 34, costA: 5, costB: 2, perturbedCostA: 3, perturbedCostB: 3, noiseA: 2, noiseB: 3 }
-    }), "INVALID_DEFINITION");
+    };
+    const experimentEngine = new QuantResearchEngine(experimentDefinition);
+    experimentEngine.applyAction({ actionId: "near-e1", kind: "ALLOCATE_SAMPLE", a: 4, b: 7 });
+    const experimentState = experimentEngine.getState();
+    const meanA = visibleNumber(experimentState, "sampleMeanA");
+    const meanB = visibleNumber(experimentState, "sampleMeanB");
+    experimentEngine.applyAction({ actionId: "near-e2", kind: "CHOOSE_OPTION", option: meanA > meanB ? "A" : "B" });
+    experimentEngine.applyAction({ actionId: "near-e3", kind: "ALLOCATE_SAMPLE", a: 4, b: 7 });
+    expect(experimentEngine.getResult().metrics.ADAPTATION).toBe(99);
+    expect(experimentEngine.getResult().overallScore).toBeLessThan(100);
 
-    expectCode(() => new QuantResearchEngine({
+    const optimizationDefinition: QuantResearchScenarioDefinition = {
       family: "CONSTRAINED_OPTIMIZATION",
       version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
       rngVersion: QUANT_RESEARCH_RNG_VERSION,
       seed: 28,
       config: { budget: 52, perturbedBudget: 49, maxX: 24, maxY: 55, perturbedPenalty: 0 }
-    }), "INVALID_DEFINITION");
+    };
+    const optimizationEngine = new QuantResearchEngine(optimizationDefinition);
+    optimizationEngine.applyAction({ actionId: "near-o1", kind: "SUBMIT_PARAMETERS", values: [24, 0] });
+    optimizationEngine.applyAction({ actionId: "near-o2", kind: "SUBMIT_PARAMETERS", values: [24, 0] });
+    expect(optimizationEngine.getResult().metrics.ADAPTATION).toBe(99);
+    expect(optimizationEngine.getResult().metrics.OBJECTIVE_QUALITY).toBe(99);
+    expect(optimizationEngine.getResult().overallScore).toBeLessThan(100);
+  });
+
+  it("does not give full posterior-update credit for repeating a prior after evidence changes the target", () => {
+    const engine = new QuantResearchEngine(bayesian);
+    const prior = bayesian.config.priorAlpha / (bayesian.config.priorAlpha + bayesian.config.priorBeta);
+    engine.applyAction({ actionId: "change-b1", kind: "SUBMIT_PROBABILITY", value: prior });
+    const successes = visibleNumber(engine.getState(), "successes");
+    const failures = visibleNumber(engine.getState(), "failures");
+    engine.applyAction({ actionId: "change-b2", kind: "SUBMIT_PROBABILITY", value: prior });
+    engine.applyAction({
+      actionId: "change-b3",
+      kind: "SUBMIT_PROBABILITY",
+      value: (bayesian.config.perturbedPriorAlpha + successes) /
+        (bayesian.config.perturbedPriorAlpha + bayesian.config.perturbedPriorBeta + successes + failures)
+    });
+    expect(engine.getResult().metrics.NUMERICAL_CORRECTNESS).toBeLessThan(100);
+
+    const exact = new QuantResearchEngine(bayesian);
+    exact.applyAction({ actionId: "exact-b1", kind: "SUBMIT_PROBABILITY", value: prior });
+    const exactSuccesses = visibleNumber(exact.getState(), "successes");
+    const exactFailures = visibleNumber(exact.getState(), "failures");
+    exact.applyAction({
+      actionId: "exact-b2",
+      kind: "SUBMIT_PROBABILITY",
+      value: (bayesian.config.priorAlpha + exactSuccesses) /
+        (bayesian.config.priorAlpha + bayesian.config.priorBeta + exactSuccesses + exactFailures)
+    });
+    exact.applyAction({
+      actionId: "exact-b3",
+      kind: "SUBMIT_PROBABILITY",
+      value: (bayesian.config.perturbedPriorAlpha + exactSuccesses) /
+        (bayesian.config.perturbedPriorAlpha + bayesian.config.perturbedPriorBeta + exactSuccesses + exactFailures)
+    });
+    expect(exact.getResult().metrics.NUMERICAL_CORRECTNESS).toBe(100);
   });
 
   it.each([
