@@ -4,7 +4,8 @@ import {
   InterpretationProviderResultSchema,
   RequestIdSchema,
   VerificationResultSchema,
-  evidenceKeyToString,
+  evidenceKeyIdentity,
+  evidenceKeysEqual,
   generationBasesEqual,
   type DeterministicVerifier,
   type FormalInterpretationCandidate,
@@ -462,7 +463,7 @@ export class InterpretationCoordinator {
           request.requestId
         ));
       }
-      if (evidenceKeyToString(candidate.target) !== evidenceKeyToString(request.target)) {
+      if (!evidenceKeysEqual(candidate.target, request.target)) {
         return this.finishFailure(failed(
           "TARGET_MISMATCH",
           "CANDIDATE_TARGET_MISMATCH",
@@ -489,7 +490,7 @@ export class InterpretationCoordinator {
         return this.finishFailure(mapStatementFailure(statement.reason, request.requestId, candidateCount));
       }
 
-      const normalizedKey = `${protocolKey(candidate.protocol)}\u0000${evidenceKeyToString(candidate.target)}\u0000${statement.canonicalStatement}`;
+      const normalizedKey = JSON.stringify([\n        protocolKey(candidate.protocol),\n        evidenceKeyIdentity(candidate.target),\n        statement.canonicalStatement\n      ]);
       const existing = admitted.get(normalizedKey);
       if (existing === undefined) {
         admitted.set(normalizedKey, {
