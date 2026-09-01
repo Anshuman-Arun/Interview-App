@@ -509,6 +509,19 @@ describe("deterministic Quant Research interview engine", () => {
     expect(getQuantResearchRegistry()[0]?.family).not.toBe("tampered");
   });
 
+  it("does not virtual-dispatch public projection after committing a transition", () => {
+    class ThrowingProjectionEngine extends QuantResearchEngine {
+      public override getState(): ReturnType<QuantResearchEngine["getState"]> {
+        throw new Error("subclass projection must not run inside applyAction");
+      }
+    }
+
+    const engine = new ThrowingProjectionEngine(sampling);
+    const transition = engine.applyAction({ actionId: "atomic-projection", kind: "REQUEST_OBSERVATION", count: 2 });
+    expect(transition.state.acceptedActionCount).toBe(1);
+    expect(engine.getAcceptedActions().map((action) => action.actionId)).toEqual(["atomic-projection"]);
+  });
+
   it("duplicate action IDs fail closed without partial mutation", () => {
     const engine = new QuantResearchEngine(sampling);
     engine.applyAction({ actionId: "sample", kind: "REQUEST_OBSERVATION", count: 2 });
