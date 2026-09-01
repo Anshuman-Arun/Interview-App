@@ -6,17 +6,25 @@ import {
   InputCommittedResponseSchema,
   ProtocolErrorResponseSchema,
   RequestIdSchema,
+  SessionArchivedResponseSchema,
+  SessionCompletedResponseSchema,
+  SessionResumedResponseSchema,
   SessionStartedResponseSchema,
   SessionSummaryResponseSchema,
+  SessionsListResponseSchema,
   type ClientCommand,
   type DeliveryId,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse,
   type RequestId,
-  type SessionId
+  type SessionId,
+  type StoredSessionSummary
 } from "../../../packages/domain/src/index.js";
 
 type SessionStartedResponse = z.infer<typeof SessionStartedResponseSchema>;
+type SessionResumedResponse = z.infer<typeof SessionResumedResponseSchema>;
+type SessionCompletedResponse = z.infer<typeof SessionCompletedResponseSchema>;
+type SessionArchivedResponse = z.infer<typeof SessionArchivedResponseSchema>;
 type InputCommittedResponse = z.infer<typeof InputCommittedResponseSchema>;
 type SessionSummaryResponse = z.infer<typeof SessionSummaryResponseSchema>;
 type DeliveryReconnectResponse = z.infer<typeof DeliveryReconnectResponseSchema>;
@@ -24,7 +32,12 @@ type DeliveryAcknowledgedResponse = z.infer<typeof DeliveryAcknowledgedResponseS
 
 export interface BrowserCommandClientOptions {
   readonly baseUrl: string;
-  readonly clientToken: string;
+  readonly clientToken?: string;
+  /**
+   * Non-secret marker used only when the trusted Electron boundary replaces it
+   * with the per-launch credential before the request leaves the renderer.
+   */
+  readonly externalAuthenticationHeaderValue?: string;
   readonly fetchImpl?: typeof fetch;
   readonly requestIdFactory?: () => RequestId;
 }
@@ -80,16 +93,33 @@ export class BrowserCommandProtocolError extends Error {
 
 export class BrowserCommandClient {
   readonly #commandUrl: string;
-  readonly #clientToken: string;
+  readonly #authenticationHeaderValue: string;
   readonly #fetchImpl: typeof fetch;
   readonly #requestIdFactory: () => RequestId;
 
   public constructor(options: BrowserCommandClientOptions) {
     this.#commandUrl = `${normalizeLoopbackBaseUrl(options.baseUrl)}/v1/commands`;
-    if (options.clientToken.length < 32) {
-      throw new Error("Client token must contain at least 32 characters");
+    if (
+      options.clientToken !== undefined
+      && options.externalAuthenticationHeaderValue !== undefined
+    ) {
+      throw new Error("Command client authentication configuration is ambiguous");
     }
-    this.#clientToken = options.clientToken;
+    if (options.externalAuthenticationHeaderValue !== undefined) {
+      if (options.externalAuthenticationHeaderValue !== "desktop-managed-v1") {
+        throw new Error("External authentication marker is invalid");
+      }
+      this.#authenticationHeaderValue = options.externalAuthenticationHeaderValue;
+    } else {
+      if (
+        typeof options.clientToken !== "string"
+        || options.clientToken.length < 32
+        || /[\r\n]/u.test(options.clientToken)
+      ) {
+        throw new Error("Client token must contain at least 32 characters");
+      }
+      this.#authenticationHeaderValue = options.clientToken;
+    }
     this.#fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.#requestIdFactory = options.requestIdFactory ?? defaultRequestIdFactory;
   }
@@ -108,6 +138,105 @@ export class BrowserCommandClient {
     const result = await this.send(
       command,
       (value) => SessionStartedResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async listSessions(
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<readonly StoredSessionSummary[]> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "LIST_SESSIONS",
+      requestId
+    });
+    const result = await this.send(
+      command,
+      (value) => SessionsListResponseSchema.parse(value),
+      options.signal
+    );
+    return result.sessions;
+  }
+
+  public async resumeSession(
+    sessionId: SessionId,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<SessionResumedResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "RESUME_SESSION",
+      requestId,
+      sessionId
+    });
+    const result = await this.send(
+      command,
+      (value) => SessionResumedResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async completeSession(
+    sessionId: SessionId,
+    summary?: string,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<SessionCompletedResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "COMPLETE_SESSION",
+      requestId,
+      sessionId,
+      ...(summary !== undefined ? { summary } : {})
+    });
+    const result = await this.send(
+      command,
+      (value) => SessionCompletedResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async archiveSession(
+    sessionId: SessionId,
+    reason?: string,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<SessionArchivedResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "ARCHIVE_SESSION",
+      requestId,
+      sessionId,
+      ...(reason !== undefined ? { reason } : {})
+    });
+    const result = await this.send(
+      command,
+      (value) => SessionArchivedResponseSchema.parse(value),
       options.signal
     );
     if (result.sessionId !== sessionId) {
@@ -259,7 +388,7 @@ export class BrowserCommandClient {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-interview-client-token": this.#clientToken
+        "x-interview-client-token": this.#authenticationHeaderValue
       },
       body: JSON.stringify(command),
       cache: "no-store",

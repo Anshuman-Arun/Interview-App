@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { SessionIdSchema } from "../../../packages/domain/src/index.js";
+import { SessionIdSchema, type SessionId } from "../../../packages/domain/src/index.js";
 import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
 import { StudentInputArea } from "./components/StudentInputArea.js";
@@ -15,6 +15,7 @@ import "./styles/transcript.css";
 
 export const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [activeTab, setActiveTab] = useState<"whiteboard" | "formulation">("whiteboard");
 
@@ -37,17 +38,28 @@ export const App: React.FC = () => {
   const handleStartSession = async () => {
     try {
       await session.startSession();
+      setShowSessionsModal(false);
     } catch {
       // Error handled in session.error
     }
   };
 
-  const handleRecoverSession = async (e: React.SyntheticEvent): Promise<void> => {
+  const handleRecoverSession = async (targetSessionId: SessionId): Promise<void> => {
+    try {
+      await session.recoverSession(targetSessionId);
+      setShowSessionsModal(false);
+    } catch {
+      // Error handled in session.error
+    }
+  };
+
+  const handleManualRecover = async (e: React.SyntheticEvent): Promise<void> => {
     e.preventDefault();
     if (!recoverySessionInput.trim()) return;
     try {
       const parsed = SessionIdSchema.parse(recoverySessionInput.trim());
       await session.recoverSession(parsed);
+      setShowSessionsModal(false);
     } catch {
       // Error handled in session.error
     }
@@ -55,8 +67,17 @@ export const App: React.FC = () => {
 
   const handleSaveSettings = (e: React.SyntheticEvent): void => {
     e.preventDefault();
+    if (session.isTransportManaged) {
+      setShowSettings(false);
+      return;
+    }
     session.setBaseUrl(inputUrl.trim());
     setShowSettings(false);
+  };
+
+  const openSessionsModal = () => {
+    void session.fetchAvailableSessions();
+    setShowSessionsModal(true);
   };
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -95,6 +116,19 @@ export const App: React.FC = () => {
     }
   }, [whiteboardAdapter]);
 
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "ACTIVE":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "COMPLETED":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "ARCHIVED":
+        return "bg-slate-100 text-slate-600 border-slate-200";
+      default:
+        return "bg-amber-50 text-amber-700 border-amber-200";
+    }
+  };
+
   return (
     <div className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
       {/* Top Header Bar */}
@@ -107,7 +141,7 @@ export const App: React.FC = () => {
             <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <span>Oxford Technical Interview</span>
               <span className="text-xs font-normal text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                Phase 1 Typed MVP
+                Durable Runtime
               </span>
             </h1>
             <p className="text-xs text-slate-500">
@@ -117,7 +151,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* Status Indicators & Controls */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-xs">
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ${
@@ -147,24 +181,60 @@ export const App: React.FC = () => {
               <span className="text-slate-400">Session:</span>
               <span className="font-semibold text-slate-800">{session.sessionId}</span>
               <span className="text-slate-300">|</span>
+              <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border ${getStatusBadgeClass(session.sessionStatus)}`}>
+                {session.sessionStatus}
+              </span>
+              <span className="text-slate-300">|</span>
               <span className="text-slate-400">Seq:</span>
               <span className="font-semibold text-slate-800">{session.sequence}</span>
             </div>
           )}
 
+          {session.isSessionStarted && session.sessionStatus === "ACTIVE" && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void session.completeSession()}
+                className="text-xs font-medium text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded border border-emerald-200 transition-colors"
+                title="Complete interview session"
+              >
+                ✓ Complete
+              </button>
+              <button
+                type="button"
+                onClick={() => void session.archiveSession()}
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded border border-slate-200 transition-colors"
+                title="Archive interview session"
+              >
+                Archive
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={() => setShowSettings((prev) => !prev)}
-            className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md border border-slate-200 transition-colors"
-            data-testid="settings-btn"
+            onClick={openSessionsModal}
+            className="text-xs font-medium text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md border border-indigo-200 transition-colors"
+            data-testid="sessions-btn"
           >
-            ⚙️ Connection
+            📋 Sessions
           </button>
+
+          {!session.isTransportManaged && (
+            <button
+              type="button"
+              onClick={() => setShowSettings((prev) => !prev)}
+              className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md border border-slate-200 transition-colors"
+              data-testid="settings-btn"
+            >
+              ⚙️ Config
+            </button>
+          )}
         </div>
       </header>
 
       {/* Settings Modal / Drawer */}
-      {showSettings && (
+      {showSettings && !session.isTransportManaged && (
         <div className="settings-drawer bg-slate-800 text-white px-6 py-4 border-b border-slate-700 flex items-center justify-between gap-6 shrink-0 shadow-md">
           <form onSubmit={handleSaveSettings} className="flex flex-wrap items-center gap-4 flex-1">
             <div className="flex flex-col gap-1">
@@ -196,6 +266,93 @@ export const App: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Sessions Management Modal */}
+      {showSessionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden border border-slate-200">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2">
+                <span className="text-base font-bold text-slate-900">Stored Interview Sessions</span>
+                <span className="text-xs text-slate-500 font-mono">({session.availableSessions.length})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSessionsModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => void handleStartSession()}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors"
+                >
+                  + Start New Interview Session
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void session.fetchAvailableSessions()}
+                  className="text-xs text-slate-500 hover:text-slate-700 underline"
+                >
+                  Refresh List
+                </button>
+              </div>
+
+              {session.availableSessions.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  No local sessions found. Start a new session to begin.
+                </div>
+              ) : (
+                session.availableSessions.map((s) => (
+                  <div
+                    key={s.sessionId}
+                    className="p-3 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors flex items-center justify-between bg-white shadow-2xs"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-semibold text-slate-900">{s.sessionId}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(s.status)}`}>
+                          {s.status}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-3">
+                        <span>Problem: {s.problemId ?? "Ramsey R(3,3)"}</span>
+                        <span>•</span>
+                        <span>Events: {s.eventCount}</span>
+                        <span>•</span>
+                        <span>Updated: {new Date(s.updatedAt).toLocaleTimeString()}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={s.status === "ACTIVE"
+                        ? () => void handleRecoverSession(s.sessionId)
+                        : undefined}
+                      disabled={s.status !== "ACTIVE"}
+                      className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
+                        s.status === "ACTIVE"
+                          ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
+                          : "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                      }`}
+                    >
+                      {s.sessionId === session.sessionId
+                        ? "Current"
+                        : s.status === "ACTIVE"
+                          ? "Resume"
+                          : "Terminal"}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -238,7 +395,7 @@ export const App: React.FC = () => {
                 </button>
                 <form
                   onSubmit={(e) => {
-                    void handleRecoverSession(e);
+                    void handleManualRecover(e);
                   }}
                   className="flex items-center gap-1"
                 >
@@ -276,9 +433,11 @@ export const App: React.FC = () => {
           <div className="p-4 border-t border-slate-200 bg-slate-50/50 shrink-0">
             <StudentInputArea
               onSubmit={(text) => session.submitTypedInput(text)}
-              disabled={!session.isSessionStarted}
+              disabled={!session.isSessionStarted || session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"}
               placeholder={
-                session.isSessionStarted
+                session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"
+                  ? `Session is ${session.sessionStatus.toLowerCase()}. Reasoning input is closed.`
+                  : session.isSessionStarted
                   ? "Enter your proof step (e.g. Choose $v_1 \\in V$. Since $\\deg(v_1) = 5$, by PHP...)"
                   : "Start or recover a session above to submit reasoning."
               }

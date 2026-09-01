@@ -16,11 +16,11 @@ function withDeliveryStatus(state: SessionState, deliveryId: string, status: Del
   const allowed: Readonly<Record<DeliveryAtom["status"], readonly DeliveryAtom["status"][]>> = {
     VALIDATED: ["QUEUED"],
     QUEUED: ["DELIVERING", "CANCELLED"],
-    DELIVERING: ["EXPOSED", "CANCELLED", "POSSIBLY_EXPOSED"],
+    DELIVERING: ["EXPOSED", "POSSIBLY_EXPOSED"],
     EXPOSED: ["COMPLETED"],
     COMPLETED: [],
     CANCELLED: [],
-    POSSIBLY_EXPOSED: []
+    POSSIBLY_EXPOSED: ["EXPOSED"]
   };
   if (!allowed[current.status].includes(status)) {
     throw new Error(`Invalid delivery transition ${current.status} -> ${status}`);
@@ -43,7 +43,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
   let next: SessionState;
   switch (event.type) {
     case "SESSION_STARTED":
-      next = { ...state, started: true };
+      next = { ...state, started: true, status: "ACTIVE" };
       break;
     case "PROBLEM_PRESENTED":
       next = {
@@ -58,6 +58,66 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         }
       };
       break;
+    case "QUANT_RESEARCH_SCENARIO_INITIALIZED": {
+      if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
+      if (
+        event.payload.definition.family !== event.payload.authoritativeSnapshot.family ||
+        state.problem?.id !== event.payload.definition.family ||
+        state.problem.version !== event.payload.definition.version
+      ) {
+        throw new Error("Quant Research initialization does not match the presented problem");
+      }
+      next = {
+        ...state,
+        quantResearch: {
+          definition: event.payload.definition,
+          authoritativeSnapshot: event.payload.authoritativeSnapshot,
+          actions: []
+        }
+      };
+      break;
+    }
+    case "QUANT_RESEARCH_ACTION_ACCEPTED": {
+      const quantResearch = state.quantResearch;
+      if (quantResearch === undefined) throw new Error("Quant Research scenario is not initialized");
+      if (quantResearch.result !== undefined) throw new Error("Quant Research scenario is already complete");
+      if (quantResearch.actions.length >= 64) throw new Error("Quant Research action history exceeds the maximum size");
+      if (quantResearch.actions.some((action) => action.actionId === event.payload.action.actionId)) {
+        throw new Error("Quant Research action ID is already present in authoritative history");
+      }
+      next = {
+        ...state,
+        quantResearch: {
+          ...quantResearch,
+          actions: [...quantResearch.actions, event.payload.action]
+        }
+      };
+      break;
+    }
+    case "QUANT_RESEARCH_SCENARIO_COMPLETED": {
+      const quantResearch = state.quantResearch;
+      if (quantResearch === undefined) throw new Error("Quant Research scenario is not initialized");
+      if (quantResearch.result !== undefined) throw new Error("Quant Research scenario is already complete");
+      const result = event.payload.result;
+      if (
+        result.status !== "COMPLETE" ||
+        result.family !== quantResearch.definition.family ||
+        result.version !== quantResearch.definition.version ||
+        result.generatorVersion !== quantResearch.definition.generatorVersion ||
+        result.rngVersion !== quantResearch.definition.rngVersion ||
+        result.acceptedActionCount !== quantResearch.actions.length
+      ) {
+        throw new Error("Quant Research completion result does not match authoritative history");
+      }
+      next = {
+        ...state,
+        quantResearch: {
+          ...quantResearch,
+          result
+        }
+      };
+      break;
+    }
     case "UTTERANCE_STARTED":
       next = { ...state, utterances: { ...state.utterances, [event.payload.utteranceId]: { utteranceId: event.payload.utteranceId, status: "CAPTURING" } } };
       break;
@@ -185,7 +245,13 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         ...state,
         verificationRequests: {
           ...state.verificationRequests,
-          [event.payload.verificationRequestId]: { ...request, status: "ACCEPTED", result: event.payload.result }
+          [event.payload.verificationRequestId]: {
+            ...request,
+            status: "ACCEPTED",
+            result: event.payload.result,
+            resultEventId: event.eventId,
+            resultSequence: event.sequence
+          }
         }
       };
       break;
@@ -259,9 +325,23 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "PEDAGOGICAL_ACTION_SELECTED":
       next = { ...state, pedagogicalActions: { ...state.pedagogicalActions, [event.payload.turnId]: event.payload.request } };
       break;
-    case "MODEL_GENERATION_STARTED":
-      next = { ...state, generations: { ...state.generations, [event.payload.generationId]: { generationId: event.payload.generationId, basis: event.payload.basis, provider: event.payload.provider, status: "ACTIVE" } } };
+    case "MODEL_GENERATION_STARTED": {
+      const pedagogicalAction = state.pedagogicalActions[event.payload.basis.turnId];
+      next = {
+        ...state,
+        generations: {
+          ...state.generations,
+          [event.payload.generationId]: {
+            generationId: event.payload.generationId,
+            basis: event.payload.basis,
+            provider: event.payload.provider,
+            ...(pedagogicalAction === undefined ? {} : { pedagogicalAction }),
+            status: "ACTIVE"
+          }
+        }
+      };
       break;
+    }
     case "GENERATION_CONTEXT_COMPILED": {
       const generation = state.generations[event.payload.generationId];
       if (generation === undefined || generation.status !== "ACTIVE") throw new Error("Context compilation requires an active generation");
@@ -288,9 +368,18 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "MODEL_GENERATION_SUPERSEDED":
       next = updateGeneration(state, event.payload.generationId, { status: "SUPERSEDED" });
       break;
-    case "PROPOSAL_VALIDATED":
-      next = updateGeneration(state, event.payload.generationId, { status: "VALIDATED" });
+    case "PROPOSAL_VALIDATED": {
+      const generation = state.generations[event.payload.generationId];
+      if (generation === undefined) throw new Error("Unknown generation");
+      next = updateGeneration(state, event.payload.generationId, {
+        status: "VALIDATED",
+        interviewerProposalValidated: true,
+        ...(generation.proposal === undefined
+          ? {}
+          : { validatedInterviewerProposal: generation.proposal })
+      });
       break;
+    }
     case "PROPOSAL_REJECTED":
       next = updateGeneration(state, event.payload.generationId, { status: "REJECTED" });
       break;
@@ -318,6 +407,25 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       break;
     case "PROBLEM_STATE_REVISION_CHANGED":
       next = { ...state, problemStateRevision: event.payload.problemStateRevision, contextEpoch: event.payload.contextEpoch };
+      break;
+    case "SESSION_COMPLETED":
+      next = {
+        ...state,
+        status: "COMPLETED",
+        completedAt: event.payload.completedAt,
+        ...(event.payload.summary ? { completionSummary: event.payload.summary } : {})
+      };
+      break;
+    case "SESSION_ARCHIVED":
+      next = {
+        ...state,
+        status: "ARCHIVED",
+        archivedAt: event.payload.archivedAt,
+        ...(event.payload.reason ? { archivalReason: event.payload.reason } : {})
+      };
+      break;
+    case "SESSION_RESUMED":
+      next = state;
       break;
   }
   return { ...next, sequence: event.sequence, eventIds: [...next.eventIds, event.eventId] };

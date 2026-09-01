@@ -371,7 +371,7 @@ async function primeCommandServer(address: BoundLoopbackAddress, sessionId: Sess
     },
     body: JSON.stringify({
       protocolVersion: 1,
-      type: "GET_SESSION_SUMMARY",
+      type: "START_SESSION",
       requestId: newRequestId(),
       sessionId
     })

@@ -5,15 +5,17 @@ import {
   GenerationBasisSchema,
   newSessionId
 } from "../packages/domain/src/index.js";
+import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
 import { initialSessionState } from "../packages/events/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
   assessVisionFreshness,
+  createCommandEnvelope,
   isGenerationBasisStillCompatible
 } from "../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
-import { createCoreHarness, providerEnvelope } from "./harness.js";
+import { authorizeSafeProbe, createCoreHarness, providerEnvelope } from "./harness.js";
 
 describe("compatibility and disclosure gates", () => {
   it("returns UNKNOWN when generation provenance cannot be established", () => {
@@ -40,7 +42,7 @@ describe("compatibility and disclosure gates", () => {
         validator: harness.validator
       });
       expect(result.accepted).toBe(false);
-      expect(result.reason).toContain("INCOMPATIBLE");
+      expect(result.reason).toMatch(/not active/u);
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
       expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
     } finally {
@@ -108,6 +110,455 @@ describe("compatibility and disclosure gates", () => {
     expect(result.accepted).toBe(false);
     if (result.accepted) throw new Error("Expected uncertain proposal rejection");
     expect(result.reason).toMatch(/uncertain/i);
+  });
+
+  it("refuses to stamp an older turn with the latest committed generation basis", async () => {
+    const harness = await createCoreHarness();
+    try {
+      await harness.turns.commitInput("A newer student turn supersedes the old response target.");
+      await expect(
+        harness.turns.startGeneration(
+          harness.inputEpisodeId,
+          harness.turnId,
+          "stale-turn-provider"
+        )
+      ).rejects.toThrow(/latest committed Turn/u);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects and supersedes a provider callback whose envelope does not match its generation basis", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const basis = harness.writer.getState().generations[harness.generationId]?.basis;
+      expect(basis).toBeDefined();
+      if (basis === undefined) throw new Error("missing generation basis");
+
+      const result = await harness.turns.processProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "mock-model",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId,
+          generationId: harness.generationId,
+          contextEpoch: basis.contextEpoch,
+          sourceRevision: basis.committedInputSequence + 1
+        }),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: harness.safeProbe
+        },
+        validator: harness.validator
+      });
+
+      expect(result.accepted).toBe(false);
+      expect(result.reason).toMatch(/callback basis/u);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects an otherwise compatible proposal when new authoritative evidence makes its selected action stale", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const state = harness.writer.getState();
+      const turn = state.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = state.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "evidence-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+      expect(evidence.committed).toBe(true);
+
+      const result = await harness.turns.processProposal({
+        envelope: providerEnvelope(harness),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "PROBE_JUSTIFICATION",
+          claimedDisclosureLevel: 0,
+          claimedDisclosureIds: [],
+          speechText: harness.safeProbe
+        },
+        validator: harness.validator
+      });
+
+      expect(result.accepted).toBe(false);
+      expect(result.reason).toMatch(/not active/u);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+
+      const refreshed = await harness.turns.selectAction(harness.turnId, sixPeopleProblem);
+      expect(refreshed.requiredAction).toBe("WAIT");
+      expect(harness.writer.getState().pedagogicalActions[harness.turnId]?.requiredAction)
+        .toBe("WAIT");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("cancels queued output and supersedes its generation when authoritative evidence changes before delivery", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
+
+      const state = harness.writer.getState();
+      const turn = state.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = state.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "evidence-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+
+      expect(evidence.committed).toBe(true);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status)
+        .toBe("CANCELLED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("marks in-progress output POSSIBLY_EXPOSED when authoritative evidence invalidates its policy", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+      const state = harness.writer.getState();
+      const turn = state.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = state.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "evidence-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+
+      expect(evidence.committed).toBe(true);
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("barge-in supersedes a validated generation and cancels queued output before exposure", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("VALIDATED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
+
+      await harness.turns.beginUtterance();
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("CANCELLED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("board revision marks already-started stale output POSSIBLY_EXPOSED", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+      await harness.turns.commitBoardPatch("student replaced the relevant board argument");
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("transcript correction marks already-started stale output POSSIBLY_EXPOSED", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+      await harness.turns.correctTranscript("corrected student reasoning");
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("new committed typed input supersedes queued output from the prior turn", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
+
+      await harness.turns.commitInput("I want to continue with a different argument.");
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("CANCELLED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("new committed typed input marks in-progress prior output POSSIBLY_EXPOSED", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+      await harness.turns.commitInput("I am interrupting with new typed reasoning.");
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("attributes mixed proposal disclosures to the exact delivery atom that exposes them", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+      expect(disclosure).toBeDefined();
+      if (disclosure === undefined) throw new Error("missing protected disclosure");
+
+      const initialState = harness.writer.getState();
+      const turn = initialState.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = initialState.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const completeSetup = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "attribution-evidence",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "COMPLETE",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+      expect(completeSetup.committed).toBe(true);
+
+      const localError = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "attribution-evidence",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "choose-vertex" },
+            dimension: "CORRECTNESS"
+          },
+          proposedValue: "LOCAL_ERROR",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+      expect(localError.committed).toBe(true);
+
+      const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+        "Check only the local step.",
+        "Focus on the incident relationships.",
+        "safe speech",
+        "safe purpose"
+      ]));
+      const delivery = new DeliveryCoordinator(harness.writer);
+
+      const exposeCurrentIntervention = async (
+        expectedAction: "CHECK_LOCAL_STEP" | "FOCUS_ATTENTION",
+        speechText: string
+      ) => {
+        const request = await harness.turns.selectAction(harness.turnId, sixPeopleProblem);
+        expect(request.requiredAction).toBe(expectedAction);
+        const generation = await harness.turns.startGeneration(
+          harness.inputEpisodeId,
+          harness.turnId,
+          "attribution-test"
+        );
+        const processed = await harness.turns.processProposal({
+          envelope: createCommandEnvelope({
+            sessionId: harness.sessionId,
+            producer: "attribution-test",
+            inputEpisodeId: harness.inputEpisodeId,
+            turnId: harness.turnId,
+            generationId: generation.generationId,
+            contextEpoch: generation.basis.contextEpoch,
+            sourceRevision: generation.basis.committedInputSequence
+          }),
+          problem: sixPeopleProblem,
+          proposal: {
+            realizedAction: expectedAction,
+            claimedDisclosureLevel: 0,
+            claimedDisclosureIds: [],
+            speechText
+          },
+          validator
+        });
+        expect(processed.accepted).toBe(true);
+        const atom = processed.deliveryAtoms[0];
+        expect(atom).toBeDefined();
+        if (atom === undefined) throw new Error("missing intervention atom");
+        await delivery.markStarted(atom.deliveryId);
+        await delivery.acknowledgeExposed(atom.deliveryId);
+        await harness.turns.supersedeGeneration(
+          generation.generationId,
+          "advance attribution regression"
+        );
+      };
+
+      await exposeCurrentIntervention("CHECK_LOCAL_STEP", "Check only the local step.");
+      await exposeCurrentIntervention("FOCUS_ATTENTION", "Focus on the incident relationships.");
+
+      const request = await harness.turns.selectAction(harness.turnId, sixPeopleProblem);
+      expect(request).toMatchObject({
+        requiredAction: "DIRECTIONAL_NUDGE",
+        maximumDisclosure: disclosure.minimumDisclosureLevel
+      });
+      expect(request.allowedDisclosureIds).toContain(disclosure.id);
+
+      const generation = await harness.turns.startGeneration(
+        harness.inputEpisodeId,
+        harness.turnId,
+        "attribution-test"
+      );
+      const processed = await harness.turns.processProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "attribution-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId,
+          generationId: generation.generationId,
+          contextEpoch: generation.basis.contextEpoch,
+          sourceRevision: generation.basis.committedInputSequence
+        }),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "DIRECTIONAL_NUDGE",
+          claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+          claimedDisclosureIds: [disclosure.id],
+          speechText: "safe speech",
+          boardActions: [{
+            operation: "write_text",
+            layer: "AI_ANNOTATION",
+            content: disclosure.fact,
+            annotationPurpose: "safe purpose"
+          }]
+        },
+        validator
+      });
+      expect(processed.accepted).toBe(true);
+      const speechAtom = processed.deliveryAtoms.find((atom) => atom.content.medium === "TEXT");
+      const boardAtom = processed.deliveryAtoms.find((atom) => atom.content.medium === "WHITEBOARD");
+      expect(speechAtom).toBeDefined();
+      expect(boardAtom).toBeDefined();
+      if (speechAtom === undefined || boardAtom === undefined) {
+        throw new Error("missing mixed proposal atoms");
+      }
+
+      expect(speechAtom.disclosureIds).toEqual([]);
+      expect(speechAtom.effectiveDisclosureLevel).toBe(0);
+      expect(boardAtom.disclosureIds).toEqual([disclosure.id]);
+      expect(boardAtom.effectiveDisclosureLevel).toBe(disclosure.minimumDisclosureLevel);
+
+      await delivery.markStarted(speechAtom.deliveryId);
+      await delivery.acknowledgeExposed(speechAtom.deliveryId);
+      expect(harness.writer.getState().disclosureLedger).not.toContain(disclosure.id);
+
+      await delivery.markStarted(boardAtom.deliveryId);
+      await delivery.acknowledgeExposed(boardAtom.deliveryId);
+      expect(harness.writer.getState().disclosureLedger).toContain(disclosure.id);
+    } finally {
+      harness.store.close();
+    }
   });
 
   it("runtime validation prevents AI mutation of the student layer", () => {

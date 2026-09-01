@@ -204,7 +204,7 @@ export class ProviderCoordinator {
           result = await this.turns.processProposal({
             envelope: createCommandEnvelope({
               sessionId: this.writer.sessionId,
-              producer: "provider-coordinator",
+              producer: generation.provider,
               requestId: record.proposalRequestId,
               generationId: record.generationId,
               ...(generation.basis.inputEpisodeId === undefined ? {} : { inputEpisodeId: generation.basis.inputEpisodeId }),

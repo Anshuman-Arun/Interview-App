@@ -1,266 +1,1340 @@
 import { describe, expect, it } from "vitest";
 import {
-  evaluateInterviewSession,
-  generateEvaluationMarkdown
-} from "../packages/interview-engine/src/session-evaluator.js";
-import { sixPeopleProblem } from "../packages/problems/src/index.js";
-import {
+  ContextEpochSchema,
   DeliveryIdSchema,
   DisclosureIdSchema,
+  EventIdSchema,
   GenerationIdSchema,
   InputEpisodeIdSchema,
-  newSessionId,
+  RequestIdSchema,
+  SessionEvaluationSchema,
   TurnIdSchema,
+  evidenceKeyToString,
+  newSessionId,
+  zeroBoardRevision,
+  zeroContextEpoch,
+  zeroPolicyRevision,
+  zeroProblemStateRevision,
+  zeroTranscriptRevision,
   type DeliveryAtom,
-  type InterviewProblem
+  type EvidenceKey,
+  type EvidenceRating,
+  type EvaluationRubric
 } from "../packages/domain/src/index.js";
-import { initialSessionState, type SessionState } from "../packages/events/src/index.js";
+import {
+  initialSessionState,
+  type EvidenceRecordState,
+  type SessionState
+} from "../packages/events/src/index.js";
+import {
+  createProviderContextSpecFingerprintSync,
+  evaluateInterviewSession,
+  generateEvaluationMarkdown
+} from "../packages/interview-engine/src/index.js";
+import { sixPeopleProblem } from "../packages/problems/src/index.js";
 
-const mockProbabilityProblem: InterviewProblem = {
-  id: "quant-probability-puzzle",
-  version: "1.0.0",
-  public: {
-    prompt: "Solve the coin puzzle with probability p.",
-    givenInformation: ["Coin tosses are i.i.d."]
-  },
-  interviewer: {
-    topics: ["probability", "combinatorics"],
-    difficulty: "introductory-oxford",
-    reasoningGraph: {
-      version: "1.0.0",
-      approaches: [{ id: "main-approach", label: "Direct conditioning" }],
-      milestones: [
-        {
-          id: "step-1",
-          description: "Formulate the sample space.",
-          approachIds: ["main-approach"],
-          optionalPrerequisiteIds: [],
-          protectedDisclosureIds: []
-        },
-        {
-          id: "step-2",
-          description: "Condition on the first event.",
-          approachIds: ["main-approach"],
-          optionalPrerequisiteIds: ["step-1"],
-          protectedDisclosureIds: [DisclosureIdSchema.parse("disclosure_prob_hint")]
-        }
-      ],
-      edges: [{ from: "step-1", to: "step-2" }],
-      commonErrors: [],
-      extensions: []
-    },
-    protectedDisclosures: [
-      {
-        id: DisclosureIdSchema.parse("disclosure_prob_hint"),
-        fact: "Condition on the outcome of the first toss.",
-        minimumDisclosureLevel: 2,
-        equivalentFormulations: ["condition on the first toss", "first event partition"]
-      }
-    ]
-  },
-  private: {
-    canonicalSolution: "Condition on the first step to establish P = p * 1 + (1-p) * 0 = p.",
-    verificationNotes: "Check that total probability rule is applied."
-  }
-};
+const chooseDisclosure = DisclosureIdSchema.parse("disclosure_choose_person_pigeonhole");
 
-describe("Session Evaluator Engine", () => {
-  it("evaluates a high-performing unassisted interview session", () => {
-    const sessionId = newSessionId();
-    const turn1 = TurnIdSchema.parse("turn_001");
-    const turn2 = TurnIdSchema.parse("turn_002");
-    const turn3 = TurnIdSchema.parse("turn_003");
-    const turn4 = TurnIdSchema.parse("turn_004");
-    const turn5 = TurnIdSchema.parse("turn_005");
+describe("grounded session evaluator", () => {
+  it("abstains for an empty session instead of fabricating a score", () => {
+    const evaluation = evaluateInterviewSession(
+      initialSessionState(newSessionId()),
+      sixPeopleProblem,
+      {},
+      { evaluatedAt: "2026-08-31T20:00:00.000Z" }
+    );
 
-    const state: SessionState = {
-      ...initialSessionState(sessionId),
-      turns: {
-        [turn1]: {
-          turnId: turn1,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_001"),
-          committedSequence: 1,
-          studentText: "Let us model the six people as vertices in a complete graph K_6 with two edge colors."
-        },
-        [turn2]: {
-          turnId: turn2,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_002"),
-          committedSequence: 2,
-          studentText: "Consider any vertex v. It has degree 5. By the pigeonhole principle, at least 3 incident edges share the same color."
-        },
-        [turn3]: {
-          turnId: turn3,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_003"),
-          committedSequence: 3,
-          studentText: "Let these 3 incident neighbors be {u1, u2, u3} connected to v by red edges."
-        },
-        [turn4]: {
-          turnId: turn4,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_004"),
-          committedSequence: 4,
-          studentText: "If any edge (ui, uj) is red, {v, ui, uj} forms a red triangle. Otherwise, all edges between {u1, u2, u3} are blue, forming a blue triangle."
-        },
-        [turn5]: {
-          turnId: turn5,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_005"),
-          committedSequence: 5,
-          studentText: "Therefore, in all cases, a monochromatic K_3 is guaranteed to exist. This completes the proof."
-        }
-      },
-      deliveries: {}
-    };
+    expect(evaluation.scores.compositeScore).toBeNull();
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.scores.rigor).toBeNull();
+    expect(evaluation.scores.communication).toBeNull();
+    expect(evaluation.lifecycle.completionState).toBe("NOT_STARTED");
+    expect(evaluation.milestones.every((item) => !item.achieved)).toBe(true);
+    expect(evaluation.keyStrengths).toEqual([]);
+  });
+
+  it("regression: turn count and word count do not create achievement, rigor, or communication evidence", () => {
+    const one = withTurns(boundState(), 1, "short");
+    const many = withTurns(
+      boundState(),
+      25,
+      Array.from({ length: 100 }, () => "word").join(" ")
+    );
+
+    const first = evaluateInterviewSession(one, sixPeopleProblem);
+    const second = evaluateInterviewSession(many, sixPeopleProblem);
+
+    expect(first.milestones.every((item) => !item.achieved)).toBe(true);
+    expect(second.milestones.every((item) => !item.achieved)).toBe(true);
+    expect(first.scores.rigor).toBeNull();
+    expect(second.scores.rigor).toBeNull();
+    expect(first.scores.communication).toBeNull();
+    expect(second.scores.communication).toBeNull();
+  });
+
+  it("uses only active scoped evidence for milestone achievement", () => {
+    let active = boundState();
+    active = setHistory(active, milestoneKey("model-relations", "PROGRESS"), [
+      { value: "COMPLETE", sequence: 10, status: "ACTIVE" }
+    ]);
+    expect(milestone(evaluateInterviewSession(active, sixPeopleProblem), "model-relations").achieved)
+      .toBe(true);
+
+    let stale = boundState();
+    stale = setHistory(stale, milestoneKey("model-relations", "PROGRESS"), [
+      { value: "COMPLETE", sequence: 5, status: "STALE" }
+    ]);
+    expect(milestone(evaluateInterviewSession(stale, sixPeopleProblem), "model-relations").achieved)
+      .toBe(false);
+
+    let contradicted = active;
+    contradicted = setHistory(contradicted, milestoneKey("model-relations", "CORRECTNESS"), [
+      { value: "STRUCTURAL_ERROR", sequence: 11, status: "ACTIVE" }
+    ]);
+    expect(milestone(evaluateInterviewSession(contradicted, sixPeopleProblem), "model-relations").achieved)
+      .toBe(false);
+  });
+
+  it("keeps a progress-complete milestone weak when active support is explicitly incomplete", () => {
+    let state = setHistory(
+      boundState(),
+      milestoneKey("model-relations", "PROGRESS"),
+      [{ value: "COMPLETE", sequence: 10, status: "ACTIVE" }]
+    );
+    state = setHistory(
+      state,
+      milestoneKey("model-relations", "JUSTIFICATION"),
+      [{ value: "UNJUSTIFIED", sequence: 11, status: "ACTIVE" }]
+    );
 
     const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(milestone(evaluation, "model-relations").achieved).toBe(true);
+    expect(milestone(evaluation, "model-relations").supportLevel).toBe("WEAK");
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.scores.rigor).toBe(0);
+  });
 
-    expect(evaluation.sessionId).toBe(sessionId);
-    expect(evaluation.problemId).toBe(sixPeopleProblem.id);
+  it("grounds correctness in accepted verifier results and abstains on unresolved verification", () => {
+    const verifiedKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "verified-claim" },
+      dimension: "CORRECTNESS"
+    };
+    const contradictedKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "contradicted-claim" },
+      dimension: "CORRECTNESS"
+    };
+    let mixed = boundState();
+    mixed = withVerification(mixed, verifiedKey, "VERIFIED", 10, "verified");
+    mixed = withVerification(mixed, contradictedKey, "CONTRADICTED", 20, "contradicted");
+    expect(evaluateInterviewSession(mixed, sixPeopleProblem).scores.technicalCorrectness).toBe(50);
+
+    const unresolved = withVerification(
+      boundState(),
+      verifiedKey,
+      "UNRESOLVED",
+      10,
+      "unresolved"
+    );
+    expect(evaluateInterviewSession(unresolved, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+  });
+
+  it("does not invent acceptance chronology for conflicting standalone verification", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "changing-formalization" },
+      dimension: "CORRECTNESS"
+    };
+
+    let firstOrder = withVerification(
+      boundState(),
+      key,
+      "CONTRADICTED",
+      10,
+      "old-contradiction"
+    );
+    firstOrder = withVerification(
+      firstOrder,
+      key,
+      "UNRESOLVED",
+      10,
+      "new-unresolved"
+    );
+    expect(evaluateInterviewSession(firstOrder, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+
+    let reverseOrder = withVerification(
+      boundState(),
+      key,
+      "UNRESOLVED",
+      10,
+      "old-unresolved"
+    );
+    reverseOrder = withVerification(
+      reverseOrder,
+      key,
+      "CONTRADICTED",
+      10,
+      "new-contradiction"
+    );
+    expect(evaluateInterviewSession(reverseOrder, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+  });
+
+  it("does not let a current positive model inference silently override a deterministic contradiction", () => {
+    const correctnessKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "conflicted-claim" },
+      dimension: "CORRECTNESS"
+    };
+    const justificationKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "conflicted-claim" },
+      dimension: "JUSTIFICATION"
+    };
+
+    let state = setHistory(boundState(), correctnessKey, [
+      { value: "CORRECT", sequence: 10, status: "ACTIVE" }
+    ]);
+    state = setHistory(state, justificationKey, [
+      { value: "JUSTIFIED", sequence: 11, status: "ACTIVE" }
+    ]);
+    state = withVerification(
+      state,
+      correctnessKey,
+      "CONTRADICTED",
+      10,
+      "conflicting-deterministic"
+    );
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.dimensionResults.technicalCorrectness.notScoredReason)
+      .toContain("conflicting");
+    expect(evaluation.scores.rigor).toBe(100);
+    expect(evaluation.dimensionResults.rigor.supportLevel).toBe("WEAK");
+  });
+
+  it("does not force rigor to zero when deterministic correctness itself is unresolved", () => {
+    const correctnessKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "ambiguous-rigor-claim" },
+      dimension: "CORRECTNESS"
+    };
+    const justificationKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "ambiguous-rigor-claim" },
+      dimension: "JUSTIFICATION"
+    };
+
+    let state = setHistory(boundState(), justificationKey, [
+      { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
+    ]);
+    state = withVerification(
+      state,
+      correctnessKey,
+      "CONTRADICTED",
+      10,
+      "ambiguous-rigor-contradicted"
+    );
+    state = withVerification(
+      state,
+      correctnessKey,
+      "UNRESOLVED",
+      10,
+      "ambiguous-rigor-unresolved"
+    );
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.scores.rigor).toBe(100);
+    expect(evaluation.dimensionResults.rigor.supportLevel).toBe("WEAK");
+  });
+
+  it("uses an unambiguous deterministic contradiction when model correctness is UNKNOWN", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "unknown-but-contradicted" },
+      dimension: "CORRECTNESS"
+    };
+    let state = setHistory(boundState(), key, [
+      { value: "UNKNOWN", sequence: 10, status: "ACTIVE" }
+    ]);
+    state = withVerification(
+      state,
+      key,
+      "CONTRADICTED",
+      10,
+      "unknown-contradiction"
+    );
+
+    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.technicalCorrectness)
+      .toBe(0);
+  });
+
+  it("requires specific verifier provenance before upgrading correctness support", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "provenance-claim" },
+      dimension: "CORRECTNESS"
+    };
+    const verified = withVerification(boundState(), key, "VERIFIED", 10, "provenance");
+    const verifiedEvaluation = evaluateInterviewSession(verified, sixPeopleProblem);
+    expect(verifiedEvaluation.scores.technicalCorrectness).toBe(100);
+    expect(verifiedEvaluation.dimensionResults.technicalCorrectness.supportLevel)
+      .toBe("MODERATE");
+    expect(verifiedEvaluation.dimensionResults.technicalCorrectness.evidenceRefs)
+      .toContainEqual({
+        kind: "VERIFICATION_REQUEST",
+        id: "verification_provenance"
+      });
+
+    const unlinked = setHistory(verified, key, [{
+      value: "CORRECT",
+      sequence: 20,
+      status: "ACTIVE",
+      evidenceEventIds: [EventIdSchema.parse("unrelated_support_event")]
+    }]);
+    const unlinkedEvaluation = evaluateInterviewSession(unlinked, sixPeopleProblem);
+    expect(unlinkedEvaluation.scores.technicalCorrectness).toBe(100);
+    expect(unlinkedEvaluation.dimensionResults.technicalCorrectness.supportLevel)
+      .toBe("WEAK");
+    expect(unlinkedEvaluation.dimensionResults.technicalCorrectness.evidenceRefs)
+      .not.toContainEqual({
+        kind: "VERIFICATION_REQUEST",
+        id: "verification_provenance"
+      });
+  });
+
+  it("does not treat a partial verifier citation as verifier-backed evidence", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "partial-verifier-provenance" },
+      dimension: "CORRECTNESS"
+    };
+    const verified = withVerification(
+      boundState(),
+      key,
+      "VERIFIED",
+      10,
+      "partial-verifier"
+    );
+    const partial = setHistory(verified, key, [{
+      value: "CORRECT",
+      sequence: 20,
+      status: "ACTIVE",
+      evidenceEventIds: [EventIdSchema.parse("verification_requested_partial-verifier")]
+    }]);
+
+    const evaluation = evaluateInterviewSession(partial, sixPeopleProblem);
     expect(evaluation.scores.technicalCorrectness).toBe(100);
-    expect(evaluation.scores.independence).toBe(100);
-    expect(evaluation.unassistedMilestoneCount).toBeGreaterThanOrEqual(5);
-    expect(evaluation.assistedMilestoneCount).toBe(0);
-    expect(evaluation.scores.compositeScore).toBeGreaterThanOrEqual(90);
-    expect(evaluation.keyStrengths.length).toBeGreaterThanOrEqual(2);
-
-    const markdown = generateEvaluationMarkdown(evaluation);
-    expect(markdown).toContain("Technical Interview Evaluation Report");
-    expect(markdown).toContain("100% unassisted session");
-    expect(markdown).toContain(sixPeopleProblem.id);
-    expect(markdown.split("\n").every((line) => !/[\t ]+$/u.test(line))).toBe(true);
+    expect(evaluation.dimensionResults.technicalCorrectness.supportLevel).toBe("WEAK");
+    expect(evaluation.dimensionResults.technicalCorrectness.evidenceRefs)
+      .not.toContainEqual({
+        kind: "VERIFICATION_REQUEST",
+        id: "verification_partial-verifier"
+      });
   });
 
-  it("strictly uses authoritative EXPOSED and POSSIBLY_EXPOSED delivery status (ignores QUEUED/CANCELLED)", () => {
-    const sessionId = newSessionId();
-    const turn1 = TurnIdSchema.parse("turn_001");
-    const turn2 = TurnIdSchema.parse("turn_002");
-    const gen1 = GenerationIdSchema.parse("gen_001");
-    const gen2 = GenerationIdSchema.parse("gen_002");
-    const gen3 = GenerationIdSchema.parse("gen_003");
-
-    const exposedDelivery: DeliveryAtom = {
-      deliveryId: DeliveryIdSchema.parse("del_001"),
-      generationId: gen1,
-      content: { medium: "TEXT", text: "Look at the degree of vertex v and use the pigeonhole principle." },
-      disclosureIds: [DisclosureIdSchema.parse("disclosure_choose_person_pigeonhole")],
-      effectiveDisclosureLevel: 2,
-      status: "EXPOSED"
+  it("rejects an accepted VERIFIED result whose atomic correctness evidence is missing", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "missing-verified-evidence" },
+      dimension: "CORRECTNESS"
+    };
+    const verified = withVerification(
+      boundState(),
+      key,
+      "VERIFIED",
+      10,
+      "missing-verified-evidence"
+    );
+    const keyString = evidenceKeyToString(key);
+    const corrupted: SessionState = {
+      ...verified,
+      studentEvidence: Object.fromEntries(
+        Object.entries(verified.studentEvidence).filter(([candidate]) => candidate !== keyString)
+      ),
+      evidenceHistory: Object.fromEntries(
+        Object.entries(verified.evidenceHistory).filter(([candidate]) => candidate !== keyString)
+      )
     };
 
-    const queuedDelivery: DeliveryAtom = {
-      deliveryId: DeliveryIdSchema.parse("del_002"),
-      generationId: gen2,
-      content: { medium: "TEXT", text: "Unexposed hint that was queued but never played." },
-      disclosureIds: [DisclosureIdSchema.parse("disclosure_complete_monochromatic_triangle")],
-      effectiveDisclosureLevel: 4,
-      status: "QUEUED"
-    };
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem)).toThrow(
+      "verified request is missing its committed correctness evidence"
+    );
+  });
 
-    const cancelledDelivery: DeliveryAtom = {
-      deliveryId: DeliveryIdSchema.parse("del_003"),
-      generationId: gen3,
-      content: { medium: "TEXT", text: "Cancelled hint due to student barge-in." },
-      disclosureIds: [DisclosureIdSchema.parse("disclosure_complete_monochromatic_triangle")],
-      effectiveDisclosureLevel: 4,
-      status: "CANCELLED"
+  it("does not resurrect invalidated verified evidence from historical verifier state", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "stale-verified-claim" },
+      dimension: "CORRECTNESS"
     };
+    let state = withVerification(boundState(), key, "VERIFIED", 10, "stale-verified");
+    state = invalidateActiveEvidence(state, key);
 
+    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+  });
+
+  it("does not let a contradiction survive a later committed input on an incompatible basis", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "superseded-by-later-input" },
+      dimension: "CORRECTNESS"
+    };
+    const contradicted = withVerification(
+      boundState(),
+      key,
+      "CONTRADICTED",
+      10,
+      "before-later-input"
+    );
+    const state = withTurns(contradicted, 1, "later student work");
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.dimensionResults.technicalCorrectness.evidenceRefs)
+      .not.toContainEqual({
+        kind: "VERIFICATION_REQUEST",
+        id: "verification_before-later-input"
+      });
+  });
+
+  it("does not treat a contradiction from a stale context epoch as current correctness", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "stale-contradiction" },
+      dimension: "CORRECTNESS"
+    };
+    const contradicted = withVerification(
+      boundState(),
+      key,
+      "CONTRADICTED",
+      10,
+      "stale-contradiction"
+    );
     const state: SessionState = {
-      ...initialSessionState(sessionId),
-      turns: {
-        [turn1]: {
-          turnId: turn1,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_001"),
-          committedSequence: 1,
-          studentText: "I am trying to solve the six people problem."
-        },
-        [turn2]: {
-          turnId: turn2,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_002"),
-          committedSequence: 2,
-          studentText: "By the pigeonhole hint, at least 3 edges from vertex v have the same color."
+      ...contradicted,
+      contextEpoch: ContextEpochSchema.parse(1)
+    };
+
+    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+  });
+
+  it("downgrades otherwise strong correctness coverage when a current subject is unresolved", () => {
+    let state = boundState();
+    for (const [index, claimId] of ["verified-a", "verified-b", "verified-c"].entries()) {
+      const key: EvidenceKey = {
+        problemId: sixPeopleProblem.id,
+        subject: { kind: "CLAIM", claimId },
+        dimension: "CORRECTNESS"
+      };
+      state = withVerification(
+        state,
+        key,
+        "VERIFIED",
+        10 + index * 10,
+        "coverage-" + claimId
+      );
+    }
+    const unknownKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "current-unknown" },
+      dimension: "CORRECTNESS"
+    };
+    state = setHistory(state, unknownKey, [
+      { value: "UNKNOWN", sequence: 50, status: "ACTIVE" }
+    ]);
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBe(100);
+    expect(evaluation.dimensionResults.technicalCorrectness.supportLevel).toBe("MODERATE");
+    expect(evaluation.summaryAssessment).toContain("1 current correctness subject");
+  });
+
+  it("rejects evidence whose lastUpdatedSequence does not match its authoritative event position", () => {
+    const key = milestoneKey("model-relations", "JUSTIFICATION");
+    const state = setHistory(boundState(), key, [
+      { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
+    ]);
+    const keyString = evidenceKeyToString(key);
+    const active = state.evidenceHistory[keyString]?.[0];
+    if (active === undefined) throw new Error("Expected active evidence");
+    const eventIds = [...state.eventIds];
+    const updateIndex = active.value.lastUpdatedSequence - 1;
+    const previousIndex = updateIndex - 1;
+    const previous = eventIds[previousIndex];
+    if (previous === undefined) throw new Error("Expected preceding event");
+    eventIds[previousIndex] = active.evidenceEventId;
+    eventIds[updateIndex] = previous;
+
+    expect(() => evaluateInterviewSession({ ...state, eventIds }, sixPeopleProblem))
+      .toThrow("evidence update sequence does not match its authoritative event position");
+  });
+
+  it("rejects session sequence metadata that disagrees with authoritative event count", () => {
+    const state = setHistory(
+      boundState(),
+      milestoneKey("model-relations", "JUSTIFICATION"),
+      [{ value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }]
+    );
+    expect(() => evaluateInterviewSession({
+      ...state,
+      sequence: state.sequence + 1
+    }, sixPeopleProblem)).toThrow(
+      "session sequence does not match authoritative event history length"
+    );
+  });
+
+  it("rejects a generation basis committed-input projection that does not match its turn", () => {
+    const state = withDelivery(
+      boundState(),
+      chooseDisclosure,
+      2,
+      "EXPOSED",
+      5,
+      "generation-basis-integrity"
+    );
+    const generationId = GenerationIdSchema.parse(
+      "generation_generation-basis-integrity"
+    );
+    const generation = state.generations[generationId];
+    if (generation === undefined) throw new Error("Expected generation fixture");
+    const corrupted: SessionState = {
+      ...state,
+      generations: {
+        ...state.generations,
+        [generationId]: {
+          ...generation,
+          basis: {
+            ...generation.basis,
+            committedInputSequence: generation.basis.committedInputSequence + 1
+          }
         }
-      },
-      deliveries: {
-        del_001: exposedDelivery,
-        del_002: queuedDelivery,
-        del_003: cancelledDelivery
       }
     };
 
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem)).toThrow(
+      "generation basis committed input does not match its turn"
+    );
+  });
+
+  it("rejects verification basis or provenance that does not match its committed turn", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "basis-integrity" },
+      dimension: "CORRECTNESS"
+    };
+    const state = withVerification(
+      boundState(),
+      key,
+      "CONTRADICTED",
+      10,
+      "basis-integrity"
+    );
+    const request = state.verificationRequests[
+      RequestIdSchema.parse("verification_basis-integrity")
+    ];
+    if (request === undefined) throw new Error("Expected verification request");
+
+    const badBasis: SessionState = {
+      ...state,
+      verificationRequests: {
+        ...state.verificationRequests,
+        [request.verificationRequestId]: {
+          ...request,
+          basis: {
+            ...request.basis,
+            committedInputSequence: request.basis.committedInputSequence + 1
+          }
+        }
+      }
+    };
+    expect(() => evaluateInterviewSession(badBasis, sixPeopleProblem)).toThrow(
+      "verification basis committed input does not match its turn"
+    );
+
+    const badProvenance: SessionState = {
+      ...state,
+      verificationRequests: {
+        ...state.verificationRequests,
+        [request.verificationRequestId]: {
+          ...request,
+          evidenceEventIds: [request.requestedEventId]
+        }
+      }
+    };
+    expect(() => evaluateInterviewSession(badProvenance, sixPeopleProblem)).toThrow(
+      "verification request provenance does not match its committed turn"
+    );
+  });
+
+  it("rejects a lastCommittedInputSequence projection that disagrees with committed turns", () => {
+    const state = withTurns(boundState(), 2, "reachable turns");
+    const corrupted: SessionState = {
+      ...state,
+      lastCommittedInputSequence: 1
+    };
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem))
+      .toThrow("last committed input sequence does not match committed turns");
+  });
+
+  it("rejects evidence provenance that is not present in authoritative event history", () => {
+    const key = milestoneKey("model-relations", "JUSTIFICATION");
+    const state = setHistory(boundState(), key, [
+      { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
+    ]);
+    const active = state.evidenceHistory[evidenceKeyToString(key)]?.[0];
+    const supportEvent = active?.value.evidenceEventIds[0];
+    if (supportEvent === undefined) throw new Error("Expected fixture support event");
+    const supportIndex = state.eventIds.indexOf(supportEvent);
+    if (supportIndex < 0) throw new Error("Expected support event in authoritative history");
+    const eventIds = [...state.eventIds];
+    eventIds[supportIndex] = EventIdSchema.parse("replacement_unrelated_authoritative_event");
+    const corrupted: SessionState = {
+      ...state,
+      eventIds
+    };
+
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem)).toThrow(
+      "evidence provenance references an unknown authoritative event"
+    );
+  });
+
+  it("scores rigor from justification evidence, not from verification-request count", () => {
+    let rigorous = boundState();
+    rigorous = setHistory(rigorous, milestoneKey("model-relations", "JUSTIFICATION"), [
+      { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
+    ]);
+    expect(evaluateInterviewSession(rigorous, sixPeopleProblem).scores.rigor).toBe(100);
+
+    const pendingKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "pending-rigor-control" },
+      dimension: "CORRECTNESS"
+    };
+    const pending = withPendingVerification(
+      withTurns(boundState(), 20, "not evidence"),
+      pendingKey,
+      30,
+      "pending"
+    );
+    const evaluation = evaluateInterviewSession(pending, sixPeopleProblem);
+    expect(evaluation.scores.rigor).toBeNull();
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+  });
+
+  it("deduplicates repeated exposure and ignores queued or cancelled assistance", () => {
+    let state = completeMilestone(boundState(), "choose-vertex", 20);
+    state = withDelivery(state, chooseDisclosure, 2, "EXPOSED", 5, "first");
+    state = withDelivery(state, chooseDisclosure, 2, "COMPLETED", 5, "repeat");
+    state = withDelivery(state, chooseDisclosure, 4, "CANCELLED", 4, "cancelled");
+    state = withDelivery(state, chooseDisclosure, 4, "QUEUED", 4, "queued");
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.disclosedInterventions).toHaveLength(2);
+    expect(milestone(evaluation, "choose-vertex").assistanceDisclosureIds).toEqual([chooseDisclosure]);
+    expect(evaluation.scores.independence).toBeNull();
+    expect(evaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
+    expect(evaluation.disclosedInterventions.map((item) => item.deliveryStatus))
+      .toEqual(["EXPOSED", "COMPLETED"]);
+  });
+
+  it("treats POSSIBLY_EXPOSED conservatively and never mistakes generation basis for exposure time", () => {
+    let uncertain = completeMilestone(boundState(), "choose-vertex", 20);
+    uncertain = withDelivery(uncertain, chooseDisclosure, 2, "POSSIBLY_EXPOSED", 5, "possible");
+    const uncertainEvaluation = evaluateInterviewSession(uncertain, sixPeopleProblem);
+    expect(uncertainEvaluation.scores.independence).toBeNull();
+    expect(uncertainEvaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
+    expect(uncertainEvaluation.disclosedInterventions[0]?.deliveryStatus).toBe("POSSIBLY_EXPOSED");
+
+    let laterBasis = completeMilestone(boundState(), "choose-vertex", 10);
+    laterBasis = withDelivery(laterBasis, chooseDisclosure, 2, "EXPOSED", 20, "later-basis");
+    const laterBasisEvaluation = evaluateInterviewSession(laterBasis, sixPeopleProblem);
+    expect(laterBasisEvaluation.scores.independence).toBeNull();
+    expect(laterBasisEvaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
+  });
+
+  it("scores error recovery only from actual evidence transitions", () => {
+    const key = milestoneKey("model-relations", "CORRECTNESS");
+    let recovered = boundState();
+    recovered = setHistory(recovered, key, [
+      { value: "LOCAL_ERROR", sequence: 10, status: "SUPERSEDED" },
+      { value: "CORRECT", sequence: 20, status: "ACTIVE" }
+    ]);
+    expect(evaluateInterviewSession(recovered, sixPeopleProblem).scores.errorRecovery).toBe(100);
+
+    let unresolved = boundState();
+    unresolved = setHistory(unresolved, key, [
+      { value: "LOCAL_ERROR", sequence: 10, status: "SUPERSEDED" },
+      { value: "STRUCTURAL_ERROR", sequence: 20, status: "ACTIVE" }
+    ]);
+    expect(evaluateInterviewSession(unresolved, sixPeopleProblem).scores.errorRecovery).toBe(0);
+
+    expect(evaluateInterviewSession(withTurns(boundState(), 40, "turn"), sixPeopleProblem)
+      .scores.errorRecovery).toBeNull();
+  });
+
+  it("renormalizes partial composites and rejects malformed rubrics", () => {
+    let state = boundState();
+    state = setHistory(state, milestoneKey("model-relations", "CORRECTNESS"), [
+      { value: "CORRECT", sequence: 10, status: "ACTIVE" }
+    ]);
+    const rubric: EvaluationRubric = {
+      correctnessWeight: 0.5,
+      rigorWeight: 0,
+      independenceWeight: 0,
+      communicationWeight: 0.5,
+      errorRecoveryWeight: 0
+    };
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem, rubric);
+    expect(evaluation.scores.technicalCorrectness).toBe(100);
+    expect(evaluation.scores.communication).toBeNull();
+    expect(evaluation.scores.compositeScore).toBe(100);
+    expect(evaluation.composite.status).toBe("PARTIAL");
+
+    expect(() => evaluateInterviewSession(state, sixPeopleProblem, {
+      correctnessWeight: 1,
+      rigorWeight: 1,
+      independenceWeight: 0,
+      communicationWeight: 0,
+      errorRecoveryWeight: 0
+    })).toThrow("weights must sum to 1");
+  });
+
+  it("rejects inconsistent serialized lifecycle and assistance metadata", () => {
+    const state = completeMilestone(boundState(), "model-relations", 10);
     const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
 
-    // Only del_001 is EXPOSED (Level 2). del_002 and del_003 were not exposed and must NOT count.
-    expect(evaluation.disclosedInterventions).toHaveLength(1);
-    expect(evaluation.disclosedInterventions[0]?.disclosureLevel).toBe(2);
-    expect(evaluation.disclosedInterventions[0]?.deliveryStatus).toBe("EXPOSED");
+    expect(() => SessionEvaluationSchema.parse({
+      ...evaluation,
+      lifecycle: {
+        ...evaluation.lifecycle,
+        completionState: "COMPLETED"
+      }
+    })).toThrow("lifecycle completion state does not match session status");
 
-    // Independence should only have the Level 2 penalty (-15), not the Level 4 penalties
-    expect(evaluation.scores.independence).toBe(85);
-    expect(evaluation.assistedMilestoneCount).toBeGreaterThanOrEqual(1);
-
-    const markdown = generateEvaluationMarkdown(evaluation);
-    expect(markdown).toContain("pigeonhole");
-    expect(markdown).not.toContain("Unexposed hint");
+    const firstMilestone = evaluation.milestones[0];
+    if (firstMilestone === undefined) throw new Error("Expected milestone evaluation");
+    expect(() => SessionEvaluationSchema.parse({
+      ...evaluation,
+      milestones: [{
+        ...firstMilestone,
+        assistanceLevel: 1,
+        assistanceDisclosureIds: []
+      }, ...evaluation.milestones.slice(1)]
+    })).toThrow("assistance level and disclosure IDs are internally inconsistent");
   });
 
-  it("evaluates custom problem reasoning graphs correctly", () => {
-    const sessionId = newSessionId();
-    const turn1 = TurnIdSchema.parse("turn_001");
-    const turn2 = TurnIdSchema.parse("turn_002");
-
-    const state: SessionState = {
-      ...initialSessionState(sessionId),
-      turns: {
-        [turn1]: {
-          turnId: turn1,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_001"),
-          committedSequence: 1,
-          studentText: "Step 1: The sample space consists of all binary sequences."
-        },
-        [turn2]: {
-          turnId: turn2,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_002"),
-          committedSequence: 2,
-          studentText: "Step 2: We condition on the first coin flip being Heads or Tails."
-        }
-      },
-      deliveries: {}
-    };
-
-    const probEval = evaluateInterviewSession(state, mockProbabilityProblem);
-    expect(probEval.problemId).toBe(mockProbabilityProblem.id);
-    expect(probEval.milestones).toHaveLength(2);
-    expect(probEval.scores.compositeScore).toBeGreaterThanOrEqual(70);
+  it("rejects tampered composite metadata even when individual scores are schema-valid", () => {
+    let state = boundState();
+    state = setHistory(state, milestoneKey("model-relations", "CORRECTNESS"), [
+      { value: "CORRECT", sequence: 10, status: "ACTIVE" }
+    ]);
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(() => SessionEvaluationSchema.parse({
+      ...evaluation,
+      composite: {
+        ...evaluation.composite,
+        status: "FULL",
+        includedDimensions: ["technicalCorrectness", "communication"],
+        omittedDimensions: []
+      }
+    })).toThrow();
   });
 
-  it("adjusts composite scoring with custom rubric weights", () => {
-    const sessionId = newSessionId();
-    const turn1 = TurnIdSchema.parse("turn_001");
-
-    const state: SessionState = {
-      ...initialSessionState(sessionId),
-      turns: {
-        [turn1]: {
-          turnId: turn1,
-          inputEpisodeId: InputEpisodeIdSchema.parse("ep_001"),
-          committedSequence: 1,
-          studentText: "Let us start by setting up the problem statement."
-        }
-      },
-      deliveries: {}
-    };
-
-    const normalEval = evaluateInterviewSession(state, mockProbabilityProblem);
-
-    // Custom rubric heavily weighting independence
-    const customEval = evaluateInterviewSession(state, mockProbabilityProblem, {
-      independenceWeight: 0.80,
-      correctnessWeight: 0.10,
-      rigorWeight: 0.05,
-      communicationWeight: 0.05,
-      errorRecoveryWeight: 0
+  it("is deterministic, timestamp-independent for scoring, and omits raw private content", () => {
+    let state = completeMilestone(boundState(), "choose-vertex", 20);
+    state = withTurns(state, 1, "PRIVATE_TRANSCRIPT_SENTINEL");
+    state = withDelivery(
+      state,
+      chooseDisclosure,
+      2,
+      "EXPOSED",
+      5,
+      "privacy",
+      "PRIVATE_HINT_SENTINEL"
+    );
+    const before = JSON.stringify(state);
+    const first = evaluateInterviewSession(state, sixPeopleProblem, {}, {
+      evaluatedAt: "2026-08-31T20:00:00.000Z"
+    });
+    const second = evaluateInterviewSession(state, sixPeopleProblem, {}, {
+      evaluatedAt: "2026-08-31T21:00:00.000Z"
     });
 
-    expect(customEval.scores.independence).toBe(100);
-    expect(customEval.scores.compositeScore).toBeGreaterThan(normalEval.scores.compositeScore);
+    expect({ ...first, evaluatedAt: "ignored" }).toEqual({ ...second, evaluatedAt: "ignored" });
+    expect(JSON.stringify(state)).toBe(before);
+    const serialized = JSON.stringify(first);
+    expect(serialized).not.toContain(sixPeopleProblem.private.canonicalSolution);
+    expect(serialized).not.toContain("PRIVATE_TRANSCRIPT_SENTINEL");
+    expect(serialized).not.toContain("PRIVATE_HINT_SENTINEL");
+
+    const markdown = generateEvaluationMarkdown(first);
+    expect(markdown).toContain("Support");
+    expect(markdown).not.toContain("PRIVATE_HINT_SENTINEL");
   });
 });
+
+function boundState(): SessionState {
+  return {
+    ...initialSessionState(newSessionId()),
+    started: true,
+    status: "ACTIVE",
+    problem: {
+      id: sixPeopleProblem.id,
+      version: sixPeopleProblem.version,
+      prompt: sixPeopleProblem.public.prompt,
+      providerContextSpecSha256: createProviderContextSpecFingerprintSync(sixPeopleProblem)
+    }
+  };
+}
+
+function milestone(
+  evaluation: ReturnType<typeof evaluateInterviewSession>,
+  milestoneId: string
+) {
+  const item = evaluation.milestones.find((candidate) => candidate.milestoneId === milestoneId);
+  if (item === undefined) throw new Error("Expected milestone evaluation");
+  return item;
+}
+
+function milestoneKey(
+  milestoneId: string,
+  dimension: EvidenceKey["dimension"]
+): EvidenceKey {
+  return {
+    problemId: sixPeopleProblem.id,
+    subject: { kind: "MILESTONE", milestoneId },
+    dimension
+  };
+}
+
+function setHistory(
+  state: SessionState,
+  key: EvidenceKey,
+  specs: readonly {
+    readonly value: EvidenceRating;
+    readonly sequence: number;
+    readonly status: EvidenceRecordState["status"];
+    readonly evidenceEventIds?: readonly ReturnType<typeof EventIdSchema.parse>[];
+    readonly confidence?: number;
+  }[]
+): SessionState {
+  const keyString = evidenceKeyToString(key);
+  const subjectId =
+    key.subject.kind === "CLAIM"
+      ? key.subject.claimId
+      : key.subject.kind === "MILESTONE"
+        ? key.subject.milestoneId
+        : key.subject.kind === "SKILL"
+          ? key.subject.skillId
+          : key.subject.approachId;
+  const recordIds = specs.map((spec, index) =>
+    EventIdSchema.parse(
+      "evidence_" +
+      subjectId +
+      "_" +
+      key.dimension +
+      "_" +
+      String(spec.sequence) +
+      "_" +
+      String(index)
+    )
+  );
+  const newHistory: EvidenceRecordState[] = specs.map((spec, index) => {
+    const evidenceEventId = recordIds[index];
+    if (evidenceEventId === undefined) throw new Error("Fixture evidence ID is unavailable");
+    const supersededByEventId = recordIds[index + 1];
+    if (spec.status === "SUPERSEDED" && supersededByEventId === undefined) {
+      throw new Error("Fixture superseded evidence requires a replacement");
+    }
+    return {
+      evidenceEventId,
+      key,
+      value: {
+        value: spec.value,
+        inferenceConfidence: spec.confidence ?? 0.95,
+        evidenceEventIds: spec.evidenceEventIds === undefined
+          ? [EventIdSchema.parse(
+              "support_" +
+              subjectId +
+              "_" +
+              key.dimension +
+              "_" +
+              String(spec.sequence) +
+              "_" +
+              String(index)
+            )]
+          : [...spec.evidenceEventIds],
+        lastUpdatedSequence: spec.sequence
+      },
+      status: spec.status,
+      ...(spec.status === "SUPERSEDED" ? { supersededByEventId } : {}),
+      ...(spec.status === "STALE" ? { invalidationReason: "stale evidence" } : {})
+    };
+  });
+  const existingHistory = [...(state.evidenceHistory[keyString] ?? [])];
+  const firstNew = newHistory[0];
+  if (firstNew !== undefined) {
+    const activeIndex = existingHistory.findIndex((record) => record.status === "ACTIVE");
+    if (activeIndex >= 0) {
+      const activeRecord = existingHistory[activeIndex];
+      if (activeRecord === undefined) throw new Error("Fixture active evidence is unavailable");
+      existingHistory[activeIndex] = {
+        ...activeRecord,
+        status: "SUPERSEDED",
+        supersededByEventId: firstNew.evidenceEventId
+      };
+    }
+  }
+  const history = [...existingHistory, ...newHistory];
+  const active = history.find((record) => record.status === "ACTIVE");
+  const studentEvidence =
+    active === undefined
+      ? Object.fromEntries(
+          Object.entries(state.studentEvidence).filter(([candidate]) => candidate !== keyString)
+        )
+      : { ...state.studentEvidence, [keyString]: active.value };
+
+  let eventIds = [...state.eventIds];
+  for (const record of newHistory) {
+    for (const provenanceId of record.value.evidenceEventIds) {
+      if (!eventIds.includes(provenanceId)) {
+        eventIds = placeEventBeforeSequence(
+          eventIds,
+          provenanceId,
+          record.value.lastUpdatedSequence
+        );
+      }
+    }
+    eventIds = placeEventAtSequence(
+      eventIds,
+      record.evidenceEventId,
+      record.value.lastUpdatedSequence
+    );
+  }
+  return {
+    ...state,
+    sequence: Math.max(state.sequence, ...specs.map((spec) => spec.sequence)),
+    eventIds,
+    studentEvidence,
+    evidenceHistory: { ...state.evidenceHistory, [keyString]: history }
+  };
+}
+
+function invalidateActiveEvidence(
+  state: SessionState,
+  key: EvidenceKey,
+  reason = "fixture invalidation"
+): SessionState {
+  const keyString = evidenceKeyToString(key);
+  const history = [...(state.evidenceHistory[keyString] ?? [])];
+  const activeIndex = history.findIndex((record) => record.status === "ACTIVE");
+  if (activeIndex < 0) throw new Error("Fixture invalidation requires active evidence");
+  const active = history[activeIndex];
+  if (active === undefined) throw new Error("Fixture active evidence is unavailable");
+  history[activeIndex] = {
+    ...active,
+    status: "STALE",
+    invalidationReason: reason
+  };
+  return {
+    ...state,
+    studentEvidence: Object.fromEntries(
+      Object.entries(state.studentEvidence).filter(([candidate]) => candidate !== keyString)
+    ),
+    evidenceHistory: {
+      ...state.evidenceHistory,
+      [keyString]: history
+    }
+  };
+}
+
+function completeMilestone(
+  state: SessionState,
+  milestoneId: string,
+  sequence: number
+): SessionState {
+  return setHistory(state, milestoneKey(milestoneId, "PROGRESS"), [
+    { value: "COMPLETE", sequence, status: "ACTIVE" }
+  ]);
+}
+
+function withTurns(
+  state: SessionState,
+  count: number,
+  text: string
+): SessionState {
+  const turns: Record<string, SessionState["turns"][string]> = { ...state.turns };
+  const inputEpisodes = { ...state.inputEpisodes };
+  let eventIds = [...state.eventIds];
+  let sequence = state.sequence;
+  for (let index = 0; index < count; index += 1) {
+    const turnId = TurnIdSchema.parse(
+      "turn_eval_" + String(sequence + 1) + "_" + String(index)
+    );
+    const inputEpisodeId = InputEpisodeIdSchema.parse(
+      "episode_eval_" + String(sequence + 1) + "_" + String(index)
+    );
+    sequence += 1;
+    const turnEventId = EventIdSchema.parse(
+      "turn_committed_eval_" + String(sequence) + "_" + String(index)
+    );
+    eventIds = placeEventAtSequence(eventIds, turnEventId, sequence);
+    inputEpisodes[inputEpisodeId] = {
+      inputEpisodeId,
+      status: "COMMITTED",
+      inputs: [{ modality: "TYPING", semanticContent: text }]
+    };
+    turns[turnId] = {
+      turnId,
+      inputEpisodeId,
+      studentText: text,
+      committedSequence: sequence
+    };
+  }
+  return {
+    ...state,
+    sequence,
+    eventIds,
+    inputEpisodes,
+    turns,
+    ...(count === 0
+      ? {}
+      : { lastCommittedInputSequence: sequence })
+  };
+}
+
+function withDelivery(
+  state: SessionState,
+  disclosureId: typeof chooseDisclosure,
+  level: 0 | 1 | 2 | 3 | 4 | 5,
+  status: DeliveryAtom["status"],
+  basisSequence: number,
+  label: string,
+  text = "fixture assistance"
+): SessionState {
+  const generationId = GenerationIdSchema.parse("generation_" + label);
+  const deliveryId = DeliveryIdSchema.parse("delivery_" + label);
+  const turnId = TurnIdSchema.parse("turn_delivery_basis_" + String(basisSequence));
+  const inputEpisodeId = InputEpisodeIdSchema.parse(
+    "episode_delivery_basis_" + String(basisSequence)
+  );
+  const turnEventId = EventIdSchema.parse(
+    "turn_committed_delivery_basis_" + String(basisSequence)
+  );
+  const atom: DeliveryAtom = {
+    deliveryId,
+    generationId,
+    content: { medium: "TEXT", text },
+    disclosureIds: [disclosureId],
+    effectiveDisclosureLevel: level,
+    status
+  };
+
+  const eventIds = placeEventAtSequence([...state.eventIds], turnEventId, basisSequence);
+  const inputEpisodes = {
+    ...state.inputEpisodes,
+    [inputEpisodeId]: {
+      inputEpisodeId,
+      status: "COMMITTED" as const,
+      inputs: [{ modality: "TYPING" as const, semanticContent: "fixture delivery basis" }]
+    }
+  };
+  const turns = {
+    ...state.turns,
+    [turnId]: {
+      turnId,
+      inputEpisodeId,
+      studentText: "fixture delivery basis",
+      committedSequence: basisSequence
+    }
+  };
+  const latestCommittedInputSequence = Math.max(
+    state.lastCommittedInputSequence ?? 0,
+    basisSequence
+  );
+
+  return {
+    ...state,
+    sequence: Math.max(state.sequence, basisSequence),
+    eventIds,
+    inputEpisodes,
+    turns,
+    lastCommittedInputSequence: latestCommittedInputSequence,
+    generations: {
+      ...state.generations,
+      [generationId]: {
+        generationId,
+        basis: {
+          contextEpoch: zeroContextEpoch,
+          committedInputSequence: basisSequence,
+          transcriptRevision: zeroTranscriptRevision,
+          boardRevision: zeroBoardRevision,
+          problemStateRevision: zeroProblemStateRevision,
+          policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
+          turnId
+        },
+        provider: "fixture-provider",
+        status: "VALIDATED"
+      }
+    },
+    deliveries: { ...state.deliveries, [deliveryId]: atom },
+    disclosureLedger:
+      status === "EXPOSED" || status === "COMPLETED" || status === "POSSIBLY_EXPOSED"
+        ? Array.from(new Set([...state.disclosureLedger, disclosureId]))
+        : state.disclosureLedger
+  };
+}
+
+function withVerification(
+  state: SessionState,
+  key: EvidenceKey,
+  status: "VERIFIED" | "CONTRADICTED" | "UNRESOLVED",
+  basisLabel: number,
+  label: string
+): SessionState {
+  const requestId = RequestIdSchema.parse("verification_" + label);
+  const turnId = TurnIdSchema.parse("turn_verification_basis_" + String(basisLabel));
+  const inputEpisodeId = InputEpisodeIdSchema.parse(
+    "episode_verification_basis_" + String(basisLabel)
+  );
+  const confidence = status === "UNRESOLVED" ? 0.7 : 1;
+  const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
+  const resultEventId = EventIdSchema.parse("verification_result_" + label);
+
+  const basis = ensureVerificationBasis(state, basisLabel, turnId, inputEpisodeId);
+  let eventIds = basis.eventIds;
+  const requestSequence = basis.sequence + 1;
+  eventIds = placeEventAtSequence(eventIds, requestedEventId, requestSequence);
+  const resultSequence = requestSequence + 1;
+  eventIds = placeEventAtSequence(eventIds, resultEventId, resultSequence);
+
+  const next: SessionState = {
+    ...basis.state,
+    sequence: resultSequence,
+    eventIds,
+    verificationRequests: {
+      ...basis.state.verificationRequests,
+      [requestId]: {
+        verificationRequestId: requestId,
+        verifier: "fixture-verifier",
+        basis: {
+          contextEpoch: zeroContextEpoch,
+          committedInputSequence: basis.committedSequence,
+          transcriptRevision: zeroTranscriptRevision,
+          boardRevision: zeroBoardRevision,
+          problemStateRevision: zeroProblemStateRevision,
+          policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
+          turnId
+        },
+        candidateFormalInterpretation: "fixture",
+        interpretationConfidence: confidence,
+        evidenceKey: key,
+        evidenceEventIds: [basis.turnEventId],
+        requestedEventId,
+        status: "ACCEPTED",
+        result: {
+          status,
+          interpretationConfidence: confidence,
+          verifier: "fixture-verifier",
+          reason: "fixture result"
+        }
+      }
+    }
+  };
+  if (status !== "VERIFIED") return next;
+  return setHistory(next, key, [{
+    value: "CORRECT",
+    sequence: resultSequence + 1,
+    status: "ACTIVE",
+    confidence,
+    evidenceEventIds: [basis.turnEventId, requestedEventId]
+  }]);
+}
+
+function withPendingVerification(
+  state: SessionState,
+  key: EvidenceKey,
+  basisLabel: number,
+  label: string
+): SessionState {
+  const requestId = RequestIdSchema.parse("verification_" + label);
+  const turnId = TurnIdSchema.parse("turn_verification_basis_" + String(basisLabel));
+  const inputEpisodeId = InputEpisodeIdSchema.parse(
+    "episode_verification_basis_" + String(basisLabel)
+  );
+  const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
+
+  const basis = ensureVerificationBasis(state, basisLabel, turnId, inputEpisodeId);
+  const requestSequence = basis.sequence + 1;
+  const eventIds = placeEventAtSequence(
+    basis.eventIds,
+    requestedEventId,
+    requestSequence
+  );
+
+  return {
+    ...basis.state,
+    sequence: requestSequence,
+    eventIds,
+    verificationRequests: {
+      ...basis.state.verificationRequests,
+      [requestId]: {
+        verificationRequestId: requestId,
+        verifier: "fixture-verifier",
+        basis: {
+          contextEpoch: zeroContextEpoch,
+          committedInputSequence: basis.committedSequence,
+          transcriptRevision: zeroTranscriptRevision,
+          boardRevision: zeroBoardRevision,
+          problemStateRevision: zeroProblemStateRevision,
+          policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
+          turnId
+        },
+        candidateFormalInterpretation: "fixture",
+        interpretationConfidence: 1,
+        evidenceKey: key,
+        evidenceEventIds: [basis.turnEventId],
+        requestedEventId,
+        status: "PENDING"
+      }
+    }
+  };
+}
+
+function ensureVerificationBasis(
+  state: SessionState,
+  basisLabel: number,
+  turnId: ReturnType<typeof TurnIdSchema.parse>,
+  inputEpisodeId: ReturnType<typeof InputEpisodeIdSchema.parse>
+): {
+  readonly state: SessionState;
+  readonly sequence: number;
+  readonly eventIds: ReturnType<typeof EventIdSchema.parse>[];
+  readonly committedSequence: number;
+  readonly turnEventId: ReturnType<typeof EventIdSchema.parse>;
+} {
+  const existingTurn = state.turns[turnId];
+  const turnEventId = EventIdSchema.parse(
+    "turn_committed_verification_basis_" + String(basisLabel)
+  );
+  if (existingTurn !== undefined) {
+    const eventIndex = state.eventIds.indexOf(turnEventId);
+    if (eventIndex < 0 || eventIndex + 1 !== existingTurn.committedSequence) {
+      throw new Error("Fixture verification basis turn provenance is inconsistent");
+    }
+    return {
+      state,
+      sequence: state.sequence,
+      eventIds: [...state.eventIds],
+      committedSequence: existingTurn.committedSequence,
+      turnEventId
+    };
+  }
+
+  const lowerBound = (state.lastCommittedInputSequence ?? 0) + 1;
+  let committedSequence: number | undefined;
+  for (let sequence = Math.max(lowerBound, 1); sequence <= basisLabel; sequence += 1) {
+    const current = state.eventIds[sequence - 1];
+    if (current === undefined || current.startsWith("fixture_padding_event_")) {
+      committedSequence = sequence;
+    }
+  }
+  committedSequence ??= state.sequence + 1;
+
+  const eventIds = placeEventAtSequence(
+    [...state.eventIds],
+    turnEventId,
+    committedSequence
+  );
+  const nextState: SessionState = {
+    ...state,
+    sequence: Math.max(state.sequence, committedSequence),
+    eventIds,
+    lastCommittedInputSequence: committedSequence,
+    inputEpisodes: {
+      ...state.inputEpisodes,
+      [inputEpisodeId]: {
+        inputEpisodeId,
+        status: "COMMITTED",
+        inputs: [{ modality: "TYPING", semanticContent: "fixture verification input" }]
+      }
+    },
+    turns: {
+      ...state.turns,
+      [turnId]: {
+        turnId,
+        inputEpisodeId,
+        studentText: "fixture verification input",
+        committedSequence
+      }
+    }
+  };
+  return {
+    state: nextState,
+    sequence: nextState.sequence,
+    eventIds,
+    committedSequence,
+    turnEventId
+  };
+}
+
+function placeEventAtSequence(
+  input: readonly ReturnType<typeof EventIdSchema.parse>[],
+  eventId: ReturnType<typeof EventIdSchema.parse>,
+  sequence: number
+): ReturnType<typeof EventIdSchema.parse>[] {
+  if (!Number.isSafeInteger(sequence) || sequence <= 0) {
+    throw new Error("Fixture sequence must be a positive safe integer");
+  }
+  const eventIds = [...input];
+  const existingIndex = eventIds.indexOf(eventId);
+  if (existingIndex >= 0 && existingIndex !== sequence - 1) {
+    throw new Error("Fixture event is already assigned to a different sequence");
+  }
+  while (eventIds.length < sequence) {
+    eventIds.push(EventIdSchema.parse("fixture_padding_event_" + String(eventIds.length + 1)));
+  }
+  const occupied = eventIds[sequence - 1];
+  if (
+    occupied !== undefined &&
+    !occupied.startsWith("fixture_padding_event_") &&
+    occupied !== eventId
+  ) {
+    throw new Error("Fixture sequence is already occupied by another authoritative event");
+  }
+  eventIds[sequence - 1] = eventId;
+  return eventIds;
+}
+
+function placeEventBeforeSequence(
+  input: readonly ReturnType<typeof EventIdSchema.parse>[],
+  eventId: ReturnType<typeof EventIdSchema.parse>,
+  beforeSequence: number
+): ReturnType<typeof EventIdSchema.parse>[] {
+  const existingIndex = input.indexOf(eventId);
+  if (existingIndex >= 0) {
+    if (existingIndex + 1 >= beforeSequence) {
+      throw new Error("Fixture provenance must predate its evidence update");
+    }
+    return [...input];
+  }
+  for (let sequence = 1; sequence < beforeSequence; sequence += 1) {
+    const current = input[sequence - 1];
+    if (current === undefined || current.startsWith("fixture_padding_event_")) {
+      return placeEventAtSequence(input, eventId, sequence);
+    }
+  }
+  throw new Error("Fixture has no authoritative sequence available for provenance");
+}
+

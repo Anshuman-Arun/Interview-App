@@ -4,25 +4,31 @@
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:replay": "vitest run tests/replay.test.ts tests/vertical-slice.test.ts",
-    "test:property": "vitest run tests/concurrency.property.test.ts",
+    "test:replay": "vitest run tests/replay.test.ts tests/vertical-slice.test.ts tests/quant-research-engine.test.ts tests/quant-research-persistence.test.ts",
+    "test:property": "vitest run tests/concurrency.property.test.ts tests/quant-research-engine.property.test.ts tests/formal-interpretation-routing.property.test.ts",
     "test:e2e": "vitest run tests/e2e-typed-interview.test.ts",
     "dev:web": "vite apps/web",
     "build:web": "vite build apps/web",
     "dev:server": "tsx apps/server/src/server.ts",
     "start:server": "tsx apps/server/src/server.ts",
     "demo": "tsx apps/server/src/run-synthetic.ts",
-    "check": "tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts"
+    "check": "node scripts/check-public-release.mjs && tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts",
+    "build:desktop": "tsc -p apps/desktop/tsconfig.json",
+    "test:desktop": "vitest run tests/desktop-electron-bootstrap.test.ts tests/desktop-electron-adversarial.test.ts tests/desktop-hook-bootstrap.test.tsx",
+    "dev:desktop": "pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js",
+    "start:desktop": "pnpm build:web && pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production",
+    "security:public": "node scripts/check-public-release.mjs"
   },
   "dependencies": {
     "katex": "^0.18.4",
+    "pngjs": "^7.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3"
@@ -34,8 +40,10 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
+    "electron": "44.0.0",
     "eslint": "^10.9.1",
     "fast-check": "^4.9.0",
+    "happy-dom": "^20.12.0",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0",

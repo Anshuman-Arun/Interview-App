@@ -28,7 +28,11 @@ describe("local compute result admission", () => {
     const harness = await speechHarness();
     const coordinator = new LocalComputeCoordinator(harness.writer);
     const issued = await coordinator.requestTranscriptAnalysis(harness.inputEpisodeId);
-    const client = new LocalComputeWorkerClient({ executable: PYTHON, scriptPath: PRODUCTION_WORKER });
+    const client = new LocalComputeWorkerClient({
+      executable: PYTHON,
+      scriptPath: PRODUCTION_WORKER,
+      requestTimeoutMs: 10_000
+    });
     clients.push(client);
     await client.start();
     const response = await client.request(issued.value);
@@ -61,7 +65,7 @@ describe("local compute result admission", () => {
     expect(laterDuplicate.appendedEventCount).toBe(0);
     expect(harness.store.eventCount(harness.sessionId)).toBe(eventCount);
     harness.store.close();
-  });
+  }, 20_000);
 
   it("discards a late result after transcript correction", async () => {
     const harness = await speechHarness();

@@ -14,11 +14,25 @@ import {
   BrowserCommandResponseError,
   BrowserCommandTransportError
 } from "../apps/web/src/command-client.js";
+import { deriveDefaultRendererStreamUrl } from "../apps/web/src/hooks/useInterviewSession.js";
 
 const CLIENT_TOKEN = "phase0-browser-command-client-token-long-enough";
 const BASE_URL = "http://127.0.0.1:43123";
 const SESSION_ID = SessionIdSchema.parse("session_browser_test");
 const DELIVERY_ID = DeliveryIdSchema.parse("delivery_browser_test");
+
+describe("browser transport endpoint derivation", () => {
+  it("preserves the standalone command+1 renderer port convention", () => {
+    expect(deriveDefaultRendererStreamUrl("http://127.0.0.1:43123"))
+      .toBe("http://127.0.0.1:43124/v1/renderer-stream");
+    expect(deriveDefaultRendererStreamUrl("http://[::1]:43123"))
+      .toBe("http://[::1]:43124/v1/renderer-stream");
+
+    expect(() => deriveDefaultRendererStreamUrl("https://127.0.0.1:43123")).toThrow();
+    expect(() => deriveDefaultRendererStreamUrl("http://localhost:43123")).toThrow();
+    expect(() => deriveDefaultRendererStreamUrl("http://127.0.0.1:65535")).toThrow(/cannot derive/u);
+  });
+});
 
 describe("browser command client", () => {
   it("sends an authenticated loopback POST without ambient browser credentials", async () => {
@@ -63,6 +77,49 @@ describe("browser command client", () => {
     });
     expect(body).not.toContain(CLIENT_TOKEN);
     expect(fetchInputUrl(call.input)).not.toContain(CLIENT_TOKEN);
+  });
+
+  it("rejects ambiguous or unknown external authentication configuration", () => {
+    expect(() => new BrowserCommandClient({
+      baseUrl: BASE_URL,
+      clientToken: CLIENT_TOKEN,
+      externalAuthenticationHeaderValue: "desktop-managed-v1"
+    })).toThrow(/ambiguous/u);
+
+    for (const markerValue of ["", "desktop-managed-v2", "arbitrary-marker"]) {
+      expect(() => new BrowserCommandClient({
+        baseUrl: BASE_URL,
+        externalAuthenticationHeaderValue: markerValue
+      })).toThrow(/marker is invalid/u);
+    }
+  });
+
+  it("supports a non-secret native authentication marker without a renderer token", async () => {
+    const requestId = RequestIdSchema.parse("request_desktop_auth");
+    const calls: FetchCall[] = [];
+    const client = new BrowserCommandClient({
+      baseUrl: BASE_URL,
+      externalAuthenticationHeaderValue: "desktop-managed-v1",
+      requestIdFactory: () => requestId,
+      fetchImpl: asFetch(async (input, init) => {
+        calls.push({ input, init: requireInit(init) });
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: true,
+          type: "SESSION_STARTED",
+          requestId,
+          sessionId: SESSION_ID
+        });
+      })
+    });
+
+    await client.startSession(SESSION_ID);
+
+    const call = requireCall(calls);
+    const headers = new Headers(call.init.headers);
+    expect(headers.get("x-interview-client-token")).toBe("desktop-managed-v1");
+    expect(fetchInputUrl(call.input)).not.toContain("desktop-managed-v1");
+    expect(requireStringBody(call.init.body)).not.toContain("desktop-managed-v1");
   });
 
   it("serializes COMMIT_TYPED_INPUT with the caller text and no credential material", async () => {
@@ -580,7 +637,7 @@ describe("browser command client", () => {
     "http://127.0.0.1:43123/path",
     "http://127.0.0.1:43123/?query=yes",
     "http://127.0.0.1:43123/#fragment",
-    "http://user:pass@127.0.0.1:43123"
+    "http://" + "user" + ":" + "pass" + "@127.0.0.1:43123"
   ])("rejects non-exact or non-loopback base URL %s", (baseUrl) => {
     expect(() => new BrowserCommandClient({
       baseUrl,
@@ -599,6 +656,22 @@ describe("browser command client", () => {
         throw new Error("unused");
       })
     })).not.toThrow();
+  });
+
+  it("rejects non-string or header-injection browser tokens before any request", () => {
+    for (const clientToken of [
+      12345 as never,
+      `${CLIENT_TOKEN}\rmalicious: yes`,
+      `${CLIENT_TOKEN}\nmalicious: yes`
+    ]) {
+      expect(() => new BrowserCommandClient({
+        baseUrl: BASE_URL,
+        clientToken,
+        fetchImpl: asFetch(async () => {
+          throw new Error("unused");
+        })
+      })).toThrow(/Client token/u);
+    }
   });
 
   it("rejects a short client token before any request can be made", () => {

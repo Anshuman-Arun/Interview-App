@@ -43,11 +43,18 @@ export async function createAndStartServer(config: ServerConfig = {}) {
   const runtime = new LocalInterviewTransportRuntime({
     security,
     registry,
+    store,
     commandPort,
     rendererStreamPort
   });
 
-  const bound = await runtime.start();
+  let bound: Awaited<ReturnType<LocalInterviewTransportRuntime["start"]>>;
+  try {
+    bound = await runtime.start();
+  } catch (error) {
+    store.close();
+    throw error;
+  }
 
   return {
     runtime,
@@ -71,8 +78,8 @@ async function main() {
   console.log(`  Host:                  ${instance.bound.command.host}`);
   console.log(`  Command Endpoint:      ${instance.bound.command.url}/v1/commands`);
   console.log(`  Renderer Stream:       ${instance.bound.rendererStream.streamUrl}`);
-  console.log(`  Allowed Origins:       ${[...instance.security.allowedOrigins].join(", ")}`);
-  console.log(`  Database File:         ${instance.databasePath}`);
+  console.log(`  Allowed Origins:       ${String(instance.security.allowedOrigins.size)} configured`);
+  console.log("  Database:              local SQLite");
   console.log("--------------------------------------------------");
   console.log("  Server is ready for authenticated client connections.");
 
@@ -82,8 +89,8 @@ async function main() {
       await instance.stop();
       console.log("Server stopped successfully.");
       process.exit(0);
-    } catch (err) {
-      console.error("Error during server shutdown:", err);
+    } catch {
+      console.error("Error during server shutdown.");
       process.exit(1);
     }
   };
@@ -93,8 +100,8 @@ async function main() {
 }
 
 if (process.argv[1] && (process.argv[1].endsWith("server.ts") || process.argv[1].endsWith("server.js"))) {
-  void main().catch((err: unknown) => {
-    console.error("Fatal error starting interview server:", err);
+  void main().catch(() => {
+    console.error("Fatal error starting interview server.");
     process.exit(1);
   });
 }

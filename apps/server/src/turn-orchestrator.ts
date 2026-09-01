@@ -1,6 +1,7 @@
 import type {
   InputEpisodeId,
   InterviewerProposal,
+  RealizationRequest,
   SessionId,
   TurnId
 } from "../../../packages/domain/src/index.js";
@@ -15,11 +16,18 @@ import {
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 
-const DEFAULT_INDEPENDENT_SAFE_PROBES = [
+const CHOOSE_PERSON_REALIZATION =
+  "Why must at least three edges share the same color from vertex A?";
+const COMPLETE_TRIANGLE_REALIZATION =
+  "Consider the three endpoints connected to vertex A by edges of the same color. What happens if any edge between them shares that color, and what happens if none of them do?";
+
+const DEFAULT_REVIEWED_REALIZATIONS = [
   "What relations exist between vertex A and the other five people?",
   "Why must that step be true?",
   "Why must that claim hold?",
-  "Can you formalize the two cases for the edges among those three vertices?"
+  "Can you formalize the two cases for the edges among those three vertices?",
+  CHOOSE_PERSON_REALIZATION,
+  COMPLETE_TRIANGLE_REALIZATION
 ] as const;
 
 export interface TurnOrchestrationInput {
@@ -38,7 +46,7 @@ export class ServerTurnOrchestrator {
     private readonly getRendererStreamServer: () => RendererStreamServer | undefined,
     validator?: DisclosureValidator
   ) {
-    this.validator = validator ?? new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(DEFAULT_INDEPENDENT_SAFE_PROBES));
+    this.validator = validator ?? new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(DEFAULT_REVIEWED_REALIZATIONS));
   }
 
   public async orchestrateTurn(input: TurnOrchestrationInput): Promise<void> {
@@ -56,29 +64,46 @@ export class ServerTurnOrchestrator {
     return orchestration;
   }
 
+  public async waitForAll(): Promise<void> {
+    await Promise.all(Array.from(this.inFlight.values()));
+  }
+
   public async recoverPendingTurns(sessionId: SessionId): Promise<void> {
     const writer = this.sessions.getWriter(sessionId);
     const state = writer.getState();
+    if (!state.started || state.status !== "ACTIVE") {
+      return;
+    }
 
     const turns = new TurnCoordinator(writer);
 
     for (const [turnId, turn] of Object.entries(state.turns)) {
-      if (turn.studentText.length === 0) continue;
-
-      const hasValidatedGeneration = Object.values(state.generations).some(
-        (g) => g.basis.turnId === turnId && g.status === "VALIDATED"
-      );
-      const hasDeliveries = Object.values(state.deliveries).some(
-        (d) => Object.values(state.generations).some((g) => g.generationId === d.generationId && g.basis.turnId === turnId)
-      );
-
-      // Clean up stranded in-flight generations from pre-crash processes
+      // Clean up stranded in-flight generations from pre-crash processes, including older turns.
       const strandedGenerations = Object.values(state.generations).filter(
         (g) => g.basis.turnId === turnId && (g.status === "ACTIVE" || g.status === "PROPOSAL_RECEIVED")
       );
       for (const stranded of strandedGenerations) {
         await turns.supersedeGeneration(stranded.generationId, "CRASH_RECOVERY_STRANDED");
       }
+
+      if (
+        turn.studentText.length === 0
+        || state.lastCommittedInputSequence === undefined
+        || turn.committedSequence !== state.lastCommittedInputSequence
+      ) continue;
+
+      const hasValidatedGeneration = Object.values(state.generations).some(
+        (g) => g.basis.turnId === turnId && g.status === "VALIDATED"
+      );
+      const hasDeliveries = Object.values(state.deliveries).some(
+        (delivery) =>
+          delivery.status !== "CANCELLED"
+          && Object.values(state.generations).some(
+            (generation) =>
+              generation.generationId === delivery.generationId
+              && generation.basis.turnId === turnId
+          )
+      );
 
       if (!hasValidatedGeneration && !hasDeliveries) {
         await this.orchestrateTurn({
@@ -94,8 +119,19 @@ export class ServerTurnOrchestrator {
   private async executeOrchestration(input: TurnOrchestrationInput): Promise<void> {
     const writer = this.sessions.getWriter(input.sessionId);
 
-    // Check if turn already has validated generation or deliveries to ensure strict idempotency
+    // Resolve all orchestration inputs back to authoritative state before doing any provider work.
     const currentState = writer.getState();
+    const authoritativeTurn = currentState.turns[input.turnId];
+    if (
+      authoritativeTurn === undefined
+      || authoritativeTurn.turnId !== input.turnId
+      || authoritativeTurn.inputEpisodeId !== input.inputEpisodeId
+      || currentState.lastCommittedInputSequence === undefined
+      || authoritativeTurn.committedSequence !== currentState.lastCommittedInputSequence
+    ) {
+      return;
+    }
+
     const existingGeneration = Object.values(currentState.generations).find(
       (g) => g.basis.turnId === input.turnId && g.status === "VALIDATED"
     );
@@ -105,14 +141,16 @@ export class ServerTurnOrchestrator {
 
     const turns = new TurnCoordinator(writer);
 
-    // 1. Pedagogical policy selects the required action
-    const realizationRequest = await turns.selectAction(input.turnId);
+    // 1. Pedagogical policy selects (or refreshes) the required action
+    const realizationRequest = await turns.selectAction(input.turnId, sixPeopleProblem);
+    if (realizationRequest.requiredAction === "WAIT") {
+      return;
+    }
 
-    // 2. Select contextual Oxford Socratic probe based on maximumDisclosure authorized
+    // 2. Realize only wording/content already authorized by application policy
     const proposal = this.createInterviewerProposal(
-      input.studentText,
-      realizationRequest.requiredAction,
-      realizationRequest.maximumDisclosure
+      authoritativeTurn.studentText,
+      realizationRequest
     );
 
     // 3. MockModelAdapter with zero metered spend
@@ -121,8 +159,8 @@ export class ServerTurnOrchestrator {
     // 4. ProviderCoordinator initiates generation, compiles context, and validates proposal
     const coordinator = new ProviderCoordinator(writer);
     const execution = await coordinator.start({
-      inputEpisodeId: input.inputEpisodeId,
-      turnId: input.turnId,
+      inputEpisodeId: authoritativeTurn.inputEpisodeId,
+      turnId: authoritativeTurn.turnId,
       provider,
       policy: {
         allowMeteredUsage: false,
@@ -153,39 +191,42 @@ export class ServerTurnOrchestrator {
 
   private createInterviewerProposal(
     studentText: string,
-    requiredAction: InterviewerProposal["realizedAction"],
-    maximumDisclosure: number
+    request: RealizationRequest
   ): InterviewerProposal {
     const text = studentText.toLowerCase();
+    const allowedDisclosureIds = new Set(request.allowedDisclosureIds ?? []);
 
-    // If policy authorizes level 4 disclosure and student reached PHP milestone
+    const completeTriangle = sixPeopleProblem.interviewer.protectedDisclosures[1];
     if (
-      maximumDisclosure >= 4 &&
-      (text.includes("pigeonhole") || text.includes("3") || text.includes("three") || text.includes("same color") || text.includes("same colour"))
+      request.maximumDisclosure >= 4
+      && completeTriangle !== undefined
+      && allowedDisclosureIds.has(completeTriangle.id)
+      && (text.includes("pigeonhole") || text.includes("3") || text.includes("three") || text.includes("same color") || text.includes("same colour"))
     ) {
-      const completeTriangle = sixPeopleProblem.interviewer.protectedDisclosures[1];
       return {
-        realizedAction: requiredAction,
+        realizedAction: request.requiredAction,
         claimedDisclosureLevel: 4,
-        claimedDisclosureIds: completeTriangle !== undefined ? [completeTriangle.id] : [],
-        speechText: "Consider the three endpoints connected to vertex A by edges of the same color. What happens if any edge between them shares that color, and what happens if none of them do?"
+        claimedDisclosureIds: [completeTriangle.id],
+        speechText: COMPLETE_TRIANGLE_REALIZATION
       };
     }
 
-    // If policy authorizes level 2 disclosure
-    if (maximumDisclosure >= 2) {
-      const choosePerson = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    const choosePerson = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    if (
+      request.maximumDisclosure >= 2
+      && choosePerson !== undefined
+      && allowedDisclosureIds.has(choosePerson.id)
+    ) {
       return {
-        realizedAction: requiredAction,
+        realizedAction: request.requiredAction,
         claimedDisclosureLevel: 2,
-        claimedDisclosureIds: choosePerson !== undefined ? [choosePerson.id] : [],
-        speechText: "Why must at least three edges share the same color from vertex A?"
+        claimedDisclosureIds: [choosePerson.id],
+        speechText: CHOOSE_PERSON_REALIZATION
       };
     }
 
-    // Default zero-disclosure probe
     return {
-      realizedAction: requiredAction,
+      realizedAction: request.requiredAction,
       claimedDisclosureLevel: 0,
       claimedDisclosureIds: [],
       speechText: "What relations exist between vertex A and the other five people?"

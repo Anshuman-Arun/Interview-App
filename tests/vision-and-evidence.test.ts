@@ -74,7 +74,11 @@ describe("vision and student evidence callbacks", () => {
       const key = evidenceKeyToString(proposal.key);
       expect(result).toEqual({ committed: true, key });
       expect(harness.writer.getState().studentEvidence[key]?.value).toBe("PROGRESSING");
-      expect(harness.writer.getState().studentEvidence[key]?.lastUpdatedSequence).toBe(harness.writer.getState().sequence);
+      const evidenceEvent = harness.store.load(harness.sessionId)
+        .findLast((event) => event.type === "STUDENT_EVIDENCE_UPDATED");
+      expect(evidenceEvent).toBeDefined();
+      expect(harness.writer.getState().studentEvidence[key]?.lastUpdatedSequence)
+        .toBe(evidenceEvent?.sequence);
     } finally {
       harness.store.close();
     }

@@ -86,9 +86,21 @@ export async function consumeAuthenticatedRendererStream(
     }
   } catch (error) {
     if (options.signal?.aborted === true) return;
+    if (error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted") || error.message.includes("terminated"))) {
+      return;
+    }
     throw error;
   } finally {
-    reader.releaseLock();
+    try {
+      await reader.cancel();
+    } catch {
+      // Ignore cancellation failures during teardown
+    }
+    try {
+      reader.releaseLock();
+    } catch {
+      // Ignore release failures during teardown
+    }
   }
 }
 

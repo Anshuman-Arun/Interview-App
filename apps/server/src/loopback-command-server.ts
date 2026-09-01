@@ -16,6 +16,7 @@ import {
   createCommandEnvelope
 } from "../../../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
+import { RequestIdConflictError } from "../../../packages/persistence/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 
@@ -60,7 +61,13 @@ export class LoopbackCommandServer {
     if (!LOOPBACK_HOSTS.has(options.security.host)) {
       throw new Error("The command server may bind only to a loopback address");
     }
-    if (options.security.clientToken.length < 32) throw new Error("Client token must contain at least 32 characters");
+    if (
+      typeof options.security.clientToken !== "string"
+      || options.security.clientToken.length < 32
+      || /[\r\n]/u.test(options.security.clientToken)
+    ) {
+      throw new Error("Client token must contain at least 32 characters");
+    }
     if (options.security.allowedOrigins.size === 0) throw new Error("At least one exact client origin is required");
     for (const origin of options.security.allowedOrigins) {
       const parsed = new URL(origin);
@@ -148,8 +155,33 @@ export class LoopbackCommandServer {
   }
 
   private async dispatch(command: ClientCommand): Promise<ProtocolSuccessResponse> {
-    const writer = this.options.sessions.getWriter(command.sessionId);
-    await this.options.sessions.ensureRecovered(command.sessionId);
+    if (command.type === "LIST_SESSIONS") {
+      const sessions = this.options.sessions.listSessions();
+      return {
+        protocolVersion: 1,
+        ok: true,
+        type: "SESSIONS_LIST",
+        requestId: command.requestId,
+        sessions: [...sessions]
+      };
+    }
+
+    if (
+      command.type === "START_SESSION"
+      && command.problemId !== undefined
+      && command.problemId !== sixPeopleProblem.id
+    ) {
+      throw new ProtocolHttpError(404, "NOT_FOUND", "Problem not found");
+    }
+
+    if (command.type !== "START_SESSION" && !this.options.sessions.hasSession(command.sessionId)) {
+      throw new ProtocolHttpError(404, "NOT_FOUND", "Session not found");
+    }
+
+    const writer = await this.options.sessions.getWriterAsync(command.sessionId);
+    if (command.type !== "START_SESSION") {
+      await this.options.sessions.ensureRecovered(command.sessionId);
+    }
     const envelope = createCommandEnvelope({
       sessionId: command.sessionId,
       requestId: command.requestId,
@@ -158,12 +190,57 @@ export class LoopbackCommandServer {
     switch (command.type) {
       case "START_SESSION": {
         await new TurnCoordinator(writer).startSession(sixPeopleProblem, envelope);
+        // Establish the process-lifetime recovery boundary immediately after
+        // authoritative creation, before a live delivery can become in-flight.
+        await this.options.sessions.ensureRecovered(command.sessionId);
         return {
           protocolVersion: 1,
           ok: true,
           type: "SESSION_STARTED",
           requestId: command.requestId,
           sessionId: command.sessionId
+        };
+      }
+      case "RESUME_SESSION": {
+        await new TurnCoordinator(writer).resumeSession(envelope);
+        const state = writer.getState();
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "SESSION_RESUMED",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          sequence: state.sequence,
+          started: state.started,
+          status: state.status,
+          ...(state.problem?.id !== undefined ? { problemId: state.problem.id } : {}),
+          contextEpoch: state.contextEpoch,
+          deliveryStatuses: Object.fromEntries(
+            Object.values(state.deliveries).map((atom) => [atom.deliveryId, atom.status])
+          ),
+          history: [...this.options.sessions.getHistory(command.sessionId)]
+        };
+      }
+      case "COMPLETE_SESSION": {
+        const completed = await new TurnCoordinator(writer).completeSession(envelope, command.summary);
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "SESSION_COMPLETED",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          completedAt: completed.completedAt
+        };
+      }
+      case "ARCHIVE_SESSION": {
+        const archived = await new TurnCoordinator(writer).archiveSession(envelope, command.reason);
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "SESSION_ARCHIVED",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          archivedAt: archived.archivedAt
         };
       }
       case "COMMIT_TYPED_INPUT": {
@@ -197,10 +274,12 @@ export class LoopbackCommandServer {
           sessionId: command.sessionId,
           sequence: state.sequence,
           started: state.started,
+          status: state.status,
           contextEpoch: state.contextEpoch,
           deliveryStatuses: Object.fromEntries(
             Object.values(state.deliveries).map((atom) => [atom.deliveryId, atom.status])
-          )
+          ),
+          history: [...this.options.sessions.getHistory(command.sessionId)]
         };
       }
       case "RECONNECT_DELIVERY": {
@@ -282,6 +361,9 @@ function parseCommand(body: string): ClientCommand {
 
 function classifyError(error: unknown): ProtocolHttpError {
   if (error instanceof ProtocolHttpError) return error;
+  if (error instanceof RequestIdConflictError) {
+    return new ProtocolHttpError(409, "CONFLICT", "RequestId conflicts with an earlier command");
+  }
   if (error instanceof Error && (error.message === "Session already started" || error.message.startsWith("Cannot "))) {
     return new ProtocolHttpError(409, "CONFLICT", "Command conflicts with current session state");
   }
