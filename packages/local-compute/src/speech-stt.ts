@@ -43,9 +43,7 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
     if (signal.aborted || this.cancelled.has(input.requestId)) throw abortError();
-    const response = this.responseFactory(input);
-    if (signal.aborted || this.cancelled.has(input.requestId)) throw abortError();
-    return response;
+    return this.responseFactory(input);
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
@@ -157,7 +155,9 @@ export function normalizeTranscriptText(value: unknown): string {
   if (typeof value !== "string") throw new Error("Recognizer transcript text must be a string");
   if (containsUnpairedSurrogate(value)) throw new Error("Recognizer transcript contains invalid Unicode");
   const normalized = value
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, " ")
+    .split("")
+    .map((character) => isUnsafeControlCharacter(character) ? " " : character)
+    .join("")
     .replace(/\s+/gu, " ")
     .trim();
   if (normalized.length > MAX_SPEECH_TRANSCRIPT_CHARS) throw new Error("Recognizer transcript exceeds maximum length");
@@ -171,9 +171,13 @@ function sameAudioBasis(left: SourceAudioBasis, right: SourceAudioBasis): boolea
     && left.startTimestampMs === right.startTimestampMs
     && left.endTimestampMs === right.endTimestampMs
     && left.sampleRate === right.sampleRate
-    && left.channels === right.channels
     && left.sampleCount === right.sampleCount
     && left.pcmSha256 === right.pcmSha256;
+}
+
+function isUnsafeControlCharacter(character: string): boolean {
+  const code = character.charCodeAt(0);
+  return (code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) || code === 0x7F;
 }
 
 function containsUnpairedSurrogate(value: string): boolean {
