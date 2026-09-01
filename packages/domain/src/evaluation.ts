@@ -99,6 +99,18 @@ export const EvaluationDimensionResultSchema = z.object({
       message: "Unscored evaluation dimensions must have insufficient support"
     });
   }
+  if (result.score !== null && result.evidenceRefs.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Scored evaluation dimensions require grounded evidence references"
+    });
+  }
+  if (!hasUniqueEvaluationRefs(result.evidenceRefs)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Evaluation dimension evidence references must be unique"
+    });
+  }
 });
 export type EvaluationDimensionResult = z.infer<typeof EvaluationDimensionResultSchema>;
 
@@ -128,7 +140,27 @@ export const EvaluationCompositeMetadataSchema = z.object({
   supportLevel: EvaluationSupportLevelSchema,
   includedDimensions: z.array(CompositeDimensionNameSchema),
   omittedDimensions: z.array(CompositeDimensionNameSchema)
-}).strict();
+}).strict().superRefine((metadata, ctx) => {
+  if (new Set(metadata.includedDimensions).size !== metadata.includedDimensions.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Composite included dimensions must be unique"
+    });
+  }
+  if (new Set(metadata.omittedDimensions).size !== metadata.omittedDimensions.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Composite omitted dimensions must be unique"
+    });
+  }
+  const included = new Set(metadata.includedDimensions);
+  if (metadata.omittedDimensions.some((dimension) => included.has(dimension))) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Composite included and omitted dimensions must be disjoint"
+    });
+  }
+});
 export type EvaluationCompositeMetadata = z.infer<typeof EvaluationCompositeMetadataSchema>;
 
 export const EvaluationLifecycleSchema = z.object({
@@ -168,6 +200,36 @@ export const MilestoneEvaluationSchema = z.object({
       message: "Incomplete milestone evaluations require a notAchievedReason"
     });
   }
+  if (milestone.achieved && milestone.supportLevel === "INSUFFICIENT") {
+    ctx.addIssue({
+      code: "custom",
+      message: "Achieved milestone evaluations require supported evidence"
+    });
+  }
+  if (milestone.achieved && milestone.evidenceRefs.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Achieved milestone evaluations require evidence references"
+    });
+  }
+  if (!hasUniqueEvaluationRefs(milestone.evidenceRefs)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Milestone evidence references must be unique"
+    });
+  }
+  if (new Set(milestone.assistanceDisclosureIds).size !== milestone.assistanceDisclosureIds.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Milestone assistance disclosure IDs must be unique"
+    });
+  }
+  if (new Set(milestone.approachIds).size !== milestone.approachIds.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Milestone approach IDs must be unique"
+    });
+  }
 });
 export type MilestoneEvaluation = z.infer<typeof MilestoneEvaluationSchema>;
 
@@ -180,8 +242,36 @@ export const DisclosedInterventionRecordSchema = z.object({
   relatedMilestoneIds: z.array(z.string().min(1)),
   deliveryStatus: z.enum(["EXPOSED", "COMPLETED", "POSSIBLY_EXPOSED"]),
   summary: z.string().min(1)
-}).strict();
+}).strict().superRefine((intervention, ctx) => {
+  if (new Set(intervention.disclosureIds).size !== intervention.disclosureIds.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Intervention disclosure IDs must be unique"
+    });
+  }
+  if (new Set(intervention.relatedMilestoneIds).size !== intervention.relatedMilestoneIds.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Intervention related milestone IDs must be unique"
+    });
+  }
+});
 export type DisclosedInterventionRecord = z.infer<typeof DisclosedInterventionRecordSchema>;
+
+function hasUniqueEvaluationRefs(
+  refs: readonly EvaluationEvidenceRef[]
+): boolean {
+  return new Set(refs.map((ref) => ref.kind + "\u0000" + ref.id)).size === refs.length;
+}
+
+function sameStringSet(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  if (left.length !== right.length) return false;
+  const values = new Set(left);
+  return values.size === left.length && right.every((value) => values.has(value));
+}
 
 export const SessionEvaluationSchema = z.object({
   sessionId: SessionIdSchema,
@@ -243,23 +333,125 @@ export const SessionEvaluationSchema = z.object({
   }
 
   if (
-    evaluation.composite.status === "NOT_SCORED" &&
-    (evaluation.scores.compositeScore !== null ||
-      evaluation.composite.supportLevel !== "INSUFFICIENT")
+    new Set(evaluation.milestones.map((milestone) => milestone.milestoneId)).size !==
+    evaluation.milestones.length
   ) {
     ctx.addIssue({
       code: "custom",
-      message: "Unscored composite metadata is internally inconsistent"
+      message: "Session evaluation milestone IDs must be unique"
     });
   }
   if (
-    evaluation.composite.status !== "NOT_SCORED" &&
-    evaluation.scores.compositeScore === null
+    new Set(evaluation.disclosedInterventions.map((item) => item.deliveryId)).size !==
+    evaluation.disclosedInterventions.length
   ) {
     ctx.addIssue({
       code: "custom",
-      message: "Scored composite metadata requires a composite score"
+      message: "Session evaluation intervention delivery IDs must be unique"
     });
+  }
+
+  const weighted = [
+    ["technicalCorrectness", evaluation.rubric.correctnessWeight],
+    ["rigor", evaluation.rubric.rigorWeight],
+    ["independence", evaluation.rubric.independenceWeight],
+    ["communication", evaluation.rubric.communicationWeight],
+    ["errorRecovery", evaluation.rubric.errorRecoveryWeight]
+  ] as const;
+  const positiveWeight = weighted.filter(([, weight]) => weight > 0);
+  const expectedIncluded = positiveWeight
+    .filter(([name]) => evaluation.dimensionResults[name].score !== null)
+    .map(([name]) => name);
+  const expectedOmitted = positiveWeight
+    .filter(([name]) => evaluation.dimensionResults[name].score === null)
+    .map(([name]) => name);
+
+  if (!sameStringSet(evaluation.composite.includedDimensions, expectedIncluded)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Composite included dimensions do not match supported weighted dimensions"
+    });
+  }
+  if (!sameStringSet(evaluation.composite.omittedDimensions, expectedOmitted)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Composite omitted dimensions do not match unsupported weighted dimensions"
+    });
+  }
+
+  const expectedStatus =
+    expectedIncluded.length === 0
+      ? "NOT_SCORED"
+      : expectedOmitted.length === 0
+        ? "FULL"
+        : "PARTIAL";
+  if (evaluation.composite.status !== expectedStatus) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Composite status does not match weighted dimension coverage"
+    });
+  }
+
+  if (expectedIncluded.length === 0) {
+    if (
+      evaluation.scores.compositeScore !== null ||
+      evaluation.composite.supportLevel !== "INSUFFICIENT"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Unscored composite metadata is internally inconsistent"
+      });
+    }
+  } else {
+    const includedWeights = weighted.filter(
+      ([name, weight]) =>
+        weight > 0 && evaluation.dimensionResults[name].score !== null
+    );
+    const totalWeight = includedWeights.reduce((sum, [, weight]) => sum + weight, 0);
+    const weightedTotal = includedWeights.reduce((sum, [name, weight]) => {
+      const score = evaluation.dimensionResults[name].score;
+      return sum + (score === null ? 0 : score * weight);
+    }, 0);
+    const expectedCompositeScore = Math.max(
+      0,
+      Math.min(100, Math.round(weightedTotal / totalWeight))
+    );
+    if (evaluation.scores.compositeScore !== expectedCompositeScore) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Composite score does not match the supported weighted dimensions"
+      });
+    }
+
+    const supportRank = {
+      INSUFFICIENT: 0,
+      WEAK: 1,
+      MODERATE: 2,
+      STRONG: 3
+    } as const;
+    const supportByRank = [
+      "INSUFFICIENT",
+      "WEAK",
+      "MODERATE",
+      "STRONG"
+    ] as const;
+    const weakestRank = Math.min(
+      ...expectedIncluded.map(
+        (name) => supportRank[evaluation.dimensionResults[name].supportLevel]
+      )
+    );
+    const expectedSupportRank =
+      expectedStatus === "PARTIAL"
+        ? Math.min(weakestRank, supportRank.MODERATE)
+        : weakestRank;
+    if (
+      evaluation.composite.supportLevel !== supportByRank[expectedSupportRank]
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Composite support does not match included dimension support"
+      });
+    }
   }
 });
 export type SessionEvaluation = z.infer<typeof SessionEvaluationSchema>;
