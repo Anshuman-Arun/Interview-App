@@ -660,12 +660,14 @@ describe("Real tldraw mounted browser integration", () => {
 
     const beforeRevision = adapter.getBoardRevision();
     await act(async () => {
-      nativeEditor.updateShapes([{
-        id: legacyId,
-        type: "geo",
-        x: 999
-      }]);
-      nativeEditor.deleteShapes([legacyId]);
+      nativeEditor.run(() => {
+        nativeEditor.updateShapes([{
+          id: legacyId,
+          type: "geo",
+          x: 999
+        }]);
+        nativeEditor.deleteShapes([legacyId]);
+      }, { ignoreShapeLock: true });
     });
 
     const after = nativeEditor.getShape(legacyId);
