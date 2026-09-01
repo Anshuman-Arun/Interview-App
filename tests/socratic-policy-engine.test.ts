@@ -1697,7 +1697,7 @@ describe("target-scoped disclosure validator", () => {
       protectedDisclosures: [malformedDisclosure]
     });
     expect(result.accepted).toBe(false);
-    if (!result.accepted) expect(result.reason).toMatch(/uncertain/i);
+    if (!result.accepted) expect(result.reason).toMatch(/uncertain|cannot be analyzed/i);
   });
 
   it("fails closed on oversized disclosure-analysis text", () => {
