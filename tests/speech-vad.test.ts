@@ -42,6 +42,30 @@ describe("deterministic voice activity state machine", () => {
     expect(vad.snapshot().state).toBe("SILENCE");
   });
 
+  it("runtime-rejects incomplete or unexpected VAD configuration", () => {
+    expect(() => new VoiceActivityStateMachine({
+      onsetThreshold: 0.5
+    } as never)).toThrow(/VAD configuration/u);
+    expect(() => new VoiceActivityStateMachine({
+      onsetThreshold: 0.5,
+      continuationThreshold: 0.4,
+      onsetHysteresisMs: 40,
+      unexpected: true
+    } as never)).toThrow(/VAD configuration/u);
+  });
+
+  it("fails closed before standalone VAD state can exceed the global utterance duration", () => {
+    const vad = new VoiceActivityStateMachine({
+      onsetThreshold: 0.5,
+      continuationThreshold: 0.5,
+      onsetHysteresisMs: 20
+    });
+    for (let index = 0; index < 600; index += 1) vad.step(1, 100);
+    expect(vad.snapshot().utteranceMs).toBe(60_000);
+    expect(() => vad.step(1, 100)).toThrow(/global limit/u);
+    expect(vad.snapshot().utteranceMs).toBe(60_000);
+  });
+
   it("snapshots VAD configuration so caller mutation cannot change thresholds mid-stream", () => {
     const config = {
       onsetThreshold: 0.8,
@@ -88,6 +112,20 @@ describe("adaptive endpointing policy", () => {
     incompleteSilenceMs: 900,
     maximumPauseMs: 1_500,
     maximumUtteranceMs: 60_000
+  });
+
+  it("runtime-rejects incomplete or unexpected endpoint configuration", () => {
+    expect(() => new AdaptiveEndpointingPolicy({
+      minimumSpeechMs: 120
+    } as never)).toThrow(/Endpointing configuration/u);
+    expect(() => new AdaptiveEndpointingPolicy({
+      minimumSpeechMs: 120,
+      minimumSilenceMs: 500,
+      incompleteSilenceMs: 900,
+      maximumPauseMs: 1_500,
+      maximumUtteranceMs: 60_000,
+      unexpected: true
+    } as never)).toThrow(/Endpointing configuration/u);
   });
 
   it("runtime-rejects malformed or internally inconsistent heuristic input", () => {
