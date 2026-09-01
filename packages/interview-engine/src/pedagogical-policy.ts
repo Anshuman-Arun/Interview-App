@@ -911,7 +911,14 @@ function collectExposedAssistance(
     if (!isDisclosedStatus(delivery.data.status)) continue;
 
     const rawGeneration = rawGenerations[delivery.data.generationId];
-    if (!isRecord(rawGeneration) || rawGeneration["generationId"] !== delivery.data.generationId) {
+    if (
+      !isRecord(rawGeneration)
+      || rawGeneration["generationId"] !== delivery.data.generationId
+      || (
+        rawGeneration["status"] !== "VALIDATED"
+        && rawGeneration["status"] !== "SUPERSEDED"
+      )
+    ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     const basis = GenerationBasisSchema.safeParse(rawGeneration["basis"]);
