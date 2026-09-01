@@ -168,7 +168,13 @@ export function normalizeReplayEvents(
   bounds: ReplayBounds,
   upcasters = new EventUpcasterRegistry()
 ): NormalizedReplayHistory {
-  if (!Array.isArray(rawEvents)) throw new ReplayProjectionError("INVALID_INPUT");
+  let inputIsArray: boolean;
+  try {
+    inputIsArray = Array.isArray(rawEvents);
+  } catch {
+    throw new ReplayProjectionError("INVALID_INPUT");
+  }
+  if (!inputIsArray) throw new ReplayProjectionError("INVALID_INPUT");
 
   let totalEventCount: number;
   try {

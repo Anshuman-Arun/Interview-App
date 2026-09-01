@@ -1973,6 +1973,16 @@ describe("replay/history projections", () => {
     ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SCHEMA" }));
     expect(eventTypeReads).toBe(1);
 
+    const revokedEventProxy = Proxy.revocable<unknown[]>([], {});
+    revokedEventProxy.revoke();
+    expect(() => projectReplayTimeline(revokedEventProxy.proxy))
+      .toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
+
+    const revokedSummaryProxy = Proxy.revocable<unknown[]>([], {});
+    revokedSummaryProxy.revoke();
+    expect(() => projectLongitudinalHistory(revokedSummaryProxy.proxy))
+      .toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
     const throwingEventArray = new Proxy<unknown[]>([], {
       get: (_target, property): unknown => {
         if (property === "length") {

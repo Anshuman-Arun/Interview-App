@@ -362,7 +362,13 @@ function selectAndParseSessionSummaries(
   maxSessions: number,
   totalInputSessions: number
 ): readonly LongitudinalSessionInput[] {
-  if (!Array.isArray(values)) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  let valuesIsArray: boolean;
+  try {
+    valuesIsArray = Array.isArray(values);
+  } catch {
+    throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  }
+  if (!valuesIsArray) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
 
   const seenSessionIds = new Set<SessionId>();
   const candidates: SelectedSessionInput[] = [];
@@ -485,7 +491,13 @@ export function projectLongitudinalHistory(
   } catch {
     throw new RangeError("Invalid replay bounds");
   }
-  if (!Array.isArray(sessionSummaries)) {
+  let inputIsArray: boolean;
+  try {
+    inputIsArray = Array.isArray(sessionSummaries);
+  } catch {
+    throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  }
+  if (!inputIsArray) {
     throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
   }
   let totalInputSessions: number;
