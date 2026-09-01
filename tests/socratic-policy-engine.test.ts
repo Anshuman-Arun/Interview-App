@@ -999,7 +999,7 @@ describe("production Socratic policy engine", () => {
     expect(decision.realizationRequest.maximumDisclosure).toBe(4);
   });
 
-  it("does not re-authorize a protected fact already exposed on the same target", () => {
+  it("allows an already-exposed relevant fact to be referenced without opening unrelated disclosures", () => {
     const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
     expect(disclosure).toBeDefined();
     if (disclosure === undefined) throw new Error("missing choose-person disclosure");
@@ -1025,7 +1025,11 @@ describe("production Socratic policy engine", () => {
     });
     const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
     expect(decision.realizationRequest.requiredAction).toBe("DIRECTIONAL_NUDGE");
-    expect(decision.realizationRequest.allowedDisclosureIds ?? []).not.toContain(disclosure.id);
+    expect(decision.realizationRequest.allowedDisclosureIds ?? []).toContain(disclosure.id);
+    const unrelated = sixPeopleProblem.interviewer.protectedDisclosures[1];
+    if (unrelated !== undefined) {
+      expect(decision.realizationRequest.allowedDisclosureIds ?? []).not.toContain(unrelated.id);
+    }
   });
 
   it("fails closed if same-ID/version problem metadata differs from the session-bound definition", () => {
