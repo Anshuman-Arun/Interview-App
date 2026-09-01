@@ -49,8 +49,10 @@ describe("transcript validation", () => {
     expect(validateTranscriptCandidate(raw, input).text).toBe("");
   });
 
-  it("normalizes bounded control characters and whitespace", () => {
+  it("normalizes bounded control/format abuse and whitespace", () => {
     expect(normalizeTranscriptText("  hello\u0000   world\nnext  ")).toBe("hello world next");
+    expect(normalizeTranscriptText("left\u202Eevil\u2069 right")).toBe("left evil right");
+    expect(normalizeTranscriptText("zero\u200Bwidth")).toBe("zero width");
   });
 
   it("rejects oversized or invalid-Unicode transcripts", () => {
@@ -116,7 +118,7 @@ describe("transcript validation", () => {
 });
 
 describe("Moonshine-compatible adapter seam", () => {
-  it("requires explicit local model paths and never treats a URL as a model source", () => {
+  it("requires explicit safe local model paths and never treats URLs/control characters as model sources", () => {
     const runtime = {
       runtimeVersion: "test-runtime",
       supportsAbort: false,
@@ -127,6 +129,47 @@ describe("Moonshine-compatible adapter seam", () => {
       modelPath: "https://example.invalid/model",
       modelVersion: "test"
     })).toThrow(/local path/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "models/moonshine/model.bin\nother",
+      modelVersion: "test"
+    })).toThrow(/safe local path/u);
+  });
+
+  it("rejects malformed runtime output before copying unbounded timing metadata", async () => {
+    const input = recognizerInput();
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime: {
+        runtimeVersion: "test-runtime",
+        supportsAbort: false,
+        async transcribe() {
+          return {
+            text: "too many timings",
+            words: Array.from({ length: 1_001 }, () => ({ word: "x", startMs: 0, endMs: 1 }))
+          };
+        }
+      },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    await expect(recognizer.recognize(input, new AbortController().signal)).rejects.toThrow();
+  });
+
+  it("rejects PCM whose byte length does not match its claimed source basis", async () => {
+    const input = recognizerInput();
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime: {
+        runtimeVersion: "test-runtime",
+        supportsAbort: false,
+        async transcribe() { return { text: "should not run" }; }
+      },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    await expect(recognizer.recognize(
+      { ...input, pcmBytes: new Uint8Array(4) },
+      new AbortController().signal
+    )).rejects.toThrow(/PCM length/u);
   });
 
   it("reports honest cancellation capability and exposes model identity", async () => {
