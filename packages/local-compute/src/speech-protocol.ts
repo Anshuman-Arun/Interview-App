@@ -149,8 +149,17 @@ export const SourceAudioBasisSchema = z.object({
     context.addIssue({ code: "custom", message: "Audio basis exceeds maximum utterance duration", path: ["sampleCount"] });
   }
   const timestampSpanMs = value.endTimestampMs - value.startTimestampMs;
+  if (timestampSpanMs + 0.001 < audioDurationMs) {
+    context.addIssue({ code: "custom", message: "Audio basis timestamp span is shorter than its PCM duration", path: ["endTimestampMs"] });
+  }
   if (timestampSpanMs > audioDurationMs + MAX_SPEECH_TIMESTAMP_DRIFT_MS + 0.001) {
     context.addIssue({ code: "custom", message: "Audio basis timestamp drift exceeds limit", path: ["endTimestampMs"] });
+  }
+  const frameCount = value.lastSequence - value.firstSequence + 1;
+  const maxSamplesPerFrame = value.sampleRate * MAX_SPEECH_FRAME_DURATION_MS / 1_000;
+  const minimumFrameCount = Math.ceil(value.sampleCount / maxSamplesPerFrame);
+  if (frameCount < minimumFrameCount || frameCount > value.sampleCount) {
+    context.addIssue({ code: "custom", message: "Audio basis sequence span is inconsistent with its sample count", path: ["lastSequence"] });
   }
 });
 export type SourceAudioBasis = z.infer<typeof SourceAudioBasisSchema>;
