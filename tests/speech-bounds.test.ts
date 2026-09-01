@@ -96,6 +96,36 @@ describe("speech protocol hard bounds", () => {
       model: { name: "fake\nmodel", version: "1" },
       sourceAudioBasis: basis
     }).success).toBe(false);
+    expect(TranscriptCandidateSchema.safeParse({
+      requestId: newRequestId(),
+      utteranceId: newUtteranceId(),
+      text: "",
+      isFinal: true,
+      model: { name: "fake", version: "1" },
+      sourceAudioBasis: basis,
+      words: [{ word: "ghost", startMs: 0, endMs: 10 }]
+    }).success).toBe(false);
+    expect(TranscriptCandidateSchema.safeParse({
+      requestId: newRequestId(),
+      utteranceId: newUtteranceId(),
+      text: "two words",
+      isFinal: true,
+      model: { name: "fake", version: "1" },
+      sourceAudioBasis: basis,
+      words: [
+        { word: "two", startMs: 20, endMs: 40 },
+        { word: "words", startMs: 30, endMs: 50 }
+      ]
+    }).success).toBe(false);
+    expect(TranscriptCandidateSchema.safeParse({
+      requestId: newRequestId(),
+      utteranceId: newUtteranceId(),
+      text: "late",
+      isFinal: true,
+      model: { name: "fake", version: "1" },
+      sourceAudioBasis: basis,
+      words: [{ word: "late", startMs: 190, endMs: 205 }]
+    }).success).toBe(false);
   });
 
   it("keeps near-maximum admitted frame timestamps representable in finalized audio bases", () => {
