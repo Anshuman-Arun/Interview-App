@@ -46,7 +46,7 @@ describe("deterministic voice activity state machine", () => {
     const probabilities = [1, 0];
     const backend = new ScriptedVadBackend(probabilities);
     probabilities[0] = 0;
-    await expect(backend.classify({} as never)).resolves.toEqual({ speechProbability: 1 });
+    await expect(backend.classify()).resolves.toEqual({ speechProbability: 1 });
   });
 
   it("is deterministic for arbitrary bounded VAD observations", () => {
