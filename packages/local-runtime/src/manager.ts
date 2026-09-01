@@ -450,7 +450,13 @@ export class LocalRuntimeManager {
       const readiness = earlyReadiness === undefined
         ? await this.waitForReadiness(record, child, attemptController.signal, remainingMs)
         : await earlyReadiness;
-      if (signal.aborted || record.expectedStop || record.state !== "STARTING") {
+      const expectedStopAfterReadiness: unknown = record.expectedStop;
+      const stateAfterReadiness: unknown = record.state;
+      if (
+        signal.aborted
+        || expectedStopAfterReadiness === true
+        || stateAfterReadiness !== "STARTING"
+      ) {
         throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
       }
       if (child.exitCode !== null || child.signalCode !== null || record.child !== child) {
@@ -710,7 +716,7 @@ export class LocalRuntimeManager {
     let exitSettled = false;
     let exitListener: ((exit: InternalExitRecord) => void) | undefined;
     const exitPromise = new Promise<never>((_resolve, reject) => {
-      exitListener = (_exit: InternalExitRecord): void => {
+      exitListener = (): void => {
         if (exitSettled) return;
         exitSettled = true;
         if (exitListener !== undefined) record.exitListeners.delete(exitListener);
@@ -1253,7 +1259,7 @@ export class LocalRuntimeManager {
 
   private timestamp(): string {
     try {
-      const observed = this.now();
+      const observed: unknown = this.now();
       if (typeof observed === "object" && observed !== null && utilTypes.isProxy(observed)) {
         throw new TypeError("Proxy diagnostic clock value");
       }
@@ -1590,14 +1596,20 @@ function isStdoutReadiness(
 }
 
 function validateDefinition(definition: LocalComponentDefinition): void {
-  if (typeof definition !== "object" || definition === null || Array.isArray(definition)) {
+  const definitionValue: unknown = definition;
+  if (
+    typeof definitionValue !== "object"
+    || definitionValue === null
+    || Array.isArray(definitionValue)
+  ) {
     invalid("Component definition must be an object");
   }
   if (typeof definition.id !== "string" || !COMPONENT_ID.test(definition.id)) {
     invalid("Component id must be stable and contain only letters, numbers, dot, underscore, or dash");
   }
   validateCommandPart(definition.executable, "executable");
-  if (definition.args !== undefined && !Array.isArray(definition.args)) invalid("args must be an array");
+  const argsValue: unknown = definition.args;
+  if (argsValue !== undefined && !Array.isArray(argsValue)) invalid("args must be an array");
   for (const argument of definition.args ?? []) validateCommandPart(argument, "argument");
   if (definition.cwd !== undefined) {
     if (typeof definition.cwd !== "string" || definition.cwd.length === 0 || definition.cwd.includes("\0")) {
@@ -1618,7 +1630,12 @@ function validateDefinition(definition: LocalComponentDefinition): void {
 
 function validateReadiness(definition: LocalComponentDefinition): void {
   const readiness = definition.readiness;
-  if (typeof readiness !== "object" || readiness === null || Array.isArray(readiness)) {
+  const readinessValue: unknown = readiness;
+  if (
+    typeof readinessValue !== "object"
+    || readinessValue === null
+    || Array.isArray(readinessValue)
+  ) {
     invalid("readiness must be an object");
   }
   switch (readiness.kind) {
@@ -1653,14 +1670,18 @@ function validateReadiness(definition: LocalComponentDefinition): void {
 }
 
 function validateRestartPolicy(policy: LocalRestartPolicy): void {
-  if (typeof policy !== "object" || policy === null || Array.isArray(policy)) {
+  const policyValue: unknown = policy;
+  if (typeof policyValue !== "object" || policyValue === null || Array.isArray(policyValue)) {
     invalid("restartPolicy must be an object");
+  }
+  const runtimeMode: unknown = policy.mode;
+  if (runtimeMode !== "NEVER" && runtimeMode !== "ON_FAILURE") {
+    invalid("Unsupported restart policy");
   }
   if (policy.mode === "NEVER") {
     validateOnlyFields(policy, "restartPolicy", new Set(["mode"]));
     return;
   }
-  if (policy.mode !== "ON_FAILURE") invalid("Unsupported restart policy");
   validateOnlyFields(policy, "restartPolicy", new Set(["mode", "maxRetries", "backoffMs", "maxBackoffMs"]));
   if (!Number.isSafeInteger(policy.maxRetries)
       || policy.maxRetries < 0
@@ -1677,7 +1698,12 @@ function validateRestartPolicy(policy: LocalRestartPolicy): void {
 
 function validateExpectedHandshakeDefinition(expected: LocalExpectedHandshake | undefined): void {
   if (expected === undefined) return;
-  if (typeof expected !== "object" || expected === null || Array.isArray(expected)) {
+  const expectedValue: unknown = expected;
+  if (
+    typeof expectedValue !== "object"
+    || expectedValue === null
+    || Array.isArray(expectedValue)
+  ) {
     invalid("expectedHandshake must be an object");
   }
   if (expected.componentVersion !== undefined) {
@@ -1694,7 +1720,8 @@ function validateExpectedHandshakeDefinition(expected: LocalExpectedHandshake | 
 
 function validateOutputLimits(output: LocalComponentDefinition["output"]): void {
   if (output === undefined) return;
-  if (typeof output !== "object" || output === null || Array.isArray(output)) {
+  const outputValue: unknown = output;
+  if (typeof outputValue !== "object" || outputValue === null || Array.isArray(outputValue)) {
     invalid("output must be an object");
   }
   if (output.maxLines !== undefined) {
@@ -1953,7 +1980,7 @@ function normalizeReportedHandshake(
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
     ...(modelVersionOrHash === undefined ? {} : { modelVersionOrHash }),
     ...(capabilities === undefined ? {} : { capabilities }),
-    ...(metadata === undefined ? {} : { metadata: metadata as Readonly<Record<string, unknown>> })
+    ...(metadata === undefined ? {} : { metadata })
   });
 }
 
@@ -1984,13 +2011,18 @@ function inspectHandshakeCapabilities(
     if (descriptor === undefined || !("value" in descriptor)) {
       fail("capabilities must be a dense data-only array");
     }
-    const capability = descriptor.value;
-    if (typeof capability !== "string"
-        || capability.length === 0
-        || capability.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+    const capability: unknown = descriptor.value;
+    if (typeof capability === "string") {
+      if (
+        capability.length === 0
+        || capability.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength
+      ) {
+        fail("capabilities must contain only non-empty bounded strings");
+      }
+      output.push(capability);
+    } else {
       fail("capabilities must contain only non-empty bounded strings");
     }
-    output.push(capability);
   }
   for (const [key, descriptor] of Object.entries(descriptors)) {
     if (key === "length" || descriptor.enumerable !== true) continue;
@@ -2143,6 +2175,7 @@ function waitForSpawn(
   }
   return new Promise((resolve, reject) => {
     let settled = false;
+    // eslint-disable-next-line prefer-const -- Timer is armed only after synchronous abort/spawn checks; cleanup must tolerate the pre-arm state.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const cleanup = (): void => {
       child.off("spawn", onSpawn);
@@ -2303,6 +2336,7 @@ function runTaskkill(
     }
 
     let settled = false;
+    // eslint-disable-next-line prefer-const -- taskkill may exit before the timeout is armed, so finish must tolerate the pre-arm state.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (success: boolean): void => {
       if (settled) return;
@@ -2419,7 +2453,7 @@ function awaitWithAbort<T>(
         if (settled) return;
         settled = true;
         cleanup();
-        reject(error);
+        reject(normalizePromiseRejection(error));
       }
     );
   });
@@ -2446,9 +2480,11 @@ function inspectResponseState(
   componentId: string
 ): { readonly redirected: boolean; readonly status: number; readonly ok: boolean } {
   try {
+    /* eslint-disable @typescript-eslint/unbound-method -- Native Response accessors are deliberately invoked with the inspected response as receiver. */
     const redirectedGetter = Object.getOwnPropertyDescriptor(Response.prototype, "redirected")?.get;
     const statusGetter = Object.getOwnPropertyDescriptor(Response.prototype, "status")?.get;
     const okGetter = Object.getOwnPropertyDescriptor(Response.prototype, "ok")?.get;
+    /* eslint-enable @typescript-eslint/unbound-method */
     if (redirectedGetter === undefined || statusGetter === undefined || okGetter === undefined) {
       throw new TypeError("Response getters unavailable");
     }
@@ -2472,6 +2508,7 @@ function inspectResponseState(
 
 function disposeResponseBody(response: Response): void {
   try {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Native Response body accessor is deliberately invoked with the inspected response as receiver.
     const bodyGetter = Object.getOwnPropertyDescriptor(Response.prototype, "body")?.get;
     if (bodyGetter === undefined) return;
     const body = bodyGetter.call(response) as ReadableStream<Uint8Array> | null;
@@ -2492,6 +2529,17 @@ function linkAbortSignal(source: AbortSignal | undefined, target: AbortControlle
   const onAbort = (): void => target.abort();
   source.addEventListener("abort", onAbort, { once: true });
   return () => source.removeEventListener("abort", onAbort);
+}
+
+function normalizePromiseRejection(error: unknown): Error {
+  if (typeof error === "object" && error !== null && !utilTypes.isProxy(error)) {
+    try {
+      if (error instanceof Error) return error;
+    } catch {
+      // Hostile rejection values are normalized below without inspecting them.
+    }
+  }
+  return new Error("Operation rejected with a non-Error value");
 }
 
 function localRuntimeErrorOrUndefined(error: unknown): LocalRuntimeError | undefined {
@@ -2616,7 +2664,7 @@ function preRedactDiagnosticValue(
     const arrayValue = safeArrayObject(value);
     if (arrayValue === undefined) return "[UNINSPECTABLE_OBJECT]";
     if (arrayValue) {
-      const rawLength = descriptors.length?.value;
+      const rawLength: unknown = descriptors.length?.value;
       if (typeof rawLength !== "number" || !Number.isSafeInteger(rawLength) || rawLength < 0) {
         return "[UNINSPECTABLE_OBJECT]";
       }
