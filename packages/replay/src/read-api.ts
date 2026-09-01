@@ -118,6 +118,15 @@ export const ReadTruncationSchema = z.object({
   }
 });
 
+function retainedCountMatchesTruncation(
+  retainedCount: number,
+  truncation: z.infer<typeof ReadTruncationSchema>
+): boolean {
+  return truncation.truncated
+    ? retainedCount === truncation.limit
+    : retainedCount <= truncation.limit;
+}
+
 const ReadEvidenceRefSchema = EvaluationEvidenceRefSchema.extend({
   id: BoundedIdentifierSchema
 }).strict();
@@ -345,6 +354,35 @@ export const GroundedEvaluationReadModelSchema = z.object({
     }
   }
 
+  if (evaluation.composite.includedDimensions.length > 0) {
+    const supportRank = {
+      INSUFFICIENT: 0,
+      WEAK: 1,
+      MODERATE: 2,
+      STRONG: 3
+    } as const;
+    const supportByRank = [
+      "INSUFFICIENT",
+      "WEAK",
+      "MODERATE",
+      "STRONG"
+    ] as const;
+    const weakestRank = Math.min(
+      ...evaluation.composite.includedDimensions.map(
+        (name) => supportRank[dimensions.get(name)?.supportLevel ?? "INSUFFICIENT"]
+      )
+    );
+    const expectedRank = evaluation.composite.status === "PARTIAL"
+      ? Math.min(weakestRank, supportRank.MODERATE)
+      : weakestRank;
+    if (evaluation.composite.supportLevel !== supportByRank[expectedRank]) {
+      context.addIssue({
+        code: "custom",
+        message: "Composite read support does not match included dimension support"
+      });
+    }
+  }
+
   if (evaluation.composite.status === "NOT_SCORED") {
     if (
       evaluation.composite.score !== null
@@ -372,6 +410,13 @@ export const GroundedEvaluationReadModelSchema = z.object({
     });
   }
 
+  const retainedAchieved = evaluation.milestones.filter(
+    (milestone) => milestone.achieved
+  );
+  const retainedUnassisted = retainedAchieved.filter(
+    (milestone) => milestone.assistanceLevel === 0
+  ).length;
+  const retainedAssisted = retainedAchieved.length - retainedUnassisted;
   if (
     evaluation.milestoneSummary.achieved > evaluation.milestoneSummary.total
     || evaluation.milestoneSummary.unassisted
@@ -380,10 +425,37 @@ export const GroundedEvaluationReadModelSchema = z.object({
     || evaluation.milestones.length
       + evaluation.milestoneTruncation.remainingCount
       !== evaluation.milestoneSummary.total
+    || retainedAchieved.length > evaluation.milestoneSummary.achieved
+    || retainedUnassisted > evaluation.milestoneSummary.unassisted
+    || retainedAssisted > evaluation.milestoneSummary.assisted
+    || !retainedCountMatchesTruncation(
+      evaluation.milestones.length,
+      evaluation.milestoneTruncation
+    )
   ) {
     context.addIssue({
       code: "custom",
       message: "Milestone summary is inconsistent with the bounded milestone projection"
+    });
+  }
+
+  if (
+    !retainedCountMatchesTruncation(
+      evaluation.disclosedInterventions.length,
+      evaluation.interventionTruncation
+    )
+    || !retainedCountMatchesTruncation(
+      evaluation.keyStrengths.length,
+      evaluation.strengthsTruncation
+    )
+    || !retainedCountMatchesTruncation(
+      evaluation.areasForImprovement.length,
+      evaluation.improvementTruncation
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Evaluation read collection truncation is inconsistent"
     });
   }
 
@@ -1088,6 +1160,25 @@ export const LongitudinalReadModelSchema = z.object({
     skillTaxonomyAvailable: z.literal(false)
   }).strict()
 }).strict().superRefine((history, context) => {
+  if (
+    !retainedCountMatchesTruncation(
+      history.repeatedProblems.length,
+      history.repeatedProblemsTruncation
+    )
+    || !retainedCountMatchesTruncation(
+      history.evaluationStatistics.length,
+      history.evaluationStatisticsTruncation
+    )
+    || !retainedCountMatchesTruncation(
+      history.improvement.length,
+      history.improvementTruncation
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Longitudinal read collection truncation is inconsistent"
+    });
+  }
   if (
     history.completedSessions > history.includedSessionCount
     || history.problemsAttempted > history.includedSessionCount
