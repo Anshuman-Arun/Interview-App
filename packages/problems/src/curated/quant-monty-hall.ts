@@ -12,7 +12,7 @@ export const quantMontyHallSpec: CuratedProblemSpec = {
   "approaches": [{"id":"bayes-cases","label":"Bayes over prize locations"},{"id":"survival-mass","label":"Track prior probability mass through host action"}],
   "milestones": [
     {"id":"state-hypotheses","description":"List prize-location hypotheses and their prior probabilities.","approachIds":["bayes-cases","survival-mass"],"hintLevels":[1]},
-    {"id":"host-likelihoods","description":"Compute P(host opens Door 3 | each prize location).","approachIds":["bayes-cases"],"prerequisiteIds":["state-hypotheses"],"hintLevels":[2]},
+    {"id":"host-likelihoods","description":"Compute P(host opens Door 3 | each prize location).","approachIds":["bayes-cases","survival-mass"],"prerequisiteIds":["state-hypotheses"],"hintLevels":[2]},
     {"id":"bayes-weight","description":"Weight each prior by the corresponding host likelihood.","approachIds":["bayes-cases","survival-mass"],"prerequisiteIds":["host-likelihoods"],"hintLevels":[3]},
     {"id":"normalize","description":"Normalize the surviving weights after observing Door 3 opened.","approachIds":["bayes-cases","survival-mass"],"prerequisiteIds":["bayes-weight"],"hintLevels":[4]},
     {"id":"decision","description":"Compare the posterior probabilities of staying and switching.","approachIds":["bayes-cases","survival-mass"],"prerequisiteIds":["normalize"],"hintLevels":[5]}

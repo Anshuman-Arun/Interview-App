@@ -23,35 +23,34 @@ export const hilbertHotelProblem: InterviewProblem = {
     reasoningGraph: {
       version: "1.0.0",
       approaches: [
-        { id: "arithmetic-shift", label: "Arithmetic coordinate shift" },
-        { id: "parity-partition", label: "Even-odd parity partition" }
+        { id: "explicit-bijections", label: "Explicit bijections for both required subproblems" }
       ],
       milestones: [
         {
           id: "infinite-set-concept",
           description: "Recognize that an infinite set can be placed in bijection with a proper subset of itself.",
-          approachIds: ["arithmetic-shift", "parity-partition"],
+          approachIds: ["explicit-bijections"],
           optionalPrerequisiteIds: [],
           protectedDisclosureIds: []
         },
         {
           id: "single-guest-shift",
           description: "Formulate the shift mapping f(n) = n + 1 for existing guests to vacate room 1.",
-          approachIds: ["arithmetic-shift"],
+          approachIds: ["explicit-bijections"],
           optionalPrerequisiteIds: ["infinite-set-concept"],
           protectedDisclosureIds: [singleGuestShiftDisclosure]
         },
         {
           id: "infinite-bus-mapping",
           description: "Formulate the mapping f(n) = 2n for existing guests, placing bus guest k into room 2k - 1.",
-          approachIds: ["parity-partition"],
+          approachIds: ["explicit-bijections"],
           optionalPrerequisiteIds: ["single-guest-shift"],
           protectedDisclosureIds: [infiniteBusDisclosure]
         },
         {
           id: "bijection-rigor",
           description: "Verify that both assignment mappings are injective and cover all designated guests without collisions.",
-          approachIds: ["arithmetic-shift", "parity-partition"],
+          approachIds: ["explicit-bijections"],
           optionalPrerequisiteIds: ["infinite-bus-mapping"],
           protectedDisclosureIds: []
         }

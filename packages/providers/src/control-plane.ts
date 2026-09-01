@@ -97,29 +97,39 @@ export class ProviderControlPlaneError extends Error {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents later monkey-patching of the private-brand checker.
 const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
 
-function machineIdSchema<TBrand extends string>() {
-  return z.string()
-    .min(1)
-    .max(64)
-    .regex(MACHINE_ID_PATTERN)
-    .refine((value) => !containsSecretLikeConfigurationText(value), {
-      message: "SECRET_IN_CONFIGURATION"
-    })
-    .brand<TBrand>();
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Captured intrinsic is invoked only via Reflect.apply.
+const REGEXP_TEST_INTRINSIC = RegExp.prototype.test;
+
+function controlPlaneRegExpTest(pattern: RegExp, value: string): boolean {
+  const result: unknown = REFLECT_APPLY_INTRINSIC(REGEXP_TEST_INTRINSIC, pattern, [value]);
+  return result === true;
 }
 
-export const ProviderIdSchema = machineIdSchema<"ProviderId">();
+const MachineIdSchema = z.string()
+  .min(1)
+  .max(64)
+  .refine((value) => controlPlaneRegExpTest(MACHINE_ID_PATTERN, value), {
+    message: "INVALID_MACHINE_ID"
+  })
+  .refine((value) => !containsSecretLikeConfigurationText(value), {
+    message: "SECRET_IN_CONFIGURATION"
+  });
+
+export const ProviderIdSchema = MachineIdSchema.brand<"ProviderId">();
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
 
-export const ProviderModelIdSchema = machineIdSchema<"ProviderModelId">();
+export const ProviderModelIdSchema = MachineIdSchema.brand<"ProviderModelId">();
 export type ProviderModelId = z.infer<typeof ProviderModelIdSchema>;
 
-export const ProviderSecretReferenceIdSchema = machineIdSchema<"ProviderSecretReferenceId">();
+export const ProviderSecretReferenceIdSchema =
+  MachineIdSchema.brand<"ProviderSecretReferenceId">();
 export type ProviderSecretReferenceId = z.infer<typeof ProviderSecretReferenceIdSchema>;
 
-export const ProviderAdapterFactoryIdSchema = machineIdSchema<"ProviderAdapterFactoryId">();
+export const ProviderAdapterFactoryIdSchema =
+  MachineIdSchema.brand<"ProviderAdapterFactoryId">();
 export type ProviderAdapterFactoryId = z.infer<typeof ProviderAdapterFactoryIdSchema>;
 
 export const ProviderKindSchema = z.enum(["MOCK", "REMOTE_API", "LOCAL_PROCESS", "OTHER"]);
@@ -128,13 +138,31 @@ export type ProviderKind = z.infer<typeof ProviderKindSchema>;
 export const CapabilitySupportSchema = z.enum(["SUPPORTED", "UNSUPPORTED", "UNKNOWN"]);
 export type CapabilitySupport = z.infer<typeof CapabilitySupportSchema>;
 
-const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
-const REGEXP_TEST_INTRINSIC = RegExp.prototype.test;
+/* eslint-disable @typescript-eslint/unbound-method -- Captured intrinsics are invoked only via Reflect.apply. */
 const STRING_TRIM_INTRINSIC = String.prototype.trim;
+const STRING_CHAR_CODE_AT_INTRINSIC = String.prototype.charCodeAt;
+/* eslint-enable @typescript-eslint/unbound-method */
 
-function controlPlaneRegExpTest(pattern: RegExp, value: string): boolean {
-  const result: unknown = REFLECT_APPLY_INTRINSIC(REGEXP_TEST_INTRINSIC, pattern, [value]);
-  return result === true;
+function containsControlPlaneControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code: unknown = REFLECT_APPLY_INTRINSIC(
+      STRING_CHAR_CODE_AT_INTRINSIC,
+      value,
+      [index]
+    );
+    if (
+      typeof code !== "number"
+      || (
+        code <= 0x1f
+        || (code >= 0x7f && code <= 0x9f)
+        || code === 0x2028
+        || code === 0x2029
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function trimControlPlaneText(value: string): string {
@@ -150,7 +178,7 @@ function trimControlPlaneText(value: string): string {
 
 function nonSecretTextSchema(maxLength: number) {
   return z.string()
-    .refine((value) => !controlPlaneRegExpTest(CONTROL_CHARACTER_PATTERN, value), {
+    .refine((value) => !containsControlPlaneControlCharacter(value), {
       message: "CONTROL_CHARACTERS_NOT_ALLOWED"
     })
     .transform((value) => trimControlPlaneText(value))
@@ -268,7 +296,7 @@ const RawProviderConfigurationSchema = z.object({
   credentialRef: ProviderSecretReferenceSchema.optional()
 }).strict();
 
-const ProviderConfigurationEnvelopeSchema = z.unknown().transform((value, context) => {
+const ProviderConfigurationEnvelopeSchema = z.unknown().transform<unknown>((value, context) => {
   try {
     return inspectPlainProviderConfigurationValue(value);
   } catch {
@@ -317,7 +345,7 @@ const ProviderModelDefinitionObjectSchema = z.object({
   metadataVersion: BoundedVersionTextSchema.optional()
 }).strict();
 
-const ProviderModelDefinitionEnvelopeSchema = z.unknown().transform((value, context) => {
+const ProviderModelDefinitionEnvelopeSchema = z.unknown().transform<unknown>((value, context) => {
   try {
     return inspectPlainProviderConfigurationValue(value);
   } catch {
@@ -384,6 +412,7 @@ class ResolvedProviderConfigurationValue implements ResolvedProviderConfiguratio
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of the private-brand checker.
 const isResolvedProviderConfiguration = ResolvedProviderConfigurationValue.isResolved;
 
 export interface ProviderAdapterFactoryInput {
@@ -413,9 +442,9 @@ export type ProviderSettingsValidator = (
 export interface ProviderModelDefinitionInput {
   readonly id: string;
   readonly displayName: string;
-  readonly adapterModelId?: string;
+  readonly adapterModelId?: string | undefined;
   readonly capabilities: ProviderModelCapabilities;
-  readonly metadataVersion?: string;
+  readonly metadataVersion?: string | undefined;
 }
 
 export interface ProviderDefinitionInput {
@@ -424,12 +453,12 @@ export interface ProviderDefinitionInput {
   readonly kind: ProviderKind;
   readonly definitionVersion: string;
   readonly capabilityVersion: string;
-  readonly adapterVersion?: string;
+  readonly adapterVersion?: string | undefined;
   readonly credentialRequirement: ProviderCredentialRequirement;
   readonly credentialPurposes: readonly ProviderCredentialPurpose[];
   readonly models: readonly ProviderModelDefinitionInput[];
-  readonly adapterFactory?: ProviderAdapterFactoryDefinition;
-  readonly validateSettings?: ProviderSettingsValidator;
+  readonly adapterFactory?: ProviderAdapterFactoryDefinition | undefined;
+  readonly validateSettings?: ProviderSettingsValidator | undefined;
 }
 
 export interface ProviderDefinition {
@@ -508,12 +537,14 @@ function freezeNullPrototype<T extends object>(value: T): T {
   return objectFreeze(value);
 }
 
+/* eslint-disable @typescript-eslint/unbound-method -- Captured collection intrinsics are invoked only via Reflect.apply. */
 const MAP_HAS_INTRINSIC = Map.prototype.has;
 const MAP_GET_INTRINSIC = Map.prototype.get;
 const MAP_SET_INTRINSIC = Map.prototype.set;
 const MAP_FOR_EACH_INTRINSIC = Map.prototype.forEach;
 const SET_HAS_INTRINSIC = Set.prototype.has;
 const SET_ADD_INTRINSIC = Set.prototype.add;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
   const result: unknown = REFLECT_APPLY_INTRINSIC(SET_HAS_INTRINSIC, set, [value]);
@@ -770,7 +801,14 @@ function readResolverMethodWithoutAccessors(
     }
 
     try {
-      current = Object.getPrototypeOf(current);
+      const nextPrototype: unknown = Object.getPrototypeOf(current);
+      if (nextPrototype !== null && typeof nextPrototype !== "object") {
+        throw new ProviderControlPlaneError(
+          "INVALID_FACTORY_INPUT",
+          "Provider secret resolver prototype chain is malformed"
+        );
+      }
+      current = nextPrototype;
     } catch {
       throw new ProviderControlPlaneError(
         "INVALID_FACTORY_INPUT",
@@ -821,7 +859,8 @@ function normalizeFactorySecretResolver(
   const assertRequestMatches = (
     request: ProviderSecretResolverRequest
   ): void => {
-    if (typeof request !== "object" || request === null) {
+    const requestValue: unknown = request;
+    if (typeof requestValue !== "object" || requestValue === null) {
       throw new ProviderControlPlaneError(
         "CREDENTIAL_RESOLUTION_FAILED",
         "Provider credential request does not match the resolved configuration"
@@ -830,7 +869,7 @@ function normalizeFactorySecretResolver(
     let inspected: Readonly<Record<string, unknown>>;
     try {
       inspected = inspectPlainDataObjectProperties(
-        request,
+        requestValue,
         new Set(["providerId", "reference"]),
         "INVALID_FACTORY_INPUT",
         "Provider credential request is malformed"
@@ -954,14 +993,15 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
   async #createAdapter(
     input: ProviderAdapterFactoryInput
   ): Promise<ReasoningProvider> {
-    if (typeof input !== "object" || input === null) {
+    const inputValue: unknown = input;
+    if (typeof inputValue !== "object" || inputValue === null) {
       throw new ProviderControlPlaneError(
         "INVALID_FACTORY_INPUT",
         "Provider adapter factory input is malformed"
       );
     }
     const inspected = inspectPlainDataObjectProperties(
-      input,
+      inputValue,
       PROVIDER_ADAPTER_FACTORY_INPUT_KEYS,
       "INVALID_FACTORY_INPUT",
       "Provider adapter factory input is malformed"
@@ -1033,9 +1073,12 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of private-brand validation.
 const isRegisteredProviderAdapterFactory = RegisteredProviderAdapterFactory.isRegistered;
+/* eslint-disable @typescript-eslint/unbound-method -- Capture prevents monkey-patching of factory ownership validation. */
 const registeredProviderAdapterFactoryBelongsTo =
   RegisteredProviderAdapterFactory.belongsToProvider;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 function normalizeFactory(
   factory: unknown,
@@ -1074,11 +1117,13 @@ function normalizeFactory(
       "Provider adapter factory is malformed"
     );
   }
+  const createAdapterImpl =
+    createAdapter as ProviderAdapterFactoryDefinition["createAdapter"];
   return new RegisteredProviderAdapterFactory(
     REGISTERED_FACTORY_CONSTRUCTION_TOKEN,
     ownerProviderId,
     id.data,
-    createAdapter
+    createAdapterImpl
   );
 }
 
@@ -1130,6 +1175,7 @@ function readAdapterMember(
         const member: unknown = descriptor.value;
         return member;
       }
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- Property getters are invoked only through Reflect.apply with the original receiver.
       const getter = descriptor.get;
       if (getter === undefined) return undefined;
       try {
@@ -1140,7 +1186,11 @@ function readAdapterMember(
       }
     }
     try {
-      current = Object.getPrototypeOf(current);
+      const nextPrototype: unknown = Object.getPrototypeOf(current);
+      if (nextPrototype !== null && typeof nextPrototype !== "object") {
+        throw adapterDefinitionMismatch();
+      }
+      current = nextPrototype;
     } catch {
       throw adapterDefinitionMismatch();
     }
@@ -1221,14 +1271,15 @@ function assertAdapterMatchesResolvedDefinition(
   adapter: ReasoningProvider
 ): void {
   try {
-    if (typeof adapter !== "object" || adapter === null) {
+    const adapterValue: unknown = adapter;
+    if (typeof adapterValue !== "object" || adapterValue === null) {
       throw adapterDefinitionMismatch();
     }
-    const name = readAdapterMember(adapter, "name");
-    const adapterVersion = readAdapterMember(adapter, "adapterVersion");
-    const capabilities = readAdapterMember(adapter, "capabilities");
-    const verifyBillingSafety = readAdapterMember(adapter, "verifyBillingSafety");
-    const createSession = readAdapterMember(adapter, "createSession");
+    const name = readAdapterMember(adapterValue, "name");
+    const adapterVersion = readAdapterMember(adapterValue, "adapterVersion");
+    const capabilities = readAdapterMember(adapterValue, "capabilities");
+    const verifyBillingSafety = readAdapterMember(adapterValue, "verifyBillingSafety");
+    const createSession = readAdapterMember(adapterValue, "createSession");
     if (
       name !== resolved.provider.id
       || adapterVersion !== resolved.provider.adapterVersion
@@ -1431,6 +1482,10 @@ function defineProviderValue(input: unknown): ProviderDefinition {
       "Provider definition is malformed"
     );
   }
+  const settingsValidator: ProviderSettingsValidator | undefined =
+    validateSettings === undefined
+      ? undefined
+      : validateSettings as ProviderSettingsValidator;
 
   let metadataInput: SafeProviderConfigurationValue;
   try {
@@ -1525,14 +1580,20 @@ function defineProviderValue(input: unknown): ProviderDefinition {
   const models = sortedFrozenModelCopy(metadataResult.data.models);
 
   return freezeNullPrototype({
-    ...metadataResult.data,
+    id: metadataResult.data.id,
+    displayName: metadataResult.data.displayName,
+    kind: metadataResult.data.kind,
+    definitionVersion: metadataResult.data.definitionVersion,
+    capabilityVersion: metadataResult.data.capabilityVersion,
+    ...(adapterVersion === undefined ? {} : { adapterVersion }),
+    credentialRequirement: metadataResult.data.credentialRequirement,
     credentialPurposes: objectFreeze(sortedCodeUnitStringCopy(credentialPurposes)),
     models: objectFreeze(models),
     ...(adapterFactory === undefined ? {} : { adapterFactory }),
-    ...(validateSettings === undefined
+    ...(settingsValidator === undefined
       ? {}
-      : { validateSettings })
-  });
+      : { validateSettings: settingsValidator })
+  }) satisfies ProviderDefinition;
 }
 
 export function defineProvider(input: ProviderDefinitionInput): ProviderDefinition {
@@ -1728,8 +1789,10 @@ export class ProviderRegistry {
   }
 }
 
+/* eslint-disable @typescript-eslint/unbound-method -- Captured registry methods are invoked only via Reflect.apply. */
 const providerRegistryGetProvider = ProviderRegistry.prototype.getProvider;
 const providerRegistryGetModel = ProviderRegistry.prototype.getModel;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 function resolveRegistrySelection(
   registry: unknown,
@@ -2041,7 +2104,7 @@ function resolveParsedProviderConfiguration(input: {
   readonly registry: unknown;
   readonly configuration: ProviderConfiguration;
   readonly requirements?: CapturedCapabilityRequirements;
-}): ResolvedProviderConfiguration {
+}): ResolvedProviderConfigurationValue {
   const { provider, model } = resolveRegistrySelection(
     input.registry,
     input.configuration.providerId,
@@ -2117,11 +2180,11 @@ export function resolveProviderConfiguration(input: {
   const requirements = requirementsProperty.present
     ? captureCapabilityRequirements(requirementsProperty.value)
     : undefined;
-  return resolveParsedProviderConfiguration({
+  return resolveParsedProviderConfiguration(freezeNullPrototype({
     registry: registryProperty.value,
     configuration: parsed,
     ...(requirements === undefined ? {} : { requirements })
-  });
+  }));
 }
 
 export function resolveAdapterFactory(
@@ -2224,12 +2287,12 @@ export async function evaluateProviderReadiness(input: {
     });
   }
 
-  let resolved: ResolvedProviderConfiguration;
+  let resolved: ResolvedProviderConfigurationValue;
   try {
-    resolved = resolveParsedProviderConfiguration({
+    resolved = resolveParsedProviderConfiguration(freezeNullPrototype({
       registry,
       configuration: parsed
-    });
+    }));
   } catch (error) {
     const reason = isProviderControlPlaneError(error)
       ? error.code
