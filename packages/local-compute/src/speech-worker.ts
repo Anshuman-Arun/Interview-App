@@ -5,13 +5,23 @@ import {
   type UtteranceId
 } from "../../domain/src/index.js";
 import {
+  DEFAULT_SPEECH_CANCELLATION_TIMEOUT_MS,
+  DEFAULT_SPEECH_RECOGNIZER_TIMEOUT_MS,
+  DEFAULT_SPEECH_VAD_TIMEOUT_MS,
   MAX_SPEECH_BUFFERED_PCM_BYTES,
+  MAX_SPEECH_CANCELLATION_TIMEOUT_MS,
   MAX_SPEECH_CONCURRENT_STREAMS,
   MAX_SPEECH_DIAGNOSTIC_CHARS,
   MAX_SPEECH_DIAGNOSTICS,
+  MAX_SPEECH_PRE_SPEECH_DURATION_MS,
+  MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
+  MAX_SPEECH_REMEMBERED_MESSAGES,
+  MAX_SPEECH_VAD_TIMEOUT_MS,
   SpeechCancelRequestSchema,
   SpeechFlushRequestSchema,
   SpeechFrameHeuristicsSchema,
+  SpeechModelIdentitySchema,
+  SpeechUtteranceIdSchema,
   SpeechWorkerEventSchema,
   type SpeechFrameHeuristics,
   type SpeechStreamId,
@@ -29,6 +39,7 @@ import {
 import {
   AdaptiveEndpointingPolicy,
   VoiceActivityStateMachine,
+  type EndpointingDecision,
   type VadBackend
 } from "./speech-vad.js";
 import {
@@ -53,9 +64,14 @@ interface StreamContext {
   processingTail: Promise<void>;
   order: PcmOrderState | undefined;
   utteranceId: UtteranceId | undefined;
+  utteranceStartTimestampMs: number | undefined;
+  preSpeechElapsedMs: number;
+  speechConfirmed: boolean;
+  terminal: boolean;
   cancelled: boolean;
   finalizationStarted: boolean;
   recognizing: boolean;
+  vadAbort: AbortController | undefined;
   recognitionAbort: AbortController | undefined;
   recognitionRequestId: RequestId | undefined;
 }
@@ -65,12 +81,21 @@ interface RememberedMessage {
   readonly events: readonly SpeechWorkerEvent[];
 }
 
+interface InFlightMessage {
+  readonly fingerprint: string;
+  readonly promise: Promise<readonly SpeechWorkerEvent[]>;
+}
+
 export interface SpeechWorkerCoreOptions {
   readonly vadBackend: VadBackend;
   readonly recognizer: SpeechRecognizer;
   readonly maxConcurrentStreams?: number;
   readonly maxBufferedPcmBytes?: number;
   readonly maxRememberedMessages?: number;
+  readonly maxPreSpeechDurationMs?: number;
+  readonly vadTimeoutMs?: number;
+  readonly recognizerTimeoutMs?: number;
+  readonly cancellationTimeoutMs?: number;
   readonly utteranceIdFactory?: () => UtteranceId;
   readonly endpointingFactory?: () => AdaptiveEndpointingPolicy;
   readonly vadStateFactory?: () => VoiceActivityStateMachine;
@@ -86,17 +111,59 @@ export class SpeechWorkerCore {
   private readonly streams = new Map<SpeechStreamId, StreamContext>();
   private readonly closedStreams = new Set<SpeechStreamId>();
   private readonly messages = new Map<RequestId, RememberedMessage>();
+  private readonly inFlightMessages = new Map<RequestId, InFlightMessage>();
   private readonly diagnostics: SpeechWorkerDiagnostic[] = [];
   private readonly transcriptGate = new TranscriptResultGate();
   private readonly maxConcurrentStreams: number;
   private readonly maxBufferedPcmBytes: number;
   private readonly maxRememberedMessages: number;
+  private readonly maxPreSpeechDurationMs: number;
+  private readonly vadTimeoutMs: number;
+  private readonly recognizerTimeoutMs: number;
+  private readonly cancellationTimeoutMs: number;
   private shuttingDown = false;
+  private shutdownPromise: Promise<void> | undefined;
 
   public constructor(private readonly options: SpeechWorkerCoreOptions) {
-    this.maxConcurrentStreams = positiveSafeInteger(options.maxConcurrentStreams ?? MAX_SPEECH_CONCURRENT_STREAMS, "maxConcurrentStreams");
-    this.maxBufferedPcmBytes = positiveSafeInteger(options.maxBufferedPcmBytes ?? MAX_SPEECH_BUFFERED_PCM_BYTES, "maxBufferedPcmBytes");
-    this.maxRememberedMessages = positiveSafeInteger(options.maxRememberedMessages ?? 1_024, "maxRememberedMessages");
+    if (typeof options.vadBackend?.classify !== "function") throw new Error("Speech VAD backend is required");
+    if (typeof options.recognizer?.recognize !== "function") throw new Error("Speech recognizer is required");
+    SpeechModelIdentitySchema.parse(options.recognizer.modelIdentity);
+
+    this.maxConcurrentStreams = boundedPositiveSafeInteger(
+      options.maxConcurrentStreams ?? MAX_SPEECH_CONCURRENT_STREAMS,
+      MAX_SPEECH_CONCURRENT_STREAMS,
+      "maxConcurrentStreams"
+    );
+    this.maxBufferedPcmBytes = boundedPositiveSafeInteger(
+      options.maxBufferedPcmBytes ?? MAX_SPEECH_BUFFERED_PCM_BYTES,
+      MAX_SPEECH_BUFFERED_PCM_BYTES,
+      "maxBufferedPcmBytes"
+    );
+    this.maxRememberedMessages = boundedPositiveSafeInteger(
+      options.maxRememberedMessages ?? MAX_SPEECH_REMEMBERED_MESSAGES,
+      MAX_SPEECH_REMEMBERED_MESSAGES,
+      "maxRememberedMessages"
+    );
+    this.maxPreSpeechDurationMs = boundedPositiveSafeInteger(
+      options.maxPreSpeechDurationMs ?? MAX_SPEECH_PRE_SPEECH_DURATION_MS,
+      MAX_SPEECH_PRE_SPEECH_DURATION_MS,
+      "maxPreSpeechDurationMs"
+    );
+    this.vadTimeoutMs = boundedPositiveSafeInteger(
+      options.vadTimeoutMs ?? DEFAULT_SPEECH_VAD_TIMEOUT_MS,
+      MAX_SPEECH_VAD_TIMEOUT_MS,
+      "vadTimeoutMs"
+    );
+    this.recognizerTimeoutMs = boundedPositiveSafeInteger(
+      options.recognizerTimeoutMs ?? DEFAULT_SPEECH_RECOGNIZER_TIMEOUT_MS,
+      MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
+      "recognizerTimeoutMs"
+    );
+    this.cancellationTimeoutMs = boundedPositiveSafeInteger(
+      options.cancellationTimeoutMs ?? DEFAULT_SPEECH_CANCELLATION_TIMEOUT_MS,
+      MAX_SPEECH_CANCELLATION_TIMEOUT_MS,
+      "cancellationTimeoutMs"
+    );
   }
 
   public getDiagnostics(): readonly SpeechWorkerDiagnostic[] {
@@ -109,7 +176,7 @@ export class SpeechWorkerCore {
 
   public async submitFrame(
     envelopeInput: unknown,
-    payload: ArrayBufferView,
+    payload: unknown,
     heuristicsInput: unknown = {}
   ): Promise<readonly SpeechWorkerEvent[]> {
     if (this.shuttingDown) throw new SpeechWorkerCoreError("SHUTTING_DOWN", "Speech worker is shutting down");
@@ -122,24 +189,26 @@ export class SpeechWorkerCore {
     } catch (error) {
       throw translatePcmError(error);
     }
-    const fingerprint = fingerprintParts(JSON.stringify(frame.envelope), frame.fingerprint, JSON.stringify(heuristics.data));
-    const replay = this.replayMessage(frame.envelope.requestId, fingerprint);
-    if (replay !== undefined) return replay;
-    if (this.closedStreams.has(frame.envelope.streamId)) {
-      throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream has already finalized");
-    }
 
-    const context = this.getOrCreateStream(frame.envelope.streamId);
-    return this.serialize(context, async () => {
-      const replayInside = this.replayMessage(frame.envelope.requestId, fingerprint);
-      if (replayInside !== undefined) return replayInside;
-      if (context.cancelled || this.closedStreams.has(context.streamId)) {
-        throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream is no longer active");
+    const fingerprint = fingerprintParts(
+      JSON.stringify(frame.envelope),
+      frame.fingerprint,
+      JSON.stringify(heuristics.data)
+    );
+    return this.runIdempotent(frame.envelope.requestId, fingerprint, async () => {
+      if (this.shuttingDown) throw new SpeechWorkerCoreError("SHUTTING_DOWN", "Speech worker is shutting down");
+      if (this.closedStreams.has(frame.envelope.streamId)) {
+        throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream has already finalized");
       }
-      if (context.finalizationStarted) {
-        throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream finalization has already started");
-      }
-      return this.processFrame(context, frame, heuristics.data, fingerprint);
+
+      const context = this.getOrCreateStream(frame.envelope.streamId);
+      return this.serialize(context, async () => {
+        if (context.terminal || this.closedStreams.has(context.streamId) || this.shuttingDown) return [];
+        if (context.finalizationStarted) {
+          throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream finalization has already started");
+        }
+        return this.processFrame(context, frame, heuristics.data);
+      });
     });
   }
 
@@ -149,33 +218,39 @@ export class SpeechWorkerCore {
     if (!parsed.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech flush request is invalid");
     const request = parsed.data;
     const fingerprint = fingerprintParts(JSON.stringify(request));
-    const replay = this.replayMessage(request.requestId, fingerprint);
-    if (replay !== undefined) return replay;
-    const context = this.streams.get(request.streamId);
-    if (context === undefined) throw new SpeechWorkerCoreError("STREAM_NOT_FOUND", "Speech stream does not exist");
 
-    return this.serialize(context, async () => {
-      const replayInside = this.replayMessage(request.requestId, fingerprint);
-      if (replayInside !== undefined) return replayInside;
-      if (context.cancelled || context.finalizationStarted) {
-        throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream is no longer active");
+    return this.runIdempotent(request.requestId, fingerprint, async () => {
+      if (this.shuttingDown) throw new SpeechWorkerCoreError("SHUTTING_DOWN", "Speech worker is shutting down");
+      const context = this.streams.get(request.streamId);
+      if (context === undefined) {
+        throw new SpeechWorkerCoreError(
+          this.closedStreams.has(request.streamId) ? "STREAM_FINALIZED" : "STREAM_NOT_FOUND",
+          this.closedStreams.has(request.streamId) ? "Speech stream has already finalized" : "Speech stream does not exist"
+        );
       }
 
-      const decision = context.endpointing.decide({ ...context.vad.snapshot(), explicitFlush: true });
-      let events: SpeechWorkerEvent[] = [];
-      if (decision.kind === "DISCARD") {
-        events = [this.event(request.requestId, request.streamId, {
-          type: "UTTERANCE_DISCARDED",
-          ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
-          reason: decision.reason
-        })];
-        this.closeStream(request.streamId);
-      } else if (decision.kind === "FINALIZE") {
-        context.finalizationStarted = true;
-        events = await this.finalizeAndRecognize(context, request.requestId, decision.reason);
-      }
-      this.rememberMessage(request.requestId, fingerprint, events);
-      return cloneEvents(events);
+      return this.serialize(context, async () => {
+        if (context.terminal || this.closedStreams.has(context.streamId) || this.shuttingDown) return [];
+        if (context.finalizationStarted) {
+          throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream finalization has already started");
+        }
+
+        const decision = this.endpointDecision(context, { explicitFlush: true });
+        if (decision.kind === "DISCARD") {
+          const events = [this.event(request.requestId, request.streamId, {
+            type: "UTTERANCE_DISCARDED",
+            ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
+            reason: decision.reason
+          })];
+          this.abandonStream(context);
+          return events;
+        }
+        if (decision.kind === "FINALIZE") {
+          context.finalizationStarted = true;
+          return this.finalizeAndRecognize(context, request.requestId, decision.reason);
+        }
+        return [];
+      });
     });
   }
 
@@ -184,54 +259,67 @@ export class SpeechWorkerCore {
     if (!parsed.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech cancellation request is invalid");
     const request = parsed.data;
     const fingerprint = fingerprintParts(JSON.stringify(request));
-    const replay = this.replayMessage(request.requestId, fingerprint);
-    if (replay !== undefined) return replay;
 
-    const context = this.streams.get(request.streamId);
-    let cancellation: "RUNTIME_ABORT_REQUESTED" | "SUPPRESS_LATE_RESULT_ONLY" | "NOT_RECOGNIZING" = "NOT_RECOGNIZING";
-    if (context !== undefined) {
-      context.cancelled = true;
-      context.recognitionAbort?.abort();
-      context.buffer.clear();
-      if (context.recognizing) {
-        cancellation = "SUPPRESS_LATE_RESULT_ONLY";
-        if (this.options.recognizer.cancellationCapability === "RUNTIME_ABORT" && this.options.recognizer.cancel !== undefined) {
-          const recognitionRequestId = context.recognitionRequestId;
-          const requested = recognitionRequestId === undefined ? false : await this.options.recognizer.cancel(recognitionRequestId);
-          if (requested) cancellation = "RUNTIME_ABORT_REQUESTED";
-        }
-      } else {
-        context.vad.cancel();
+    return this.runIdempotent(request.requestId, fingerprint, async () => {
+      const context = this.streams.get(request.streamId);
+      let cancellation: "RUNTIME_ABORT_REQUESTED" | "SUPPRESS_LATE_RESULT_ONLY" | "NOT_RECOGNIZING" = "NOT_RECOGNIZING";
+      let recognitionRequestId: RequestId | undefined;
+
+      if (context !== undefined) {
+        context.cancelled = true;
+        context.terminal = true;
+        context.vadAbort?.abort();
+        context.recognitionAbort?.abort();
+        recognitionRequestId = context.recognitionRequestId;
+        if (context.recognizing) cancellation = "SUPPRESS_LATE_RESULT_ONLY";
+        if (!context.recognizing) safeCancelVad(context.vad);
+        context.buffer.clear();
+        this.streams.delete(request.streamId);
       }
-      this.closeStream(request.streamId);
-    }
+      this.rememberClosedStream(request.streamId);
 
-    const events = [this.event(request.requestId, request.streamId, {
-      type: "SPEECH_CANCELLED",
-      cancellation
-    })];
-    this.rememberMessage(request.requestId, fingerprint, events);
-    return cloneEvents(events);
+      if (context?.recognizing === true
+          && recognitionRequestId !== undefined
+          && this.options.recognizer.cancellationCapability === "RUNTIME_ABORT"
+          && this.options.recognizer.cancel !== undefined) {
+        if (await this.attemptRecognizerCancel(recognitionRequestId, request.streamId)) {
+          cancellation = "RUNTIME_ABORT_REQUESTED";
+        }
+      }
+
+      return [this.event(request.requestId, request.streamId, {
+        type: "SPEECH_CANCELLED",
+        cancellation
+      })];
+    });
   }
 
-  public async shutdown(): Promise<void> {
-    if (this.shuttingDown) return;
+  public shutdown(): Promise<void> {
+    if (this.shutdownPromise !== undefined) return this.shutdownPromise;
     this.shuttingDown = true;
-    const cancellations: Promise<unknown>[] = [];
-    for (const context of this.streams.values()) {
+    const shutdown = this.performShutdown();
+    this.shutdownPromise = shutdown;
+    return shutdown;
+  }
+
+  private async performShutdown(): Promise<void> {
+    const cancellations: Promise<boolean>[] = [];
+    for (const context of [...this.streams.values()]) {
       context.cancelled = true;
+      context.terminal = true;
+      context.vadAbort?.abort();
       context.recognitionAbort?.abort();
       context.buffer.clear();
-      if (!context.recognizing) context.vad.cancel();
+      if (!context.recognizing) safeCancelVad(context.vad);
       if (context.recognizing
           && context.recognitionRequestId !== undefined
           && this.options.recognizer.cancellationCapability === "RUNTIME_ABORT"
           && this.options.recognizer.cancel !== undefined) {
-        cancellations.push(this.options.recognizer.cancel(context.recognitionRequestId));
+        cancellations.push(this.attemptRecognizerCancel(context.recognitionRequestId, context.streamId));
       }
-      this.closedStreams.add(context.streamId);
+      this.streams.delete(context.streamId);
+      this.rememberClosedStream(context.streamId);
     }
-    this.streams.clear();
     await Promise.allSettled(cancellations);
     this.rememberDiagnostic({ code: "SHUTDOWN" });
   }
@@ -239,8 +327,7 @@ export class SpeechWorkerCore {
   private async processFrame(
     context: StreamContext,
     frame: PcmFrameSnapshot,
-    heuristics: SpeechFrameHeuristics,
-    fingerprint: string
+    heuristics: SpeechFrameHeuristics
   ): Promise<readonly SpeechWorkerEvent[]> {
     try {
       context.order = advancePcmOrder(context.order, frame);
@@ -248,15 +335,50 @@ export class SpeechWorkerCore {
       throw translatePcmError(error);
     }
 
+    if (this.wouldExceedEndpointMaximum(context, frame.durationMs)) {
+      const decision = this.endpointDecision(context, {
+        forceMaximumDuration: true,
+        appearsIncomplete: heuristics.appearsIncomplete
+      });
+      if (decision.kind === "DISCARD") {
+        const events = [this.event(frame.envelope.requestId, frame.envelope.streamId, {
+          type: "UTTERANCE_DISCARDED",
+          ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
+          reason: decision.reason
+        })];
+        this.abandonStream(context);
+        return events;
+      }
+      if (decision.kind === "FINALIZE") {
+        context.finalizationStarted = true;
+        return this.finalizeAndRecognize(context, frame.envelope.requestId, "MAX_DURATION");
+      }
+    }
+
     const stateBefore = context.vad.snapshot().state;
+    const vadAbort = new AbortController();
+    context.vadAbort = vadAbort;
     let observation;
     try {
-      observation = await this.options.vadBackend.classify(frame);
-    } catch {
+      observation = await withTimeout(
+        Promise.resolve().then(async () => this.options.vadBackend.classify(frame, vadAbort.signal)),
+        this.vadTimeoutMs,
+        () => vadAbort.abort()
+      );
+    } catch (error) {
+      if (error instanceof OperationTimeoutError) {
+        this.abandonStream(context);
+        this.rememberDiagnostic({ code: "VAD_TIMEOUT", streamId: context.streamId });
+        throw new SpeechWorkerCoreError("VAD_TIMEOUT", "VAD backend timed out");
+      }
+      if (context.cancelled || context.terminal || this.shuttingDown || vadAbort.signal.aborted) return [];
       this.abandonStream(context);
+      this.rememberDiagnostic({ code: "VAD_FAILURE", streamId: context.streamId });
       throw new SpeechWorkerCoreError("VAD_FAILURE", "VAD backend failed");
+    } finally {
+      if (context.vadAbort === vadAbort) context.vadAbort = undefined;
     }
-    if (context.cancelled || this.shuttingDown) return [];
+    if (context.cancelled || context.terminal || this.shuttingDown) return [];
 
     let step;
     try {
@@ -266,8 +388,31 @@ export class SpeechWorkerCore {
       throw new SpeechWorkerCoreError("VAD_PROTOCOL_ERROR", "VAD backend returned an invalid observation");
     }
 
+    if (!context.speechConfirmed) {
+      context.preSpeechElapsedMs += frame.durationMs;
+    }
+    if (stateBefore === "SILENCE" && (step.state === "POSSIBLE_SPEECH" || step.speechStarted)) {
+      context.utteranceStartTimestampMs = frame.envelope.timestampMs;
+    }
+
     if (context.utteranceId === undefined && (step.state === "POSSIBLE_SPEECH" || step.speechStarted)) {
-      context.utteranceId = this.createUtteranceId();
+      try {
+        context.utteranceId = this.createUtteranceId();
+      } catch {
+        this.abandonStream(context);
+        throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Speech worker could not create a valid utterance identity");
+      }
+    }
+
+    if (step.speechStarted) context.speechConfirmed = true;
+    if (!context.speechConfirmed && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
+      const events = [this.event(frame.envelope.requestId, frame.envelope.streamId, {
+        type: "UTTERANCE_DISCARDED",
+        ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
+        reason: "NO_SPEECH_TIMEOUT"
+      })];
+      this.abandonStream(context);
+      return events;
     }
 
     const shouldBuffer = stateBefore !== "SILENCE" || step.state !== "SILENCE";
@@ -290,15 +435,15 @@ export class SpeechWorkerCore {
       }));
       context.buffer.clear();
       context.utteranceId = undefined;
-      this.rememberMessage(frame.envelope.requestId, fingerprint, events);
-      return cloneEvents(events);
+      context.utteranceStartTimestampMs = undefined;
+      return events;
     }
 
     if (step.speechStarted && context.utteranceId !== undefined) {
       events.push(this.event(frame.envelope.requestId, frame.envelope.streamId, {
         type: "SPEECH_STARTED",
         utteranceId: context.utteranceId,
-        atTimestampMs: frame.envelope.timestampMs
+        atTimestampMs: context.utteranceStartTimestampMs ?? frame.envelope.timestampMs
       }));
     }
     if (step.possibleEndpoint && context.utteranceId !== undefined) {
@@ -309,9 +454,8 @@ export class SpeechWorkerCore {
       }));
     }
 
-    const decision = context.endpointing.decide({
-      ...context.vad.snapshot(),
-      ...(heuristics.appearsIncomplete === undefined ? {} : { appearsIncomplete: heuristics.appearsIncomplete })
+    const decision = this.endpointDecision(context, {
+      appearsIncomplete: heuristics.appearsIncomplete
     });
     if (decision.kind === "DISCARD") {
       events.push(this.event(frame.envelope.requestId, frame.envelope.streamId, {
@@ -319,14 +463,13 @@ export class SpeechWorkerCore {
         ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
         reason: decision.reason
       }));
-      this.closeStream(context.streamId);
+      this.abandonStream(context);
     } else if (decision.kind === "FINALIZE") {
       context.finalizationStarted = true;
       events.push(...await this.finalizeAndRecognize(context, frame.envelope.requestId, decision.reason));
     }
 
-    this.rememberMessage(frame.envelope.requestId, fingerprint, events);
-    return cloneEvents(events);
+    return context.cancelled || this.shuttingDown ? [] : events;
   }
 
   private async finalizeAndRecognize(
@@ -336,17 +479,25 @@ export class SpeechWorkerCore {
   ): Promise<SpeechWorkerEvent[]> {
     const utteranceId = context.utteranceId;
     if (utteranceId === undefined || context.buffer.getSampleCount() === 0) {
-      this.closeStream(context.streamId);
+      this.abandonStream(context);
       return [this.event(requestId, context.streamId, {
         type: "UTTERANCE_DISCARDED",
         reason: "TOO_SHORT"
       })];
     }
 
-    context.vad.finalize();
-    const basis = context.buffer.sourceBasis(context.streamId);
-    const pcmBytes = context.buffer.materialize();
-    const durationMs = basis.endTimestampMs - basis.startTimestampMs;
+    let basis;
+    let pcmBytes;
+    try {
+      context.vad.finalize();
+      basis = context.buffer.sourceBasis(context.streamId);
+      pcmBytes = context.buffer.materialize();
+    } catch {
+      this.abandonStream(context);
+      throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Speech worker could not finalize the bounded audio basis");
+    }
+
+    const durationMs = context.buffer.getDurationMs();
     const events: SpeechWorkerEvent[] = [this.event(requestId, context.streamId, {
       type: "UTTERANCE_FINALIZED",
       utteranceId,
@@ -361,13 +512,17 @@ export class SpeechWorkerCore {
     const abortController = new AbortController();
     context.recognitionAbort = abortController;
     try {
-      const raw = await this.options.recognizer.recognize({
-        requestId,
-        utteranceId,
-        pcmBytes,
-        sourceAudioBasis: basis
-      }, abortController.signal);
-      if (context.cancelled || abortController.signal.aborted || this.shuttingDown) return events;
+      const raw = await withTimeout(
+        Promise.resolve().then(async () => this.options.recognizer.recognize({
+          requestId,
+          utteranceId,
+          pcmBytes,
+          sourceAudioBasis: basis
+        }, abortController.signal)),
+        this.recognizerTimeoutMs,
+        () => abortController.abort()
+      );
+      if (context.cancelled || context.terminal || abortController.signal.aborted || this.shuttingDown) return [];
       try {
         const { candidate } = this.transcriptGate.admit(raw, {
           requestId,
@@ -380,22 +535,68 @@ export class SpeechWorkerCore {
           candidate
         }));
       } catch {
-        events.push(this.errorEvent(requestId, context.streamId, "RECOGNIZER_PROTOCOL_ERROR", "Recognizer returned an invalid bounded result"));
+        events.push(this.errorEvent(
+          requestId,
+          context.streamId,
+          "RECOGNIZER_PROTOCOL_ERROR",
+          "Recognizer returned an invalid bounded result"
+        ));
       }
     } catch (error) {
-      if (!context.cancelled && !abortController.signal.aborted && !this.shuttingDown) {
-        events.push(this.errorEvent(requestId, context.streamId, "RECOGNIZER_FAILURE", "Recognizer failed to produce a result"));
+      if (context.cancelled || context.terminal || this.shuttingDown) return [];
+      if (error instanceof OperationTimeoutError) {
+        events.push(this.errorEvent(requestId, context.streamId, "RECOGNIZER_TIMEOUT", "Recognizer timed out"));
+        this.rememberDiagnostic({ code: "RECOGNIZER_TIMEOUT", streamId: context.streamId });
+      } else {
+        events.push(this.errorEvent(
+          requestId,
+          context.streamId,
+          "RECOGNIZER_FAILURE",
+          "Recognizer failed to produce a result"
+        ));
         this.rememberDiagnostic({ code: "RECOGNIZER_FAILURE", streamId: context.streamId });
       }
-      void error;
     } finally {
       context.recognizing = false;
       context.recognitionAbort = undefined;
       context.recognitionRequestId = undefined;
       context.buffer.clear();
-      this.closeStream(context.streamId);
+      context.terminal = true;
+      this.streams.delete(context.streamId);
+      this.rememberClosedStream(context.streamId);
     }
-    return events;
+    return context.cancelled || this.shuttingDown ? [] : events;
+  }
+
+  private endpointDecision(
+    context: StreamContext,
+    options: {
+      readonly explicitFlush?: boolean;
+      readonly forceMaximumDuration?: boolean;
+      readonly appearsIncomplete?: boolean;
+    }
+  ): EndpointingDecision {
+    try {
+      const snapshot = context.vad.snapshot();
+      return context.endpointing.decide({
+        ...snapshot,
+        ...(options.forceMaximumDuration === true
+          ? { utteranceMs: context.endpointing.getMaximumUtteranceMs() }
+          : {}),
+        ...(options.explicitFlush === undefined ? {} : { explicitFlush: options.explicitFlush }),
+        ...(options.appearsIncomplete === undefined ? {} : { appearsIncomplete: options.appearsIncomplete })
+      });
+    } catch {
+      this.abandonStream(context);
+      throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Endpointing policy failed");
+    }
+  }
+
+  private wouldExceedEndpointMaximum(context: StreamContext, nextFrameDurationMs: number): boolean {
+    const snapshot = context.vad.snapshot();
+    return context.utteranceId !== undefined
+      && context.buffer.getSampleCount() > 0
+      && snapshot.utteranceMs + nextFrameDurationMs > context.endpointing.getMaximumUtteranceMs() + 0.001;
   }
 
   private async serialize<T>(context: StreamContext, operation: () => Promise<T>): Promise<T> {
@@ -414,6 +615,9 @@ export class SpeechWorkerCore {
   private getOrCreateStream(streamId: SpeechStreamId): StreamContext {
     const existing = this.streams.get(streamId);
     if (existing !== undefined) return existing;
+    if (this.closedStreams.has(streamId)) {
+      throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream has already finalized");
+    }
     if (this.streams.size >= this.maxConcurrentStreams) {
       throw new SpeechWorkerCoreError("RESOURCE_LIMIT", "Maximum concurrent speech streams reached");
     }
@@ -425,9 +629,14 @@ export class SpeechWorkerCore {
       processingTail: Promise.resolve(),
       order: undefined,
       utteranceId: undefined,
+      utteranceStartTimestampMs: undefined,
+      preSpeechElapsedMs: 0,
+      speechConfirmed: false,
+      terminal: false,
       cancelled: false,
       finalizationStarted: false,
       recognizing: false,
+      vadAbort: undefined,
       recognitionAbort: undefined,
       recognitionRequestId: undefined
     };
@@ -436,12 +645,13 @@ export class SpeechWorkerCore {
   }
 
   private abandonStream(context: StreamContext): void {
+    context.terminal = true;
     context.buffer.clear();
-    this.closeStream(context.streamId);
+    this.streams.delete(context.streamId);
+    this.rememberClosedStream(context.streamId);
   }
 
-  private closeStream(streamId: SpeechStreamId): void {
-    this.streams.delete(streamId);
+  private rememberClosedStream(streamId: SpeechStreamId): void {
     this.closedStreams.add(streamId);
     while (this.closedStreams.size > 1_024) {
       const oldest = this.closedStreams.values().next().value;
@@ -451,7 +661,77 @@ export class SpeechWorkerCore {
   }
 
   private createUtteranceId(): UtteranceId {
-    return this.options.utteranceIdFactory?.() ?? newUtteranceId();
+    return SpeechUtteranceIdSchema.parse(this.options.utteranceIdFactory?.() ?? newUtteranceId());
+  }
+
+  private runIdempotent(
+    requestId: RequestId,
+    fingerprint: string,
+    operation: () => Promise<readonly SpeechWorkerEvent[]>
+  ): Promise<readonly SpeechWorkerEvent[]> {
+    const replay = this.replayMessage(requestId, fingerprint);
+    if (replay !== undefined) return Promise.resolve(replay);
+
+    const active = this.inFlightMessages.get(requestId);
+    if (active !== undefined) {
+      if (active.fingerprint !== fingerprint) {
+        return Promise.reject(new SpeechWorkerCoreError(
+          "REQUEST_ID_CONFLICT",
+          "RequestId was reused concurrently with different speech content"
+        ));
+      }
+      return active.promise.then((events) => cloneEvents(events));
+    }
+
+    let tracked: InFlightMessage;
+    const canonical = Promise.resolve()
+      .then(operation)
+      .then((events) => {
+        const cloned = cloneEvents(events);
+        this.rememberMessage(requestId, fingerprint, cloned);
+        return cloned;
+      })
+      .finally(() => {
+        if (this.inFlightMessages.get(requestId) === tracked) this.inFlightMessages.delete(requestId);
+      });
+    tracked = { fingerprint, promise: canonical };
+    this.inFlightMessages.set(requestId, tracked);
+    return canonical.then((events) => cloneEvents(events));
+  }
+
+  private replayMessage(requestId: RequestId, fingerprint: string): readonly SpeechWorkerEvent[] | undefined {
+    const remembered = this.messages.get(requestId);
+    if (remembered === undefined) return undefined;
+    if (remembered.fingerprint !== fingerprint) {
+      throw new SpeechWorkerCoreError("REQUEST_ID_CONFLICT", "RequestId was reused with different speech content");
+    }
+    return cloneEvents(remembered.events);
+  }
+
+  private rememberMessage(requestId: RequestId, fingerprint: string, events: readonly SpeechWorkerEvent[]): void {
+    this.messages.set(requestId, { fingerprint, events: cloneEvents(events) });
+    if (this.messages.size <= this.maxRememberedMessages) return;
+    const oldest = this.messages.keys().next().value;
+    if (oldest !== undefined) this.messages.delete(oldest);
+  }
+
+  private async attemptRecognizerCancel(requestId: RequestId, streamId: SpeechStreamId): Promise<boolean> {
+    const cancel = this.options.recognizer.cancel;
+    if (cancel === undefined) return false;
+    try {
+      const result = await withTimeout(
+        Promise.resolve().then(async () => cancel.call(this.options.recognizer, requestId)),
+        this.cancellationTimeoutMs,
+        () => undefined
+      );
+      return result === true;
+    } catch (error) {
+      this.rememberDiagnostic({
+        code: error instanceof OperationTimeoutError ? "CANCELLATION_TIMEOUT" : "CANCELLATION_FAILURE",
+        streamId
+      });
+      return false;
+    }
   }
 
   private event(
@@ -476,22 +756,6 @@ export class SpeechWorkerCore {
     return this.event(requestId, streamId, { type: "SPEECH_WORKER_ERROR", code, message });
   }
 
-  private replayMessage(requestId: RequestId, fingerprint: string): readonly SpeechWorkerEvent[] | undefined {
-    const remembered = this.messages.get(requestId);
-    if (remembered === undefined) return undefined;
-    if (remembered.fingerprint !== fingerprint) {
-      throw new SpeechWorkerCoreError("REQUEST_ID_CONFLICT", "RequestId was reused with different speech content");
-    }
-    return cloneEvents(remembered.events);
-  }
-
-  private rememberMessage(requestId: RequestId, fingerprint: string, events: readonly SpeechWorkerEvent[]): void {
-    this.messages.set(requestId, { fingerprint, events: cloneEvents(events) });
-    if (this.messages.size <= this.maxRememberedMessages) return;
-    const oldest = this.messages.keys().next().value;
-    if (oldest !== undefined) this.messages.delete(oldest);
-  }
-
   private rememberDiagnostic(input: SpeechWorkerDiagnostic): void {
     const diagnostic: SpeechWorkerDiagnostic = {
       code: input.code.slice(0, MAX_SPEECH_DIAGNOSTIC_CHARS),
@@ -500,6 +764,51 @@ export class SpeechWorkerCore {
     };
     this.diagnostics.push(diagnostic);
     if (this.diagnostics.length > MAX_SPEECH_DIAGNOSTICS) this.diagnostics.shift();
+  }
+}
+
+class OperationTimeoutError extends Error {}
+
+function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  onTimeout: () => void
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        onTimeout();
+      } catch {
+        // Timeout cleanup is best-effort and may not undermine suppression.
+      }
+      reject(new OperationTimeoutError("Speech worker operation timed out"));
+    }, timeoutMs);
+
+    void operation.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+function safeCancelVad(vad: VoiceActivityStateMachine): void {
+  try {
+    vad.cancel();
+  } catch {
+    // State is already terminal; the stream tombstone remains authoritative locally.
   }
 }
 
@@ -518,7 +827,9 @@ function fingerprintParts(...parts: readonly string[]): string {
   return hash.digest("hex");
 }
 
-function positiveSafeInteger(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive safe integer`);
+function boundedPositiveSafeInteger(value: number, maximum: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) {
+    throw new Error(`${label} must be a positive safe integer no greater than ${String(maximum)}`);
+  }
   return value;
 }
