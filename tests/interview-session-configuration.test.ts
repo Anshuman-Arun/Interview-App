@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  ConfiguredSessionStartedResponseSchema,
   InterviewCatalogResponseSchema,
   InterviewSessionConfigurationSchema,
+  InterviewSessionContextResponseSchema,
   OxfordInterviewSessionConfigurationSchema,
   ProtocolErrorResponseSchema,
   SessionStartedResponseSchema,
@@ -80,10 +82,10 @@ describe("generic interview session configuration", () => {
       divisibility.interviewer.difficulty
     );
 
-    const ramsey = SessionStartedResponseSchema.parse(
+    const ramsey = ConfiguredSessionStartedResponseSchema.parse(
       await json(await postStart(ramseySession, ramseyConfiguration))
     );
-    const other = SessionStartedResponseSchema.parse(
+    const other = ConfiguredSessionStartedResponseSchema.parse(
       await json(await postStart(divisibilitySession, divisibilityConfiguration))
     );
 
@@ -178,7 +180,7 @@ describe("generic interview session configuration", () => {
       providerSelection: { providerId: "mock-model", modelId: "mock-default" }
     });
 
-    const started = SessionStartedResponseSchema.parse(
+    const started = ConfiguredSessionStartedResponseSchema.parse(
       await json(await postStart(sessionId, configuration))
     );
     expect(started.configuration).toEqual(configuration);
@@ -258,8 +260,19 @@ describe("generic interview session configuration", () => {
       sessionId
     });
     expect(response.status).toBe(200);
-    expect(SessionStartedResponseSchema.parse(await json(response)).problem?.id)
-      .toBe(sixPeopleProblem.id);
+    const legacyStarted = SessionStartedResponseSchema.parse(await json(response));
+    expect(legacyStarted.sessionId).toBe(sessionId);
+
+    const contextResponse = await post({
+      protocolVersion: 1,
+      type: "GET_INTERVIEW_SESSION_CONTEXT",
+      requestId: newRequestId(),
+      sessionId
+    });
+    expect(contextResponse.status).toBe(200);
+    const context = InterviewSessionContextResponseSchema.parse(await json(contextResponse));
+    expect(context.configuration.mode).toBe("OXFORD_MATHEMATICS");
+    expect(context.problem?.id).toBe(sixPeopleProblem.id);
     expect(store.eventCount(sessionId)).toBe(eventCount);
   });
 
@@ -511,7 +524,7 @@ describe("generic interview session configuration", () => {
   ): Promise<Response> {
     return post({
       protocolVersion: 1,
-      type: "START_SESSION",
+      type: "START_CONFIGURED_SESSION",
       requestId,
       sessionId,
       configuration
