@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  QUANT_RESEARCH_GENERATOR_VERSION,
   QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
   QuantResearchEngine,
@@ -13,6 +14,7 @@ import {
 const bayesian: QuantResearchScenarioDefinition = {
   family: "BAYESIAN_UPDATING",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed: 17,
   config: { priorAlpha: 2, priorBeta: 3, observationCount: 8, perturbedPriorAlpha: 5, perturbedPriorBeta: 2 }
@@ -21,6 +23,7 @@ const bayesian: QuantResearchScenarioDefinition = {
 const sampling: QuantResearchScenarioDefinition = {
   family: "SAMPLING_ESTIMATION",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed: 91,
   config: { maxSamples: 10, populationSize: 32, centerMin: -20, centerMax: 20, noiseRadius: 4, outlierShift: 25 }
@@ -29,6 +32,7 @@ const sampling: QuantResearchScenarioDefinition = {
 const experimental: QuantResearchScenarioDefinition = {
   family: "EXPERIMENTAL_ALLOCATION",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed: 808,
   config: { totalBudget: 20, costA: 2, costB: 4, perturbedCostA: 5, perturbedCostB: 2, noiseA: 2, noiseB: 5 }
@@ -37,6 +41,7 @@ const experimental: QuantResearchScenarioDefinition = {
 const model: QuantResearchScenarioDefinition = {
   family: "MODEL_COMPARISON",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed: 1234,
   config: { observationCount: 10, noiseRadius: 2, outlierShift: 30 }
@@ -45,6 +50,7 @@ const model: QuantResearchScenarioDefinition = {
 const optimization: QuantResearchScenarioDefinition = {
   family: "CONSTRAINED_OPTIMIZATION",
   version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
   rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed: 42,
   config: { budget: 30, perturbedBudget: 24, maxX: 15, maxY: 10, perturbedPenalty: 5 }
