@@ -1150,6 +1150,41 @@ describe("production Socratic policy engine", () => {
     expect(decision.realizationRequest.maximumDisclosure).toBe(0);
   });
 
+  it("fails closed when the direct policy API is asked about a stale committed turn", () => {
+    const { state: base, turnId } = makeState();
+    const staleTurn = base.turns[turnId];
+    expect(staleTurn).toBeDefined();
+    if (staleTurn === undefined) throw new Error("missing stale turn");
+    const newerEpisodeId = InputEpisodeIdSchema.parse(nextId("episode_newer_policy"));
+    const newerTurnId = TurnIdSchema.parse(nextId("turn_newer_policy"));
+    const state: SessionState = {
+      ...base,
+      lastCommittedInputSequence: base.sequence,
+      inputEpisodes: {
+        ...base.inputEpisodes,
+        [newerEpisodeId]: {
+          inputEpisodeId: newerEpisodeId,
+          status: "COMMITTED",
+          inputs: [{ modality: "TYPING", semanticContent: "newer student work" }]
+        }
+      },
+      turns: {
+        ...base.turns,
+        [newerTurnId]: {
+          turnId: newerTurnId,
+          inputEpisodeId: newerEpisodeId,
+          studentText: "newer student work",
+          committedSequence: base.sequence
+        }
+      }
+    };
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("STALE_TURN_CONTEXT");
+    expect(decision.realizationRequest.requiredAction).toBe("CLARIFY");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
   it("handles an empty committed turn conservatively", () => {
     const { state: base, turnId } = makeState();
     const turn = base.turns[turnId];
@@ -1537,6 +1572,92 @@ describe("production Socratic policy engine", () => {
     });
     expect(context.forbiddenDisclosureIds).not.toContain(disclosure.id);
     expect(context.forbiddenDisclosureIds).toContain(other.id);
+  });
+
+  it("rejects direct context compilation for a stale committed turn", () => {
+    const { state: base, turnId } = makeState();
+    const newerEpisodeId = InputEpisodeIdSchema.parse(nextId("episode_newer_context"));
+    const newerTurnId = TurnIdSchema.parse(nextId("turn_newer_context"));
+    const request: RealizationRequest = {
+      requiredAction: "PROBE_JUSTIFICATION",
+      target: target("turn", turnId),
+      maximumDisclosure: 0
+    };
+    const state: SessionState = {
+      ...base,
+      lastCommittedInputSequence: base.sequence,
+      pedagogicalActions: {
+        ...base.pedagogicalActions,
+        [turnId]: request
+      },
+      inputEpisodes: {
+        ...base.inputEpisodes,
+        [newerEpisodeId]: {
+          inputEpisodeId: newerEpisodeId,
+          status: "COMMITTED",
+          inputs: [{ modality: "TYPING", semanticContent: "newer context work" }]
+        }
+      },
+      turns: {
+        ...base.turns,
+        [newerTurnId]: {
+          turnId: newerTurnId,
+          inputEpisodeId: newerEpisodeId,
+          studentText: "newer context work",
+          committedSequence: base.sequence
+        }
+      }
+    };
+
+    expect(() => compileContext({
+      state,
+      problem: sixPeopleProblem,
+      turnId,
+      realizationRequest: request
+    })).toThrow(/latest committed Turn/u);
+  });
+
+  it("keeps previously exposed but currently unauthorized protected facts forbidden", () => {
+    const currentlyAllowed = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    const previouslyExposed = sixPeopleProblem.interviewer.protectedDisclosures[1];
+    expect(currentlyAllowed).toBeDefined();
+    expect(previouslyExposed).toBeDefined();
+    if (currentlyAllowed === undefined || previouslyExposed === undefined) {
+      throw new Error("missing disclosure fixtures");
+    }
+
+    const { state: base, turnId } = makeState();
+    let state = withAssistance(base, {
+      target: target("milestone", "close-triangle"),
+      action: "EXPLICIT_HINT",
+      maximumDisclosure: 4,
+      effectiveDisclosureLevel: 4,
+      disclosureIds: [previouslyExposed.id],
+      allowedDisclosureIds: [previouslyExposed.id]
+    });
+    const request: RealizationRequest = {
+      requiredAction: "DIRECTIONAL_NUDGE",
+      target: target("milestone", "choose-vertex"),
+      maximumDisclosure: 2,
+      allowedDisclosureIds: [currentlyAllowed.id]
+    };
+    state = {
+      ...state,
+      pedagogicalActions: {
+        ...state.pedagogicalActions,
+        [turnId]: request
+      }
+    };
+
+    const context = compileContext({
+      state,
+      problem: sixPeopleProblem,
+      turnId,
+      realizationRequest: request
+    });
+    expect(context.deliveredFacts).toContain(previouslyExposed.id);
+    expect(context.forbiddenDisclosureIds).toContain(previouslyExposed.id);
+    expect(context.forbiddenDisclosureIds).not.toContain(currentlyAllowed.id);
   });
 
   it("rejects provider context when target authorization exceeds its numeric disclosure ceiling", () => {
