@@ -104,12 +104,12 @@ function isAbortSignal(value: unknown): value is AbortSignal {
         || Object.hasOwn(value, "removeEventListener")) {
       return false;
     }
-    const abortedGetter = Object.getOwnPropertyDescriptor(
+    const abortedDescriptor = Object.getOwnPropertyDescriptor(
       AbortSignal.prototype,
       "aborted"
-    )?.get;
-    if (abortedGetter === undefined) return false;
-    const readAborted = abortedGetter.bind(value);
+    );
+    if (abortedDescriptor?.get === undefined) return false;
+    const readAborted = abortedDescriptor.get.bind(value);
     return typeof readAborted() === "boolean";
   } catch {
     return false;
