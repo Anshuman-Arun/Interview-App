@@ -1882,7 +1882,7 @@ describe("replay/history projections", () => {
           ? {
               ...item,
               payload: { ...item.payload, provider: oversized }
-            } as SessionEvent
+            }
           : item
       );
       expect(() => projectSessionHistory(oversizedProvider))
