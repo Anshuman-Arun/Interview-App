@@ -6,6 +6,7 @@ import {
   GenerationIdSchema,
   InputEpisodeIdSchema,
   RequestIdSchema,
+  RealizationRequestSchema,
   SessionIdSchema,
   TurnIdSchema,
   evidenceKeyToString,
@@ -497,6 +498,31 @@ describe("production Socratic policy engine", () => {
     expect(decision.realizationRequest.requiredAction).toBe("FOCUS_ATTENTION");
     expect(decision.realizationRequest.maximumDisclosure).toBe(1);
     expect(decision.escalationJustified).toBe(true);
+  });
+
+  it("fails closed on malformed historical disclosure authorization even when no protected atom was exposed", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    const unknownDisclosureId = DisclosureIdSchema.parse(
+      "disclosure_unknown_historical_authorization"
+    );
+    state = withAssistance(state, {
+      target: target("milestone", "choose-vertex"),
+      action: "CHECK_LOCAL_STEP",
+      maximumDisclosure: 1,
+      allowedDisclosureIds: [unknownDisclosureId]
+    });
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest).toMatchObject({
+      requiredAction: "CLARIFY",
+      maximumDisclosure: 0
+    });
   });
 
   it("keeps exposed assistance bound to the action snapshot that its generation actually used", () => {
@@ -2000,6 +2026,28 @@ describe("production Socratic policy engine", () => {
     for (const disclosure of sixPeopleProblem.interviewer.protectedDisclosures) {
       expect(serialized).not.toContain(disclosure.fact);
     }
+  });
+});
+
+describe("realization request validation", () => {
+  it("bounds target size without rewriting exact target identity", () => {
+    const targetValue = " milestone:exact-target ";
+    expect(RealizationRequestSchema.parse({
+      requiredAction: "CLARIFY",
+      target: targetValue,
+      maximumDisclosure: 0
+    }).target).toBe(targetValue);
+
+    expect(RealizationRequestSchema.safeParse({
+      requiredAction: "CLARIFY",
+      target: "   ",
+      maximumDisclosure: 0
+    }).success).toBe(false);
+    expect(RealizationRequestSchema.safeParse({
+      requiredAction: "CLARIFY",
+      target: "x".repeat(1_025),
+      maximumDisclosure: 0
+    }).success).toBe(false);
   });
 });
 
