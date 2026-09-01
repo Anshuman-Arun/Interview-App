@@ -1,4 +1,5 @@
 export const QUANT_RESEARCH_VERSION = "1.0.0" as const;
+export const QUANT_RESEARCH_RNG_VERSION = "xorshift32-rejection-v1" as const;
 
 export const QUANT_RESEARCH_FAMILIES = [
   "BAYESIAN_UPDATING",
