@@ -60,12 +60,14 @@ export interface SessionReadServiceOptions {
 export function createCatalogSessionProblemResolver(
   problems: readonly InterviewProblem[] = problemCatalog
 ): ExactSessionProblemResolver {
-  const byIdentity = new Map(
-    problems.map((problem) => [
-      JSON.stringify([problem.id, problem.version]),
-      problem
-    ] as const)
-  );
+  const byIdentity = new Map<string, InterviewProblem>();
+  for (const problem of problems) {
+    const identity = JSON.stringify([problem.id, problem.version]);
+    if (byIdentity.has(identity)) {
+      throw new Error("Problem catalog contains a duplicate id/version identity");
+    }
+    byIdentity.set(identity, problem);
+  }
   return {
     resolve(problemId, problemVersion) {
       return byIdentity.get(JSON.stringify([problemId, problemVersion]));
@@ -104,6 +106,14 @@ function boundedIdentity(value: string | undefined): string | undefined {
     || containsControlCharacter(value)
   ) {
     return undefined;
+  }
+  return value;
+}
+
+function boundedSessionIdentity(value: SessionId): SessionId | undefined {
+  if (boundedIdentity(value) === undefined) return undefined;
+  for (const character of value) {
+    if (character === "/" || character === "\\") return undefined;
   }
   return value;
 }
@@ -339,7 +349,7 @@ export class SessionReadService {
     let consumedEvents = 0;
 
     for (const sessionId of inventory.sessionIds) {
-      if (boundedIdentity(sessionId) === undefined) continue;
+      if (boundedSessionIdentity(sessionId) === undefined) continue;
 
       const expectedEventCount = this.readEventCount(sessionId);
       if (expectedEventCount === undefined || expectedEventCount === 0) {
