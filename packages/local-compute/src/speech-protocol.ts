@@ -4,12 +4,23 @@ import { RequestIdSchema, UtteranceIdSchema } from "../../domain/src/index.js";
 export const SPEECH_PROTOCOL_VERSION = 1 as const;
 export const MAX_SPEECH_FRAME_DURATION_MS = 100;
 export const MAX_SPEECH_UTTERANCE_DURATION_MS = 60_000;
+export const MAX_SPEECH_PRE_SPEECH_DURATION_MS = 10_000;
+export const MAX_SPEECH_TIMESTAMP_DRIFT_MS = 250;
+export const MAX_SPEECH_TIMESTAMP_MS = Number.MAX_SAFE_INTEGER - MAX_SPEECH_UTTERANCE_DURATION_MS;
 export const MAX_SPEECH_BUFFERED_PCM_BYTES = 12 * 1024 * 1024;
 export const MAX_SPEECH_CONCURRENT_STREAMS = 4;
+export const MAX_SPEECH_REMEMBERED_MESSAGES = 1_024;
 export const MAX_SPEECH_TRANSCRIPT_CHARS = 20_000;
 export const MAX_SPEECH_WORD_TIMINGS = 1_000;
+export const MAX_SPEECH_TRANSCRIPT_RESULT_CACHE = 1_024;
 export const MAX_SPEECH_DIAGNOSTICS = 32;
 export const MAX_SPEECH_DIAGNOSTIC_CHARS = 256;
+export const DEFAULT_SPEECH_VAD_TIMEOUT_MS = 2_000;
+export const MAX_SPEECH_VAD_TIMEOUT_MS = 5_000;
+export const DEFAULT_SPEECH_RECOGNIZER_TIMEOUT_MS = 30_000;
+export const MAX_SPEECH_RECOGNIZER_TIMEOUT_MS = 60_000;
+export const DEFAULT_SPEECH_CANCELLATION_TIMEOUT_MS = 500;
+export const MAX_SPEECH_CANCELLATION_TIMEOUT_MS = 2_000;
 
 export const SpeechProtocolVersionSchema = z.literal(SPEECH_PROTOCOL_VERSION);
 const SpeechIdentityPattern = /^[A-Za-z0-9._:-]+$/u;
@@ -36,6 +47,7 @@ export const SpeechSampleFormatSchema = z.literal("F32LE");
 const NonnegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const PositiveSafeIntegerSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const FiniteNonnegativeNumberSchema = z.number().nonnegative();
+const SpeechTimestampMsSchema = z.number().nonnegative().max(MAX_SPEECH_TIMESTAMP_MS);
 
 export const SpeechPcmFrameEnvelopeSchema = z.object({
   protocolVersion: SpeechProtocolVersionSchema,
@@ -47,7 +59,7 @@ export const SpeechPcmFrameEnvelopeSchema = z.object({
   sampleFormat: SpeechSampleFormatSchema,
   frameSamples: PositiveSafeIntegerSchema,
   payloadByteLength: PositiveSafeIntegerSchema,
-  timestampMs: FiniteNonnegativeNumberSchema
+  timestampMs: SpeechTimestampMsSchema
 }).strict().superRefine((value, context) => {
   const expectedBytes = value.frameSamples * value.channels * 4;
   if (value.payloadByteLength !== expectedBytes) {
@@ -110,6 +122,7 @@ export type SpeechFinalizationReason = z.infer<typeof SpeechFinalizationReasonSc
 export const SpeechDiscardReasonSchema = z.enum([
   "FALSE_START",
   "TOO_SHORT",
+  "NO_SPEECH_TIMEOUT",
   "CANCELLED"
 ]);
 export type SpeechDiscardReason = z.infer<typeof SpeechDiscardReasonSchema>;
@@ -118,8 +131,8 @@ export const SourceAudioBasisSchema = z.object({
   streamId: SpeechStreamIdSchema,
   firstSequence: NonnegativeSafeIntegerSchema,
   lastSequence: NonnegativeSafeIntegerSchema,
-  startTimestampMs: FiniteNonnegativeNumberSchema,
-  endTimestampMs: FiniteNonnegativeNumberSchema,
+  startTimestampMs: SpeechTimestampMsSchema,
+  endTimestampMs: SpeechTimestampMsSchema,
   sampleRate: SpeechSampleRateSchema,
   channels: SpeechChannelCountSchema,
   sampleCount: PositiveSafeIntegerSchema,
@@ -131,16 +144,29 @@ export const SourceAudioBasisSchema = z.object({
   if (value.endTimestampMs < value.startTimestampMs) {
     context.addIssue({ code: "custom", message: "Audio basis timestamp range is reversed", path: ["endTimestampMs"] });
   }
+  const audioDurationMs = value.sampleCount / value.sampleRate * 1_000;
+  if (audioDurationMs > MAX_SPEECH_UTTERANCE_DURATION_MS + 0.001) {
+    context.addIssue({ code: "custom", message: "Audio basis exceeds maximum utterance duration", path: ["sampleCount"] });
+  }
+  const timestampSpanMs = value.endTimestampMs - value.startTimestampMs;
+  if (timestampSpanMs > audioDurationMs + MAX_SPEECH_TIMESTAMP_DRIFT_MS + 0.001) {
+    context.addIssue({ code: "custom", message: "Audio basis timestamp drift exceeds limit", path: ["endTimestampMs"] });
+  }
 });
 export type SourceAudioBasis = z.infer<typeof SourceAudioBasisSchema>;
 
-const safeRecognizerMetadataTextSchema = (maxLength: number) => z.string()
+const safeRecognizerWordSchema = (maxLength: number) => z.string()
   .min(1)
   .max(maxLength)
-  .refine((value) => !/\p{Cc}/u.test(value), { message: "Recognizer metadata contains control characters" });
+  .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), { message: "Recognizer word metadata contains unsafe control/format characters" });
+const SafeModelIdentityPattern = /^[A-Za-z0-9][A-Za-z0-9._+:/@ -]*$/u;
+const safeModelIdentityTextSchema = (maxLength: number) => z.string()
+  .min(1)
+  .max(maxLength)
+  .regex(SafeModelIdentityPattern);
 
 export const TranscriptWordTimingSchema = z.object({
-  word: safeRecognizerMetadataTextSchema(128),
+  word: safeRecognizerWordSchema(128),
   startMs: FiniteNonnegativeNumberSchema,
   endMs: FiniteNonnegativeNumberSchema,
   confidence: z.number().min(0).max(1).optional()
@@ -152,8 +178,8 @@ export const TranscriptWordTimingSchema = z.object({
 export type TranscriptWordTiming = z.infer<typeof TranscriptWordTimingSchema>;
 
 export const SpeechModelIdentitySchema = z.object({
-  name: safeRecognizerMetadataTextSchema(100),
-  version: safeRecognizerMetadataTextSchema(100)
+  name: safeModelIdentityTextSchema(100),
+  version: safeModelIdentityTextSchema(100)
 }).strict();
 export type SpeechModelIdentity = z.infer<typeof SpeechModelIdentitySchema>;
 
@@ -180,8 +206,10 @@ export const SpeechWorkerErrorCodeSchema = z.enum([
   "STREAM_FINALIZED",
   "VAD_FAILURE",
   "VAD_PROTOCOL_ERROR",
+  "VAD_TIMEOUT",
   "RECOGNIZER_FAILURE",
   "RECOGNIZER_PROTOCOL_ERROR",
+  "RECOGNIZER_TIMEOUT",
   "CANCELLED",
   "SHUTTING_DOWN",
   "INTERNAL_ERROR"
