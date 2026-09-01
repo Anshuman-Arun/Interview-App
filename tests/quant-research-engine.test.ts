@@ -478,6 +478,26 @@ describe("deterministic Quant Research interview engine", () => {
     expect(engine.getResult().metrics.CONSISTENCY).toBe(0);
   });
 
+  it("does not call a corrected Bayesian answer consistent with a wrong prior posterior", () => {
+    const engine = new QuantResearchEngine(bayesian);
+    const prior = bayesian.config.priorAlpha / (bayesian.config.priorAlpha + bayesian.config.priorBeta);
+    engine.applyAction({ actionId: "inconsistent-b1", kind: "SUBMIT_PROBABILITY", value: prior });
+    const successes = visibleNumber(engine.getState(), "successes");
+    const failures = visibleNumber(engine.getState(), "failures");
+
+    engine.applyAction({ actionId: "inconsistent-b2", kind: "SUBMIT_PROBABILITY", value: 0 });
+    engine.applyAction({
+      actionId: "inconsistent-b3",
+      kind: "SUBMIT_PROBABILITY",
+      value: (bayesian.config.perturbedPriorAlpha + successes) /
+        (bayesian.config.perturbedPriorAlpha + bayesian.config.perturbedPriorBeta + successes + failures)
+    });
+
+    expect(engine.getResult().metrics.NUMERICAL_CORRECTNESS).toBe(0);
+    expect(engine.getResult().metrics.ADAPTATION).toBe(100);
+    expect(engine.getResult().metrics.CONSISTENCY).toBe(0);
+  });
+
   it("sampling enforces observation budget and supports contamination adaptation", () => {
     const engine = new QuantResearchEngine(sampling);
     engine.applyAction({ actionId: "s1", kind: "REQUEST_OBSERVATION", count: 4 });
