@@ -52,6 +52,37 @@ function analyzerResultWithinBounds(value: unknown): boolean {
     && reason.length <= MAX_DISCLOSURE_ANALYSIS_CHARACTERS;
 }
 
+interface ProtectedMatch {
+  readonly ok: boolean;
+  readonly ids: readonly DisclosureId[];
+  readonly level: DisclosureLevel;
+}
+
+function deriveProtectedMatch(
+  text: string,
+  protectedDisclosures: readonly ProtectedDisclosure[]
+): ProtectedMatch {
+  const normalized = normalize(text);
+  const ids: DisclosureId[] = [];
+  let level: DisclosureLevel = 0;
+
+  for (const disclosure of protectedDisclosures) {
+    const formulations = [disclosure.fact, ...disclosure.equivalentFormulations]
+      .map(normalize);
+    if (formulations.some((formulation) => formulation.length === 0)) {
+      return { ok: false, ids: [], level: 0 };
+    }
+    if (formulations.some((formulation) => normalized.includes(formulation))) {
+      ids.push(disclosure.id);
+      if (disclosure.minimumDisclosureLevel > level) {
+        level = disclosure.minimumDisclosureLevel;
+      }
+    }
+  }
+
+  return { ok: true, ids, level };
+}
+
 function protectedMetadataWithinBounds(
   protectedDisclosures: readonly ProtectedDisclosure[]
 ): boolean {
@@ -98,23 +129,15 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
     }
 
     const normalized = normalize(text);
-    let level: DisclosureLevel = 0;
-    const ids: DisclosureId[] = [];
-    for (const item of protectedDisclosures) {
-      const formulations = [item.fact, ...item.equivalentFormulations].map(normalize);
-      if (formulations.some((phrase) => phrase.length === 0)) {
-        return unknownAnalysis("Protected disclosure metadata normalizes to an empty formulation");
-      }
-      if (formulations.some((phrase) => normalized.includes(phrase))) {
-        ids.push(item.id);
-        if (item.minimumDisclosureLevel > level) level = item.minimumDisclosureLevel;
-      }
+    const protectedMatch = deriveProtectedMatch(text, protectedDisclosures);
+    if (!protectedMatch.ok) {
+      return unknownAnalysis("Protected disclosure metadata normalizes to an empty formulation");
     }
-    if (ids.length > 0) {
+    if (protectedMatch.ids.length > 0) {
       return {
         status: "SAFE",
-        effectiveDisclosureLevel: level,
-        effectiveDisclosureIds: ids,
+        effectiveDisclosureLevel: protectedMatch.level,
+        effectiveDisclosureIds: [...protectedMatch.ids],
         confidence: 1,
         reason: "Protected formulation classified independently"
       };
@@ -184,7 +207,20 @@ export class DisclosureValidator {
     }
 
     const analyses: DisclosureAnalysis[] = [];
+    const deterministicIds = new Set<DisclosureId>();
+    let deterministicLevel: DisclosureLevel = 0;
     for (const text of texts) {
+      const protectedMatch = deriveProtectedMatch(text, input.protectedDisclosures);
+      if (!protectedMatch.ok) {
+        return {
+          accepted: false,
+          reason: "Protected disclosure metadata cannot be analyzed deterministically"
+        };
+      }
+      for (const disclosureId of protectedMatch.ids) deterministicIds.add(disclosureId);
+      if (protectedMatch.level > deterministicLevel) {
+        deterministicLevel = protectedMatch.level;
+      }
       let rawAnalysis: unknown;
       try {
         rawAnalysis = this.analyzer.analyze(text, input.protectedDisclosures);
@@ -227,8 +263,11 @@ export class DisclosureValidator {
       };
     }
 
-    const effectiveIds = Array.from(new Set(analyses.flatMap((item) => item.effectiveDisclosureIds)));
-    let metadataFloor: DisclosureLevel = 0;
+    const effectiveIds = Array.from(new Set([
+      ...deterministicIds,
+      ...analyses.flatMap((item) => item.effectiveDisclosureIds)
+    ]));
+    let metadataFloor: DisclosureLevel = deterministicLevel;
     for (const disclosureId of effectiveIds) {
       const disclosure = disclosureById.get(disclosureId);
       if (disclosure === undefined) {
