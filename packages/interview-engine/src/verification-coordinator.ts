@@ -366,8 +366,10 @@ export class VerificationCoordinator {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const supplied = VerificationResultSchema.parse(input.result);
 
-    const snapshotRequest = this.writer.getState().verificationRequests[envelope.correlationId];
-    const recomputed = snapshotRequest === undefined
+    const snapshotState = this.writer.getState();
+    const snapshotRequest = snapshotState.verificationRequests[envelope.correlationId];
+    const recomputed = snapshotState.status !== "ACTIVE"
+      || snapshotRequest === undefined
       || snapshotRequest.status !== "PENDING"
       || !this.isScopeAuthorized(snapshotRequest.verifier, snapshotRequest.evidenceKey)
       ? undefined

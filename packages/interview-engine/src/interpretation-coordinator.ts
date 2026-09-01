@@ -147,14 +147,14 @@ export interface FormalInterpretationProvider {
 }
 
 export type DeterministicInterpretationResponder =
-  (request: FormalInterpretationRequest) => unknown | Promise<unknown>;
+  (request: FormalInterpretationRequest) => unknown;
 
 export class DeterministicFormalInterpretationProvider implements FormalInterpretationProvider {
   private readonly responder?: DeterministicInterpretationResponder;
   private readonly staticResult?: unknown;
   private calls = 0;
 
-  public constructor(resultOrResponder: unknown | DeterministicInterpretationResponder) {
+  public constructor(resultOrResponder: unknown) {
     if (typeof resultOrResponder === "function") {
       this.responder = resultOrResponder as DeterministicInterpretationResponder;
     } else {
@@ -371,7 +371,7 @@ export class InterpretationCoordinator {
       if (!route.ok) return this.finishFailure(mapRouteFailure(route.reason, request.requestId, 0, true));
     }
 
-    if (record.cancelled) {
+    if (this.isCancelled(record)) {
       return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
     }
 
@@ -388,7 +388,7 @@ export class InterpretationCoordinator {
       return this.finishFailure(failed("INVALID_PROVIDER_OUTPUT", "PROVIDER_FAILURE", 0, request.requestId));
     }
 
-    if (record.cancelled) {
+    if (this.isCancelled(record)) {
       return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
     }
 
@@ -488,7 +488,7 @@ export class InterpretationCoordinator {
         request.requestId
       ));
     }
-    const candidate = admitted.values().next().value as AdmittedCandidate | undefined;
+    const candidate = admitted.values().next().value;
     if (candidate === undefined) {
       return this.finishFailure(failed(
         "NO_SUPPORTED_INTERPRETATION",
@@ -508,7 +508,7 @@ export class InterpretationCoordinator {
 
     const beforeDispatchFailure = this.checkCurrentRequest(request, candidateCount);
     if (beforeDispatchFailure !== undefined) return this.finishFailure(beforeDispatchFailure);
-    if (record.cancelled) {
+    if (this.isCancelled(record)) {
       return this.finishFailure(failed("STALE", "CANCELLED", candidateCount, request.requestId));
     }
 
@@ -673,6 +673,10 @@ export class InterpretationCoordinator {
         reason: "VERIFIER_EXECUTION_FAILED: deterministic verifier execution did not return a valid result"
       };
     }
+  }
+
+  private isCancelled(record: RequestRecord): boolean {
+    return record.cancelled;
   }
 
   private checkCurrentRequest(

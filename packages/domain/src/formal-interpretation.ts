@@ -130,7 +130,7 @@ export const FormalInterpretationCandidateSchema = z.object({
   candidateId: z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u),
   protocol: FormalProtocolRefSchema,
   formalStatement: z.string().min(1).max(MAX_FORMAL_INTERPRETATION_STATEMENT_CHARACTERS),
-  confidence: z.number().finite().min(0).max(1),
+  confidence: z.number().min(0).max(1),
   target: EvidenceKeySchema,
   source: FormalInterpretationCandidateSourceSchema
 }).strict();

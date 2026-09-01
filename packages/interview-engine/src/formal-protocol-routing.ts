@@ -58,7 +58,7 @@ export interface FormalProtocolRouteDefinition {
   readonly verifierProtocol: string;
   readonly verifierProtocolVersion: number;
   readonly verifier: string;
-  readonly statementSchema: ZodType<unknown>;
+  readonly statementSchema: ZodType;
 }
 
 function freezeRoute(definition: FormalProtocolRouteDefinition): FormalProtocolRouteDefinition {
@@ -243,10 +243,7 @@ export class FormalProtocolRoutingRegistry {
 
   public createVerifier(resolution: Extract<FormalProtocolRouteResolution, { readonly ok: true }>): DeterministicVerifier | undefined {
     try {
-      const verifier = resolution.descriptor.create();
-      return verifier !== null && typeof verifier === "object" && typeof verifier.verify === "function"
-        ? verifier
-        : undefined;
+      return resolution.descriptor.create();
     } catch {
       return undefined;
     }
