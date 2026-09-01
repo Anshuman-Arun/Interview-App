@@ -4,6 +4,7 @@ import {
   QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
   QuantResearchEngine,
+  QuantResearchError,
   replayQuantResearch,
   type QuantResearchScenarioDefinition
 } from "../packages/local-compute/src/index.js";
@@ -164,8 +165,9 @@ describe("Quant Research property invariants", () => {
         let engine: QuantResearchEngine;
         try {
           engine = new QuantResearchEngine(optimizationDefinition(seed));
-        } catch {
-          return;
+        } catch (error) {
+          if (error instanceof QuantResearchError && error.code === "INVALID_DEFINITION") return;
+          throw error;
         }
         engine.applyAction({ actionId: "o1", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
         engine.applyAction({ actionId: "o2", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
