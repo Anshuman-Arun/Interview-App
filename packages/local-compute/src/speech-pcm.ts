@@ -318,6 +318,7 @@ function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
 
 function validatePcmOrderState(prior: PcmOrderState): void {
   const streamId = SpeechStreamIdSchema.safeParse(prior.streamId);
+  const sampleDerivedEndMs = prior.firstTimestampMs + prior.cumulativeDurationMs;
   if (!streamId.success
       || (prior.sampleRate !== 16_000 && prior.sampleRate !== 48_000)
       || prior.channels !== 1
@@ -328,8 +329,12 @@ function validatePcmOrderState(prior: PcmOrderState): void {
       || prior.firstTimestampMs < 0
       || !Number.isFinite(prior.cumulativeDurationMs)
       || prior.cumulativeDurationMs <= 0
+      || !Number.isFinite(sampleDerivedEndMs)
+      || sampleDerivedEndMs > Number.MAX_SAFE_INTEGER
       || !Number.isFinite(prior.nextEarliestTimestampMs)
-      || prior.nextEarliestTimestampMs < prior.firstTimestampMs) {
+      || prior.nextEarliestTimestampMs > Number.MAX_SAFE_INTEGER
+      || prior.nextEarliestTimestampMs + 0.001 < sampleDerivedEndMs
+      || prior.nextEarliestTimestampMs > sampleDerivedEndMs + MAX_SPEECH_TIMESTAMP_DRIFT_MS + 0.001) {
     throw new PcmAdmissionError("INVALID_FRAME", "Prior PCM ordering state is invalid");
   }
 }
