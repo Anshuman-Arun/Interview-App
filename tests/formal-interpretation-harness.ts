@@ -7,11 +7,8 @@ import {
 } from "../packages/domain/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/six-people.js";
-import {
-  SessionRuntimeRegistry,
-  TurnCoordinator,
-  type SessionWriter
-} from "../packages/interview-engine/src/index.js";
+import { SessionRuntimeRegistry, type SessionWriter } from "../packages/interview-engine/src/session-writer.js";
+import { TurnCoordinator } from "../packages/interview-engine/src/turn-coordinator.js";
 
 export interface CoreHarness {
   readonly store: SqliteEventStore;

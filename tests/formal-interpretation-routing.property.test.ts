@@ -5,11 +5,9 @@ import {
   type EvidenceKey,
   type FormalProtocolRef
 } from "../packages/domain/src/index.js";
-import {
-  FormalProtocolRoutingRegistry,
-  createFormalInterpretationRequest,
-  echoInterpretationCandidateSource
-} from "../packages/interview-engine/src/index.js";
+import { createFormalInterpretationRequest } from "../packages/interview-engine/src/formal-interpretation.js";
+import { FormalProtocolRoutingRegistry } from "../packages/interview-engine/src/formal-protocol-routing.js";
+import { echoInterpretationCandidateSource } from "../packages/interview-engine/src/interpretation-coordinator.js";
 import { DETERMINISTIC_MATH_VERIFIERS } from "../packages/verification/src/index.js";
 import { createCoreHarness } from "./formal-interpretation-harness.js";
 

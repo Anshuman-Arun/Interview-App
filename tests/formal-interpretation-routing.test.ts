@@ -8,16 +8,16 @@ import {
   type FormalInterpretationRequest,
   type FormalProtocolRef
 } from "../packages/domain/src/index.js";
+import { createCommandEnvelope } from "../packages/interview-engine/src/envelopes.js";
+import { createFormalInterpretationRequest } from "../packages/interview-engine/src/formal-interpretation.js";
+import { FormalProtocolRoutingRegistry } from "../packages/interview-engine/src/formal-protocol-routing.js";
 import {
   DeterministicFormalInterpretationProvider,
-  FormalProtocolRoutingRegistry,
   InterpretationCoordinator,
-  VerificationCoordinator,
-  createCommandEnvelope,
-  createFormalInterpretationRequest,
   echoInterpretationCandidateSource,
   providerResultFor
-} from "../packages/interview-engine/src/index.js";
+} from "../packages/interview-engine/src/interpretation-coordinator.js";
+import { VerificationCoordinator } from "../packages/interview-engine/src/verification-coordinator.js";
 import {
   COMBINATORIAL_COUNTING_PROTOCOL,
   COMBINATORIAL_COUNTING_VERIFIER_NAME,
