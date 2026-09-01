@@ -78,44 +78,31 @@ export class DisclosureValidator {
     readonly protectedDisclosures: readonly ProtectedDisclosure[];
   }): ProposalValidation {
     if (input.proposal.realizedAction !== input.request.requiredAction) {
-      return { accepted: false, reason: "Model realized an action that application policy did not select" };
+      return { accepted: false, reason: "Proposal action does not match the application-selected pedagogical action" };
     }
-    if (input.proposal.speechText === undefined && (input.proposal.boardActions?.length ?? 0) === 0) {
-      return { accepted: false, reason: "Proposal contains no deliverable realization" };
+
+    const analysis = this.analyzer.analyze(input.proposal.speechText, input.protectedDisclosures);
+    if (analysis.status !== "SAFE") {
+      return { accepted: false, reason: "Disclosure analysis is uncertain and therefore fails closed", analysis };
     }
-    const texts = [input.proposal.speechText ?? "", ...(input.proposal.boardActions ?? []).map((item) => item.content ?? item.annotationPurpose)];
-    const analyses = texts.filter((text) => text.length > 0).map((text) => this.analyzer.analyze(text, input.protectedDisclosures));
-    if (analyses.some((analysis) => analysis.status === "UNKNOWN" || analysis.confidence < 1)) {
-      const uncertain = analyses.find((item) => item.status === "UNKNOWN");
-      return {
-        accepted: false,
-        reason: "Disclosure validation is uncertain and therefore fails closed",
-        ...(uncertain === undefined ? {} : { analysis: uncertain })
-      };
+    if (analysis.effectiveDisclosureLevel > input.request.maximumDisclosure) {
+      return { accepted: false, reason: "Proposal exceeds the application-selected maximum disclosure level", analysis };
     }
-    const effectiveLevel = analyses.reduce<DisclosureLevel>((maximum, item) => item.effectiveDisclosureLevel > maximum ? item.effectiveDisclosureLevel : maximum, 0);
-    const effectiveIds = Array.from(new Set(analyses.flatMap((item) => item.effectiveDisclosureIds)));
-    const combined: DisclosureAnalysis = {
-      status: "SAFE",
-      effectiveDisclosureLevel: effectiveLevel,
-      effectiveDisclosureIds: effectiveIds,
-      confidence: Math.min(...analyses.map((item) => item.confidence)),
-      reason: analyses.map((item) => item.reason).join("; ")
-    };
-    if (combined.effectiveDisclosureLevel > input.request.maximumDisclosure) {
-      return {
-        accepted: false,
-        reason: "Effective disclosure exceeds the application-authorized boundary",
-        analysis: combined
-      };
+
+    if (input.request.allowedDisclosureIds !== undefined) {
+      const allowed = new Set<DisclosureId>(input.request.allowedDisclosureIds);
+      const containsUnauthorizedProtectedDisclosure = analysis.effectiveDisclosureIds.some(
+        (disclosureId) => !allowed.has(disclosureId)
+      );
+      if (containsUnauthorizedProtectedDisclosure) {
+        return {
+          accepted: false,
+          reason: "Proposal contains a protected disclosure outside the application-selected target authorization",
+          analysis
+        };
+      }
     }
-    if (input.proposal.claimedDisclosureLevel < combined.effectiveDisclosureLevel) {
-      return {
-        accepted: false,
-        reason: "Model claimed disclosure level understates effective disclosure",
-        analysis: combined
-      };
-    }
-    return { accepted: true, analysis: combined };
+
+    return { accepted: true, analysis };
   }
 }
