@@ -65,6 +65,7 @@ interface CaptureResources {
 
 const DEFAULT_FRAME_SIZE = 2_048;
 const MAX_SCRIPT_PROCESSOR_CHANNELS = 32;
+const MAX_MEDIA_STREAM_TRACKS = 32;
 const SCRIPT_PROCESSOR_FRAME_SIZES: ReadonlySet<number> = new Set([
   256,
   512,
@@ -205,6 +206,12 @@ export class BrowserMicrophoneCapture {
         throw new AudioInfrastructureError(
           "CAPTURE_FAILED",
           "Microphone stream audio tracks must be returned as an array"
+        );
+      }
+      if (streamTracks.length > MAX_MEDIA_STREAM_TRACKS) {
+        throw new AudioInfrastructureError(
+          "CAPTURE_FAILED",
+          "Microphone stream exposed too many audio tracks"
         );
       }
       const ownedTracks: AudioMediaStreamTrackLike[] = [];
@@ -1176,7 +1183,9 @@ function stopStreamAudioTracks(
   const handled = new Set<AudioMediaStreamTrackLike>(alreadyOwned);
   const stopReturnedTracks = (tracks: unknown): boolean => {
     if (!isUnknownArray(tracks)) return false;
-    for (const track of tracks) {
+    const count = Math.min(tracks.length, MAX_MEDIA_STREAM_TRACKS);
+    for (let index = 0; index < count; index += 1) {
+      const track = tracks[index];
       if (typeof track !== "object" || track === null) continue;
       const ownedTrack = track as AudioMediaStreamTrackLike;
       if (handled.has(ownedTrack)) continue;
