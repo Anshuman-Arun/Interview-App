@@ -110,11 +110,7 @@ export function evaluateInterviewSession(
     ...customRubric
   });
 
-  const turnsList = Object.values(state.turns).sort(
-    (left, right) =>
-      left.committedSequence - right.committedSequence ||
-      compareStrings(left.turnId, right.turnId)
-  );
+  const totalTurns = Object.keys(state.turns).length;
 
   const activeEvidence = collectActiveEvidence(state, problem.id);
   const verificationByEvidenceKey = collectAcceptedVerifications(state, problem.id);
@@ -175,7 +171,7 @@ export function evaluateInterviewSession(
     rigor,
     errorRecovery
   );
-  const lifecycle = evaluateLifecycle(state, turnsList.length);
+  const lifecycle = evaluateLifecycle(state, totalTurns);
   const summaryAssessment = buildSummary(
     lifecycle.completionState,
     composite.score,
@@ -213,7 +209,7 @@ export function evaluateInterviewSession(
     disclosedInterventions: disclosureData.interventions,
     unassistedMilestoneCount,
     assistedMilestoneCount,
-    totalTurns: turnsList.length,
+    totalTurns,
     keyStrengths,
     areasForImprovement,
     summaryAssessment
@@ -241,6 +237,9 @@ function assertProblemIdentity(
   if (state.problem.id !== problem.id || state.problem.version !== problem.version) {
     throw new Error("Evaluation problem identity does not match the authoritative session state");
   }
+  if (state.problem.prompt !== problem.public.prompt) {
+    throw new Error("Evaluation problem prompt does not match the authoritative session state");
+  }
   if (state.problem.providerContextSpecSha256 === undefined) {
     throw new Error("Evaluation problem definition provenance is unavailable");
   }
@@ -260,6 +259,7 @@ function assertEvaluationStateConsistency(
     problem.interviewer.reasoningGraph.approaches.map((approach) => approach.id)
   );
   const activeByKey = new Map<string, EvidenceRecordState>();
+  const seenEvidenceEventIds = new Set<string>();
   const protectedDisclosureById = new Map(
     problem.interviewer.protectedDisclosures.map((disclosure) => [disclosure.id, disclosure] as const)
   );
@@ -273,21 +273,69 @@ function assertEvaluationStateConsistency(
     }
 
     let previousSequence = 0;
-    for (const record of history) {
+    for (const [recordIndex, record] of history.entries()) {
       const canonicalKey = evidenceKeyToString(record.key);
       if (canonicalKey !== storedKey) {
         throw new Error("Evaluation evidence history key does not match its scoped evidence record");
       }
+      if (seenEvidenceEventIds.has(record.evidenceEventId)) {
+        throw new Error("Evaluation evidence history reuses an evidence-event identity");
+      }
+      seenEvidenceEventIds.add(record.evidenceEventId);
       if (!isEvidenceValueAllowed(record.key, record.value.value)) {
         throw new Error("Evaluation evidence record contains a value invalid for its dimension");
       }
-      if (record.value.lastUpdatedSequence > state.sequence) {
-        throw new Error("Evaluation evidence record sequence exceeds authoritative session sequence");
+      if (
+        !Number.isFinite(record.value.inferenceConfidence) ||
+        record.value.inferenceConfidence < 0 ||
+        record.value.inferenceConfidence > 1
+      ) {
+        throw new Error("Evaluation evidence record has invalid inference confidence");
+      }
+      if (record.value.evidenceEventIds.length === 0) {
+        throw new Error("Evaluation evidence record has no provenance references");
+      }
+      if (
+        !Number.isSafeInteger(record.value.lastUpdatedSequence) ||
+        record.value.lastUpdatedSequence <= 0 ||
+        record.value.lastUpdatedSequence > state.sequence
+      ) {
+        throw new Error("Evaluation evidence record sequence is outside authoritative session bounds");
       }
       if (record.value.lastUpdatedSequence <= previousSequence) {
         throw new Error("Evaluation evidence history is not strictly chronological");
       }
       previousSequence = record.value.lastUpdatedSequence;
+
+      const nextRecord = history[recordIndex + 1];
+      if (record.status === "ACTIVE") {
+        if (recordIndex !== history.length - 1) {
+          throw new Error("Evaluation active evidence must be the final record in its history");
+        }
+        if (
+          record.supersededByEventId !== undefined ||
+          record.invalidationReason !== undefined
+        ) {
+          throw new Error("Evaluation active evidence cannot carry terminal history metadata");
+        }
+      } else if (record.status === "SUPERSEDED") {
+        if (
+          record.supersededByEventId === undefined ||
+          nextRecord?.evidenceEventId !== record.supersededByEventId
+        ) {
+          throw new Error("Evaluation superseded evidence must identify the next replacement record");
+        }
+        if (record.invalidationReason !== undefined) {
+          throw new Error("Evaluation superseded evidence cannot carry an invalidation reason");
+        }
+      } else {
+        if (record.invalidationReason === undefined) {
+          throw new Error("Evaluation stale evidence must retain an invalidation reason");
+        }
+        if (record.supersededByEventId !== undefined) {
+          throw new Error("Evaluation stale evidence cannot point to a superseding record");
+        }
+      }
 
       if (record.key.problemId === problem.id) {
         if (
@@ -342,11 +390,13 @@ function assertEvaluationStateConsistency(
     } else if (request.result !== undefined) {
       throw new Error("Evaluation non-accepted verification request cannot contain an accepted result");
     }
-    if (
-      request.evidenceKey.problemId === problem.id &&
-      request.evidenceKey.dimension !== "CORRECTNESS"
-    ) {
-      throw new Error("Evaluation verification evidence must be scoped to correctness");
+    if (request.evidenceKey.problemId === problem.id) {
+      if (
+        request.evidenceKey.subject.kind !== "CLAIM" ||
+        request.evidenceKey.dimension !== "CORRECTNESS"
+      ) {
+        throw new Error("Evaluation verification evidence must be scoped to claim correctness");
+      }
     }
   }
 
@@ -386,10 +436,29 @@ function assertEvaluationStateConsistency(
     throw new Error("Evaluation disclosure ledger does not match exposed delivery state");
   }
 
-  if (state.status === "COMPLETED" && state.completedAt === undefined) {
-    throw new Error("Evaluation completed session is missing its completion timestamp");
+  if (state.status === "CREATED") {
+    if (state.started) {
+      throw new Error("Evaluation created session cannot be marked started");
+    }
+    if (state.completedAt !== undefined || state.archivedAt !== undefined) {
+      throw new Error("Evaluation created session cannot contain terminal timestamps");
+    }
+  } else if (!state.started) {
+    throw new Error("Evaluation non-created session must be marked started");
   }
-  if (state.status === "ARCHIVED" && state.archivedAt === undefined) {
+
+  if (state.status === "ACTIVE") {
+    if (state.completedAt !== undefined || state.archivedAt !== undefined) {
+      throw new Error("Evaluation active session cannot contain terminal timestamps");
+    }
+  } else if (state.status === "COMPLETED") {
+    if (state.completedAt === undefined) {
+      throw new Error("Evaluation completed session is missing its completion timestamp");
+    }
+    if (state.archivedAt !== undefined) {
+      throw new Error("Evaluation completed session cannot contain an archival timestamp");
+    }
+  } else if (state.status === "ARCHIVED" && state.archivedAt === undefined) {
     throw new Error("Evaluation archived session is missing its archival timestamp");
   }
 }
@@ -630,7 +699,6 @@ function evaluateMilestones(
     supportLevel: EvaluationSupportLevel;
     evidenceRefs: EvaluationEvidenceRef[];
     notAchievedReason?: string;
-    achievedAtTurnId?: MilestoneEvaluation["achievedAtTurnId"];
   }>();
 
   for (const milestone of graph.milestones) {
@@ -697,9 +765,6 @@ function evaluateMilestones(
     }
 
     let supportLevel = supportFromEvidenceRecords(records, relevantVerificationRequests.length > 0);
-    if (achieved && directComplete && supportLevel === "WEAK" && progress.value.inferenceConfidence >= 0.8) {
-      supportLevel = "MODERATE";
-    }
     if (achieved && incompleteSupport) {
       supportLevel = minSupport(supportLevel, "WEAK");
     }
@@ -879,7 +944,7 @@ function evaluateTechnicalCorrectness(
         score: 0,
         supportLevel: supportFromCount(
           1,
-          Math.min(...contradicted.map((request) => request.result?.interpretationConfidence ?? 0)),
+          minimumNumber(contradicted.map((request) => request.result?.interpretationConfidence ?? 0)),
           true
         ),
         refs: uniqueRefs([
@@ -994,7 +1059,7 @@ function evaluateRigor(
   const score = roundScore(
     samples.reduce((sum, sample) => sum + sample.score, 0) / samples.length
   );
-  const minConfidence = Math.min(...samples.map((sample) => sample.confidence));
+  const minConfidence = minimumNumber(samples.map((sample) => sample.confidence));
   return {
     result: scoredDimension(
       score,
@@ -1473,7 +1538,7 @@ function supportFromEvidenceRecords(
   if (records.length === 0) return "INSUFFICIENT";
   return supportFromCount(
     records.length,
-    Math.min(...records.map((record) => record.value.inferenceConfidence)),
+    minimumNumber(records.map((record) => record.value.inferenceConfidence)),
     verifierBacked
   );
 }
@@ -1594,6 +1659,19 @@ function compareStrings(left: string, right: string): number {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
+}
+
+function minimumNumber(values: Iterable<number>): number {
+  let minimum = Number.POSITIVE_INFINITY;
+  let found = false;
+  for (const value of values) {
+    found = true;
+    if (value < minimum) minimum = value;
+  }
+  if (!found) {
+    throw new Error("Evaluation cannot compute support from an empty numeric sample");
+  }
+  return minimum;
 }
 
 function markdownTableCell(value: string): string {
