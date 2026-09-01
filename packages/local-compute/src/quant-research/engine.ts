@@ -125,11 +125,16 @@ function boundedScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function distanceWithin(error: number, threshold: number): boolean {
+  const tolerance = Number.EPSILON * 8 * Math.max(1, Math.abs(error), Math.abs(threshold));
+  return error <= threshold + tolerance;
+}
+
 function distanceScore(error: number, scale: number): number {
-  if (error <= scale) return 100;
-  if (error <= scale * 2) return 80;
-  if (error <= scale * 4) return 50;
-  if (error <= scale * 8) return 20;
+  if (distanceWithin(error, scale)) return 100;
+  if (distanceWithin(error, scale * 2)) return 80;
+  if (distanceWithin(error, scale * 4)) return 50;
+  if (distanceWithin(error, scale * 8)) return 20;
   return 0;
 }
 
