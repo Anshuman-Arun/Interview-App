@@ -1,8 +1,15 @@
+import { z } from "zod";
 import {
   MAX_SPEECH_TRANSCRIPT_CHARS,
+  MAX_SPEECH_TRANSCRIPT_RESULT_CACHE,
   MAX_SPEECH_UTTERANCE_DURATION_MS,
   MAX_SPEECH_WORD_TIMINGS,
+  SourceAudioBasisSchema,
+  SpeechModelIdentitySchema,
+  SpeechRequestIdSchema,
+  SpeechUtteranceIdSchema,
   TranscriptCandidateSchema,
+  TranscriptWordTimingSchema,
   type SourceAudioBasis,
   type SpeechModelIdentity,
   type TranscriptCandidate,
@@ -30,6 +37,7 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
   public readonly modelIdentity = { name: "deterministic-fake", version: "1" } as const;
   public readonly cancellationCapability: RecognizerCancellationCapability = "RUNTIME_ABORT";
   private readonly cancelled = new Set<RequestId>();
+  private readonly maxCancelledIds = 1_024;
 
   public constructor(
     private readonly responseFactory: (input: RecognizerAudioInput) => unknown = (input) => ({
@@ -44,11 +52,18 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
     if (signal.aborted || this.cancelled.has(input.requestId)) throw abortError();
-    return this.responseFactory(input);
+    const response = this.responseFactory(input);
+    this.cancelled.delete(input.requestId);
+    return response;
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
     this.cancelled.add(requestId);
+    while (this.cancelled.size > this.maxCancelledIds) {
+      const oldest = this.cancelled.values().next().value;
+      if (oldest === undefined) break;
+      this.cancelled.delete(oldest);
+    }
     return true;
   }
 }
@@ -68,8 +83,8 @@ export interface MoonshineRuntime {
     readonly modelPath: string;
     readonly configPath?: string;
     readonly signal?: AbortSignal;
-  }): Promise<MoonshineRuntimeResult>;
-  cancel?(requestId: RequestId): Promise<boolean>;
+  }): Promise<unknown>;
+  cancel?(requestId: RequestId): Promise<unknown>;
 }
 
 export interface MoonshineRecognizerOptions {
@@ -83,48 +98,67 @@ export interface MoonshineRecognizerOptions {
 export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   public readonly modelIdentity: SpeechModelIdentity;
   public readonly cancellationCapability: RecognizerCancellationCapability;
+  private readonly modelPath: string;
+  private readonly configPath: string | undefined;
 
   public constructor(private readonly options: MoonshineRecognizerOptions) {
-    validateLocalPath(options.modelPath, "Moonshine model path");
-    if (options.configPath !== undefined) validateLocalPath(options.configPath, "Moonshine config path");
-    if (options.modelVersion.trim().length === 0 || options.modelVersion.length > 100) {
-      throw new Error("Moonshine model version is invalid");
-    }
+    this.modelPath = validateLocalPath(options.modelPath, "Moonshine model path");
+    this.configPath = options.configPath === undefined
+      ? undefined
+      : validateLocalPath(options.configPath, "Moonshine config path");
+    validateRuntimeIdentity(options.runtime.runtimeVersion, "Moonshine runtime version");
+    if (typeof options.runtime.supportsAbort !== "boolean") throw new Error("Moonshine runtime abort capability must be boolean");
+    if (typeof options.runtime.transcribe !== "function") throw new Error("Moonshine runtime transcribe callback is required");
     const name = options.modelName?.trim() || "moonshine";
-    if (name.length > 100) throw new Error("Moonshine model name is too long");
-    this.modelIdentity = { name, version: options.modelVersion };
+    this.modelIdentity = SpeechModelIdentitySchema.parse({
+      name,
+      version: options.modelVersion.trim()
+    });
     this.cancellationCapability = options.runtime.supportsAbort ? "RUNTIME_ABORT" : "NONE";
   }
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
-    const durationMs = input.sourceAudioBasis.sampleCount / input.sourceAudioBasis.sampleRate * 1_000;
-    if (durationMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
+    const requestId = SpeechRequestIdSchema.parse(input.requestId);
+    const utteranceId = SpeechUtteranceIdSchema.parse(input.utteranceId);
+    const sourceAudioBasis = SourceAudioBasisSchema.parse(input.sourceAudioBasis);
+    const expectedBytes = sourceAudioBasis.sampleCount * sourceAudioBasis.channels * 4;
+    if (input.pcmBytes.byteLength !== expectedBytes) {
+      throw new Error("Moonshine PCM length does not match its source audio basis");
+    }
+    const durationMs = sourceAudioBasis.sampleCount / sourceAudioBasis.sampleRate * 1_000;
+    if (durationMs > MAX_SPEECH_UTTERANCE_DURATION_MS + 0.001) {
       throw new Error("Moonshine input exceeds maximum utterance duration");
     }
-    const runtimeResult = await this.options.runtime.transcribe({
+    const runtimeResult = MoonshineRuntimeResultSchema.parse(await this.options.runtime.transcribe({
       pcmBytes: input.pcmBytes,
-      sampleRate: input.sourceAudioBasis.sampleRate,
-      modelPath: this.options.modelPath,
-      ...(this.options.configPath === undefined ? {} : { configPath: this.options.configPath }),
+      sampleRate: sourceAudioBasis.sampleRate,
+      modelPath: this.modelPath,
+      ...(this.configPath === undefined ? {} : { configPath: this.configPath }),
       ...(this.options.runtime.supportsAbort ? { signal } : {})
-    });
+    }));
     return {
-      requestId: input.requestId,
-      utteranceId: input.utteranceId,
+      requestId,
+      utteranceId,
       text: runtimeResult.text,
       isFinal: true,
       ...(runtimeResult.confidence === undefined ? {} : { confidence: runtimeResult.confidence }),
-      ...(runtimeResult.words === undefined ? {} : { words: [...runtimeResult.words] }),
+      ...(runtimeResult.words === undefined ? {} : { words: runtimeResult.words }),
       model: this.modelIdentity,
-      sourceAudioBasis: input.sourceAudioBasis
+      sourceAudioBasis
     };
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
     if (!this.options.runtime.supportsAbort || this.options.runtime.cancel === undefined) return false;
-    return this.options.runtime.cancel(requestId);
+    return (await this.options.runtime.cancel(requestId)) === true;
   }
 }
+
+const MoonshineRuntimeResultSchema = z.object({
+  text: z.string().max(MAX_SPEECH_TRANSCRIPT_CHARS),
+  confidence: z.number().min(0).max(1).optional(),
+  words: z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS).optional()
+}).strict();
 
 export interface TranscriptValidationBasis {
   readonly requestId: RequestId;
@@ -151,7 +185,7 @@ export function validateTranscriptCandidate(raw: unknown, expected: TranscriptVa
     throw new Error("Recognizer result model identity does not match configured recognizer");
   }
 
-  const utteranceDurationMs = expected.sourceAudioBasis.endTimestampMs - expected.sourceAudioBasis.startTimestampMs;
+  const utteranceDurationMs = expected.sourceAudioBasis.sampleCount / expected.sourceAudioBasis.sampleRate * 1_000;
   let previousEnd = 0;
   for (const word of candidate.words ?? []) {
     if (word.endMs > utteranceDurationMs + 1) throw new Error("Recognizer word timing exceeds utterance duration");
@@ -165,9 +199,8 @@ export function normalizeTranscriptText(value: unknown): string {
   if (typeof value !== "string") throw new Error("Recognizer transcript text must be a string");
   if (value.length > MAX_SPEECH_TRANSCRIPT_CHARS) throw new Error("Recognizer transcript exceeds maximum length");
   if (containsUnpairedSurrogate(value)) throw new Error("Recognizer transcript contains invalid Unicode");
-  const normalized = value
-    .split("")
-    .map((character) => isUnsafeControlCharacter(character) ? " " : character)
+  const normalized = Array.from(value)
+    .map((character) => isUnsafeTranscriptCharacter(character) ? " " : character)
     .join("")
     .replace(/\s+/gu, " ")
     .trim();
@@ -186,9 +219,15 @@ function sameAudioBasis(left: SourceAudioBasis, right: SourceAudioBasis): boolea
     && left.pcmSha256 === right.pcmSha256;
 }
 
-function isUnsafeControlCharacter(character: string): boolean {
-  const code = character.charCodeAt(0);
-  return (code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) || code === 0x7F;
+function isUnsafeTranscriptCharacter(character: string): boolean {
+  const code = character.codePointAt(0);
+  if (code === undefined) return true;
+  if ((code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) || code === 0x7F) return true;
+  return code === 0x200B
+    || code === 0x2060
+    || code === 0xFEFF
+    || (code >= 0x202A && code <= 0x202E)
+    || (code >= 0x2066 && code <= 0x2069);
 }
 
 function containsUnpairedSurrogate(value: string): boolean {
@@ -205,11 +244,18 @@ function containsUnpairedSurrogate(value: string): boolean {
   return false;
 }
 
-function validateLocalPath(value: string, label: string): void {
+function validateLocalPath(value: string, label: string): string {
   const path = value.trim();
   if (path.length === 0 || path.length > 1_024) throw new Error(`${label} is invalid`);
-  if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(path)) {
-    throw new Error(`${label} must be an explicitly supplied local path, not a URL`);
+  if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(path) || /[\p{Cc}\p{Cf}]/u.test(path)) {
+    throw new Error(`${label} must be an explicitly supplied safe local path, not a URL`);
+  }
+  return path;
+}
+
+function validateRuntimeIdentity(value: string, label: string): void {
+  if (typeof value !== "string" || value.length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
+    throw new Error(`${label} is invalid`);
   }
 }
 
@@ -230,15 +276,14 @@ export interface TranscriptAdmission {
 
 interface RememberedTranscript {
   readonly fingerprint: string;
-  readonly candidate: TranscriptCandidate;
 }
 
 export class TranscriptResultGate {
   private readonly remembered = new Map<RequestId, RememberedTranscript>();
 
-  public constructor(private readonly maxEntries = 1_024) {
-    if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0) {
-      throw new Error("Transcript result cache bound must be a positive safe integer");
+  public constructor(private readonly maxEntries = 128) {
+    if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0 || maxEntries > MAX_SPEECH_TRANSCRIPT_RESULT_CACHE) {
+      throw new Error("Transcript result cache bound must be within the hard speech cache limit");
     }
   }
 
@@ -248,9 +293,9 @@ export class TranscriptResultGate {
     const prior = this.remembered.get(candidate.requestId);
     if (prior !== undefined) {
       if (prior.fingerprint !== fingerprint) throw new Error("Recognizer reused a result requestId with conflicting content");
-      return { duplicate: true, candidate: TranscriptCandidateSchema.parse(prior.candidate) };
+      return { duplicate: true, candidate };
     }
-    this.remembered.set(candidate.requestId, { fingerprint, candidate: TranscriptCandidateSchema.parse(candidate) });
+    this.remembered.set(candidate.requestId, { fingerprint });
     if (this.remembered.size > this.maxEntries) {
       const oldest = this.remembered.keys().next().value;
       if (oldest !== undefined) this.remembered.delete(oldest);
