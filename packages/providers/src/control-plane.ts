@@ -413,9 +413,9 @@ export type ProviderSettingsValidator = (
 export interface ProviderModelDefinitionInput {
   readonly id: string;
   readonly displayName: string;
-  readonly adapterModelId?: string;
+  readonly adapterModelId?: string | undefined;
   readonly capabilities: ProviderModelCapabilities;
-  readonly metadataVersion?: string;
+  readonly metadataVersion?: string | undefined;
 }
 
 export interface ProviderDefinitionInput {
@@ -424,12 +424,12 @@ export interface ProviderDefinitionInput {
   readonly kind: ProviderKind;
   readonly definitionVersion: string;
   readonly capabilityVersion: string;
-  readonly adapterVersion?: string;
+  readonly adapterVersion?: string | undefined;
   readonly credentialRequirement: ProviderCredentialRequirement;
   readonly credentialPurposes: readonly ProviderCredentialPurpose[];
   readonly models: readonly ProviderModelDefinitionInput[];
-  readonly adapterFactory?: ProviderAdapterFactoryDefinition;
-  readonly validateSettings?: ProviderSettingsValidator;
+  readonly adapterFactory?: ProviderAdapterFactoryDefinition | undefined;
+  readonly validateSettings?: ProviderSettingsValidator | undefined;
 }
 
 export interface ProviderDefinition {
