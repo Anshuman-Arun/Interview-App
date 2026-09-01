@@ -142,7 +142,7 @@ corepack pnpm demo
 corepack pnpm check
 ```
 
-It runs public-release/security hygiene, architecture boundaries, TypeScript, ESLint, browser build, desktop build, the complete Vitest suite, focused desktop/replay/property/typed-E2E gates, and the synthetic interview demo.
+It runs tracked-working-tree public-release/security hygiene, architecture boundaries, TypeScript, ESLint, browser build, desktop build, the complete Vitest suite, focused desktop/replay/property/typed-E2E gates, and the synthetic interview demo. The repository security gate is not a Git-history or GitHub-metadata/artifact audit.
 
 The complete Vitest discovery is authoritative for repository-wide coverage: `vitest.config.ts` includes every `tests/**/*.test.ts` and `tests/**/*.test.tsx` file. `pnpm test` is the normal local full-suite command; CI and `pnpm check` use `pnpm test:ci`, which runs the same discovery with at most two workers for cross-platform runner stability. Focused scripts are intentionally rerun as secondary gates so their package-script contracts cannot silently rot. `test:property` follows the `.property.test.` filename convention rather than a hand-maintained partial list.
 
