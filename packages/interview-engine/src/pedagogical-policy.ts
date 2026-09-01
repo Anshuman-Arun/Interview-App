@@ -941,6 +941,15 @@ function collectExposedAssistance(
     }
 
     const allowedIds = new Set(parsedRequest.data.allowedDisclosureIds ?? []);
+    for (const disclosureId of allowedIds) {
+      const disclosure = disclosuresById.get(disclosureId);
+      if (
+        disclosure === undefined
+        || disclosure.minimumDisclosureLevel > parsedRequest.data.maximumDisclosure
+      ) {
+        return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+      }
+    }
     for (const disclosureId of delivery.data.disclosureIds) {
       const disclosure = disclosuresById.get(disclosureId);
       if (
