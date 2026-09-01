@@ -34,6 +34,35 @@ function frame(sequence: number, speech = true, streamId = "adversarial-stream")
 }
 
 describe("speech worker adversarial callback boundaries", () => {
+  it("contains throwing getters in public request validation", async () => {
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    const fixture = frame(0, false, "throwing-heuristics");
+    const hostileHeuristics = Object.defineProperty({}, "appearsIncomplete", {
+      enumerable: true,
+      get() { throw new Error("credential=heuristics-secret"); }
+    });
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm, hostileHeuristics))
+      .rejects.toMatchObject({
+        code: "INVALID_REQUEST",
+        message: "Speech frame heuristics are invalid"
+      });
+
+    const hostileControl = Object.defineProperty({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "throwing-control"
+    }, "type", {
+      enumerable: true,
+      get() { throw new Error("credential=control-secret"); }
+    });
+    await expect(worker.handleControl(hostileControl)).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+      message: "Speech control request is invalid"
+    });
+  });
   it("runtime-validates malformed construction options instead of relying on TypeScript", () => {
     type Options = ConstructorParameters<typeof SpeechWorkerCore>[0];
     const castOptions = (value: unknown): Options => value as Options;
