@@ -43,6 +43,45 @@ describe("transcript validation", () => {
     await expect(recognizer.cancel("x".repeat(129) as never)).rejects.toThrow();
   });
 
+  it("settles in-flight fake recognition on AbortSignal and direct cancel", async () => {
+    const input = recognizerInput();
+    const never = new Promise<unknown>(() => undefined);
+    const recognizer = new DeterministicFakeRecognizer(() => never);
+
+    const controller = new AbortController();
+    const aborted = recognizer.recognize(input, controller.signal);
+    await Promise.resolve();
+    controller.abort();
+    await expect(aborted).rejects.toMatchObject({ name: "AbortError" });
+
+    const cancelled = recognizer.recognize(input, new AbortController().signal);
+    await Promise.resolve();
+    await expect(recognizer.cancel(input.requestId)).resolves.toBe(true);
+    await expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("rejects duplicate concurrent fake recognition IDs rather than overwriting cancellation state", async () => {
+    const input = recognizerInput();
+    let release: ((value: unknown) => void) | undefined;
+    const held = new Promise<unknown>((resolve) => { release = resolve; });
+    const recognizer = new DeterministicFakeRecognizer(() => held);
+
+    const first = recognizer.recognize(input, new AbortController().signal);
+    await Promise.resolve();
+    await expect(recognizer.recognize(input, new AbortController().signal))
+      .rejects.toThrow(/already in flight/u);
+
+    release?.({
+      requestId: input.requestId,
+      utteranceId: input.utteranceId,
+      text: "done",
+      isFinal: true,
+      model: { name: "deterministic-fake", version: "1" },
+      sourceAudioBasis: input.sourceAudioBasis
+    });
+    await expect(first).resolves.toMatchObject({ text: "done" });
+  });
+
   it("accepts deterministic and empty final transcripts", async () => {
     const input = recognizerInput();
     const recognizer = new DeterministicFakeRecognizer((value) => ({
