@@ -49,12 +49,11 @@ export class SileroVadBackend implements VadBackend {
   private readonly scoreRuntime: SileroVadRuntime["score"];
 
   public constructor(runtime: SileroVadRuntime, modelPath: string) {
+    const rawRuntime: unknown = runtime;
+    if (!isRecord(rawRuntime)) throw new Error("Silero runtime must be an object");
     this.modelPath = validateLocalModelPath(modelPath, "Silero model path");
-    validateRuntimeIdentity(runtime.runtimeVersion, "Silero runtime version");
-    this.scoreRuntime = bindSileroScore(
-      (runtime as unknown as { score?: unknown }).score,
-      runtime
-    );
+    validateRuntimeIdentity(rawRuntime.runtimeVersion, "Silero runtime version");
+    this.scoreRuntime = bindSileroScore(rawRuntime.score, rawRuntime);
   }
 
   public async classify(frame: PcmFrameSnapshot, signal?: AbortSignal): Promise<VadObservation> {
@@ -120,6 +119,12 @@ const DEFAULT_VAD_CONFIG: VoiceActivityConfig = {
   onsetHysteresisMs: 60
 };
 
+const VoiceActivityConfigSchema = z.object({
+  onsetThreshold: z.number().min(0).max(1),
+  continuationThreshold: z.number().min(0).max(1),
+  onsetHysteresisMs: z.number().positive().max(MAX_SPEECH_UTTERANCE_DURATION_MS)
+}).strict();
+
 export class VoiceActivityStateMachine {
   private state: VoiceActivityState = "SILENCE";
   private candidateSpeechMs = 0;
@@ -129,22 +134,12 @@ export class VoiceActivityStateMachine {
   private readonly config: VoiceActivityConfig;
 
   public constructor(config: VoiceActivityConfig = DEFAULT_VAD_CONFIG) {
-    validateProbability(config.onsetThreshold, "onsetThreshold");
-    validateProbability(config.continuationThreshold, "continuationThreshold");
-    if (config.continuationThreshold > config.onsetThreshold) {
+    const parsed = VoiceActivityConfigSchema.safeParse(config);
+    if (!parsed.success) throw new Error("VAD configuration is invalid");
+    if (parsed.data.continuationThreshold > parsed.data.onsetThreshold) {
       throw new Error("Continuation threshold must not exceed onset threshold");
     }
-    if (!Number.isFinite(config.onsetHysteresisMs) || config.onsetHysteresisMs <= 0) {
-      throw new Error("Onset hysteresis must be positive");
-    }
-    if (config.onsetHysteresisMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
-      throw new Error("Onset hysteresis cannot exceed the maximum utterance duration");
-    }
-    this.config = Object.freeze({
-      onsetThreshold: config.onsetThreshold,
-      continuationThreshold: config.continuationThreshold,
-      onsetHysteresisMs: config.onsetHysteresisMs
-    });
+    this.config = Object.freeze({ ...parsed.data });
   }
 
   public step(probability: number, durationMs: number): VoiceActivityStep {
@@ -309,32 +304,33 @@ const DEFAULT_ENDPOINT_CONFIG: EndpointingConfig = {
   maximumUtteranceMs: MAX_SPEECH_UTTERANCE_DURATION_MS
 };
 
+const EndpointingConfigSchema = z.object({
+  minimumSpeechMs: z.number().positive(),
+  minimumSilenceMs: z.number().positive(),
+  incompleteSilenceMs: z.number().positive(),
+  maximumPauseMs: z.number().positive(),
+  maximumUtteranceMs: z.number().positive()
+}).strict();
+
 export class AdaptiveEndpointingPolicy {
   private readonly config: EndpointingConfig;
 
   public constructor(config: EndpointingConfig = DEFAULT_ENDPOINT_CONFIG) {
-    for (const [name, value] of Object.entries(config)) {
-      if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be positive`);
-    }
-    if (config.minimumSilenceMs > config.maximumPauseMs) {
+    const parsed = EndpointingConfigSchema.safeParse(config);
+    if (!parsed.success) throw new Error("Endpointing configuration is invalid");
+    if (parsed.data.minimumSilenceMs > parsed.data.maximumPauseMs) {
       throw new Error("Minimum endpoint silence cannot exceed maximum pause");
     }
-    if (config.incompleteSilenceMs < config.minimumSilenceMs) {
+    if (parsed.data.incompleteSilenceMs < parsed.data.minimumSilenceMs) {
       throw new Error("Incomplete-utterance silence cannot be shorter than normal endpoint silence");
     }
-    if (config.maximumUtteranceMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
+    if (parsed.data.maximumUtteranceMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
       throw new Error("Endpointing cannot exceed the global utterance duration limit");
     }
-    if (config.minimumSpeechMs > config.maximumUtteranceMs) {
+    if (parsed.data.minimumSpeechMs > parsed.data.maximumUtteranceMs) {
       throw new Error("Minimum speech duration cannot exceed maximum utterance duration");
     }
-    this.config = Object.freeze({
-      minimumSpeechMs: config.minimumSpeechMs,
-      minimumSilenceMs: config.minimumSilenceMs,
-      incompleteSilenceMs: config.incompleteSilenceMs,
-      maximumPauseMs: config.maximumPauseMs,
-      maximumUtteranceMs: config.maximumUtteranceMs
-    });
+    this.config = Object.freeze({ ...parsed.data });
   }
 
   public getMaximumUtteranceMs(): number {
@@ -376,7 +372,8 @@ function validateProbability(value: number, label: string): void {
   }
 }
 
-function validateLocalModelPath(value: string, label: string): string {
+function validateLocalModelPath(value: unknown, label: string): string {
+  if (typeof value !== "string") throw new Error(`${label} is invalid`);
   const path = value.trim();
   if (path.length === 0 || path.length > 1_024) throw new Error(`${label} is invalid`);
   const windowsDrivePath = /^[A-Za-z]:[\\/]/u.test(path);
@@ -398,4 +395,9 @@ function validateRuntimeIdentity(value: unknown, label: string): void {
 function bindSileroScore(value: unknown, owner: unknown): SileroVadRuntime["score"] {
   if (typeof value !== "function") throw new Error("Silero runtime score callback is required");
   return value.bind(owner) as SileroVadRuntime["score"];
+}
+
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
