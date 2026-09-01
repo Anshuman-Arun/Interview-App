@@ -96,6 +96,64 @@ describe("transcript validation", () => {
     expect(validateTranscriptCandidate(raw, input).text).toBe("");
   });
 
+  it("snapshots transcript candidate and expected-basis accessors exactly once", () => {
+    const input = recognizerInput();
+    const expectedReads = { requestId: 0, utteranceId: 0, basis: 0, model: 0 };
+    const expected = {
+      get requestId() { expectedReads.requestId += 1; return input.requestId; },
+      get utteranceId() { expectedReads.utteranceId += 1; return input.utteranceId; },
+      get sourceAudioBasis() { expectedReads.basis += 1; return input.sourceAudioBasis; },
+      get modelIdentity() {
+        expectedReads.model += 1;
+        return { name: "deterministic-fake", version: "1" };
+      }
+    };
+
+    const candidateReads = {
+      requestId: 0,
+      utteranceId: 0,
+      text: 0,
+      isFinal: 0,
+      confidence: 0,
+      words: 0,
+      model: 0,
+      basis: 0,
+      word: 0
+    };
+    const timing = {
+      get word() { candidateReads.word += 1; return "hello"; },
+      startMs: 0,
+      endMs: 20
+    };
+    const raw = {
+      get requestId() { candidateReads.requestId += 1; return input.requestId; },
+      get utteranceId() { candidateReads.utteranceId += 1; return input.utteranceId; },
+      get text() { candidateReads.text += 1; return "hello"; },
+      get isFinal() { candidateReads.isFinal += 1; return true; },
+      get confidence() { candidateReads.confidence += 1; return 0.9; },
+      get words() { candidateReads.words += 1; return [timing]; },
+      get model() {
+        candidateReads.model += 1;
+        return { name: "deterministic-fake", version: "1" };
+      },
+      get sourceAudioBasis() { candidateReads.basis += 1; return input.sourceAudioBasis; }
+    };
+
+    expect(validateTranscriptCandidate(raw, expected as never)).toMatchObject({ text: "hello" });
+    expect(expectedReads).toEqual({ requestId: 1, utteranceId: 1, basis: 1, model: 1 });
+    expect(candidateReads).toEqual({
+      requestId: 1,
+      utteranceId: 1,
+      text: 1,
+      isFinal: 1,
+      confidence: 1,
+      words: 1,
+      model: 1,
+      basis: 1,
+      word: 1
+    });
+  });
+
   it("normalizes bounded control/format abuse and whitespace", () => {
     expect(normalizeTranscriptText("  hello\u0000   world\nnext  ")).toBe("hello world next");
     expect(normalizeTranscriptText("left\u202Eevil\u2069 right")).toBe("left evil right");
