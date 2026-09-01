@@ -113,6 +113,7 @@ export type PolicyReasonCode =
   | "PROBLEM_CONTEXT_MISMATCH"
   | "PROBLEM_PROVENANCE_UNKNOWN"
   | "PROBLEM_DEFINITION_MISMATCH"
+  | "STALE_TURN_CONTEXT"
   | "MISSING_PROBLEM_CONTEXT"
   | "ASSISTANCE_SATURATED";
 
@@ -1755,8 +1756,7 @@ export function decidePedagogicalPolicy(
   }
 
   const rawTurn = rawTurns[turnId];
-  if (rawTurn === undefined) throw new Error("Unknown turn " + turnId);
-  if (!isRecord(rawTurn)) {
+  if (rawTurn === undefined || !isRecord(rawTurn)) {
     return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
   }
   const inputEpisodeId = rawTurn["inputEpisodeId"];
@@ -1770,6 +1770,12 @@ export function decidePedagogicalPolicy(
     || committedSequence <= 0
   ) {
     return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
+  }
+  if (
+    !Number.isSafeInteger(state.lastCommittedInputSequence)
+    || committedSequence !== state.lastCommittedInputSequence
+  ) {
+    return failClosedDecision(turnId, "STALE_TURN_CONTEXT");
   }
   const rawEpisode = rawEpisodes[inputEpisodeId];
   if (
