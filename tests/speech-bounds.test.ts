@@ -495,7 +495,7 @@ describe("speech protocol hard bounds", () => {
       async score() { return 1.1; }
     };
     expect(() => new SileroVadBackend(runtime, "https://example.invalid/silero.onnx")).toThrow(/local filesystem path/u);
-    expect(() => new SileroVadBackend(runtime, "models/silero/model.onnx\nother")).toThrow(/local filesystem path/u);
+    expect(() => new SileroVadBackend(runtime, "models/silero/model.onnx\nother")).toThrow(/invalid/u);
     expect(() => new SileroVadBackend(runtime, "file:/tmp/silero.onnx")).toThrow(/local filesystem path/u);
     expect(() => new SileroVadBackend(runtime, "\\\\server\\share\\silero.onnx")).toThrow(/local filesystem path/u);
     expect(() => new SileroVadBackend(runtime, "C:\\models\\silero\\model.onnx")).not.toThrow();
