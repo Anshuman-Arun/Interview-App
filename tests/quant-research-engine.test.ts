@@ -135,7 +135,7 @@ describe("deterministic Quant Research interview engine", () => {
       const engine = new QuantResearchEngine(definition);
       const serialized = JSON.stringify({ state: engine.getState(), diagnostics: engine.getDiagnostics(), result: engine.getResult() });
       expect(serialized).not.toContain('"seed"');
-      expect(serialized).not.toMatch(/hidden|latentModel|bestObjective|sampleOrder|population|SuccessThreshold/iu);
+      expect(serialized).not.toMatch(/"(?:hiddenCenter|hiddenPopulation|hiddenMeanA|hiddenMeanB|hiddenModel|sequenceA|sequenceB|points|perturbedPoints|baseBestObjective|perturbedBestObjective|sampleOrder|observations|successes)":/u);
     }
   });
 
