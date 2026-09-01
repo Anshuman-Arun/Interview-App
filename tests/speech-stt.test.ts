@@ -239,6 +239,32 @@ describe("Moonshine-compatible adapter seam", () => {
       .rejects.toThrow(/input must be an object/u);
   });
 
+  it("rejects malformed cancellation signals and short-circuits already-aborted Moonshine calls", async () => {
+    let transcribeCalls = 0;
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime: {
+        runtimeVersion: "test-runtime",
+        supportsAbort: true,
+        async transcribe() {
+          transcribeCalls += 1;
+          return { text: "should not run" };
+        }
+      },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    const input = recognizerInput();
+
+    await expect(recognizer.recognize(input, null as never))
+      .rejects.toThrow(/cancellation signal is invalid/u);
+
+    const controller = new AbortController();
+    controller.abort();
+    await expect(recognizer.recognize(input, controller.signal))
+      .rejects.toMatchObject({ name: "AbortError" });
+    expect(transcribeCalls).toBe(0);
+  });
+
   it("rejects PCM whose byte length does not match its claimed source basis", async () => {
     const input = recognizerInput();
     const recognizer = new MoonshineSpeechRecognizer({
