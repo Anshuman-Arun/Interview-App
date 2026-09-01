@@ -44,6 +44,7 @@ import {
 import {
   AdaptiveEndpointingPolicy,
   VadBackendProtocolError,
+  VadObservationSchema,
   VoiceActivityStateMachine,
   type EndpointingDecision,
   type VadBackend
@@ -440,11 +441,16 @@ export class SpeechWorkerCore {
     let observation;
     try {
       const isolatedVadFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
-      observation = await withTimeout(
+      const rawObservation = await withTimeout(
         Promise.resolve().then(async () => this.classifyVad(isolatedVadFrame, vadAbort.signal)),
         this.vadTimeoutMs,
         () => vadAbort.abort()
       );
+      try {
+        observation = VadObservationSchema.parse(rawObservation);
+      } catch {
+        throw new VadBackendProtocolError("VAD backend returned an invalid bounded observation");
+      }
     } catch (error) {
       if (context.cancelled || context.terminal || this.shuttingDown) return [];
       if (error instanceof OperationTimeoutError) {
