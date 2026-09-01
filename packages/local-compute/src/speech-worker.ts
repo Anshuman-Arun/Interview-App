@@ -736,6 +736,7 @@ export class SpeechWorkerCore {
           "RECOGNIZER_PROTOCOL_ERROR",
           "Recognizer returned an invalid bounded result"
         ));
+        this.rememberDiagnostic({ code: "RECOGNIZER_PROTOCOL_ERROR", streamId: context.streamId });
       }
     } catch (error) {
       if (context.cancelled || context.terminal || this.shuttingDown) return [];
