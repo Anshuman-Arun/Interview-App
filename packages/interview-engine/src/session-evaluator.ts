@@ -555,6 +555,25 @@ function assertEvaluationStateConsistency(
     ) {
       throw new Error("Evaluation verification evidence must be scoped to claim correctness");
     }
+
+    if (request.status === "ACCEPTED" && request.result?.status === "VERIFIED") {
+      const expectedEvidenceEventIds = Array.from(
+        new Set([...request.evidenceEventIds, request.requestedEventId])
+      );
+      const committedEvidence = state.evidenceHistory[
+        evidenceKeyToString(request.evidenceKey)
+      ]?.find((record) =>
+        record.value.value === "CORRECT" &&
+        record.value.inferenceConfidence === request.result?.interpretationConfidence &&
+        record.value.evidenceEventIds.length === expectedEvidenceEventIds.length &&
+        record.value.evidenceEventIds.every(
+          (eventId, index) => eventId === expectedEvidenceEventIds[index]
+        )
+      );
+      if (committedEvidence === undefined) {
+        throw new Error("Evaluation verified request is missing its committed correctness evidence");
+      }
+    }
   }
 
   const exposedDisclosureIds = new Set<DisclosureId>();

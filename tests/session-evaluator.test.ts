@@ -338,6 +338,35 @@ describe("grounded session evaluator", () => {
       });
   });
 
+  it("rejects an accepted VERIFIED result whose atomic correctness evidence is missing", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "missing-verified-evidence" },
+      dimension: "CORRECTNESS"
+    };
+    const verified = withVerification(
+      boundState(),
+      key,
+      "VERIFIED",
+      10,
+      "missing-verified-evidence"
+    );
+    const keyString = evidenceKeyToString(key);
+    const corrupted: SessionState = {
+      ...verified,
+      studentEvidence: Object.fromEntries(
+        Object.entries(verified.studentEvidence).filter(([candidate]) => candidate !== keyString)
+      ),
+      evidenceHistory: Object.fromEntries(
+        Object.entries(verified.evidenceHistory).filter(([candidate]) => candidate !== keyString)
+      )
+    };
+
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem)).toThrow(
+      "verified request is missing its committed correctness evidence"
+    );
+  });
+
   it("does not resurrect invalidated verified evidence from historical verifier state", () => {
     const key: EvidenceKey = {
       problemId: sixPeopleProblem.id,
