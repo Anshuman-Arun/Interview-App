@@ -19,6 +19,7 @@ import {
 } from "../../../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
 import { RequestIdConflictError } from "../../../packages/persistence/src/index.js";
+import { MAX_REPLAY_IDENTIFIER_CHARS } from "../../../packages/replay/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { SessionReadService } from "./session-read-service.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
@@ -383,7 +384,9 @@ function parseReadRoute(rawUrl: string | undefined): ReadRoute | undefined {
   }
   if (
     decoded.length === 0
-    || decoded.length > 512
+    || decoded.length > MAX_REPLAY_IDENTIFIER_CHARS
+    || decoded === "."
+    || decoded === ".."
     || containsUnsafeReadPathCharacter(decoded)
   ) {
     return undefined;
