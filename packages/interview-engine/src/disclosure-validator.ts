@@ -294,12 +294,19 @@ export class DisclosureValidator {
       disclosureById.set(disclosure.id, disclosure);
     }
 
-    const texts: string[] = [];
-    if (input.proposal.speechText !== undefined) texts.push(input.proposal.speechText);
-    for (const action of input.proposal.boardActions ?? []) {
-      if (action.content !== undefined && action.content.length > 0) texts.push(action.content);
-      texts.push(action.annotationPurpose);
+    const realizationTexts: string[][] = [];
+    if (input.proposal.speechText !== undefined) {
+      realizationTexts.push([input.proposal.speechText]);
     }
+    for (const action of input.proposal.boardActions ?? []) {
+      const actionTexts: string[] = [];
+      if (action.content !== undefined && action.content.length > 0) {
+        actionTexts.push(action.content);
+      }
+      actionTexts.push(action.annotationPurpose);
+      realizationTexts.push(actionTexts);
+    }
+    const texts = realizationTexts.flat();
     if (texts.length === 0) {
       return { accepted: false, reason: "Proposal contains no analyzable deliverable realization" };
     }
@@ -317,6 +324,7 @@ export class DisclosureValidator {
     }
 
     const analyses: DisclosureAnalysis[] = [];
+    const protectedMatches: ProtectedMatch[] = [];
     const deterministicIds = new Set<DisclosureId>();
     let deterministicLevel: DisclosureLevel = 0;
     let totalAnalyzerReasonCharacters = 0;
@@ -329,6 +337,7 @@ export class DisclosureValidator {
           reason: "Protected disclosure metadata cannot be analyzed deterministically"
         };
       }
+      protectedMatches.push(protectedMatch);
       for (const disclosureId of protectedMatch.ids) deterministicIds.add(disclosureId);
       if (protectedMatch.level > deterministicLevel) {
         deterministicLevel = protectedMatch.level;
@@ -404,36 +413,72 @@ export class DisclosureValidator {
       }
     }
 
-    const effectiveIds = Array.from(new Set([
-      ...deterministicIds,
-      ...analyses.flatMap((item) => item.effectiveDisclosureIds),
-      ...input.proposal.claimedDisclosureIds
-    ]));
-    let metadataFloor: DisclosureLevel = deterministicLevel;
-    for (const disclosureId of effectiveIds) {
-      const disclosure = disclosureById.get(disclosureId);
-      if (disclosure === undefined) {
-        return {
-          accepted: false,
-          reason: "Disclosure analyzer referenced an unknown protected disclosure"
-        };
-      }
-      if (disclosure.minimumDisclosureLevel > metadataFloor) {
-        metadataFloor = disclosure.minimumDisclosureLevel;
+    for (const analysis of analyses) {
+      for (const disclosureId of analysis.effectiveDisclosureIds) {
+        if (!disclosureById.has(disclosureId)) {
+          return {
+            accepted: false,
+            reason: "Disclosure analyzer referenced an unknown protected disclosure"
+          };
+        }
       }
     }
-    const analyzedLevel = analyses.reduce<DisclosureLevel>(
-      (maximum, item) => item.effectiveDisclosureLevel > maximum ? item.effectiveDisclosureLevel : maximum,
-      0
+
+    const baseRealizationAnalyses: DisclosureAnalysis[] = [];
+    let analysisOffset = 0;
+    for (const group of realizationTexts) {
+      const groupAnalyses = analyses.slice(analysisOffset, analysisOffset + group.length);
+      const groupMatches = protectedMatches.slice(analysisOffset, analysisOffset + group.length);
+      analysisOffset += group.length;
+      const groupDeterministicIds = Array.from(new Set(
+        groupMatches.flatMap((match) => match.ids)
+      ));
+      const groupDeterministicLevel = groupMatches.reduce<DisclosureLevel>(
+        (maximum, match) => match.level > maximum ? match.level : maximum,
+        0
+      );
+      baseRealizationAnalyses.push(combineSafeAnalyses(
+        groupAnalyses,
+        groupDeterministicIds,
+        groupDeterministicLevel,
+        [],
+        disclosureById
+      ));
+    }
+
+    const localizedIds = new Set(
+      baseRealizationAnalyses.flatMap((analysis) => analysis.effectiveDisclosureIds)
     );
-    const effectiveLevel = analyzedLevel > metadataFloor ? analyzedLevel : metadataFloor;
-    const combined: DisclosureAnalysis = {
-      status: "SAFE",
-      effectiveDisclosureLevel: effectiveLevel,
-      effectiveDisclosureIds: effectiveIds,
-      confidence: Math.min(...analyses.map((item) => item.confidence)),
-      reason: analyses.map((item) => item.reason).join("; ")
-    };
+    const unlocalizedClaimedIds = input.proposal.claimedDisclosureIds.filter(
+      (disclosureId) => !localizedIds.has(disclosureId)
+    );
+    const realizationAnalyses = unlocalizedClaimedIds.length === 0
+      ? baseRealizationAnalyses
+      : baseRealizationAnalyses.map((analysis) =>
+          combineSafeAnalyses(
+            [analysis],
+            [],
+            0,
+            unlocalizedClaimedIds,
+            disclosureById
+          )
+        );
+
+    let combined: DisclosureAnalysis;
+    try {
+      combined = combineSafeAnalyses(
+        analyses,
+        [...deterministicIds],
+        deterministicLevel,
+        input.proposal.claimedDisclosureIds,
+        disclosureById
+      );
+    } catch {
+      return {
+        accepted: false,
+        reason: "Disclosure analysis could not be combined safely"
+      };
+    }
 
     const allowed = new Set<DisclosureId>(input.request.allowedDisclosureIds ?? []);
     if (allowed.size !== (input.request.allowedDisclosureIds?.length ?? 0)) {
@@ -483,6 +528,29 @@ export class DisclosureValidator {
       };
     }
 
-    return { accepted: true, analysis: combined };
+    const speechOffset = input.proposal.speechText === undefined ? 0 : 1;
+    const speechAnalysis = input.proposal.speechText === undefined
+      ? null
+      : realizationAnalyses[0] ?? null;
+    const boardActionAnalyses = realizationAnalyses.slice(speechOffset);
+    if (
+      (input.proposal.speechText !== undefined && speechAnalysis === null)
+      || boardActionAnalyses.length !== (input.proposal.boardActions?.length ?? 0)
+    ) {
+      return {
+        accepted: false,
+        reason: "Disclosure realization attribution failed closed",
+        analysis: combined
+      };
+    }
+
+    return {
+      accepted: true,
+      analysis: combined,
+      realizations: {
+        speech: speechAnalysis,
+        boardActions: boardActionAnalyses
+      }
+    };
   }
 }
