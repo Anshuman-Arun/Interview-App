@@ -348,8 +348,9 @@ function resolveConfig(input: QuantTraderScenarioConfig): ResolvedQuantTraderSce
   if (!parsedResult.success) {
     const familyIssue = parsedResult.error.issues.some((issue) => issue.path[0] === "family");
     if (familyIssue) {
-      const rawFamily = typeof input === "object" && input !== null && "family" in input
-        ? String((input as { readonly family?: unknown }).family)
+      const rawInput: unknown = input;
+      const rawFamily = typeof rawInput === "object" && rawInput !== null && "family" in rawInput
+        ? String((rawInput as { readonly family?: unknown }).family)
         : "undefined";
       throw new Error(`Invalid scenario family: ${rawFamily}`);
     }
@@ -670,7 +671,7 @@ export class QuantTraderInterviewEngine {
     }
 
     const marketStateAfterAction = this.orderBook.getMarketState();
-    const portfolio = this.portfolio.updateMarkPrice(this.fairValueValue);
+    this.portfolio.updateMarkPrice(this.fairValueValue);
     const risk = this.portfolio.checkRiskLimits(this.fairValueValue);
     if (risk.breached && risk.reason !== undefined) {
       this.recordRiskBreach("POST_ROUND", risk.reason);
@@ -877,14 +878,16 @@ export class QuantTraderInterviewEngine {
       : "quote_bid_STUDENT_";
     const studentSide = incomingMarketSide === "BUY" ? "SELL" as const : "BUY" as const;
 
-    return fills
-      .filter((fill) => fill.matchedOrderId?.startsWith(makerPrefix) === true)
-      .map((fill) => ({
+    return fills.flatMap((fill) => {
+      const matchedOrderId = fill.matchedOrderId;
+      if (matchedOrderId?.startsWith(makerPrefix) !== true) return [];
+      return [{
         ...fill,
-        orderId: fill.matchedOrderId!,
+        orderId: matchedOrderId,
         matchedOrderId: fill.orderId,
         side: studentSide
-      }));
+      }];
+    });
   }
 
   private applyFairValueUpdateForCurrentRound(): void {
