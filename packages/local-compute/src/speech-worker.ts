@@ -473,8 +473,9 @@ export class SpeechWorkerCore {
       const vadOperation = Promise.resolve()
         .then(async () => this.classifyVad(isolatedVadFrame, vadAbort.signal));
       this.trackUnderlyingOperation(this.vadOperations, vadOperation);
-      const rawObservation = await withTimeout(
+      const rawObservation = await withTimeoutAndAbort(
         vadOperation,
+        vadAbort.signal,
         this.vadTimeoutMs,
         () => vadAbort.abort()
       );
@@ -667,8 +668,9 @@ export class SpeechWorkerCore {
         sourceAudioBasis: recognizerBasis
       }, abortController.signal));
       this.trackUnderlyingOperation(this.recognizerOperations, recognitionOperation);
-      const raw = await withTimeout(
+      const raw = await withTimeoutAndAbort(
         recognitionOperation,
+        abortController.signal,
         this.recognizerTimeoutMs,
         () => abortController.abort()
       );
@@ -1075,6 +1077,63 @@ export class SpeechWorkerCore {
 }
 
 class OperationTimeoutError extends Error {}
+class OperationCancelledError extends Error {}
+
+function withTimeoutAndAbort<T>(
+  operation: Promise<T>,
+  signal: AbortSignal,
+  timeoutMs: number,
+  onTimeout: () => void
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new OperationCancelledError("Speech worker operation was cancelled"));
+    };
+
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      try {
+        onTimeout();
+      } catch {
+        // Timeout cleanup is best-effort and may not undermine suppression.
+      }
+      reject(new OperationTimeoutError("Speech worker operation timed out"));
+    }, timeoutMs);
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    void operation.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error instanceof Error ? error : new Error("Speech worker operation failed"));
+      }
+    );
+  });
+}
 
 function withTimeout<T>(
   operation: Promise<T>,
