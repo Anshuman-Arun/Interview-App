@@ -182,6 +182,29 @@ export class LoopbackCommandServer {
       };
     }
 
+    let startComposition: ReturnType<typeof resolveInterviewSessionConfiguration> | undefined;
+    if (command.type === "START_SESSION") {
+      if (command.configuration !== undefined && command.problemId !== undefined) {
+        throw new ProtocolHttpError(
+          400,
+          "INVALID_COMMAND",
+          "START_SESSION may not combine configuration with legacy problemId"
+        );
+      }
+      try {
+        startComposition = resolveInterviewSessionConfiguration(
+          command.configuration
+            ?? createLegacyDefaultSessionConfiguration(command.problemId)
+        );
+      } catch {
+        throw new ProtocolHttpError(
+          404,
+          "NOT_FOUND",
+          "Configured interview target is not available"
+        );
+      }
+    }
+
     if (command.type !== "START_SESSION" && !this.options.sessions.hasSession(command.sessionId)) {
       throw new ProtocolHttpError(404, "NOT_FOUND", "Session not found");
     }
@@ -197,26 +220,9 @@ export class LoopbackCommandServer {
     });
     switch (command.type) {
       case "START_SESSION": {
-        if (command.configuration !== undefined && command.problemId !== undefined) {
-          throw new ProtocolHttpError(
-            400,
-            "INVALID_COMMAND",
-            "START_SESSION may not combine configuration with legacy problemId"
-          );
-        }
-
-        let composition;
-        try {
-          composition = resolveInterviewSessionConfiguration(
-            command.configuration
-              ?? createLegacyDefaultSessionConfiguration(command.problemId)
-          );
-        } catch {
-          throw new ProtocolHttpError(
-            404,
-            "NOT_FOUND",
-            "Configured interview target is not available"
-          );
+        const composition = startComposition;
+        if (composition === undefined) {
+          throw new Error("Validated START_SESSION composition is missing");
         }
 
         try {
