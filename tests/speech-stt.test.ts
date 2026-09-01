@@ -194,6 +194,7 @@ describe("transcript validation", () => {
     expect(() => validateTranscriptCandidate({ ...valid, requestId: newRequestId() }, input)).toThrow(/requestId/u);
     expect(() => validateTranscriptCandidate({ ...valid, utteranceId: newUtteranceId() }, input)).toThrow(/utteranceId/u);
     expect(() => validateTranscriptCandidate({ ...valid, sourceAudioBasis: basis({ pcmSha256: "b".repeat(64) }) }, input)).toThrow(/audio basis/u);
+    expect(() => validateTranscriptCandidate({ ...valid, sourceAudioBasis: basis({ channels: 2 }) }, input)).toThrow(/audio basis/u);
   });
 
   it("runtime-validates the expected callback basis instead of trusting typed callers", () => {
