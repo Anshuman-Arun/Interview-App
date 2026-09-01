@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_SPEECH_FRAME_DURATION_MS, MAX_SPEECH_UTTERANCE_DURATION_MS } from "./speech-protocol.js";
-import type { PcmFrameSnapshot } from "./speech-pcm.js";
+import { snapshotPcmFrame, type PcmFrameSnapshot } from "./speech-pcm.js";
 
 export interface VadObservation {
   readonly speechProbability: number;
@@ -18,10 +18,11 @@ export class DeterministicEnergyVadBackend implements VadBackend {
   }
 
   public async classify(frame: PcmFrameSnapshot): Promise<VadObservation> {
-    const view = new DataView(frame.bytes.buffer, frame.bytes.byteOffset, frame.bytes.byteLength);
+    const boundedFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
+    const view = new DataView(boundedFrame.bytes.buffer, boundedFrame.bytes.byteOffset, boundedFrame.bytes.byteLength);
     let squared = 0;
-    const count = frame.bytes.byteLength / 4;
-    for (let offset = 0; offset < frame.bytes.byteLength; offset += 4) {
+    const count = boundedFrame.bytes.byteLength / 4;
+    for (let offset = 0; offset < boundedFrame.bytes.byteLength; offset += 4) {
       const sample = view.getFloat32(offset, true);
       squared += sample * sample;
     }
@@ -52,9 +53,10 @@ export class SileroVadBackend implements VadBackend {
   }
 
   public async classify(frame: PcmFrameSnapshot, signal?: AbortSignal): Promise<VadObservation> {
+    const boundedFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
     const rawProbability = await this.runtime.score({
-      pcmBytes: new Uint8Array(frame.bytes),
-      sampleRate: frame.envelope.sampleRate,
+      pcmBytes: boundedFrame.bytes,
+      sampleRate: boundedFrame.envelope.sampleRate,
       modelPath: this.modelPath,
       ...(signal === undefined ? {} : { signal })
     });
@@ -356,7 +358,7 @@ function validateLocalModelPath(value: string, label: string): string {
 }
 
 function validateRuntimeIdentity(value: unknown, label: string): void {
-  if (typeof value !== "string" || value.length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
     throw new Error(`${label} is invalid`);
   }
 }
