@@ -94,9 +94,11 @@ export const QuantTraderScenarioConfigSchema = z.object({
     });
   }
 
-  const resolvedRisk = {
-    ...defaults.riskLimits,
-    ...config.riskLimits
+  const resolvedRisk: PositionRiskLimits = {
+    maxPosition: config.riskLimits?.maxPosition ?? defaults.riskLimits.maxPosition,
+    maxDrawdown: config.riskLimits?.maxDrawdown ?? defaults.riskLimits.maxDrawdown,
+    stopLossThreshold:
+      config.riskLimits?.stopLossThreshold ?? defaults.riskLimits.stopLossThreshold
   };
   if (resolvedRisk.stopLossThreshold > resolvedRisk.maxDrawdown) {
     context.addIssue({
