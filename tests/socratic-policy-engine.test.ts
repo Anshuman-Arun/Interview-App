@@ -1410,6 +1410,71 @@ describe("production Socratic policy engine", () => {
     expect(context.forbiddenDisclosureIds).toContain(other.id);
   });
 
+  it("rejects provider context when target authorization exceeds its numeric disclosure ceiling", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[1];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing level-four disclosure");
+
+    const { state: base, turnId } = makeState();
+    const realizationRequest: RealizationRequest = {
+      requiredAction: "DIRECTIONAL_NUDGE",
+      target: target("milestone", "close-triangle"),
+      maximumDisclosure: 2,
+      allowedDisclosureIds: [disclosure.id]
+    };
+    const state: SessionState = {
+      ...base,
+      pedagogicalActions: {
+        ...base.pedagogicalActions,
+        [turnId]: realizationRequest
+      }
+    };
+
+    expect(() => compileContext({
+      state,
+      problem: sixPeopleProblem,
+      turnId,
+      realizationRequest
+    })).toThrow(/above its numeric ceiling/u);
+  });
+
+  it("rejects provider context for a bound problem with duplicate protected disclosure IDs", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing protected disclosure");
+    const duplicateProblem: InterviewProblem = {
+      ...sixPeopleProblem,
+      version: "1.0.0-duplicate-disclosure-context-test",
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        protectedDisclosures: [
+          ...sixPeopleProblem.interviewer.protectedDisclosures,
+          { ...disclosure }
+        ]
+      }
+    };
+    const { state: base, turnId } = makeState(duplicateProblem);
+    const realizationRequest: RealizationRequest = {
+      requiredAction: "PROBE_JUSTIFICATION",
+      target: target("turn", turnId),
+      maximumDisclosure: 0
+    };
+    const state: SessionState = {
+      ...base,
+      pedagogicalActions: {
+        ...base.pedagogicalActions,
+        [turnId]: realizationRequest
+      }
+    };
+
+    expect(() => compileContext({
+      state,
+      problem: duplicateProblem,
+      turnId,
+      realizationRequest
+    })).toThrow(/duplicate protected disclosure IDs/u);
+  });
+
   it("does not let low-confidence completion unlock a downstream protected hint", () => {
     const { state: base, turnId } = makeState();
     let state = withEvidence(
