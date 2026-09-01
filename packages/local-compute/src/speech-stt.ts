@@ -41,8 +41,8 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
   public readonly modelIdentity = Object.freeze({ name: "deterministic-fake", version: "1" } as const);
   public readonly cancellationCapability: RecognizerCancellationCapability = "RUNTIME_ABORT";
   private readonly cancelled = new Set<RequestId>();
-  private readonly maxCancelledIds = 1_024;
-
+  private readonly inFlightCancellation = new Map<RequestId, () => void>();
+  private readonly maxTrackedRequestIds = 1_024;
   private readonly responseFactory: (input: RecognizerAudioInput) => unknown;
 
   public constructor(
@@ -61,16 +61,69 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
     validateAbortSignal(signal);
-    if (signal.aborted || this.cancelled.has(input.requestId)) throw abortError();
-    const response = this.responseFactory(input);
-    this.cancelled.delete(input.requestId);
-    return response;
+    const rawInput: unknown = input;
+    if (!isRecord(rawInput)) throw new Error("Fake recognizer input must be an object");
+    preflightBoundedString(rawInput.requestId, 128, "Fake recognizer request ID");
+    const requestId = SpeechRequestIdSchema.parse(rawInput.requestId);
+
+    if (signal.aborted || this.cancelled.delete(requestId)) throw abortError();
+    if (this.inFlightCancellation.has(requestId)) {
+      throw new Error("Fake recognizer request ID is already in flight");
+    }
+    if (this.inFlightCancellation.size >= this.maxTrackedRequestIds) {
+      throw new Error("Fake recognizer in-flight request limit exceeded");
+    }
+
+    return new Promise<unknown>((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        signal.removeEventListener("abort", onAbort);
+        this.inFlightCancellation.delete(requestId);
+        this.cancelled.delete(requestId);
+      };
+      const settleResolve = (value: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+      const settleReject = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error instanceof Error ? error : new Error("Fake recognizer failed"));
+      };
+      const onAbort = () => settleReject(abortError());
+
+      this.inFlightCancellation.set(requestId, onAbort);
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted || this.cancelled.delete(requestId)) {
+        onAbort();
+        return;
+      }
+
+      let response: unknown;
+      try {
+        response = this.responseFactory(input);
+      } catch (error) {
+        settleReject(error);
+        return;
+      }
+      void Promise.resolve(response).then(settleResolve, settleReject);
+    });
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
+    preflightBoundedString(requestId, 128, "Fake recognizer cancellation request ID");
     const boundedRequestId = SpeechRequestIdSchema.parse(requestId);
+    const cancelInFlight = this.inFlightCancellation.get(boundedRequestId);
+    if (cancelInFlight !== undefined) {
+      cancelInFlight();
+      return true;
+    }
+
     this.cancelled.add(boundedRequestId);
-    while (this.cancelled.size > this.maxCancelledIds) {
+    while (this.cancelled.size > this.maxTrackedRequestIds) {
       const oldest = this.cancelled.values().next().value;
       if (oldest === undefined) break;
       this.cancelled.delete(oldest);
