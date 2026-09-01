@@ -131,6 +131,15 @@ function protectedMetadataCharacterCount(
   return total;
 }
 
+function protectedMetadataFormulationCount(
+  protectedDisclosures: readonly ProtectedDisclosure[]
+): number {
+  return protectedDisclosures.reduce(
+    (total, disclosure) => total + 1 + disclosure.equivalentFormulations.length,
+    0
+  );
+}
+
 export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
   private readonly safeTexts: ReadonlySet<string>;
 
@@ -246,7 +255,11 @@ export class DisclosureValidator {
       return { accepted: false, reason: "Proposal exceeds the bounded aggregate disclosure-validation input size" };
     }
     const metadataCharacters = protectedMetadataCharacterCount(input.protectedDisclosures);
-    if (texts.length * metadataCharacters > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS) {
+    const formulationCount = protectedMetadataFormulationCount(input.protectedDisclosures);
+    if (
+      texts.length * metadataCharacters > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
+      || totalProposalTextCharacters * formulationCount > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS
+    ) {
       return { accepted: false, reason: "Proposal exceeds the bounded disclosure-analysis work budget" };
     }
 
