@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  QUANT_RESEARCH_FAMILIES,
   QUANT_RESEARCH_GENERATOR_VERSION,
   QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
@@ -77,6 +78,18 @@ describe("deterministic Quant Research interview engine", () => {
   it("registers exactly the five supported family/version pairs", () => {
     expect(getQuantResearchRegistry()).toHaveLength(5);
     expect(new Set(getQuantResearchRegistry().map((item) => item.family)).size).toBe(5);
+  });
+
+  it("keeps the exported family whitelist immutable at runtime", () => {
+    expect(Object.isFrozen(QUANT_RESEARCH_FAMILIES)).toBe(true);
+    expect(() => (QUANT_RESEARCH_FAMILIES as unknown as string[]).push("MUTATED")).toThrow();
+    expect(QUANT_RESEARCH_FAMILIES).toEqual([
+      "BAYESIAN_UPDATING",
+      "SAMPLING_ESTIMATION",
+      "EXPERIMENTAL_ALLOCATION",
+      "MODEL_COMPARISON",
+      "CONSTRAINED_OPTIMIZATION"
+    ]);
   });
 
   it("rejects duplicate family/version registrations", () => {
