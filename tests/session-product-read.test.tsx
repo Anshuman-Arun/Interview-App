@@ -415,7 +415,7 @@ describe("grounded evaluation/replay product surface", () => {
       }
     );
     expect(queryInjection.status).toBe(404);
-    expect(server.store.eventCount(sessionId)).toBe(before);
+    expect(server.store.eventCount(sessionId)).toBe(archivedCount);
   });
 
   it("reopens completed history after restart and remains read-only", async () => {
