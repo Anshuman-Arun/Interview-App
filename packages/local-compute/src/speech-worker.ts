@@ -364,12 +364,13 @@ export class SpeechWorkerCore {
         () => vadAbort.abort()
       );
     } catch (error) {
+      if (context.cancelled || context.terminal || this.shuttingDown) return [];
       if (error instanceof OperationTimeoutError) {
         this.abandonStream(context);
         this.rememberDiagnostic({ code: "VAD_TIMEOUT", streamId: context.streamId });
         throw new SpeechWorkerCoreError("VAD_TIMEOUT", "VAD backend timed out");
       }
-      if (context.cancelled || context.terminal || this.shuttingDown || vadAbort.signal.aborted) return [];
+      if (vadAbort.signal.aborted) return [];
       this.abandonStream(context);
       this.rememberDiagnostic({ code: "VAD_FAILURE", streamId: context.streamId });
       throw new SpeechWorkerCoreError("VAD_FAILURE", "VAD backend failed");
@@ -403,7 +404,9 @@ export class SpeechWorkerCore {
     }
 
     if (step.speechStarted) context.speechConfirmed = true;
-    if (!context.speechConfirmed && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
+    if (!context.speechConfirmed
+        && step.state === "SILENCE"
+        && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
       const events = [this.event(frame.envelope.requestId, frame.envelope.streamId, {
         type: "UTTERANCE_DISCARDED",
         ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
