@@ -326,14 +326,14 @@ function validateLocalPath(value: string, label: string): string {
   const windowsDrivePath = /^[A-Za-z]:[\\/]/u.test(path);
   const uriLikePath = /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(path);
   const uncLikePath = /^(?:\\\\|\/\/)/u.test(path);
-  if ((uriLikePath && !windowsDrivePath) || uncLikePath || /[\p{Cc}\p{Cf}]/u.test(path)) {
+  if ((uriLikePath && !windowsDrivePath) || uncLikePath || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(path)) {
     throw new Error(`${label} must be an explicitly supplied safe local filesystem path`);
   }
   return path;
 }
 
 function validateRuntimeIdentity(value: unknown, label: string): void {
-  if (typeof value !== "string" || value.trim().length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(value)) {
     throw new Error(`${label} is invalid`);
   }
 }
@@ -376,12 +376,23 @@ function preflightWordTimings(value: unknown, label: string): void {
   }
   for (const word of value) {
     preflightNestedRecord(word, WORD_TIMING_KEYS, "Recognizer word timing");
+    if (isRecord(word) && (typeof word.word !== "string" || word.word.length === 0 || word.word.length > 128)) {
+      throw new Error(`${label} contains word text outside bounded metadata limits`);
+    }
   }
 }
 
 function preflightNestedRecord(value: unknown, allowed: ReadonlySet<string>, label: string): void {
   if (!isRecord(value)) return;
   assertAllowedOwnEnumerableKeys(value, allowed, label);
+  if (label === "Recognizer model identity") {
+    if (typeof value.name !== "string" || value.name.length === 0 || value.name.length > 100) {
+      throw new Error("Recognizer model name exceeds bounded metadata limits");
+    }
+    if (typeof value.version !== "string" || value.version.length === 0 || value.version.length > 100) {
+      throw new Error("Recognizer model version exceeds bounded metadata limits");
+    }
+  }
 }
 
 function assertAllowedOwnEnumerableKeys(
