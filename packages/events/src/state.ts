@@ -25,6 +25,12 @@ import type {
   VerificationResult,
   EvidenceKey
 } from "../../domain/src/index.js";
+import type {
+  QuantResearchActionEvent,
+  QuantResearchAuthoritativeSnapshotEvent,
+  QuantResearchResultEvent,
+  QuantResearchScenarioDefinitionEvent
+} from "./schemas.js";
 import {
   zeroBoardRevision,
   zeroContextEpoch,
@@ -94,6 +100,13 @@ export interface EvidenceRecordState {
   readonly supersededByEventId?: EventId;
   readonly invalidationReason?: string;
 }
+export interface QuantResearchSessionState {
+  readonly definition: QuantResearchScenarioDefinitionEvent;
+  readonly authoritativeSnapshot: QuantResearchAuthoritativeSnapshotEvent;
+  readonly actions: readonly QuantResearchActionEvent[];
+  readonly result?: QuantResearchResultEvent | undefined;
+}
+
 export interface GenerationState {
   readonly generationId: GenerationId;
   readonly basis: GenerationBasis;
@@ -124,6 +137,7 @@ export interface SessionState {
   readonly problemStateRevision: ProblemStateRevision;
   readonly policyRevision: PolicyRevision;
   readonly lastCommittedInputSequence?: number;
+  readonly quantResearch?: QuantResearchSessionState | undefined;
   readonly eventIds: readonly EventId[];
   readonly utterances: Readonly<Record<string, UtteranceState>>;
   readonly inputEpisodes: Readonly<Record<string, InputEpisodeState>>;
