@@ -1,7 +1,8 @@
 import type {
-  DisclosureAnalysis,
-  DisclosureId,
-  DisclosureLevel,
+  DisclosureAnalysisSchema,
+  type DisclosureAnalysis,
+  type DisclosureId,
+  type DisclosureLevel,
   InterviewerProposal,
   ProtectedDisclosure,
   RealizationRequest
@@ -110,12 +111,37 @@ export class DisclosureValidator {
       input.proposal.speechText ?? "",
       ...(input.proposal.boardActions ?? []).map((item) => item.content ?? item.annotationPurpose)
     ];
-    const analyses = texts
-      .filter((text) => text.length > 0)
-      .map((text) => this.analyzer.analyze(text, input.protectedDisclosures));
+    const analyses: DisclosureAnalysis[] = [];
+    for (const text of texts.filter((candidate) => candidate.length > 0)) {
+      let rawAnalysis: unknown;
+      try {
+        rawAnalysis = this.analyzer.analyze(text, input.protectedDisclosures);
+      } catch {
+        return {
+          accepted: false,
+          reason: "Disclosure analyzer failed and therefore fails closed"
+        };
+      }
+      const parsed = DisclosureAnalysisSchema.safeParse(rawAnalysis);
+      if (!parsed.success) {
+        return {
+          accepted: false,
+          reason: "Disclosure analyzer returned an invalid result and therefore fails closed"
+        };
+      }
+      analyses.push(parsed.data);
+    }
 
-    if (analyses.some((analysis) => analysis.status === "UNKNOWN" || analysis.confidence < 1)) {
-      const uncertain = analyses.find((item) => item.status === "UNKNOWN");
+    const unsafe = analyses.find((analysis) => analysis.status === "UNSAFE");
+    if (unsafe !== undefined) {
+      return {
+        accepted: false,
+        reason: "Disclosure analysis classified proposal content as unsafe",
+        analysis: unsafe
+      };
+    }
+    if (analyses.some((analysis) => analysis.status !== "SAFE" || analysis.confidence < 1)) {
+      const uncertain = analyses.find((item) => item.status !== "SAFE" || item.confidence < 1);
       return {
         accepted: false,
         reason: "Disclosure validation is uncertain and therefore fails closed",
