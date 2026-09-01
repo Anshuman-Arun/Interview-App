@@ -334,20 +334,3 @@ function validatePcmOrderState(prior: PcmOrderState): void {
   }
 }
 
-
-function validatePcmOrderState(value: PcmOrderState): void {
-  if (!SpeechStreamIdSchema.safeParse(value.streamId).success
-      || (value.sampleRate !== 16_000 && value.sampleRate !== 48_000)
-      || value.channels !== 1
-      || value.sampleFormat !== "F32LE"
-      || !Number.isFinite(value.firstTimestampMs)
-      || value.firstTimestampMs < 0
-      || !Number.isFinite(value.cumulativeDurationMs)
-      || value.cumulativeDurationMs <= 0
-      || !Number.isSafeInteger(value.lastSequence)
-      || value.lastSequence < 0
-      || !Number.isFinite(value.nextEarliestTimestampMs)
-      || value.nextEarliestTimestampMs < value.firstTimestampMs) {
-    throw new PcmAdmissionError("INVALID_FRAME", "PCM order state is invalid");
-  }
-}
