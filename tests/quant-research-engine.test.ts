@@ -450,6 +450,20 @@ describe("deterministic Quant Research interview engine", () => {
   it("distinguishes malformed replay input from an oversized replay", () => {
     expectCode(() => replayQuantResearch(bayesian, "not-an-array"), "INVALID_REPLAY");
     expectCode(() => replayQuantResearch(bayesian, Array.from({ length: 65 }, () => null)), "RESOURCE_LIMIT_EXCEEDED");
+
+    const sparseReplay = new Array<unknown>(1);
+    expectCode(() => replayQuantResearch(bayesian, sparseReplay), "INVALID_REPLAY");
+
+    let iteratorInvoked = false;
+    const customIteratorReplay: unknown[] = [];
+    Object.defineProperty(customIteratorReplay, Symbol.iterator, {
+      value: function* () {
+        iteratorInvoked = true;
+        while (true) yield null;
+      }
+    });
+    expectCode(() => replayQuantResearch(bayesian, customIteratorReplay), "INVALID_REPLAY");
+    expect(iteratorInvoked).toBe(false);
   });
 
   it("returns detached final results as well as detached public state", () => {
