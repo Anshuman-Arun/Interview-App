@@ -25,9 +25,20 @@ function requireRealTldrawBridge(
   return editor;
 }
 
+const ACT_ENVIRONMENT_KEY = "IS_REACT_ACT_ENVIRONMENT";
+const hadActEnvironment = Object.prototype.hasOwnProperty.call(
+  globalThis,
+  ACT_ENVIRONMENT_KEY
+);
+const previousActEnvironment = Reflect.get(globalThis, ACT_ENVIRONMENT_KEY);
+const originalDocumentFontsDescriptor = Object.getOwnPropertyDescriptor(
+  document,
+  "fonts"
+);
+
 describe("Real tldraw mounted browser integration", () => {
   beforeEach(() => {
-    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    Reflect.set(globalThis, ACT_ENVIRONMENT_KEY, true);
 
     vi.stubGlobal("fetch", async () => new Response(JSON.stringify({}), {
       status: 200,
@@ -35,11 +46,11 @@ describe("Real tldraw mounted browser integration", () => {
     }));
 
     if (typeof globalThis.FontFace === "undefined") {
-      (globalThis as unknown as { FontFace: unknown }).FontFace = class FontFace {
+      vi.stubGlobal("FontFace", class FontFace {
         public load(): Promise<this> {
           return Promise.resolve(this);
         }
-      };
+      });
     }
 
     if (typeof document !== "undefined") {
@@ -60,6 +71,16 @@ describe("Real tldraw mounted browser integration", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    if (hadActEnvironment) {
+      Reflect.set(globalThis, ACT_ENVIRONMENT_KEY, previousActEnvironment);
+    } else {
+      Reflect.deleteProperty(globalThis, ACT_ENVIRONMENT_KEY);
+    }
+    if (originalDocumentFontsDescriptor === undefined) {
+      Reflect.deleteProperty(document, "fonts");
+    } else {
+      Object.defineProperty(document, "fonts", originalDocumentFontsDescriptor);
+    }
   });
 
   it("mounts the real tldraw component into a DOM element and initializes adapter bridge", async () => {
@@ -90,7 +111,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(mountedEditor).toBeInstanceOf(RealTldrawEditorBridge);
     expect(adapter.getEditor()).toBe(mountedEditor);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -177,7 +200,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(snapshot.studentShapes.length).toBeGreaterThanOrEqual(1);
     expect(snapshot.aiAnnotations.length).toBeGreaterThanOrEqual(1);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -245,7 +270,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(bridge.getShape(firstId)).toBeUndefined();
     expect(bridge.getShape(secondId)).toBeUndefined();
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -300,7 +327,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(bridge.getShape(id)?.x).toBe(100);
     expect(bridge.getShape(id)?.meta?.["shapeRevision"]).toBe(4);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -336,7 +365,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(bridge.getShape(id)).toBeUndefined();
     expect(adapter.getBoardRevision()).toBe(0);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -371,7 +402,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(adapter.getBoardRevision()).toBe(1);
     expect(changes).toHaveLength(1);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     expect(adapter.getEditor()).toBeNull();
     expect(adapter.getBoardRevision()).toBe(1);
 
@@ -395,7 +428,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(adapter.getBoardRevision()).toBe(2);
     expect(changes).toHaveLength(2);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -471,7 +506,9 @@ describe("Real tldraw mounted browser integration", () => {
 
     unlistenThrowing();
     unlistenSecond();
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -522,7 +559,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(bridge.getShape("shape:mixed-adapter")?.meta?.["shapeRevision"]).toBe(1);
     expect(bridge.getShape(directId)?.meta?.["shapeRevision"]).toBe(1);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -577,7 +616,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(adapter.getBoardRevision()).toBe(boardRevision);
     expect(changes).toHaveLength(changeCount);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -612,7 +653,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(bridge.getShape(nativeId)).toBeUndefined();
     expect(adapter.getBoardRevision()).toBe(Number.MAX_SAFE_INTEGER);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -684,7 +727,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(nativeEditor.getShape(legacyId)).toBeDefined();
     expect(adapter.getBoardRevision()).toBe(beforeRevision);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
@@ -886,7 +931,9 @@ describe("Real tldraw mounted browser integration", () => {
     expect(bridge.getShape(studentId)).toBeDefined();
     expect(adapter.getBoardRevision()).toBe(beforeProtectedDelete);
 
-    handle.unmount();
+    await act(async () => {
+      handle.unmount();
+    });
     container.remove();
   });
 
