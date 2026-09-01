@@ -227,13 +227,18 @@ export const SpeechModelIdentitySchema = z.object({
 }).strict();
 export type SpeechModelIdentity = z.infer<typeof SpeechModelIdentitySchema>;
 
+const BoundedTranscriptWordsSchema = z.preprocess(
+  (value) => Array.isArray(value) && value.length > MAX_SPEECH_WORD_TIMINGS ? null : value,
+  z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS)
+);
+
 export const TranscriptCandidateSchema = z.object({
   requestId: SpeechRequestIdSchema,
   utteranceId: SpeechUtteranceIdSchema,
   text: SafeTranscriptTextSchema,
   isFinal: z.literal(true),
   confidence: z.number().min(0).max(1).optional(),
-  words: z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS).optional(),
+  words: BoundedTranscriptWordsSchema.optional(),
   model: SpeechModelIdentitySchema,
   sourceAudioBasis: SourceAudioBasisSchema
 }).strict();
