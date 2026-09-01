@@ -112,22 +112,23 @@ export function snapshotParentEnvironmentRecord(parent: NodeJS.ProcessEnv): Node
 function validateParentEnvironmentRecord(
   parent: NodeJS.ProcessEnv
 ): Readonly<Record<string, PropertyDescriptor>> {
-  if (typeof parent !== "object" || parent === null) {
+  const parentValue: unknown = parent;
+  if (typeof parentValue !== "object" || parentValue === null) {
     throw new Error("Parent environment must be an object");
   }
-  if (utilTypes.isProxy(parent)) throw new Error("Parent environment could not be inspected");
-  if (Array.isArray(parent)) throw new Error("Parent environment must be an object");
+  if (utilTypes.isProxy(parentValue)) throw new Error("Parent environment could not be inspected");
+  if (Array.isArray(parentValue)) throw new Error("Parent environment must be an object");
 
   let prototype: unknown;
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
-    prototype = Object.getPrototypeOf(parent);
-    descriptors = Object.getOwnPropertyDescriptors(parent);
+    prototype = Object.getPrototypeOf(parentValue);
+    descriptors = Object.getOwnPropertyDescriptors(parentValue);
   } catch {
     throw new Error("Parent environment could not be inspected");
   }
 
-  if (parent !== process.env && prototype !== Object.prototype && prototype !== null) {
+  if (parentValue !== process.env && prototype !== Object.prototype && prototype !== null) {
     throw new Error("Parent environment must be a plain data object or process.env");
   }
 
@@ -210,15 +211,16 @@ function inspectEnvironmentDefinition(
   definition: LocalEnvironmentDefinition | undefined
 ): LocalEnvironmentDefinition | undefined {
   if (definition === undefined) return undefined;
-  if (typeof definition !== "object" || definition === null
-      || safelyIsEnvironmentArray(definition, "Environment definition")) {
+  const definitionValue: unknown = definition;
+  if (typeof definitionValue !== "object" || definitionValue === null
+      || safelyIsEnvironmentArray(definitionValue, "Environment definition")) {
     throw new Error("Environment definition must be an object");
   }
-  assertPlainEnvironmentObject(definition, "Environment definition");
+  assertPlainEnvironmentObject(definitionValue, "Environment definition");
 
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
   try {
-    descriptors = Object.getOwnPropertyDescriptors(definition);
+    descriptors = Object.getOwnPropertyDescriptors(definitionValue);
   } catch {
     throw new Error("Environment definition could not be inspected");
   }
