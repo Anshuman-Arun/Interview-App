@@ -14,6 +14,7 @@ import {
   GenerationBasisSchema,
   GenerationIdSchema,
   InputEpisodeIdSchema,
+  InterviewSessionConfigurationSchema,
   InterviewerProposalSchema,
   PolicyRevisionSchema,
   ProviderContextSpecFingerprintSchema,
@@ -29,7 +30,7 @@ import {
   VerificationResultSchema
 } from "../../domain/src/index.js";
 
-export const CURRENT_EVENT_SCHEMA_VERSION = 2 as const;
+export const CURRENT_EVENT_SCHEMA_VERSION = 3 as const;
 export const EventSourceSchema = z.enum(["APPLICATION", "USER", "PROVIDER", "RENDERER", "WORKER", "RECOVERY"]);
 export type EventSource = z.infer<typeof EventSourceSchema>;
 
@@ -315,7 +316,10 @@ const event = <TType extends string, TPayload extends z.ZodType>(type: TType, pa
   z.object({ ...metadata, type: z.literal(type), payload }).strict();
 
 export const SessionEventSchema = z.discriminatedUnion("type", [
-  event("SESSION_STARTED", z.object({ startedAt: z.iso.datetime() }).strict()),
+  event("SESSION_STARTED", z.object({
+    startedAt: z.iso.datetime(),
+    configuration: InterviewSessionConfigurationSchema.optional()
+  }).strict()),
   event("PROBLEM_PRESENTED", z.object({
     problemId: z.string().min(1),
     problemVersion: z.string().min(1),
