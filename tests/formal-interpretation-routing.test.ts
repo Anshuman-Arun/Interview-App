@@ -1034,8 +1034,7 @@ describe("provider cancellation capacity accounting", () => {
       if (releaseFirstProvider === undefined) throw new Error("Expected provider release function");
       releaseFirstProvider(providerResultFor(firstRequest, []));
       await firstProviderWork;
-      await Promise.resolve();
-      await Promise.resolve();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const afterProviderSettles = await coordinator.interpretAndVerify(thirdRequest);
       expect(afterProviderSettles).toMatchObject({
