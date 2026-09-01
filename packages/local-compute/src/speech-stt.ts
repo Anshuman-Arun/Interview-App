@@ -122,7 +122,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       options.runtime,
       "Moonshine runtime transcribe callback"
     );
-    this.cancelRuntime = bindOptionalRuntimeFunction<MoonshineRuntime["cancel"]>(
+    this.cancelRuntime = bindOptionalRuntimeFunction<NonNullable<MoonshineRuntime["cancel"]>>(
       (options.runtime as unknown as { cancel?: unknown }).cancel,
       options.runtime,
       "Moonshine runtime cancel callback"
