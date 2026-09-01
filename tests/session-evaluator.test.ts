@@ -94,6 +94,25 @@ describe("grounded session evaluator", () => {
       .toBe(false);
   });
 
+  it("keeps a progress-complete milestone weak when active support is explicitly incomplete", () => {
+    let state = setHistory(
+      boundState(),
+      milestoneKey("model-relations", "PROGRESS"),
+      [{ value: "COMPLETE", sequence: 10, status: "ACTIVE" }]
+    );
+    state = setHistory(
+      state,
+      milestoneKey("model-relations", "JUSTIFICATION"),
+      [{ value: "UNJUSTIFIED", sequence: 11, status: "ACTIVE" }]
+    );
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(milestone(evaluation, "model-relations").achieved).toBe(true);
+    expect(milestone(evaluation, "model-relations").supportLevel).toBe("WEAK");
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.scores.rigor).toBe(0);
+  });
+
   it("grounds correctness in accepted verifier results and abstains on unresolved verification", () => {
     const verifiedKey: EvidenceKey = {
       problemId: sixPeopleProblem.id,
@@ -193,6 +212,37 @@ describe("grounded session evaluator", () => {
 
     expect(evaluateInterviewSession(state, sixPeopleProblem).scores.technicalCorrectness)
       .toBeNull();
+  });
+
+  it("downgrades otherwise strong correctness coverage when a current subject is unresolved", () => {
+    let state = boundState();
+    for (const [index, claimId] of ["verified-a", "verified-b", "verified-c"].entries()) {
+      const key: EvidenceKey = {
+        problemId: sixPeopleProblem.id,
+        subject: { kind: "CLAIM", claimId },
+        dimension: "CORRECTNESS"
+      };
+      state = withVerification(
+        state,
+        key,
+        "VERIFIED",
+        10 + index * 10,
+        "coverage-" + claimId
+      );
+    }
+    const unknownKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "current-unknown" },
+      dimension: "CORRECTNESS"
+    };
+    state = setHistory(state, unknownKey, [
+      { value: "UNKNOWN", sequence: 50, status: "ACTIVE" }
+    ]);
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBe(100);
+    expect(evaluation.dimensionResults.technicalCorrectness.supportLevel).toBe("MODERATE");
+    expect(evaluation.summaryAssessment).toContain("1 current correctness subject");
   });
 
   it("scores rigor from justification evidence, not from verification-request count", () => {
