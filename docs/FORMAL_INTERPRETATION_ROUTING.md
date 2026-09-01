@@ -49,6 +49,7 @@ Adding a future family requires an explicit application route, its deterministic
 `createFormalInterpretationRequest` builds requests from current `SessionWriter` state. A request binds:
 
 - request, session, generation, InputEpisode, and turn identities;
+- bounded request/session/generation/InputEpisode/turn/event identifiers and bounded claim-target identifiers;
 - the exact `GenerationBasis`;
 - source revision and authoritative event provenance; for the current `TURN_TEXT` source kind this is exactly the committed-turn event, not an arbitrary superset of session events;
 - a bounded UTF-16 source-text span from the committed turn;
