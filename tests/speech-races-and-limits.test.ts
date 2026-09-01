@@ -406,6 +406,35 @@ describe("speech worker adversarial races and hard limits", () => {
     expect(events.some((event) => event.type === "TRANSCRIPT_CANDIDATE")).toBe(false);
   });
 
+  it("classifies recognizer PCM mutation as a protocol violation even when the recognizer then hangs", async () => {
+    const recognizer: SpeechRecognizer = {
+      modelIdentity: { name: "mutate-then-hang", version: "1" },
+      cancellationCapability: "NONE",
+      async recognize(input) {
+        input.pcmBytes[0] = 1;
+        return new Promise(() => undefined);
+      }
+    };
+    const subject = worker({
+      recognizer,
+      recognizerTimeoutMs: 20,
+      endpointingFactory: shortEndpointing
+    });
+
+    const events: SpeechWorkerEvent[] = [];
+    for (let sequence = 0; sequence < 4; sequence += 1) {
+      const fixture = frame(sequence, sequence < 3, "mutate-then-hang");
+      events.push(...await subject.submitFrame(fixture.envelope, fixture.pcm));
+    }
+
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "SPEECH_WORKER_ERROR",
+      code: "RECOGNIZER_PROTOCOL_ERROR",
+      message: "Recognizer mutated bounded PCM input"
+    }));
+    expect(events.some((event) => event.type === "SPEECH_WORKER_ERROR" && event.code === "RECOGNIZER_TIMEOUT")).toBe(false);
+  });
+
   it("times out a hung recognizer without leaving the stream or request pending forever", async () => {
     const recognizer: SpeechRecognizer = {
       modelIdentity: { name: "hung-recognizer", version: "1" },
@@ -503,6 +532,46 @@ describe("speech worker adversarial races and hard limits", () => {
       cancellation: "RUNTIME_ABORT_REQUESTED"
     }));
     expect(subject.getDiagnostics()).toContainEqual(expect.objectContaining({ code: "CANCELLATION_TIMEOUT" }));
+
+    deferred.resolve(validRaw(recognitionInput, "hanging-cancel"));
+    expect(await finalizing).toEqual([]);
+  });
+
+  it("keeps the dedicated shutdown reserve available while a cancellation reserve is occupied", async () => {
+    const deferred = deferredRecognizerWithHangingCancel();
+    const subject = worker({
+      recognizer: deferred.recognizer,
+      endpointingFactory: shortEndpointing,
+      maxConcurrentStreams: 1,
+      maxInFlightRequests: 1,
+      cancellationTimeoutMs: 20,
+      recognizerTimeoutMs: 200
+    });
+
+    for (let sequence = 0; sequence < 3; sequence += 1) {
+      const fixture = frame(sequence, true, "shutdown-after-cancel-reserve");
+      await subject.submitFrame(fixture.envelope, fixture.pcm);
+    }
+    const endpoint = frame(3, false, "shutdown-after-cancel-reserve");
+    const finalizing = subject.submitFrame(endpoint.envelope, endpoint.pcm);
+    const recognitionInput = await deferred.started;
+
+    const cancelling = subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "shutdown-after-cancel-reserve",
+      type: "CANCEL_SPEECH"
+    });
+    const shutdownRequest = {
+      protocolVersion: 1 as const,
+      requestId: newRequestId(),
+      type: "SHUTDOWN_SPEECH_WORKER" as const
+    };
+    await expect(subject.handleControl(shutdownRequest)).resolves.toEqual([]);
+    await expect(cancelling).resolves.toContainEqual(expect.objectContaining({
+      type: "SPEECH_CANCELLED",
+      cancellation: "RUNTIME_ABORT_REQUESTED"
+    }));
 
     deferred.resolve(validRaw(recognitionInput, "hanging-cancel"));
     expect(await finalizing).toEqual([]);
