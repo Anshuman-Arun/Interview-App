@@ -1375,6 +1375,7 @@ describe("local worker lifecycle manager", () => {
         await new Promise<void>((resolve) => setTimeout(resolve, 1));
       }
       expect(queuedStart).toBeDefined();
+      if (queuedStart === undefined) throw new Error("Expected queued restart");
       const recovered = await queuedStart;
       expect(recovered.state).toBe("READY");
       expect(recovered.restartCount).toBe(0);
@@ -1440,6 +1441,7 @@ describe("local worker lifecycle manager", () => {
     expect(readFileSync(counter, "utf8")).toBe("1");
     await expect(runtime.stop("reentrant")).resolves.toMatchObject({ disposition: "GRACEFUL" });
     expect(restarted).toBeDefined();
+    if (restarted === undefined) throw new Error("Expected reentrant restart");
     const second = await restarted;
     expect(second.state).toBe("READY");
     expect(readFileSync(counter, "utf8")).toBe("2");
@@ -1989,7 +1991,7 @@ describe("local worker lifecycle manager", () => {
 
     expect(() => runtime.register({
       ...definition("bad-hook", "ready"),
-      gracefulShutdown: "not-a-function" as unknown as LocalComponentDefinition["gracefulShutdown"]
+      gracefulShutdown: "not-a-function" as unknown as NonNullable<LocalComponentDefinition["gracefulShutdown"]>
     })).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
 
     expect(() => runtime.register(null as unknown as LocalComponentDefinition))
@@ -2557,7 +2559,7 @@ describe("local worker lifecycle manager", () => {
       restartPolicy: {
         mode: "NEVER",
         maxRetries: 1
-      } as unknown as LocalComponentDefinition["restartPolicy"]
+      } as unknown as NonNullable<LocalComponentDefinition["restartPolicy"]>
     }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
   });
 
