@@ -295,21 +295,26 @@ function selectAndParseSessionSummaries(
 
   const seenSessionIds = new Set<SessionId>();
   const candidates: SelectedSessionInput[] = [];
-  for (const raw of values) {
-    let parsed: ReturnType<typeof LongitudinalSessionEnvelopeSchema.safeParse>;
-    try {
-      parsed = LongitudinalSessionEnvelopeSchema.safeParse(raw);
-    } catch {
-      throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  try {
+    for (const raw of values) {
+      let parsed: ReturnType<typeof LongitudinalSessionEnvelopeSchema.safeParse>;
+      try {
+        parsed = LongitudinalSessionEnvelopeSchema.safeParse(raw);
+      } catch {
+        throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+      }
+      if (!parsed.success || !identifierWithinReplayLimit(parsed.data.sessionId)) {
+        throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+      }
+      if (seenSessionIds.has(parsed.data.sessionId)) {
+        throw new ReplayProjectionError("DUPLICATE_SESSION");
+      }
+      seenSessionIds.add(parsed.data.sessionId);
+      candidates.push({ raw, envelope: parsed.data });
     }
-    if (!parsed.success || !identifierWithinReplayLimit(parsed.data.sessionId)) {
-      throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
-    }
-    if (seenSessionIds.has(parsed.data.sessionId)) {
-      throw new ReplayProjectionError("DUPLICATE_SESSION");
-    }
-    seenSessionIds.add(parsed.data.sessionId);
-    candidates.push({ raw, envelope: parsed.data });
+  } catch (error) {
+    if (error instanceof ReplayProjectionError) throw error;
+    throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
   }
 
   return candidates
@@ -393,6 +398,15 @@ export function projectLongitudinalHistory(
   options: LongitudinalHistoryOptions = {}
 ): LongitudinalHistoryProjection {
   const bounds = resolveReplayBounds(options.bounds);
+  if (!Array.isArray(sessionSummaries)) {
+    throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  }
+  let totalInputSessions: number;
+  try {
+    totalInputSessions = sessionSummaries.length;
+  } catch {
+    throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  }
   const included = selectAndParseSessionSummaries(
     sessionSummaries,
     bounds.maxSessions
@@ -534,9 +548,9 @@ export function projectLongitudinalHistory(
   ).length;
 
   return {
-    totalInputSessions: sessionSummaries.length,
+    totalInputSessions,
     includedSessionCount: included.length,
-    sessionTruncation: truncationInfo(sessionSummaries.length, bounds.maxSessions),
+    sessionTruncation: truncationInfo(totalInputSessions, bounds.maxSessions),
     completedSessions: included.filter((session) => session.lifecycle.completed === true).length,
     sessionsWithUnknownCompletion: included.filter((session) => session.lifecycle.completed === null).length,
     problemsAttempted: exactProblems.size,

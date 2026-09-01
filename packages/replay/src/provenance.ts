@@ -157,7 +157,14 @@ export function normalizeReplayEvents(
 ): NormalizedReplayHistory {
   if (!Array.isArray(rawEvents)) throw new ReplayProjectionError("INVALID_INPUT");
 
-  const selectedCount = Math.min(rawEvents.length, bounds.maxEvents);
+  let totalEventCount: number;
+  try {
+    totalEventCount = rawEvents.length;
+  } catch {
+    throw new ReplayProjectionError("INVALID_INPUT");
+  }
+
+  const selectedCount = Math.min(totalEventCount, bounds.maxEvents);
   const selectedBySequence = new Map<number, {
     readonly raw: unknown;
     readonly metadata: SafeEventMetadata;
@@ -165,29 +172,36 @@ export function normalizeReplayEvents(
   const selectedEventIds = new Set<string>();
   let sessionId: z.infer<typeof SessionIdSchema> | null = null;
 
-  for (const rawValue of rawEvents) {
-    const raw: unknown = rawValue;
-    let parsed: ReturnType<typeof SafeEventMetadataSchema.safeParse>;
-    try {
-      parsed = SafeEventMetadataSchema.safeParse(raw);
-    } catch {
-      throw new ReplayProjectionError("INVALID_EVENT_METADATA");
-    }
-    if (!parsed.success) throw new ReplayProjectionError("INVALID_EVENT_METADATA");
-    const metadata = parsed.data;
-    sessionId ??= metadata.sessionId;
-    if (metadata.sessionId !== sessionId) throw new ReplayProjectionError("MIXED_SESSION_IDS");
+  try {
+    for (const rawValue of rawEvents) {
+      const raw: unknown = rawValue;
+      let parsed: ReturnType<typeof SafeEventMetadataSchema.safeParse>;
+      try {
+        parsed = SafeEventMetadataSchema.safeParse(raw);
+      } catch {
+        throw new ReplayProjectionError("INVALID_EVENT_METADATA");
+      }
+      if (!parsed.success) throw new ReplayProjectionError("INVALID_EVENT_METADATA");
+      const metadata = parsed.data;
+      sessionId ??= metadata.sessionId;
+      if (metadata.sessionId !== sessionId) {
+        throw new ReplayProjectionError("MIXED_SESSION_IDS");
+      }
 
-    if (metadata.sequence <= selectedCount) {
-      if (selectedBySequence.has(metadata.sequence)) {
-        throw new ReplayProjectionError("INVALID_EVENT_SEQUENCE");
+      if (metadata.sequence <= selectedCount) {
+        if (selectedBySequence.has(metadata.sequence)) {
+          throw new ReplayProjectionError("INVALID_EVENT_SEQUENCE");
+        }
+        if (selectedEventIds.has(metadata.eventId)) {
+          throw new ReplayProjectionError("INVALID_EVENT_IDENTITY");
+        }
+        selectedEventIds.add(metadata.eventId);
+        selectedBySequence.set(metadata.sequence, { raw, metadata });
       }
-      if (selectedEventIds.has(metadata.eventId)) {
-        throw new ReplayProjectionError("INVALID_EVENT_IDENTITY");
-      }
-      selectedEventIds.add(metadata.eventId);
-      selectedBySequence.set(metadata.sequence, { raw, metadata });
     }
+  } catch (error) {
+    if (error instanceof ReplayProjectionError) throw error;
+    throw new ReplayProjectionError("INVALID_INPUT");
   }
 
   const selected: Array<{
@@ -261,8 +275,8 @@ export function normalizeReplayEvents(
   return {
     sessionId,
     events,
-    totalEventCount: rawEvents.length,
-    eventTruncation: truncationInfo(rawEvents.length, bounds.maxEvents),
+    totalEventCount,
+    eventTruncation: truncationInfo(totalEventCount, bounds.maxEvents),
     hasUnknownEvents,
     ...(firstUnknownSequence === undefined ? {} : { firstUnknownSequence })
   };

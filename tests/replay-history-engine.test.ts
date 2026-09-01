@@ -1155,6 +1155,43 @@ describe("replay/history projections", () => {
     }
   });
 
+  it("rejects new delivery queueing after completion even when the old basis is otherwise unchanged", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const coordinator = new DeliveryCoordinator(harness.writer);
+      await coordinator.markStarted(atom.deliveryId);
+      await coordinator.acknowledgeExposed(atom.deliveryId);
+      await coordinator.acknowledgeCompleted(atom.deliveryId);
+      await harness.turns.completeSession();
+
+      const postTerminalAudio = DeliveryAtomSchema.parse({
+        deliveryId: newDeliveryId(),
+        generationId: harness.generationId,
+        content: {
+          medium: "AUDIO",
+          text: harness.safeProbe,
+          audioRef: "/fixture/post-terminal-audio.wav"
+        },
+        disclosureIds: [],
+        effectiveDisclosureLevel: 0,
+        status: "VALIDATED"
+      });
+      const authoritative = harness.store.load(harness.sessionId);
+      expect(() => projectSessionHistory([
+        ...authoritative,
+        event(
+          harness.sessionId,
+          authoritative.length + 1,
+          "DELIVERY_QUEUED",
+          { atom: postTerminalAudio }
+        )
+      ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("rejects verification provenance that does not match its formal proposal and generation basis", async () => {
     const harness = await createCoreHarness();
     try {
@@ -1813,6 +1850,42 @@ describe("replay/history projections", () => {
       expect(error).toBeInstanceOf(ReplayProjectionError);
       expect(error).toMatchObject({ code: "INVALID_EVENT_METADATA" });
       expect(String(error)).not.toContain("PRIVATE_GETTER_EVENT_MARKER");
+    }
+
+    const throwingEventArray = new Proxy<unknown[]>([], {
+      get: (target, property, receiver) => {
+        if (property === "length") {
+          throw new Error("PRIVATE_EVENT_ARRAY_MARKER");
+        }
+        return Reflect.get(target, property, receiver);
+      }
+    });
+    try {
+      projectReplayTimeline(throwingEventArray);
+      throw new Error("Expected throwing event array rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ReplayProjectionError);
+      expect(error).toMatchObject({ code: "INVALID_INPUT" });
+      expect(String(error)).not.toContain("PRIVATE_EVENT_ARRAY_MARKER");
+    }
+
+    const throwingSummaryArray = new Proxy<unknown[]>([], {
+      get: (target, property, receiver) => {
+        if (property === Symbol.iterator) {
+          return () => {
+            throw new Error("PRIVATE_SUMMARY_ARRAY_MARKER");
+          };
+        }
+        return Reflect.get(target, property, receiver);
+      }
+    });
+    try {
+      projectLongitudinalHistory(throwingSummaryArray);
+      throw new Error("Expected throwing summary array rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ReplayProjectionError);
+      expect(error).toMatchObject({ code: "INVALID_SESSION_SUMMARY" });
+      expect(String(error)).not.toContain("PRIVATE_SUMMARY_ARRAY_MARKER");
     }
 
     const throwingSummary = {};

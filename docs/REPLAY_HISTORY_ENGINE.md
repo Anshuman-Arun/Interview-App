@@ -141,14 +141,17 @@ rather than being made to look current.
 ## Lifecycle and recovery
 
 Session completion is inferred only from an authoritative `SESSION_COMPLETED`
-event/state replay. Absence of later events never implies completion. After a session becomes COMPLETED or ARCHIVED, replay still enforces the status
-requirements of the authoritative producer for each event type. User/interview
-operations whose coordinator requires an ACTIVE session remain invalid, while
-already-issued cleanup/callback paths that the application intentionally permits
-(such as discarding a still-capturing utterance or acknowledging completion of an
-already EXPOSED delivery) may finish. This preserves real serialized races without
-reopening the session or inventing a blanket terminal rule that current producers
-do not enforce. Session
+event/state replay. Absence of later events never implies completion. After a
+session becomes COMPLETED or ARCHIVED, replay still enforces the status requirements
+of the authoritative producer for each event type. User/interview operations whose
+coordinator requires an ACTIVE session remain invalid; newly queueing or starting a
+Delivery is also ACTIVE-only, so terminal sessions cannot reopen output merely
+because an older validated generation remains revision-compatible. Already-issued
+cleanup/callback paths that the application intentionally permits (such as a late
+vision result, discarding a still-capturing utterance, or acknowledging completion
+of an already EXPOSED delivery) may finish. This preserves real serialized races
+without reopening the session or inventing a blanket terminal rule that current
+producers do not enforce. Session
 resumption is counted from `SESSION_RESUMED`; `RECOVERY`-source
 `DELIVERY_POSSIBLY_EXPOSED` events are counted separately without assuming that
 every such event proves an application crash. Empty, active,
