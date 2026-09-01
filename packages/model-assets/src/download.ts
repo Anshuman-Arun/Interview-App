@@ -1,0 +1,293 @@
+import http from "node:http";
+import https from "node:https";
+import type { FileHandle } from "node:fs/promises";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { ModelAssetError } from "./types.js";
+
+export const MAX_DOWNLOAD_TIMEOUT_MS = 2_147_483_647;
+export const MAX_DOWNLOAD_REDIRECTS = 20;
+const MAX_ARTIFACT_URL_LENGTH = 2_048;
+const MAX_RESPONSE_HEADER_BYTES = 16 * 1024;
+
+function isSignalAborted(signal: AbortSignal): boolean {
+  return signal.aborted;
+}
+
+export interface ArtifactDownloadOptions {
+  readonly maxBytes: number;
+  readonly expectedBytes: number;
+  readonly timeoutMs: number;
+  readonly maxRedirects: number;
+  readonly allowCrossOriginRedirects: boolean;
+  readonly signal: AbortSignal;
+}
+
+function systemErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  return typeof error.code === "string" ? error.code : undefined;
+}
+
+function classifyTransferError(error: unknown): ModelAssetError {
+  const code = systemErrorCode(error);
+  if (code === "ENOSPC" || code === "EDQUOT") {
+    return new ModelAssetError(
+      "INSUFFICIENT_DISK_SPACE",
+      "Artifact download could not continue because the destination filesystem is full.",
+      { cause: error }
+    );
+  }
+  if (code === "EACCES"
+      || code === "EPERM"
+      || code === "EEXIST"
+      || code === "ENOENT"
+      || code === "EISDIR"
+      || code === "EROFS"
+      || code === "EMFILE"
+      || code === "ENFILE"
+      || code === "EFBIG"
+      || code === "EBADF"
+      || code === "EIO") {
+    return new ModelAssetError(
+      "IO_ERROR",
+      "Artifact download failed while writing the staging file.",
+      { cause: error }
+    );
+  }
+  return new ModelAssetError("NETWORK_ERROR", "Artifact HTTP request failed.", { cause: error });
+}
+
+function parseUrl(value: string): URL {
+  if (value.length > MAX_ARTIFACT_URL_LENGTH) {
+    throw new ModelAssetError(
+      "UNSAFE_REDIRECT",
+      "Artifact URL exceeds the package URL-length safety limit."
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch (error) {
+    throw new ModelAssetError("INVALID_MANIFEST", "Artifact source URL is invalid.", { cause: error });
+  }
+  if (parsed.href.length > MAX_ARTIFACT_URL_LENGTH) {
+    throw new ModelAssetError(
+      "UNSAFE_REDIRECT",
+      "Canonical artifact URL exceeds the package URL-length safety limit."
+    );
+  }
+  if ((parsed.protocol !== "http:" && parsed.protocol !== "https:")
+      || parsed.username.length > 0
+      || parsed.password.length > 0) {
+    throw new ModelAssetError("UNSAFE_REDIRECT", "Artifact source must use HTTP(S) without embedded credentials.");
+  }
+  return parsed;
+}
+
+function redirectStatus(statusCode: number | undefined): boolean {
+  return statusCode === 301 || statusCode === 302 || statusCode === 303 || statusCode === 307 || statusCode === 308;
+}
+
+function requestClient(url: URL): typeof http | typeof https {
+  return url.protocol === "https:" ? https : http;
+}
+
+function parseContentLength(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^\d+$/u.test(value)) {
+    throw new ModelAssetError("NETWORK_ERROR", "Artifact response has an invalid Content-Length header.");
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new ModelAssetError("NETWORK_ERROR", "Artifact response Content-Length is outside safe bounds.");
+  }
+  return parsed;
+}
+
+async function downloadResponseToFile(
+  source: URL,
+  destinationHandle: FileHandle,
+  options: ArtifactDownloadOptions,
+  redirectCount: number,
+  originalOrigin: string
+): Promise<number> {
+  if (isSignalAborted(options.signal)) throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
+
+  return await new Promise<number>((resolvePromise, rejectPromise) => {
+    let settled = false;
+    const settleReject = (error: unknown): void => {
+      if (settled) return;
+      settled = true;
+      if (error instanceof ModelAssetError) {
+        rejectPromise(error);
+      } else if (isSignalAborted(options.signal)) {
+        rejectPromise(new ModelAssetError("CANCELLED", "Artifact download was cancelled.", { cause: error }));
+      } else {
+        rejectPromise(classifyTransferError(error));
+      }
+    };
+
+    const request = requestClient(source).get(source, {
+      headers: {
+        "accept-encoding": "identity",
+        "user-agent": "interview-app-model-assets/1"
+      },
+      signal: options.signal,
+      maxHeaderSize: MAX_RESPONSE_HEADER_BYTES
+    }, (response) => {
+      void (async () => {
+        try {
+          if (redirectStatus(response.statusCode)) {
+            const location = response.headers.location;
+            if (location === undefined) {
+              throw new ModelAssetError("NETWORK_ERROR", "Artifact redirect response is missing a Location header.");
+            }
+            if (redirectCount >= options.maxRedirects) {
+              throw new ModelAssetError("REDIRECT_LIMIT", "Artifact download exceeded the configured redirect limit.");
+            }
+            const next = parseUrl(new URL(location, source).toString());
+            if (source.protocol === "https:" && next.protocol !== "https:") {
+              throw new ModelAssetError("UNSAFE_REDIRECT", "HTTPS artifact downloads may not redirect to HTTP.");
+            }
+            if (!options.allowCrossOriginRedirects && next.origin !== originalOrigin) {
+              throw new ModelAssetError("UNSAFE_REDIRECT", "Cross-origin artifact redirect rejected by policy.");
+            }
+            response.destroy();
+            const result = await downloadResponseToFile(
+              next,
+              destinationHandle,
+              options,
+              redirectCount + 1,
+              originalOrigin
+            );
+            if (!settled) {
+              settled = true;
+              resolvePromise(result);
+            }
+            return;
+          }
+
+          if (response.statusCode !== 200) {
+            response.destroy();
+            throw new ModelAssetError("HTTP_STATUS", "Artifact server returned a non-success status.");
+          }
+
+          const contentLength = parseContentLength(response.headers["content-length"]);
+          if (contentLength !== undefined && contentLength > options.maxBytes) {
+            response.destroy();
+            throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact response exceeds the configured size limit.");
+          }
+          if (contentLength !== undefined && contentLength !== options.expectedBytes) {
+            response.destroy();
+            throw new ModelAssetError("SIZE_MISMATCH", "Artifact response size does not match the manifest.");
+          }
+
+          let bytes = 0;
+          const limiter = new Transform({
+            transform(chunk: Buffer, _encoding, callback) {
+              const nextBytes = bytes + chunk.byteLength;
+              if (!Number.isSafeInteger(nextBytes)) {
+                callback(new ModelAssetError(
+                  "ARTIFACT_TOO_LARGE",
+                  "Artifact response exceeds safe integer byte accounting."
+                ));
+                return;
+              }
+              bytes = nextBytes;
+              if (bytes > options.maxBytes) {
+                callback(new ModelAssetError("ARTIFACT_TOO_LARGE", "Artifact response exceeds the configured size limit."));
+                return;
+              }
+              if (bytes > options.expectedBytes) {
+                callback(new ModelAssetError("SIZE_MISMATCH", "Artifact response exceeded the manifest size."));
+                return;
+              }
+              callback(null, chunk);
+            }
+          });
+          const destinationStream = destinationHandle.createWriteStream({ autoClose: false });
+          try {
+            await pipeline(
+              response,
+              limiter,
+              destinationStream,
+              { signal: options.signal }
+            );
+          } finally {
+            destinationStream.destroy();
+          }
+          if (bytes !== options.expectedBytes) {
+            throw new ModelAssetError("SIZE_MISMATCH", "Downloaded artifact size does not match the manifest.");
+          }
+          if (!settled) {
+            settled = true;
+            resolvePromise(bytes);
+          }
+        } catch (error) {
+          response.destroy();
+          settleReject(error);
+        }
+      })();
+    });
+    request.once("error", settleReject);
+  });
+}
+
+export async function downloadHttpArtifact(
+  sourceUrl: string,
+  destinationHandle: FileHandle,
+  options: ArtifactDownloadOptions
+): Promise<number> {
+  if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes <= 0
+      || !Number.isSafeInteger(options.expectedBytes) || options.expectedBytes <= 0
+      || !Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0
+      || options.timeoutMs > MAX_DOWNLOAD_TIMEOUT_MS
+      || !Number.isSafeInteger(options.maxRedirects) || options.maxRedirects < 0
+      || options.maxRedirects > MAX_DOWNLOAD_REDIRECTS) {
+    throw new ModelAssetError("INVALID_CONFIGURATION", "Artifact download limits are invalid.");
+  }
+  if (options.expectedBytes > options.maxBytes) {
+    throw new ModelAssetError("ARTIFACT_TOO_LARGE", "Manifest artifact size exceeds the configured download limit.");
+  }
+  if (isSignalAborted(options.signal)) throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
+
+  const source = parseUrl(sourceUrl);
+  const controller = new AbortController();
+  let timedOut = false;
+  const didTimeOut = (): boolean => timedOut;
+  const externalAbort = (): void => controller.abort(options.signal.reason);
+  options.signal.addEventListener("abort", externalAbort, { once: true });
+  if (isSignalAborted(options.signal)) {
+    controller.abort(options.signal.reason);
+  }
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new Error("artifact download timeout"));
+  }, options.timeoutMs);
+  timer.unref();
+
+  try {
+    const bytes = await downloadResponseToFile(source, destinationHandle, {
+      ...options,
+      signal: controller.signal
+    }, 0, source.origin);
+    if (isSignalAborted(options.signal)) {
+      throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.");
+    }
+    if (didTimeOut()) {
+      throw new ModelAssetError("DOWNLOAD_TIMEOUT", "Artifact download exceeded the configured timeout.");
+    }
+    return bytes;
+  } catch (error) {
+    if (isSignalAborted(options.signal)) {
+      throw new ModelAssetError("CANCELLED", "Artifact download was cancelled.", { cause: error });
+    }
+    if (didTimeOut()) {
+      throw new ModelAssetError("DOWNLOAD_TIMEOUT", "Artifact download exceeded the configured timeout.", { cause: error });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    options.signal.removeEventListener("abort", externalAbort);
+  }
+}
