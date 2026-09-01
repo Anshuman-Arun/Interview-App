@@ -592,9 +592,9 @@ function collectAdapterMutationToken(meta: unknown, target: Set<number>): void {
 }
 
 function withoutAdapterMutationToken(meta: Record<string, unknown>): Record<string, unknown> {
-  const result = { ...meta };
-  delete result[ADAPTER_MUTATION_TOKEN];
-  return result;
+  return Object.fromEntries(
+    Object.entries(meta).filter(([key]) => key !== ADAPTER_MUTATION_TOKEN)
+  );
 }
 
 function legacyPropsToNative(
