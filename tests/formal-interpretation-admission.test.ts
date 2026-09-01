@@ -211,27 +211,13 @@ describe("formal interpretation proposal admission", () => {
 
     const unknownHarness = await createCoreHarness();
     const missingEpisodeId = newInputEpisodeId();
-    const unknownGeneration = await unknownHarness.turns.startGeneration(
-      missingEpisodeId,
-      unknownHarness.turnId,
-      "mock-formal-interpreter"
-    );
-    const unknown = await new VerificationCoordinator(unknownHarness.writer).requestVerificationFromProposal({
-      envelope: createCommandEnvelope({
-        sessionId: unknownHarness.sessionId,
-        producer: "mock-formal-interpreter",
-        generationId: unknownGeneration.generationId,
-        inputEpisodeId: missingEpisodeId,
-        turnId: unknownHarness.turnId,
-        contextEpoch: unknownGeneration.basis.contextEpoch,
-        sourceRevision: unknownGeneration.basis.committedInputSequence
-      }),
-      proposal: completeGraphProposal(1),
-      verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
-      evidenceKey: claimEvidenceKey
-    });
-    expect(unknown.value).toMatchObject({ accepted: false, reason: "COMPATIBILITY_UNKNOWN" });
-    expect(unknownHarness.writer.getState().generations[unknownGeneration.generationId]?.status).toBe("SUPERSEDED");
+    await expect(
+      unknownHarness.turns.startGeneration(
+        missingEpisodeId,
+        unknownHarness.turnId,
+        "mock-formal-interpreter"
+      )
+    ).rejects.toThrow(/committed InputEpisode/u);
     unknownHarness.store.close();
   });
 
