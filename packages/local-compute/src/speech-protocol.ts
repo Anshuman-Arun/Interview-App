@@ -46,7 +46,6 @@ export const SpeechSampleFormatSchema = z.literal("F32LE");
 
 const NonnegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const PositiveSafeIntegerSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-const FiniteNonnegativeNumberSchema = z.number().nonnegative();
 const SpeechTimestampMsSchema = z.number().nonnegative().max(MAX_SPEECH_TIMESTAMP_MS);
 
 export const SpeechPcmFrameEnvelopeSchema = z.object({
