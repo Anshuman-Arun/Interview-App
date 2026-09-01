@@ -849,7 +849,13 @@ export interface QuantResearchReplayOutput {
 }
 
 function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
-  if (!Array.isArray(actionsInput)) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be an array");
+  let isArray: boolean;
+  try {
+    isArray = Array.isArray(actionsInput);
+  } catch {
+    throw new QuantResearchError("INVALID_REPLAY", "Replay actions could not be safely inspected");
+  }
+  if (!isArray) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be an array");
   let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
