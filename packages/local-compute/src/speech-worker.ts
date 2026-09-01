@@ -379,13 +379,21 @@ export class SpeechWorkerCore {
       }
     }
 
-    const stateBefore = context.vad.snapshot().state;
+    let stateBefore;
+    try {
+      stateBefore = context.vad.snapshot().state;
+    } catch {
+      this.abandonStream(context);
+      throw new SpeechWorkerCoreError("INTERNAL_ERROR", "VAD state could not be inspected");
+    }
+
     const vadAbort = new AbortController();
     context.vadAbort = vadAbort;
     let observation;
     try {
+      const isolatedVadFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
       observation = await withTimeout(
-        Promise.resolve().then(async () => this.options.vadBackend.classify(frame, vadAbort.signal)),
+        Promise.resolve().then(async () => this.options.vadBackend.classify(isolatedVadFrame, vadAbort.signal)),
         this.vadTimeoutMs,
         () => vadAbort.abort()
       );
@@ -430,9 +438,7 @@ export class SpeechWorkerCore {
     }
 
     if (step.speechStarted) context.speechConfirmed = true;
-    if (!context.speechConfirmed
-        && step.state === "SILENCE"
-        && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
+    if (!context.speechConfirmed && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
       const events = [this.event(frame.envelope.requestId, frame.envelope.streamId, {
         type: "UTTERANCE_DISCARDED",
         ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
@@ -620,10 +626,15 @@ export class SpeechWorkerCore {
   }
 
   private wouldExceedEndpointMaximum(context: StreamContext, nextFrameDurationMs: number): boolean {
-    const snapshot = context.vad.snapshot();
-    return context.utteranceId !== undefined
-      && context.buffer.getSampleCount() > 0
-      && snapshot.utteranceMs + nextFrameDurationMs > context.endpointing.getMaximumUtteranceMs() + 0.001;
+    try {
+      const snapshot = context.vad.snapshot();
+      return context.utteranceId !== undefined
+        && context.buffer.getSampleCount() > 0
+        && snapshot.utteranceMs + nextFrameDurationMs > context.endpointing.getMaximumUtteranceMs() + 0.001;
+    } catch {
+      this.abandonStream(context);
+      throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Speech endpoint state could not be inspected");
+    }
   }
 
   private async serialize<T>(context: StreamContext, operation: () => Promise<T>): Promise<T> {
