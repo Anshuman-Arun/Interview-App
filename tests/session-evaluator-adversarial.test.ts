@@ -394,6 +394,28 @@ describe("grounded session evaluator adversarial cases", () => {
     expect(evaluateInterviewSession(state, sixPeopleProblem).scores.communication).toBeNull();
   });
 
+  it("does not serialize interviewer milestone descriptions into evaluation output", () => {
+    const privateDescription = "PRIVATE_MILESTONE_DESCRIPTION_SENTINEL";
+    const problem: InterviewProblem = {
+      ...sixPeopleProblem,
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        reasoningGraph: {
+          ...sixPeopleProblem.interviewer.reasoningGraph,
+          milestones: sixPeopleProblem.interviewer.reasoningGraph.milestones.map(
+            (milestone, index) => index === 0
+              ? { ...milestone, description: privateDescription }
+              : milestone
+          )
+        }
+      }
+    };
+
+    const evaluation = evaluateInterviewSession(boundStateFor(problem), problem);
+    expect(JSON.stringify(evaluation)).not.toContain(privateDescription);
+    expect(evaluation.milestones[0]?.description).toBe("Reasoning milestone 1");
+  });
+
   it("never serializes protected fact text merely because its disclosure was exposed", () => {
     let state = complete(boundState(), "choose-vertex", 20);
     state = addDelivery(state, chooseDisclosure, 2, "EXPOSED", 5, "private-fact");

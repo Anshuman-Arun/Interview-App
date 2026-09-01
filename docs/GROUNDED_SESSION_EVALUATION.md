@@ -211,6 +211,8 @@ Milestone results also retain the protected disclosure IDs structurally associat
 
 A future replay UI can resolve these references against authoritative history to explain a result without embedding transcripts or protected solution text into the evaluation object.
 
+Milestone results retain protected disclosure IDs structurally associated with exposure and the milestone's valid approach IDs. The legacy description field is preserved for compatibility, but it contains only an ordinal structural label such as "Reasoning milestone 2". Evaluation output never copies the interviewer-owned reasoning-graph description, because that text can contain solution-bearing material.
+
 ## Composite score
 
 The legacy score field names are retained, but dimension scores may now be null.

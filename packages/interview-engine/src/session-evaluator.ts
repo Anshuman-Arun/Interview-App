@@ -1072,7 +1072,7 @@ function evaluateMilestones(
   }
 
   const facts: MilestoneFacts[] = [];
-  for (const milestone of graph.milestones) {
+  for (const [milestoneIndex, milestone] of graph.milestones.entries()) {
     const baseResult = base.get(milestone.id);
     if (baseResult === undefined) {
       throw new Error("Evaluation could not resolve a reasoning-graph milestone");
@@ -1113,7 +1113,7 @@ function evaluateMilestones(
 
     const evaluation: MilestoneEvaluation = {
       milestoneId: milestone.id,
-      description: milestone.description,
+      description: "Reasoning milestone " + String(milestoneIndex + 1),
       achieved: baseResult.achieved,
       assistanceLevel,
       supportLevel,
