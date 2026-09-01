@@ -34,6 +34,38 @@ function frame(sequence: number, speech = true, streamId = "adversarial-stream")
 }
 
 describe("speech worker adversarial callback boundaries", () => {
+  it("runtime-validates malformed construction options instead of relying on TypeScript", () => {
+    type Options = ConstructorParameters<typeof SpeechWorkerCore>[0];
+    const castOptions = (value: unknown): Options => value as Options;
+
+    expect(() => new SpeechWorkerCore(castOptions(null))).toThrow(/options must be an object/u);
+    expect(() => new SpeechWorkerCore(castOptions({
+      recognizer: new DeterministicFakeRecognizer()
+    }))).toThrow(/VAD backend must be an object/u);
+    expect(() => new SpeechWorkerCore(castOptions({
+      vadBackend: { classify: "not-a-function" },
+      recognizer: new DeterministicFakeRecognizer()
+    }))).toThrow(/VAD classify callback is required/u);
+    expect(() => new SpeechWorkerCore(castOptions({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: {
+        modelIdentity: { name: "fake", version: "1" },
+        cancellationCapability: "NONE",
+        recognize: async () => ({}),
+        cancel: "not-a-function"
+      }
+    }))).toThrow(/cancel callback must be a function/u);
+    expect(() => new SpeechWorkerCore(castOptions({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      endpointingFactory: "not-a-function"
+    }))).toThrow(/endpointing factory must be a function/u);
+    expect(() => new SpeechWorkerCore(castOptions({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      maxConcurrentStreams: null
+    }))).toThrow(/maxConcurrentStreams/u);
+  });
   it("maps arbitrary VAD exceptions to a stable code and closes the poisoned stream", async () => {
     const vadBackend: VadBackend = {
       async classify() {
