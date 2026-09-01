@@ -9,6 +9,7 @@ import {
   SessionIdSchema,
   TurnIdSchema,
   evidenceKeyToString,
+  type DisclosureId,
   type EvidenceKey,
   type EvidenceRating,
   type InterviewProblem,
@@ -22,6 +23,8 @@ import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
+  compileContext,
+  createProviderContextSpecFingerprintSync,
   decidePedagogicalPolicy
 } from "../packages/interview-engine/src/index.js";
 
@@ -39,7 +42,9 @@ function makeState(problem: InterviewProblem = sixPeopleProblem): {
   const sessionId = SessionIdSchema.parse(nextId("session_policy"));
   const turnId = TurnIdSchema.parse(nextId("turn_policy"));
   const inputEpisodeId = InputEpisodeIdSchema.parse(nextId("episode_policy"));
-  const seedEventId = EventIdSchema.parse(nextId("event_seed"));
+  const seedEventIds = Array.from({ length: 10 }, () =>
+    EventIdSchema.parse(nextId("event_seed"))
+  );
   const initial = initialSessionState(sessionId);
   return {
     turnId,
@@ -51,10 +56,11 @@ function makeState(problem: InterviewProblem = sixPeopleProblem): {
       problem: {
         id: problem.id,
         version: problem.version,
-        prompt: problem.public.prompt
+        prompt: problem.public.prompt,
+        providerContextSpecSha256: createProviderContextSpecFingerprintSync(problem)
       },
       lastCommittedInputSequence: 4,
-      eventIds: [seedEventId],
+      eventIds: seedEventIds,
       inputEpisodes: {
         [inputEpisodeId]: {
           inputEpisodeId,
@@ -122,10 +128,17 @@ function withEvidence(
 ): SessionState {
   const eventId = EventIdSchema.parse(nextId("event_evidence"));
   const sequence = state.sequence + 1;
+  const provenanceEventId = state.eventIds[Math.max(0, Math.min(
+    state.eventIds.length - 1,
+    (Object.values(state.turns)[0]?.committedSequence ?? 1) - 1
+  ))];
+  if (provenanceEventId === undefined) throw new Error("missing evidence provenance");
   const evidenceValue = {
     value,
     inferenceConfidence: options.confidence ?? 0.95,
-    evidenceEventIds: options.duplicateProvenance ? [eventId, eventId] : [eventId],
+    evidenceEventIds: options.duplicateProvenance
+      ? [provenanceEventId, provenanceEventId]
+      : [provenanceEventId],
     lastUpdatedSequence: sequence
   };
   const canonicalKey = evidenceKeyToString(key);
@@ -161,6 +174,8 @@ function withAssistance(
     readonly maximumDisclosure: RealizationRequest["maximumDisclosure"];
     readonly effectiveDisclosureLevel?: RealizationRequest["maximumDisclosure"];
     readonly status?: "EXPOSED" | "COMPLETED" | "POSSIBLY_EXPOSED";
+    readonly disclosureIds?: readonly DisclosureId[];
+    readonly allowedDisclosureIds?: readonly DisclosureId[];
   }
 ): SessionState {
   const turnId = TurnIdSchema.parse(nextId("turn_assist"));
@@ -168,11 +183,19 @@ function withAssistance(
   const generationId = GenerationIdSchema.parse(nextId("generation_assist"));
   const deliveryId = DeliveryIdSchema.parse(nextId("delivery_assist"));
   const turnSequence = Math.max(1, state.sequence - 1);
+  const disclosureIds = [...(input.disclosureIds ?? [])];
   const request: RealizationRequest = {
     requiredAction: input.action,
     target: input.target,
-    maximumDisclosure: input.maximumDisclosure
+    maximumDisclosure: input.maximumDisclosure,
+    ...(input.allowedDisclosureIds === undefined
+      ? {}
+      : { allowedDisclosureIds: [...input.allowedDisclosureIds] })
   };
+  const disclosedStatus = input.status === undefined
+    || input.status === "EXPOSED"
+    || input.status === "COMPLETED"
+    || input.status === "POSSIBLY_EXPOSED";
   return {
     ...state,
     turns: {
@@ -212,11 +235,14 @@ function withAssistance(
         deliveryId,
         generationId,
         content: { medium: "TEXT", text: "reviewed assistance" },
-        disclosureIds: [],
+        disclosureIds,
         effectiveDisclosureLevel: input.effectiveDisclosureLevel ?? input.maximumDisclosure,
         status: input.status ?? "EXPOSED"
       }
-    }
+    },
+    disclosureLedger: disclosedStatus
+      ? Array.from(new Set([...state.disclosureLedger, ...disclosureIds]))
+      : state.disclosureLedger
   };
 }
 
@@ -229,6 +255,11 @@ function withVerification(
   const requestId = RequestIdSchema.parse(nextId("request_verify"));
   const eventId = EventIdSchema.parse(nextId("event_verify"));
   const sequence = state.sequence + 1;
+  const turn = Object.values(state.turns)[0];
+  const provenanceEventId = turn === undefined
+    ? undefined
+    : state.eventIds[turn.committedSequence - 1];
+  if (provenanceEventId === undefined) throw new Error("missing verification provenance");
   return {
     ...state,
     sequence,
@@ -253,7 +284,7 @@ function withVerification(
         candidateFormalInterpretation: "formal candidate",
         interpretationConfidence: 1,
         evidenceKey: key,
-        evidenceEventIds: [eventId],
+        evidenceEventIds: [provenanceEventId],
         requestedEventId: eventId,
         status: "ACCEPTED",
         result: {
@@ -524,10 +555,14 @@ describe("production Socratic policy engine", () => {
     const branchDisclosure = problem.interviewer.protectedDisclosures.at(-1);
     expect(branchDisclosure).toBeDefined();
     if (branchDisclosure !== undefined) {
-      state = {
-        ...state,
-        disclosureLedger: [branchDisclosure.id]
-      };
+      state = withAssistance(state, {
+        target: target("milestone", "close-triangle"),
+        action: "DIRECTIONAL_NUDGE",
+        maximumDisclosure: 2,
+        effectiveDisclosureLevel: 2,
+        disclosureIds: [branchDisclosure.id],
+        allowedDisclosureIds: [branchDisclosure.id]
+      });
     }
 
     const decision = decidePedagogicalPolicy(state, turnId, problem);
