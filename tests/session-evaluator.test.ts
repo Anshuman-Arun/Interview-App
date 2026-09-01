@@ -4,6 +4,7 @@ import {
   DisclosureIdSchema,
   EventIdSchema,
   GenerationIdSchema,
+  InputEpisodeIdSchema,
   RequestIdSchema,
   TurnIdSchema,
   evidenceKeyToString,
@@ -324,7 +325,7 @@ function withTurns(
     const turnId = TurnIdSchema.parse("turn_eval_" + String(index));
     turns[turnId] = {
       turnId,
-      inputEpisodeId: ("episode_eval_" + String(index)) as SessionState["turns"][string]["inputEpisodeId"],
+      inputEpisodeId: InputEpisodeIdSchema.parse("episode_eval_" + String(index)),
       studentText: text,
       committedSequence: index + 1
     };

@@ -840,7 +840,7 @@ function evaluateIndependence(
     refs.push(...milestone.evaluation.evidenceRefs);
   }
 
-  let supportLevel = supportFromCount(achieved.length, 1, false);
+  let supportLevel = supportFromGroundedCount(achieved.length);
   if (attributionUncertain) supportLevel = minSupport(supportLevel, "WEAK");
 
   return {
@@ -1040,7 +1040,7 @@ function evaluateErrorRecovery(
   return {
     result: scoredDimension(
       roundScore((recoveryCount / opportunities) * 100),
-      supportFromCount(opportunities, 1, false),
+      supportFromGroundedCount(opportunities),
       uniqueRefs(refs)
     ),
     recoveryCount,
@@ -1345,6 +1345,15 @@ function supportFromEvidenceRecords(
     Math.min(...records.map((record) => record.value.inferenceConfidence)),
     verifierBacked
   );
+}
+
+function supportFromGroundedCount(
+  count: number
+): EvaluationSupportLevel {
+  if (count <= 0) return "INSUFFICIENT";
+  if (count === 1) return "WEAK";
+  if (count === 2) return "MODERATE";
+  return "STRONG";
 }
 
 function supportFromCount(
