@@ -179,6 +179,8 @@ interface RequestRecord {
   cancelled: boolean;
   dispatchStarted: boolean;
   settled: boolean;
+  readonly cancelSignal: Promise<void>;
+  readonly resolveCancel: () => void;
   promise: Promise<InterpretationExecutionOutcome>;
 }
 
@@ -309,12 +311,7 @@ export class InterpretationCoordinator {
     const record = this.records.get(parsed.data);
     if (record === undefined || record.settled || record.dispatchStarted) return false;
     record.cancelled = true;
-    this.addDiagnostic({
-      requestId: parsed.data,
-      state: "CANCELLED",
-      candidateCount: 0,
-      reason: "CANCELLED"
-    });
+    record.resolveCancel();
     return true;
   }
 
@@ -344,11 +341,18 @@ export class InterpretationCoordinator {
       return Promise.resolve(failed("RESOURCE_LIMIT", "IN_FLIGHT_LIMIT", 0, request.requestId));
     }
 
+    let resolveCancel: (() => void) | undefined;
+    const cancelSignal = new Promise<void>((resolve) => {
+      resolveCancel = resolve;
+    });
+    if (resolveCancel === undefined) throw new Error("Cancellation signal initialization failed");
     const record: RequestRecord = {
       fingerprint,
       cancelled: false,
       dispatchStarted: false,
       settled: false,
+      cancelSignal,
+      resolveCancel,
       promise: Promise.resolve(failed("INVALID_REQUEST", "MALFORMED_REQUEST", 0, request.requestId))
     };
     this.records.set(request.requestId, record);
@@ -384,16 +388,23 @@ export class InterpretationCoordinator {
       candidateCount: 0
     });
 
-    let rawResult: unknown;
-    try {
-      rawResult = await this.provider.interpret(deepFreeze(structuredClone(request)));
-    } catch {
-      return this.finishFailure(failed("INVALID_PROVIDER_OUTPUT", "PROVIDER_FAILURE", 0, request.requestId));
-    }
-
-    if (this.isCancelled(record)) {
+    const providerWork = Promise.resolve()
+      .then(() => this.provider.interpret(deepFreeze(structuredClone(request))))
+      .then(
+        (value) => ({ kind: "RESULT" as const, value }),
+        () => ({ kind: "ERROR" as const })
+      );
+    const providerRace = await Promise.race([
+      providerWork,
+      record.cancelSignal.then(() => ({ kind: "CANCELLED" as const }))
+    ]);
+    if (providerRace.kind === "CANCELLED" || this.isCancelled(record)) {
       return this.finishFailure(failed("STALE", "CANCELLED", 0, request.requestId));
     }
+    if (providerRace.kind === "ERROR") {
+      return this.finishFailure(failed("INVALID_PROVIDER_OUTPUT", "PROVIDER_FAILURE", 0, request.requestId));
+    }
+    const rawResult: unknown = providerRace.value;
 
     const providerResult = InterpretationProviderResultSchema.safeParse(rawResult);
     if (!providerResult.success) {
