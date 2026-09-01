@@ -1,8 +1,5 @@
 import type {
   InputEpisodeId,
-  InterviewProblem,
-  InterviewerProposal,
-  RealizationRequest,
   SessionId,
   TurnId
 } from "../../../packages/domain/src/index.js";
@@ -16,12 +13,10 @@ import {
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
-
-const GENERIC_REVIEWED_REALIZATIONS = [
-  "Why must that step be true?",
-  "Can you make that step more precise?",
-  "What would you try next?"
-] as const;
+import {
+  getReviewedProblemRealizationTexts,
+  realizeProblemInterviewerProposal
+} from "./problem-realization.js";
 
 export interface TurnOrchestrationInput {
   readonly sessionId: SessionId;
@@ -40,7 +35,7 @@ export class ServerTurnOrchestrator {
     validator?: DisclosureValidator
   ) {
     this.validator = validator ?? new DisclosureValidator(
-      new ClosedWorldDisclosureAnalyzer(GENERIC_REVIEWED_REALIZATIONS)
+      new ClosedWorldDisclosureAnalyzer(getReviewedProblemRealizationTexts())
     );
   }
 
@@ -153,7 +148,11 @@ export class ServerTurnOrchestrator {
     }
 
     // 2. Realize only wording/content already authorized by application policy
-    const proposal = this.createInterviewerProposal(problem, realizationRequest);
+    const proposal = realizeProblemInterviewerProposal(
+      problem,
+      authoritativeTurn.studentText,
+      realizationRequest
+    );
 
     // 3. MockModelAdapter with zero metered spend
     const provider = new MockModelAdapter({ proposal });
@@ -191,32 +190,5 @@ export class ServerTurnOrchestrator {
     }
   }
 
-  private createInterviewerProposal(
-    problem: InterviewProblem,
-    request: RealizationRequest
-  ): InterviewerProposal {
-    const allowedDisclosureIds = new Set(request.allowedDisclosureIds ?? []);
-    const authorizedDisclosure = problem.interviewer.protectedDisclosures.find(
-      (disclosure) =>
-        allowedDisclosureIds.has(disclosure.id)
-        && disclosure.minimumDisclosureLevel <= request.maximumDisclosure
-    );
-
-    if (authorizedDisclosure !== undefined) {
-      return {
-        realizedAction: request.requiredAction,
-        claimedDisclosureLevel: authorizedDisclosure.minimumDisclosureLevel,
-        claimedDisclosureIds: [authorizedDisclosure.id],
-        speechText: authorizedDisclosure.fact
-      };
-    }
-
-    return {
-      realizedAction: request.requiredAction,
-      claimedDisclosureLevel: 0,
-      claimedDisclosureIds: [],
-      speechText: "Why must that step be true?"
-    };
-  }
 
 }
