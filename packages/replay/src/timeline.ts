@@ -1,11 +1,8 @@
 import type {
   DeliveryAtom,
-  DeliveryStatus,
+  DeliveryStatus
 } from "../../domain/src/index.js";
-import type {
-  EventType,
-  SessionEvent
-} from "../../events/src/index.js";
+import type { EventType } from "../../events/src/index.js";
 import {
   previewText,
   resolveReplayBounds,

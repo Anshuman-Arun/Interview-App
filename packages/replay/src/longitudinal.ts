@@ -24,8 +24,7 @@ import type {
   LongitudinalHistoryProjection,
   LongitudinalImprovementRecord,
   LongitudinalRepeatedProblem,
-  ReplayEvaluationSummary,
-  SessionHistoryProjection
+  ReplayEvaluationSummary
 } from "./types.js";
 
 export interface LongitudinalHistoryOptions {

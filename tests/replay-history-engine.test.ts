@@ -387,12 +387,12 @@ describe("replay/history projections", () => {
     };
     const episodeStarted = event(sessionId, 3, "INPUT_EPISODE_STARTED", {
       inputEpisodeId: "episode-verification"
-    });
+    }, "USER");
     const episodeUpdated = event(sessionId, 4, "INPUT_EPISODE_UPDATED", {
       inputEpisodeId: "episode-verification",
       modality: "TYPING",
       semanticContent: "A claim to verify"
-    });
+    }, "USER");
     const episodeCommitted = event(sessionId, 5, "INPUT_EPISODE_COMMITTED", {
       inputEpisodeId: "episode-verification"
     });
@@ -413,7 +413,7 @@ describe("replay/history projections", () => {
 
     for (const [index, status] of ["VERIFIED", "CONTRADICTED", "UNRESOLVED"].entries()) {
       const requestId = `verification-${String(index)}`;
-      events.push(event(sessionId, sequence, "VERIFICATION_REQUESTED", {
+      const requestEvent = event(sessionId, sequence, "VERIFICATION_REQUESTED", {
         verificationRequestId: requestId,
         verifier: "deterministic-verifier",
         basis: basis(),
@@ -421,7 +421,8 @@ describe("replay/history projections", () => {
         interpretationConfidence: 1,
         evidenceKey: key,
         evidenceEventIds: [turn.eventId]
-      }));
+      });
+      events.push(requestEvent);
       sequence += 1;
       events.push(event(sessionId, sequence, "VERIFICATION_RESULT_ACCEPTED", {
         verificationRequestId: requestId,
@@ -433,6 +434,20 @@ describe("replay/history projections", () => {
         }
       }));
       sequence += 1;
+
+      if (status === "VERIFIED") {
+        const value = EvidenceValueSchema.parse({
+          value: "CORRECT",
+          inferenceConfidence: 1,
+          evidenceEventIds: [turn.eventId, requestEvent.eventId],
+          lastUpdatedSequence: sequence
+        });
+        events.push(event(sessionId, sequence, "STUDENT_EVIDENCE_UPDATED", {
+          key,
+          value
+        }));
+        sequence += 1;
+      }
     }
 
     events.push(event(sessionId, sequence, "VERIFICATION_REQUESTED", {
@@ -546,12 +561,12 @@ describe("replay/history projections", () => {
       ...base(boundedSessionId, "bounds"),
       event(boundedSessionId, 3, "INPUT_EPISODE_STARTED", {
         inputEpisodeId: "episode-bounds"
-      }),
+      }, "USER"),
       event(boundedSessionId, 4, "INPUT_EPISODE_UPDATED", {
         inputEpisodeId: "episode-bounds",
         modality: "TYPING",
         semanticContent: longText
-      }),
+      }, "USER"),
       event(boundedSessionId, 5, "INPUT_EPISODE_COMMITTED", {
         inputEpisodeId: "episode-bounds"
       }),
@@ -878,11 +893,19 @@ describe("replay/history projections", () => {
       value: "PROGRESSING",
       inferenceConfidence: 0.9,
       evidenceEventIds: provenanceIds,
-      lastUpdatedSequence: 6
+      lastUpdatedSequence: 7
     });
     const history = projectSessionHistory([
       ...prefix,
-      event(sessionId, 6, "STUDENT_EVIDENCE_UPDATED", { key, value })
+      event(sessionId, 6, "EVIDENCE_PROPOSED", {
+        proposal: {
+          key,
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.9,
+          evidenceEventIds: provenanceIds
+        }
+      }, "PROVIDER"),
+      event(sessionId, 7, "STUDENT_EVIDENCE_UPDATED", { key, value })
     ], {
       bounds: { maxProvenanceIds: 2 }
     });
@@ -894,8 +917,8 @@ describe("replay/history projections", () => {
       remainingCount: 3
     });
     expect(history.evidenceHistory[0]?.value?.evidenceEventIds).toHaveLength(2);
-    expect(history.timeline.entries[5]?.evidence?.supportingEventIds).toHaveLength(2);
-    expect(history.timeline.entries[5]?.evidence?.supportingEventIdsTruncation)
+    expect(history.timeline.entries[6]?.evidence?.supportingEventIds).toHaveLength(2);
+    expect(history.timeline.entries[6]?.evidence?.supportingEventIdsTruncation)
       .toEqual({ truncated: true, limit: 2, remainingCount: 3 });
   });
 
@@ -967,24 +990,33 @@ describe("longitudinal projection", () => {
       problemVersion: version,
       prompt: "prompt"
     });
+    const key: EvidenceKey = {
+      problemId,
+      subject: { kind: "SKILL", skillId },
+      dimension: "PROGRESS"
+    };
     const evidence = EvidenceValueSchema.parse({
       value,
       inferenceConfidence: 0.9,
       evidenceEventIds: [problem.eventId],
-      lastUpdatedSequence: 3
+      lastUpdatedSequence: 4
     });
     const historyEvents = [
       started,
       problem,
-      event(sessionId, 3, "STUDENT_EVIDENCE_UPDATED", {
-        key: {
-          problemId,
-          subject: { kind: "SKILL", skillId },
-          dimension: "PROGRESS"
-        },
+      event(sessionId, 3, "EVIDENCE_PROPOSED", {
+        proposal: {
+          key,
+          proposedValue: value,
+          inferenceConfidence: 0.9,
+          evidenceEventIds: [problem.eventId]
+        }
+      }, "PROVIDER"),
+      event(sessionId, 4, "STUDENT_EVIDENCE_UPDATED", {
+        key,
         value: evidence
       }),
-      event(sessionId, 4, "SESSION_COMPLETED", {
+      event(sessionId, 5, "SESSION_COMPLETED", {
         completedAt: "2026-08-31T19:05:00.000Z"
       })
     ];

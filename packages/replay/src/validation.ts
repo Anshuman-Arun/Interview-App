@@ -5,8 +5,8 @@ import {
   type DeliveryAtom,
   type DisclosureAnalysis,
   type EvidenceKey,
-  type FormalInterpretationProposal,
   type EventId,
+  type FormalInterpretationProposal,
   type GenerationId,
   type InterviewerProposal,
   type SessionId
@@ -15,6 +15,8 @@ import {
   isGenerationBasisStillCompatible,
   initialSessionState,
   reduceSessionEvent,
+  type EventSource,
+  type EventType,
   type SessionEvent,
   type SessionState
 } from "../../events/src/index.js";
@@ -28,8 +30,131 @@ type GenerationPhase =
   | "REJECTED"
   | "SUPERSEDED";
 
+type GenerationProposalKind = "INTERVIEWER" | "FORMAL";
+
+interface ExpectedEvidenceUpdate {
+  readonly key: EvidenceKey;
+  readonly value: SessionEvent extends infer TEvent
+    ? TEvent extends { readonly type: "STUDENT_EVIDENCE_UPDATED" }
+      ? TEvent["payload"]["value"]
+      : never
+    : never;
+  readonly supersedesEventId?: EventId;
+}
+
+type PendingNext =
+  | { readonly kind: "PROBLEM_PRESENTED" }
+  | {
+      readonly kind: "TRANSCRIPT_FINALIZED";
+      readonly inputEpisodeId: string;
+    }
+  | {
+      readonly kind: "SPEECH_INPUT_UPDATE";
+      readonly inputEpisodeId: string;
+      readonly text: string;
+    }
+  | {
+      readonly kind: "TURN_COMMITTED";
+      readonly inputEpisodeId: string;
+    }
+  | {
+      readonly kind: "MODEL_PROPOSAL_OUTCOME";
+      readonly generationId: GenerationId;
+    }
+  | {
+      readonly kind: "FORMAL_PROPOSAL_OUTCOME";
+      readonly generationId: GenerationId;
+      readonly proposalRequestId: string;
+    }
+  | {
+      readonly kind: "EVIDENCE_UPDATE";
+      readonly expected: ExpectedEvidenceUpdate;
+    }
+  | {
+      readonly kind: "FIRST_DELIVERY";
+      readonly generationId: GenerationId;
+    };
+
+type RequiredFollowUp =
+  | {
+      readonly kind: "SUPERSEDE_GENERATION";
+      readonly generationId: GenerationId;
+    }
+  | {
+      readonly kind: "CANCEL_DELIVERY";
+      readonly deliveryId: string;
+    }
+  | {
+      readonly kind: "POSSIBLY_EXPOSE_DELIVERY";
+      readonly deliveryId: string;
+      readonly source: "APPLICATION";
+    }
+  | {
+      readonly kind: "INVALIDATE_EVIDENCE";
+      readonly keyIdentity: string;
+      readonly evidenceEventId: EventId;
+    };
+
+const ALLOWED_SOURCES = {
+  SESSION_STARTED: ["APPLICATION"],
+  PROBLEM_PRESENTED: ["APPLICATION"],
+  UTTERANCE_STARTED: ["USER"],
+  UTTERANCE_DISCARDED: ["USER"],
+  INPUT_EPISODE_STARTED: ["USER", "APPLICATION"],
+  INPUT_EPISODE_UPDATED: ["USER", "APPLICATION"],
+  INPUT_EPISODE_COMMITTED: ["APPLICATION"],
+  TURN_COMMITTED: ["APPLICATION"],
+  TRANSCRIPT_FINALIZED: ["WORKER"],
+  TRANSCRIPT_CORRECTED: ["APPLICATION"],
+  BOARD_PATCH_COMMITTED: ["USER"],
+  VISION_REQUESTED: ["APPLICATION"],
+  VISION_RESULT_ACCEPTED: ["WORKER"],
+  VISION_RESULT_DISCARDED: ["APPLICATION"],
+  LOCAL_COMPUTE_REQUESTED: ["APPLICATION"],
+  LOCAL_COMPUTE_RESULT_ACCEPTED: ["APPLICATION"],
+  LOCAL_COMPUTE_RESULT_DISCARDED: ["APPLICATION"],
+  VERIFICATION_REQUESTED: ["APPLICATION"],
+  VERIFICATION_RESULT_ACCEPTED: ["APPLICATION"],
+  VERIFICATION_RESULT_DISCARDED: ["APPLICATION"],
+  EVIDENCE_PROPOSED: ["PROVIDER"],
+  STUDENT_EVIDENCE_UPDATED: ["APPLICATION"],
+  STUDENT_EVIDENCE_INVALIDATED: ["APPLICATION"],
+  PEDAGOGICAL_ACTION_SELECTED: ["APPLICATION"],
+  MODEL_GENERATION_STARTED: ["APPLICATION"],
+  GENERATION_CONTEXT_COMPILED: ["APPLICATION"],
+  MODEL_PROPOSAL_RECEIVED: ["PROVIDER"],
+  FORMAL_INTERPRETATION_PROPOSAL_RECEIVED: ["PROVIDER"],
+  FORMAL_INTERPRETATION_PROPOSAL_REJECTED: ["APPLICATION"],
+  MODEL_GENERATION_SUPERSEDED: ["APPLICATION"],
+  PROPOSAL_VALIDATED: ["APPLICATION"],
+  PROPOSAL_REJECTED: ["APPLICATION"],
+  DELIVERY_QUEUED: ["APPLICATION"],
+  DELIVERY_STARTED: ["APPLICATION"],
+  DELIVERY_EXPOSED: ["RENDERER"],
+  DELIVERY_COMPLETED: ["RENDERER"],
+  DELIVERY_CANCELLED: ["APPLICATION"],
+  DELIVERY_POSSIBLY_EXPOSED: ["APPLICATION", "RECOVERY"],
+  POLICY_REVISION_CHANGED: ["APPLICATION"],
+  PROBLEM_STATE_REVISION_CHANGED: ["APPLICATION"],
+  SESSION_COMPLETED: ["APPLICATION"],
+  SESSION_ARCHIVED: ["APPLICATION"],
+  SESSION_RESUMED: ["APPLICATION"]
+} as const satisfies Readonly<Record<EventType, readonly EventSource[]>>;
+
 function fail(): never {
   throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
+}
+
+function assertEventSource(event: SessionEvent): void {
+  const allowed = ALLOWED_SOURCES[event.type] as readonly EventSource[];
+  if (!allowed.includes(event.source)) fail();
+
+  if (event.type === "INPUT_EPISODE_UPDATED") {
+    const expectedSource = event.payload.modality === "SPEECH"
+      ? "APPLICATION"
+      : "USER";
+    if (event.source !== expectedSource) fail();
+  }
 }
 
 function registerEvidenceIdentity(
@@ -41,14 +166,6 @@ function registerEvidenceIdentity(
   const prior = aliases.get(serialized);
   if (prior !== undefined && prior !== canonical) fail();
   aliases.set(serialized, canonical);
-}
-
-function assertPriorEventIds(
-  state: Readonly<SessionState>,
-  eventIds: readonly EventId[]
-): void {
-  const known = new Set(state.eventIds);
-  if (!eventIds.every((eventId) => known.has(eventId))) fail();
 }
 
 function generationPhase(
@@ -70,7 +187,6 @@ function boardActionsEqual(
   right: NonNullable<InterviewerProposal["boardActions"]>[number]
 ): boolean {
   return left.operation === right.operation
-    && left.layer === right.layer
     && left.content === right.content
     && left.targetShapeId === right.targetShapeId
     && left.expectedShapeRevision === right.expectedShapeRevision
@@ -89,6 +205,203 @@ function deliveryContentIsAuthorized(
   );
 }
 
+function committedSpeechText(
+  state: Readonly<SessionState>,
+  inputEpisodeId: string
+): string | undefined {
+  const episode = state.inputEpisodes[inputEpisodeId];
+  if (episode === undefined || episode.status !== "COMMITTED") return undefined;
+  const text = episode.inputs
+    .filter((input) => input.modality === "SPEECH")
+    .map((input) => input.semanticContent)
+    .join(" ");
+  return text.length === 0 ? undefined : text;
+}
+
+function independentlyAnalyze(text: string): {
+  readonly normalizedText: string;
+  readonly tokenCount: number;
+} {
+  const normalizedText = text.trim().split(/\s+/u)
+    .filter((token) => token.length > 0)
+    .join(" ");
+  return {
+    normalizedText,
+    tokenCount: normalizedText.length === 0
+      ? 0
+      : normalizedText.split(" ").length
+  };
+}
+
+function evidenceUpdateMatches(
+  event: SessionEvent,
+  expected: ExpectedEvidenceUpdate
+): boolean {
+  if (event.type !== "STUDENT_EVIDENCE_UPDATED") return false;
+  return replayEvidenceIdentity(event.payload.key) === replayEvidenceIdentity(expected.key)
+    && event.payload.value.value === expected.value.value
+    && event.payload.value.inferenceConfidence === expected.value.inferenceConfidence
+    && arraysEqual(
+      event.payload.value.evidenceEventIds,
+      expected.value.evidenceEventIds
+    )
+    && event.payload.value.lastUpdatedSequence === expected.value.lastUpdatedSequence
+    && event.payload.supersedesEventId === expected.supersedesEventId;
+}
+
+function consumePendingNext(
+  pending: PendingNext,
+  event: SessionEvent
+): PendingNext["kind"] {
+  switch (pending.kind) {
+    case "PROBLEM_PRESENTED":
+      if (event.type !== "PROBLEM_PRESENTED") fail();
+      break;
+    case "TRANSCRIPT_FINALIZED":
+      if (
+        event.type !== "TRANSCRIPT_FINALIZED"
+        || event.payload.inputEpisodeId !== pending.inputEpisodeId
+      ) fail();
+      break;
+    case "SPEECH_INPUT_UPDATE":
+      if (
+        event.type !== "INPUT_EPISODE_UPDATED"
+        || event.payload.inputEpisodeId !== pending.inputEpisodeId
+        || event.payload.modality !== "SPEECH"
+        || event.payload.semanticContent !== pending.text
+      ) fail();
+      break;
+    case "TURN_COMMITTED":
+      if (
+        event.type !== "TURN_COMMITTED"
+        || event.payload.inputEpisodeId !== pending.inputEpisodeId
+      ) fail();
+      break;
+    case "MODEL_PROPOSAL_OUTCOME":
+      if (
+        (event.type !== "PROPOSAL_VALIDATED" && event.type !== "PROPOSAL_REJECTED")
+        || event.payload.generationId !== pending.generationId
+      ) fail();
+      break;
+    case "FORMAL_PROPOSAL_OUTCOME":
+      if (event.type === "FORMAL_INTERPRETATION_PROPOSAL_REJECTED") {
+        if (event.payload.generationId !== pending.generationId) fail();
+      } else if (event.type === "VERIFICATION_REQUESTED") {
+        if (
+          event.payload.sourceGenerationId !== pending.generationId
+          || event.payload.sourceProposalRequestId !== pending.proposalRequestId
+        ) fail();
+      } else {
+        fail();
+      }
+      break;
+    case "EVIDENCE_UPDATE":
+      if (!evidenceUpdateMatches(event, pending.expected)) fail();
+      break;
+    case "FIRST_DELIVERY":
+      if (
+        event.type !== "DELIVERY_QUEUED"
+        || event.payload.atom.generationId !== pending.generationId
+      ) fail();
+      break;
+  }
+
+  return pending.kind;
+}
+
+function requiredFollowUpMatches(
+  required: RequiredFollowUp,
+  event: SessionEvent
+): boolean {
+  switch (required.kind) {
+    case "SUPERSEDE_GENERATION":
+      return event.type === "MODEL_GENERATION_SUPERSEDED"
+        && event.payload.generationId === required.generationId;
+    case "CANCEL_DELIVERY":
+      return event.type === "DELIVERY_CANCELLED"
+        && event.payload.deliveryId === required.deliveryId;
+    case "POSSIBLY_EXPOSE_DELIVERY":
+      return event.type === "DELIVERY_POSSIBLY_EXPOSED"
+        && event.source === required.source
+        && event.payload.deliveryId === required.deliveryId;
+    case "INVALIDATE_EVIDENCE":
+      return event.type === "STUDENT_EVIDENCE_INVALIDATED"
+        && event.payload.invalidatesEventId === required.evidenceEventId
+        && replayEvidenceIdentity(event.payload.key) === required.keyIdentity;
+  }
+}
+
+function expectedEvidenceFromProposal(
+  state: Readonly<SessionState>,
+  event: Extract<SessionEvent, { readonly type: "EVIDENCE_PROPOSED" }>
+): ExpectedEvidenceUpdate | undefined {
+  const proposal = event.payload.proposal;
+  if (
+    state.problem?.id !== proposal.key.problemId
+    || proposal.inferenceConfidence < 0.7
+    || !isEvidenceValueAllowed(proposal.key, proposal.proposedValue)
+    || !proposal.evidenceEventIds.every((eventId) => state.eventIds.includes(eventId))
+  ) {
+    return undefined;
+  }
+
+  const keyString = evidenceKeyToString(proposal.key);
+  const active = state.evidenceHistory[keyString]?.find((record) =>
+    record.status === "ACTIVE"
+  );
+  return {
+    key: proposal.key,
+    value: {
+      value: proposal.proposedValue,
+      inferenceConfidence: proposal.inferenceConfidence,
+      evidenceEventIds: proposal.evidenceEventIds,
+      lastUpdatedSequence: event.sequence + 1
+    },
+    ...(active === undefined
+      ? {}
+      : { supersedesEventId: active.evidenceEventId })
+  };
+}
+
+function expectedEvidenceFromVerification(
+  state: Readonly<SessionState>,
+  event: Extract<SessionEvent, { readonly type: "VERIFICATION_RESULT_ACCEPTED" }>
+): ExpectedEvidenceUpdate | undefined {
+  if (event.payload.result.status !== "VERIFIED") return undefined;
+  const request = state.verificationRequests[event.payload.verificationRequestId];
+  if (request === undefined) fail();
+
+  const keyString = evidenceKeyToString(request.evidenceKey);
+  const active = state.evidenceHistory[keyString]?.find((record) =>
+    record.status === "ACTIVE"
+  );
+  return {
+    key: request.evidenceKey,
+    value: {
+      value: "CORRECT",
+      inferenceConfidence: event.payload.result.interpretationConfidence,
+      evidenceEventIds: Array.from(new Set([
+        ...request.evidenceEventIds,
+        request.requestedEventId
+      ])),
+      lastUpdatedSequence: event.sequence + 1
+    },
+    ...(active === undefined
+      ? {}
+      : { supersedesEventId: active.evidenceEventId })
+  };
+}
+
+function terminalStateIsSettled(state: Readonly<SessionState>): boolean {
+  const generationsSettled = Object.values(state.generations).every((generation) =>
+    generation.status !== "ACTIVE" && generation.status !== "PROPOSAL_RECEIVED"
+  );
+  const deliveriesSettled = Object.values(state.deliveries).every((delivery) =>
+    delivery.status !== "QUEUED" && delivery.status !== "DELIVERING"
+  );
+  return generationsSettled && deliveriesSettled;
+}
+
 export interface ValidatedReplayPrefix {
   readonly state: SessionState;
   readonly validatedThroughSequence: number;
@@ -101,6 +414,7 @@ export function validateKnownReplayPrefix(
 ): ValidatedReplayPrefix {
   let state = initialSessionState(sessionId);
   const generationPhases = new Map<GenerationId, GenerationPhase>();
+  const generationProposalKinds = new Map<GenerationId, GenerationProposalKind>();
   const validatedAnalyses = new Map<GenerationId, DisclosureAnalysis>();
   const formalProposals = new Map<string, {
     readonly generationId: GenerationId;
@@ -108,10 +422,32 @@ export function validateKnownReplayPrefix(
   }>();
   const usedTurnEpisodes = new Set<string>();
   const evidenceAliases = new Map<string, string>();
+  let pendingNext: PendingNext | undefined;
+  let requiredFollowUps: RequiredFollowUp[] = [];
   let problemPresented = false;
 
   try {
     for (const event of events) {
+      assertEventSource(event);
+
+      let consumedPendingKind: PendingNext["kind"] | undefined;
+      if (pendingNext !== undefined) {
+        consumedPendingKind = consumePendingNext(pendingNext, event);
+        pendingNext = undefined;
+      }
+
+      let consumedRequiredKind: RequiredFollowUp["kind"] | undefined;
+      if (requiredFollowUps.length > 0) {
+        const index = requiredFollowUps.findIndex((required) =>
+          requiredFollowUpMatches(required, event)
+        );
+        if (index < 0) fail();
+        consumedRequiredKind = requiredFollowUps[index]?.kind;
+        requiredFollowUps = requiredFollowUps.filter((_, candidateIndex) =>
+          candidateIndex !== index
+        );
+      }
+
       if (!state.started && event.type !== "SESSION_STARTED") fail();
       if (state.started && event.type === "SESSION_STARTED") fail();
       if (
@@ -123,6 +459,7 @@ export function validateKnownReplayPrefix(
 
       switch (event.type) {
         case "SESSION_STARTED":
+          pendingNext = { kind: "PROBLEM_PRESENTED" };
           break;
 
         case "PROBLEM_PRESENTED":
@@ -130,17 +467,60 @@ export function validateKnownReplayPrefix(
           problemPresented = true;
           break;
 
-        case "UTTERANCE_STARTED":
+        case "UTTERANCE_STARTED": {
           if (state.utterances[event.payload.utteranceId] !== undefined) fail();
+          requiredFollowUps = [
+            ...Object.values(state.generations)
+              .filter((generation) => generation.status === "ACTIVE")
+              .map((generation): RequiredFollowUp => ({
+                kind: "SUPERSEDE_GENERATION",
+                generationId: generation.generationId
+              })),
+            ...Object.values(state.deliveries).flatMap((delivery): RequiredFollowUp[] =>
+              delivery.status === "QUEUED"
+                ? [{
+                    kind: "CANCEL_DELIVERY",
+                    deliveryId: delivery.deliveryId
+                  }]
+                : delivery.status === "DELIVERING"
+                  ? [{
+                      kind: "POSSIBLY_EXPOSE_DELIVERY",
+                      deliveryId: delivery.deliveryId,
+                      source: "APPLICATION"
+                    }]
+                  : []
+            )
+          ];
+          break;
+        }
+
+        case "UTTERANCE_DISCARDED":
           break;
 
         case "INPUT_EPISODE_STARTED":
           if (state.inputEpisodes[event.payload.inputEpisodeId] !== undefined) fail();
+          if (event.source === "APPLICATION") {
+            pendingNext = {
+              kind: "TRANSCRIPT_FINALIZED",
+              inputEpisodeId: event.payload.inputEpisodeId
+            };
+          }
+          break;
+
+        case "INPUT_EPISODE_UPDATED":
           break;
 
         case "INPUT_EPISODE_COMMITTED": {
           const episode = state.inputEpisodes[event.payload.inputEpisodeId];
-          if (episode === undefined || episode.status !== "ACTIVE" || episode.inputs.length === 0) fail();
+          if (
+            episode === undefined
+            || episode.status !== "ACTIVE"
+            || episode.inputs.length === 0
+          ) fail();
+          pendingNext = {
+            kind: "TURN_COMMITTED",
+            inputEpisodeId: event.payload.inputEpisodeId
+          };
           break;
         }
 
@@ -149,6 +529,10 @@ export function validateKnownReplayPrefix(
           const episode = state.inputEpisodes[event.payload.inputEpisodeId];
           if (episode === undefined || episode.status !== "COMMITTED") fail();
           if (usedTurnEpisodes.has(event.payload.inputEpisodeId)) fail();
+          const expectedStudentText = episode.inputs
+            .map((input) => input.semanticContent)
+            .join(" ");
+          if (event.payload.studentText !== expectedStudentText) fail();
           usedTurnEpisodes.add(event.payload.inputEpisodeId);
           break;
         }
@@ -156,44 +540,95 @@ export function validateKnownReplayPrefix(
         case "TRANSCRIPT_FINALIZED": {
           if (event.payload.transcriptRevision !== state.transcriptRevision + 1) fail();
           const episode = state.inputEpisodes[event.payload.inputEpisodeId];
-          if (episode === undefined || episode.status !== "ACTIVE") fail();
+          const utterance = state.utterances[event.payload.utteranceId];
+          if (
+            episode === undefined
+            || episode.status !== "ACTIVE"
+            || utterance === undefined
+            || utterance.status !== "CAPTURING"
+          ) fail();
+          pendingNext = {
+            kind: "SPEECH_INPUT_UPDATE",
+            inputEpisodeId: event.payload.inputEpisodeId,
+            text: event.payload.text
+          };
           break;
         }
 
-        case "TRANSCRIPT_CORRECTED":
+        case "TRANSCRIPT_CORRECTED": {
           if (
             event.payload.transcriptRevision !== state.transcriptRevision + 1
             || event.payload.contextEpoch !== state.contextEpoch + 1
           ) fail();
+          requiredFollowUps = Object.values(state.evidenceHistory)
+            .flatMap((records) => records)
+            .filter((record) => record.status === "ACTIVE")
+            .map((record): RequiredFollowUp => ({
+              kind: "INVALIDATE_EVIDENCE",
+              keyIdentity: replayEvidenceIdentity(record.key),
+              evidenceEventId: record.evidenceEventId
+            }));
           break;
+        }
 
         case "BOARD_PATCH_COMMITTED":
           if (event.payload.boardRevision !== state.boardRevision + 1) fail();
           break;
 
-        case "EVIDENCE_PROPOSED":
+        case "VISION_REQUESTED":
           if (
-            state.problem?.id !== event.payload.proposal.key.problemId
-            || !isEvidenceValueAllowed(
-              event.payload.proposal.key,
-              event.payload.proposal.proposedValue
+            state.visionRequests[event.payload.visionRequestId] !== undefined
+            || event.payload.sourceBoardRevision !== state.boardRevision
+          ) fail();
+          break;
+
+        case "VISION_RESULT_ACCEPTED": {
+          const request = state.visionRequests[event.payload.visionRequestId];
+          const observation = event.payload.observation;
+          if (
+            request === undefined
+            || request.status !== "PENDING"
+            || request.sourceBoardRevision !== state.boardRevision
+            || observation.sourceBoardRevision !== request.sourceBoardRevision
+            || observation.regionId !== request.regionId
+            || observation.relevantShapeIds.length !== request.relevantShapeIds.length
+            || !request.relevantShapeIds.every((shapeId) =>
+              observation.relevantShapeIds.includes(shapeId)
             )
           ) fail();
-          assertPriorEventIds(state, event.payload.proposal.evidenceEventIds);
+          break;
+        }
+
+        case "VISION_RESULT_DISCARDED":
           break;
 
-        case "STUDENT_EVIDENCE_UPDATED":
+        case "LOCAL_COMPUTE_REQUESTED":
           if (
-            state.problem?.id !== event.payload.key.problemId
-            || !isEvidenceValueAllowed(event.payload.key, event.payload.value.value)
+            state.localComputeRequests[event.payload.computeRequestId] !== undefined
+            || event.payload.sourceTranscriptRevision !== state.transcriptRevision
+            || committedSpeechText(state, event.payload.inputEpisodeId) === undefined
           ) fail();
-          registerEvidenceIdentity(evidenceAliases, event.payload.key);
-          assertPriorEventIds(state, event.payload.value.evidenceEventIds);
           break;
 
-        case "STUDENT_EVIDENCE_INVALIDATED":
-          if (state.problem?.id !== event.payload.key.problemId) fail();
-          registerEvidenceIdentity(evidenceAliases, event.payload.key);
+        case "LOCAL_COMPUTE_RESULT_ACCEPTED": {
+          const request = state.localComputeRequests[event.payload.computeRequestId];
+          if (
+            request === undefined
+            || request.status !== "PENDING"
+            || request.sourceTranscriptRevision !== event.payload.sourceTranscriptRevision
+            || state.transcriptRevision !== request.sourceTranscriptRevision
+          ) fail();
+          const text = committedSpeechText(state, request.inputEpisodeId);
+          if (text === undefined) fail();
+          const expected = independentlyAnalyze(text);
+          if (
+            event.payload.normalizedText !== expected.normalizedText
+            || event.payload.tokenCount !== expected.tokenCount
+          ) fail();
+          break;
+        }
+
+        case "LOCAL_COMPUTE_RESULT_DISCARDED":
           break;
 
         case "VERIFICATION_REQUESTED": {
@@ -202,16 +637,29 @@ export function validateKnownReplayPrefix(
             || event.payload.evidenceKey.subject.kind !== "CLAIM"
             || event.payload.evidenceKey.dimension !== "CORRECTNESS"
           ) fail();
-          assertPriorEventIds(state, event.payload.evidenceEventIds);
-          if (isGenerationBasisStillCompatible(event.payload.basis, state) !== "COMPATIBLE") fail();
+          if (
+            !event.payload.evidenceEventIds.every((eventId) =>
+              state.eventIds.includes(eventId)
+            )
+            || isGenerationBasisStillCompatible(event.payload.basis, state)
+              !== "COMPATIBLE"
+          ) fail();
 
           const hasSourceGeneration = event.payload.sourceGenerationId !== undefined;
           const hasSourceProposal = event.payload.sourceProposalRequestId !== undefined;
           if (hasSourceGeneration !== hasSourceProposal) fail();
+
           if (
             event.payload.sourceGenerationId !== undefined
             && event.payload.sourceProposalRequestId !== undefined
           ) {
+            if (consumedPendingKind !== "FORMAL_PROPOSAL_OUTCOME") fail();
+            if (
+              generationPhase(generationPhases, event.payload.sourceGenerationId)
+                !== "PROPOSAL_RECEIVED"
+              || generationProposalKinds.get(event.payload.sourceGenerationId)
+                !== "FORMAL"
+            ) fail();
             const source = formalProposals.get(event.payload.sourceProposalRequestId);
             const generation = state.generations[event.payload.sourceGenerationId];
             if (
@@ -228,24 +676,90 @@ export function validateKnownReplayPrefix(
           break;
         }
 
+        case "VERIFICATION_RESULT_ACCEPTED": {
+          const request = state.verificationRequests[event.payload.verificationRequestId];
+          if (
+            request === undefined
+            || request.status !== "PENDING"
+            || request.verifier !== event.payload.result.verifier
+            || request.interpretationConfidence
+              !== event.payload.result.interpretationConfidence
+            || isGenerationBasisStillCompatible(request.basis, state)
+              !== "COMPATIBLE"
+          ) fail();
+          const expected = expectedEvidenceFromVerification(state, event);
+          if (expected !== undefined) {
+            pendingNext = {
+              kind: "EVIDENCE_UPDATE",
+              expected
+            };
+          }
+          break;
+        }
+
+        case "VERIFICATION_RESULT_DISCARDED":
+          break;
+
+        case "EVIDENCE_PROPOSED": {
+          const expected = expectedEvidenceFromProposal(state, event);
+          if (expected !== undefined) {
+            pendingNext = {
+              kind: "EVIDENCE_UPDATE",
+              expected
+            };
+          }
+          break;
+        }
+
+        case "STUDENT_EVIDENCE_UPDATED":
+          if (consumedPendingKind !== "EVIDENCE_UPDATE") fail();
+          if (
+            state.problem?.id !== event.payload.key.problemId
+            || !isEvidenceValueAllowed(event.payload.key, event.payload.value.value)
+            || !event.payload.value.evidenceEventIds.every((eventId) =>
+              state.eventIds.includes(eventId)
+            )
+          ) fail();
+          registerEvidenceIdentity(evidenceAliases, event.payload.key);
+          break;
+
+        case "STUDENT_EVIDENCE_INVALIDATED":
+          if (consumedRequiredKind !== "INVALIDATE_EVIDENCE") fail();
+          if (state.problem?.id !== event.payload.key.problemId) fail();
+          registerEvidenceIdentity(evidenceAliases, event.payload.key);
+          break;
+
         case "PEDAGOGICAL_ACTION_SELECTED":
           if (state.turns[event.payload.turnId] === undefined) fail();
           break;
 
-        case "MODEL_GENERATION_STARTED": {
-          if (state.generations[event.payload.generationId] !== undefined) fail();
-          if (isGenerationBasisStillCompatible(event.payload.basis, state) !== "COMPATIBLE") fail();
+        case "MODEL_GENERATION_STARTED":
+          if (
+            state.generations[event.payload.generationId] !== undefined
+            || isGenerationBasisStillCompatible(event.payload.basis, state)
+              !== "COMPATIBLE"
+          ) fail();
           generationPhases.set(event.payload.generationId, "ACTIVE");
+          break;
+
+        case "GENERATION_CONTEXT_COMPILED": {
+          if (generationPhase(generationPhases, event.payload.generationId) !== "ACTIVE") fail();
+          if (
+            state.problem === undefined
+            || event.payload.manifest.problemId !== state.problem.id
+            || event.payload.manifest.problemVersion !== state.problem.version
+          ) fail();
           break;
         }
 
-        case "GENERATION_CONTEXT_COMPILED":
-          if (generationPhase(generationPhases, event.payload.generationId) !== "ACTIVE") fail();
-          break;
-
         case "MODEL_PROPOSAL_RECEIVED":
           if (generationPhase(generationPhases, event.payload.generationId) !== "ACTIVE") fail();
+          generationProposalKinds.set(event.payload.generationId, "INTERVIEWER");
           generationPhases.set(event.payload.generationId, "PROPOSAL_RECEIVED");
+          pendingNext = {
+            kind: "MODEL_PROPOSAL_OUTCOME",
+            generationId: event.payload.generationId
+          };
           break;
 
         case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
@@ -254,37 +768,25 @@ export function validateKnownReplayPrefix(
           formalProposals.set(event.payload.proposalRequestId, {
             generationId: event.payload.generationId,
             proposal: event.payload.proposal
-          });
+          };
+          generationProposalKinds.set(event.payload.generationId, "FORMAL");
           generationPhases.set(event.payload.generationId, "PROPOSAL_RECEIVED");
+          pendingNext = {
+            kind: "FORMAL_PROPOSAL_OUTCOME",
+            generationId: event.payload.generationId,
+            proposalRequestId: event.payload.proposalRequestId
+          };
           break;
 
         case "FORMAL_INTERPRETATION_PROPOSAL_REJECTED":
-        case "PROPOSAL_REJECTED":
-          if (generationPhase(generationPhases, event.payload.generationId) !== "PROPOSAL_RECEIVED") fail();
+          if (
+            consumedPendingKind !== "FORMAL_PROPOSAL_OUTCOME"
+            || generationPhase(generationPhases, event.payload.generationId)
+              !== "PROPOSAL_RECEIVED"
+            || generationProposalKinds.get(event.payload.generationId) !== "FORMAL"
+          ) fail();
           generationPhases.set(event.payload.generationId, "REJECTED");
           break;
-
-        case "PROPOSAL_VALIDATED": {
-          if (generationPhase(generationPhases, event.payload.generationId) !== "PROPOSAL_RECEIVED") fail();
-          const generation = state.generations[event.payload.generationId];
-          const proposal = generation?.proposal;
-          const request = generation === undefined
-            ? undefined
-            : state.pedagogicalActions[generation.basis.turnId];
-          if (
-            generation === undefined
-            || proposal === undefined
-            || request === undefined
-            || proposal.realizedAction !== request.requiredAction
-            || event.payload.analysis.status !== "SAFE"
-            || event.payload.analysis.confidence !== 1
-            || event.payload.analysis.effectiveDisclosureLevel > request.maximumDisclosure
-            || proposal.claimedDisclosureLevel < event.payload.analysis.effectiveDisclosureLevel
-          ) fail();
-          validatedAnalyses.set(event.payload.generationId, event.payload.analysis);
-          generationPhases.set(event.payload.generationId, "VALIDATED");
-          break;
-        }
 
         case "MODEL_GENERATION_SUPERSEDED": {
           const phase = generationPhase(generationPhases, event.payload.generationId);
@@ -298,9 +800,59 @@ export function validateKnownReplayPrefix(
           break;
         }
 
+        case "PROPOSAL_VALIDATED": {
+          if (
+            consumedPendingKind !== "MODEL_PROPOSAL_OUTCOME"
+            || generationPhase(generationPhases, event.payload.generationId)
+              !== "PROPOSAL_RECEIVED"
+            || generationProposalKinds.get(event.payload.generationId)
+              !== "INTERVIEWER"
+          ) fail();
+          const generation = state.generations[event.payload.generationId];
+          const proposal = generation?.proposal;
+          const request = generation === undefined
+            ? undefined
+            : state.pedagogicalActions[generation.basis.turnId];
+          if (
+            generation === undefined
+            || proposal === undefined
+            || request === undefined
+            || isGenerationBasisStillCompatible(generation.basis, state)
+              !== "COMPATIBLE"
+            || proposal.realizedAction !== request.requiredAction
+            || event.payload.analysis.status !== "SAFE"
+            || event.payload.analysis.confidence !== 1
+            || event.payload.analysis.effectiveDisclosureLevel
+              > request.maximumDisclosure
+            || proposal.claimedDisclosureLevel
+              < event.payload.analysis.effectiveDisclosureLevel
+          ) fail();
+          validatedAnalyses.set(event.payload.generationId, event.payload.analysis);
+          generationPhases.set(event.payload.generationId, "VALIDATED");
+          pendingNext = {
+            kind: "FIRST_DELIVERY",
+            generationId: event.payload.generationId
+          };
+          break;
+        }
+
+        case "PROPOSAL_REJECTED":
+          if (
+            consumedPendingKind !== "MODEL_PROPOSAL_OUTCOME"
+            || generationPhase(generationPhases, event.payload.generationId)
+              !== "PROPOSAL_RECEIVED"
+            || generationProposalKinds.get(event.payload.generationId)
+              !== "INTERVIEWER"
+          ) fail();
+          generationPhases.set(event.payload.generationId, "REJECTED");
+          break;
+
         case "DELIVERY_QUEUED": {
           if (state.deliveries[event.payload.atom.deliveryId] !== undefined) fail();
-          if (generationPhase(generationPhases, event.payload.atom.generationId) !== "VALIDATED") fail();
+          if (
+            generationPhase(generationPhases, event.payload.atom.generationId)
+              !== "VALIDATED"
+          ) fail();
           const generation = state.generations[event.payload.atom.generationId];
           const analysis = validatedAnalyses.get(event.payload.atom.generationId);
           if (
@@ -333,10 +885,22 @@ export function validateKnownReplayPrefix(
           const generation = state.generations[delivery.generationId];
           if (
             generation === undefined
-            || isGenerationBasisStillCompatible(generation.basis, state) !== "COMPATIBLE"
+            || isGenerationBasisStillCompatible(generation.basis, state)
+              !== "COMPATIBLE"
           ) fail();
           break;
         }
+
+        case "DELIVERY_EXPOSED":
+        case "DELIVERY_COMPLETED":
+          break;
+
+        case "DELIVERY_POSSIBLY_EXPOSED":
+          if (
+            event.source === "APPLICATION"
+            && consumedRequiredKind !== "POSSIBLY_EXPOSE_DELIVERY"
+          ) fail();
+          break;
 
         case "POLICY_REVISION_CHANGED":
           if (
@@ -353,18 +917,18 @@ export function validateKnownReplayPrefix(
           break;
 
         case "SESSION_COMPLETED":
-          if (state.status !== "ACTIVE") fail();
+          if (state.status !== "ACTIVE" || !terminalStateIsSettled(state)) fail();
           break;
 
         case "SESSION_ARCHIVED":
-          if (state.status !== "ACTIVE" && state.status !== "COMPLETED") fail();
+          if (
+            (state.status !== "ACTIVE" && state.status !== "COMPLETED")
+            || !terminalStateIsSettled(state)
+          ) fail();
           break;
 
         case "SESSION_RESUMED":
           if (state.status !== "ACTIVE") fail();
-          break;
-
-        default:
           break;
       }
 
@@ -376,7 +940,11 @@ export function validateKnownReplayPrefix(
   }
 
   if (options.completeHistory === true) {
-    if (state.started && state.problem === undefined) fail();
+    if (
+      state.started && state.problem === undefined
+      || pendingNext !== undefined
+      || requiredFollowUps.length > 0
+    ) fail();
 
     const turnCountsByEpisode = new Map<string, number>();
     for (const turn of Object.values(state.turns)) {
@@ -394,9 +962,7 @@ export function validateKnownReplayPrefix(
 
     if (
       (state.status === "COMPLETED" || state.status === "ARCHIVED")
-      && Object.values(state.deliveries).some((delivery) =>
-        delivery.status === "QUEUED" || delivery.status === "DELIVERING"
-      )
+      && !terminalStateIsSettled(state)
     ) fail();
   }
 
