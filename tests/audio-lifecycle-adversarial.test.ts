@@ -15,6 +15,18 @@ import {
   type CaptureScriptProcessorLike
 } from "../apps/web/src/index.js";
 
+async function waitForTestCondition(
+  condition: () => boolean,
+  description: string,
+  attempts = 100
+): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (condition()) return;
+    await Promise.resolve();
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
 class Deferred<T> {
   public readonly promise: Promise<T>;
   private resolveValue!: (value: T | PromiseLike<T>) => void;
@@ -99,12 +111,17 @@ function captureFixture(options: { readonly deferredGetUserMedia?: boolean } = {
   readonly stream: Stream;
   readonly context: DeferredCloseContext;
   readonly getUserMedia: Deferred<AudioMediaStreamLike> | undefined;
+  readonly getUserMediaCalls: () => number;
 } {
   const stream = new Stream();
   const context = new DeferredCloseContext();
   const getUserMedia = options.deferredGetUserMedia ? new Deferred<AudioMediaStreamLike>() : undefined;
+  let getUserMediaCallCount = 0;
   const mediaDevices: AudioMediaDevicesLike = {
-    getUserMedia: async () => getUserMedia === undefined ? stream : getUserMedia.promise,
+    getUserMedia: async () => {
+      getUserMediaCallCount += 1;
+      return getUserMedia === undefined ? stream : getUserMedia.promise;
+    },
     enumerateDevices: async () => [],
     addEventListener: () => undefined,
     removeEventListener: () => undefined
@@ -118,7 +135,8 @@ function captureFixture(options: { readonly deferredGetUserMedia?: boolean } = {
     capture: new BrowserMicrophoneCapture(environment),
     stream,
     context,
-    getUserMedia
+    getUserMedia,
+    getUserMediaCalls: () => getUserMediaCallCount
   };
 }
 
@@ -225,7 +243,10 @@ describe("microphone lifecycle adversarial ordering", () => {
   it("late getUserMedia cannot attach resources after disposal", async () => {
     const setup = captureFixture({ deferredGetUserMedia: true });
     const starting = setup.capture.start({ onFrame: () => undefined });
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => setup.getUserMediaCalls() === 1,
+      "deferred getUserMedia request to begin"
+    );
 
     await setup.capture.dispose();
     setup.getUserMedia?.resolve(setup.stream);

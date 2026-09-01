@@ -54,9 +54,16 @@ export interface MicrophoneCaptureOptions {
   readonly onError?: (error: AudioInfrastructureError) => unknown;
 }
 
+interface OwnedCaptureTrack {
+  readonly track: AudioMediaStreamTrackLike;
+  readonly stop: AudioMediaStreamTrackLike["stop"];
+  readonly addEndedListener: AudioMediaStreamTrackLike["addEventListener"];
+  readonly removeEndedListener: AudioMediaStreamTrackLike["removeEventListener"];
+}
+
 interface CaptureResources {
   readonly operation: number;
-  readonly tracks: readonly AudioMediaStreamTrackLike[];
+  readonly tracks: readonly OwnedCaptureTrack[];
   readonly trackEnded: () => void;
   readonly context: CaptureAudioContextLike;
   readonly source: CaptureAudioNodeLike;
@@ -156,7 +163,7 @@ export class BrowserMicrophoneCapture {
     this.startAbort = startAbort;
 
     let stream: AudioMediaStreamLike | undefined;
-    let tracks: readonly AudioMediaStreamTrackLike[] = [];
+    let tracks: readonly OwnedCaptureTrack[] = [];
     let context: CaptureAudioContextLike | undefined;
     let source: CaptureAudioNodeLike | undefined;
     let processor: CaptureScriptProcessorLike | undefined;
@@ -214,7 +221,7 @@ export class BrowserMicrophoneCapture {
           "Microphone stream exposed too many audio tracks"
         );
       }
-      const ownedTracks: AudioMediaStreamTrackLike[] = [];
+      const ownedTracks: OwnedCaptureTrack[] = [];
       const ownedTrackSet = new Set<AudioMediaStreamTrackLike>();
       tracks = ownedTracks;
       for (let index = 0; index < streamTracks.length; index += 1) {
@@ -246,7 +253,12 @@ export class BrowserMicrophoneCapture {
           );
         }
         ownedTrackSet.add(ownedTrack);
-        ownedTracks.push(ownedTrack);
+        ownedTracks.push(Object.freeze({
+          track: ownedTrack,
+          stop: stopTrack as AudioMediaStreamTrackLike["stop"],
+          addEndedListener: addEndedListener as AudioMediaStreamTrackLike["addEventListener"],
+          removeEndedListener: removeEndedListener as AudioMediaStreamTrackLike["removeEventListener"]
+        }));
       }
       this.throwIfOperationSuperseded(operation);
       if (tracks.length === 0) {
@@ -318,16 +330,12 @@ export class BrowserMicrophoneCapture {
         );
       };
 
-      for (const track of tracks) {
-        const addEndedListener = readUnknownProperty(track, "addEventListener");
-        this.throwIfOperationSuperseded(operation);
-        if (typeof addEndedListener !== "function") {
-          throw new AudioInfrastructureError(
-            "CAPTURE_FAILED",
-            "Microphone track lost ended-listener registration capability"
-          );
-        }
-        Reflect.apply(addEndedListener, track, ["ended", trackEnded]);
+      for (const ownedTrack of tracks) {
+        Reflect.apply(
+          ownedTrack.addEndedListener,
+          ownedTrack.track,
+          ["ended", trackEnded]
+        );
         this.throwIfOperationSuperseded(operation);
       }
       const trackEndedAfterListenerInstall = this.anyTrackEnded(tracks, operation);
@@ -436,7 +444,7 @@ export class BrowserMicrophoneCapture {
       }
     } catch (error) {
       if (stream !== undefined) {
-        stopStreamAudioTracks(stream, tracks);
+        stopStreamAudioTracks(stream, rawTrackReferences(tracks));
       }
       await this.trackCleanup(() => releaseCaptureParts(tracks, trackEnded, context, source, processor));
       if (!this.isCurrent(operation)) return;
@@ -629,11 +637,11 @@ export class BrowserMicrophoneCapture {
   }
 
   private anyTrackEnded(
-    tracks: readonly AudioMediaStreamTrackLike[],
+    tracks: readonly OwnedCaptureTrack[],
     operation: number
   ): boolean {
-    for (const track of tracks) {
-      const readyState: unknown = readUnknownProperty(track, "readyState");
+    for (const ownedTrack of tracks) {
+      const readyState: unknown = readUnknownProperty(ownedTrack.track, "readyState");
       this.throwIfOperationSuperseded(operation);
       if (
         readyState !== undefined
@@ -959,7 +967,7 @@ export function defaultCaptureEnvironment(): BrowserMicrophoneCaptureEnvironment
 }
 
 async function releaseCaptureParts(
-  tracks: readonly AudioMediaStreamTrackLike[],
+  tracks: readonly OwnedCaptureTrack[],
   trackEnded: (() => void) | undefined,
   context: CaptureAudioContextLike | undefined,
   source: CaptureAudioNodeLike | undefined,
@@ -975,9 +983,13 @@ async function releaseCaptureParts(
 
   if (trackEnded !== undefined) {
     try {
-      for (const track of tracks) {
+      for (const ownedTrack of tracks) {
         try {
-          track.removeEventListener("ended", trackEnded);
+          Reflect.apply(
+            ownedTrack.removeEndedListener,
+            ownedTrack.track,
+            ["ended", trackEnded]
+          );
         } catch {
           // Continue releasing the remaining owned resources.
         }
@@ -1185,7 +1197,13 @@ function stopStreamAudioTracks(
     if (!isUnknownArray(tracks)) return false;
     const count = Math.min(tracks.length, MAX_MEDIA_STREAM_TRACKS);
     for (let index = 0; index < count; index += 1) {
-      const track = tracks[index];
+      let track: unknown;
+      try {
+        track = tracks[index];
+      } catch {
+        // Continue so one hostile slot cannot hide later accessible tracks.
+        continue;
+      }
       if (typeof track !== "object" || track === null) continue;
       const ownedTrack = track as AudioMediaStreamTrackLike;
       if (handled.has(ownedTrack)) continue;
@@ -1222,18 +1240,20 @@ function stopStreamAudioTracks(
   }
 }
 
-function stopTracks(tracks: readonly AudioMediaStreamTrackLike[]): void {
-  try {
-    for (const track of tracks) {
-      try {
-        track.stop();
-      } catch {
-        // Continue stopping other tracks and closing the capture context.
-      }
+function stopTracks(tracks: readonly OwnedCaptureTrack[]): void {
+  for (const ownedTrack of tracks) {
+    try {
+      Reflect.apply(ownedTrack.stop, ownedTrack.track, []);
+    } catch {
+      // Continue stopping other tracks and closing the capture context.
     }
-  } catch {
-    // Malformed browser values must not poison later cleanup/start cycles.
   }
+}
+
+function rawTrackReferences(
+  tracks: readonly OwnedCaptureTrack[]
+): readonly AudioMediaStreamTrackLike[] {
+  return tracks.map((ownedTrack) => ownedTrack.track);
 }
 
 function notifyCaptureError(
@@ -1279,13 +1299,10 @@ function closeUnknownAudioContext(value: unknown): void {
 function isCaptureAudioContextLike(value: unknown): value is CaptureAudioContextLike {
   try {
     if (typeof value !== "object" || value === null) return false;
-    const sampleRate: unknown = Reflect.get(value, "sampleRate");
     const createMediaStreamSource: unknown = Reflect.get(value, "createMediaStreamSource");
     const createScriptProcessor: unknown = Reflect.get(value, "createScriptProcessor");
     const close: unknown = Reflect.get(value, "close");
-    return typeof sampleRate === "number"
-      && Number.isFinite(sampleRate)
-      && sampleRate > 0
+    return "sampleRate" in value
       && "destination" in value
       && typeof createMediaStreamSource === "function"
       && typeof createScriptProcessor === "function"

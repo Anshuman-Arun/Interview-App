@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   newDeliveryId,
   newSessionId
@@ -33,6 +33,18 @@ import {
   type CaptureAudioProcessEventLike,
   type CaptureScriptProcessorLike
 } from "../apps/web/src/audio/index.js";
+
+async function waitForTestCondition(
+  condition: () => boolean,
+  description: string,
+  attempts = 100
+): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (condition()) return;
+    await Promise.resolve();
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
 
 function frame(sequence: number): AudioFrame {
   return {
@@ -1432,8 +1444,10 @@ describe("microphone capture lifecycle", () => {
     });
 
     const starting = capture.start({ onFrame: () => undefined });
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => context.resumeCount === 1,
+      "AudioContext resume to begin"
+    );
     expect(context.resumeCount).toBe(1);
 
     await capture.stop();
@@ -1899,15 +1913,11 @@ describe("microphone capture lifecycle", () => {
 
   it("still disconnects nodes and closes context when the track collection becomes non-iterable during cleanup", async () => {
     const track = new FakeTrack();
-    const malformedTracks = {
-      length: 1,
-      some: () => false,
-      0: track
-    } as unknown as readonly AudioMediaStreamTrackLike[];
+    const returnedTracks: AudioMediaStreamTrackLike[] = [track];
     const context = new FakeCaptureContext();
     const media: AudioMediaDevicesLike = {
       getUserMedia: async () => ({
-        getAudioTracks: () => malformedTracks
+        getAudioTracks: () => returnedTracks
       })
     };
     const capture = new BrowserMicrophoneCapture({
@@ -1916,17 +1926,19 @@ describe("microphone capture lifecycle", () => {
       now: () => 0
     });
 
-    await expect(capture.start({ onFrame: () => undefined })).rejects.toMatchObject({
-      code: "CAPTURE_FAILED"
+    await capture.start({ onFrame: () => undefined });
+    Object.defineProperty(returnedTracks, Symbol.iterator, {
+      configurable: true,
+      value: undefined
     });
+    await capture.stop();
 
-    expect(capture.state).toBe("FAILED");
+    expect(capture.state).toBe("STOPPED");
+    expect(track.stopCount).toBe(1);
     expect(context.source.disconnectCount).toBe(1);
-    expect(context.processor.connectCount).toBe(0);
     expect(context.processor.disconnectCount).toBe(1);
     expect(context.closeCount).toBe(1);
   });
-
   it("does not let a malformed cleanup value poison later capture lifecycle", async () => {
     let malformed = true;
     const media: AudioMediaDevicesLike = {
@@ -2072,8 +2084,11 @@ describe("microphone capture lifecycle", () => {
     void starting.then(() => {
       startingResolved = true;
     });
-    await Promise.resolve();
     expect(capture.state).toBe("STARTING");
+    await waitForTestCondition(
+      () => resolveStream !== undefined,
+      "getUserMedia request to begin"
+    );
 
     await capture.stop();
     expect(capture.state).toBe("STOPPED");
@@ -2188,7 +2203,10 @@ describe("microphone capture lifecycle", () => {
     });
 
     const starting = capture.start({ onFrame: () => undefined });
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => resolveStream !== undefined,
+      "getUserMedia request to begin"
+    );
     await capture.stop();
     await starting;
 
@@ -2218,7 +2236,10 @@ describe("microphone capture lifecycle", () => {
     });
 
     const starting = capture.start({ onFrame: () => undefined });
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => resolveStream !== undefined,
+      "getUserMedia request to begin"
+    );
     await capture.stop();
     await starting;
 
@@ -2257,8 +2278,10 @@ describe("microphone capture lifecycle", () => {
     });
 
     const firstStart = capture.start({ onFrame: () => undefined });
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => callCount === 1,
+      "first getUserMedia request to begin"
+    );
     expect(callCount).toBe(1);
 
     await capture.stop();
@@ -2314,8 +2337,10 @@ describe("microphone capture lifecycle", () => {
     });
 
     const firstStart = capture.start({ onFrame: () => undefined });
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => callCount === 1,
+      "first serialized getUserMedia request to begin"
+    );
     expect(callCount).toBe(1);
 
     await capture.stop();
@@ -2332,8 +2357,10 @@ describe("microphone capture lifecycle", () => {
     if (resolveFirst === undefined) throw new Error("First getUserMedia resolver was not installed");
     resolveFirst(new FakeStream(firstTrack));
     await firstStart;
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => callCount === 2,
+      "replacement getUserMedia request to begin"
+    );
 
     expect(firstTrack.stopCount).toBe(1);
     expect(callCount).toBe(2);
@@ -2439,8 +2466,10 @@ describe("microphone capture lifecycle", () => {
     };
 
     const starting = capture.start({ onFrame: () => undefined });
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => capture.state === "STOPPED",
+      "reentrant stop during capture setup"
+    );
 
     expect(capture.state).toBe("STOPPED");
     if (stopping === undefined) throw new Error("Reentrant stop was not invoked");
@@ -2484,8 +2513,10 @@ describe("microphone capture lifecycle", () => {
     };
 
     const starting = capture.start({ onFrame: () => undefined });
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => capture.state === "DISPOSED",
+      "reentrant disposal during capture setup"
+    );
     expect(capture.state).toBe("DISPOSED");
     if (disposing === undefined) throw new Error("Reentrant dispose was not invoked");
 
@@ -3759,8 +3790,10 @@ describe("queued browser audio playback", () => {
       outputDeviceId: "speaker-2"
     });
 
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => base.src === "/a.wav",
+      "source attachment after output selection"
+    );
 
     expect(sinkReads).toBe(1);
     expect(base.sinkIds).toEqual(["speaker-2"]);
@@ -3820,10 +3853,10 @@ describe("queued browser audio playback", () => {
 
     if (resolveFirstSink === undefined) throw new Error("First sink resolver was not installed");
     resolveFirstSink();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => sinkCalls === 2 && element.src === "/default.wav",
+      "default-output reuse after prior sink settles"
+    );
 
     expect(sinkCalls).toBe(2);
     expect(currentSink).toBe("");
@@ -3850,10 +3883,10 @@ describe("queued browser audio playback", () => {
       outputDeviceId: "default"
     });
 
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => element.sinkIds.length === 1 && element.src === "/speaker.wav",
+      "first explicit-output playback setup"
+    );
     expect(element.sinkIds).toEqual(["speaker-2"]);
 
     element.emit("playing");
@@ -3861,10 +3894,10 @@ describe("queued browser audio playback", () => {
     element.emit("ended");
     expect((await first.result).status).toBe("COMPLETED");
 
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => element.sinkIds.length === 2 && element.src === "/default.wav",
+      "default-output reset on reused element"
+    );
 
     expect(element.sinkIds).toEqual(["speaker-2", ""]);
     expect(element.src).toBe("/default.wav");
@@ -3894,8 +3927,10 @@ describe("queued browser audio playback", () => {
 
     if (releaseSink === undefined) throw new Error("Sink resolver was not installed");
     releaseSink();
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => element.src === "/a.wav",
+      "source attachment after deferred sink selection"
+    );
 
     expect(element.src).toBe("/a.wav");
     expect(element.listenerCount()).toBe(3);
@@ -4121,22 +4156,25 @@ describe("queued browser audio playback", () => {
         throw new Error("name getter failed");
       }
     });
-    const setup = playbackFixture();
-    const hostileElement = setup.elements[0];
-    if (hostileElement === undefined) throw new Error("Expected playback element");
+    const hostileElement = new FakeAudioElement();
     hostileElement.play = () => rejectHostileFixture(hostileError as Error);
-    const first = setup.playback.enqueue({ id: "hostile", source: "/hostile.wav" });
-    const second = setup.playback.enqueue({ id: "next", source: "/next.wav" });
+    const followingElement = new FakeAudioElement();
+    let factoryCalls = 0;
+    const playback = new BrowserAudioPlayback(() => {
+      factoryCalls += 1;
+      return factoryCalls === 1 ? hostileElement : followingElement;
+    });
+    const first = playback.enqueue({ id: "hostile", source: "/hostile.wav" });
+    const second = playback.enqueue({ id: "next", source: "/next.wav" });
 
     const firstOutcome = await first.result;
     expect(firstOutcome.status).toBe("FAILED");
     expect(firstOutcome.error?.code).toBe("PLAYBACK_FAILED");
-    expect(setup.playback.snapshot().currentId).toBe("next");
+    expect(playback.snapshot().currentId).toBe("next");
 
     second.cancel();
     await second.result;
   });
-
   it("maps autoplay policy rejection to a typed permission failure", async () => {
     const element = new FakeAudioElement();
     element.playError = Object.assign(new Error("autoplay blocked"), { name: "NotAllowedError" });
@@ -4266,7 +4304,10 @@ describe("queued browser audio playback", () => {
       source: "/a.wav",
       outputDeviceId: "speaker-2"
     });
-    await Promise.resolve();
+    await waitForTestCondition(
+      () => setup.elements[0]?.sinkIds.length === 1 && setup.elements[0]?.src === "/a.wav",
+      "selected output sink setup"
+    );
     expect(setup.elements[0]?.sinkIds).toEqual(["speaker-2"]);
     setup.elements[0]?.emit("playing");
     setup.elements[0]?.emit("ended");

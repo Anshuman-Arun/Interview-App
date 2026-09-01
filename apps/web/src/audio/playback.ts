@@ -422,6 +422,10 @@ export class BrowserAudioPlayback {
         let sinkOperation: Promise<void>;
         try {
           const sinkResult: unknown = Reflect.apply(setSinkId, element, [requestedSinkId]);
+          if (!this.isActivePending(pending)) {
+            this.releaseDetachedElement(element);
+            return;
+          }
           sinkOperation = Promise.resolve(sinkResult).then(() => undefined);
         } catch (error) {
           if (!this.isActivePending(pending)) {
@@ -526,6 +530,10 @@ export class BrowserAudioPlayback {
       let playOperation: Promise<void>;
       try {
         const playResult: unknown = Reflect.apply(play, element, []);
+        if (!this.isActivePending(pending)) {
+          this.releaseDetachedElement(element);
+          return;
+        }
         playOperation = Promise.resolve(playResult).then(() => undefined);
       } catch (error) {
         if (!this.isActivePending(pending)) {
