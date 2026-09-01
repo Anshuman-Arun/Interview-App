@@ -218,7 +218,7 @@ function assertExactKeys(record: Record<string, unknown>, expected: readonly str
 
 function finiteNumber(value: unknown, context: string, fail: (message: string) => never): number {
   if (typeof value !== "number" || !Number.isFinite(value)) fail(context + " must be a finite number");
-  return value;
+  return Object.is(value, -0) ? 0 : value;
 }
 
 function boundedFiniteNumber(value: unknown, min: number, max: number, context: string, fail: (message: string) => never): number {
