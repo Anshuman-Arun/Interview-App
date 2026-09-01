@@ -25,6 +25,7 @@ import {
   SpeechUtteranceIdSchema,
   SpeechWorkerEventSchema,
   type SpeechFrameHeuristics,
+  type SpeechModelIdentity,
   type SpeechStreamId,
   type SpeechWorkerErrorCode,
   type SpeechWorkerEvent
@@ -127,7 +128,7 @@ export class SpeechWorkerCore {
   private readonly inFlightMessages = new Map<RequestId, InFlightMessage>();
   private readonly diagnostics: SpeechWorkerDiagnostic[] = [];
   private readonly transcriptGate = new TranscriptResultGate();
-  private readonly recognizerModelIdentity;
+  private readonly recognizerModelIdentity: SpeechModelIdentity;
   private readonly recognizerCancellationCapability: RecognizerCancellationCapability;
   private readonly maxConcurrentStreams: number;
   private readonly maxBufferedPcmBytes: number;
