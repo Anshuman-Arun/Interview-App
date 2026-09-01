@@ -68,11 +68,11 @@ const QuantRiskLimitOverridesSchema = z.object({
 export const QuantTraderScenarioConfigSchema = z.object({
   family: QuantTraderScenarioFamilySchema,
   seed: z.number().int().refine(Number.isSafeInteger, { message: "seed must be a safe integer" }),
-  rounds: positiveSafeIntegerSchema("rounds must be a positive integer").optional(),
+  rounds: positiveSafeIntegerSchema("rounds must be a positive safe integer").optional(),
   initialCash: FiniteNonnegativeNumberSchema.optional(),
   fairValue: finitePositiveNumberSchema("fairValue must be a finite positive number").optional(),
   tickSize: finitePositiveNumberSchema("tickSize must be a finite positive number").optional(),
-  maxQuoteSize: positiveSafeIntegerSchema("maxQuoteSize must be a positive integer").optional(),
+  maxQuoteSize: positiveSafeIntegerSchema("maxQuoteSize must be a positive safe integer").optional(),
   noiseTraderProbability: ProbabilitySchema.optional(),
   informedTraderProbability: ProbabilitySchema.optional(),
   noiseBuyProbability: ProbabilitySchema.optional(),
