@@ -589,6 +589,95 @@ describe("deterministic Quant Research interview engine", () => {
     expectCode(() => engine.applyAction({ actionId: "m3", kind: "CHOOSE_OPTION", option: "LINEAR" }), "SCENARIO_COMPLETE");
   });
 
+  it("preserves the only legal action and evidence history for every completed family", () => {
+    const completed: Array<{
+      engine: QuantResearchEngine;
+      expectedKinds: readonly string[];
+      expectedEvidence: readonly string[];
+    }> = [];
+
+    const bayesianEngine = new QuantResearchEngine(bayesian);
+    bayesianEngine.applyAction({ actionId: "history-b1", kind: "SUBMIT_PROBABILITY", value: 0.5 });
+    bayesianEngine.applyAction({ actionId: "history-b2", kind: "SUBMIT_PROBABILITY", value: 0.5 });
+    bayesianEngine.applyAction({ actionId: "history-b3", kind: "SUBMIT_PROBABILITY", value: 0.5 });
+    completed.push({
+      engine: bayesianEngine,
+      expectedKinds: ["SUBMIT_PROBABILITY", "SUBMIT_PROBABILITY", "SUBMIT_PROBABILITY"],
+      expectedEvidence: [
+        "CALIBRATION@PRIOR_ESTIMATE",
+        "NUMERICAL_CORRECTNESS@POSTERIOR_UPDATE",
+        "ADAPTATION@PRIOR_PERTURBATION",
+        "CONSISTENCY@PRIOR_PERTURBATION"
+      ]
+    });
+
+    const samplingEngine = new QuantResearchEngine(sampling);
+    samplingEngine.applyAction({ actionId: "history-s1", kind: "REQUEST_OBSERVATION", count: 1 });
+    samplingEngine.applyAction({ actionId: "history-s2", kind: "REQUEST_OBSERVATION", count: 1 });
+    samplingEngine.applyAction({ actionId: "history-s3", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 0 });
+    samplingEngine.applyAction({ actionId: "history-s4", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 0 });
+    completed.push({
+      engine: samplingEngine,
+      expectedKinds: ["REQUEST_OBSERVATION", "REQUEST_OBSERVATION", "SUBMIT_NUMERIC_ESTIMATE", "SUBMIT_NUMERIC_ESTIMATE"],
+      expectedEvidence: [
+        "NUMERICAL_CORRECTNESS@SAMPLING",
+        "SAMPLE_EFFICIENCY@SAMPLING",
+        "ADAPTATION@OUTLIER_PERTURBATION",
+        "ROBUSTNESS@OUTLIER_PERTURBATION"
+      ]
+    });
+
+    const experimentalEngine = new QuantResearchEngine(experimental);
+    experimentalEngine.applyAction({ actionId: "history-e1", kind: "ALLOCATE_SAMPLE", a: 2, b: 4 });
+    experimentalEngine.applyAction({ actionId: "history-e2", kind: "CHOOSE_OPTION", option: "A" });
+    experimentalEngine.applyAction({ actionId: "history-e3", kind: "ALLOCATE_SAMPLE", a: 2, b: 5 });
+    completed.push({
+      engine: experimentalEngine,
+      expectedKinds: ["ALLOCATE_SAMPLE", "CHOOSE_OPTION", "ALLOCATE_SAMPLE"],
+      expectedEvidence: [
+        "SAMPLE_EFFICIENCY@INITIAL_ALLOCATION",
+        "NUMERICAL_CORRECTNESS@EXPERIMENT_DECISION",
+        "ADAPTATION@PERTURBED_ALLOCATION",
+        "SAMPLE_EFFICIENCY@PERTURBED_ALLOCATION"
+      ]
+    });
+
+    const modelEngine = new QuantResearchEngine(model);
+    modelEngine.applyAction({ actionId: "history-m1", kind: "CHOOSE_OPTION", option: "CONSTANT" });
+    modelEngine.applyAction({ actionId: "history-m2", kind: "CHOOSE_OPTION", option: "CONSTANT" });
+    completed.push({
+      engine: modelEngine,
+      expectedKinds: ["CHOOSE_OPTION", "CHOOSE_OPTION"],
+      expectedEvidence: [
+        "NUMERICAL_CORRECTNESS@INITIAL_MODEL_CHOICE",
+        "ROBUSTNESS@OUTLIER_MODEL_CHOICE",
+        "CONSISTENCY@OUTLIER_MODEL_CHOICE"
+      ]
+    });
+
+    const optimizationEngine = new QuantResearchEngine(optimization);
+    optimizationEngine.applyAction({ actionId: "history-o1", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
+    optimizationEngine.applyAction({ actionId: "history-o2", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
+    completed.push({
+      engine: optimizationEngine,
+      expectedKinds: ["SUBMIT_PARAMETERS", "SUBMIT_PARAMETERS"],
+      expectedEvidence: [
+        "CONSTRAINT_DISCIPLINE@BASE_OPTIMIZATION",
+        "OBJECTIVE_QUALITY@BASE_OPTIMIZATION",
+        "CONSTRAINT_DISCIPLINE@PERTURBED_OPTIMIZATION",
+        "OBJECTIVE_QUALITY@PERTURBED_OPTIMIZATION",
+        "ADAPTATION@PERTURBED_OPTIMIZATION"
+      ]
+    });
+
+    for (const item of completed) {
+      expect(item.engine.getResult().status).toBe("COMPLETE");
+      expect(item.engine.getAcceptedActions().map((action) => action.kind)).toEqual(item.expectedKinds);
+      expect(item.engine.getResult().evidence.map((evidenceItem) => evidenceItem.category + "@" + evidenceItem.stage))
+        .toEqual(item.expectedEvidence);
+    }
+  });
+
   it("Bayesian scenario reveals data only after the prior estimate and supports prior perturbation", () => {
     const engine = new QuantResearchEngine(bayesian);
     expect(engine.getState().visibleData.map((item) => item.key)).not.toContain("successes");
