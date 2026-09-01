@@ -490,7 +490,7 @@ export class InterpretationCoordinator {
         return this.finishFailure(mapStatementFailure(statement.reason, request.requestId, candidateCount));
       }
 
-      const normalizedKey = JSON.stringify([\n        protocolKey(candidate.protocol),\n        evidenceKeyIdentity(candidate.target),\n        statement.canonicalStatement\n      ]);
+      const normalizedKey = `[${JSON.stringify(protocolKey(candidate.protocol))},${evidenceKeyIdentity(candidate.target)},${JSON.stringify(statement.canonicalStatement)}]`;
       const existing = admitted.get(normalizedKey);
       if (existing === undefined) {
         admitted.set(normalizedKey, {
