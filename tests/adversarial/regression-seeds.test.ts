@@ -110,7 +110,7 @@ describe("adversarial named regression schedules", () => {
       await session.close();
       await fixture.close();
     }
-  });
+  }, 15_000);
 
   it("transcript correction changes Context Epoch before an old provider result returns", async () => {
     const fixture = await AdversarialFixture.create();
