@@ -15,10 +15,14 @@ import {
   TurnCoordinator,
   createCommandEnvelope
 } from "../../../packages/interview-engine/src/index.js";
-import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
 import { RequestIdConflictError } from "../../../packages/persistence/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
+import {
+  createLegacyDefaultSessionConfiguration,
+  listInterviewCatalogEntries,
+  resolveInterviewSessionConfiguration
+} from "./interview-session-composition.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
@@ -155,6 +159,16 @@ export class LoopbackCommandServer {
   }
 
   private async dispatch(command: ClientCommand): Promise<ProtocolSuccessResponse> {
+    if (command.type === "LIST_INTERVIEW_CATALOG") {
+      return {
+        protocolVersion: 1,
+        ok: true,
+        type: "INTERVIEW_CATALOG",
+        requestId: command.requestId,
+        entries: [...listInterviewCatalogEntries()]
+      };
+    }
+
     if (command.type === "LIST_SESSIONS") {
       const sessions = this.options.sessions.listSessions();
       return {
@@ -164,14 +178,6 @@ export class LoopbackCommandServer {
         requestId: command.requestId,
         sessions: [...sessions]
       };
-    }
-
-    if (
-      command.type === "START_SESSION"
-      && command.problemId !== undefined
-      && command.problemId !== sixPeopleProblem.id
-    ) {
-      throw new ProtocolHttpError(404, "NOT_FOUND", "Problem not found");
     }
 
     if (command.type !== "START_SESSION" && !this.options.sessions.hasSession(command.sessionId)) {
@@ -189,7 +195,34 @@ export class LoopbackCommandServer {
     });
     switch (command.type) {
       case "START_SESSION": {
-        await new TurnCoordinator(writer).startSession(sixPeopleProblem, envelope);
+        if (command.configuration !== undefined && command.problemId !== undefined) {
+          throw new ProtocolHttpError(
+            400,
+            "INVALID_COMMAND",
+            "START_SESSION may not combine configuration with legacy problemId"
+          );
+        }
+
+        let composition;
+        try {
+          composition = resolveInterviewSessionConfiguration(
+            command.configuration
+              ?? createLegacyDefaultSessionConfiguration(command.problemId)
+          );
+        } catch {
+          throw new ProtocolHttpError(
+            404,
+            "NOT_FOUND",
+            "Configured interview target is not available"
+          );
+        }
+
+        await new TurnCoordinator(writer).startConfiguredSession({
+          configuration: composition.configuration,
+          ...(composition.mode === "OXFORD_MATHEMATICS"
+            ? { problem: composition.problem }
+            : {})
+        }, envelope);
         // Establish the process-lifetime recovery boundary immediately after
         // authoritative creation, before a live delivery can become in-flight.
         await this.options.sessions.ensureRecovered(command.sessionId);
@@ -198,7 +231,8 @@ export class LoopbackCommandServer {
           ok: true,
           type: "SESSION_STARTED",
           requestId: command.requestId,
-          sessionId: command.sessionId
+          sessionId: command.sessionId,
+          configuration: composition.configuration
         };
       }
       case "RESUME_SESSION": {
@@ -213,7 +247,9 @@ export class LoopbackCommandServer {
           sequence: state.sequence,
           started: state.started,
           status: state.status,
+          ...(state.configuration === undefined ? {} : { configuration: state.configuration }),
           ...(state.problem?.id !== undefined ? { problemId: state.problem.id } : {}),
+          ...(state.problem?.version !== undefined ? { problemVersion: state.problem.version } : {}),
           contextEpoch: state.contextEpoch,
           deliveryStatuses: Object.fromEntries(
             Object.values(state.deliveries).map((atom) => [atom.deliveryId, atom.status])
@@ -275,6 +311,9 @@ export class LoopbackCommandServer {
           sequence: state.sequence,
           started: state.started,
           status: state.status,
+          ...(state.configuration === undefined ? {} : { configuration: state.configuration }),
+          ...(state.problem?.id !== undefined ? { problemId: state.problem.id } : {}),
+          ...(state.problem?.version !== undefined ? { problemVersion: state.problem.version } : {}),
           contextEpoch: state.contextEpoch,
           deliveryStatuses: Object.fromEntries(
             Object.values(state.deliveries).map((atom) => [atom.deliveryId, atom.status])
