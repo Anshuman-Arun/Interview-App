@@ -794,7 +794,6 @@ function withDelivery(
           boardRevision: zeroBoardRevision,
           problemStateRevision: zeroProblemStateRevision,
           policyRevision: zeroPolicyRevision,
-          inputEpisodeId,
           turnId
         },
         provider: "fixture-provider",
@@ -860,6 +859,7 @@ function withVerification(
           boardRevision: zeroBoardRevision,
           problemStateRevision: zeroProblemStateRevision,
           policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
           turnId
         },
         candidateFormalInterpretation: "fixture",
