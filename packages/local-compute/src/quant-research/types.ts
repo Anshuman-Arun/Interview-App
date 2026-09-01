@@ -1,4 +1,5 @@
 export const QUANT_RESEARCH_VERSION = "1.0.0" as const;
+export const QUANT_RESEARCH_GENERATOR_VERSION = "quant-research-generator-v1" as const;
 export const QUANT_RESEARCH_RNG_VERSION = "xorshift32-rejection-v1" as const;
 
 export const QUANT_RESEARCH_FAMILIES = [
@@ -53,11 +54,11 @@ export interface ConstrainedOptimizationConfig {
 }
 
 export type QuantResearchScenarioDefinition =
-  | Readonly<{ family: "BAYESIAN_UPDATING"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: BayesianUpdatingConfig }>
-  | Readonly<{ family: "SAMPLING_ESTIMATION"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: SamplingEstimationConfig }>
-  | Readonly<{ family: "EXPERIMENTAL_ALLOCATION"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ExperimentalAllocationConfig }>
-  | Readonly<{ family: "MODEL_COMPARISON"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ModelComparisonConfig }>
-  | Readonly<{ family: "CONSTRAINED_OPTIMIZATION"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ConstrainedOptimizationConfig }>;
+  | Readonly<{ family: "BAYESIAN_UPDATING"; version: typeof QUANT_RESEARCH_VERSION; generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: BayesianUpdatingConfig }>
+  | Readonly<{ family: "SAMPLING_ESTIMATION"; version: typeof QUANT_RESEARCH_VERSION; generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: SamplingEstimationConfig }>
+  | Readonly<{ family: "EXPERIMENTAL_ALLOCATION"; version: typeof QUANT_RESEARCH_VERSION; generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ExperimentalAllocationConfig }>
+  | Readonly<{ family: "MODEL_COMPARISON"; version: typeof QUANT_RESEARCH_VERSION; generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ModelComparisonConfig }>
+  | Readonly<{ family: "CONSTRAINED_OPTIMIZATION"; version: typeof QUANT_RESEARCH_VERSION; generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ConstrainedOptimizationConfig }>;
 
 interface ActionBase {
   readonly actionId: string;
@@ -379,21 +380,22 @@ function parseOptimizationConfig(value: unknown): ConstrainedOptimizationConfig 
 
 export function parseQuantResearchDefinition(input: unknown): QuantResearchScenarioDefinition {
   const record = asRecord(input, "Scenario definition", failDefinition);
-  assertExactKeys(record, ["family", "version", "rngVersion", "seed", "config"], "Scenario definition", failDefinition);
+  assertExactKeys(record, ["family", "version", "generatorVersion", "rngVersion", "seed", "config"], "Scenario definition", failDefinition);
   if (record.version !== QUANT_RESEARCH_VERSION) failDefinition("Unsupported scenario version");
+  if (record.generatorVersion !== QUANT_RESEARCH_GENERATOR_VERSION) failDefinition("Unsupported scenario generator version");
   if (record.rngVersion !== QUANT_RESEARCH_RNG_VERSION) failDefinition("Unsupported deterministic RNG version");
   const seed = boundedInteger(record.seed, 0, MAX_SEED, "seed", failDefinition);
   switch (record.family) {
     case "BAYESIAN_UPDATING":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseBayesianConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseBayesianConfig(record.config) };
     case "SAMPLING_ESTIMATION":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseSamplingConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseSamplingConfig(record.config) };
     case "EXPERIMENTAL_ALLOCATION":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseExperimentalConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseExperimentalConfig(record.config) };
     case "MODEL_COMPARISON":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseModelConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseModelConfig(record.config) };
     case "CONSTRAINED_OPTIMIZATION":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseOptimizationConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseOptimizationConfig(record.config) };
     default:
       failDefinition("Unknown scenario family");
   }
