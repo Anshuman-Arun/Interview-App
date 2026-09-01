@@ -395,7 +395,7 @@ describe("deterministic Quant Research interview engine", () => {
   it("bounds reentrant parser, registry, and replay traps with domain errors", () => {
     let nestedDefinitionCode: QuantResearchError["code"] | undefined;
     const definitionTarget = { ...sampling, config: { ...sampling.config } };
-    let definitionProxy: typeof definitionTarget;
+    let definitionProxy: unknown;
     definitionProxy = new Proxy(definitionTarget, {
       getPrototypeOf(value) {
         try {
@@ -412,7 +412,7 @@ describe("deterministic Quant Research interview engine", () => {
 
     let nestedActionCode: QuantResearchError["code"] | undefined;
     const actionTarget = { actionId: "reentrant-parser", kind: "REQUEST_OBSERVATION", count: 2 } as const;
-    let actionProxy: typeof actionTarget;
+    let actionProxy: unknown;
     actionProxy = new Proxy(actionTarget, {
       ownKeys(value) {
         try {
@@ -434,7 +434,7 @@ describe("deterministic Quant Research interview engine", () => {
       rngVersion: QUANT_RESEARCH_RNG_VERSION
     } as const;
     let nestedRegistryCode: QuantResearchError["code"] | undefined;
-    let registryProxy: typeof registration[];
+    let registryProxy: unknown;
     const registryTarget = [registration];
     registryProxy = new Proxy(registryTarget, {
       ownKeys(value) {
@@ -451,7 +451,7 @@ describe("deterministic Quant Research interview engine", () => {
     expect(nestedRegistryCode).toBe("INVALID_REGISTRY");
 
     let nestedReplayCode: QuantResearchError["code"] | undefined;
-    let replayProxy: unknown[];
+    let replayProxy: unknown;
     const replayTarget: unknown[] = [];
     replayProxy = new Proxy(replayTarget, {
       ownKeys(value) {
