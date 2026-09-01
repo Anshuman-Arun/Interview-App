@@ -642,9 +642,12 @@ export const ReplayReadEntrySchema = z.object({
   const safeSummary = SAFE_REPLAY_SUMMARY_BY_KIND[
     entry.kind as keyof typeof SAFE_REPLAY_SUMMARY_BY_KIND
   ];
+  const expectedSummary = entry.stateValidation === "UNAVAILABLE_AFTER_UNKNOWN"
+    ? "Known event after unknown semantic boundary; payload intentionally withheld"
+    : safeSummary;
   if (
-    safeSummary === undefined
-    || entry.summary !== safeSummary
+    expectedSummary === undefined
+    || entry.summary !== expectedSummary
     || entry.category !== expectedReplayReadCategory(entry.kind, entry.source)
   ) {
     context.addIssue({
