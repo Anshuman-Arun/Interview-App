@@ -51,13 +51,36 @@ const valuesByDimension: Readonly<Record<EvidenceKey["dimension"], ReadonlySet<z
 export const isEvidenceValueAllowed = (key: EvidenceKey, value: z.infer<typeof EvidenceRatingSchema>): boolean =>
   valuesByDimension[key.dimension].has(value);
 
-export function evidenceKeyToString(key: EvidenceKey): string {
-  const subjectId = key.subject.kind === "CLAIM"
+function evidenceSubjectId(key: EvidenceKey): string {
+  return key.subject.kind === "CLAIM"
     ? key.subject.claimId
     : key.subject.kind === "MILESTONE"
       ? key.subject.milestoneId
       : key.subject.kind === "SKILL"
         ? key.subject.skillId
         : key.subject.approachId;
-  return `${key.problemId}|${key.subject.kind}|${subjectId}|${key.dimension}`;
+}
+
+/**
+ * Collision-free structural identity for authorization/equality checks.
+ *
+ * evidenceKeyToString is retained for its established persistence/display
+ * encoding, whose delimiter form is not safe for authority decisions because
+ * evidence IDs may themselves contain "|".
+ */
+export function evidenceKeyIdentity(key: EvidenceKey): string {
+  return JSON.stringify([
+    key.problemId,
+    key.subject.kind,
+    evidenceSubjectId(key),
+    key.dimension
+  ]);
+}
+
+export function evidenceKeysEqual(left: EvidenceKey, right: EvidenceKey): boolean {
+  return evidenceKeyIdentity(left) === evidenceKeyIdentity(right);
+}
+
+export function evidenceKeyToString(key: EvidenceKey): string {
+  return `${key.problemId}|${key.subject.kind}|${evidenceSubjectId(key)}|${key.dimension}`;
 }
