@@ -44,6 +44,7 @@ const PACKAGE_RULES = new Map([
   ["whiteboard", new Set(["domain"])],
   ["vision", new Set(["domain"])],
   ["local-compute", new Set(["domain"])],
+  ["local-runtime", new Set(["diagnostics"])],
   ["model-assets", new Set()],
   ["delivery", new Set(["domain", "events"])],
   ["interview-engine", new Set([
@@ -253,20 +254,25 @@ function locationForRelative(relativePath) {
 }
 
 function projectTargetForSpecifier(root, record, specifier) {
-  if (specifier.startsWith(".")) {
-    const absoluteTarget = path.resolve(path.dirname(record.absolutePath), specifier);
+  const normalizedSpecifier = specifier.replaceAll("\\", "/");
+  if (normalizedSpecifier.startsWith(".")) {
+    const absoluteTarget = path.resolve(path.dirname(record.absolutePath), normalizedSpecifier);
     const relativeTarget = toPosix(path.relative(root, absoluteTarget));
     if (relativeTarget === ".." || relativeTarget.startsWith("../")) return null;
     return locationForRelative(relativeTarget);
   }
 
-  if (specifier.startsWith("packages/") || specifier.startsWith("apps/") || specifier.startsWith("workers/")) {
-    return locationForRelative(specifier);
+  if (
+    normalizedSpecifier.startsWith("packages/")
+    || normalizedSpecifier.startsWith("apps/")
+    || normalizedSpecifier.startsWith("workers/")
+  ) {
+    return locationForRelative(normalizedSpecifier);
   }
 
-  const scopedMatch = /^@interview-app\/([^/]+)(?:\/|$)/u.exec(specifier);
+  const scopedMatch = /^@interview-app\/([^/]+)(?:\/|$)/u.exec(normalizedSpecifier);
   if (scopedMatch?.[1] !== undefined) return { kind: "package", name: scopedMatch[1] };
-  if (PACKAGE_RULES.has(specifier)) return { kind: "package", name: specifier };
+  if (PACKAGE_RULES.has(normalizedSpecifier)) return { kind: "package", name: normalizedSpecifier };
   return null;
 }
 
@@ -692,6 +698,41 @@ function checkEventCredentials(root, records, violations) {
   }
 }
 
+function checkBrowserProcessCapabilities(root, records, violations) {
+  for (const record of records) {
+    if (record.location.kind !== "app" || record.location.name !== "web") continue;
+    for (const specifier of extractModuleSpecifiers(record.sourceFile)) {
+      if (/^(?:node:)?child_process$/u.test(specifier)) {
+        addViolation(
+          violations,
+          "BROWSER_PROCESS_CAPABILITY",
+          record.relativePath,
+          "Browser code may not import child-process execution capabilities."
+        );
+        continue;
+      }
+      const target = projectTargetForSpecifier(root, record, specifier);
+      if (target?.kind === "app" && target.name === "server") {
+        addViolation(
+          violations,
+          "BROWSER_PROCESS_CAPABILITY",
+          record.relativePath,
+          "Browser code may not import server modules that can transitively expose Node process capabilities."
+        );
+        continue;
+      }
+      if (target?.kind === "package" && target.name === "local-runtime") {
+        addViolation(
+          violations,
+          "BROWSER_PROCESS_CAPABILITY",
+          record.relativePath,
+          "Browser code may not import the local process lifecycle package."
+        );
+      }
+    }
+  }
+}
+
 function addViolation(violations, code, file, message) {
   violations.push({ code, file, message });
 }
@@ -719,6 +760,7 @@ async function main() {
   checkAuthority(records, violations);
   checkProviders(records, violations);
   checkEventCredentials(root, records, violations);
+  checkBrowserProcessCapabilities(root, records, violations);
 
   const finalViolations = uniqueSortedViolations(violations);
   if (finalViolations.length > 0) {
