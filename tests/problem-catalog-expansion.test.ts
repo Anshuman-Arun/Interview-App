@@ -16,6 +16,7 @@ import {
 import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
+  createProviderContextSpecFingerprintSync,
   selectPedagogicalAction
 } from "../packages/interview-engine/src/index.js";
 import {
@@ -168,7 +169,8 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
           problem: {
             id: problem.id,
             version: problem.version,
-            prompt: problem.public.prompt
+            prompt: problem.public.prompt,
+            providerContextSpecSha256: createProviderContextSpecFingerprintSync(problem)
           },
           turns: {
             [turnId]: {
