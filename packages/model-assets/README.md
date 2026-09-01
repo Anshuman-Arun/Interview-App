@@ -10,6 +10,12 @@ Manifest and resolution objects must be JSON-like own data records. Inherited fi
 
 `resolveAssetManifest` requires an exact family/version and exact requested variant. Platform and architecture constraints are compatibility predicates: a generic artifact may match any target, while platform/architecture-specific matches are preferred by specificity. Equally specific matches fail as ambiguous; unsupported targets fail explicitly. `resolveAssetForCurrentPlatform` validates its request before reading/spreading it and then binds the request to the current Node platform/architecture.
 
+### Manifest source trust boundary
+
+Manifest structure is treated as hostile data and is validated accordingly, but **network destination authority is application-owned**. Production callers must select manifests from an application-controlled registry or equivalent trusted configuration; `install()` is not a general-purpose downloader for arbitrary user-, model-, document-, or remote-supplied URLs.
+
+The package deliberately does not claim SSRF protection for an attacker who is allowed to choose an otherwise-valid initial HTTP(S) `sourceUrl`. In particular, the URL validator does not reject loopback, link-local, or private-network destinations and does not implement DNS-rebinding defenses. If third-party or user-supplied manifests are supported later, the application must add an explicit origin/egress policy before passing them to this package (or this package must gain such a policy) rather than relying on redirect validation alone.
+
 ## Cache layout
 
 The caller supplies an absolute cache root. The manager canonicalizes it, pins the filesystem identity of the root and its two fixed managed parents, and creates only these managed namespaces:
