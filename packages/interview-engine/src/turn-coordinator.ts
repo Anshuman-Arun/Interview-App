@@ -743,6 +743,16 @@ export class TurnCoordinator {
       const generation = state.generations[generationId];
       if (generation === undefined) return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Unknown generation" } };
       if (generation.status !== "ACTIVE") return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Generation is not active" } };
+      if (envelope.producer !== generation.provider) {
+        return {
+          drafts: [],
+          result: {
+            accepted: false,
+            deliveryAtoms: [],
+            reason: "Provider callback identity does not match the generation provider"
+          }
+        };
+      }
       if (
         state.problem === undefined
         || state.problem.id !== input.problem.id
