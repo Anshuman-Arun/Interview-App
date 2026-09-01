@@ -1917,6 +1917,56 @@ describe("production Socratic policy engine", () => {
     expect(decision.realizationRequest.maximumDisclosure).toBeLessThan(4);
   });
 
+  it("fails closed when low-confidence VERIFIED state is paired with a CORRECT evidence mirror", () => {
+    const { state: base, turnId } = makeState();
+    const key = claimKey(
+      sixPeopleProblem,
+      "low-confidence-forged-verified-evidence",
+      "CORRECTNESS"
+    );
+    const withRequest = withVerification(base, key, "VERIFIED", { confidence: 0.8 });
+    const verification = Object.values(withRequest.verificationRequests)[0];
+    expect(verification).toBeDefined();
+    if (verification === undefined) throw new Error("missing verification fixture");
+
+    const evidenceEventId = EventIdSchema.parse(nextId("event_verify_evidence"));
+    const evidenceValue = {
+      value: "CORRECT" as const,
+      inferenceConfidence: 0.8,
+      evidenceEventIds: [
+        ...verification.evidenceEventIds,
+        verification.requestedEventId
+      ],
+      lastUpdatedSequence: withRequest.sequence + 1
+    };
+    const canonicalKey = evidenceKeyToString(key);
+    const state: SessionState = {
+      ...withRequest,
+      sequence: withRequest.sequence + 1,
+      eventIds: [...withRequest.eventIds, evidenceEventId],
+      studentEvidence: {
+        ...withRequest.studentEvidence,
+        [canonicalKey]: evidenceValue
+      },
+      evidenceHistory: {
+        ...withRequest.evidenceHistory,
+        [canonicalKey]: [{
+          evidenceEventId,
+          key,
+          value: evidenceValue,
+          status: "ACTIVE"
+        }]
+      }
+    };
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest).toMatchObject({
+      requiredAction: "CLARIFY",
+      maximumDisclosure: 0
+    });
+  });
+
   it("treats a low-confidence accepted contradiction as unresolved rather than a correction", () => {
     const { state: base, turnId } = makeState();
     const state = withVerification(
