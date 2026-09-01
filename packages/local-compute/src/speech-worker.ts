@@ -163,6 +163,7 @@ export class SpeechWorkerCore {
   public constructor(options: SpeechWorkerCoreOptions) {
     const rawOptions: unknown = options;
     if (!isRecord(rawOptions)) throw new Error("Speech worker options must be an object");
+    assertAllowedOptionKeys(rawOptions);
     const rawVadBackend = rawOptions.vadBackend;
     const rawRecognizer = rawOptions.recognizer;
     if (!isRecord(rawVadBackend)) throw new Error("Speech worker VAD backend must be an object");
@@ -1130,4 +1131,29 @@ function validateOptionalFunction(value: unknown, label: string): void {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+
+const SPEECH_WORKER_OPTION_KEYS = new Set([
+  "vadBackend",
+  "recognizer",
+  "maxConcurrentStreams",
+  "maxBufferedPcmBytes",
+  "maxRememberedMessages",
+  "maxInFlightRequests",
+  "maxPreSpeechDurationMs",
+  "vadTimeoutMs",
+  "recognizerTimeoutMs",
+  "cancellationTimeoutMs",
+  "utteranceIdFactory",
+  "endpointingFactory",
+  "vadStateFactory"
+]);
+
+function assertAllowedOptionKeys(value: Record<string, unknown>): void {
+  for (const key of Object.keys(value)) {
+    if (!SPEECH_WORKER_OPTION_KEYS.has(key)) {
+      throw new Error("Speech worker options contain an unexpected field");
+    }
+  }
 }
