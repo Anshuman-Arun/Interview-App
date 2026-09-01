@@ -622,7 +622,9 @@ export class BrowserAudioPlayback {
       if (!this.isActivePending(pending)) {
         const removeEventListener: unknown = pending.removeEventListener;
         if (typeof removeEventListener === "function") {
-          safely(() => Reflect.apply(removeEventListener, element, [type, listener]));
+          safely(() => {
+            Reflect.apply(removeEventListener, element, [type, listener]);
+          });
         }
         this.releaseDetachedElement(element);
         return false;
@@ -634,7 +636,9 @@ export class BrowserAudioPlayback {
 
     const removeEventListener: unknown = pending.removeEventListener;
     if (typeof removeEventListener === "function") {
-      safely(() => Reflect.apply(removeEventListener, element, [type, listener]));
+      safely(() => {
+        Reflect.apply(removeEventListener, element, [type, listener]);
+      });
     }
     this.releaseDetachedElement(element);
     return false;

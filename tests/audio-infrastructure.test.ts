@@ -50,12 +50,6 @@ function proxyGet(target: object, property: PropertyKey, receiver: unknown): unk
   return value;
 }
 
-function asVoidCallback<Args extends unknown[]>(
-  callback: (...args: Args) => Promise<void>
-): (...args: Args) => void {
-  return callback;
-}
-
 describe("bounded audio buffering", () => {
   it("preserves order, drops oldest on overflow, clears, and remains reusable", () => {
     const buffer = new BoundedAudioFrameBuffer(2);
@@ -409,7 +403,7 @@ describe("browser audio devices", () => {
       }
     });
     const manager = new BrowserAudioDeviceManager({
-      enumerateDevices: () => Promise.reject(hostileError)
+      enumerateDevices: () => Promise.reject(hostileError as Error)
     });
 
     expect(await manager.enumerate()).toEqual({
@@ -528,12 +522,10 @@ describe("browser audio devices", () => {
   it("contains async device-change observer rejection", async () => {
     const media = new FakeMediaDevices();
     let calls = 0;
-    const unsubscribe = new BrowserAudioDeviceManager(media).subscribe(
-      asVoidCallback(async () => {
-        calls += 1;
-        throw new Error("observer rejected");
-      })
-    );
+    const unsubscribe = new BrowserAudioDeviceManager(media).subscribe(async () => {
+      calls += 1;
+      throw new Error("observer rejected");
+    });
 
     media.emitDeviceChange();
     await Promise.resolve();
@@ -762,7 +754,7 @@ class FakeCaptureContext implements CaptureAudioContextLike {
   public async resume(): Promise<void> {
     this.resumeCount += 1;
     await this.resumeGate;
-    if (this.resumeError !== undefined) await Promise.reject(this.resumeError);
+    if (this.resumeError !== undefined) await Promise.reject(this.resumeError as Error);
     this.state = "running";
   }
 
@@ -1206,7 +1198,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError)
+      getUserMedia: () => Promise.reject(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1232,7 +1224,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError)
+      getUserMedia: () => Promise.reject(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1255,7 +1247,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError)
+      getUserMedia: () => Promise.reject(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1491,9 +1483,9 @@ describe("microphone capture lifecycle", () => {
 
     await expect(capture.start({
       onFrame: () => undefined,
-      onError: asVoidCallback(async () => {
+      onError: async () => {
         throw new Error("observer rejected");
-      })
+      }
     })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
 
     await Promise.resolve();
@@ -1747,9 +1739,9 @@ describe("microphone capture lifecycle", () => {
     const capture = new BrowserMicrophoneCapture(setup.environment);
     const errors: AudioInfrastructureError[] = [];
     await capture.start({
-      onFrame: asVoidCallback(async () => {
+      onFrame: async () => {
         throw new Error("async consumer failed");
-      }),
+      },
       onError: (error) => errors.push(error)
     });
 
@@ -4102,7 +4094,7 @@ describe("queued browser audio playback", () => {
     const setup = playbackFixture();
     const hostileElement = setup.elements[0];
     if (hostileElement === undefined) throw new Error("Expected playback element");
-    hostileElement.play = () => Promise.reject(hostileError);
+    hostileElement.play = () => Promise.reject(hostileError as Error);
     const first = setup.playback.enqueue({ id: "hostile", source: "/hostile.wav" });
     const second = setup.playback.enqueue({ id: "next", source: "/next.wav" });
 

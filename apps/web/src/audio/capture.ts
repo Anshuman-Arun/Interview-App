@@ -50,8 +50,8 @@ export interface MicrophoneCaptureOptions {
   readonly deviceId?: string;
   readonly channelCount?: number;
   readonly frameSize?: number;
-  readonly onFrame: (frame: AudioFrame) => void;
-  readonly onError?: (error: AudioInfrastructureError) => void;
+  readonly onFrame: (frame: AudioFrame) => void | Promise<void>;
+  readonly onError?: (error: AudioInfrastructureError) => void | Promise<void>;
 }
 
 interface CaptureResources {

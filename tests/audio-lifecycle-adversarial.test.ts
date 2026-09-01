@@ -125,7 +125,6 @@ function captureFixture(options: { readonly deferredGetUserMedia?: boolean } = {
 describe("microphone lifecycle adversarial ordering", () => {
   it("stops an unpublished stream when getAudioTracks access supersedes start", async () => {
     const track = new Track();
-    let capture!: BrowserMicrophoneCapture;
     let stopping: Promise<void> | undefined;
     let getterReads = 0;
     const stream = {} as AudioMediaStreamLike;
@@ -138,7 +137,7 @@ describe("microphone lifecycle adversarial ordering", () => {
       }
     });
     const createAudioContext = vi.fn(() => new DeferredCloseContext());
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: {
         getUserMedia: async () => stream
       },
@@ -156,7 +155,6 @@ describe("microphone lifecycle adversarial ordering", () => {
   });
 
   it("lets dispose win immediately during a track readyState read", async () => {
-    let capture!: BrowserMicrophoneCapture;
     let disposing: Promise<void> | undefined;
     let readyStateReads = 0;
     const track: AudioMediaStreamTrackLike & { stopCount: number } = {
@@ -176,7 +174,7 @@ describe("microphone lifecycle adversarial ordering", () => {
       getAudioTracks: () => [track]
     };
     const createAudioContext = vi.fn(() => new DeferredCloseContext());
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: {
         getUserMedia: async () => stream
       },

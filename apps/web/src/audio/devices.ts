@@ -81,7 +81,7 @@ export class BrowserAudioDeviceManager {
     }
   }
 
-  public subscribe(listener: () => void): () => void {
+  public subscribe(listener: () => void | Promise<void>): () => void {
     if (typeof listener !== "function") {
       throw new TypeError("Audio device-change listener must be callable");
     }
