@@ -140,8 +140,9 @@ export class SpeechWorkerCore {
   private readonly allocatedEndpointingPolicies = new WeakSet<AdaptiveEndpointingPolicy>();
   private readonly seenUtteranceIds = new Set<UtteranceId>();
   private rememberedResultChars = 0;
-  private readonly vadBackend: VadBackend;
-  private readonly recognizer: SpeechRecognizer;
+  private readonly classifyVad: VadBackend["classify"];
+  private readonly recognizeSpeech: SpeechRecognizer["recognize"];
+  private readonly cancelRecognition: SpeechRecognizer["cancel"];
   private readonly utteranceIdFactory: SpeechWorkerCoreOptions["utteranceIdFactory"];
   private readonly endpointingFactory: SpeechWorkerCoreOptions["endpointingFactory"];
   private readonly vadStateFactory: SpeechWorkerCoreOptions["vadStateFactory"];
@@ -159,8 +160,9 @@ export class SpeechWorkerCore {
   private shutdownPromise: Promise<void> | undefined;
 
   public constructor(options: SpeechWorkerCoreOptions) {
-    this.vadBackend = options.vadBackend;
-    this.recognizer = options.recognizer;
+    this.classifyVad = options.vadBackend.classify.bind(options.vadBackend);
+    this.recognizeSpeech = options.recognizer.recognize.bind(options.recognizer);
+    this.cancelRecognition = options.recognizer.cancel?.bind(options.recognizer);
     this.utteranceIdFactory = options.utteranceIdFactory;
     this.endpointingFactory = options.endpointingFactory;
     this.vadStateFactory = options.vadStateFactory;
@@ -340,7 +342,7 @@ export class SpeechWorkerCore {
       if (context?.recognizing === true
           && recognitionRequestId !== undefined
           && this.recognizerCancellationCapability === "RUNTIME_ABORT"
-          && this.recognizer.cancel !== undefined) {
+          && this.cancelRecognition !== undefined) {
         if (await this.attemptRecognizerCancel(recognitionRequestId, request.streamId)) {
           cancellation = "RUNTIME_ABORT_REQUESTED";
         }
@@ -373,7 +375,7 @@ export class SpeechWorkerCore {
       if (context.recognizing
           && context.recognitionRequestId !== undefined
           && this.recognizerCancellationCapability === "RUNTIME_ABORT"
-          && this.recognizer.cancel !== undefined) {
+          && this.cancelRecognition !== undefined) {
         cancellations.push(this.attemptRecognizerCancel(context.recognitionRequestId, context.streamId));
       }
       this.streams.delete(context.streamId);
@@ -428,7 +430,7 @@ export class SpeechWorkerCore {
     try {
       const isolatedVadFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
       observation = await withTimeout(
-        Promise.resolve().then(async () => this.vadBackend.classify(isolatedVadFrame, vadAbort.signal)),
+        Promise.resolve().then(async () => this.classifyVad(isolatedVadFrame, vadAbort.signal)),
         this.vadTimeoutMs,
         () => vadAbort.abort()
       );
@@ -595,7 +597,7 @@ export class SpeechWorkerCore {
     try {
       const recognizerBasis = SourceAudioBasisSchema.parse(basis);
       const raw = await withTimeout(
-        Promise.resolve().then(async () => this.recognizer.recognize({
+        Promise.resolve().then(async () => this.recognizeSpeech({
           requestId,
           utteranceId,
           pcmBytes,
@@ -907,11 +909,11 @@ export class SpeechWorkerCore {
   }
 
   private async attemptRecognizerCancel(requestId: RequestId, streamId: SpeechStreamId): Promise<boolean> {
-    const recognizer = this.recognizer;
-    if (recognizer.cancel === undefined) return false;
+    const cancelRecognition = this.cancelRecognition;
+    if (cancelRecognition === undefined) return false;
     try {
       const result = await withTimeout(
-        Promise.resolve().then(async () => recognizer.cancel?.(requestId) ?? false),
+        Promise.resolve().then(async () => cancelRecognition(requestId)),
         this.cancellationTimeoutMs,
         () => undefined
       );
