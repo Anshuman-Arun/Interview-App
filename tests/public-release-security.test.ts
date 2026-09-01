@@ -64,6 +64,18 @@ describe("public-release hygiene checker", () => {
     expect(result.status).toBe(0);
   });
 
+  it("allows package-manager credentials supplied by safe placeholders", () => {
+    const root = createFixture({
+      ".npmrc": [
+        "//registry.npmjs.org/:_authToken=${NPM_TOKEN}",
+        "_auth=${NPM_AUTH}",
+        "_password=[REDACTED]"
+      ].join("\n") + "\n"
+    });
+    const result = runChecker(root);
+    expect(result.status).toBe(0);
+  });
+
   const prohibitedCases: readonly {
     readonly name: string;
     readonly expectedCode: string;
