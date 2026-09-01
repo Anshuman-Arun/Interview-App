@@ -232,6 +232,12 @@ describe("speech protocol hard bounds", () => {
       cumulativeDurationMs: 200,
       nextEarliestTimestampMs: 200
     }, next)).toThrow(/PCM ordering state/u);
+    expect(() => advancePcmOrder({
+      ...state,
+      lastSequence: 999,
+      cumulativeDurationMs: 1,
+      nextEarliestTimestampMs: 1
+    }, next)).toThrow(/PCM ordering state/u);
     expect(() => advancePcmOrder(undefined, null as never)).toThrow(/frame must be an object/u);
   });
 
