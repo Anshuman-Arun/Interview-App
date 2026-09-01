@@ -137,11 +137,7 @@ export const FormalInterpretationRequestSchema = z.object({
       message: "Interpretation source must match its authoritative generation basis"
     });
   }
-  if (
-    value.target.problemId !== value.problem.id
-    || value.target.subject.kind !== "CLAIM"
-    || value.target.dimension !== "CORRECTNESS"
-  ) {
+  if (value.target.problemId !== value.problem.id) {
     context.addIssue({
       code: "custom",
       path: ["target"],
@@ -170,9 +166,9 @@ export const FormalInterpretationCandidateSourceSchema = z.object({
   generationId: BoundedGenerationIdSchema,
   basis: FormalInterpretationGenerationBasisSchema,
   sourceRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  inputEpisodeId: InputEpisodeIdSchema,
-  turnId: TurnIdSchema,
-  eventIds: z.array(EventIdSchema).min(1).max(MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS),
+  inputEpisodeId: BoundedInputEpisodeIdSchema,
+  turnId: BoundedTurnIdSchema,
+  eventIds: z.array(BoundedEventIdSchema).min(1).max(MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS),
   problem: FormalInterpretationProblemRefSchema
 }).strict();
 export type FormalInterpretationCandidateSource = z.infer<typeof FormalInterpretationCandidateSourceSchema>;
@@ -183,7 +179,7 @@ export const FormalInterpretationCandidateSchema = z.object({
   protocol: FormalProtocolRefSchema,
   formalStatement: z.string().min(1).max(MAX_FORMAL_INTERPRETATION_STATEMENT_CHARACTERS),
   confidence: z.number().min(0).max(1),
-  target: EvidenceKeySchema,
+  target: FormalInterpretationTargetSchema,
   source: FormalInterpretationCandidateSourceSchema
 }).strict();
 export type FormalInterpretationCandidate = z.infer<typeof FormalInterpretationCandidateSchema>;
