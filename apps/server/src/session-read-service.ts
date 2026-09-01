@@ -19,6 +19,7 @@ import {
 import {
   DEFAULT_REPLAY_BOUNDS,
   MAX_HISTORY_READ_SESSIONS,
+  MAX_REPLAY_IDENTIFIER_CHARS,
   SessionEvaluationReadResponseSchema,
   SessionHistoryReadResponseSchema,
   SessionReplayReadResponseSchema,
@@ -102,7 +103,7 @@ function boundedIdentity(value: string | undefined): string | undefined {
   if (
     value === undefined
     || value.length === 0
-    || value.length > 512
+    || value.length > MAX_REPLAY_IDENTIFIER_CHARS
     || containsControlCharacter(value)
   ) {
     return undefined;
