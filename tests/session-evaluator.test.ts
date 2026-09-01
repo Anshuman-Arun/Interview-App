@@ -404,9 +404,14 @@ describe("grounded session evaluator", () => {
     ]);
     expect(evaluateInterviewSession(rigorous, sixPeopleProblem).scores.rigor).toBe(100);
 
+    const pendingKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "pending-rigor-control" },
+      dimension: "CORRECTNESS"
+    };
     const pending = withPendingVerification(
       withTurns(boundState(), 20, "not evidence"),
-      milestoneKey("model-relations", "CORRECTNESS"),
+      pendingKey,
       30,
       "pending"
     );
