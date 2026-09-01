@@ -1,9 +1,9 @@
 import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
 import {
   ImageSnapshot,
-  VisionImageArtifact,
   assertVisionRasterSource,
   visionRasterIdentity,
+  type VisionImageArtifact,
   type VisionRasterIdentity,
   type VisionRasterSource
 } from "./types.js";
