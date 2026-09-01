@@ -43,9 +43,12 @@ import {
 } from "./speech-pcm.js";
 import {
   AdaptiveEndpointingPolicy,
+  EndpointingDecisionSchema,
   VadBackendProtocolError,
   VadObservationSchema,
+  VoiceActivitySnapshotSchema,
   VoiceActivityStateMachine,
+  VoiceActivityStepSchema,
   type EndpointingDecision,
   type VadBackend
 } from "./speech-vad.js";
@@ -455,7 +458,7 @@ export class SpeechWorkerCore {
 
     let stateBefore;
     try {
-      stateBefore = context.vad.snapshot().state;
+      stateBefore = VoiceActivitySnapshotSchema.parse(context.vad.snapshot()).state;
     } catch {
       this.abandonStream(context);
       throw new SpeechWorkerCoreError("INTERNAL_ERROR", "VAD state could not be inspected");
@@ -508,10 +511,12 @@ export class SpeechWorkerCore {
 
     let step;
     try {
-      step = context.vad.step(observation.speechProbability, frame.durationMs);
+      step = VoiceActivityStepSchema.parse(
+        context.vad.step(observation.speechProbability, frame.durationMs)
+      );
     } catch {
       this.abandonStream(context);
-      throw new SpeechWorkerCoreError("VAD_PROTOCOL_ERROR", "VAD backend returned an invalid observation");
+      throw new SpeechWorkerCoreError("INTERNAL_ERROR", "VAD state machine returned an invalid state");
     }
 
     if (!context.speechConfirmed) {
@@ -757,15 +762,15 @@ export class SpeechWorkerCore {
     }
   ): EndpointingDecision {
     try {
-      const snapshot = context.vad.snapshot();
-      return context.endpointing.decide({
+      const snapshot = VoiceActivitySnapshotSchema.parse(context.vad.snapshot());
+      return EndpointingDecisionSchema.parse(context.endpointing.decide({
         ...snapshot,
         ...(options.forceMaximumDuration === true
           ? { utteranceMs: context.endpointing.getMaximumUtteranceMs() }
           : {}),
         ...(options.explicitFlush === undefined ? {} : { explicitFlush: options.explicitFlush }),
         ...(options.appearsIncomplete === undefined ? {} : { appearsIncomplete: options.appearsIncomplete })
-      });
+      }));
     } catch {
       this.abandonStream(context);
       throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Endpointing policy failed");
@@ -774,7 +779,7 @@ export class SpeechWorkerCore {
 
   private wouldExceedEndpointMaximum(context: StreamContext, nextFrameDurationMs: number): boolean {
     try {
-      const snapshot = context.vad.snapshot();
+      const snapshot = VoiceActivitySnapshotSchema.parse(context.vad.snapshot());
       return context.utteranceId !== undefined
         && context.buffer.getSampleCount() > 0
         && snapshot.utteranceMs + nextFrameDurationMs > context.endpointing.getMaximumUtteranceMs() + 0.001;
