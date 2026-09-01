@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:replay": "vitest run tests/replay.test.ts tests/vertical-slice.test.ts tests/quant-research-engine.test.ts tests/quant-research-persistence.test.ts",
-    "test:property": "vitest run tests/concurrency.property.test.ts tests/quant-research-engine.property.test.ts",
+    "test:property": "vitest run tests/concurrency.property.test.ts tests/quant-research-engine.property.test.ts tests/formal-interpretation-routing.property.test.ts",
     "test:e2e": "vitest run tests/e2e-typed-interview.test.ts",
     "dev:web": "vite apps/web",
     "build:web": "vite build apps/web",
