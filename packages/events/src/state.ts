@@ -104,6 +104,8 @@ export interface GenerationState {
   readonly pedagogicalAction?: RealizationRequest;
   /** Derived from PROPOSAL_VALIDATED and preserved through later supersession. */
   readonly interviewerProposalValidated?: true;
+  /** Exact interviewer proposal that was present when application validation succeeded. */
+  readonly validatedInterviewerProposal?: InterviewerProposal;
   readonly status: "ACTIVE" | "PROPOSAL_RECEIVED" | "VALIDATED" | "REJECTED" | "SUPERSEDED";
   readonly contextManifest?: ContextCompilationManifest;
   readonly proposal?: InterviewerProposal;
