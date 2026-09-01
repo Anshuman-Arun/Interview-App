@@ -552,9 +552,9 @@ function publicPrompt(state: InternalState): string {
       if (state.stage === "OUTLIER_PERTURBATION") return "One contaminated observation has been introduced. Submit a revised estimate of the unchanged latent center.";
       return "Scenario complete.";
     case "EXPERIMENTAL_ALLOCATION":
-      if (state.stage === "INITIAL_ALLOCATION") return "Allocate samples across experiments A and B under the stated budget.";
+      if (state.stage === "INITIAL_ALLOCATION") return "Allocate samples across experiments A and B to minimize the variance of the estimated mean difference under the stated budget.";
       if (state.stage === "EXPERIMENT_DECISION") return "Choose the experiment with the larger latent mean using the revealed summaries.";
-      if (state.stage === "PERTURBED_ALLOCATION") return "Experiment costs changed. Reallocate samples under the same total budget.";
+      if (state.stage === "PERTURBED_ALLOCATION") return "Experiment costs changed. Reallocate samples to minimize mean-difference variance under the same total budget.";
       return "Scenario complete.";
     case "MODEL_COMPARISON":
       if (state.stage === "INITIAL_MODEL_CHOICE") return "Choose which generating family is more plausible: a constant mean or a linear trend whose slope magnitude is at least the stated minimum.";
@@ -612,8 +612,10 @@ function publicData(state: InternalState): readonly QuantResearchPublicDatum[] {
         datum("totalBudget", "Total sample budget", state.config.totalBudget),
         datum("costA", "Current cost per A sample", perturbed ? state.config.perturbedCostA : state.config.costA),
         datum("costB", "Current cost per B sample", perturbed ? state.config.perturbedCostB : state.config.costB),
-        datum("noiseA", "A noise bound", state.config.noiseA),
-        datum("noiseB", "B noise bound", state.config.noiseB)
+        datum("noiseA", "A discrete-uniform integer-noise radius", state.config.noiseA),
+        datum("noiseB", "B discrete-uniform integer-noise radius", state.config.noiseB),
+        datum("noiseModel", "Observation noise model", "INDEPENDENT_DISCRETE_UNIFORM_INTEGER"),
+        datum("allocationObjective", "Allocation objective", "MINIMIZE_VARIANCE_OF_ESTIMATED_MEAN_DIFFERENCE")
       ];
       if (perturbed) {
         data.push(datum("baselineCostA", "Baseline cost per A sample", state.config.costA));
