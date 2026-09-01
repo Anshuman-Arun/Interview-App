@@ -353,10 +353,21 @@ export class InterpretationCoordinator {
   }
 
   public interpretAndVerify(input: unknown): Promise<InterpretationExecutionOutcome> {
-    if (requestExceedsStructuralBounds(input)) {
+    let requestExceedsBounds: boolean;
+    try {
+      requestExceedsBounds = requestExceedsStructuralBounds(input);
+    } catch {
+      return Promise.resolve(failed("INVALID_REQUEST", "MALFORMED_REQUEST", 0));
+    }
+    if (requestExceedsBounds) {
       return Promise.resolve(failed("RESOURCE_LIMIT", "RESOURCE_LIMIT", 0));
     }
-    const parsed = FormalInterpretationRequestSchema.safeParse(input);
+    let parsed: ReturnType<typeof FormalInterpretationRequestSchema.safeParse>;
+    try {
+      parsed = FormalInterpretationRequestSchema.safeParse(input);
+    } catch {
+      return Promise.resolve(failed("INVALID_REQUEST", "MALFORMED_REQUEST", 0));
+    }
     if (!parsed.success) {
       return Promise.resolve(failed("INVALID_REQUEST", "MALFORMED_REQUEST", 0));
     }
@@ -458,7 +469,18 @@ export class InterpretationCoordinator {
     }
     const rawResult: unknown = providerRace.value;
 
-    if (providerResultExceedsStructuralBounds(rawResult)) {
+    let providerResultExceedsBounds: boolean;
+    try {
+      providerResultExceedsBounds = providerResultExceedsStructuralBounds(rawResult);
+    } catch {
+      return this.finishFailure(failed(
+        "INVALID_PROVIDER_OUTPUT",
+        "MALFORMED_PROVIDER_RESULT",
+        0,
+        request.requestId
+      ));
+    }
+    if (providerResultExceedsBounds) {
       return this.finishFailure(failed(
         "RESOURCE_LIMIT",
         "RESOURCE_LIMIT",
@@ -466,7 +488,17 @@ export class InterpretationCoordinator {
         request.requestId
       ));
     }
-    const providerResult = InterpretationProviderResultSchema.safeParse(rawResult);
+    let providerResult: ReturnType<typeof InterpretationProviderResultSchema.safeParse>;
+    try {
+      providerResult = InterpretationProviderResultSchema.safeParse(rawResult);
+    } catch {
+      return this.finishFailure(failed(
+        "INVALID_PROVIDER_OUTPUT",
+        "MALFORMED_PROVIDER_RESULT",
+        0,
+        request.requestId
+      ));
+    }
     if (!providerResult.success) {
       return this.finishFailure(failed(
         "INVALID_PROVIDER_OUTPUT",
