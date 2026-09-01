@@ -1280,7 +1280,12 @@ function assertAdapterMatchesResolvedDefinition(
       throw adapterDefinitionMismatch();
     }
   } catch (error) {
-    if (isProviderControlPlaneError(error)) throw error;
+    if (
+      isProviderControlPlaneError(error)
+      && error.code === "ADAPTER_DEFINITION_MISMATCH"
+    ) {
+      throw error;
+    }
     throw adapterDefinitionMismatch();
   }
 }

@@ -1710,6 +1710,48 @@ describe("adapter factory adversarial boundary", () => {
       .not.toContain("private-adapter-secret");
   });
 
+  it("does not let branded adapter metadata errors spoof another control-plane code", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(providerInput({
+      id: "mock-model",
+      adapterVersion: "1.0.0",
+      models: [{
+        id: "branded-error-model",
+        displayName: "Branded Error Model",
+        capabilities: firstModel(MOCK_PROVIDER_DEFINITION).capabilities
+      }],
+      adapterFactory: {
+        id: "branded-error-factory",
+        createAdapter() {
+          const adapter = new MockModelAdapter({ proposal: PROPOSAL });
+          Object.defineProperty(adapter, "name", {
+            configurable: true,
+            enumerable: true,
+            get() {
+              throw new ProviderControlPlaneError(
+                "CREDENTIALS_REQUIRED",
+                "Adapter metadata must not control validation error codes"
+              );
+            }
+          });
+          return adapter;
+        }
+      }
+    }));
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: "mock-model",
+        modelId: "branded-error-model",
+        enabled: true
+      }
+    });
+
+    await expect(resolveAdapterFactory(resolved).createAdapter({ resolved }))
+      .rejects.toMatchObject({ code: "ADAPTER_DEFINITION_MISMATCH" });
+  });
+
   it("rejects runtime data-use values that contradict the registered execution kind", async () => {
     for (const entry of [
       {
