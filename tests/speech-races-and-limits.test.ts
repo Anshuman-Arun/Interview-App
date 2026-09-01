@@ -325,7 +325,7 @@ describe("speech worker adversarial races and hard limits", () => {
     const vadBackend: VadBackend = {
       async classify(input) {
         input.bytes.fill(0);
-        return { speechProbability: 1 };
+        return { speechProbability: input.envelope.sequence < 3 ? 1 : 0 };
       }
     };
     const recognizer: SpeechRecognizer = {
