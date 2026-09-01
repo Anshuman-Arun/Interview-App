@@ -1,6 +1,7 @@
 export const QUANT_RESEARCH_VERSION = "1.0.0" as const;
 export const QUANT_RESEARCH_GENERATOR_VERSION = "quant-research-generator-v1" as const;
 export const QUANT_RESEARCH_RNG_VERSION = "xorshift32-rejection-v1" as const;
+export const QUANT_RESEARCH_VERIFIER_VERSION = "quant-research-deterministic-verifier-v1" as const;
 
 export const QUANT_RESEARCH_FAMILIES = Object.freeze([
   "BAYESIAN_UPDATING",
@@ -138,6 +139,81 @@ export interface QuantResearchTransition {
   readonly actionId: string;
   readonly state: QuantResearchPublicState;
 }
+
+export interface QuantResearchPersistedRational {
+  readonly numerator: number;
+  readonly denominator: number;
+}
+
+export type QuantResearchAuthoritativeSnapshot =
+  | Readonly<{
+      family: "BAYESIAN_UPDATING";
+      verifierVersion: typeof QUANT_RESEARCH_VERIFIER_VERSION;
+      generatedParameters: Readonly<{
+        observations: readonly boolean[];
+        successes: number;
+      }>;
+      gradingData: Readonly<{
+        priorPredictive: QuantResearchPersistedRational;
+        posterior: QuantResearchPersistedRational;
+        perturbedPosterior: QuantResearchPersistedRational;
+      }>;
+    }>
+  | Readonly<{
+      family: "SAMPLING_ESTIMATION";
+      verifierVersion: typeof QUANT_RESEARCH_VERIFIER_VERSION;
+      generatedParameters: Readonly<{
+        hiddenCenter: number;
+        hiddenPopulation: readonly number[];
+        sampleOrder: readonly number[];
+        contaminatedObservation: number;
+      }>;
+      gradingData: Readonly<{ validatedCenter: number }>;
+    }>
+  | Readonly<{
+      family: "EXPERIMENTAL_ALLOCATION";
+      verifierVersion: typeof QUANT_RESEARCH_VERIFIER_VERSION;
+      generatedParameters: Readonly<{
+        hiddenMeanA: number;
+        hiddenMeanB: number;
+        sequenceA: readonly number[];
+        sequenceB: readonly number[];
+      }>;
+      gradingData: Readonly<{
+        baseOptimalVariance: QuantResearchPersistedRational;
+        baseOptimalAllocations: readonly Readonly<{ a: number; b: number }>[];
+        perturbedOptimalVariance: QuantResearchPersistedRational;
+        perturbedOptimalAllocations: readonly Readonly<{ a: number; b: number }>[];
+      }>;
+    }>
+  | Readonly<{
+      family: "MODEL_COMPARISON";
+      verifierVersion: typeof QUANT_RESEARCH_VERIFIER_VERSION;
+      generatedParameters: Readonly<{
+        hiddenModel: "CONSTANT" | "LINEAR";
+        hiddenIntercept: number;
+        hiddenSlope: number;
+        points: readonly Readonly<{ x: number; y: number }>[];
+        perturbedPoints: readonly Readonly<{ x: number; y: number }>[];
+      }>;
+      gradingData: Readonly<{ validatedModel: "CONSTANT" | "LINEAR" }>;
+    }>
+  | Readonly<{
+      family: "CONSTRAINED_OPTIMIZATION";
+      verifierVersion: typeof QUANT_RESEARCH_VERIFIER_VERSION;
+      generatedParameters: Readonly<{
+        coefficientX: number;
+        coefficientY: number;
+        basePenalty: number;
+      }>;
+      gradingData: Readonly<{
+        baseBestObjective: number;
+        baseOptimalPoints: readonly Readonly<{ x: number; y: number }>[];
+        perturbedBestObjective: number;
+        perturbedOptimalPoints: readonly Readonly<{ x: number; y: number }>[];
+      }>;
+    }>;
+
 
 export type QuantResearchErrorCode =
   | "INVALID_DEFINITION"
