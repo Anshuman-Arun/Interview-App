@@ -1145,6 +1145,16 @@ export const SessionHistoryReadResponseSchema = z.object({
       message: "History read response contains duplicate session identities"
     });
   }
+  if (
+    history.longitudinal.includedSessionCount > history.sessions.length
+    || history.longitudinal.sessionTruncation.remainingCount
+      < history.sessionTruncation.remainingCount
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Longitudinal coverage cannot exceed retained session-card coverage"
+    });
+  }
 });
 export type SessionHistoryReadResponse = z.infer<typeof SessionHistoryReadResponseSchema>;
 
