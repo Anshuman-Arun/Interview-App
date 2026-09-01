@@ -256,11 +256,9 @@ export class ProviderConfigurationSafetyError extends Error {
   }
 }
 
-function isProviderConfigurationSafetyError(
-  value: unknown
-): value is ProviderConfigurationSafetyError {
-  return ProviderConfigurationSafetyError.isSafetyError(value);
-}
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of the private-brand checker.
+const isProviderConfigurationSafetyError =
+  ProviderConfigurationSafetyError.isSafetyError;
 
 export type SafeProviderConfigurationPrimitive = string | number | boolean | null;
 export type SafeProviderConfigurationValue =
