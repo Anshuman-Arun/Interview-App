@@ -280,8 +280,15 @@ export class VerificationCoordinator {
       const episode = state.inputEpisodes[input.inputEpisodeId];
       const turn = state.turns[input.turnId];
       if (episode === undefined || episode.status !== "COMMITTED") throw new Error("Verification requires a committed InputEpisode");
-      if (turn === undefined || turn.inputEpisodeId !== input.inputEpisodeId) throw new Error("Verification Turn does not match its InputEpisode");
-      if (state.lastCommittedInputSequence === undefined) throw new Error("Verification requires a committed Turn");
+      if (
+        turn === undefined
+        || turn.turnId !== input.turnId
+        || turn.inputEpisodeId !== input.inputEpisodeId
+      ) throw new Error("Verification Turn does not match its InputEpisode");
+      if (
+        state.lastCommittedInputSequence === undefined
+        || turn.committedSequence !== state.lastCommittedInputSequence
+      ) throw new Error("Verification requires the latest committed Turn");
       if (state.problem?.id !== evidenceKey.problemId) throw new Error("Verification evidence is scoped to a different problem");
       if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
         throw new Error("Phase 0 deterministic verification may commit only claim correctness evidence");
