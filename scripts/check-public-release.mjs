@@ -69,7 +69,9 @@ const CONTENT_RULES = [
   },
   {
     code: "SECRET_PATTERN",
-    pattern: /(?:AKIA[0-9A-Z]{16}|(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,}|\bsk-[A-Za-z0-9_-]{20,}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}\b|-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----)/gu,
+    // Character classes preserve exact matching while preventing this scanner
+    // source from containing the literal private-key signatures it detects.
+    pattern: /(?:AKIA[0-9A-Z]{16}|(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,}|\bsk-[A-Za-z0-9_-]{20,}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}\b|-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE[ ]KEY-----|-----BEGIN PGP PRIVATE[ ]KEY BLOCK-----)/gu,
     message: "tracked content matches a high-confidence credential/private-key signature"
   },
   {
