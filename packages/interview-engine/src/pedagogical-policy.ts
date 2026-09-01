@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   DeliveryAtomSchema,
+  DisclosureIdSchema,
   DisclosureLevelSchema,
   EvidenceKeySchema,
   EvidenceValueSchema,
@@ -40,8 +41,8 @@ const PolicyProblemViewSchema = z.object({
   interviewer: z.object({
     reasoningGraph: ReasoningGraphSchema,
     protectedDisclosures: z.array(ProtectedDisclosureSchema).max(MAX_PROTECTED_DISCLOSURES)
-  }).passthrough()
-}).passthrough();
+  }).loose()
+}).loose();
 
 type PolicyProblemView = z.infer<typeof PolicyProblemViewSchema>;
 type EvidenceSubject = EvidenceKey["subject"];
@@ -394,11 +395,12 @@ function collectActiveEvidence(
       return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
     }
 
-    const activeRecords = rawHistory.filter((rawRecord) => {
+    const historyItems: readonly unknown[] = rawHistory;
+    const activeRecords = historyItems.filter((rawRecord) => {
       if (!isRecord(rawRecord)) return false;
       return rawRecord["status"] === "ACTIVE";
     });
-    const hasUnknownStatus = rawHistory.some((rawRecord) => {
+    const hasUnknownStatus = historyItems.some((rawRecord) => {
       if (!isRecord(rawRecord)) return true;
       const status = rawRecord["status"];
       return status !== "ACTIVE" && status !== "SUPERSEDED" && status !== "STALE";
@@ -638,7 +640,7 @@ function findConflictTarget(
   for (const signal of evidence) targets.set(targetToString(signal.target), signal.target);
   for (const signal of verification) targets.set(targetToString(signal.target), signal.target);
 
-  for (const [targetKey, target] of [...targets.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
+  for (const [, target] of [...targets.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
     const subjectSignals = evidence.filter((signal) => sameTarget(signal.target, target));
     const values = new Set(subjectSignals.map((signal) => signal.value.value));
     const verificationStatuses = verificationStatusesForTarget(verification, target);
@@ -943,15 +945,22 @@ function validateDisclosureLedger(
   state: Readonly<SessionState>,
   graph: GraphContext
 ): CollectionResult<ReadonlySet<DisclosureId>> {
-  if (!Array.isArray(state.disclosureLedger) || state.disclosureLedger.length > MAX_PROTECTED_DISCLOSURES) {
+  const rawLedger: unknown = state.disclosureLedger;
+  if (!Array.isArray(rawLedger)) {
+    return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+  }
+  if (rawLedger.length > MAX_PROTECTED_DISCLOSURES) {
     return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
   }
+
+  const ledgerItems: readonly unknown[] = rawLedger;
   const delivered = new Set<DisclosureId>();
-  for (const disclosureId of state.disclosureLedger) {
-    if (!graph.disclosureIds.has(disclosureId)) {
+  for (const rawDisclosureId of ledgerItems) {
+    const parsed = DisclosureIdSchema.safeParse(rawDisclosureId);
+    if (!parsed.success || !graph.disclosureIds.has(parsed.data)) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
-    delivered.add(disclosureId);
+    delivered.add(parsed.data);
   }
   return { ok: true, value: delivered };
 }
