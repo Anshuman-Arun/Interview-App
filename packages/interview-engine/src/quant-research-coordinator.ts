@@ -107,6 +107,9 @@ function reconstructEngine(state: Readonly<SessionState>): QuantResearchEngine {
   const eventDefinition = QuantResearchScenarioDefinitionEventSchema.parse(persisted.definition);
   const definition = parseQuantResearchDefinition(eventDefinition);
   const engine = new QuantResearchEngine(definition);
+  if (state.problem.prompt !== engine.getState().prompt) {
+    throw new Error("Persisted Quant Research public prompt does not match deterministic regeneration");
+  }
 
   const expectedSnapshot = canonicalEventSnapshot(engine);
   const storedSnapshot = QuantResearchAuthoritativeSnapshotEventSchema.parse(persisted.authoritativeSnapshot);
