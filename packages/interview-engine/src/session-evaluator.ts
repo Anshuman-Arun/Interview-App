@@ -1,6 +1,7 @@
 import {
   EvaluationRubricSchema,
   SessionEvaluationSchema,
+  assertReasoningGraphIntegrity,
   evidenceKeyToString,
   isDisclosedStatus,
   isEvidenceValueAllowed,
@@ -44,7 +45,12 @@ const LIMITS = {
   disclosureRefs: 50_000,
   reasoningEdges: 50_000,
   approaches: 10_000,
-  protectedDisclosures: 20_000
+  protectedDisclosures: 20_000,
+  events: 250_000,
+  evidenceProvenanceRefs: 150_000,
+  verificationProvenanceRefs: 100_000,
+  reasoningRefs: 100_000,
+  problemFingerprintCharacters: 2_000_000
 } as const;
 
 const SUPPORT_RANK: Readonly<Record<EvaluationSupportLevel, number>> = {
@@ -220,6 +226,9 @@ function assertProblemIdentity(
   state: Readonly<SessionState>,
   problem: InterviewProblem
 ): void {
+  assertReasoningGraphIntegrity(problem.interviewer.reasoningGraph);
+  assertProblemDefinitionUniqueness(problem);
+
   if (state.problem === undefined) {
     const hasAuthoritativeActivity =
       state.started ||
@@ -248,6 +257,51 @@ function assertProblemIdentity(
   }
 }
 
+function assertProblemDefinitionUniqueness(problem: InterviewProblem): void {
+  const graph = problem.interviewer.reasoningGraph;
+  assertUniqueStrings(
+    graph.approaches.map((approach) => approach.id),
+    "reasoning-graph approach"
+  );
+  assertUniqueStrings(
+    graph.milestones.map((milestone) => milestone.id),
+    "reasoning-graph milestone"
+  );
+  assertUniqueStrings(
+    problem.interviewer.protectedDisclosures.map((disclosure) => disclosure.id),
+    "protected-disclosure"
+  );
+
+  const protectedDisclosureIds = new Set(
+    problem.interviewer.protectedDisclosures.map((disclosure) => disclosure.id)
+  );
+  for (const milestone of graph.milestones) {
+    assertUniqueStrings(milestone.approachIds, "milestone approach reference");
+    assertUniqueStrings(
+      milestone.optionalPrerequisiteIds,
+      "milestone optional-prerequisite reference"
+    );
+    assertUniqueStrings(
+      milestone.protectedDisclosureIds,
+      "milestone protected-disclosure reference"
+    );
+    for (const disclosureId of milestone.protectedDisclosureIds) {
+      if (!protectedDisclosureIds.has(disclosureId)) {
+        throw new Error("Evaluation reasoning graph references an unknown protected disclosure");
+      }
+    }
+  }
+
+  const edgeKeys = graph.edges.map((edge) => edge.from + "\u0000" + edge.to);
+  assertUniqueStrings(edgeKeys, "reasoning-graph edge");
+}
+
+function assertUniqueStrings(values: readonly string[], label: string): void {
+  if (new Set(values).size !== values.length) {
+    throw new Error("Evaluation problem contains duplicate " + label + " identities");
+  }
+}
+
 function assertEvaluationStateConsistency(
   state: Readonly<SessionState>,
   problem: InterviewProblem
@@ -260,6 +314,21 @@ function assertEvaluationStateConsistency(
   );
   const activeByKey = new Map<string, EvidenceRecordState>();
   const seenEvidenceEventIds = new Set<string>();
+  const authoritativeEventIds = new Set(state.eventIds);
+  if (authoritativeEventIds.size !== state.eventIds.length) {
+    throw new Error("Evaluation authoritative event history contains duplicate event identities");
+  }
+
+  for (const [turnId, turn] of Object.entries(state.turns)) {
+    if (turn.turnId !== turnId) {
+      throw new Error("Evaluation turn identity does not match its state key");
+    }
+  }
+  for (const [generationId, generation] of Object.entries(state.generations)) {
+    if (generation.generationId !== generationId) {
+      throw new Error("Evaluation generation identity does not match its state key");
+    }
+  }
   const protectedDisclosureById = new Map(
     problem.interviewer.protectedDisclosures.map((disclosure) => [disclosure.id, disclosure] as const)
   );
@@ -282,6 +351,16 @@ function assertEvaluationStateConsistency(
         throw new Error("Evaluation evidence history reuses an evidence-event identity");
       }
       seenEvidenceEventIds.add(record.evidenceEventId);
+      if (!authoritativeEventIds.has(record.evidenceEventId)) {
+        throw new Error("Evaluation evidence record references a non-authoritative evidence event");
+      }
+      if (
+        record.value.evidenceEventIds.some(
+          (eventId) => !authoritativeEventIds.has(eventId)
+        )
+      ) {
+        throw new Error("Evaluation evidence provenance references an unknown authoritative event");
+      }
       if (!isEvidenceValueAllowed(record.key, record.value.value)) {
         throw new Error("Evaluation evidence record contains a value invalid for its dimension");
       }
@@ -376,6 +455,16 @@ function assertEvaluationStateConsistency(
   for (const [requestId, request] of Object.entries(state.verificationRequests)) {
     if (request.verificationRequestId !== requestId) {
       throw new Error("Evaluation verification-request identity does not match its state key");
+    }
+    if (!authoritativeEventIds.has(request.requestedEventId)) {
+      throw new Error("Evaluation verification request references a non-authoritative request event");
+    }
+    if (
+      request.evidenceEventIds.some(
+        (eventId) => !authoritativeEventIds.has(eventId)
+      )
+    ) {
+      throw new Error("Evaluation verification request provenance references an unknown authoritative event");
     }
     if (request.status === "ACCEPTED") {
       if (request.result === undefined) {
@@ -482,12 +571,22 @@ function assertEvaluationInputBounds(
   if (turnCount > LIMITS.turns) {
     throw new Error("Evaluation input exceeds the supported turn bound");
   }
+  if (state.eventIds.length > LIMITS.events) {
+    throw new Error("Evaluation input exceeds the supported authoritative-event bound");
+  }
 
   let evidenceRecordCount = 0;
+  let evidenceProvenanceRefCount = 0;
   for (const history of Object.values(state.evidenceHistory)) {
     evidenceRecordCount += history.length;
     if (evidenceRecordCount > LIMITS.evidenceRecords) {
       throw new Error("Evaluation input exceeds the supported evidence-history bound");
+    }
+    for (const record of history) {
+      evidenceProvenanceRefCount += record.value.evidenceEventIds.length;
+      if (evidenceProvenanceRefCount > LIMITS.evidenceProvenanceRefs) {
+        throw new Error("Evaluation input exceeds the supported evidence-provenance bound");
+      }
     }
   }
 
@@ -499,6 +598,13 @@ function assertEvaluationInputBounds(
   const verificationCount = Object.keys(state.verificationRequests).length;
   if (verificationCount > LIMITS.verificationRequests) {
     throw new Error("Evaluation input exceeds the supported verification bound");
+  }
+  let verificationProvenanceRefCount = 0;
+  for (const request of Object.values(state.verificationRequests)) {
+    verificationProvenanceRefCount += request.evidenceEventIds.length;
+    if (verificationProvenanceRefCount > LIMITS.verificationProvenanceRefs) {
+      throw new Error("Evaluation input exceeds the supported verification-provenance bound");
+    }
   }
 
   if (problem.interviewer.reasoningGraph.milestones.length > LIMITS.milestones) {
@@ -514,6 +620,21 @@ function assertEvaluationInputBounds(
     throw new Error("Evaluation input exceeds the supported protected-disclosure bound");
   }
 
+  let reasoningRefCount = 0;
+  for (const milestone of problem.interviewer.reasoningGraph.milestones) {
+    reasoningRefCount +=
+      milestone.approachIds.length +
+      milestone.optionalPrerequisiteIds.length +
+      milestone.protectedDisclosureIds.length;
+    if (reasoningRefCount > LIMITS.reasoningRefs) {
+      throw new Error("Evaluation input exceeds the supported reasoning-reference bound");
+    }
+  }
+
+  if (problemFingerprintCharacterCount(problem) > LIMITS.problemFingerprintCharacters) {
+    throw new Error("Evaluation problem exceeds the supported fingerprint-input bound");
+  }
+
   let disclosureRefCount = 0;
   for (const delivery of Object.values(state.deliveries)) {
     disclosureRefCount += delivery.disclosureIds.length;
@@ -521,6 +642,42 @@ function assertEvaluationInputBounds(
       throw new Error("Evaluation input exceeds the supported disclosure-reference bound");
     }
   }
+}
+
+function problemFingerprintCharacterCount(problem: InterviewProblem): number {
+  let count = problem.id.length +
+    problem.version.length +
+    problem.public.prompt.length +
+    problem.interviewer.difficulty.length +
+    problem.interviewer.reasoningGraph.version.length;
+
+  for (const value of problem.public.givenInformation) count += value.length;
+  for (const value of problem.interviewer.topics) count += value.length;
+  for (const approach of problem.interviewer.reasoningGraph.approaches) {
+    count += approach.id.length + approach.label.length;
+  }
+  for (const milestone of problem.interviewer.reasoningGraph.milestones) {
+    count += milestone.id.length + milestone.description.length;
+    for (const value of milestone.approachIds) count += value.length;
+    for (const value of milestone.optionalPrerequisiteIds) count += value.length;
+    for (const value of milestone.protectedDisclosureIds) count += value.length;
+  }
+  for (const edge of problem.interviewer.reasoningGraph.edges) {
+    count += edge.from.length + edge.to.length;
+  }
+  for (const error of problem.interviewer.reasoningGraph.commonErrors) {
+    count += error.id.length + error.description.length;
+  }
+  for (const extension of problem.interviewer.reasoningGraph.extensions) {
+    count += extension.id.length + extension.prompt.length;
+  }
+  for (const disclosure of problem.interviewer.protectedDisclosures) {
+    count += disclosure.id.length + disclosure.fact.length;
+    for (const formulation of disclosure.equivalentFormulations) {
+      count += formulation.length;
+    }
+  }
+  return count;
 }
 
 function collectActiveEvidence(
@@ -550,6 +707,9 @@ function collectAcceptedVerifications(
   problemId: string
 ): ReadonlyMap<string, readonly VerificationRequestState[]> {
   const byKey = new Map<string, VerificationRequestState[]>();
+  const eventOrder = new Map(
+    state.eventIds.map((eventId, index) => [eventId, index] as const)
+  );
   const accepted = Object.values(state.verificationRequests)
     .filter(
       (request) =>
@@ -559,7 +719,8 @@ function collectAcceptedVerifications(
     )
     .sort(
       (left, right) =>
-        left.basis.committedInputSequence - right.basis.committedInputSequence ||
+        requireEventOrder(eventOrder, left.requestedEventId) -
+          requireEventOrder(eventOrder, right.requestedEventId) ||
         compareStrings(left.verificationRequestId, right.verificationRequestId)
     );
 
@@ -927,43 +1088,32 @@ function evaluateTechnicalCorrectness(
     );
     if (currentRequests.length === 0) continue;
 
-    const contradicted = currentRequests.filter(
-      (request) => request.result?.status === "CONTRADICTED"
-    );
-    const unresolved = currentRequests.filter(
-      (request) => request.result?.status === "UNRESOLVED"
+    const latest = currentRequests.at(-1);
+    if (latest?.result === undefined) continue;
+    const latestRef = evaluationRef(
+      "VERIFICATION_REQUEST",
+      latest.verificationRequestId
     );
 
-    if (contradicted.length > 0) {
-      const representative = contradicted[0];
-      if (representative === undefined) continue;
-      sampleBySubject.set(subjectKey(representative.evidenceKey), {
+    if (latest.result.status === "CONTRADICTED") {
+      sampleBySubject.set(subjectKey(latest.evidenceKey), {
         score: 0,
         supportLevel: supportFromCount(
           1,
-          minimumNumber(contradicted.map((request) => request.result?.interpretationConfidence ?? 0)),
+          latest.result.interpretationConfidence,
           true
         ),
-        refs: uniqueRefs([
-          ...contradicted.map((request) =>
-            evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
-          ),
-          ...unresolved.map((request) =>
-            evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
-          )
-        ]),
+        refs: [latestRef],
         positive: false,
         negative: true
       });
       continue;
     }
 
-    if (unresolved.length > 0) unresolvedCount += 1;
-    unresolvedRefs.push(
-      ...unresolved.map((request) =>
-        evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
-      )
-    );
+    if (latest.result.status === "UNRESOLVED") {
+      unresolvedCount += 1;
+      unresolvedRefs.push(latestRef);
+    }
   }
 
   const samples = [...sampleBySubject.values()];
@@ -1160,8 +1310,8 @@ function evaluateErrorRecovery(
         ...record.value.evidenceEventIds.map((id) => evaluationRef("EVIDENCE_EVENT", id))
       ];
       const negative =
-        NEGATIVE_RECOVERY_RATINGS.has(record.value.value) ||
-        record.status === "STALE";
+        NEGATIVE_RECOVERY_RATINGS.has(record.value.value) &&
+        record.status !== "STALE";
       const positive =
         POSITIVE_RECOVERY_RATINGS.has(record.value.value) &&
         record.status !== "STALE";
@@ -1229,18 +1379,28 @@ function evaluateErrorRecovery(
 
   }
 
-  positiveApproachRecords.sort(
-    (left, right) =>
-      left.sequence - right.sequence ||
-      compareStrings(left.approachId, right.approachId)
-  );
+  const positiveByDimension = new Map<
+    EvidenceKey["dimension"],
+    typeof positiveApproachRecords
+  >();
+  for (const record of positiveApproachRecords) {
+    const current = positiveByDimension.get(record.dimension) ?? [];
+    current.push(record);
+    positiveByDimension.set(record.dimension, current);
+  }
+  for (const records of positiveByDimension.values()) {
+    records.sort(
+      (left, right) =>
+        left.sequence - right.sequence ||
+        compareStrings(left.approachId, right.approachId)
+    );
+  }
 
   for (const error of unresolvedApproachErrors) {
-    const switched = positiveApproachRecords.find(
-      (candidate) =>
-        candidate.approachId !== error.approachId &&
-        candidate.dimension === error.dimension &&
-        candidate.sequence > error.sequence
+    const switched = findApproachSwitchRecovery(
+      positiveByDimension.get(error.dimension) ?? [],
+      error.approachId,
+      error.sequence
     );
     if (switched === undefined) {
       failureCount += 1;
@@ -1257,7 +1417,7 @@ function evaluateErrorRecovery(
   if (opportunities === 0) {
     return {
       result: unsupportedDimension(
-        "No grounded error or invalidated-evidence transition created an error-recovery opportunity."
+        "No grounded negative-to-supported evidence transition created an error-recovery opportunity."
       ),
       recoveryCount: 0,
       failureCount: 0
@@ -1277,6 +1437,49 @@ function evaluateErrorRecovery(
     recoveryCount,
     failureCount
   };
+}
+
+function findApproachSwitchRecovery(
+  records: readonly {
+    readonly approachId: string;
+    readonly sequence: number;
+    readonly confidence: number;
+    readonly refs: readonly EvaluationEvidenceRef[];
+  }[],
+  excludedApproachId: string,
+  afterSequence: number
+):
+  | {
+      readonly approachId: string;
+      readonly sequence: number;
+      readonly confidence: number;
+      readonly refs: readonly EvaluationEvidenceRef[];
+    }
+  | undefined {
+  let low = 0;
+  let high = records.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = records[middle];
+    if (candidate === undefined || candidate.sequence > afterSequence) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+
+  if (low >= records.length) return undefined;
+  const first = records[low];
+  if (first === undefined) return undefined;
+  if (first.approachId !== excludedApproachId) return first;
+
+  for (let index = low + 1; index < records.length; index += 1) {
+    const candidate = records[index];
+    if (candidate !== undefined && candidate.approachId !== excludedApproachId) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 function computeComposite(
@@ -1350,8 +1553,8 @@ function buildStrengths(
   const unassisted = achieved.filter((item) => item.evaluation.assistanceLevel === 0);
 
   if (
-    dimensions.technicalCorrectness.score !== null &&
-    dimensions.technicalCorrectness.score >= 80 &&
+    (correctness.positiveCount ?? 0) > 0 &&
+    (correctness.negativeCount ?? 0) === 0 &&
     SUPPORT_RANK[dimensions.technicalCorrectness.supportLevel] >= SUPPORT_RANK.MODERATE
   ) {
     strengths.push(
@@ -1362,8 +1565,8 @@ function buildStrengths(
   }
 
   if (
-    dimensions.rigor.score !== null &&
-    dimensions.rigor.score >= 80 &&
+    (rigor.positiveCount ?? 0) > 0 &&
+    (rigor.negativeCount ?? 0) === 0 &&
     SUPPORT_RANK[dimensions.rigor.supportLevel] >= SUPPORT_RANK.MODERATE
   ) {
     strengths.push(
@@ -1373,18 +1576,21 @@ function buildStrengths(
     );
   }
 
-  if (unassisted.length > 0) {
+  if (unassisted.length > 0 && dimensions.independence.score === 100) {
     strengths.push(
       String(unassisted.length) +
       " achieved milestone(s) have no attributable protected disclosure in the current exposure ledger."
     );
   }
 
-  if ((recovery.recoveryCount ?? 0) > 0) {
+  if (
+    (recovery.recoveryCount ?? 0) > 0 &&
+    (recovery.failureCount ?? 0) === 0
+  ) {
     strengths.push(
       "The evidence history records " +
       String(recovery.recoveryCount) +
-      " error or invalidation episode(s) followed by supported replacement evidence."
+      " grounded error episode(s) followed by supported replacement evidence."
     );
   }
 
@@ -1399,22 +1605,14 @@ function buildImprovementAreas(
 ): string[] {
   const improvements: string[] = [];
 
-  if (
-    dimensions.technicalCorrectness.score !== null &&
-    dimensions.technicalCorrectness.score < 70 &&
-    (correctness.negativeCount ?? 0) > 0
-  ) {
+  if ((correctness.negativeCount ?? 0) > 0) {
     improvements.push(
       String(correctness.negativeCount) +
       " scored correctness subject(s) remain locally or structurally contradicted."
     );
   }
 
-  if (
-    dimensions.rigor.score !== null &&
-    dimensions.rigor.score < 70 &&
-    (rigor.negativeCount ?? 0) > 0
-  ) {
+  if ((rigor.negativeCount ?? 0) > 0) {
     improvements.push(
       String(rigor.negativeCount) +
       " scoped justification subject(s) remain incomplete, unjustified, or constrained by correctness errors."
@@ -1675,6 +1873,17 @@ function compareStrings(left: string, right: string): number {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
+}
+
+function requireEventOrder(
+  eventOrder: ReadonlyMap<string, number>,
+  eventId: string
+): number {
+  const order = eventOrder.get(eventId);
+  if (order === undefined) {
+    throw new Error("Evaluation cannot order a non-authoritative event reference");
+  }
+  return order;
 }
 
 function minimumNumber(values: Iterable<number>): number {
