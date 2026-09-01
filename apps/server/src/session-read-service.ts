@@ -445,7 +445,13 @@ export class SessionReadService {
         }
       }
 
-      longitudinalInputs.push(history);
+      // Longitudinal statistics are intentionally exact problem/version only.
+      // Configured Quant Trading sessions have no InterviewProblem identity, so
+      // keep their history card available without admitting them into those
+      // problem-comparative aggregates.
+      if (history.problem !== undefined) {
+        longitudinalInputs.push(history);
+      }
       cards.push({
         ...cardBase,
         readStatus: "AVAILABLE",
