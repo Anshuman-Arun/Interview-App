@@ -477,6 +477,70 @@ describe("grounded session evaluator", () => {
       .toThrow("evidence update sequence does not match its authoritative event position");
   });
 
+  it("rejects session sequence metadata that disagrees with authoritative event count", () => {
+    const state = setHistory(
+      boundState(),
+      milestoneKey("model-relations", "JUSTIFICATION"),
+      [{ value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }]
+    );
+    expect(() => evaluateInterviewSession({
+      ...state,
+      sequence: state.sequence + 1
+    }, sixPeopleProblem)).toThrow(
+      "session sequence does not match authoritative event history length"
+    );
+  });
+
+  it("rejects verification basis or provenance that does not match its committed turn", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "basis-integrity" },
+      dimension: "CORRECTNESS"
+    };
+    const state = withVerification(
+      boundState(),
+      key,
+      "CONTRADICTED",
+      10,
+      "basis-integrity"
+    );
+    const request = state.verificationRequests[
+      RequestIdSchema.parse("verification_basis-integrity")
+    ];
+    if (request === undefined) throw new Error("Expected verification request");
+
+    const badBasis: SessionState = {
+      ...state,
+      verificationRequests: {
+        ...state.verificationRequests,
+        [request.verificationRequestId]: {
+          ...request,
+          basis: {
+            ...request.basis,
+            committedInputSequence: request.basis.committedInputSequence + 1
+          }
+        }
+      }
+    };
+    expect(() => evaluateInterviewSession(badBasis, sixPeopleProblem)).toThrow(
+      "verification basis committed input does not match its turn"
+    );
+
+    const badProvenance: SessionState = {
+      ...state,
+      verificationRequests: {
+        ...state.verificationRequests,
+        [request.verificationRequestId]: {
+          ...request,
+          evidenceEventIds: [request.requestedEventId]
+        }
+      }
+    };
+    expect(() => evaluateInterviewSession(badProvenance, sixPeopleProblem)).toThrow(
+      "verification request provenance does not match its committed turn"
+    );
+  });
+
   it("rejects a lastCommittedInputSequence projection that disagrees with committed turns", () => {
     const state = withTurns(boundState(), 2, "reachable turns");
     const corrupted: SessionState = {

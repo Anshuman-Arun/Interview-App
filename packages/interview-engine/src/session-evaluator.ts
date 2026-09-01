@@ -332,6 +332,9 @@ function assertEvaluationStateConsistency(
   if (!Number.isSafeInteger(state.sequence) || state.sequence < 0) {
     throw new Error("Evaluation session sequence is not a nonnegative safe integer");
   }
+  if (state.sequence !== state.eventIds.length) {
+    throw new Error("Evaluation session sequence does not match authoritative event history length");
+  }
 
   let latestCommittedInputSequence: number | undefined;
   const committedTurnSequences = new Set<number>();
@@ -375,6 +378,9 @@ function assertEvaluationStateConsistency(
     const turn = state.turns[generation.basis.turnId];
     if (turn === undefined) {
       throw new Error("Evaluation generation basis references an unknown committed turn");
+    }
+    if (generation.basis.committedInputSequence !== turn.committedSequence) {
+      throw new Error("Evaluation generation basis committed input does not match its turn");
     }
     if (
       generation.basis.inputEpisodeId !== undefined &&
@@ -517,6 +523,20 @@ function assertEvaluationStateConsistency(
     if (request.verificationRequestId !== requestId) {
       throw new Error("Evaluation verification-request identity does not match its state key");
     }
+    const basisTurn = state.turns[request.basis.turnId];
+    if (basisTurn === undefined) {
+      throw new Error("Evaluation verification basis references an unknown committed turn");
+    }
+    if (request.basis.committedInputSequence !== basisTurn.committedSequence) {
+      throw new Error("Evaluation verification basis committed input does not match its turn");
+    }
+    if (
+      request.basis.inputEpisodeId !== undefined &&
+      request.basis.inputEpisodeId !== basisTurn.inputEpisodeId
+    ) {
+      throw new Error("Evaluation verification basis input episode does not match its turn");
+    }
+
     const requestedSequence = authoritativeEventOrder.get(request.requestedEventId);
     if (requestedSequence === undefined) {
       throw new Error("Evaluation verification request references a non-authoritative request event");
@@ -524,14 +544,14 @@ function assertEvaluationStateConsistency(
     if (requestedSequence <= request.basis.committedInputSequence) {
       throw new Error("Evaluation verification request must follow its committed-input basis");
     }
-    for (const eventId of request.evidenceEventIds) {
-      const provenanceSequence = authoritativeEventOrder.get(eventId);
-      if (provenanceSequence === undefined) {
-        throw new Error("Evaluation verification request provenance references an unknown authoritative event");
-      }
-      if (provenanceSequence > request.basis.committedInputSequence) {
-        throw new Error("Evaluation verification provenance exceeds its committed-input basis");
-      }
+
+    const committedTurnEventId = state.eventIds[basisTurn.committedSequence - 1];
+    if (
+      committedTurnEventId === undefined ||
+      request.evidenceEventIds.length !== 1 ||
+      request.evidenceEventIds[0] !== committedTurnEventId
+    ) {
+      throw new Error("Evaluation verification request provenance does not match its committed turn");
     }
     if (request.status === "ACCEPTED") {
       if (request.result === undefined) {
