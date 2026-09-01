@@ -126,6 +126,10 @@ function validateOptionalAbortSignal(value: unknown): AbortSignal | undefined {
   return value;
 }
 
+function isSignalAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
 function errnoCode(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
   return typeof error.code === "string" ? error.code : undefined;
@@ -733,7 +737,7 @@ export async function verifyArtifactFileWithIdentity(
       "Expected artifact size exceeds the configured verification byte limit."
     );
   }
-  if (validatedSignal?.aborted === true) throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
+  if (isSignalAborted(validatedSignal)) throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
 
   const openedFile = await openStableRegularFile(
     rawFilePath,
@@ -748,7 +752,7 @@ export async function verifyArtifactFileWithIdentity(
     );
   }
   const fileSize = Number(fileStat.size);
-  if (validatedSignal?.aborted === true) {
+  if (isSignalAborted(validatedSignal)) {
     await openedFile.handle.close().catch(() => undefined);
     throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
   }
@@ -781,13 +785,13 @@ export async function verifyArtifactFileWithIdentity(
     stream.destroy(new ModelAssetError("CANCELLED", "Artifact verification was cancelled."));
   };
   validatedSignal?.addEventListener("abort", abortListener, { once: true });
-  if (validatedSignal?.aborted === true) {
+  if (isSignalAborted(validatedSignal)) {
     abortListener();
   }
   let verificationCloseError: unknown;
   try {
     for await (const chunk of stream) {
-      if (validatedSignal?.aborted === true) {
+      if (isSignalAborted(validatedSignal)) {
         throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
       }
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -806,7 +810,7 @@ export async function verifyArtifactFileWithIdentity(
     }
   } catch (error) {
     if (error instanceof ModelAssetError) throw error;
-    if (validatedSignal?.aborted === true) {
+    if (isSignalAborted(validatedSignal)) {
       throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.", { cause: error });
     }
     throw new ModelAssetError("IO_ERROR", "Unable to read artifact for verification.", { cause: error });
@@ -826,7 +830,7 @@ export async function verifyArtifactFileWithIdentity(
     );
   }
 
-  if (validatedSignal?.aborted === true) {
+  if (isSignalAborted(validatedSignal)) {
     throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
   }
   if (bytes !== expectedSize) {
