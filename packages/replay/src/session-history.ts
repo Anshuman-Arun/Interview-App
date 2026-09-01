@@ -486,7 +486,7 @@ function evaluationSummary(evaluation: SessionEvaluation): ReplayEvaluationSumma
 function interventionIdentity(input: {
   readonly deliveryId: string;
   readonly generationId: string;
-  readonly turnId?: string;
+  readonly turnId?: string | undefined;
   readonly disclosureLevel: number;
   readonly disclosureIds: readonly string[];
   readonly deliveryStatus: "EXPOSED" | "COMPLETED" | "POSSIBLY_EXPOSED";
