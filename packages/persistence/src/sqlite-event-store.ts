@@ -262,6 +262,48 @@ export class SqliteEventStore {
         };
   }
 
+  public getProcessedResultForWriter(
+    sessionId: SessionId,
+    requestId: RequestId,
+    expectedPriorSequence: number
+  ):
+    | { readonly found: false }
+    | { readonly found: true; readonly commandFingerprint: string | null; readonly result: unknown } {
+    if (!Number.isSafeInteger(expectedPriorSequence) || expectedPriorSequence < 0) {
+      throw new RangeError("Expected prior event sequence must be a non-negative safe integer");
+    }
+
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const latest = this.database.prepare(
+        "SELECT COALESCE(MAX(sequence), 0) AS sequence FROM session_events WHERE session_id = ?"
+      ).get(sessionId) as { sequence: number };
+      if (!Number.isSafeInteger(latest.sequence) || latest.sequence < 0) {
+        throw new CorruptEventStreamError(
+          `Invalid latest event sequence for session ${sessionId}: ${String(latest.sequence)}`
+        );
+      }
+      if (latest.sequence !== expectedPriorSequence) {
+        throw new StaleSessionWriterError(expectedPriorSequence, latest.sequence);
+      }
+
+      const prior = this.database.prepare(
+        "SELECT command_fingerprint, result_json FROM processed_requests WHERE session_id = ? AND request_id = ?"
+      ).get(sessionId, requestId) as { command_fingerprint: string | null; result_json: string } | undefined;
+      this.database.exec("COMMIT");
+      return prior === undefined
+        ? { found: false }
+        : {
+            found: true,
+            commandFingerprint: prior.command_fingerprint,
+            result: JSON.parse(prior.result_json) as unknown
+          };
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   public appendIdempotent<TResult>(input: AppendIdempotentInput<TResult>): AppendIdempotentResult<TResult> {
     const commandFingerprint = CommandFingerprintSchema.parse(input.commandFingerprint);
     this.database.exec("BEGIN IMMEDIATE");

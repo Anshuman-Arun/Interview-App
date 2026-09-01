@@ -528,10 +528,6 @@ describe("authenticated renderer stream transport", () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
     const writer = registry.get(sessionId);
-    const atom = await queueDelivery(writer, {
-      medium: "TEXT",
-      text: "shutdown publication race"
-    });
 
     const controller = new AbortController();
     const response = await fetch(streamAddress.streamUrl, {
@@ -546,6 +542,11 @@ describe("authenticated renderer stream transport", () => {
     });
     expect(response.status).toBe(200);
     await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, {
+      medium: "TEXT",
+      text: "shutdown publication race"
+    });
 
     let releaseRecovery!: () => void;
     const recoveryGate = new Promise<void>((resolve) => {
