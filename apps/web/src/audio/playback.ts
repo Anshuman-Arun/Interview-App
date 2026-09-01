@@ -336,15 +336,16 @@ export class BrowserAudioPlayback {
         );
       }
 
-      elementSetupKey = element;
-      const existingSetupOwner = this.elementSetupOwners.get(elementSetupKey);
+      const setupKey: object = element;
+      elementSetupKey = setupKey;
+      const existingSetupOwner = this.elementSetupOwners.get(setupKey);
       if (existingSetupOwner !== undefined && existingSetupOwner !== pending) {
         throw new AudioInfrastructureError(
           "PLAYBACK_FAILED",
           "Audio element factory reused an element before prior setup cleanup completed"
         );
       }
-      this.elementSetupOwners.set(elementSetupKey, pending);
+      this.elementSetupOwners.set(setupKey, pending);
       pending.element = element;
 
       let pause: BrowserAudioElementLike["pause"];
@@ -376,7 +377,7 @@ export class BrowserAudioPlayback {
         return;
       }
 
-      const priorSinkOperation = this.elementSinkOperations.get(elementSetupKey);
+      const priorSinkOperation = this.elementSinkOperations.get(setupKey);
       if (priorSinkOperation !== undefined) {
         const priorSinkOutcome = await waitForBrowserOperationOrSettlement(
           priorSinkOperation,
@@ -393,7 +394,7 @@ export class BrowserAudioPlayback {
       }
 
       const explicitOutput = requiresExplicitOutputSelection(pending.request.outputDeviceId);
-      const priorSinkState = this.elementSinkStates.get(elementSetupKey);
+      const priorSinkState = this.elementSinkStates.get(setupKey);
       const mustResetDefaultOutput = !explicitOutput
         && priorSinkState !== undefined
         && priorSinkState !== "";
@@ -414,7 +415,7 @@ export class BrowserAudioPlayback {
         }
 
         const requestedSinkId = explicitOutput ? pending.request.outputDeviceId : "";
-        this.elementSinkStates.set(elementSetupKey, null);
+        this.elementSinkStates.set(setupKey, null);
 
         let sinkOperation: Promise<void>;
         try {
@@ -430,21 +431,21 @@ export class BrowserAudioPlayback {
         let trackedSinkOperation: Promise<void>;
         trackedSinkOperation = sinkOperation.then(
           () => {
-            if (this.elementSinkOperations.get(elementSetupKey) === trackedSinkOperation) {
-              this.elementSinkStates.set(elementSetupKey, requestedSinkId);
+            if (this.elementSinkOperations.get(setupKey) === trackedSinkOperation) {
+              this.elementSinkStates.set(setupKey, requestedSinkId);
             }
           },
           () => {
-            if (this.elementSinkOperations.get(elementSetupKey) === trackedSinkOperation) {
-              this.elementSinkStates.set(elementSetupKey, null);
+            if (this.elementSinkOperations.get(setupKey) === trackedSinkOperation) {
+              this.elementSinkStates.set(setupKey, null);
             }
           }
         ).finally(() => {
-          if (this.elementSinkOperations.get(elementSetupKey) === trackedSinkOperation) {
-            this.elementSinkOperations.delete(elementSetupKey);
+          if (this.elementSinkOperations.get(setupKey) === trackedSinkOperation) {
+            this.elementSinkOperations.delete(setupKey);
           }
         });
-        this.elementSinkOperations.set(elementSetupKey, trackedSinkOperation);
+        this.elementSinkOperations.set(setupKey, trackedSinkOperation);
 
         const sinkOutcome = await waitForBrowserOperationOrSettlement(
           sinkOperation,

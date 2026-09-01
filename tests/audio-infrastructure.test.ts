@@ -307,6 +307,10 @@ class FakeMediaDevices implements AudioMediaDevicesLike {
   public removeEventListener(_type: "devicechange", listener: () => void): void {
     this.deviceChangeListeners.delete(listener);
   }
+
+  public emitDeviceChange(): void {
+    for (const listener of [...this.deviceChangeListeners]) listener();
+  }
 }
 
 describe("browser audio devices", () => {
@@ -419,7 +423,7 @@ describe("browser audio devices", () => {
         labelReads += 1;
         throw new Error("video label should not be read");
       }
-    } as AudioMediaDeviceInfoLike;
+    } as unknown as AudioMediaDeviceInfoLike;
     const manager = new BrowserAudioDeviceManager({
       enumerateDevices: async () => [videoDevice]
     });
@@ -908,7 +912,7 @@ describe("microphone capture lifecycle", () => {
         throw new Error("later option getter failed");
       },
       onFrame: () => undefined
-    } as MicrophoneCaptureOptions;
+    } as unknown as MicrophoneCaptureOptions;
 
     await expect(capture.start(options)).rejects.toMatchObject({ code: "DISPOSED" });
 
@@ -932,7 +936,7 @@ describe("microphone capture lifecycle", () => {
         throw new Error("later restart option getter failed");
       },
       onFrame: () => undefined
-    } as MicrophoneCaptureOptions;
+    } as unknown as MicrophoneCaptureOptions;
 
     await capture.restart(options);
     if (stopping === undefined) throw new Error("Reentrant stop was not invoked");
@@ -2836,7 +2840,7 @@ describe("queued browser audio playback", () => {
         sourceReads += 1;
         throw new Error("duplicate payload should not be read");
       }
-    } as PlayableAudio;
+    } as unknown as PlayableAudio;
 
     try {
       setup.playback.enqueue(duplicate);

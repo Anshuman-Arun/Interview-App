@@ -161,7 +161,7 @@ describe("microphone lifecycle adversarial ordering", () => {
     let readyStateReads = 0;
     const track: AudioMediaStreamTrackLike & { stopCount: number } = {
       stopCount: 0,
-      get readyState() {
+      get readyState(): AudioMediaStreamTrackLike["readyState"] {
         readyStateReads += 1;
         if (readyStateReads === 1) disposing = capture.dispose();
         return "live";
