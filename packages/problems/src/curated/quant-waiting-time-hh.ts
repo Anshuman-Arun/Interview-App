@@ -9,13 +9,13 @@ export const quantWaitingTimeHhSpec: CuratedProblemSpec = {
   "difficulty":"quant-standard",
   "prompt":"A fair coin is flipped repeatedly until two consecutive Heads (HH) first appear. What is the expected number of flips? Derive the answer from states or conditional expectation.",
   "givenInformation":["Coin flips are independent and fair."],
-  "approaches":[{"id":"state-recursion","label":"Two-state first-step recursion"},{"id":"renewal-cases","label":"Condition on early patterns"}],
+  "approaches":[{"id":"state-recursion","label":"Two-state first-step recursion"}],
   "milestones":[
-    {"id":"choose-states","description":"Distinguish the state with no useful trailing Head from the state with exactly one trailing Head.","approachIds":["state-recursion","renewal-cases"],"hintLevels":[1]},
+    {"id":"choose-states","description":"Distinguish the state with no useful trailing Head from the state with exactly one trailing Head.","approachIds":["state-recursion"],"hintLevels":[1]},
     {"id":"equation-empty","description":"Write a first-step equation for the expected remaining time E_0 from the no-trailing-Head state.","approachIds":["state-recursion"],"prerequisiteIds":["choose-states"],"hintLevels":[2]},
     {"id":"equation-head","description":"Write the equation for E_1 after one trailing Head.","approachIds":["state-recursion"],"prerequisiteIds":["equation-empty"],"hintLevels":[3]},
-    {"id":"solve-system","description":"Solve the two linear equations.","approachIds":["state-recursion","renewal-cases"],"prerequisiteIds":["equation-head"],"hintLevels":[4]},
-    {"id":"interpret","description":"State E_0 as the expected number of flips from the start.","approachIds":["state-recursion","renewal-cases"],"prerequisiteIds":["solve-system"],"hintLevels":[5]}
+    {"id":"solve-system","description":"Solve the two linear equations.","approachIds":["state-recursion"],"prerequisiteIds":["equation-head"],"hintLevels":[4]},
+    {"id":"interpret","description":"State E_0 as the expected number of flips from the start.","approachIds":["state-recursion"],"prerequisiteIds":["solve-system"],"hintLevels":[5]}
   ],
   "edges":[{"from":"choose-states","to":"equation-empty"},{"from":"equation-empty","to":"equation-head"},{"from":"equation-head","to":"solve-system"},{"from":"solve-system","to":"interpret"}],
   "commonErrors":[{"id":"geometric-quarter","description":"Treats disjoint pairs as independent trials with success probability 1/4, ignoring overlaps such as HHH."},{"id":"reset-after-head","description":"After state H and another H, adds a new state instead of recognizing absorption."}],
