@@ -25,6 +25,7 @@ import {
   isGenerationBasisStillCompatible,
   type SessionState
 } from "../../events/src/index.js";
+import { createProviderContextSpecFingerprintSync } from "./context-compiler.js";
 
 const MAX_APPROACHES = 256;
 const MAX_MILESTONES = 2_048;
@@ -35,6 +36,16 @@ const MAX_EVIDENCE_RECORDS = 16_384;
 const MAX_DELIVERIES = 4_096;
 const MAX_VERIFICATION_REQUESTS = 2_048;
 const MAX_EVENT_IDS = 100_000;
+const MAX_POLICY_ID_CHARACTERS = 512;
+const MAX_POLICY_TEXT_CHARACTERS = 100_000;
+const MAX_APPROACH_REFS_PER_MILESTONE = 256;
+const MAX_PREREQUISITES_PER_MILESTONE = 2_048;
+const MAX_DISCLOSURE_REFS_PER_MILESTONE = 256;
+const MAX_EQUIVALENT_FORMULATIONS_PER_DISCLOSURE = 256;
+const MAX_COMMON_ERRORS = 2_048;
+const MAX_EXTENSIONS = 2_048;
+const MAX_EVIDENCE_PROVENANCE_IDS = 4_096;
+const MIN_ACTIONABLE_EVIDENCE_CONFIDENCE = 0.7;
 
 const PolicyProblemViewSchema = z.object({
   id: z.string().min(1),
@@ -87,6 +98,8 @@ export type PolicyReasonCode =
   | "INVALID_REASONING_TARGET"
   | "RESOURCE_LIMIT_EXCEEDED"
   | "PROBLEM_CONTEXT_MISMATCH"
+  | "PROBLEM_PROVENANCE_UNKNOWN"
+  | "PROBLEM_DEFINITION_MISMATCH"
   | "MISSING_PROBLEM_CONTEXT"
   | "ASSISTANCE_SATURATED";
 
@@ -121,10 +134,15 @@ interface VerificationSignal {
 interface AssistanceRecord {
   readonly generationId: string;
   readonly action: SocraticAction;
-  readonly target?: string;
+  readonly target: string;
   readonly maximumDisclosure: DisclosureLevel;
   readonly effectiveDisclosureLevel: DisclosureLevel;
   readonly turnSequence: number;
+}
+
+interface AssistanceSnapshot {
+  readonly records: readonly AssistanceRecord[];
+  readonly disclosedIds: ReadonlySet<DisclosureId>;
 }
 
 interface GraphContext {
@@ -224,7 +242,103 @@ function failClosedDecision(
   };
 }
 
+function boundedString(value: unknown, maximum: number): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= maximum;
+}
+
+function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined {
+  if (!isRecord(problem) || !boundedString(problem["id"], MAX_POLICY_ID_CHARACTERS) || !boundedString(problem["version"], MAX_POLICY_ID_CHARACTERS)) {
+    return "MALFORMED_POLICY_INPUT";
+  }
+
+  const interviewer = problem["interviewer"];
+  if (!isRecord(interviewer)) return "MALFORMED_POLICY_INPUT";
+  const graph = interviewer["reasoningGraph"];
+  const disclosures = interviewer["protectedDisclosures"];
+  if (!isRecord(graph) || !Array.isArray(disclosures)) return "MALFORMED_POLICY_INPUT";
+  if (disclosures.length > MAX_PROTECTED_DISCLOSURES) return "RESOURCE_LIMIT_EXCEEDED";
+
+  const approaches = graph["approaches"];
+  const milestones = graph["milestones"];
+  const edges = graph["edges"];
+  const commonErrors = graph["commonErrors"];
+  const extensions = graph["extensions"];
+  if (
+    !Array.isArray(approaches)
+    || !Array.isArray(milestones)
+    || !Array.isArray(edges)
+    || !Array.isArray(commonErrors)
+    || !Array.isArray(extensions)
+  ) return "MALFORMED_POLICY_INPUT";
+  if (
+    approaches.length > MAX_APPROACHES
+    || milestones.length > MAX_MILESTONES
+    || edges.length > MAX_GRAPH_EDGES
+    || commonErrors.length > MAX_COMMON_ERRORS
+    || extensions.length > MAX_EXTENSIONS
+  ) return "RESOURCE_LIMIT_EXCEEDED";
+
+  for (const approach of approaches as readonly unknown[]) {
+    if (
+      !isRecord(approach)
+      || !boundedString(approach["id"], MAX_POLICY_ID_CHARACTERS)
+      || !boundedString(approach["label"], MAX_POLICY_TEXT_CHARACTERS)
+    ) return "MALFORMED_POLICY_INPUT";
+  }
+
+  for (const milestone of milestones as readonly unknown[]) {
+    if (!isRecord(milestone)) return "MALFORMED_POLICY_INPUT";
+    const approachIds = milestone["approachIds"];
+    const prerequisiteIds = milestone["optionalPrerequisiteIds"];
+    const disclosureIds = milestone["protectedDisclosureIds"];
+    if (
+      !boundedString(milestone["id"], MAX_POLICY_ID_CHARACTERS)
+      || !boundedString(milestone["description"], MAX_POLICY_TEXT_CHARACTERS)
+      || !Array.isArray(approachIds)
+      || !Array.isArray(prerequisiteIds)
+      || !Array.isArray(disclosureIds)
+    ) return "MALFORMED_POLICY_INPUT";
+    if (
+      approachIds.length > MAX_APPROACH_REFS_PER_MILESTONE
+      || prerequisiteIds.length > MAX_PREREQUISITES_PER_MILESTONE
+      || disclosureIds.length > MAX_DISCLOSURE_REFS_PER_MILESTONE
+    ) return "RESOURCE_LIMIT_EXCEEDED";
+    if (
+      !(approachIds as readonly unknown[]).every((id) => boundedString(id, MAX_POLICY_ID_CHARACTERS))
+      || !(prerequisiteIds as readonly unknown[]).every((id) => boundedString(id, MAX_POLICY_ID_CHARACTERS))
+      || !(disclosureIds as readonly unknown[]).every((id) => boundedString(id, MAX_POLICY_ID_CHARACTERS))
+    ) return "MALFORMED_POLICY_INPUT";
+  }
+
+  for (const edge of edges as readonly unknown[]) {
+    if (
+      !isRecord(edge)
+      || !boundedString(edge["from"], MAX_POLICY_ID_CHARACTERS)
+      || !boundedString(edge["to"], MAX_POLICY_ID_CHARACTERS)
+    ) return "MALFORMED_POLICY_INPUT";
+  }
+
+  for (const disclosure of disclosures as readonly unknown[]) {
+    if (!isRecord(disclosure)) return "MALFORMED_POLICY_INPUT";
+    const formulations = disclosure["equivalentFormulations"];
+    if (
+      !boundedString(disclosure["id"], MAX_POLICY_ID_CHARACTERS)
+      || !boundedString(disclosure["fact"], MAX_POLICY_TEXT_CHARACTERS)
+      || !Array.isArray(formulations)
+    ) return "MALFORMED_POLICY_INPUT";
+    if (formulations.length > MAX_EQUIVALENT_FORMULATIONS_PER_DISCLOSURE) return "RESOURCE_LIMIT_EXCEEDED";
+    if (!(formulations as readonly unknown[]).every((value) => boundedString(value, MAX_POLICY_TEXT_CHARACTERS))) {
+      return "MALFORMED_POLICY_INPUT";
+    }
+  }
+
+  return undefined;
+}
+
 function validateGraphContext(problem: unknown): CollectionResult<GraphContext> {
+  const preflightFailure = preflightPolicyProblem(problem);
+  if (preflightFailure !== undefined) return { ok: false, reasonCode: preflightFailure };
+
   const parsed = PolicyProblemViewSchema.safeParse(problem);
   if (!parsed.success) {
     return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
@@ -385,6 +499,10 @@ function collectActiveEvidence(
     return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
   }
   const knownEventIds = new Set<string>(state.eventIds);
+  const eventSequence = new Map<string, number>();
+  state.eventIds.forEach((eventId, index) => {
+    eventSequence.set(eventId, index + 1);
+  });
   let recordCount = 0;
   const activeKeys = new Set<string>();
   const signals: ActiveEvidenceSignal[] = [];
@@ -442,10 +560,16 @@ function collectActiveEvidence(
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
+    const recordSequence = eventSequence.get(evidenceRecordId);
     if (
       !Number.isSafeInteger(value.lastUpdatedSequence)
       || value.lastUpdatedSequence > state.sequence
-      || !value.evidenceEventIds.every((eventId) => knownEventIds.has(eventId))
+      || recordSequence !== value.lastUpdatedSequence
+      || value.evidenceEventIds.length > MAX_EVIDENCE_PROVENANCE_IDS
+      || !value.evidenceEventIds.every((eventId) => {
+        const provenanceSequence = eventSequence.get(eventId);
+        return provenanceSequence !== undefined && provenanceSequence < value.lastUpdatedSequence;
+      })
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
@@ -514,7 +638,7 @@ function collectVerificationSignals(
   });
 
   const signals: VerificationSignal[] = [];
-  for (const rawRequest of entries.map((entry) => entry[1])) {
+  for (const [requestKey, rawRequest] of entries) {
     if (!isRecord(rawRequest)) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
@@ -528,17 +652,41 @@ function collectVerificationSignals(
     const key = EvidenceKeySchema.safeParse(rawRequest["evidenceKey"]);
     const basis = GenerationBasisSchema.safeParse(rawRequest["basis"]);
     const requestedEventId = rawRequest["requestedEventId"];
+    const verificationRequestId = rawRequest["verificationRequestId"];
+    const verifier = rawRequest["verifier"];
+    const interpretationConfidence = rawRequest["interpretationConfidence"];
+    const evidenceEventIds = rawRequest["evidenceEventIds"];
     if (
       !result.success
       || !key.success
       || !basis.success
       || typeof requestedEventId !== "string"
+      || verificationRequestId !== requestKey
+      || typeof verifier !== "string"
+      || verifier.length === 0
+      || verifier.length > 128
+      || typeof interpretationConfidence !== "number"
+      || interpretationConfidence !== result.data.interpretationConfidence
+      || verifier !== result.data.verifier
+      || !Array.isArray(evidenceEventIds)
+      || evidenceEventIds.length === 0
+      || evidenceEventIds.length > MAX_EVIDENCE_PROVENANCE_IDS
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
 
     const sequence = eventSequence.get(requestedEventId);
-    if (sequence === undefined) {
+    if (
+      sequence === undefined
+      || !(evidenceEventIds as readonly unknown[]).every((eventId) =>
+        typeof eventId === "string"
+        && eventSequence.has(eventId)
+        && (eventSequence.get(eventId) ?? Number.POSITIVE_INFINITY) < sequence
+      )
+    ) {
+      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
+    if (key.data.subject.kind !== "CLAIM" || key.data.dimension !== "CORRECTNESS") {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     if (key.data.problemId !== graph.problem.id) continue;
@@ -570,8 +718,9 @@ function collectVerificationSignals(
 }
 
 function collectExposedAssistance(
-  state: Readonly<SessionState>
-): CollectionResult<readonly AssistanceRecord[]> {
+  state: Readonly<SessionState>,
+  graph: GraphContext
+): CollectionResult<AssistanceSnapshot> {
   const rawDeliveries: unknown = state.deliveries;
   if (!isRecord(rawDeliveries)) {
     return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
@@ -582,6 +731,8 @@ function collectExposedAssistance(
   }
 
   const byGeneration = new Map<string, AssistanceRecord>();
+  const disclosedIds = new Set<DisclosureId>();
+  const disclosuresById = disclosureMap(graph);
   for (const [deliveryKey, rawDelivery] of deliveryEntries.sort((left, right) => left[0].localeCompare(right[0]))) {
     const delivery = DeliveryAtomSchema.safeParse(rawDelivery);
     if (!delivery.success) {
@@ -608,18 +759,33 @@ function collectExposedAssistance(
     const turn = state.turns[basis.data.turnId];
     if (
       !parsedRequest.success
+      || parsedRequest.data.target === undefined
       || turn === undefined
       || !Number.isSafeInteger(turn.committedSequence)
       || turn.committedSequence <= 0
+      || delivery.data.effectiveDisclosureLevel > parsedRequest.data.maximumDisclosure
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
+
+    const allowedIds = new Set(parsedRequest.data.allowedDisclosureIds ?? []);
+    for (const disclosureId of delivery.data.disclosureIds) {
+      const disclosure = disclosuresById.get(disclosureId);
+      if (
+        disclosure === undefined
+        || !allowedIds.has(disclosureId)
+        || disclosure.minimumDisclosureLevel > delivery.data.effectiveDisclosureLevel
+      ) {
+        return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+      }
+      disclosedIds.add(disclosureId);
     }
 
     const current = byGeneration.get(delivery.data.generationId);
     const record: AssistanceRecord = {
       generationId: delivery.data.generationId,
       action: parsedRequest.data.requiredAction,
-      ...(parsedRequest.data.target === undefined ? {} : { target: parsedRequest.data.target }),
+      target: parsedRequest.data.target,
       maximumDisclosure: parsedRequest.data.maximumDisclosure,
       effectiveDisclosureLevel: delivery.data.effectiveDisclosureLevel,
       turnSequence: turn.committedSequence
@@ -634,10 +800,13 @@ function collectExposedAssistance(
 
   return {
     ok: true,
-    value: [...byGeneration.values()].sort((left, right) => {
-      if (left.turnSequence !== right.turnSequence) return left.turnSequence - right.turnSequence;
-      return left.generationId.localeCompare(right.generationId);
-    })
+    value: {
+      records: [...byGeneration.values()].sort((left, right) => {
+        if (left.turnSequence !== right.turnSequence) return left.turnSequence - right.turnSequence;
+        return left.generationId.localeCompare(right.generationId);
+      }),
+      disclosedIds
+    }
   };
 }
 
@@ -967,12 +1136,7 @@ function assistanceForTarget(
   target: PolicyTarget
 ): readonly AssistanceRecord[] {
   const targetString = targetToString(target);
-  return assistance.filter(
-    (record) =>
-      record.target === undefined
-      || record.target === targetString
-      || record.target === "the student's most recent asserted step"
-  );
+  return assistance.filter((record) => record.target === targetString);
 }
 
 function requestedLevel(value: number): DisclosureLevel {
@@ -987,7 +1151,8 @@ function disclosureMap(graph: GraphContext): ReadonlyMap<DisclosureId, PolicyPro
 
 function validateDisclosureLedger(
   state: Readonly<SessionState>,
-  graph: GraphContext
+  graph: GraphContext,
+  exposedDisclosureIds: ReadonlySet<DisclosureId>
 ): CollectionResult<ReadonlySet<DisclosureId>> {
   const rawLedger: unknown = state.disclosureLedger;
   if (!Array.isArray(rawLedger)) {
@@ -1005,6 +1170,12 @@ function validateDisclosureLedger(
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     delivered.add(parsed.data);
+  }
+  if (
+    delivered.size !== exposedDisclosureIds.size
+    || [...delivered].some((disclosureId) => !exposedDisclosureIds.has(disclosureId))
+  ) {
+    return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
   }
   return { ok: true, value: delivered };
 }
@@ -1275,14 +1446,26 @@ export function decidePedagogicalPolicy(
   ) {
     return failClosedDecision(turnId, "PROBLEM_CONTEXT_MISMATCH");
   }
+  if (state.problem.providerContextSpecSha256 === undefined) {
+    return failClosedDecision(turnId, "PROBLEM_PROVENANCE_UNKNOWN");
+  }
+  let policyProblemFingerprint: string;
+  try {
+    policyProblemFingerprint = createProviderContextSpecFingerprintSync(problem);
+  } catch {
+    return failClosedDecision(turnId, "MALFORMED_POLICY_INPUT");
+  }
+  if (state.problem.providerContextSpecSha256 !== policyProblemFingerprint) {
+    return failClosedDecision(turnId, "PROBLEM_DEFINITION_MISMATCH");
+  }
 
   const evidenceResult = collectActiveEvidence(state, graph);
   if (!evidenceResult.ok) return failClosedDecision(turnId, evidenceResult.reasonCode);
   const verificationResult = collectVerificationSignals(state, graph);
   if (!verificationResult.ok) return failClosedDecision(turnId, verificationResult.reasonCode);
-  const assistanceResult = collectExposedAssistance(state);
+  const assistanceResult = collectExposedAssistance(state, graph);
   if (!assistanceResult.ok) return failClosedDecision(turnId, assistanceResult.reasonCode);
-  const ledgerResult = validateDisclosureLedger(state, graph);
+  const ledgerResult = validateDisclosureLedger(state, graph, assistanceResult.value.disclosedIds);
   if (!ledgerResult.ok) return failClosedDecision(turnId, ledgerResult.reasonCode);
 
   let classification = classifyProgress(
@@ -1291,7 +1474,7 @@ export function decidePedagogicalPolicy(
     graph,
     turnId
   );
-  const targetAssistance = assistanceForTarget(assistanceResult.value, classification.target);
+  const targetAssistance = assistanceForTarget(assistanceResult.value.records, classification.target);
   if (
     classification.classification === "TRUE_STAGNATION"
     && targetAssistance.length >= 2
