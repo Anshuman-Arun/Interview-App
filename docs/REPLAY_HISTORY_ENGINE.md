@@ -319,3 +319,12 @@ A replay UI can render these typed read models without being given mutation
 authority. UI work, audio storage/playback, real tldraw replay, evaluator scoring
 changes, provider routing, and new authoritative events are intentionally outside
 this package.
+
+## Replay-boundary test discipline
+
+Replay tests that need delivery lifecycle records queue validated delivery atoms
+through the authoritative session writer instead of depending on pedagogical
+proposal admission. That keeps the read-model tests focused on persisted event
+semantics while proposal/disclosure admission remains covered by its owning
+subsystem.
+
