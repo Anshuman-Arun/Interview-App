@@ -263,7 +263,12 @@ export class SpeechWorkerCore {
     payload: unknown,
     heuristicsInput: unknown = {}
   ): Promise<readonly SpeechWorkerEvent[]> {
-    const heuristics = SpeechFrameHeuristicsSchema.safeParse(heuristicsInput);
+    let heuristics: ReturnType<typeof SpeechFrameHeuristicsSchema.safeParse>;
+    try {
+      heuristics = SpeechFrameHeuristicsSchema.safeParse(heuristicsInput);
+    } catch {
+      throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech frame heuristics are invalid");
+    }
     if (!heuristics.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech frame heuristics are invalid");
 
     let frame: PcmFrameSnapshot;
@@ -296,7 +301,12 @@ export class SpeechWorkerCore {
   }
 
   public async handleControl(input: unknown): Promise<readonly SpeechWorkerEvent[]> {
-    const parsed = SpeechControlRequestSchema.safeParse(input);
+    let parsed: ReturnType<typeof SpeechControlRequestSchema.safeParse>;
+    try {
+      parsed = SpeechControlRequestSchema.safeParse(input);
+    } catch {
+      throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech control request is invalid");
+    }
     if (!parsed.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech control request is invalid");
     if (parsed.data.type === "FLUSH_SPEECH") return this.flush(parsed.data);
     if (parsed.data.type === "CANCEL_SPEECH") return this.cancel(parsed.data);
@@ -309,7 +319,12 @@ export class SpeechWorkerCore {
   }
 
   public async flush(input: unknown): Promise<readonly SpeechWorkerEvent[]> {
-    const parsed = SpeechFlushRequestSchema.safeParse(input);
+    let parsed: ReturnType<typeof SpeechFlushRequestSchema.safeParse>;
+    try {
+      parsed = SpeechFlushRequestSchema.safeParse(input);
+    } catch {
+      throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech flush request is invalid");
+    }
     if (!parsed.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech flush request is invalid");
     const request = parsed.data;
     const fingerprint = fingerprintParts(JSON.stringify(request));
@@ -350,7 +365,12 @@ export class SpeechWorkerCore {
   }
 
   public async cancel(input: unknown): Promise<readonly SpeechWorkerEvent[]> {
-    const parsed = SpeechCancelRequestSchema.safeParse(input);
+    let parsed: ReturnType<typeof SpeechCancelRequestSchema.safeParse>;
+    try {
+      parsed = SpeechCancelRequestSchema.safeParse(input);
+    } catch {
+      throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech cancellation request is invalid");
+    }
     if (!parsed.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech cancellation request is invalid");
     const request = parsed.data;
     const fingerprint = fingerprintParts(JSON.stringify(request));
