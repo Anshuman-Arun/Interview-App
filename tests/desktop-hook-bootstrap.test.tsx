@@ -9,25 +9,23 @@ function Probe({ tick }: { readonly tick: number }) {
   return <div>{String(session.isTransportManaged)}:{tick}</div>;
 }
 
-const actEnvironment = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT?: boolean;
-};
+const ACT_ENVIRONMENT_KEY = "IS_REACT_ACT_ENVIRONMENT";
 const hadActEnvironment = Object.prototype.hasOwnProperty.call(
   globalThis,
-  "IS_REACT_ACT_ENVIRONMENT"
+  ACT_ENVIRONMENT_KEY
 );
-const previousActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT;
+const previousActEnvironment = Reflect.get(globalThis, ACT_ENVIRONMENT_KEY);
 
 describe("desktop hook bootstrap lifecycle", () => {
   beforeEach(() => {
-    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+    Reflect.set(globalThis, ACT_ENVIRONMENT_KEY, true);
   });
 
   afterEach(() => {
     if (hadActEnvironment) {
-      actEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
+      Reflect.set(globalThis, ACT_ENVIRONMENT_KEY, previousActEnvironment);
     } else {
-      delete actEnvironment.IS_REACT_ACT_ENVIRONMENT;
+      Reflect.deleteProperty(globalThis, ACT_ENVIRONMENT_KEY);
     }
     vi.unstubAllGlobals();
     delete (globalThis as typeof globalThis & { interviewDesktop?: unknown }).interviewDesktop;
