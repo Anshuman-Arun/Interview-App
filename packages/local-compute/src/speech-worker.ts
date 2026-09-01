@@ -645,10 +645,11 @@ export class SpeechWorkerCore {
     reason: "SILENCE" | "MAX_DURATION" | "FLUSH"
   ): Promise<SpeechWorkerEvent[]> {
     const utteranceId = context.utteranceId;
-    if (utteranceId === undefined || context.buffer.getSampleCount() === 0) {
+    if (!context.speechConfirmed || utteranceId === undefined || context.buffer.getSampleCount() === 0) {
       this.abandonStream(context);
       return [this.event(requestId, context.streamId, {
         type: "UTTERANCE_DISCARDED",
+        ...(utteranceId === undefined ? {} : { utteranceId }),
         reason: "TOO_SHORT"
       })];
     }
