@@ -20,6 +20,8 @@ const MAX_TOTAL_EQUIVALENT_FORMULATIONS = 4_096;
 const MAX_TOTAL_PROTECTED_DISCLOSURE_CHARACTERS = 1_000_000;
 const MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS = 10_000_000;
 const MAX_ANALYZER_DISCLOSURE_IDS = 256;
+const MAX_TOTAL_ANALYZER_DISCLOSURE_IDS = 65_536;
+const MAX_TOTAL_ANALYZER_REASON_CHARACTERS = 1_000_000;
 const MAX_BOARD_ACTIONS = 256;
 const MAX_REVIEWED_SAFE_TEXTS = 1_024;
 const MAX_TOTAL_REVIEWED_SAFE_TEXT_CHARACTERS = 1_000_000;
@@ -266,6 +268,8 @@ export class DisclosureValidator {
     const analyses: DisclosureAnalysis[] = [];
     const deterministicIds = new Set<DisclosureId>();
     let deterministicLevel: DisclosureLevel = 0;
+    let totalAnalyzerReasonCharacters = 0;
+    let totalAnalyzerDisclosureIds = 0;
     for (const text of texts) {
       const protectedMatch = deriveProtectedMatch(text, input.protectedDisclosures);
       if (!protectedMatch.ok) {
@@ -298,6 +302,17 @@ export class DisclosureValidator {
         return {
           accepted: false,
           reason: "Disclosure analyzer returned an invalid result and therefore fails closed"
+        };
+      }
+      totalAnalyzerReasonCharacters += parsed.data.reason.length;
+      totalAnalyzerDisclosureIds += parsed.data.effectiveDisclosureIds.length;
+      if (
+        totalAnalyzerReasonCharacters > MAX_TOTAL_ANALYZER_REASON_CHARACTERS
+        || totalAnalyzerDisclosureIds > MAX_TOTAL_ANALYZER_DISCLOSURE_IDS
+      ) {
+        return {
+          accepted: false,
+          reason: "Disclosure analyzer results exceed the bounded aggregate output size"
         };
       }
       analyses.push(parsed.data);
