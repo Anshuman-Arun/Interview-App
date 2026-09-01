@@ -456,9 +456,9 @@ function entryForKnownEvent(
                 : "POSSIBLY_EXPOSED";
         delivery = deliveryDetail(atom, status, bounds);
       }
-      if (event.type === "DELIVERY_CANCELLED" || event.type === "DELIVERY_POSSIBLY_EXPOSED") {
-        text = previewText(event.payload.reason, bounds.maxTextPreviewChars);
-      }
+      // Cancellation/uncertainty reasons are application-internal free text and
+      // may accidentally contain protected realization content. Their existence is
+      // represented by the authoritative event itself; do not render the reason.
       break;
     }
     case "POLICY_REVISION_CHANGED":

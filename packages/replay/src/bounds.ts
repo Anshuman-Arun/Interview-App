@@ -1,4 +1,5 @@
 export const MAX_REPLAY_IDENTIFIER_CHARS = 512;
+export const MAX_REPLAY_EVALUATION_COLLECTION_ITEMS = 20_000;
 
 export interface ReplayBounds {
   readonly maxEvents: number;

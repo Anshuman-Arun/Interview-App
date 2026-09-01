@@ -14,6 +14,7 @@ import type {
   SessionState
 } from "../../events/src/index.js";
 import {
+  MAX_REPLAY_EVALUATION_COLLECTION_ITEMS,
   previewText,
   resolveReplayBounds,
   takeBounded,
@@ -456,6 +457,46 @@ function interventionIdentity(input: {
   ]);
 }
 
+function evaluationCollectionsWithinReplayBudget(input: unknown): boolean {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return true;
+  }
+
+  const record = input as Readonly<Record<string, unknown>>;
+  let itemCount = 0;
+  const addArrayLength = (value: unknown): boolean => {
+    if (!Array.isArray(value)) return true;
+    itemCount += value.length;
+    return itemCount <= MAX_REPLAY_EVALUATION_COLLECTION_ITEMS;
+  };
+
+  if (
+    !addArrayLength(record.milestones)
+    || !addArrayLength(record.disclosedInterventions)
+    || !addArrayLength(record.keyStrengths)
+    || !addArrayLength(record.areasForImprovement)
+  ) {
+    return false;
+  }
+
+  if (Array.isArray(record.disclosedInterventions)) {
+    for (const intervention of record.disclosedInterventions) {
+      if (
+        typeof intervention !== "object"
+        || intervention === null
+        || Array.isArray(intervention)
+      ) {
+        continue;
+      }
+      const disclosureIds = (intervention as Readonly<Record<string, unknown>>)
+        .disclosureIds;
+      if (!addArrayLength(disclosureIds)) return false;
+    }
+  }
+
+  return true;
+}
+
 function validateEvaluation(
   input: unknown,
   sessionId: SessionId | null,
@@ -463,7 +504,17 @@ function validateEvaluation(
   state: SessionState | undefined
 ): ReplayEvaluationSummary | undefined {
   if (input === undefined) return undefined;
-  const parsed = SessionEvaluationSchema.safeParse(input);
+
+  let parsed: ReturnType<typeof SessionEvaluationSchema.safeParse>;
+  try {
+    if (!evaluationCollectionsWithinReplayBudget(input)) {
+      throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    }
+    parsed = SessionEvaluationSchema.safeParse(input);
+  } catch (error) {
+    if (error instanceof ReplayProjectionError) throw error;
+    throw new ReplayProjectionError("EVALUATION_MISMATCH");
+  }
   if (!parsed.success) throw new ReplayProjectionError("EVALUATION_MISMATCH");
 
   const evaluatedAt = z.iso.datetime().safeParse(parsed.data.evaluatedAt);

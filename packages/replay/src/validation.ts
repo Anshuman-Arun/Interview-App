@@ -146,6 +146,22 @@ const ALLOWED_SOURCES = {
   SESSION_RESUMED: ["APPLICATION"]
 } as const satisfies Readonly<Record<EventType, readonly EventSource[]>>;
 
+const ACTIVE_SESSION_REQUIRED_EVENT_TYPES = new Set<EventType>([
+  "UTTERANCE_STARTED",
+  "INPUT_EPISODE_STARTED",
+  "INPUT_EPISODE_UPDATED",
+  "INPUT_EPISODE_COMMITTED",
+  "TURN_COMMITTED",
+  "TRANSCRIPT_FINALIZED",
+  "TRANSCRIPT_CORRECTED",
+  "BOARD_PATCH_COMMITTED",
+  "VISION_REQUESTED",
+  "STUDENT_EVIDENCE_INVALIDATED",
+  "PEDAGOGICAL_ACTION_SELECTED",
+  "MODEL_GENERATION_STARTED",
+  "SESSION_RESUMED"
+]);
+
 function fail(): never {
   throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
 }
@@ -523,11 +539,9 @@ export function validateKnownReplayPrefix(
 
       if (!state.started && event.type !== "SESSION_STARTED") fail();
       if (state.started && event.type === "SESSION_STARTED") fail();
-      if (state.status === "ARCHIVED" && event.type !== "DELIVERY_COMPLETED") fail();
       if (
-        state.status === "COMPLETED"
-        && event.type !== "SESSION_ARCHIVED"
-        && event.type !== "DELIVERY_COMPLETED"
+        state.status !== "ACTIVE"
+        && ACTIVE_SESSION_REQUIRED_EVENT_TYPES.has(event.type)
       ) fail();
       if (
         state.started

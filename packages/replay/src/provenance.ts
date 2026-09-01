@@ -167,7 +167,12 @@ export function normalizeReplayEvents(
 
   for (const rawValue of rawEvents) {
     const raw: unknown = rawValue;
-    const parsed = SafeEventMetadataSchema.safeParse(raw);
+    let parsed: ReturnType<typeof SafeEventMetadataSchema.safeParse>;
+    try {
+      parsed = SafeEventMetadataSchema.safeParse(raw);
+    } catch {
+      throw new ReplayProjectionError("INVALID_EVENT_METADATA");
+    }
     if (!parsed.success) throw new ReplayProjectionError("INVALID_EVENT_METADATA");
     const metadata = parsed.data;
     sessionId ??= metadata.sessionId;

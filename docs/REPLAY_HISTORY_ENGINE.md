@@ -99,7 +99,9 @@ stored; it does not assert that PCM/media is still available. WHITEBOARD replay
 preserves visible action operation/content and target/revision metadata without
 exposing the internal `annotationPurpose`. For QUEUED, DELIVERING, CANCELLED,
 POSSIBLY_EXPOSED, and COMPLETED entries, only safe delivery metadata is projected;
-atom content and exact disclosure IDs are withheld. Their effective disclosure
+atom content and exact disclosure IDs are withheld. Free-text cancellation and
+uncertainty reasons are also withheld because those application-internal strings
+are not a safe alternate channel for realization content. Their effective disclosure
 level and disclosure-ID count remain available for audit. A validated proposal's
 delivery authorization is also consumption-bounded: replay rejects fresh DeliveryId
 duplicates that would realize more TEXT/AUDIO/board outputs than the proposal
@@ -134,11 +136,14 @@ rather than being made to look current.
 ## Lifecycle and recovery
 
 Session completion is inferred only from an authoritative `SESSION_COMPLETED`
-event/state replay. Absence of later events never implies completion. Once a
-session is COMPLETED or ARCHIVED, replay rejects new semantic work; the only
-post-terminal delivery transition admitted is a renderer `DELIVERY_COMPLETED`
-acknowledgement for an atom that was already authoritatively EXPOSED. This preserves
-the real renderer race without reopening the session. Session
+event/state replay. Absence of later events never implies completion. After a session becomes COMPLETED or ARCHIVED, replay still enforces the status
+requirements of the authoritative producer for each event type. User/interview
+operations whose coordinator requires an ACTIVE session remain invalid, while
+already-issued cleanup/callback paths that the application intentionally permits
+(such as discarding a still-capturing utterance or acknowledging completion of an
+already EXPOSED delivery) may finish. This preserves real serialized races without
+reopening the session or inventing a blanket terminal rule that current producers
+do not enforce. Session
 resumption is counted from `SESSION_RESUMED`; `RECOVERY`-source
 `DELIVERY_POSSIBLY_EXPOSED` events are counted separately without assuming that
 every such event proves an application crash. Empty, active,
@@ -207,12 +212,16 @@ views, but may not raise them above the package defaults:
 | evidence-history entries | 2,000 |
 | verification entries | 1,000 |
 | generation entries | 1,000 |
+| evaluation collection items (aggregate import budget) | 20,000 |
 
 Every bounded collection reports `truncated`, `limit`, and
 `remainingCount`. The 512-character identifier limit is a replay/import safety
 limit only; it does not alter authoritative domain schemas or writer contracts.
 Oversized imported identifiers fail with sanitized projection errors rather than
-being truncated into ambiguous identities. Summary counts are computed over the full validated event prefix
+being truncated into ambiguous identities. Optional imported SessionEvaluation
+artifacts are preflighted with an aggregate collection-item budget before full
+schema parsing, preventing unbounded milestone/intervention/feedback arrays from
+defeating the read-model resource boundary. Summary counts are computed over the full validated event prefix
 rather than the bounded display rows. History is never silently dropped. The
 normalizer may still scan supplied event metadata to recover authoritative sequence
 order; the event cap bounds semantic upcasting/materialization and output state.

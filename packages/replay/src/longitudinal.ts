@@ -165,7 +165,12 @@ function truncationMatchesLength(
 }
 
 function parseSelectedSessionSummary(value: unknown): LongitudinalSessionInput {
-  const result = LongitudinalSessionInputSchema.safeParse(value);
+  let result: ReturnType<typeof LongitudinalSessionInputSchema.safeParse>;
+  try {
+    result = LongitudinalSessionInputSchema.safeParse(value);
+  } catch {
+    throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  }
   if (!result.success) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
 
   const session = result.data;
@@ -291,7 +296,12 @@ function selectAndParseSessionSummaries(
   const seenSessionIds = new Set<SessionId>();
   const candidates: SelectedSessionInput[] = [];
   for (const raw of values) {
-    const parsed = LongitudinalSessionEnvelopeSchema.safeParse(raw);
+    let parsed: ReturnType<typeof LongitudinalSessionEnvelopeSchema.safeParse>;
+    try {
+      parsed = LongitudinalSessionEnvelopeSchema.safeParse(raw);
+    } catch {
+      throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+    }
     if (!parsed.success || !identifierWithinReplayLimit(parsed.data.sessionId)) {
       throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
     }

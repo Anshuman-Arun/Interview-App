@@ -30,6 +30,7 @@ import {
   projectReplayTimeline,
   projectSessionHistory
 } from "../packages/replay/src/index.js";
+import { MAX_REPLAY_EVALUATION_COLLECTION_ITEMS } from "../packages/replay/src/bounds.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import { authorizeSafeProbe, createCoreHarness, type CoreHarness } from "./harness.js";
 
@@ -437,10 +438,16 @@ describe("replay/history projections", () => {
       expect(queued?.delivery?.presentationState).toBe("AUTHORIZED");
       expect(queued?.delivery?.status).toBe("QUEUED");
       await new DeliveryCoordinator(cancelledHarness.writer)
-        .cancelBeforeExposure(atom.deliveryId, "cancelled before renderer exposure");
-      const cancelled = projectReplayTimeline(cancelledHarness.store.load(cancelledHarness.sessionId))
-        .entries.find((entry) => entry.kind === "DELIVERY_CANCELLED");
+        .cancelBeforeExposure(atom.deliveryId, cancelledHarness.safeProbe);
+      const cancelledProjection = projectReplayTimeline(
+        cancelledHarness.store.load(cancelledHarness.sessionId)
+      );
+      const cancelled = cancelledProjection.entries.find((entry) =>
+        entry.kind === "DELIVERY_CANCELLED"
+      );
       expect(cancelled?.delivery?.presentationState).toBe("CANCELLED");
+      expect(cancelled?.text).toBeUndefined();
+      expect(JSON.stringify(cancelledProjection)).not.toContain(cancelledHarness.safeProbe);
     } finally {
       cancelledHarness.store.close();
     }
@@ -461,7 +468,7 @@ describe("replay/history projections", () => {
       expect(delivering?.disclosure.disclosureIds).toBeUndefined();
       expect(JSON.stringify(deliveringProjection)).not.toContain(possibleHarness.safeProbe);
 
-      await coordinator.markPossiblyExposed(atom.deliveryId, "transport uncertainty");
+      await coordinator.markPossiblyExposed(atom.deliveryId, possibleHarness.safeProbe);
       const history = projectSessionHistory(possibleHarness.store.load(possibleHarness.sessionId));
       expect(history.counts.possiblyExposedInterventions).toBe(1);
       expect(history.counts.exposedInterventions).toBe(0);
@@ -922,7 +929,7 @@ describe("replay/history projections", () => {
     expect(boundedHistory.countsComplete).toBe(false);
   });
 
-  it("rejects known state-changing events after completion or archival", () => {
+  it("rejects interactions whose authoritative producer requires an active session", () => {
     const completedId = "session-terminal-completed" as SessionId;
     const completed = [
       ...base(completedId, "terminal-completed"),
@@ -948,6 +955,29 @@ describe("replay/history projections", () => {
     ];
     expect(() => projectReplayTimeline(archived))
       .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+  });
+
+  it("allows producer-valid cleanup events after session completion", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const utteranceId = await harness.turns.beginUtterance();
+      await harness.turns.completeSession();
+      await harness.turns.discardUtterance(
+        utteranceId,
+        "late VAD cleanup after completion"
+      );
+
+      const projected = projectSessionHistory(
+        harness.store.load(harness.sessionId)
+      );
+      expect(projected.lifecycle.status).toBe("COMPLETED");
+      expect(projected.timeline.entries.at(-1)).toMatchObject({
+        kind: "UTTERANCE_DISCARDED",
+        relations: { utteranceId }
+      });
+    } finally {
+      harness.store.close();
+    }
   });
 
   it("allows late renderer completion for an already exposed delivery after archival", async () => {
@@ -1689,6 +1719,66 @@ describe("replay/history projections", () => {
       .toEqual({ truncated: true, limit: 2, remainingCount: 3 });
   });
 
+  it("sanitizes throwing accessors at replay and longitudinal validation boundaries", () => {
+    const throwingEvent = {};
+    Object.defineProperty(throwingEvent, "eventId", {
+      enumerable: true,
+      get: () => {
+        throw new Error("PRIVATE_GETTER_EVENT_MARKER");
+      }
+    });
+
+    try {
+      projectReplayTimeline([throwingEvent]);
+      throw new Error("Expected throwing event accessor rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ReplayProjectionError);
+      expect(error).toMatchObject({ code: "INVALID_EVENT_METADATA" });
+      expect(String(error)).not.toContain("PRIVATE_GETTER_EVENT_MARKER");
+    }
+
+    const throwingSummary = {};
+    Object.defineProperty(throwingSummary, "sessionId", {
+      enumerable: true,
+      get: () => {
+        throw new Error("PRIVATE_GETTER_SUMMARY_MARKER");
+      }
+    });
+
+    try {
+      projectLongitudinalHistory([throwingSummary]);
+      throw new Error("Expected throwing summary accessor rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ReplayProjectionError);
+      expect(error).toMatchObject({ code: "INVALID_SESSION_SUMMARY" });
+      expect(String(error)).not.toContain("PRIVATE_GETTER_SUMMARY_MARKER");
+    }
+
+    const evaluationSessionId = "session-throwing-evaluation" as SessionId;
+    const completed = [
+      ...base(evaluationSessionId, "throwing-evaluation"),
+      event(evaluationSessionId, 3, "SESSION_COMPLETED", {
+        completedAt: "2026-08-31T19:10:00.000Z"
+      })
+    ];
+    const throwingEvaluation = {};
+    Object.defineProperty(throwingEvaluation, "keyStrengths", {
+      enumerable: true,
+      get: () => {
+        throw new Error("PRIVATE_GETTER_EVALUATION_MARKER");
+      }
+    });
+
+    try {
+      projectSessionHistory(completed, { evaluation: throwingEvaluation });
+      throw new Error("Expected throwing evaluation accessor rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ReplayProjectionError);
+      expect(error).toMatchObject({ code: "EVALUATION_MISMATCH" });
+      expect(String(error)).not.toContain("PRIVATE_GETTER_EVALUATION_MARKER");
+    }
+  });
+
   it("fails sanitized on corrupt caller histories and validates linked evaluations", () => {
     const sessionId = "session-invalid" as SessionId;
     const active = base(sessionId, "evaluation", "1.0.0");
@@ -1743,6 +1833,16 @@ describe("replay/history projections", () => {
       .toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
     expect(() => projectSessionHistory(valid, {
       evaluation: { ...evaluation, problemVersion: "2.0.0" }
+    })).toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
+
+    expect(() => projectSessionHistory(valid, {
+      evaluation: {
+        ...evaluation,
+        keyStrengths: Array.from(
+          { length: MAX_REPLAY_EVALUATION_COLLECTION_ITEMS + 1 },
+          () => "oversized imported feedback"
+        )
+      }
     })).toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
   });
 });
