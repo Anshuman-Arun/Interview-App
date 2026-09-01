@@ -103,6 +103,16 @@ describe("adaptive endpointing policy", () => {
     });
   });
 
+  it("rejects endpoint configurations whose minimum speech can never fit", () => {
+    expect(() => new AdaptiveEndpointingPolicy({
+      minimumSpeechMs: 201,
+      minimumSilenceMs: 20,
+      incompleteSilenceMs: 20,
+      maximumPauseMs: 300,
+      maximumUtteranceMs: 200
+    })).toThrow(/Minimum speech duration/u);
+  });
+
   it("forces a deterministic maximum-duration endpoint", () => {
     const shortPolicy = new AdaptiveEndpointingPolicy({
       minimumSpeechMs: 20,
