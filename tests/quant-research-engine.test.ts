@@ -396,8 +396,7 @@ describe("deterministic Quant Research interview engine", () => {
   it("bounds reentrant parser, registry, and replay traps with domain errors", () => {
     let nestedDefinitionCode: QuantResearchError["code"] | undefined;
     const definitionTarget = { ...sampling, config: { ...sampling.config } };
-    let definitionProxy: unknown;
-    definitionProxy = new Proxy(definitionTarget, {
+    const definitionProxy: unknown = new Proxy(definitionTarget, {
       getPrototypeOf(value) {
         try {
           parseQuantResearchDefinition(definitionProxy);
@@ -413,8 +412,7 @@ describe("deterministic Quant Research interview engine", () => {
 
     let nestedActionCode: QuantResearchError["code"] | undefined;
     const actionTarget = { actionId: "reentrant-parser", kind: "REQUEST_OBSERVATION", count: 2 } as const;
-    let actionProxy: unknown;
-    actionProxy = new Proxy(actionTarget, {
+    const actionProxy: unknown = new Proxy(actionTarget, {
       ownKeys(value) {
         try {
           parseQuantResearchAction(actionProxy);
@@ -435,9 +433,8 @@ describe("deterministic Quant Research interview engine", () => {
       rngVersion: QUANT_RESEARCH_RNG_VERSION
     } as const;
     let nestedRegistryCode: QuantResearchError["code"] | undefined;
-    let registryProxy: unknown;
     const registryTarget = [registration];
-    registryProxy = new Proxy(registryTarget, {
+    const registryProxy: unknown = new Proxy(registryTarget, {
       ownKeys(value) {
         try {
           assertUniqueQuantResearchRegistrations(registryProxy);
@@ -452,9 +449,8 @@ describe("deterministic Quant Research interview engine", () => {
     expect(nestedRegistryCode).toBe("INVALID_REGISTRY");
 
     let nestedReplayCode: QuantResearchError["code"] | undefined;
-    let replayProxy: unknown;
     const replayTarget: unknown[] = [];
-    replayProxy = new Proxy(replayTarget, {
+    const replayProxy: unknown = new Proxy(replayTarget, {
       ownKeys(value) {
         try {
           replayQuantResearch(bayesian, replayProxy);
