@@ -120,7 +120,7 @@ corepack pnpm dev:web
 corepack pnpm dev:desktop
 ```
 
-`dev:desktop` expects the Vite development server to already be running. A bare `dev:web` renderer is useful for UI work, but the current `App` has no built-in browser-token acquisition flow, so `start:server` + `dev:web` alone is not an authenticated end-to-end interview path.
+`dev:desktop` expects the Vite development server to already be running. The default dev origins agree on `http://127.0.0.1:5173`, but Vite is allowed to choose another free port when 5173 is occupied; if it reports a different loopback origin, set `INTERVIEW_DESKTOP_DEV_URL` to that exact origin before launching Electron. A bare `dev:web` renderer is useful for UI work, but the current `App` has no built-in browser-token acquisition flow, so `start:server` + `dev:web` alone is not an authenticated end-to-end interview path.
 
 Server-only development and transport testing can still use:
 
