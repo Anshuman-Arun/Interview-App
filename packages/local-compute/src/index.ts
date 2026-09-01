@@ -3,3 +3,7 @@ export * from "./worker-client.js";
 export * from "./order-book.js";
 export * from "./portfolio-tracker.js";
 export * from "./market-maker.js";
+export * from "./tts-protocol.js";
+export * from "./tts-core.js";
+export * from "./tts-request-manager.js";
+export * from "./tts-worker.js";
