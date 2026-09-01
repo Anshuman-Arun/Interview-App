@@ -77,15 +77,13 @@ export interface EvaluationOptions {
 interface DisclosureExposure {
   readonly disclosureId: DisclosureId;
   readonly level: DisclosureLevel;
-  readonly possiblyExposed: boolean;
   readonly deliveryRefs: readonly EvaluationEvidenceRef[];
 }
 
 interface MilestoneFacts {
   readonly evaluation: MilestoneEvaluation;
-  readonly achievedSequence?: number;
   readonly attributionUncertain: boolean;
-  readonly priorAssistanceRefs: readonly EvaluationEvidenceRef[];
+  readonly assistanceExposureRefs: readonly EvaluationEvidenceRef[];
 }
 
 interface DimensionComputation {
@@ -529,7 +527,6 @@ function collectDisclosureData(
 
   const exposuresMutable = new Map<DisclosureId, {
     level: DisclosureLevel;
-    possiblyExposed: boolean;
     deliveryRefs: EvaluationEvidenceRef[];
   }>();
 
@@ -595,12 +592,10 @@ function collectDisclosureData(
       if (current === undefined) {
         exposuresMutable.set(disclosureId, {
           level: disclosureLevel,
-          possiblyExposed: delivery.status === "POSSIBLY_EXPOSED",
           deliveryRefs: [deliveryRef]
         });
       } else {
         current.level = Math.max(current.level, disclosureLevel) as DisclosureLevel;
-        current.possiblyExposed ||= delivery.status === "POSSIBLY_EXPOSED";
         current.deliveryRefs.push(deliveryRef);
       }
     }
@@ -611,7 +606,6 @@ function collectDisclosureData(
     exposures.set(disclosureId, {
       disclosureId,
       level: exposure.level,
-      possiblyExposed: exposure.possiblyExposed,
       deliveryRefs: uniqueRefs(exposure.deliveryRefs)
     });
   }
@@ -633,7 +627,6 @@ function evaluateMilestones(
   const milestoneById = new Map(graph.milestones.map((milestone) => [milestone.id, milestone] as const));
   const base = new Map<string, {
     achieved: boolean;
-    achievedSequence?: number;
     supportLevel: EvaluationSupportLevel;
     evidenceRefs: EvaluationEvidenceRef[];
     notAchievedReason?: string;
@@ -698,37 +691,18 @@ function evaluateMilestones(
       evidenceRefs.push(evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId));
     }
 
-    const achievedSequence = achieved
-      ? Math.max(
-          ...records
-            .filter((record) =>
-              record.value.value === "COMPLETE" ||
-              record.value.value === "CORRECT" ||
-              record.value.value === "JUSTIFIED" ||
-              record.value.value === "NOT_APPLICABLE"
-            )
-            .map((record) => record.value.lastUpdatedSequence)
-        )
-      : undefined;
-
     let supportLevel = supportFromEvidenceRecords(records, relevantVerificationRequests.length > 0);
     if (achieved && directComplete && supportLevel === "WEAK" && progress.value.inferenceConfidence >= 0.8) {
       supportLevel = "MODERATE";
     }
 
-    const achievedAtTurnId = achieved
-      ? findTurnForEvidence(records, verificationByEvidenceKey)
-      : undefined;
-
     base.set(milestone.id, {
       achieved,
-      ...(achievedSequence === undefined ? {} : { achievedSequence }),
       supportLevel,
       evidenceRefs: uniqueRefs([
         evaluationRef("MILESTONE", milestone.id),
         ...evidenceRefs
       ]),
-      ...(achievedAtTurnId === undefined ? {} : { achievedAtTurnId }),
       ...(achieved
         ? {}
         : {
@@ -773,7 +747,7 @@ function evaluateMilestones(
 
     let assistanceLevel: DisclosureLevel = 0;
     const assistanceDisclosureIds: DisclosureId[] = [];
-    const priorAssistanceRefs: EvaluationEvidenceRef[] = [];
+    const assistanceExposureRefs: EvaluationEvidenceRef[] = [];
     let attributionUncertain = false;
 
     for (const disclosureId of milestone.protectedDisclosureIds) {
@@ -783,7 +757,7 @@ function evaluateMilestones(
       attributionUncertain = true;
       assistanceLevel = Math.max(assistanceLevel, exposure.level) as DisclosureLevel;
       assistanceDisclosureIds.push(disclosureId);
-      priorAssistanceRefs.push(...exposure.deliveryRefs);
+      assistanceExposureRefs.push(...exposure.deliveryRefs);
     }
 
     if (attributionUncertain && assistanceLevel > 0) {
@@ -801,7 +775,7 @@ function evaluateMilestones(
       supportLevel,
       evidenceRefs: uniqueRefs([
         ...baseResult.evidenceRefs,
-        ...priorAssistanceRefs
+        ...assistanceExposureRefs
       ]),
       assistanceDisclosureIds: Array.from(new Set(assistanceDisclosureIds)).sort(),
       approachIds: [...milestone.approachIds].sort(),
@@ -812,11 +786,8 @@ function evaluateMilestones(
 
     facts.push({
       evaluation,
-      ...(baseResult.achievedSequence === undefined
-        ? {}
-        : { achievedSequence: baseResult.achievedSequence }),
       attributionUncertain,
-      priorAssistanceRefs: uniqueRefs(priorAssistanceRefs)
+      assistanceExposureRefs: uniqueRefs(assistanceExposureRefs)
     });
   }
 
@@ -1029,7 +1000,7 @@ function evaluateIndependence(
 
   const uncertain = achieved.filter((item) => item.attributionUncertain);
   const uncertaintyRefs = uniqueRefs([
-    ...uncertain.flatMap((item) => item.priorAssistanceRefs),
+    ...uncertain.flatMap((item) => item.assistanceExposureRefs),
     ...unattributedAssistanceRefs
   ]);
   if (uncertain.length > 0 || unattributedAssistanceRefs.length > 0) {
@@ -1089,7 +1060,7 @@ function evaluateErrorRecovery(
       .sort(
         (left, right) =>
           left.value.lastUpdatedSequence - right.value.lastUpdatedSequence ||
-          left.evidenceEventId.localeCompare(right.evidenceEventId)
+          compareStrings(left.evidenceEventId, right.evidenceEventId)
       );
     if (records.length === 0) continue;
 
@@ -1447,21 +1418,6 @@ function getActiveEvidence(
   );
 }
 
-function findTurnForEvidence(
-  records: readonly EvidenceRecordState[],
-  verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>
-): MilestoneEvaluation["achievedAtTurnId"] | undefined {
-  const candidates = records.flatMap((record) =>
-    supportingVerificationRequests(record, verificationByEvidenceKey)
-  );
-  const latest = [...candidates].sort(
-    (left, right) =>
-      right.basis.committedInputSequence - left.basis.committedInputSequence ||
-      compareStrings(right.verificationRequestId, left.verificationRequestId)
-  )[0];
-  return latest?.basis.turnId;
-}
-
 function supportingVerificationRequests(
   record: EvidenceRecordState,
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>
@@ -1619,6 +1575,13 @@ function compareStrings(left: string, right: string): number {
   return 0;
 }
 
+function markdownTableCell(value: string): string {
+  return value
+    .replace(/\\/gu, "\\\\")
+    .replace(/\|/gu, "\\|")
+    .replace(/[\r\n]+/gu, " ");
+}
+
 export function generateEvaluationMarkdown(evaluation: SessionEvaluation): string {
   const scoreText = (score: number | null): string =>
     score === null ? "Not scored" : String(score) + "%";
@@ -1627,9 +1590,9 @@ export function generateEvaluationMarkdown(evaluation: SessionEvaluation): strin
 
   const milestoneRows = evaluation.milestones.map((milestone) =>
     "| " +
-    milestone.milestoneId +
+    markdownTableCell(milestone.milestoneId) +
     " | " +
-    milestone.description +
+    markdownTableCell(milestone.description) +
     " | " +
     (milestone.achieved ? "Achieved" : "Incomplete") +
     " | Level " +
@@ -1647,13 +1610,13 @@ export function generateEvaluationMarkdown(evaluation: SessionEvaluation): strin
           "| :--- | :---: | :---: | :--- |",
           ...evaluation.disclosedInterventions.map((item) =>
             "| " +
-            item.deliveryId +
+            markdownTableCell(item.deliveryId) +
             " | " +
             String(item.disclosureLevel) +
             " | " +
             item.deliveryStatus +
             " | " +
-            (item.relatedMilestoneIds.join(", ") || "none") +
+            markdownTableCell(item.relatedMilestoneIds.join(", ") || "none") +
             " |"
           )
         ];
