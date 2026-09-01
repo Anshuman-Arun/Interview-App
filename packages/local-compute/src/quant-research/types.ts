@@ -138,7 +138,8 @@ export type QuantResearchErrorCode =
   | "DUPLICATE_ACTION_ID"
   | "RESOURCE_LIMIT_EXCEEDED"
   | "SCENARIO_COMPLETE"
-  | "INVALID_REGISTRY";
+  | "INVALID_REGISTRY"
+  | "INVALID_REPLAY";
 
 export class QuantResearchError extends Error {
   public readonly code: QuantResearchErrorCode;
