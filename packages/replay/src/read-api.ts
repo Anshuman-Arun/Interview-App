@@ -613,11 +613,8 @@ function projectReplayEntry(entry: ReplayTimelineEntry): ReplayReadEntry {
         effectiveDisclosureLevel: entry.delivery.disclosure.effectiveDisclosureLevel,
         disclosureIdCount: entry.delivery.disclosure.disclosureIdCount,
         contentWithheld:
-          entry.delivery.presentationState === "POSSIBLY_PRESENTED"
-          || (
-            entry.delivery.status !== "EXPOSED"
-            && entry.delivery.presentationState !== "CANCELLED"
-          ),
+          entry.delivery.text === undefined
+          && entry.delivery.boardAction === undefined,
         ...(entry.kind === "DELIVERY_EXPOSED" && entry.delivery.boardAction !== undefined
           ? { boardAction: entry.delivery.boardAction }
           : {})
