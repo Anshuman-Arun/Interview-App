@@ -253,7 +253,7 @@ describe("recognition cancellation, races, and diagnostics", () => {
 
     deferred.resolve(validRaw(recognitionInput));
     const finalEvents = await finalizing;
-    expect(finalEvents.some((event) => event.type === "TRANSCRIPT_CANDIDATE")).toBe(false);
+    expect(finalEvents).toEqual([]);
   });
 
   it("suppresses recognition during shutdown and makes shutdown idempotent", async () => {
@@ -269,7 +269,7 @@ describe("recognition cancellation, races, and diagnostics", () => {
     await worker.shutdown();
     await worker.shutdown();
     deferred.resolve(validRaw(recognitionInput));
-    expect((await finalizing).some((event) => event.type === "TRANSCRIPT_CANDIDATE")).toBe(false);
+    expect(await finalizing).toEqual([]);
     expect(worker.getActiveStreamCount()).toBe(0);
   });
 
