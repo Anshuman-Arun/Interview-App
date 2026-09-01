@@ -1156,7 +1156,17 @@ function withTimeoutAndAbort<T>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      try {
+        onTimeout();
+      } catch {
+        // Timeout cleanup is best-effort and may not undermine suppression.
+      }
+      reject(new OperationTimeoutError("Speech worker operation timed out"));
+    }, timeoutMs);
 
     const cleanup = () => {
       clearTimeout(timer);
@@ -1169,17 +1179,6 @@ function withTimeoutAndAbort<T>(
       reject(new OperationCancelledError("Speech worker operation was cancelled"));
     };
 
-    timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener("abort", onAbort);
-      try {
-        onTimeout();
-      } catch {
-        // Timeout cleanup is best-effort and may not undermine suppression.
-      }
-      reject(new OperationTimeoutError("Speech worker operation timed out"));
-    }, timeoutMs);
 
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted) {
