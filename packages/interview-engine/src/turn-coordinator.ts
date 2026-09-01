@@ -45,7 +45,7 @@ import {
 import type { EventDraft, SessionState } from "../../events/src/index.js";
 import { z } from "zod";
 import { createCommandEnvelope } from "./envelopes.js";
-import { createProviderContextSpecFingerprintSync } from "./context-compiler.js";
+import { canonicalJson, createProviderContextSpecFingerprintSync } from "./context-compiler.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
@@ -84,6 +84,44 @@ function assertSessionActive(state: Readonly<SessionState>, operation: string): 
   if (!state.started || state.status !== "ACTIVE") {
     throw new Error(`Cannot ${operation} in status ${state.status}`);
   }
+}
+
+const MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS = 100_000;
+const MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS = 256;
+const MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS = 256;
+
+function isRuntimeRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function proposalWithinAdmissionBounds(value: unknown): boolean {
+  if (!isRuntimeRecord(value)) return true;
+
+  const claimedDisclosureIds = value["claimedDisclosureIds"];
+  if (
+    Array.isArray(claimedDisclosureIds)
+    && claimedDisclosureIds.length > MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS
+  ) return false;
+
+  const speechText = value["speechText"];
+  if (
+    typeof speechText === "string"
+    && speechText.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
+  ) return false;
+
+  const boardActions = value["boardActions"];
+  if (!Array.isArray(boardActions)) return true;
+  if (boardActions.length > MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS) return false;
+  return boardActions.every((rawAction) => {
+    if (!isRuntimeRecord(rawAction)) return true;
+    const content = rawAction["content"];
+    const annotationPurpose = rawAction["annotationPurpose"];
+    return (typeof content !== "string" || content.length <= MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS)
+      && (
+        typeof annotationPurpose !== "string"
+        || annotationPurpose.length <= MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
+      );
+  });
 }
 
 function terminalInvalidationDrafts(
@@ -474,9 +512,27 @@ export class TurnCoordinator {
       if (state.problem.providerContextSpecSha256 !== policyProblemFingerprint) {
         throw new Error("Problem definition does not match the session-bound pedagogical policy contract");
       }
-      const existing = state.pedagogicalActions[turnId];
-      if (existing !== undefined) return { drafts: [], result: existing };
+      if (state.problem.prompt !== problem.public.prompt) {
+        throw new Error("Problem prompt does not match the session-bound pedagogical policy contract");
+      }
+      const turn = state.turns[turnId];
+      if (
+        turn === undefined
+        || turn.turnId !== turnId
+        || state.lastCommittedInputSequence === undefined
+        || turn.committedSequence !== state.lastCommittedInputSequence
+      ) {
+        throw new Error("Pedagogical action selection requires the latest committed Turn");
+      }
+
       const request = selectPedagogicalAction(state, turnId, problem);
+      const existing = RealizationRequestSchema.safeParse(state.pedagogicalActions[turnId]);
+      if (
+        existing.success
+        && canonicalJson(existing.data) === canonicalJson(request)
+      ) {
+        return { drafts: [], result: existing.data };
+      }
       return { drafts: [{ source: "APPLICATION", type: "PEDAGOGICAL_ACTION_SELECTED", payload: { turnId, request } }], result: request };
     });
     return result.value;
@@ -491,6 +547,19 @@ export class TurnCoordinator {
     }, GenerationStartedResultSchema, (state) => {
       assertSessionActive(state, "start generation");
       if (state.lastCommittedInputSequence === undefined) throw new Error("No committed input exists");
+      const episode = state.inputEpisodes[inputEpisodeId];
+      const turn = state.turns[turnId];
+      if (episode === undefined || episode.status !== "COMMITTED") {
+        throw new Error("Generation requires a committed InputEpisode");
+      }
+      if (
+        turn === undefined
+        || turn.turnId !== turnId
+        || turn.inputEpisodeId !== inputEpisodeId
+        || turn.committedSequence !== state.lastCommittedInputSequence
+      ) {
+        throw new Error("Generation requires the latest committed Turn and matching InputEpisode");
+      }
       const basis: GenerationBasis = {
         contextEpoch: state.contextEpoch,
         committedInputSequence: state.lastCommittedInputSequence,
@@ -513,6 +582,9 @@ export class TurnCoordinator {
     readonly validator: DisclosureValidator;
   }): Promise<ProcessProposalResult> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    if (!proposalWithinAdmissionBounds(input.proposal)) {
+      throw new Error("Provider proposal exceeds the bounded admission input size");
+    }
     const proposal = InterviewerProposalSchema.parse(input.proposal);
     const generationId = envelope.generationId;
     if (generationId === undefined) throw new Error("Provider result envelope is missing generationId");
@@ -530,26 +602,48 @@ export class TurnCoordinator {
       const generation = state.generations[generationId];
       if (generation === undefined) return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Unknown generation" } };
       if (generation.status !== "ACTIVE") return { drafts: [], result: { accepted: false, deliveryAtoms: [], reason: "Generation is not active" } };
-      if (state.problem?.providerContextSpecSha256 === undefined) {
-        return rejectDrafts(generationId, proposal, "Problem definition provenance is unavailable");
+      if (
+        state.problem === undefined
+        || state.problem.id !== input.problem.id
+        || state.problem.version !== input.problem.version
+        || state.problem.providerContextSpecSha256 === undefined
+      ) {
+        return rejectDrafts(generationId, proposal, "Problem definition provenance is unavailable or mismatched");
       }
       if (state.problem.providerContextSpecSha256 !== providerContextSpecSha256) {
         return rejectDrafts(generationId, proposal, "Problem definition does not match the session-bound provider context contract");
       }
+      if (
+        envelope.inputEpisodeId !== generation.basis.inputEpisodeId
+        || envelope.turnId !== generation.basis.turnId
+        || envelope.contextEpoch !== generation.basis.contextEpoch
+        || envelope.sourceRevision !== generation.basis.committedInputSequence
+      ) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "Provider callback basis does not match the generation basis");
+      }
       const compatibility = isGenerationBasisStillCompatible(generation.basis, state);
       if (compatibility !== "COMPATIBLE") {
-        return {
-          drafts: [
-            { source: "PROVIDER", type: "MODEL_PROPOSAL_RECEIVED", payload: { generationId, proposal } },
-            { source: "APPLICATION", type: "PROPOSAL_REJECTED", payload: { generationId, reason: `Generation compatibility is ${compatibility}` } },
-            { source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId, reason: `Generation compatibility is ${compatibility}` } }
-          ],
-          result: { accepted: false, deliveryAtoms: [], reason: `Generation compatibility is ${compatibility}` }
-        };
+        return rejectAndSupersedeDrafts(generationId, proposal, `Generation compatibility is ${compatibility}`);
       }
-      const request = state.pedagogicalActions[generation.basis.turnId];
-      if (request === undefined) return rejectDrafts(generationId, proposal, "No application-selected pedagogical action");
-      const validation = input.validator.validate({ proposal, request, protectedDisclosures: input.problem.interviewer.protectedDisclosures });
+      const parsedRequest = RealizationRequestSchema.safeParse(
+        state.pedagogicalActions[generation.basis.turnId]
+      );
+      if (!parsedRequest.success) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "No valid application-selected pedagogical action");
+      }
+      const currentRequest = selectPedagogicalAction(
+        state,
+        generation.basis.turnId,
+        input.problem
+      );
+      if (canonicalJson(parsedRequest.data) !== canonicalJson(currentRequest)) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "Application-selected pedagogical action is stale");
+      }
+      const validation = input.validator.validate({
+        proposal,
+        request: parsedRequest.data,
+        protectedDisclosures: input.problem.interviewer.protectedDisclosures
+      });
       if (!validation.accepted) return rejectDrafts(generationId, proposal, validation.reason);
       const atoms: DeliveryAtom[] = [];
       if (proposal.speechText !== undefined) {
@@ -650,5 +744,20 @@ function rejectDrafts(generationId: GenerationId, proposal: InterviewerProposal,
       { source: "APPLICATION", type: "PROPOSAL_REJECTED", payload: { generationId, reason } }
     ],
     result: { accepted: false, deliveryAtoms: [], reason }
+  };
+}
+
+function rejectAndSupersedeDrafts(
+  generationId: GenerationId,
+  proposal: InterviewerProposal,
+  reason: string
+): { readonly drafts: readonly EventDraft[]; readonly result: ProcessProposalResult } {
+  const rejected = rejectDrafts(generationId, proposal, reason);
+  return {
+    drafts: [
+      ...rejected.drafts,
+      { source: "APPLICATION", type: "MODEL_GENERATION_SUPERSEDED", payload: { generationId, reason } }
+    ],
+    result: rejected.result
   };
 }
