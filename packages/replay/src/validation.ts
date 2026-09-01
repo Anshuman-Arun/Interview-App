@@ -2,6 +2,7 @@ import {
   evidenceKeyToString,
   isEvidenceValueAllowed,
   type EvidenceKey,
+  type EventId,
   type GenerationId,
   type SessionId
 } from "../../domain/src/index.js";
@@ -39,7 +40,7 @@ function registerEvidenceIdentity(
 
 function assertPriorEventIds(
   state: Readonly<SessionState>,
-  eventIds: readonly string[]
+  eventIds: readonly EventId[]
 ): void {
   const known = new Set(state.eventIds);
   if (!eventIds.every((eventId) => known.has(eventId))) fail();

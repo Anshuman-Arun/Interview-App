@@ -51,7 +51,7 @@ function event(
     sequence,
     schemaVersion: CURRENT_EVENT_SCHEMA_VERSION,
     source,
-    wallTime: `2026-08-31T19:00:${String(sequence).padStart(2, "0")}.000Z`,
+    wallTime: `2026-08-31T19:00:${String(sequence % 60).padStart(2, "0")}.000Z`,
     elapsedMs: sequence * 10,
     causationId: `request_cause_${sessionId}_${String(sequence)}`,
     correlationId: `request_corr_${sessionId}_${String(sequence)}`,
@@ -70,11 +70,12 @@ function base(sessionId: SessionId, problemId = "problem-a", version = "1.0.0"):
 function basis() {
   return {
     contextEpoch: 0,
-    committedInputSequence: 1,
+    committedInputSequence: 6,
     transcriptRevision: 0,
     boardRevision: 0,
     problemStateRevision: 0,
     policyRevision: 0,
+    inputEpisodeId: "episode-verification",
     turnId: "turn-verification"
   };
 }
@@ -98,6 +99,7 @@ async function addEvidence(harness: CoreHarness, value: "PROGRESSING" | "COMPLET
 }
 
 async function queueAudio(harness: CoreHarness) {
+  await authorizeSafeProbe(harness);
   const atom = DeliveryAtomSchema.parse({
     deliveryId: newDeliveryId(),
     generationId: harness.generationId,
@@ -383,8 +385,31 @@ describe("replay/history projections", () => {
       subject: { kind: "CLAIM", claimId: "claim-1" },
       dimension: "CORRECTNESS"
     };
-    const events: SessionEvent[] = [start, problem];
-    let sequence = 3;
+    const episodeStarted = event(sessionId, 3, "INPUT_EPISODE_STARTED", {
+      inputEpisodeId: "episode-verification"
+    });
+    const episodeUpdated = event(sessionId, 4, "INPUT_EPISODE_UPDATED", {
+      inputEpisodeId: "episode-verification",
+      modality: "TYPING",
+      semanticContent: "A claim to verify"
+    });
+    const episodeCommitted = event(sessionId, 5, "INPUT_EPISODE_COMMITTED", {
+      inputEpisodeId: "episode-verification"
+    });
+    const turn = event(sessionId, 6, "TURN_COMMITTED", {
+      turnId: "turn-verification",
+      inputEpisodeId: "episode-verification",
+      studentText: "A claim to verify"
+    });
+    const events: SessionEvent[] = [
+      start,
+      problem,
+      episodeStarted,
+      episodeUpdated,
+      episodeCommitted,
+      turn
+    ];
+    let sequence = 7;
 
     for (const [index, status] of ["VERIFIED", "CONTRADICTED", "UNRESOLVED"].entries()) {
       const requestId = `verification-${String(index)}`;
@@ -395,7 +420,7 @@ describe("replay/history projections", () => {
         candidateFormalInterpretation: `formal claim ${String(index)}`,
         interpretationConfidence: 1,
         evidenceKey: key,
-        evidenceEventIds: [start.eventId]
+        evidenceEventIds: [turn.eventId]
       }));
       sequence += 1;
       events.push(event(sessionId, sequence, "VERIFICATION_RESULT_ACCEPTED", {
@@ -417,7 +442,7 @@ describe("replay/history projections", () => {
       candidateFormalInterpretation: "stale callback claim",
       interpretationConfidence: 0.9,
       evidenceKey: key,
-      evidenceEventIds: [problem.eventId]
+      evidenceEventIds: [turn.eventId]
     }));
     sequence += 1;
     events.push(event(sessionId, sequence, "VERIFICATION_RESULT_DISCARDED", {
@@ -455,7 +480,9 @@ describe("replay/history projections", () => {
   it("handles lifecycle states, mixed v1/v2 upcasts, future events, and explicit bounds safely", () => {
     const empty = projectSessionHistory([]);
     expect(empty.currentStateAvailable).toBe(false);
-    expect(empty.lifecycle.completed).toBe(false);
+    expect(empty.lifecycle.status).toBe("UNKNOWN");
+    expect(empty.lifecycle.completed).toBeNull();
+    expect(empty.lifecycle.historyComplete).toBe(false);
 
     const sessionId = "session-lifecycle" as SessionId;
     const active = base(sessionId, "lifecycle");
@@ -514,30 +541,246 @@ describe("replay/history projections", () => {
     expect(JSON.stringify(currentUnknownProjection)).not.toContain(privateMarker);
 
     const longText = "🙂".repeat(20);
+    const boundedSessionId = "session-bounds" as SessionId;
     const boundedEvents = [
-      ...base("session-bounds" as SessionId, "bounds"),
-      event("session-bounds" as SessionId, 3, "TURN_COMMITTED", {
+      ...base(boundedSessionId, "bounds"),
+      event(boundedSessionId, 3, "INPUT_EPISODE_STARTED", {
+        inputEpisodeId: "episode-bounds"
+      }),
+      event(boundedSessionId, 4, "INPUT_EPISODE_UPDATED", {
+        inputEpisodeId: "episode-bounds",
+        modality: "TYPING",
+        semanticContent: longText
+      }),
+      event(boundedSessionId, 5, "INPUT_EPISODE_COMMITTED", {
+        inputEpisodeId: "episode-bounds"
+      }),
+      event(boundedSessionId, 6, "TURN_COMMITTED", {
         turnId: "turn-bounds",
         inputEpisodeId: "episode-bounds",
         studentText: longText
       }),
-      event("session-bounds" as SessionId, 4, "SESSION_RESUMED", {
-        resumedAt: "2026-08-31T19:00:04.000Z"
-      }),
-      event("session-bounds" as SessionId, 5, "SESSION_RESUMED", {
-        resumedAt: "2026-08-31T19:00:05.000Z"
+      event(boundedSessionId, 7, "SESSION_COMPLETED", {
+        completedAt: "2026-08-31T19:01:00.000Z"
       })
     ];
     const bounded = projectReplayTimeline(boundedEvents, {
-      bounds: { maxEvents: 4, maxTimelineEntries: 3, maxTextPreviewChars: 5 }
+      bounds: { maxEvents: 6, maxTimelineEntries: 4, maxTextPreviewChars: 5 }
     });
     expect(bounded.eventTruncation.remainingCount).toBe(1);
-    expect(bounded.timelineTruncation.remainingCount).toBe(1);
-    expect(bounded.entries[2]?.text).toEqual({
+    expect(bounded.timelineTruncation.remainingCount).toBe(2);
+    expect(bounded.entries[3]?.text).toEqual({
       text: "🙂🙂🙂🙂🙂",
       originalLength: 20,
       truncated: true
     });
+    const boundedHistory = projectSessionHistory(boundedEvents, {
+      bounds: { maxEvents: 6, maxTimelineEntries: 4, maxTextPreviewChars: 5 }
+    });
+    expect(boundedHistory.lifecycle.completed).toBeNull();
+    expect(boundedHistory.countsComplete).toBe(false);
+  });
+
+  it("rejects reducer-valid delivery transitions that violate generation and exposure authority", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      await harness.turns.supersedeGeneration(
+        harness.generationId,
+        "generation no longer current"
+      );
+      const authoritative = harness.store.load(harness.sessionId);
+      const nextSequence = authoritative.length + 1;
+
+      const startedAfterSupersession = [
+        ...authoritative,
+        event(harness.sessionId, nextSequence, "DELIVERY_STARTED", {
+          deliveryId: atom.deliveryId
+        })
+      ];
+      expect(() => projectReplayTimeline(startedAfterSupersession))
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+
+      const lateAtom = DeliveryAtomSchema.parse({
+        ...atom,
+        deliveryId: newDeliveryId(),
+        status: "VALIDATED"
+      });
+      const queuedAfterSupersession = [
+        ...authoritative,
+        event(harness.sessionId, nextSequence, "DELIVERY_QUEUED", {
+          atom: lateAtom
+        })
+      ];
+      expect(() => projectSessionHistory(queuedAfterSupersession))
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+
+    const cancellationHarness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(cancellationHarness);
+      await new DeliveryCoordinator(cancellationHarness.writer).markStarted(atom.deliveryId);
+      const authoritative = cancellationHarness.store.load(cancellationHarness.sessionId);
+      const unsafeCancellation = [
+        ...authoritative,
+        event(
+          cancellationHarness.sessionId,
+          authoritative.length + 1,
+          "DELIVERY_CANCELLED",
+          {
+            deliveryId: atom.deliveryId,
+            reason: "incorrectly treating an in-flight delivery as unseen"
+          }
+        )
+      ];
+      expect(() => projectReplayTimeline(unsafeCancellation))
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      cancellationHarness.store.close();
+    }
+  });
+
+  it("treats an unknown event as a semantic boundary and withholds later known payloads", () => {
+    const sessionId = "session-unknown-boundary" as SessionId;
+    const secret = "LATER_KNOWN_PAYLOAD_MUST_NOT_BE_INTERPRETED";
+    const knownPrefix = base(sessionId, "future-boundary");
+    const unknownEvent = {
+      eventId: "event-unknown-boundary",
+      sessionId,
+      sequence: 3,
+      schemaVersion: CURRENT_EVENT_SCHEMA_VERSION + 1,
+      source: "APPLICATION",
+      wallTime: "2026-08-31T19:00:03.000Z",
+      elapsedMs: 30,
+      causationId: "request-unknown-boundary-cause",
+      correlationId: "request-unknown-boundary-correlation",
+      type: "FUTURE_STATE_TRANSITION",
+      payload: { hiddenState: "future-only" }
+    };
+    const laterKnown = event(sessionId, 4, "SESSION_COMPLETED", {
+      completedAt: "2026-08-31T19:00:04.000Z",
+      summary: secret
+    });
+    const history = projectSessionHistory([
+      ...knownPrefix,
+      unknownEvent,
+      laterKnown
+    ]);
+
+    expect(history.currentStateAvailable).toBe(false);
+    expect(history.validatedThroughSequence).toBe(2);
+    expect(history.knownThroughSequence).toBe(4);
+    expect(history.lifecycle.status).toBe("UNKNOWN");
+    expect(history.lifecycle.completed).toBeNull();
+    expect(history.countsComplete).toBe(false);
+    expect(history.timeline.entries[2]?.stateValidation).toBe("UNKNOWN_EVENT");
+    expect(history.timeline.entries[3]).toMatchObject({
+      kind: "SESSION_COMPLETED",
+      stateValidation: "UNAVAILABLE_AFTER_UNKNOWN"
+    });
+    expect(JSON.stringify(history)).not.toContain(secret);
+
+    const invalidPrefix = [
+      ...knownPrefix,
+      event(sessionId, 3, "INPUT_EPISODE_COMMITTED", {
+        inputEpisodeId: "missing-episode"
+      }),
+      {
+        ...unknownEvent,
+        eventId: "event-unknown-after-invalid-prefix",
+        sequence: 4
+      }
+    ];
+    expect(() => projectReplayTimeline(invalidPrefix))
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+  });
+
+  it("validates sequence and event identity across the entire raw history beyond projection bounds", () => {
+    const sessionId = "session-tail-corruption" as SessionId;
+    const valid = [
+      ...base(sessionId, "tail"),
+      event(sessionId, 3, "SESSION_RESUMED", {
+        resumedAt: "2026-08-31T19:01:03.000Z"
+      }),
+      event(sessionId, 4, "SESSION_RESUMED", {
+        resumedAt: "2026-08-31T19:01:04.000Z"
+      })
+    ];
+
+    const duplicateTailSequence = [
+      valid[0],
+      valid[1],
+      valid[2],
+      { ...valid[3], sequence: 3 }
+    ];
+    expect(() => projectReplayTimeline(duplicateTailSequence, {
+      bounds: { maxEvents: 2 }
+    })).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEQUENCE" }));
+
+    const gappedTail = [
+      valid[0],
+      valid[1],
+      valid[2],
+      { ...valid[3], sequence: 5 }
+    ];
+    expect(() => projectReplayTimeline(gappedTail, {
+      bounds: { maxEvents: 2 }
+    })).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEQUENCE" }));
+
+    const duplicateEventId = [
+      valid[0],
+      valid[1],
+      { ...valid[2], eventId: valid[1]?.eventId }
+    ];
+    expect(() => projectSessionHistory(duplicateEventId))
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_IDENTITY" }));
+  });
+
+  it("bounds evidence provenance arrays without losing explicit truncation metadata", () => {
+    const sessionId = "session-provenance-bounds" as SessionId;
+    const prefix = [
+      ...base(sessionId, "provenance"),
+      event(sessionId, 3, "SESSION_RESUMED", {
+        resumedAt: "2026-08-31T19:01:03.000Z"
+      }),
+      event(sessionId, 4, "SESSION_RESUMED", {
+        resumedAt: "2026-08-31T19:01:04.000Z"
+      }),
+      event(sessionId, 5, "SESSION_RESUMED", {
+        resumedAt: "2026-08-31T19:01:05.000Z"
+      })
+    ];
+    const provenanceIds = prefix.map((item) => item.eventId);
+    const key: EvidenceKey = {
+      problemId: "provenance",
+      subject: { kind: "SKILL", skillId: "bounded-provenance" },
+      dimension: "PROGRESS"
+    };
+    const value = EvidenceValueSchema.parse({
+      value: "PROGRESSING",
+      inferenceConfidence: 0.9,
+      evidenceEventIds: provenanceIds,
+      lastUpdatedSequence: 6
+    });
+    const history = projectSessionHistory([
+      ...prefix,
+      event(sessionId, 6, "STUDENT_EVIDENCE_UPDATED", { key, value })
+    ], {
+      bounds: { maxProvenanceIds: 2 }
+    });
+
+    expect(history.currentEvidence[0]?.value.evidenceEventIds).toHaveLength(2);
+    expect(history.currentEvidence[0]?.value.evidenceEventIdsTruncation).toEqual({
+      truncated: true,
+      limit: 2,
+      remainingCount: 3
+    });
+    expect(history.evidenceHistory[0]?.value?.evidenceEventIds).toHaveLength(2);
+    expect(history.timeline.entries[5]?.evidence?.supportingEventIds).toHaveLength(2);
+    expect(history.timeline.entries[5]?.evidence?.supportingEventIdsTruncation)
+      .toEqual({ truncated: true, limit: 2, remainingCount: 3 });
   });
 
   it("fails sanitized on corrupt caller histories and validates linked evaluations", () => {
@@ -596,10 +839,12 @@ describe("longitudinal projection", () => {
     problemId: string,
     version: string,
     score: number,
-    value: "PROGRESSING" | "COMPLETE"
+    value: "PROGRESSING" | "COMPLETE",
+    startedAt = "2026-08-31T19:00:01.000Z",
+    skillId = "shared-exact-skill"
   ) {
     const started = event(sessionId, 1, "SESSION_STARTED", {
-      startedAt: "2026-08-31T19:00:01.000Z"
+      startedAt
     });
     const problem = event(sessionId, 2, "PROBLEM_PRESENTED", {
       problemId,
@@ -609,7 +854,7 @@ describe("longitudinal projection", () => {
     const evidence = EvidenceValueSchema.parse({
       value,
       inferenceConfidence: 0.9,
-      evidenceEventIds: [problem.eventId],
+      evidenceEventIds: [turn.eventId],
       lastUpdatedSequence: 3
     });
     const historyEvents = [
@@ -618,7 +863,7 @@ describe("longitudinal projection", () => {
       event(sessionId, 3, "STUDENT_EVIDENCE_UPDATED", {
         key: {
           problemId,
-          subject: { kind: "SKILL", skillId: "shared-exact-skill" },
+          subject: { kind: "SKILL", skillId },
           dimension: "PROGRESS"
         },
         value: evidence
@@ -656,12 +901,34 @@ describe("longitudinal projection", () => {
   it("aggregates only exact comparable problems/evidence and truncates sessions explicitly", () => {
     expect(projectLongitudinalHistory([]).includedSessionCount).toBe(0);
 
-    const first = evaluated("session-long-a" as SessionId, "same", "1", 60, "PROGRESSING");
-    const second = evaluated("session-long-b" as SessionId, "same", "1", 80, "COMPLETE");
-    const otherVersion = evaluated("session-long-c" as SessionId, "same", "2", 95, "COMPLETE");
+    const first = evaluated(
+      "session-long-a" as SessionId,
+      "same",
+      "1",
+      60,
+      "PROGRESSING",
+      "2026-08-31T19:00:01.000Z"
+    );
+    const second = evaluated(
+      "session-long-b" as SessionId,
+      "same",
+      "1",
+      80,
+      "COMPLETE",
+      "2026-08-31T19:01:01.000Z"
+    );
+    const otherVersion = evaluated(
+      "session-long-c" as SessionId,
+      "same",
+      "2",
+      95,
+      "COMPLETE",
+      "2026-08-31T19:02:01.000Z"
+    );
     const result = projectLongitudinalHistory([otherVersion, second, first]);
 
     expect(result.completedSessions).toBe(3);
+    expect(result.sessionsWithUnknownCompletion).toBe(0);
     expect(result.problemsAttempted).toBe(2);
     expect(result.assistanceEligibleSessionCount).toBe(3);
     expect(result.sessionsExcludedFromAssistanceStatistics).toBe(0);
@@ -681,9 +948,12 @@ describe("longitudinal projection", () => {
       toSessionId: "session-long-b",
       compositeScoreDelta: 20
     }]);
+    expect(result.improvementComparisonsSkipped).toBe(0);
     expect(result.comparability.skillTaxonomyAvailable).toBe(false);
     expect(result.evidencePatterns.some((item) =>
-      item.keyString.includes("shared-exact-skill") && item.sessionCount >= 2
+      item.key.subject.kind === "SKILL"
+      && item.key.subject.skillId === "shared-exact-skill"
+      && item.sessionCount >= 2
     )).toBe(true);
 
     const bounded = projectLongitudinalHistory([first, second, otherVersion], {
@@ -696,5 +966,105 @@ describe("longitudinal projection", () => {
     });
     expect(() => projectLongitudinalHistory([first, first]))
       .toThrow(expect.objectContaining({ code: "DUPLICATE_SESSION" }));
+  });
+
+  it("uses collision-safe structured identities for problems and evidence", () => {
+    const problemCollisionA = evaluated(
+      "session-problem-collision-a" as SessionId,
+      "a\u0000b",
+      "c",
+      60,
+      "PROGRESSING",
+      "2026-08-31T20:00:01.000Z"
+    );
+    const problemCollisionB = evaluated(
+      "session-problem-collision-b" as SessionId,
+      "a",
+      "b\u0000c",
+      70,
+      "COMPLETE",
+      "2026-08-31T20:01:01.000Z"
+    );
+    const problemResult = projectLongitudinalHistory([
+      problemCollisionA,
+      problemCollisionB
+    ]);
+    expect(problemResult.problemsAttempted).toBe(2);
+    expect(problemResult.repeatedProblems).toEqual([]);
+
+    const evidenceCollisionA = evaluated(
+      "session-evidence-collision-a" as SessionId,
+      "p|SKILL|x",
+      "1",
+      60,
+      "PROGRESSING",
+      "2026-08-31T20:02:01.000Z",
+      "y"
+    );
+    const evidenceCollisionB = evaluated(
+      "session-evidence-collision-b" as SessionId,
+      "p",
+      "1",
+      70,
+      "COMPLETE",
+      "2026-08-31T20:03:01.000Z",
+      "x|SKILL|y"
+    );
+    expect(
+      evidenceCollisionA.currentEvidence[0]?.keyString
+    ).toBe(evidenceCollisionB.currentEvidence[0]?.keyString);
+
+    const evidenceResult = projectLongitudinalHistory([
+      evidenceCollisionA,
+      evidenceCollisionB
+    ]);
+    expect(evidenceResult.evidencePatterns).toHaveLength(2);
+    expect(evidenceResult.evidencePatterns.every((item) =>
+      item.sessionCount === 1
+    )).toBe(true);
+  });
+
+  it("rejects malformed longitudinal summaries and does not invent chronological improvement on ties", () => {
+    const first = evaluated(
+      "session-malformed-a" as SessionId,
+      "ordered",
+      "1",
+      50,
+      "PROGRESSING",
+      "2026-08-31T21:00:00.000Z"
+    );
+    const second = evaluated(
+      "session-malformed-b" as SessionId,
+      "ordered",
+      "1",
+      80,
+      "COMPLETE",
+      "2026-08-31T21:00:00.000Z"
+    );
+
+    const tied = projectLongitudinalHistory([second, first]);
+    expect(tied.improvement).toEqual([]);
+    expect(tied.improvementComparisonsSkipped).toBe(1);
+
+    expect(() => projectLongitudinalHistory([{
+      ...first,
+      counts: { ...first.counts, exposedInterventions: -1 }
+    }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
+    expect(() => projectLongitudinalHistory([{
+      ...first,
+      evaluation: first.evaluation === undefined
+        ? undefined
+        : {
+            ...first.evaluation,
+            scores: {
+              ...first.evaluation.scores,
+              compositeScore: Number.NaN
+            }
+          }
+    }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
+    expect(() => projectLongitudinalHistory([projectSessionHistory([])]))
+      .toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
   });
 });

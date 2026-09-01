@@ -13,7 +13,10 @@ import {
 
 const sessionId = "session-replay-property" as SessionId;
 
-function event(sequence: number, type: "SESSION_STARTED" | "SESSION_RESUMED"): SessionEvent {
+function event(
+  sequence: number,
+  type: "SESSION_STARTED" | "PROBLEM_PRESENTED" | "SESSION_RESUMED"
+): SessionEvent {
   return SessionEventSchema.parse({
     eventId: `property-event-${String(sequence)}`,
     sessionId,
@@ -27,15 +30,22 @@ function event(sequence: number, type: "SESSION_STARTED" | "SESSION_RESUMED"): S
     type,
     payload: type === "SESSION_STARTED"
       ? { startedAt: "2026-08-31T19:10:00.000Z" }
-      : { resumedAt: "2026-08-31T19:10:30.000Z" }
+      : type === "PROBLEM_PRESENTED"
+        ? {
+            problemId: "property-problem",
+            problemVersion: "1.0.0",
+            prompt: "Property-test public prompt"
+          }
+        : { resumedAt: "2026-08-31T19:10:30.000Z" }
   });
 }
 
 function history(resumeCount: number): readonly SessionEvent[] {
   return [
     event(1, "SESSION_STARTED"),
+    event(2, "PROBLEM_PRESENTED"),
     ...Array.from({ length: resumeCount }, (_, index) =>
-      event(index + 2, "SESSION_RESUMED")
+      event(index + 3, "SESSION_RESUMED")
     )
   ];
 }

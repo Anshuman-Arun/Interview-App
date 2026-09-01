@@ -155,9 +155,15 @@ export interface ReplayRevisionDetail {
   readonly contextEpoch?: number;
 }
 
+export type ReplayStateValidation =
+  | "VALIDATED"
+  | "UNKNOWN_EVENT"
+  | "UNAVAILABLE_AFTER_UNKNOWN";
+
 export interface ReplayTimelineEntry {
   readonly kind: EventType | "UNKNOWN_EVENT";
   readonly summary: string;
+  readonly stateValidation: ReplayStateValidation;
   readonly provenance: ReplayEventProvenance;
   readonly relations: ReplayRelationRefs;
   readonly text?: TextPreview;
@@ -184,12 +190,20 @@ export interface ReplayTimelineProjection {
   readonly bounds: ReplayBounds;
 }
 
+export interface ReplayEvidenceValue {
+  readonly value: EvidenceValue["value"];
+  readonly inferenceConfidence: number;
+  readonly evidenceEventIds: readonly EventId[];
+  readonly evidenceEventIdsTruncation: TruncationInfo;
+  readonly lastUpdatedSequence: number;
+}
+
 export interface ReplayEvidenceHistoryEntry {
   readonly sequence: number;
   readonly evidenceEventId: EventId;
   readonly transition: "UPDATED" | "INVALIDATED";
   readonly key: EvidenceKey;
-  readonly value?: EvidenceValue;
+  readonly value?: ReplayEvidenceValue;
   readonly supersedesEventId?: EventId;
   readonly invalidatesEventId?: EventId;
   readonly reason?: TextPreview;
@@ -199,7 +213,7 @@ export interface ReplayEvidenceHistoryEntry {
 export interface ReplayCurrentEvidence {
   readonly keyString: string;
   readonly key: EvidenceKey;
-  readonly value: EvidenceValue;
+  readonly value: ReplayEvidenceValue;
   readonly evidenceEventId: EventId;
 }
 
@@ -209,6 +223,7 @@ export interface ReplayVerificationHistoryEntry {
   readonly basis: GenerationBasis;
   readonly evidenceKey: EvidenceKey;
   readonly evidenceEventIds: readonly EventId[];
+  readonly evidenceEventIdsTruncation: TruncationInfo;
   readonly candidateFormalInterpretation: TextPreview;
   readonly interpretationConfidence: number;
   readonly sourceGenerationId?: GenerationId;
@@ -254,10 +269,15 @@ export interface ReplayGenerationHistoryEntry {
     readonly provenance: ReplayEventProvenance;
   };
   readonly deliveryIds: readonly string[];
+  readonly deliveryIdsTruncation: TruncationInfo;
   readonly lateEventAfterSupersession: boolean;
+  readonly statusIsCurrent: boolean;
 }
 
 export interface ReplayEvaluationSummary {
+  readonly sessionId: SessionId;
+  readonly problemId: string;
+  readonly problemVersion: string;
   readonly evaluatedAt: string;
   readonly scores: {
     readonly technicalCorrectness: number;
@@ -277,13 +297,13 @@ export interface ReplayEvaluationSummary {
 }
 
 export interface ReplaySessionLifecycle {
-  readonly status: "CREATED" | "ACTIVE" | "COMPLETED" | "ARCHIVED" | "UNKNOWN";
-  readonly started: boolean;
-  readonly completed: boolean;
-  readonly archived: boolean;
+  readonly status: "ACTIVE" | "COMPLETED" | "ARCHIVED" | "UNKNOWN";
+  readonly historyComplete: boolean;
+  readonly started: boolean | null;
+  readonly completed: boolean | null;
+  readonly archived: boolean | null;
   readonly resumedCount: number;
   readonly conservativeRecoveryCount: number;
-  readonly createdAt?: string;
   readonly startedAt?: string;
   readonly completedAt?: string;
   readonly archivedAt?: string;
@@ -328,19 +348,24 @@ export interface SessionHistoryProjection {
   readonly counts: ReplaySessionCounts;
   readonly highestDisclosureUsed?: DisclosureLevel;
   readonly currentStateAvailable: boolean;
+  readonly validatedThroughSequence: number;
   readonly knownThroughSequence: number;
+  readonly countsComplete: boolean;
   readonly totalEventCount: number;
   readonly timeline: ReplayTimelineProjection;
   readonly evidenceHistory: readonly ReplayEvidenceHistoryEntry[];
   readonly evidenceHistoryTruncation: TruncationInfo;
+  readonly evidenceHistoryComplete: boolean;
   readonly currentEvidence: readonly ReplayCurrentEvidence[];
   readonly currentEvidenceTruncation: TruncationInfo;
   readonly evidenceSummary: ReplayEvidenceSummary;
   readonly verificationHistory: readonly ReplayVerificationHistoryEntry[];
   readonly verificationTruncation: TruncationInfo;
+  readonly verificationHistoryComplete: boolean;
   readonly verificationSummary: ReplayVerificationSummary;
   readonly generationHistory: readonly ReplayGenerationHistoryEntry[];
   readonly generationTruncation: TruncationInfo;
+  readonly generationHistoryComplete: boolean;
   readonly evaluation?: ReplayEvaluationSummary;
 }
 
@@ -367,7 +392,7 @@ export interface LongitudinalRepeatedProblem {
 }
 
 export interface LongitudinalEvidencePattern {
-  readonly keyString: string;
+  readonly key: EvidenceKey;
   readonly sessionCount: number;
   readonly observedValues: Readonly<Record<string, number>>;
 }
@@ -377,6 +402,7 @@ export interface LongitudinalHistoryProjection {
   readonly includedSessionCount: number;
   readonly sessionTruncation: TruncationInfo;
   readonly completedSessions: number;
+  readonly sessionsWithUnknownCompletion: number;
   readonly problemsAttempted: number;
   readonly assistanceEligibleSessionCount: number;
   readonly sessionsWithAssistance: number;
@@ -386,6 +412,7 @@ export interface LongitudinalHistoryProjection {
   readonly repeatedProblems: readonly LongitudinalRepeatedProblem[];
   readonly evaluationStatistics: readonly LongitudinalEvaluationStatistics[];
   readonly improvement: readonly LongitudinalImprovementRecord[];
+  readonly improvementComparisonsSkipped: number;
   readonly evidencePatterns: readonly LongitudinalEvidencePattern[];
   readonly sessionsExcludedFromEvidencePatterns: number;
   readonly sessionsWithIncompleteProjection: number;

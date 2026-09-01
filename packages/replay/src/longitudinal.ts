@@ -97,11 +97,11 @@ const LongitudinalSessionInputSchema = z.object({
   lifecycle: z.object({
     startedAt: z.iso.datetime().optional(),
     completed: z.boolean().nullable()
-  }).strict(),
+  }),
   counts: z.object({
     exposedInterventions: SafeNonnegativeIntegerSchema,
     possiblyExposedInterventions: SafeNonnegativeIntegerSchema
-  }).strict(),
+  }),
   currentStateAvailable: z.boolean(),
   currentEvidenceTruncation: TruncationSchema,
   currentEvidence: z.array(z.object({
@@ -111,7 +111,7 @@ const LongitudinalSessionInputSchema = z.object({
     evidenceEventId: EventIdSchema
   }).strict()),
   evaluation: EvaluationInputSchema.optional()
-}).strip();
+});
 
 type LongitudinalSessionInput = z.infer<typeof LongitudinalSessionInputSchema>;
 
@@ -281,6 +281,7 @@ export function projectLongitudinalHistory(
   const repeatedProblems: LongitudinalRepeatedProblem[] = [];
   const evaluationStatistics: LongitudinalEvaluationStatistics[] = [];
   const improvement: LongitudinalImprovementRecord[] = [];
+  let improvementComparisonsSkipped = 0;
 
   for (const sessions of problemGroups.values()) {
     const first = sessions[0];
@@ -314,6 +315,16 @@ export function projectLongitudinalHistory(
         const previous = evaluated[index - 1];
         const current = evaluated[index];
         if (previous === undefined || current === undefined) continue;
+        const previousStartedAt = previous.lifecycle.startedAt;
+        const currentStartedAt = current.lifecycle.startedAt;
+        if (
+          previousStartedAt === undefined
+          || currentStartedAt === undefined
+          || previousStartedAt >= currentStartedAt
+        ) {
+          improvementComparisonsSkipped += 1;
+          continue;
+        }
         improvement.push({
           problemId: first.problem.problemId,
           problemVersion: first.problem.problemVersion,
@@ -389,6 +400,7 @@ export function projectLongitudinalHistory(
     repeatedProblems,
     evaluationStatistics,
     improvement,
+    improvementComparisonsSkipped,
     evidencePatterns,
     sessionsExcludedFromEvidencePatterns: evidenceExcluded,
     sessionsWithIncompleteProjection: included.filter((session) => !session.currentStateAvailable).length,
