@@ -277,6 +277,23 @@ const EndpointingInputSchema = z.object({
   if (value.speechMs + value.silenceMs > value.utteranceMs + 0.001) {
     context.addIssue({ code: "custom", message: "Speech plus trailing silence cannot exceed utterance duration", path: ["utteranceMs"] });
   }
+
+  if (value.state === "SILENCE"
+      && (value.speechMs !== 0 || value.silenceMs !== 0 || value.utteranceMs !== 0)) {
+    context.addIssue({ code: "custom", message: "Silent VAD state must have zero accumulated durations", path: ["state"] });
+  }
+  if (value.state === "POSSIBLE_SPEECH"
+      && (value.speechMs !== 0 || value.silenceMs !== 0 || value.utteranceMs <= 0)) {
+    context.addIssue({ code: "custom", message: "Possible-speech VAD state has inconsistent durations", path: ["state"] });
+  }
+  if (value.state === "SPEECH"
+      && (value.speechMs <= 0 || value.silenceMs !== 0 || value.utteranceMs <= 0)) {
+    context.addIssue({ code: "custom", message: "Speech VAD state has inconsistent durations", path: ["state"] });
+  }
+  if (value.state === "POSSIBLE_END"
+      && (value.speechMs <= 0 || value.silenceMs <= 0 || value.utteranceMs <= 0)) {
+    context.addIssue({ code: "custom", message: "Possible-end VAD state has inconsistent durations", path: ["state"] });
+  }
 });
 
 export type EndpointingDecision =
