@@ -314,7 +314,7 @@ function parseExperimentalConfig(value: unknown): ExperimentalAllocationConfig {
   const perturbedCostA = boundedInteger(record.perturbedCostA, 1, 20, "perturbedCostA", failDefinition);
   const perturbedCostB = boundedInteger(record.perturbedCostB, 1, 20, "perturbedCostB", failDefinition);
   if (costA + costB > totalBudget) failDefinition("Initial budget must allow at least one sample from each experiment");
-  if (Math.min(perturbedCostA, perturbedCostB) > totalBudget) failDefinition("Perturbed costs leave no feasible sample allocation");
+  if (perturbedCostA + perturbedCostB > totalBudget) failDefinition("Perturbed budget must allow at least one sample from each experiment");
   if (costA === perturbedCostA && costB === perturbedCostB) failDefinition("Perturbed experiment costs must differ from the initial costs");
   return {
     totalBudget,
