@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:ci": "vitest run --maxWorkers=1",
     "test:replay": "vitest run tests/replay.test.ts tests/replay-history-engine.test.ts tests/vertical-slice.test.ts tests/quant-research-engine.test.ts tests/quant-research-persistence.test.ts",
-    "test:property": "vitest run .property.test.",
+    "test:property": "vitest run .property.test. --maxWorkers=1",
     "test:e2e": "vitest run tests/e2e-typed-interview.test.ts",
     "dev:web": "vite apps/web",
     "build:web": "vite build apps/web",
