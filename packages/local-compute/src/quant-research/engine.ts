@@ -1236,8 +1236,9 @@ export function replayQuantResearch(definitionInput: unknown, actionsInput: unkn
   if (replayingQuantResearch) throw new QuantResearchError("INVALID_REPLAY", "Reentrant Quant Research replay is not allowed");
   replayingQuantResearch = true;
   try {
-    const actions = snapshotReplayActions(actionsInput);
-    const engine = new QuantResearchEngine(definitionInput);
+    const definition = parseQuantResearchDefinition(definitionInput);
+    const actions = snapshotReplayActions(actionsInput).map((action) => parseQuantResearchAction(action));
+    const engine = new QuantResearchEngine(definition);
     for (const action of actions) engine.applyAction(action);
     return { state: engine.getState(), result: engine.getResult(), acceptedActions: engine.getAcceptedActions() };
   } finally {
