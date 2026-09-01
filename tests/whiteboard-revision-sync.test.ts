@@ -227,7 +227,7 @@ describe("TldrawWhiteboardAdapter board revision authority", () => {
       createShapes: (shapes) => base.createShapes(shapes),
       deleteShapes: (ids) => base.deleteShapes(ids),
       updateShapes: (shapes) => base.updateShapes(shapes),
-      getShapePageBounds: (id) => base.getShapePageBounds?.(id)
+      getShapePageBounds: (id) => base.getShapePageBounds(id)
     };
     const adapter = new TldrawWhiteboardAdapter(editor);
 
