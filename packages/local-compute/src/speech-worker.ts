@@ -469,12 +469,13 @@ export class SpeechWorkerCore {
     const vadAbort = new AbortController();
     context.vadAbort = vadAbort;
     let observation;
+    if (this.vadOperations.size >= this.maxConcurrentStreams) {
+      this.abandonStream(context);
+      this.rememberDiagnostic({ code: "VAD_RESOURCE_LIMIT", streamId: context.streamId });
+      context.vadAbort = undefined;
+      throw new SpeechWorkerCoreError("RESOURCE_LIMIT", "Maximum underlying VAD operation count reached");
+    }
     try {
-      if (this.vadOperations.size >= this.maxConcurrentStreams) {
-        this.abandonStream(context);
-        this.rememberDiagnostic({ code: "VAD_RESOURCE_LIMIT", streamId: context.streamId });
-        throw new SpeechWorkerCoreError("RESOURCE_LIMIT", "Maximum underlying VAD operation count reached");
-      }
       const isolatedVadFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
       const vadOperation = Promise.resolve()
         .then(async () => this.classifyVad(isolatedVadFrame, vadAbort.signal));
@@ -491,7 +492,6 @@ export class SpeechWorkerCore {
         throw new VadBackendProtocolError("VAD backend returned an invalid bounded observation");
       }
     } catch (error) {
-      if (error instanceof SpeechWorkerCoreError) throw error;
       if (context.cancelled || context.terminal || this.shuttingDown) return [];
       if (error instanceof OperationTimeoutError) {
         this.abandonStream(context);
