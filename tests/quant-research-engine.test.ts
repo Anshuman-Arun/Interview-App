@@ -428,9 +428,13 @@ describe("deterministic Quant Research interview engine", () => {
     expect(rejected.getState()).toEqual(before);
 
     const engine = new QuantResearchEngine(experimental);
-    engine.applyAction({ actionId: "frontier-1", kind: "ALLOCATE_SAMPLE", a: 8, b: 1 });
+    engine.applyAction({ actionId: "frontier-1", kind: "ALLOCATE_SAMPLE", a: 2, b: 4 });
     engine.applyAction({ actionId: "frontier-2", kind: "CHOOSE_OPTION", option: "A" });
-    engine.applyAction({ actionId: "frontier-3", kind: "ALLOCATE_SAMPLE", a: 4, b: 0 });
+    expectCode(
+      () => engine.applyAction({ actionId: "one-arm-perturbed", kind: "ALLOCATE_SAMPLE", a: 4, b: 0 }),
+      "ACTION_NOT_ALLOWED"
+    );
+    engine.applyAction({ actionId: "frontier-3", kind: "ALLOCATE_SAMPLE", a: 2, b: 5 });
     const efficiencyEvidence = engine.getResult().evidence.filter((item) => item.category === "SAMPLE_EFFICIENCY");
     expect(efficiencyEvidence.map((item) => item.score)).toEqual([100, 100]);
     expect(engine.getResult().metrics.SAMPLE_EFFICIENCY).toBe(100);
