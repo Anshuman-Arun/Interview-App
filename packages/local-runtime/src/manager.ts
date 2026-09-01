@@ -943,6 +943,8 @@ export class LocalRuntimeManager {
         pid: child.pid as number,
         signal
       });
+      // Keep the callback result as unknown until application-owned admission;
+      // Promise assimilation itself can inspect a hostile value's "then" property.
       let observedDecision: unknown;
       try {
         observedDecision = strategy.probe(context);
