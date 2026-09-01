@@ -56,6 +56,18 @@ describe("deterministic voice activity state machine", () => {
     } as never)).toThrow(/VAD configuration/u);
   });
 
+  it("contains throwing getters during direct VAD configuration validation", () => {
+    const hostile = Object.defineProperty({
+      continuationThreshold: 0.4,
+      onsetHysteresisMs: 40
+    }, "onsetThreshold", {
+      enumerable: true,
+      get() { throw new Error("credential=vad-config-secret"); }
+    });
+    expect(() => new VoiceActivityStateMachine(hostile as never))
+      .toThrow("VAD configuration is invalid");
+  });
+
   it("fails closed before standalone VAD state can exceed the global utterance duration", () => {
     const vad = new VoiceActivityStateMachine({
       onsetThreshold: 0.5,
@@ -164,6 +176,32 @@ describe("adaptive endpointing policy", () => {
       maximumUtteranceMs: 60_000,
       unexpected: true
     } as never)).toThrow(/Endpointing configuration/u);
+  });
+
+  it("contains throwing getters during direct endpoint configuration and input validation", () => {
+    const hostileConfig = Object.defineProperty({
+      minimumSpeechMs: 120,
+      minimumSilenceMs: 500,
+      incompleteSilenceMs: 900,
+      maximumPauseMs: 1_500
+    }, "maximumUtteranceMs", {
+      enumerable: true,
+      get() { throw new Error("credential=endpoint-config-secret"); }
+    });
+    expect(() => new AdaptiveEndpointingPolicy(hostileConfig as never))
+      .toThrow("Endpointing configuration is invalid");
+
+    const policy = new AdaptiveEndpointingPolicy();
+    const hostileInput = Object.defineProperty({
+      state: "SILENCE",
+      speechMs: 0,
+      silenceMs: 0
+    }, "utteranceMs", {
+      enumerable: true,
+      get() { throw new Error("credential=endpoint-input-secret"); }
+    });
+    expect(() => policy.decide(hostileInput as never))
+      .toThrow("Endpointing input is invalid");
   });
 
   it("runtime-rejects malformed or internally inconsistent heuristic input", () => {
