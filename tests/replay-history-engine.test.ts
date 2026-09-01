@@ -450,6 +450,17 @@ describe("replay/history projections", () => {
       const atom = await authorizeSafeProbe(possibleHarness);
       const coordinator = new DeliveryCoordinator(possibleHarness.writer);
       await coordinator.markStarted(atom.deliveryId);
+      const deliveringProjection = projectReplayTimeline(
+        possibleHarness.store.load(possibleHarness.sessionId)
+      );
+      const delivering = deliveringProjection.entries.find((entry) =>
+        entry.kind === "DELIVERY_STARTED"
+      )?.delivery;
+      expect(delivering?.presentationState).toBe("DELIVERING");
+      expect(delivering?.text).toBeUndefined();
+      expect(delivering?.disclosure.disclosureIds).toBeUndefined();
+      expect(JSON.stringify(deliveringProjection)).not.toContain(possibleHarness.safeProbe);
+
       await coordinator.markPossiblyExposed(atom.deliveryId, "transport uncertainty");
       const history = projectSessionHistory(possibleHarness.store.load(possibleHarness.sessionId));
       expect(history.counts.possiblyExposedInterventions).toBe(1);

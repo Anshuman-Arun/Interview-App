@@ -33,7 +33,8 @@ export interface ReplayTimelineOptions {
   readonly bounds?: Partial<ReplayBounds>;
 }
 
-function assertNever(_value: never): never {
+function assertNever(value: never): never {
+  void value;
   throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
 }
 
