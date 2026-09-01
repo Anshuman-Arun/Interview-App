@@ -254,6 +254,11 @@ export function EvaluationPanel({
                     {ref.kind}: {ref.id}
                   </div>
                 ))}
+                {milestone.evidenceRefTruncation.truncated ? (
+                  <p className="text-[10px] text-slate-500">
+                    +{milestone.evidenceRefTruncation.remainingCount} additional milestone evidence reference(s) are outside the bounded display.
+                  </p>
+                ) : null}
               </div>
             </details>
           ))}
@@ -290,6 +295,11 @@ export function EvaluationPanel({
                     ? ` · milestones: ${intervention.relatedMilestoneIds.join(", ")}`
                     : ""}
                 </p>
+                {intervention.relatedMilestoneTruncation.truncated ? (
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    +{intervention.relatedMilestoneTruncation.remainingCount} additional milestone association(s) are outside the bounded display.
+                  </p>
+                ) : null}
                 {intervention.deliveryStatus === "POSSIBLY_EXPOSED" ? (
                   <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
                     Exposure is uncertain. Content is intentionally not replayed.
@@ -297,6 +307,11 @@ export function EvaluationPanel({
                 ) : null}
               </div>
             ))}
+            {evaluation.interventionTruncation.truncated ? (
+              <p className="text-[11px] text-slate-500">
+                {evaluation.interventionTruncation.remainingCount} additional delivered-assistance record(s) are outside the bounded display.
+              </p>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -314,6 +329,11 @@ export function EvaluationPanel({
                 ))}
               </ul>
             )}
+            {evaluation.strengthsTruncation.truncated ? (
+              <p className="mt-2 text-[10px] text-slate-500">
+                +{evaluation.strengthsTruncation.remainingCount} additional grounded strength statement(s) are outside the bounded display.
+              </p>
+            ) : null}
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-3">
             <h3 className="text-xs font-bold text-slate-900">Grounded improvement areas</h3>
@@ -326,6 +346,11 @@ export function EvaluationPanel({
                 ))}
               </ul>
             )}
+            {evaluation.improvementTruncation.truncated ? (
+              <p className="mt-2 text-[10px] text-slate-500">
+                +{evaluation.improvementTruncation.remainingCount} additional grounded improvement statement(s) are outside the bounded display.
+              </p>
+            ) : null}
           </div>
         </section>
       ) : null}
