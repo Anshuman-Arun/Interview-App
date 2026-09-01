@@ -476,5 +476,5 @@ export class VerificationCoordinator {
 }
 
 function verificationScopeKey(verifier: string, evidenceKey: EvidenceKey): string {
-  return JSON.stringify([verifier, evidenceKeyIdentity(evidenceKey)]);
+  return `[${JSON.stringify(verifier)},${evidenceKeyIdentity(evidenceKey)}]`;
 }
