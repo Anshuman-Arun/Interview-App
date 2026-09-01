@@ -256,6 +256,10 @@ export class VerificationCoordinator {
   }) {
     const verifier = VerifierIdSchema.parse(input.verifier);
     const evidenceKey = EvidenceKeySchema.parse(input.evidenceKey);
+    const interpretation = FormalInterpretationProposalSchema.parse({
+      candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
+      interpretationConfidence: input.interpretationConfidence
+    });
     const verificationRequestId = newRequestId();
     const envelope = CommandEnvelopeSchema.parse(input.envelope ?? createCommandEnvelope({
       sessionId: this.writer.sessionId,
@@ -272,14 +276,18 @@ export class VerificationCoordinator {
         inputEpisodeId: input.inputEpisodeId,
         turnId: input.turnId,
         verifier,
-        candidateFormalInterpretation: input.candidateFormalInterpretation,
-        interpretationConfidence: input.interpretationConfidence,
+        candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
+        interpretationConfidence: interpretation.interpretationConfidence,
         evidenceKey
       }
     }, VerificationWorkItemSchema, (state) => {
       const episode = state.inputEpisodes[input.inputEpisodeId];
       const turn = state.turns[input.turnId];
-      if (episode === undefined || episode.status !== "COMMITTED") throw new Error("Verification requires a committed InputEpisode");
+      if (
+        episode === undefined
+        || episode.inputEpisodeId !== input.inputEpisodeId
+        || episode.status !== "COMMITTED"
+      ) throw new Error("Verification requires a committed InputEpisode");
       if (
         turn === undefined
         || turn.turnId !== input.turnId
@@ -314,8 +322,8 @@ export class VerificationCoordinator {
         verificationRequestId: effectiveRequestId,
         verifier,
         basis,
-        candidateFormalInterpretation: input.candidateFormalInterpretation,
-        interpretationConfidence: input.interpretationConfidence,
+        candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
+        interpretationConfidence: interpretation.interpretationConfidence,
         evidenceKey,
         evidenceEventIds: [evidenceEventId]
       });
