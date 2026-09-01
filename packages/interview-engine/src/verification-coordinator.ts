@@ -257,7 +257,7 @@ export class VerificationCoordinator {
     const verifier = VerifierIdSchema.parse(input.verifier);
     const evidenceKey = EvidenceKeySchema.parse(input.evidenceKey);
     const interpretation = FormalInterpretationProposalSchema.parse({
-      candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
+      candidateFormalInterpretation: input.candidateFormalInterpretation,
       interpretationConfidence: input.interpretationConfidence
     });
     const verificationRequestId = newRequestId();
