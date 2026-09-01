@@ -15,6 +15,17 @@ import {
   type SafeProviderConfigurationRecord,
   type SafeProviderConfigurationValue
 } from "./safe-configuration.js";
+
+const OBJECT_FREEZE_INTRINSIC = Object.freeze;
+const OBJECT_SET_PROTOTYPE_OF_INTRINSIC = Object.setPrototypeOf;
+
+function objectFreeze<T extends object>(value: T): Readonly<T> {
+  return OBJECT_FREEZE_INTRINSIC(value);
+}
+
+function objectSetPrototypeOf(value: object, prototype: object | null): void {
+  OBJECT_SET_PROTOTYPE_OF_INTRINSIC(value, prototype);
+}
 export {
   PROVIDER_CONFIGURATION_LIMITS,
   SafeProviderConfigurationRecordSchema,
@@ -352,7 +363,7 @@ class ResolvedProviderConfigurationValue implements ResolvedProviderConfiguratio
         "Provider resolution construction is not permitted"
       );
     }
-    Object.freeze(this);
+    objectFreeze(this);
   }
 
   public static isResolved(value: unknown): value is ResolvedProviderConfigurationValue {
@@ -485,8 +496,8 @@ function hasDuplicateStrings(values: readonly string[]): boolean {
 }
 
 function freezeNullPrototype<T extends object>(value: T): T {
-  Object.setPrototypeOf(value, null);
-  return Object.freeze(value);
+  objectSetPrototypeOf(value, null);
+  return objectFreeze(value);
 }
 
 const MAP_HAS_INTRINSIC = Map.prototype.has;
@@ -694,7 +705,7 @@ function inspectPlainDataObjectProperties(
   }
   if (symbols.length > 0) throw new ProviderControlPlaneError(errorCode, message);
   const inspected: Record<string, unknown> = {};
-  Object.setPrototypeOf(inspected, null);
+  objectSetPrototypeOf(inspected, null);
   const descriptorKeys = Object.keys(descriptors);
   for (let index = 0; index < descriptorKeys.length; index += 1) {
     const key = descriptorKeys[index];
@@ -711,7 +722,7 @@ function inspectPlainDataObjectProperties(
     const item: unknown = descriptor.value;
     inspected[key] = item;
   }
-  return Object.freeze(inspected);
+  return objectFreeze(inspected);
 }
 
 function readResolverMethodWithoutAccessors(
@@ -909,7 +920,7 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
     this.#ownerProviderId = ownerProviderId;
     this.#createAdapterImpl = createAdapterImpl;
     this.createAdapter = (input) => this.#createAdapter(input);
-    Object.freeze(this);
+    objectFreeze(this);
   }
 
   public static isRegistered(value: unknown): value is RegisteredProviderAdapterFactory {
@@ -1156,7 +1167,7 @@ function snapshotAdapterCapabilities(value: unknown): unknown {
   }
 
   const snapshot: Record<string, unknown> = {};
-  Object.setPrototypeOf(snapshot, null);
+  objectSetPrototypeOf(snapshot, null);
   for (let index = 0; index < REQUIRED_MODEL_CAPABILITY_KEYS.length; index += 1) {
     const key = REQUIRED_MODEL_CAPABILITY_KEYS[index];
     if (key === undefined) continue;
@@ -1166,7 +1177,7 @@ function snapshotAdapterCapabilities(value: unknown): unknown {
   if (reasoningLevels !== undefined) {
     snapshot.reasoningLevels = reasoningLevels;
   }
-  return Object.freeze(snapshot);
+  return objectFreeze(snapshot);
 }
 
 function supportMatchesBoolean(
@@ -1322,7 +1333,7 @@ function freezeCapabilities(
   const reasoningLevels: ProviderModelCapabilities["reasoningLevels"] =
     capabilities.reasoningLevels === "UNKNOWN"
       ? "UNKNOWN"
-      : Object.freeze(sortedCodeUnitStringCopy(capabilities.reasoningLevels));
+      : objectFreeze(sortedCodeUnitStringCopy(capabilities.reasoningLevels));
   return freezeNullPrototype({ ...capabilities, reasoningLevels });
 }
 
@@ -1502,8 +1513,8 @@ function defineProviderValue(input: unknown): ProviderDefinition {
 
   return freezeNullPrototype({
     ...metadataResult.data,
-    credentialPurposes: Object.freeze(sortedCodeUnitStringCopy(credentialPurposes)),
-    models: Object.freeze(models),
+    credentialPurposes: objectFreeze(sortedCodeUnitStringCopy(credentialPurposes)),
+    models: objectFreeze(models),
     ...(adapterFactory === undefined ? {} : { adapterFactory }),
     ...(validateSettings === undefined
       ? {}
@@ -1579,7 +1590,7 @@ function snapshotProviderDefinitionInputs(
       "Provider registration batch is malformed"
     );
   }
-  return Object.freeze(snapshot);
+  return objectFreeze(snapshot);
 }
 
 export class ProviderRegistry {
@@ -1628,7 +1639,7 @@ export class ProviderRegistry {
       }
       providerMapSet(this.#providers, definition.id, definition);
     }
-    return Object.freeze(definitions);
+    return objectFreeze(definitions);
   }
 
   public enumerateProviders(): readonly ProviderDefinition[] {
@@ -1652,7 +1663,7 @@ export class ProviderRegistry {
         "Provider registry storage is invalid"
       );
     }
-    return Object.freeze(sortedProviderDefinitionCopy(values));
+    return objectFreeze(sortedProviderDefinitionCopy(values));
   }
 
   public enumerateModels(providerId: string): readonly ProviderModelDefinition[] {
@@ -1802,7 +1813,7 @@ function normalizeCapabilityRequirements(
       uniqueRequirements[uniqueRequirements.length] = parsedRequirement.data;
     }
   }
-  return Object.freeze(sortedCodeUnitStringCopy(uniqueRequirements));
+  return objectFreeze(sortedCodeUnitStringCopy(uniqueRequirements));
 }
 
 interface CapturedCapabilityRequirements {
@@ -1822,7 +1833,7 @@ function captureCapabilityRequirements(
     const empty: ProviderCapabilityKey[] = [];
     return freezeNullPrototype({
       valid: false,
-      value: Object.freeze(empty)
+      value: objectFreeze(empty)
     });
   }
 }
@@ -1854,8 +1865,8 @@ function matchNormalizedCapabilityRequirements(
   }
   return freezeNullPrototype({
     compatible: unsupported.length === 0 && unknown.length === 0,
-    unsupported: Object.freeze(unsupported),
-    unknown: Object.freeze(unknown)
+    unsupported: objectFreeze(unsupported),
+    unknown: objectFreeze(unknown)
   });
 }
 

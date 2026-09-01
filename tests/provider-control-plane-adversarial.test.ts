@@ -712,6 +712,52 @@ describe("provider configuration secret exclusion", () => {
   });
 });
 
+describe("control-plane immutability intrinsic hardening", () => {
+  it("keeps frozen null-prototype outputs when Object mutation helpers are overridden", () => {
+    const originalFreeze = Object.getOwnPropertyDescriptor(Object, "freeze");
+    const originalSetPrototypeOf = Object.getOwnPropertyDescriptor(Object, "setPrototypeOf");
+    if (originalFreeze === undefined || originalSetPrototypeOf === undefined) {
+      throw new Error("Object mutation intrinsics are unavailable");
+    }
+
+    const configurationInput = settingsConfiguration({ mode: "safe" });
+    const definitionInput = createSettingsProviderInput();
+
+    try {
+      Object.defineProperty(Object, "freeze", {
+        configurable: true,
+        writable: true,
+        value<T>(value: T): T {
+          return value;
+        }
+      });
+      Object.defineProperty(Object, "setPrototypeOf", {
+        configurable: true,
+        writable: true,
+        value<T extends object>(value: T): T {
+          return value;
+        }
+      });
+
+      const configuration = validateProviderConfiguration(configurationInput);
+      const definition = defineProvider(definitionInput);
+
+      expect(Object.getPrototypeOf(configuration)).toBeNull();
+      expect(Object.isFrozen(configuration)).toBe(true);
+      expect(Object.getPrototypeOf(configuration.settings)).toBeNull();
+      expect(Object.isFrozen(configuration.settings)).toBe(true);
+      expect(Object.getPrototypeOf(definition)).toBeNull();
+      expect(Object.isFrozen(definition)).toBe(true);
+      expect(Object.isFrozen(definition.models)).toBe(true);
+      expect(Object.getPrototypeOf(definition.models[0]?.capabilities)).toBeNull();
+      expect(Object.isFrozen(definition.models[0]?.capabilities)).toBe(true);
+    } finally {
+      Object.defineProperty(Object, "freeze", originalFreeze);
+      Object.defineProperty(Object, "setPrototypeOf", originalSetPrototypeOf);
+    }
+  });
+});
+
 describe("provider configuration hostile object handling", () => {
   it("rejects prototype-bearing and special-key objects without prototype pollution", () => {
     const polluted: unknown = JSON.parse('{"__proto__":{"polluted":true}}');

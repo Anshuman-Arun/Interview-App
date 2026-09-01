@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+const OBJECT_FREEZE_INTRINSIC = Object.freeze;
+const OBJECT_SET_PROTOTYPE_OF_INTRINSIC = Object.setPrototypeOf;
+
+function objectFreeze<T extends object>(value: T): Readonly<T> {
+  return OBJECT_FREEZE_INTRINSIC(value);
+}
+
+function objectSetPrototypeOf(value: object, prototype: object | null): void {
+  OBJECT_SET_PROTOTYPE_OF_INTRINSIC(value, prototype);
+}
+
 const BLOCKED_CONFIGURATION_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 const SECRET_CONFIGURATION_KEYS = new Set([
   "authorization",
@@ -121,7 +132,7 @@ const URL_USERINFO_PATTERN =
 const PRIVATE_KEY_PATTERN =
   /-----BEGIN(?:(?: [A-Z0-9]+)? PRIVATE KEY| PGP PRIVATE KEY BLOCK)-----/iu;
 
-export const PROVIDER_CONFIGURATION_LIMITS = Object.freeze({
+export const PROVIDER_CONFIGURATION_LIMITS = objectFreeze({
   maxDepth: 16,
   maxNodes: 2_000,
   maxArrayItems: 128,
@@ -174,7 +185,7 @@ function regexpExec(pattern: RegExp, value: string): readonly unknown[] | null {
     const item: unknown = result[index];
     output[index] = item;
   }
-  return Object.freeze(output);
+  return objectFreeze(output);
 }
 
 function normalizeUnicode(value: string): string {
@@ -428,14 +439,14 @@ function readSimpleSerializedAssignment(
   cursor = operatorIndex + 1;
   while (cursor < value.length && isAssignmentWhitespace(value, cursor)) cursor += 1;
   const key = copyStringRange(value, keyStart, keyEnd);
-  if (cursor >= value.length) return Object.freeze([key, ""]);
+  if (cursor >= value.length) return objectFreeze([key, ""]);
 
   const openingQuote = value[cursor];
   if (openingQuote === "\"" || openingQuote === "'") {
     cursor += 1;
     const valueStart = cursor;
     while (cursor < value.length && value[cursor] !== openingQuote) cursor += 1;
-    return Object.freeze([key, copyStringRange(value, valueStart, cursor)]);
+    return objectFreeze([key, copyStringRange(value, valueStart, cursor)]);
   }
 
   const valueStart = cursor;
@@ -448,7 +459,7 @@ function readSimpleSerializedAssignment(
   ) {
     cursor += 1;
   }
-  return Object.freeze([key, copyStringRange(value, valueStart, cursor)]);
+  return objectFreeze([key, copyStringRange(value, valueStart, cursor)]);
 }
 
 function isAuthorizationConfigurationKey(key: string): boolean {
@@ -618,7 +629,7 @@ function inspectConfigurationArray(
     const key = descriptorKeys[index];
     if (key !== undefined && !setHas(allowedKeys, key)) failMalformedConfiguration();
   }
-  return Object.freeze(output);
+  return objectFreeze(output);
 }
 
 function inspectConfigurationRecord(
@@ -647,7 +658,7 @@ function inspectConfigurationRecord(
 
   const sortedKeys = sortedCodeUnitStringCopy(descriptorKeys);
   const output: Record<string, SafeProviderConfigurationValue> = {};
-  Object.setPrototypeOf(output, null);
+  objectSetPrototypeOf(output, null);
   for (let index = 0; index < sortedKeys.length; index += 1) {
     const key = sortedKeys[index];
     if (key === undefined) continue;
@@ -666,7 +677,7 @@ function inspectConfigurationRecord(
     if (rejectSecrets && isSecretConfigurationKey(key)) failSecretConfiguration();
     output[key] = inspectConfigurationValue(item, state, depth + 1, rejectSecrets);
   }
-  return Object.freeze(output);
+  return objectFreeze(output);
 }
 
 function inspectConfigurationValue(
