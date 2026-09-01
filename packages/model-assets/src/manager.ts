@@ -1795,14 +1795,12 @@ export class ModelAssetManager {
     await this.withCapacityGate(paths, async (shared) => {
       const reserved = shared.stagingReservations.get(stagingDirectory);
       if (reserved === undefined) {
-        if (shared.activeStagingDirectories.has(stagingDirectory)) {
+        if (shared.activeStagingDirectories.has(stagingDirectory)
+            || await pathEntryExists(stagingDirectory)) {
           throw new ModelAssetError(
             "IO_ERROR",
             "Cache reservation state lost staging identity during release."
           );
-        }
-        if (removeStaging) {
-          await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
         }
         return;
       }
