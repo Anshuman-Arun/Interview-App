@@ -107,6 +107,12 @@ export function compileContext(input: {
     || input.state.problem.version !== input.problem.version
   ) throw new Error("Problem does not match the session's presented problem");
   const delivered = new Set(input.state.disclosureLedger);
+  const allowed = new Set(input.realizationRequest.allowedDisclosureIds ?? []);
+  const knownDisclosureIds = new Set(input.problem.interviewer.protectedDisclosures.map((item) => item.id));
+  if ([...allowed].some((id) => !knownDisclosureIds.has(id))) {
+    throw new Error("Realization request authorizes an unknown protected disclosure");
+  }
+
   return CompiledContextSchema.parse({
     problemPrompt: input.state.problem.prompt,
     recentStudentWork: turn.studentText,
@@ -114,6 +120,6 @@ export function compileContext(input: {
     deliveredFacts: [...delivered],
     forbiddenDisclosureIds: input.problem.interviewer.protectedDisclosures
       .map((item) => item.id)
-      .filter((id) => !delivered.has(id))
+      .filter((id) => !delivered.has(id) && !allowed.has(id))
   });
 }
