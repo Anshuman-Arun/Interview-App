@@ -339,12 +339,14 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
           }
         }
       ]);
+      const newerShape = base.getShape("shape:ai_newer");
+      const olderShape = base.getShape("shape:ai_older");
+      if (newerShape === undefined || olderShape === undefined) {
+        throw new Error("AI ordering fixture shapes were not created");
+      }
       const editor = {
         getShape: (id: string) => base.getShape(id),
-        getCurrentPageShapes: () => [
-          base.getShape("shape:ai_newer")!,
-          base.getShape("shape:ai_older")!
-        ],
+        getCurrentPageShapes: () => [newerShape, olderShape],
         createShapes: base.createShapes.bind(base),
         deleteShapes: base.deleteShapes.bind(base),
         updateShapes: base.updateShapes.bind(base),
@@ -818,7 +820,7 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
           targetShapeId: "shape:target",
           expectedShapeRevision,
           annotationPurpose: "test"
-        } as BoardAction)).rejects.toThrow(/positive safe integer/u);
+        })).rejects.toThrow(/positive safe integer/u);
       }
 
       await expect(adapter.applyAiOverlayAction({
@@ -826,20 +828,20 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
         layer: "AI_ANNOTATION",
         expectedShapeRevision: 1,
         annotationPurpose: "test"
-      } as BoardAction)).rejects.toThrow(/requires targetShapeId/u);
+      })).rejects.toThrow(/requires targetShapeId/u);
 
       await expect(adapter.applyAiOverlayAction({
         operation: "circle",
         layer: "AI_ANNOTATION",
         targetShapeId: "   ",
         annotationPurpose: "test"
-      } as BoardAction)).rejects.toThrow(/targetShapeId must be non-blank/u);
+      })).rejects.toThrow(/targetShapeId must be non-blank/u);
 
       await expect(adapter.applyAiOverlayAction({
         operation: "circle",
         layer: "AI_ANNOTATION",
         annotationPurpose: "   "
-      } as BoardAction)).rejects.toThrow(/annotationPurpose must be non-blank/u);
+      })).rejects.toThrow(/annotationPurpose must be non-blank/u);
 
       expect(editor.getCurrentPageShapes()).toEqual([]);
     });
