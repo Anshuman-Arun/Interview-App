@@ -13,7 +13,7 @@ import {
   TranscriptCandidateSchema,
   type SourceAudioBasis
 } from "../packages/local-compute/src/speech-protocol.js";
-import { BoundedPcmBuffer, snapshotPcmFrame } from "../packages/local-compute/src/speech-pcm.js";
+import { advancePcmOrder, BoundedPcmBuffer, snapshotPcmFrame } from "../packages/local-compute/src/speech-pcm.js";
 import {
   MoonshineSpeechRecognizer,
   TranscriptResultGate,
@@ -98,6 +98,42 @@ describe("speech protocol hard bounds", () => {
     }).success).toBe(false);
   });
 
+  it("keeps near-maximum admitted frame timestamps representable in finalized audio bases", () => {
+    const pcm = new Float32Array(320);
+    const snapshot = snapshotPcmFrame({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "max-timestamp",
+      sequence: 0,
+      sampleRate: 16_000,
+      channels: 1,
+      sampleFormat: "F32LE",
+      frameSamples: 320,
+      payloadByteLength: pcm.byteLength,
+      timestampMs: MAX_SPEECH_TIMESTAMP_MS
+    }, pcm);
+    const buffer = new BoundedPcmBuffer();
+    buffer.append(snapshot, false);
+    expect(buffer.sourceBasis("max-timestamp")).toMatchObject({
+      startTimestampMs: MAX_SPEECH_TIMESTAMP_MS,
+      endTimestampMs: MAX_SPEECH_TIMESTAMP_MS + 20
+    });
+  });
+
+  it("rejects unsafe transcript text at the protocol schema even without the STT normalizer", () => {
+    const basis = sourceBasis();
+    const common = {
+      requestId: newRequestId(),
+      utteranceId: newUtteranceId(),
+      isFinal: true,
+      model: { name: "model", version: "1" },
+      sourceAudioBasis: basis
+    };
+    expect(TranscriptCandidateSchema.safeParse({ ...common, text: "line\nbreak" }).success).toBe(false);
+    expect(TranscriptCandidateSchema.safeParse({ ...common, text: "bidi\u202Etext" }).success).toBe(false);
+    expect(TranscriptCandidateSchema.safeParse({ ...common, text: "bad\uD800text" }).success).toBe(false);
+  });
+
   it("cross-validates event envelopes against nested audio/candidate metadata", () => {
     const basis = sourceBasis();
     const requestId = newRequestId();
@@ -133,6 +169,37 @@ describe("speech protocol hard bounds", () => {
     expect(SpeechModelIdentitySchema.safeParse({ name: "月光-model", version: "版本-1" }).success).toBe(true);
     expect(SpeechModelIdentitySchema.safeParse({ name: "   ", version: "1" }).success).toBe(false);
     expect(SpeechModelIdentitySchema.safeParse({ name: "model", version: "v\n1" }).success).toBe(false);
+  });
+
+  it("binds direct PCM order state to one stream and rejects malformed prior state", () => {
+    const pcm = new Float32Array(320);
+    const first = snapshotPcmFrame({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "order-a",
+      sequence: 0,
+      sampleRate: 16_000,
+      channels: 1,
+      sampleFormat: "F32LE",
+      frameSamples: 320,
+      payloadByteLength: pcm.byteLength,
+      timestampMs: 0
+    }, pcm);
+    const state = advancePcmOrder(undefined, first);
+    const otherStream = snapshotPcmFrame({
+      ...first.envelope,
+      requestId: newRequestId(),
+      streamId: "order-b",
+      sequence: 1,
+      timestampMs: 20
+    }, pcm);
+    expect(() => advancePcmOrder(state, otherStream)).toThrow(/stream identity/u);
+    expect(() => advancePcmOrder({ ...state, cumulativeDurationMs: Number.NaN }, snapshotPcmFrame({
+      ...first.envelope,
+      requestId: newRequestId(),
+      sequence: 1,
+      timestampMs: 20
+    }, pcm))).toThrow(/order state/u);
   });
 
   it("enforces buffer/cache hard limits even when helpers are used directly", () => {
