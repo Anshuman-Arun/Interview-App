@@ -305,15 +305,18 @@ const MoonshineRuntimeResultSchema = z.object({
 function parseMoonshineRuntimeResult(raw: unknown): z.infer<typeof MoonshineRuntimeResultSchema> {
   if (!isRecord(raw)) throw new Error("Moonshine runtime result must be an object");
   assertAllowedOwnEnumerableKeys(raw, MOONSHINE_RESULT_KEYS, "Moonshine runtime result");
-  if (typeof raw.text !== "string") throw new Error("Moonshine runtime transcript must be text");
-  if (raw.text.length > MAX_SPEECH_TRANSCRIPT_CHARS) {
+
+  const text = raw.text;
+  const confidence = raw.confidence;
+  const words = snapshotWordTimings(raw.words, "Moonshine runtime word timings");
+  if (typeof text !== "string") throw new Error("Moonshine runtime transcript must be text");
+  if (text.length > MAX_SPEECH_TRANSCRIPT_CHARS) {
     throw new Error("Moonshine runtime transcript exceeds maximum length");
   }
-  preflightWordTimings(raw.words, "Moonshine runtime word timings");
   return MoonshineRuntimeResultSchema.parse({
-    text: raw.text,
-    ...(raw.confidence === undefined ? {} : { confidence: raw.confidence }),
-    ...(raw.words === undefined ? {} : { words: raw.words })
+    text,
+    ...(confidence === undefined ? {} : { confidence }),
+    ...(words === undefined ? {} : { words })
   });
 }
 
@@ -325,36 +328,67 @@ export interface TranscriptValidationBasis {
 }
 
 export function validateTranscriptCandidate(raw: unknown, expected: TranscriptValidationBasis): TranscriptCandidate {
-  preflightBoundedString(expected.requestId, 128, "Expected recognizer request ID");
-  preflightBoundedString(expected.utteranceId, 128, "Expected recognizer utterance ID");
-  preflightSourceAudioBasis(expected.sourceAudioBasis, "Expected recognizer source audio basis");
-  if (expected.modelIdentity !== undefined) {
-    preflightModelIdentity(expected.modelIdentity, "Expected recognizer model identity");
-  }
-  const expectedRequestId = SpeechRequestIdSchema.parse(expected.requestId);
-  const expectedUtteranceId = SpeechUtteranceIdSchema.parse(expected.utteranceId);
-  const expectedSourceAudioBasis = SourceAudioBasisSchema.parse(expected.sourceAudioBasis);
-  const expectedModelIdentity = expected.modelIdentity === undefined
+  const rawExpected: unknown = expected;
+  if (!isRecord(rawExpected)) throw new Error("Expected recognizer validation basis must be an object");
+  assertAllowedOwnEnumerableKeys(
+    rawExpected,
+    TRANSCRIPT_VALIDATION_BASIS_KEYS,
+    "Expected recognizer validation basis"
+  );
+
+  const expectedRequestIdRaw = rawExpected.requestId;
+  const expectedUtteranceIdRaw = rawExpected.utteranceId;
+  const expectedSourceAudioBasisRaw = rawExpected.sourceAudioBasis;
+  const expectedModelIdentityRaw = rawExpected.modelIdentity;
+  preflightBoundedString(expectedRequestIdRaw, 128, "Expected recognizer request ID");
+  preflightBoundedString(expectedUtteranceIdRaw, 128, "Expected recognizer utterance ID");
+  const expectedSourceAudioBasisInput = snapshotSourceAudioBasisInput(
+    expectedSourceAudioBasisRaw,
+    "Expected recognizer source audio basis"
+  );
+  const expectedModelIdentityInput = expectedModelIdentityRaw === undefined
     ? undefined
-    : SpeechModelIdentitySchema.parse(expected.modelIdentity);
+    : snapshotModelIdentityInput(expectedModelIdentityRaw, "Expected recognizer model identity");
+
+  const expectedRequestId = SpeechRequestIdSchema.parse(expectedRequestIdRaw);
+  const expectedUtteranceId = SpeechUtteranceIdSchema.parse(expectedUtteranceIdRaw);
+  const expectedSourceAudioBasis = SourceAudioBasisSchema.parse(expectedSourceAudioBasisInput);
+  const expectedModelIdentity = expectedModelIdentityInput === undefined
+    ? undefined
+    : SpeechModelIdentitySchema.parse(expectedModelIdentityInput);
+
   if (!isRecord(raw)) throw new Error("Recognizer result must be an object");
   assertAllowedOwnEnumerableKeys(raw, TRANSCRIPT_CANDIDATE_KEYS, "Recognizer result");
-  preflightBoundedString(raw.requestId, 128, "Recognizer request ID");
-  preflightBoundedString(raw.utteranceId, 128, "Recognizer utterance ID");
-  preflightWordTimings(raw.words, "Recognizer word timing metadata");
-  preflightModelIdentity(raw.model, "Recognizer model identity");
-  preflightSourceAudioBasis(raw.sourceAudioBasis, "Recognizer source audio basis");
-  const normalizedText = normalizeTranscriptText(raw.text);
+
+  const requestIdRaw = raw.requestId;
+  const utteranceIdRaw = raw.utteranceId;
+  const textRaw = raw.text;
+  const isFinalRaw = raw.isFinal;
+  const confidenceRaw = raw.confidence;
+  const wordsRaw = raw.words;
+  const modelRaw = raw.model;
+  const sourceAudioBasisRaw = raw.sourceAudioBasis;
+
+  preflightBoundedString(requestIdRaw, 128, "Recognizer request ID");
+  preflightBoundedString(utteranceIdRaw, 128, "Recognizer utterance ID");
+  const words = snapshotWordTimings(wordsRaw, "Recognizer word timing metadata");
+  const model = snapshotModelIdentityInput(modelRaw, "Recognizer model identity");
+  const sourceAudioBasis = snapshotSourceAudioBasisInput(
+    sourceAudioBasisRaw,
+    "Recognizer source audio basis"
+  );
+  const normalizedText = normalizeTranscriptText(textRaw);
   const candidate = TranscriptCandidateSchema.parse({
-    requestId: raw.requestId,
-    utteranceId: raw.utteranceId,
+    requestId: requestIdRaw,
+    utteranceId: utteranceIdRaw,
     text: normalizedText,
-    isFinal: raw.isFinal,
-    ...(raw.confidence === undefined ? {} : { confidence: raw.confidence }),
-    ...(raw.words === undefined ? {} : { words: raw.words }),
-    model: raw.model,
-    sourceAudioBasis: raw.sourceAudioBasis
+    isFinal: isFinalRaw,
+    ...(confidenceRaw === undefined ? {} : { confidence: confidenceRaw }),
+    ...(words === undefined ? {} : { words }),
+    model,
+    sourceAudioBasis
   });
+
   if (candidate.requestId !== expectedRequestId) throw new Error("Recognizer result requestId does not match request");
   if (candidate.utteranceId !== expectedUtteranceId) throw new Error("Recognizer result utteranceId does not match utterance");
   if (!sameAudioBasis(candidate.sourceAudioBasis, expectedSourceAudioBasis)) {
@@ -451,6 +485,12 @@ function validateAbortSignal(value: unknown): asserts value is AbortSignal {
   }
 }
 
+const TRANSCRIPT_VALIDATION_BASIS_KEYS = new Set([
+  "requestId",
+  "utteranceId",
+  "sourceAudioBasis",
+  "modelIdentity"
+]);
 const RECOGNIZER_AUDIO_INPUT_KEYS = new Set([
   "requestId",
   "utteranceId",
@@ -482,30 +522,39 @@ const SOURCE_AUDIO_BASIS_KEYS = new Set([
   "pcmSha256"
 ]);
 
-function preflightWordTimings(value: unknown, label: string): void {
-  if (value === undefined) return;
-  if (!Array.isArray(value)) return;
+function snapshotWordTimings(value: unknown, label: string): Record<string, unknown>[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   if (value.length > MAX_SPEECH_WORD_TIMINGS) {
     throw new Error(`${label} exceeds maximum entry count`);
   }
-  for (const word of value) {
-    if (!isRecord(word)) continue;
+  return value.map((word) => {
+    if (!isRecord(word)) throw new Error(`${label} contains a non-object entry`);
     assertAllowedOwnEnumerableKeys(word, WORD_TIMING_KEYS, "Recognizer word timing");
-    if (typeof word.word !== "string" || word.word.length === 0 || word.word.length > 128) {
+    const wordText = word.word;
+    const startMs = word.startMs;
+    const endMs = word.endMs;
+    const confidence = word.confidence;
+    if (typeof wordText !== "string" || wordText.length === 0 || wordText.length > 128) {
       throw new Error(`${label} contains word text outside bounded metadata limits`);
     }
-  }
+    return {
+      word: wordText,
+      startMs,
+      endMs,
+      ...(confidence === undefined ? {} : { confidence })
+    };
+  });
 }
 
-function preflightModelIdentity(value: unknown, label: string): void {
-  if (!isRecord(value)) return;
+function snapshotModelIdentityInput(value: unknown, label: string): Record<string, unknown> {
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
   assertAllowedOwnEnumerableKeys(value, MODEL_IDENTITY_KEYS, label);
-  preflightBoundedString(value.name, 100, `${label} name`);
-  preflightBoundedString(value.version, 100, `${label} version`);
-}
-
-function preflightSourceAudioBasis(value: unknown, label: string): void {
-  void snapshotSourceAudioBasisInput(value, label);
+  const name = value.name;
+  const version = value.version;
+  preflightBoundedString(name, 100, `${label} name`);
+  preflightBoundedString(version, 100, `${label} version`);
+  return { name, version };
 }
 
 function snapshotSourceAudioBasisInput(value: unknown, label: string): Record<string, unknown> {
