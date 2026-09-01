@@ -15,6 +15,16 @@ import {
 import type { BoardAction } from "../packages/domain/src/index.js";
 import type { NormalizedStudentShapeChange } from "../apps/web/src/whiteboard/normalized-board.js";
 
+function requireRealTldrawBridge(
+  handle: ReturnType<typeof createWhiteboardCanvasMount>
+): RealTldrawEditorBridge {
+  const editor = handle.getEditor();
+  if (!(editor instanceof RealTldrawEditorBridge)) {
+    throw new Error("Real tldraw bridge did not mount");
+  }
+  return editor;
+}
+
 describe("Real tldraw mounted browser integration", () => {
   beforeEach(() => {
     (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -91,16 +101,10 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const normalizedChanges: NormalizedStudentShapeChange[] = [];
 
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) {
-          bridge = editor;
-        }
-      },
       onNormalizedBoardChange: (change) => {
         normalizedChanges.push(change);
       }
@@ -110,7 +114,8 @@ describe("Real tldraw mounted browser integration", () => {
       handle.mount(container);
     });
 
-    expect(bridge).not.toBeNull();
+    const bridge = requireRealTldrawBridge(handle);
+    expect(bridge).toBeInstanceOf(RealTldrawEditorBridge);
     const canvasElement = container.querySelector("[data-whiteboard-canvas='true']");
     expect(canvasElement).not.toBeNull();
 
@@ -184,18 +189,14 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      }
     });
 
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Real tldraw bridge did not mount");
+    const bridge = requireRealTldrawBridge(handle);
 
     const firstId = createShapeId("multi-first");
     const secondId = createShapeId("multi-second");
@@ -255,18 +256,14 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      }
     });
 
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Real tldraw bridge did not mount");
+    const bridge = requireRealTldrawBridge(handle);
 
     const id = createShapeId("undo-redo");
     await act(async () => {
@@ -314,19 +311,15 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const handle = createWhiteboardCanvasMount({
       adapter,
       readOnly: true,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      }
     });
 
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Real tldraw bridge did not mount");
+    const bridge = requireRealTldrawBridge(handle);
     expect(bridge.getNativeEditor().getIsReadonly()).toBe(true);
 
     const id = createShapeId("readonly-create");
@@ -354,20 +347,16 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const changes: NormalizedStudentShapeChange[] = [];
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      },
       onNormalizedBoardChange: (change) => changes.push(change)
     });
 
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("First tldraw bridge did not mount");
+    let bridge = requireRealTldrawBridge(handle);
     const firstBridge = bridge;
     const firstId = createShapeId("before-remount");
     await act(async () => {
@@ -386,11 +375,10 @@ describe("Real tldraw mounted browser integration", () => {
     expect(adapter.getEditor()).toBeNull();
     expect(adapter.getBoardRevision()).toBe(1);
 
-    bridge = null;
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Second tldraw bridge did not mount");
+    bridge = requireRealTldrawBridge(handle);
     expect(bridge).not.toBe(firstBridge);
     expect(adapter.getBoardRevision()).toBe(1);
 
@@ -418,15 +406,11 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const firstChanges: NormalizedStudentShapeChange[] = [];
     const secondChanges: NormalizedStudentShapeChange[] = [];
 
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      },
       onNormalizedBoardChange: (change) => {
         firstChanges.push(change);
       }
@@ -435,7 +419,7 @@ describe("Real tldraw mounted browser integration", () => {
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Real tldraw bridge did not mount");
+    const bridge = requireRealTldrawBridge(handle);
 
     const unlistenThrowing = bridge.subscribeToNormalizedStudentChanges(() => {
       throw new Error("observer failure must not own editor mutation");
@@ -444,9 +428,8 @@ describe("Real tldraw mounted browser integration", () => {
       secondChanges.push(change);
     });
 
-    let created: ReturnType<typeof adapter.createStudentShape> | undefined;
     await act(async () => {
-      created = adapter.createStudentShape({
+      adapter.createStudentShape({
         id: "shape:multi-subscriber",
         type: "geo",
         x: 40,
@@ -455,6 +438,7 @@ describe("Real tldraw mounted browser integration", () => {
       });
     });
 
+    const created = bridge.getShape("shape:multi-subscriber");
     if (created === undefined) throw new Error("Student shape was not created");
     expect(adapter.getBoardRevision()).toBe(1);
     expect(firstChanges.at(-1)?.source).toBe("ADAPTER");
@@ -498,20 +482,16 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const changes: NormalizedStudentShapeChange[] = [];
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      },
       onNormalizedBoardChange: (change) => changes.push(change)
     });
 
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Real tldraw bridge did not mount");
+    const bridge = requireRealTldrawBridge(handle);
 
     const directId = createShapeId("mixed-direct");
     await act(async () => {
@@ -553,20 +533,16 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const changes: NormalizedStudentShapeChange[] = [];
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      },
       onNormalizedBoardChange: (change) => changes.push(change)
     });
 
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Real tldraw bridge did not mount");
+    const bridge = requireRealTldrawBridge(handle);
 
     const nativeId = createShapeId("max-revision");
     await act(async () => {
@@ -612,18 +588,14 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      }
     });
 
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Real tldraw bridge did not mount");
+    const bridge = requireRealTldrawBridge(handle);
 
     (adapter as unknown as { localBoardRevision: number }).localBoardRevision =
       Number.MAX_SAFE_INTEGER;
@@ -651,20 +623,16 @@ describe("Real tldraw mounted browser integration", () => {
     document.body.appendChild(container);
 
     const adapter = new TldrawWhiteboardAdapter();
-    let bridge: RealTldrawEditorBridge | null = null;
     const normalizedChanges: NormalizedStudentShapeChange[] = [];
     const handle = createWhiteboardCanvasMount({
       adapter,
-      onEditorMount: (editor) => {
-        if (editor instanceof RealTldrawEditorBridge) bridge = editor;
-      },
       onNormalizedBoardChange: (change) => normalizedChanges.push(change)
     });
 
     await act(async () => {
       handle.mount(container);
     });
-    if (bridge === null) throw new Error("Real tldraw bridge did not mount");
+    const bridge = requireRealTldrawBridge(handle);
 
     const studentId = createShapeId("native-student");
     await act(async () => {

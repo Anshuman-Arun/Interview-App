@@ -484,11 +484,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       return existing;
     }
 
-    const rawRevision = existing.meta?.["shapeRevision"];
-    const currentRevision = rawRevision === undefined ? 1 : rawRevision;
-    if (!Number.isSafeInteger(currentRevision) || currentRevision < 1) {
-      throw new Error(`Student shape ${shapeId} has an invalid revision`);
-    }
+    const currentRevision = readShapeRevision(existing.meta?.["shapeRevision"], shapeId);
     if (currentRevision >= Number.MAX_SAFE_INTEGER) {
       throw new Error("Student shape revision cannot exceed Number.MAX_SAFE_INTEGER");
     }

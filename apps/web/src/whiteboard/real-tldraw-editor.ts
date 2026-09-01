@@ -512,11 +512,7 @@ export class RealTldrawEditorBridge implements TldrawEditor {
   }
 
   private toNativePartial(shape: TLShapePartialRecord): TLShapePartial {
-    const layer = typeof shape.meta?.["layer"] === "string"
-      ? shape.meta["layer"]
-      : shape.isLocked
-        ? AI_LAYER
-        : STUDENT_LAYER;
+    const layer = effectivePartialLayer(shape);
     const origin = typeof shape.meta?.["origin"] === "string"
       ? shape.meta["origin"]
       : originForLayer(layer);
