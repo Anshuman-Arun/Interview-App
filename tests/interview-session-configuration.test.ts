@@ -18,7 +18,9 @@ import {
 } from "../packages/local-compute/src/index.js";
 import {
   QuantResearchCoordinator,
-  SessionRuntimeRegistry
+  SessionRuntimeRegistry,
+  TurnCoordinator,
+  createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
@@ -218,6 +220,31 @@ describe("generic interview session configuration", () => {
       prompt: problem.public.prompt
     });
     expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
+  });
+
+  it("keeps the legacy start fingerprint idempotent across the protocol compatibility path", async () => {
+    const sessionId = newSessionId();
+    const requestId = newRequestId();
+    const writer = registry.get(sessionId);
+    const envelope = createCommandEnvelope({
+      sessionId,
+      requestId,
+      producer: "authenticated-local-client"
+    });
+
+    await new TurnCoordinator(writer).startSession(sixPeopleProblem, envelope);
+    const eventCount = store.eventCount(sessionId);
+
+    const response = await post({
+      protocolVersion: 1,
+      type: "START_SESSION",
+      requestId,
+      sessionId
+    });
+    expect(response.status).toBe(200);
+    expect(SessionStartedResponseSchema.parse(await json(response)).problem?.id)
+      .toBe(sixPeopleProblem.id);
+    expect(store.eventCount(sessionId)).toBe(eventCount);
   });
 
   it("rejects any later attempt to mutate a started session configuration", async () => {
