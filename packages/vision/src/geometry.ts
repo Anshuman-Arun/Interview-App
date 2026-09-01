@@ -1,0 +1,207 @@
+import { z } from "zod";
+import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
+import {
+  snapshotOwnEnumerableRecord,
+  snapshotOwnEnumerableRecordForSchema
+} from "./object-validation.js";
+import { PixelDimensionsSchema, VisionPreprocessingError } from "./types.js";
+import type { PixelDimensions } from "./types.js";
+
+const SAFE_INTEGER_SCHEMA = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
+const SAFE_NONNEGATIVE_INTEGER_SCHEMA = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const SAFE_POSITIVE_INTEGER_SCHEMA = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+
+export const MAX_GEOMETRY_RECTANGLES = 2048;
+
+const PIXEL_DIMENSION_FIELDS = new Set(["width", "height"]);
+const IMAGE_RECT_FIELDS = new Set(["x", "y", "width", "height"]);
+const RECT_CORNER_FIELDS = new Set(["x1", "y1", "x2", "y2"]);
+
+export const ImageRectSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Image rectangle schema input",
+    IMAGE_RECT_FIELDS
+  ),
+  z.object({
+    x: SAFE_INTEGER_SCHEMA,
+    y: SAFE_INTEGER_SCHEMA,
+    width: SAFE_POSITIVE_INTEGER_SCHEMA,
+    height: SAFE_POSITIVE_INTEGER_SCHEMA
+  }).strict()
+).superRefine((rect, context) => {
+  if (!Number.isSafeInteger(rect.x + rect.width)) {
+    context.addIssue({ code: "custom", message: "Rectangle right edge exceeds safe integer range" });
+  }
+  if (!Number.isSafeInteger(rect.y + rect.height)) {
+    context.addIssue({ code: "custom", message: "Rectangle bottom edge exceeds safe integer range" });
+  }
+});
+export type ImageRect = z.infer<typeof ImageRectSchema>;
+
+export const RectCornersSchema = z.preprocess(
+  (value) => snapshotOwnEnumerableRecordForSchema(
+    value,
+    "Rectangle corners schema input",
+    RECT_CORNER_FIELDS
+  ),
+  z.object({
+    x1: SAFE_INTEGER_SCHEMA,
+    y1: SAFE_INTEGER_SCHEMA,
+    x2: SAFE_INTEGER_SCHEMA,
+    y2: SAFE_INTEGER_SCHEMA
+  }).strict()
+);
+export type RectCorners = z.infer<typeof RectCornersSchema>;
+
+function invalidRect(message: string): never {
+  throw new VisionPreprocessingError("INVALID_RECTANGLE", message);
+}
+
+function parsePixelDimensions(input: PixelDimensions): PixelDimensions {
+  let ownInput: Readonly<Record<string, unknown>>;
+  try {
+    ownInput = snapshotOwnEnumerableRecord(input, "Image dimensions", PIXEL_DIMENSION_FIELDS);
+  } catch {
+    invalidRect("Image dimensions could not be read safely");
+  }
+  const parsed = PixelDimensionsSchema.safeParse(ownInput);
+  if (!parsed.success) invalidRect("Image dimensions must be positive safe integers");
+  return parsed.data;
+}
+
+function safeAdd(left: number, right: number, label: string): number {
+  const result = left + right;
+  if (!Number.isSafeInteger(result)) invalidRect(`${label} exceeds safe integer range`);
+  return result;
+}
+
+export function validateImageRect(input: ImageRect): ImageRect {
+  let ownInput: Readonly<Record<string, unknown>>;
+  try {
+    ownInput = snapshotOwnEnumerableRecord(input, "Rectangle", IMAGE_RECT_FIELDS);
+  } catch {
+    invalidRect("Rectangle coordinates could not be read safely");
+  }
+  const parsed = ImageRectSchema.safeParse(ownInput);
+  if (!parsed.success) invalidRect("Rectangle coordinates must be safe integers with positive width and height");
+  safeAdd(parsed.data.x, parsed.data.width, "Rectangle right edge");
+  safeAdd(parsed.data.y, parsed.data.height, "Rectangle bottom edge");
+  return Object.freeze(parsed.data);
+}
+
+export function imageBounds(dimensions: PixelDimensions): ImageRect {
+  const parsed = parsePixelDimensions(dimensions);
+  return Object.freeze({ x: 0, y: 0, width: parsed.width, height: parsed.height });
+}
+
+export function normalizeRect(corners: RectCorners): ImageRect {
+  let ownCorners: Readonly<Record<string, unknown>>;
+  try {
+    ownCorners = snapshotOwnEnumerableRecord(corners, "Rectangle corners", RECT_CORNER_FIELDS);
+  } catch {
+    invalidRect("Rectangle corners could not be read safely");
+  }
+  const parsed = RectCornersSchema.safeParse(ownCorners);
+  if (!parsed.success) invalidRect("Rectangle corners must be safe integers");
+
+  const x = Math.min(parsed.data.x1, parsed.data.x2);
+  const y = Math.min(parsed.data.y1, parsed.data.y2);
+  const width = Math.abs(parsed.data.x2 - parsed.data.x1);
+  const height = Math.abs(parsed.data.y2 - parsed.data.y1);
+  if (width === 0 || height === 0) invalidRect("Rectangle must have non-zero area");
+  return validateImageRect({ x, y, width, height });
+}
+
+export function rectArea(rect: ImageRect): number {
+  const safe = validateImageRect(rect);
+  const area = safe.width * safe.height;
+  if (!Number.isSafeInteger(area)) invalidRect("Rectangle area exceeds safe integer range");
+  return area;
+}
+
+export function intersectRects(left: ImageRect, right: ImageRect): ImageRect | undefined {
+  const a = validateImageRect(left);
+  const b = validateImageRect(right);
+  const leftEdge = Math.max(a.x, b.x);
+  const topEdge = Math.max(a.y, b.y);
+  const rightEdge = Math.min(safeAdd(a.x, a.width, "Rectangle edge"), safeAdd(b.x, b.width, "Rectangle edge"));
+  const bottomEdge = Math.min(safeAdd(a.y, a.height, "Rectangle edge"), safeAdd(b.y, b.height, "Rectangle edge"));
+  if (rightEdge <= leftEdge || bottomEdge <= topEdge) return undefined;
+  return validateImageRect({
+    x: leftEdge,
+    y: topEdge,
+    width: rightEdge - leftEdge,
+    height: bottomEdge - topEdge
+  });
+}
+
+export function rectsOverlap(left: ImageRect, right: ImageRect): boolean {
+  return intersectRects(left, right) !== undefined;
+}
+
+export function unionRects(rectangles: readonly ImageRect[]): ImageRect | undefined {
+  const rectangleCount = boundedArrayLength(rectangles, MAX_GEOMETRY_RECTANGLES, "Rectangle collection");
+  if (rectangleCount === 0) return undefined;
+  const firstInput = readArrayEntry(rectangles, 0, "Rectangle collection");
+  if (firstInput === undefined) invalidRect("Rectangle collection must not contain missing entries");
+  const first = validateImageRect(firstInput);
+  let minX = first.x;
+  let minY = first.y;
+  let maxX = safeAdd(first.x, first.width, "Rectangle edge");
+  let maxY = safeAdd(first.y, first.height, "Rectangle edge");
+
+  for (let index = 1; index < rectangleCount; index += 1) {
+    const input = readArrayEntry(rectangles, index, "Rectangle collection");
+    if (input === undefined) invalidRect("Rectangle collection must not contain missing entries");
+    const rect = validateImageRect(input);
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
+    maxX = Math.max(maxX, safeAdd(rect.x, rect.width, "Rectangle edge"));
+    maxY = Math.max(maxY, safeAdd(rect.y, rect.height, "Rectangle edge"));
+  }
+
+  return validateImageRect({ x: minX, y: minY, width: maxX - minX, height: maxY - minY });
+}
+
+export function clipRectToBounds(rect: ImageRect, bounds: ImageRect): ImageRect | undefined {
+  return intersectRects(validateImageRect(rect), validateImageRect(bounds));
+}
+
+export function expandRect(
+  rect: ImageRect,
+  paddingPixels: number,
+  bounds?: ImageRect
+): ImageRect | undefined {
+  const safe = validateImageRect(rect);
+  const parsedPadding = SAFE_NONNEGATIVE_INTEGER_SCHEMA.safeParse(paddingPixels);
+  if (!parsedPadding.success) invalidRect("Padding must be a nonnegative safe integer");
+  const padding = parsedPadding.data;
+
+  const x = safeAdd(safe.x, -padding, "Expanded rectangle edge");
+  const y = safeAdd(safe.y, -padding, "Expanded rectangle edge");
+  const doubledPadding = padding * 2;
+  if (!Number.isSafeInteger(doubledPadding)) invalidRect("Padding exceeds safe integer range");
+  const width = safeAdd(safe.width, doubledPadding, "Expanded rectangle width");
+  const height = safeAdd(safe.height, doubledPadding, "Expanded rectangle height");
+  const expanded = validateImageRect({ x, y, width, height });
+  return bounds === undefined ? expanded : clipRectToBounds(expanded, bounds);
+}
+
+export function rectContains(outer: ImageRect, inner: ImageRect): boolean {
+  const a = validateImageRect(outer);
+  const b = validateImageRect(inner);
+  return b.x >= a.x
+    && b.y >= a.y
+    && safeAdd(b.x, b.width, "Rectangle edge") <= safeAdd(a.x, a.width, "Rectangle edge")
+    && safeAdd(b.y, b.height, "Rectangle edge") <= safeAdd(a.y, a.height, "Rectangle edge");
+}
+
+export function assertRectWithinImage(rect: ImageRect, dimensions: PixelDimensions): ImageRect {
+  const safeRect = validateImageRect(rect);
+  const bounds = imageBounds(dimensions);
+  if (!rectContains(bounds, safeRect)) {
+    throw new VisionPreprocessingError("OUT_OF_BOUNDS", "Image region extends outside source image bounds");
+  }
+  return safeRect;
+}

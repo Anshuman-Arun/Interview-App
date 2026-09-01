@@ -1865,6 +1865,7 @@ describe("local model asset manager", () => {
     await writeFile(verifyFile, payload);
 
     const manager = managerFor(root);
+    await expect(manager.listInstalledArtifacts()).resolves.toEqual([]);
     const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
     const UnsafeInstall = manager.install.bind(manager) as unknown as (
       manifest: unknown,
@@ -1898,7 +1899,8 @@ describe("local model asset manager", () => {
     });
 
     expect(fixture.requestCount()).toBe(0);
-    expect(await readdir(root)).toEqual([]);
+    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
+    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
   });
 
   it("rejects getter-backed fake cancellation signals without invoking them", async () => {
