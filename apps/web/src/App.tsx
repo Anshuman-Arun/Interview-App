@@ -98,11 +98,15 @@ export const App: React.FC = () => {
     setShowSettings(false);
   };
 
-  const openSessionsModal = () => {
+  const refreshStoredSessions = (): void => {
     void session.fetchAvailableSessions();
     void session.readSessionHistory()
       .then((value) => setHistoryRead(value))
       .catch(() => setHistoryRead(null));
+  };
+
+  const openSessionsModal = (): void => {
+    refreshStoredSessions();
     setShowSessionsModal(true);
   };
 
@@ -305,7 +309,7 @@ export const App: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void session.fetchAvailableSessions()}
+                  onClick={refreshStoredSessions}
                   className="text-xs text-slate-500 hover:text-slate-700 underline"
                 >
                   Refresh List
