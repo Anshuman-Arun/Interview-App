@@ -467,6 +467,13 @@ export class TurnCoordinator {
         || state.problem.id !== problem.id
         || state.problem.version !== problem.version
       ) throw new Error("Problem does not match the session's presented problem");
+      if (state.problem.providerContextSpecSha256 === undefined) {
+        throw new Error("Problem definition provenance is unavailable for pedagogical policy");
+      }
+      const policyProblemFingerprint = createProviderContextSpecFingerprintSync(problem);
+      if (state.problem.providerContextSpecSha256 !== policyProblemFingerprint) {
+        throw new Error("Problem definition does not match the session-bound pedagogical policy contract");
+      }
       const existing = state.pedagogicalActions[turnId];
       if (existing !== undefined) return { drafts: [], result: existing };
       const request = selectPedagogicalAction(state, turnId, problem);
