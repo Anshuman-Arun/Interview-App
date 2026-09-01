@@ -1,7 +1,6 @@
-import {
-  isDisclosedStatus,
-  type DeliveryAtom,
-  type DeliveryStatus
+import type {
+  DeliveryAtom,
+  DeliveryStatus
 } from "../../domain/src/index.js";
 import type { EventType } from "../../events/src/index.js";
 import {
@@ -13,7 +12,8 @@ import {
 } from "./bounds.js";
 import {
   normalizeReplayEvents,
-  type NormalizedReplayEvent
+  type NormalizedReplayEvent,
+  type NormalizedReplayHistory
 } from "./provenance.js";
 import { validateKnownReplayPrefix } from "./validation.js";
 import type {
@@ -102,8 +102,8 @@ function deliveryDetail(
   status: DeliveryStatus,
   bounds: ReplayBounds
 ): ReplayDeliveryDetail {
-  const disclosed = isDisclosedStatus(status);
-  const boundedIds = disclosed
+  const contentMayBeRendered = status === "EXPOSED";
+  const boundedIds = contentMayBeRendered
     ? takeBounded(atom.disclosureIds, bounds.maxDisclosureIds)
     : undefined;
   const base = {
@@ -124,7 +124,11 @@ function deliveryDetail(
     }
   } as const;
 
-  if (!disclosed) return base;
+  if (!contentMayBeRendered) {
+    return atom.content.medium === "AUDIO"
+      ? { ...base, audioReferenceRecorded: true }
+      : base;
+  }
 
   if (atom.content.medium === "TEXT") {
     return {
@@ -499,6 +503,14 @@ export function projectReplayTimeline(
 ): ReplayTimelineProjection {
   const bounds = resolveReplayBounds(options.bounds);
   const normalized = normalizeReplayEvents(rawEvents, bounds);
+  return projectReplayTimelineFromNormalized(normalized, bounds);
+}
+
+export function projectReplayTimelineFromNormalized(
+  normalized: NormalizedReplayHistory,
+  bounds: ReplayBounds,
+  knownPrefixAlreadyValidated = false
+): ReplayTimelineProjection {
   const semanticBoundarySequence = normalized.firstUnknownSequence;
   const validatedItems = normalized.events.filter((item) =>
     semanticBoundarySequence === undefined
@@ -512,7 +524,11 @@ export function projectReplayTimeline(
     return item.event;
   });
 
-  if (normalized.sessionId !== null && validatedEvents.length > 0) {
+  if (
+    !knownPrefixAlreadyValidated
+    && normalized.sessionId !== null
+    && validatedEvents.length > 0
+  ) {
     validateKnownReplayPrefix(normalized.sessionId, validatedEvents, {
       completeHistory:
         !normalized.eventTruncation.truncated

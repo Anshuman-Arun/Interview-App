@@ -50,13 +50,20 @@ count, whether speech text was present, and board-action count. Internal policy
 targets, formal-interpretation text, verifier reasons, vision interpretations, and
 model-claimed disclosure IDs are withheld.
 
-Candidate-visible AI content is projected only from a `DeliveryAtom` whose
-authoritative status is `EXPOSED`, `COMPLETED`, or `POSSIBLY_EXPOSED`. This
-prevents generated, rejected, queued, delivering, or cancelled material from
-becoming a replay disclosure path.
+Candidate-visible AI content is projected exactly once, from the authoritative
+`DELIVERY_EXPOSED` transition. `DELIVERY_COMPLETED` remains a distinct lifecycle
+entry but does not repeat content. `POSSIBLY_EXPOSED` continues to count as
+disclosed for policy/evaluation, but its content and exact disclosure IDs are
+withheld: replay must not turn uncertain prior exposure into a new definite
+exposure outside the delivery authority boundary. Generated, rejected, queued,
+delivering, cancelled, and merely possibly exposed material therefore cannot
+become a new replay disclosure path.
 
 Problem prompts and private problem partitions are not copied into replay entries.
-The projection never reads canonical solutions.
+The projection never reads canonical solutions. WHITEBOARD InputEpisode semantic
+content is admitted only when paired with the corresponding authoritative
+`BOARD_PATCH_COMMITTED` transition from the same serialized command, preventing
+invented board semantics from appearing in committed Turns.
 
 ## Delivery and exposure
 
@@ -74,15 +81,17 @@ POSSIBLY_EXPOSED        -> possibly presented
 but never delivered content is not rendered as candidate-visible dialogue, and
 duplicate acknowledgements do not create duplicate delivery identities.
 
-For `EXPOSED`, `COMPLETED`, and `POSSIBLY_EXPOSED` atoms, TEXT and AUDIO may
-include a bounded text preview when that text was authoritatively stored in the
-delivery atom. AUDIO records only that an audio reference was stored; it does not
-assert that PCM/media is still available. WHITEBOARD replay preserves visible
-action operation/content and target/revision metadata without exposing the internal
-`annotationPurpose`. For QUEUED, DELIVERING, and CANCELLED atoms, only safe delivery
-metadata is projected; the atom content and exact disclosure IDs are withheld.
-Their effective disclosure level and disclosure-ID count remain available for audit
-without exposing protected-fact identifiers that were never presented.
+Only `DELIVERY_EXPOSED` may include candidate-visible TEXT/AUDIO/WHITEBOARD
+content and bounded disclosure IDs. AUDIO records only that an audio reference was
+stored; it does not assert that PCM/media is still available. WHITEBOARD replay
+preserves visible action operation/content and target/revision metadata without
+exposing the internal `annotationPurpose`. For QUEUED, DELIVERING, CANCELLED,
+POSSIBLY_EXPOSED, and COMPLETED entries, only safe delivery metadata is projected;
+atom content and exact disclosure IDs are withheld. Their effective disclosure
+level and disclosure-ID count remain available for audit. A validated proposal's
+delivery authorization is also consumption-bounded: replay rejects fresh DeliveryId
+duplicates that would realize more TEXT/AUDIO/board outputs than the proposal
+actually authorized.
 
 ## Evidence and verification history
 

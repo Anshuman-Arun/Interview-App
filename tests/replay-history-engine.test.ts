@@ -418,6 +418,13 @@ describe("replay/history projections", () => {
         presentationState: "PRESENTED"
       });
       expect(exposed?.delivery?.text?.text).toBe(exposedHarness.safeProbe);
+      await coordinator.acknowledgeCompleted(atom.deliveryId);
+      const completedEntry = projectReplayTimeline(
+        exposedHarness.store.load(exposedHarness.sessionId)
+      ).entries.find((entry) => entry.kind === "DELIVERY_COMPLETED");
+      expect(completedEntry?.delivery?.presentationState).toBe("PRESENTED");
+      expect(completedEntry?.delivery?.text).toBeUndefined();
+      expect(completedEntry?.delivery?.disclosure.disclosureIds).toBeUndefined();
     } finally {
       exposedHarness.store.close();
     }
@@ -447,9 +454,13 @@ describe("replay/history projections", () => {
       const history = projectSessionHistory(possibleHarness.store.load(possibleHarness.sessionId));
       expect(history.counts.possiblyExposedInterventions).toBe(1);
       expect(history.counts.exposedInterventions).toBe(0);
-      expect(history.timeline.entries.find((entry) =>
+      const possiblyExposed = history.timeline.entries.find((entry) =>
         entry.kind === "DELIVERY_POSSIBLY_EXPOSED"
-      )?.delivery?.presentationState).toBe("POSSIBLY_PRESENTED");
+      )?.delivery;
+      expect(possiblyExposed?.presentationState).toBe("POSSIBLY_PRESENTED");
+      expect(possiblyExposed?.text).toBeUndefined();
+      expect(possiblyExposed?.disclosure.disclosureIds).toBeUndefined();
+      expect(JSON.stringify(history)).not.toContain(possibleHarness.safeProbe);
     } finally {
       possibleHarness.store.close();
     }
@@ -467,6 +478,8 @@ describe("replay/history projections", () => {
         audioReferenceRecorded: true,
         presentationState: "POSSIBLY_PRESENTED"
       });
+      expect(audio?.delivery?.text).toBeUndefined();
+      expect(JSON.stringify(audio)).not.toContain(audioHarness.safeProbe);
     } finally {
       audioHarness.store.close();
     }
@@ -941,6 +954,30 @@ describe("replay/history projections", () => {
     }
   });
 
+  it("rejects duplicate delivery realizations under fresh DeliveryIds", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const authoritative = harness.store.load(harness.sessionId);
+      const duplicateAtom = DeliveryAtomSchema.parse({
+        ...atom,
+        deliveryId: newDeliveryId(),
+        status: "VALIDATED"
+      });
+      expect(() => projectSessionHistory([
+        ...authoritative,
+        event(
+          harness.sessionId,
+          authoritative.length + 1,
+          "DELIVERY_QUEUED",
+          { atom: duplicateAtom }
+        )
+      ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("rejects verification provenance that does not match its formal proposal and generation basis", async () => {
     const harness = await createCoreHarness();
     try {
@@ -1067,6 +1104,63 @@ describe("replay/history projections", () => {
         key,
         value: forgedValue
       })
+    ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+  });
+
+  it("requires WHITEBOARD InputEpisode semantics to come from the paired board patch", () => {
+    const sessionId = "session-whiteboard-provenance" as SessionId;
+    const started = [
+      ...base(sessionId, "whiteboard-provenance"),
+      event(sessionId, 3, "INPUT_EPISODE_STARTED", {
+        inputEpisodeId: "episode-whiteboard-provenance"
+      }, "USER")
+    ];
+    const patch = event(sessionId, 4, "BOARD_PATCH_COMMITTED", {
+      boardRevision: 1,
+      summary: "student drew the diagonal"
+    }, "USER");
+    const update = SessionEventSchema.parse({
+      ...event(sessionId, 5, "INPUT_EPISODE_UPDATED", {
+        inputEpisodeId: "episode-whiteboard-provenance",
+        modality: "WHITEBOARD",
+        semanticContent: "student drew the diagonal"
+      }, "USER"),
+      causationId: patch.causationId,
+      correlationId: patch.correlationId
+    });
+    const valid = [
+      ...started,
+      patch,
+      update,
+      event(sessionId, 6, "INPUT_EPISODE_COMMITTED", {
+        inputEpisodeId: "episode-whiteboard-provenance"
+      }),
+      event(sessionId, 7, "TURN_COMMITTED", {
+        turnId: "turn-whiteboard-provenance",
+        inputEpisodeId: "episode-whiteboard-provenance",
+        studentText: "student drew the diagonal"
+      })
+    ];
+    expect(projectSessionHistory(valid).counts.turns).toBe(1);
+
+    const forged = valid.map((item) =>
+      item.type === "INPUT_EPISODE_UPDATED"
+        ? SessionEventSchema.parse({
+            ...item,
+            correlationId: "different-whiteboard-command"
+          })
+        : item
+    );
+    expect(() => projectReplayTimeline(forged))
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+
+    expect(() => projectReplayTimeline([
+      ...started,
+      event(sessionId, 4, "INPUT_EPISODE_UPDATED", {
+        inputEpisodeId: "episode-whiteboard-provenance",
+        modality: "WHITEBOARD",
+        semanticContent: "invented board work"
+      }, "USER")
     ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
@@ -1587,7 +1681,7 @@ describe("replay/history projections", () => {
       expect(() => projectSessionHistory(events, {
         evaluation: {
           ...evaluation,
-          evaluatedAt: "2000-01-01T00:00:00.000Z"
+          evaluatedAt: "not-an-iso-datetime"
         }
       })).toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
     } finally {
@@ -1768,6 +1862,66 @@ describe("longitudinal projection", () => {
     const result = projectLongitudinalHistory([accented, alpha, zeta]);
     expect(result.evaluationStatistics.map((entry) => entry.problemId))
       .toEqual(["Zeta", "alpha", "éclair"]);
+  });
+
+  it("deep-validates only the deterministically included maxSessions subset", () => {
+    const included = evaluated(
+      "session-bounded-include" as SessionId,
+      "bounded",
+      "1",
+      70,
+      "PROGRESSING",
+      "2026-08-31T18:00:00.000Z"
+    );
+    const excludedOversized = {
+      sessionId: "session-bounded-exclude",
+      lifecycle: {
+        startedAt: "2099-01-01T00:00:00.000Z",
+        completed: true,
+        historyComplete: true
+      },
+      currentEvidence: Array.from(
+        { length: DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries + 1 },
+        () => ({ deliberatelyMalformed: true })
+      )
+    };
+
+    const result = projectLongitudinalHistory(
+      [excludedOversized, included],
+      { bounds: { maxSessions: 1 } }
+    );
+    expect(result.includedSessionCount).toBe(1);
+    expect(result.totalInputSessions).toBe(2);
+    expect(result.sessionTruncation.remainingCount).toBe(1);
+    expect(result.evaluationStatistics[0]?.problemId).toBe("bounded");
+  });
+
+  it("orders recorded ISO start instants rather than comparing timestamp strings", () => {
+    const first = evaluated(
+      "session-time-first" as SessionId,
+      "time-order",
+      "1",
+      50,
+      "PROGRESSING",
+      "2026-08-31T18:00:00Z"
+    );
+    const second = evaluated(
+      "session-time-second" as SessionId,
+      "time-order",
+      "1",
+      80,
+      "COMPLETE",
+      "2026-08-31T18:00:00.500Z"
+    );
+
+    const result = projectLongitudinalHistory([second, first]);
+    expect(result.improvement).toEqual([{
+      problemId: "time-order",
+      problemVersion: "1",
+      fromSessionId: "session-time-first",
+      toSessionId: "session-time-second",
+      compositeScoreDelta: 30
+    }]);
   });
 
   it("uses collision-safe structured identities for problems and evidence", () => {

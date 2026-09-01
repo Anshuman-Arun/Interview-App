@@ -35,6 +35,12 @@ type GenerationPhase =
 
 type GenerationProposalKind = "INTERVIEWER" | "FORMAL";
 
+interface DeliveryAuthorizationUsage {
+  textUsed: boolean;
+  audioUsed: boolean;
+  readonly boardActionIndexesUsed: Set<number>;
+}
+
 interface ExpectedEvidenceUpdate {
   readonly key: EvidenceKey;
   readonly value: EvidenceValue;
@@ -182,6 +188,11 @@ function assertDeliveryIdentifiers(atom: DeliveryAtom): void {
   }
 }
 
+function sameCommandIdentity(left: SessionEvent, right: SessionEvent): boolean {
+  return left.causationId === right.causationId
+    && left.correlationId === right.correlationId;
+}
+
 function assertEventSource(event: SessionEvent): void {
   const allowed = ALLOWED_SOURCES[event.type] as readonly EventSource[];
   if (!allowed.includes(event.source)) fail();
@@ -230,16 +241,39 @@ function boardActionsEqual(
     && left.annotationPurpose === right.annotationPurpose;
 }
 
-function deliveryContentIsAuthorized(
+function consumeDeliveryAuthorization(
   proposal: InterviewerProposal,
-  content: DeliveryAtom["content"]
+  content: DeliveryAtom["content"],
+  usage: DeliveryAuthorizationUsage
 ): boolean {
-  if (content.medium === "TEXT" || content.medium === "AUDIO") {
-    return proposal.speechText !== undefined && content.text === proposal.speechText;
+  if (content.medium === "TEXT") {
+    if (
+      usage.textUsed
+      || proposal.speechText === undefined
+      || content.text !== proposal.speechText
+    ) return false;
+    usage.textUsed = true;
+    return true;
   }
-  return (proposal.boardActions ?? []).some((action) =>
-    boardActionsEqual(action, content.action)
+
+  if (content.medium === "AUDIO") {
+    if (
+      usage.audioUsed
+      || proposal.speechText === undefined
+      || content.text !== proposal.speechText
+    ) return false;
+    usage.audioUsed = true;
+    return true;
+  }
+
+  const actions = proposal.boardActions ?? [];
+  const index = actions.findIndex((action, actionIndex) =>
+    !usage.boardActionIndexesUsed.has(actionIndex)
+    && boardActionsEqual(action, content.action)
   );
+  if (index < 0) return false;
+  usage.boardActionIndexesUsed.add(index);
+  return true;
 }
 
 function committedSpeechText(
@@ -453,6 +487,7 @@ export function validateKnownReplayPrefix(
   const generationPhases = new Map<GenerationId, GenerationPhase>();
   const generationProposalKinds = new Map<GenerationId, GenerationProposalKind>();
   const validatedAnalyses = new Map<GenerationId, DisclosureAnalysis>();
+  const deliveryAuthorizationUsage = new Map<GenerationId, DeliveryAuthorizationUsage>();
   const formalProposals = new Map<string, {
     readonly generationId: GenerationId;
     readonly proposal: FormalInterpretationProposal;
@@ -462,6 +497,7 @@ export function validateKnownReplayPrefix(
   let pendingNext: PendingNext | undefined;
   let requiredFollowUps: RequiredFollowUp[] = [];
   let problemPresented = false;
+  let previousEvent: SessionEvent | undefined;
 
   try {
     for (const event of events) {
@@ -551,6 +587,14 @@ export function validateKnownReplayPrefix(
 
         case "INPUT_EPISODE_UPDATED":
           assertBoundedIdentifier(event.payload.inputEpisodeId);
+          if (event.payload.modality === "WHITEBOARD") {
+            if (
+              previousEvent?.type !== "BOARD_PATCH_COMMITTED"
+              || previousEvent.payload.summary !== event.payload.semanticContent
+              || previousEvent.payload.boardRevision !== state.boardRevision
+              || !sameCommandIdentity(previousEvent, event)
+            ) fail();
+          }
           break;
 
         case "INPUT_EPISODE_COMMITTED": {
@@ -921,6 +965,11 @@ export function validateKnownReplayPrefix(
               < event.payload.analysis.effectiveDisclosureLevel
           ) fail();
           validatedAnalyses.set(event.payload.generationId, event.payload.analysis);
+          deliveryAuthorizationUsage.set(event.payload.generationId, {
+            textUsed: false,
+            audioUsed: false,
+            boardActionIndexesUsed: new Set<number>()
+          });
           generationPhases.set(event.payload.generationId, "VALIDATED");
           pendingNext = {
             kind: "FIRST_DELIVERY",
@@ -950,18 +999,23 @@ export function validateKnownReplayPrefix(
           ) fail();
           const generation = state.generations[event.payload.atom.generationId];
           const analysis = validatedAnalyses.get(event.payload.atom.generationId);
+          const authorizationUsage = deliveryAuthorizationUsage.get(
+            event.payload.atom.generationId
+          );
           if (
             generation?.proposal === undefined
             || analysis === undefined
+            || authorizationUsage === undefined
             || event.payload.atom.effectiveDisclosureLevel
               !== analysis.effectiveDisclosureLevel
             || !arraysEqual(
               event.payload.atom.disclosureIds,
               analysis.effectiveDisclosureIds
             )
-            || !deliveryContentIsAuthorized(
+            || !consumeDeliveryAuthorization(
               generation.proposal,
-              event.payload.atom.content
+              event.payload.atom.content,
+              authorizationUsage
             )
           ) fail();
           break;
@@ -1032,6 +1086,7 @@ export function validateKnownReplayPrefix(
       }
 
       state = reduceSessionEvent(state, event);
+      previousEvent = event;
     }
   } catch (error) {
     if (error instanceof ReplayProjectionError) throw error;

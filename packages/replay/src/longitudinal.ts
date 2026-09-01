@@ -123,6 +123,20 @@ const LongitudinalSessionInputSchema = z.object({
 
 type LongitudinalSessionInput = z.infer<typeof LongitudinalSessionInputSchema>;
 
+const LongitudinalSessionEnvelopeSchema = z.object({
+  sessionId: SessionIdSchema,
+  lifecycle: z.object({
+    startedAt: z.iso.datetime().optional()
+  })
+});
+type LongitudinalSessionEnvelope = z.infer<typeof LongitudinalSessionEnvelopeSchema>;
+
+interface SelectedSessionInput {
+  readonly raw: unknown;
+  readonly envelope: LongitudinalSessionEnvelope;
+}
+
+
 function identifierWithinReplayLimit(value: string): boolean {
   return value.length <= MAX_REPLAY_IDENTIFIER_CHARS;
 }
@@ -150,111 +164,158 @@ function truncationMatchesLength(
     : length <= truncation.limit;
 }
 
-function parseSessionSummaries(
-  values: readonly unknown[]
-): readonly LongitudinalSessionInput[] {
-  if (!Array.isArray(values)) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+function parseSelectedSessionSummary(value: unknown): LongitudinalSessionInput {
+  const result = LongitudinalSessionInputSchema.safeParse(value);
+  if (!result.success) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
 
-  const parsed: LongitudinalSessionInput[] = [];
-  for (const value of values) {
-    const result = LongitudinalSessionInputSchema.safeParse(value);
-    if (!result.success) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  const session = result.data;
+  if (
+    !identifierWithinReplayLimit(session.sessionId)
+    || (session.problem !== undefined
+      && (
+        !identifierWithinReplayLimit(session.problem.problemId)
+        || !identifierWithinReplayLimit(session.problem.problemVersion)
+      ))
+    || session.currentStateAvailable !== session.lifecycle.historyComplete
+    || session.currentStateAvailable !== session.countsComplete
+    || (session.lifecycle.historyComplete && session.lifecycle.completed === null)
+    || (session.currentStateAvailable
+      && (session.problem === undefined || session.lifecycle.startedAt === undefined))
+    || session.validatedThroughSequence > session.observedThroughSequence
+    || session.observedThroughSequence > session.totalEventCount
+    || (session.currentStateAvailable
+      && (
+        session.validatedThroughSequence !== session.observedThroughSequence
+        || session.observedThroughSequence !== session.totalEventCount
+      ))
+    || session.currentEvidenceTruncation.limit
+      > DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries
+    || (!session.currentStateAvailable && session.currentEvidence.length !== 0)
+    || !truncationMatchesLength(
+      session.currentEvidenceTruncation,
+      session.currentEvidence.length
+    )
+  ) {
+    throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+  }
 
-    const session = result.data;
+  if (session.evaluation !== undefined) {
     if (
-      !identifierWithinReplayLimit(session.sessionId)
-      || (session.problem !== undefined
-        && (
-          !identifierWithinReplayLimit(session.problem.problemId)
-          || !identifierWithinReplayLimit(session.problem.problemVersion)
-        ))
-      || session.currentStateAvailable !== session.lifecycle.historyComplete
-      || session.currentStateAvailable !== session.countsComplete
-      || (session.lifecycle.historyComplete && session.lifecycle.completed === null)
-      || (session.currentStateAvailable
-        && (session.problem === undefined || session.lifecycle.startedAt === undefined))
-      || session.validatedThroughSequence > session.observedThroughSequence
-      || session.observedThroughSequence > session.totalEventCount
-      || (session.currentStateAvailable
-        && (
-          session.validatedThroughSequence !== session.observedThroughSequence
-          || session.observedThroughSequence !== session.totalEventCount
-        ))
-      || session.currentEvidenceTruncation.limit
-        > DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries
-      || (!session.currentStateAvailable && session.currentEvidence.length !== 0)
+      !session.currentStateAvailable
+      || session.lifecycle.completed !== true
+      || session.problem === undefined
+      || !identifierWithinReplayLimit(session.evaluation.sessionId)
+      || !identifierWithinReplayLimit(session.evaluation.problemId)
+      || !identifierWithinReplayLimit(session.evaluation.problemVersion)
+      || session.evaluation.sessionId !== session.sessionId
+      || session.evaluation.problemId !== session.problem.problemId
+      || session.evaluation.problemVersion !== session.problem.problemVersion
+      || session.evaluation.totalTurns !== session.counts.turns
+      || session.evaluation.achievedMilestoneCount > session.evaluation.milestoneCount
+      || session.evaluation.unassistedMilestoneCount
+        + session.evaluation.assistedMilestoneCount
+        !== session.evaluation.achievedMilestoneCount
+      || session.evaluation.disclosedInterventionCount
+        !== session.counts.exposedInterventions
+          + session.counts.possiblyExposedInterventions
+    ) {
+      throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+    }
+  }
+
+  const evidenceIdentities = new Set<string>();
+  for (const evidence of session.currentEvidence) {
+    const identity = replayEvidenceIdentity(evidence.key);
+    if (
+      session.problem === undefined
+      || !identifierWithinReplayLimit(evidence.evidenceEventId)
+      || !evidenceKeyIdentifiersWithinReplayLimit(evidence.key)
+      || evidence.value.evidenceEventIds.some((eventId) =>
+        !identifierWithinReplayLimit(eventId)
+      )
+      || evidence.value.evidenceEventIdsTruncation.limit
+        > DEFAULT_REPLAY_BOUNDS.maxProvenanceIds
+      || evidence.value.lastUpdatedSequence > session.validatedThroughSequence
+      || evidence.key.problemId !== session.problem.problemId
+      || evidence.keyString !== evidenceKeyToString(evidence.key)
+      || evidenceIdentities.has(identity)
       || !truncationMatchesLength(
-        session.currentEvidenceTruncation,
-        session.currentEvidence.length
+        evidence.value.evidenceEventIdsTruncation,
+        evidence.value.evidenceEventIds.length
       )
     ) {
       throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
     }
-
-    if (session.evaluation !== undefined) {
-      if (
-        !session.currentStateAvailable
-        || session.lifecycle.completed !== true
-        || session.problem === undefined
-        || !identifierWithinReplayLimit(session.evaluation.sessionId)
-        || !identifierWithinReplayLimit(session.evaluation.problemId)
-        || !identifierWithinReplayLimit(session.evaluation.problemVersion)
-        || session.evaluation.sessionId !== session.sessionId
-        || session.evaluation.problemId !== session.problem.problemId
-        || session.evaluation.problemVersion !== session.problem.problemVersion
-        || session.evaluation.totalTurns !== session.counts.turns
-        || session.evaluation.achievedMilestoneCount > session.evaluation.milestoneCount
-        || session.evaluation.unassistedMilestoneCount
-          + session.evaluation.assistedMilestoneCount
-          !== session.evaluation.achievedMilestoneCount
-        || session.evaluation.disclosedInterventionCount
-          !== session.counts.exposedInterventions
-            + session.counts.possiblyExposedInterventions
-      ) {
-        throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
-      }
-    }
-
-    const evidenceIdentities = new Set<string>();
-    for (const evidence of session.currentEvidence) {
-      const identity = replayEvidenceIdentity(evidence.key);
-      if (
-        session.problem === undefined
-        || !identifierWithinReplayLimit(evidence.evidenceEventId)
-        || !evidenceKeyIdentifiersWithinReplayLimit(evidence.key)
-        || evidence.value.evidenceEventIds.some((eventId) =>
-          !identifierWithinReplayLimit(eventId)
-        )
-        || evidence.value.evidenceEventIdsTruncation.limit
-          > DEFAULT_REPLAY_BOUNDS.maxProvenanceIds
-        || evidence.value.lastUpdatedSequence > session.validatedThroughSequence
-        || evidence.key.problemId !== session.problem.problemId
-        || evidence.keyString !== evidenceKeyToString(evidence.key)
-        || evidenceIdentities.has(identity)
-        || !truncationMatchesLength(
-          evidence.value.evidenceEventIdsTruncation,
-          evidence.value.evidenceEventIds.length
-        )
-      ) {
-        throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
-      }
-      evidenceIdentities.add(identity);
-    }
-
-    parsed.push(session);
+    evidenceIdentities.add(identity);
   }
-  return parsed;
+
+  return session;
 }
 
-function sessionSortKey(session: LongitudinalSessionInput): string {
-  return session.lifecycle.startedAt ?? "";
+function recordedStartTime(startedAt: string | undefined): number | undefined {
+  if (startedAt === undefined) return undefined;
+  const parsed = Date.parse(startedAt);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function compareRecordedStartTimes(
+  leftStartedAt: string | undefined,
+  rightStartedAt: string | undefined
+): number {
+  const left = recordedStartTime(leftStartedAt);
+  const right = recordedStartTime(rightStartedAt);
+  if (left === undefined && right === undefined) return 0;
+  if (left === undefined) return -1;
+  if (right === undefined) return 1;
+  return left - right;
+}
+
+function compareSessionEnvelopes(
+  left: SelectedSessionInput,
+  right: SelectedSessionInput
+): number {
+  const timeOrder = compareRecordedStartTimes(
+    left.envelope.lifecycle.startedAt,
+    right.envelope.lifecycle.startedAt
+  );
+  if (timeOrder !== 0) return timeOrder;
+  return compareReplayStrings(left.envelope.sessionId, right.envelope.sessionId);
+}
+
+function selectAndParseSessionSummaries(
+  values: readonly unknown[],
+  maxSessions: number
+): readonly LongitudinalSessionInput[] {
+  if (!Array.isArray(values)) throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+
+  const seenSessionIds = new Set<SessionId>();
+  const candidates: SelectedSessionInput[] = [];
+  for (const raw of values) {
+    const parsed = LongitudinalSessionEnvelopeSchema.safeParse(raw);
+    if (!parsed.success || !identifierWithinReplayLimit(parsed.data.sessionId)) {
+      throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+    }
+    if (seenSessionIds.has(parsed.data.sessionId)) {
+      throw new ReplayProjectionError("DUPLICATE_SESSION");
+    }
+    seenSessionIds.add(parsed.data.sessionId);
+    candidates.push({ raw, envelope: parsed.data });
+  }
+
+  return candidates
+    .sort(compareSessionEnvelopes)
+    .slice(0, maxSessions)
+    .map((candidate) => parseSelectedSessionSummary(candidate.raw));
 }
 
 function compareSessions(
   left: LongitudinalSessionInput,
   right: LongitudinalSessionInput
 ): number {
-  const timeOrder = compareReplayStrings(sessionSortKey(left), sessionSortKey(right));
+  const timeOrder = compareRecordedStartTimes(
+    left.lifecycle.startedAt,
+    right.lifecycle.startedAt
+  );
   if (timeOrder !== 0) return timeOrder;
   return compareReplayStrings(left.sessionId, right.sessionId);
 }
@@ -322,17 +383,10 @@ export function projectLongitudinalHistory(
   options: LongitudinalHistoryOptions = {}
 ): LongitudinalHistoryProjection {
   const bounds = resolveReplayBounds(options.bounds);
-  const parsedSessions = parseSessionSummaries(sessionSummaries);
-  const seenSessionIds = new Set<SessionId>();
-  for (const session of parsedSessions) {
-    if (seenSessionIds.has(session.sessionId)) {
-      throw new ReplayProjectionError("DUPLICATE_SESSION");
-    }
-    seenSessionIds.add(session.sessionId);
-  }
-
-  const ordered = [...parsedSessions].sort(compareSessions);
-  const included = ordered.slice(0, bounds.maxSessions);
+  const included = selectAndParseSessionSummaries(
+    sessionSummaries,
+    bounds.maxSessions
+  );
   const problemGroups = new Map<string, LongitudinalSessionInput[]>();
   const evidenceGroups = new Map<string, {
     key: EvidenceKey;
@@ -408,8 +462,8 @@ export function projectLongitudinalHistory(
         const previous = evaluated[index - 1];
         const current = evaluated[index];
         if (previous === undefined || current === undefined) continue;
-        const previousStartedAt = previous.lifecycle.startedAt;
-        const currentStartedAt = current.lifecycle.startedAt;
+        const previousStartedAt = recordedStartTime(previous.lifecycle.startedAt);
+        const currentStartedAt = recordedStartTime(current.lifecycle.startedAt);
         if (
           previousStartedAt === undefined
           || currentStartedAt === undefined

@@ -25,7 +25,7 @@ import {
   ReplayProjectionError,
   type NormalizedReplayEvent
 } from "./provenance.js";
-import { projectReplayTimeline } from "./timeline.js";
+import { projectReplayTimelineFromNormalized } from "./timeline.js";
 import { validateKnownReplayPrefix } from "./validation.js";
 import type {
   ReplayCurrentEvidence,
@@ -461,7 +461,6 @@ function validateEvaluation(
     || state === undefined
     || state.completedAt === undefined
     || (state.status !== "COMPLETED" && state.status !== "ARCHIVED")
-    || Date.parse(evaluatedAt.data) < Date.parse(state.completedAt)
     || parsed.data.sessionId !== sessionId
     || problem === undefined
     || parsed.data.problemId !== problem.problemId
@@ -641,7 +640,11 @@ export function projectSessionHistory(
         problemVersion: state.problem.version
       };
 
-  const timeline = projectReplayTimeline(rawEvents, { bounds });
+  const timeline = projectReplayTimelineFromNormalized(
+    normalized,
+    bounds,
+    true
+  );
   const evidence = evidenceHistoryFrom(semanticItems, bounds);
   const currentEvidence = state === undefined
     ? takeBounded<ReplayCurrentEvidence>([], bounds.maxEvidenceHistoryEntries)
