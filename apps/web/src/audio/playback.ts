@@ -67,6 +67,7 @@ interface PendingPlayback {
   pause: BrowserAudioElementLike["pause"] | undefined;
   hasStarted: boolean;
   settled: boolean;
+  setupStarted: boolean;
 }
 
 export class BrowserAudioPlayback {
@@ -186,7 +187,8 @@ export class BrowserAudioPlayback {
         removeEventListener: undefined,
         pause: undefined,
         hasStarted: false,
-        settled: false
+        settled: false,
+        setupStarted: false
       };
 
       this.queue.push(pending);
@@ -314,13 +316,24 @@ export class BrowserAudioPlayback {
       this.disposed
       || this.cancellingAll
       || this.clearingQueued
-      || this.current !== undefined
+    ) return;
+
+    if (this.current === undefined) {
+      const next = this.queue.shift();
+      if (next === undefined) return;
+      this.current = next;
+    }
+
+    const pending = this.current;
+    if (
+      pending === undefined
+      || pending.settled
+      || pending.setupStarted
       || this.setupInFlight
     ) return;
-    const next = this.queue.shift();
-    if (next === undefined) return;
-    this.current = next;
-    void this.startCurrent(next);
+
+    pending.setupStarted = true;
+    void this.startCurrent(pending);
   }
 
   private async startCurrent(pending: PendingPlayback): Promise<void> {
