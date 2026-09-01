@@ -182,7 +182,8 @@ describe("local worker lifecycle manager", () => {
     const proxiedDate = new Proxy(new Date(), {
       get: (target, key, receiver) => {
         clockProxyTraps += 1;
-        return Reflect.get(target, key, receiver);
+        const result: unknown = Reflect.get(target, key, receiver);
+        return result;
       },
       getPrototypeOf: (target) => {
         clockProxyTraps += 1;
@@ -761,7 +762,8 @@ describe("local worker lifecycle manager", () => {
     const proxiedResponse = new Proxy(new Response(null, { status: 204 }), {
       get: (target, key, receiver) => {
         responseProxyTraps += 1;
-        return Reflect.get(target, key, receiver);
+        const result: unknown = Reflect.get(target, key, receiver);
+        return result;
       },
       getPrototypeOf: (target) => {
         responseProxyTraps += 1;
