@@ -2035,6 +2035,94 @@ describe("target-scoped disclosure validator", () => {
     expect(result.analysis?.effectiveDisclosureLevel).toBeGreaterThan(0);
   });
 
+  it("localizes a detected protected disclosure to the realization that actually contains it", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing protected disclosure");
+
+    const validator = new DisclosureValidator(
+      new ClosedWorldDisclosureAnalyzer(["safe speech", "safe purpose"])
+    );
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "DIRECTIONAL_NUDGE",
+        claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+        claimedDisclosureIds: [disclosure.id],
+        speechText: "safe speech",
+        boardActions: [{
+          operation: "write_text",
+          layer: "AI_ANNOTATION",
+          content: disclosure.fact,
+          annotationPurpose: "safe purpose"
+        }]
+      },
+      request: {
+        requiredAction: "DIRECTIONAL_NUDGE",
+        maximumDisclosure: disclosure.minimumDisclosureLevel,
+        allowedDisclosureIds: [disclosure.id]
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+
+    expect(result.accepted).toBe(true);
+    if (!result.accepted) throw new Error(result.reason);
+    expect(result.analysis.effectiveDisclosureIds).toContain(disclosure.id);
+    expect(result.realizations.speech).toMatchObject({
+      effectiveDisclosureLevel: 0,
+      effectiveDisclosureIds: []
+    });
+    expect(result.realizations.boardActions).toHaveLength(1);
+    expect(result.realizations.boardActions[0]).toMatchObject({
+      effectiveDisclosureLevel: disclosure.minimumDisclosureLevel,
+      effectiveDisclosureIds: [disclosure.id]
+    });
+  });
+
+  it("conservatively taints every realization when a provider claim cannot be localized", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing protected disclosure");
+
+    const validator = new DisclosureValidator({
+      analyze: () => ({
+        status: "SAFE",
+        effectiveDisclosureLevel: 0,
+        effectiveDisclosureIds: [],
+        confidence: 1,
+        reason: "synthetic semantic miss"
+      })
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "DIRECTIONAL_NUDGE",
+        claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+        claimedDisclosureIds: [disclosure.id],
+        speechText: "synthetic safe-looking speech",
+        boardActions: [{
+          operation: "write_text",
+          layer: "AI_ANNOTATION",
+          content: "synthetic safe-looking board text",
+          annotationPurpose: "synthetic safe-looking purpose"
+        }]
+      },
+      request: {
+        requiredAction: "DIRECTIONAL_NUDGE",
+        maximumDisclosure: disclosure.minimumDisclosureLevel,
+        allowedDisclosureIds: [disclosure.id]
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+
+    expect(result.accepted).toBe(true);
+    if (!result.accepted) throw new Error(result.reason);
+    expect(result.realizations.speech?.effectiveDisclosureIds).toContain(disclosure.id);
+    expect(result.realizations.boardActions[0]?.effectiveDisclosureIds).toContain(disclosure.id);
+    expect(result.realizations.speech?.effectiveDisclosureLevel)
+      .toBe(disclosure.minimumDisclosureLevel);
+    expect(result.realizations.boardActions[0]?.effectiveDisclosureLevel)
+      .toBe(disclosure.minimumDisclosureLevel);
+  });
+
   it("treats a provider-claimed protected disclosure as effective even when text analysis misses it", () => {
     const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
     expect(disclosure).toBeDefined();
