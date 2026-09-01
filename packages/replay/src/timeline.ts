@@ -1,7 +1,6 @@
 import type {
   DeliveryAtom,
   DeliveryStatus,
-  GenerationId
 } from "../../domain/src/index.js";
 import type {
   EventType,
@@ -105,8 +104,7 @@ function deliveryDetail(
   status: DeliveryStatus,
   bounds: ReplayBounds
 ): ReplayDeliveryDetail {
-  const disclosureIds = [...atom.disclosureIds].sort((left, right) => left.localeCompare(right));
-  const boundedIds = takeBounded(disclosureIds, bounds.maxDisclosureIds);
+  const boundedIds = takeBounded(atom.disclosureIds, bounds.maxDisclosureIds);
   const base = {
     deliveryId: atom.deliveryId,
     generationId: atom.generationId,
@@ -149,31 +147,6 @@ function deliveryDetail(
         : { expectedShapeRevision: action.expectedShapeRevision })
     }
   };
-}
-
-function generationIdFor(event: SessionEvent): GenerationId | undefined {
-  switch (event.type) {
-    case "MODEL_GENERATION_STARTED":
-    case "GENERATION_CONTEXT_COMPILED":
-    case "MODEL_PROPOSAL_RECEIVED":
-    case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
-    case "FORMAL_INTERPRETATION_PROPOSAL_REJECTED":
-    case "MODEL_GENERATION_SUPERSEDED":
-    case "PROPOSAL_VALIDATED":
-    case "PROPOSAL_REJECTED":
-      return event.payload.generationId;
-    default:
-      return undefined;
-  }
-}
-
-function isLateGenerationLifecycle(type: EventType): boolean {
-  return type === "GENERATION_CONTEXT_COMPILED"
-    || type === "MODEL_PROPOSAL_RECEIVED"
-    || type === "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED"
-    || type === "FORMAL_INTERPRETATION_PROPOSAL_REJECTED"
-    || type === "PROPOSAL_VALIDATED"
-    || type === "PROPOSAL_REJECTED";
 }
 
 function entryForKnownEvent(
@@ -317,7 +290,7 @@ function entryForKnownEvent(
       break;
     case "EVIDENCE_PROPOSED": {
       const supporting = takeBounded(
-        [...event.payload.proposal.evidenceEventIds],
+        event.payload.proposal.evidenceEventIds,
         bounds.maxProvenanceIds
       );
       evidence = {
@@ -332,7 +305,7 @@ function entryForKnownEvent(
     }
     case "STUDENT_EVIDENCE_UPDATED": {
       const supporting = takeBounded(
-        [...event.payload.value.evidenceEventIds],
+        event.payload.value.evidenceEventIds,
         bounds.maxProvenanceIds
       );
       evidence = {
@@ -401,8 +374,10 @@ function entryForKnownEvent(
       break;
     case "MODEL_PROPOSAL_RECEIVED": {
       relations = { generationId: event.payload.generationId };
-      const ids = [...event.payload.proposal.claimedDisclosureIds].sort((left, right) => left.localeCompare(right));
-      const bounded = takeBounded(ids, bounds.maxDisclosureIds);
+      const bounded = takeBounded(
+        event.payload.proposal.claimedDisclosureIds,
+        bounds.maxDisclosureIds
+      );
       generation = {
         generationId: event.payload.generationId,
         phase: "PROPOSAL_RECEIVED",
@@ -566,8 +541,6 @@ export function projectReplayTimeline(
 
   const timelineSelected = normalized.events.slice(0, bounds.maxTimelineEntries);
   const queuedAtoms = new Map<string, DeliveryAtom>();
-  const supersededGenerations = new Set<GenerationId>();
-  const lateIssueKeys = new Set<string>();
   const issues: ReplayProjectionIssue[] = [];
   const entries: ReplayTimelineEntry[] = [];
 
@@ -620,27 +593,7 @@ export function projectReplayTimeline(
       continue;
     }
 
-    const generationId = generationIdFor(item.event);
-    if (
-      generationId !== undefined
-      && supersededGenerations.has(generationId)
-      && isLateGenerationLifecycle(item.event.type)
-    ) {
-      const key = `${generationId}:${String(item.event.sequence)}`;
-      if (!lateIssueKeys.has(key)) {
-        lateIssueKeys.add(key);
-        issues.push({
-          code: "LATE_GENERATION_EVENT_AFTER_SUPERSESSION",
-          sequence: item.event.sequence,
-          eventType: item.event.type
-        });
-      }
-    }
-
     entries.push(entryForKnownEvent(item, queuedAtoms, bounds));
-    if (item.event.type === "MODEL_GENERATION_SUPERSEDED") {
-      supersededGenerations.add(item.event.payload.generationId);
-    }
   }
 
   const timelineTruncation = truncationInfo(normalized.events.length, bounds.maxTimelineEntries);
@@ -653,8 +606,7 @@ export function projectReplayTimeline(
     complete:
       !normalized.eventTruncation.truncated
       && !timelineTruncation.truncated
-      && !normalized.hasUnknownEvents
-      && lateIssueKeys.size === 0,
+      && !normalized.hasUnknownEvents,
     issues,
     bounds
   };

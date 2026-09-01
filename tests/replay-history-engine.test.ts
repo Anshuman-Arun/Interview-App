@@ -24,6 +24,7 @@ import {
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import {
+  DEFAULT_REPLAY_BOUNDS,
   ReplayProjectionError,
   projectLongitudinalHistory,
   projectReplayTimeline,
@@ -105,7 +106,7 @@ async function queueAudio(harness: CoreHarness) {
     generationId: harness.generationId,
     content: {
       medium: "AUDIO",
-      text: "Authoritative audio transcript metadata",
+      text: harness.safeProbe,
       audioRef: "/fixture/audio.wav"
     },
     disclosureIds: [],
@@ -301,8 +302,7 @@ describe("replay/history projections", () => {
       expect(generation).toMatchObject({
         generationId: harness.generationId,
         status: "SUPERSEDED",
-        deliveryIds: [atom.deliveryId],
-        lateEventAfterSupersession: false
+        deliveryIds: [atom.deliveryId]
       });
       expect(generation?.basis.turnId).toBe(harness.turnId);
       expect(generation?.superseded?.reason.text).toBe("student changed direction");
@@ -579,6 +579,117 @@ describe("replay/history projections", () => {
     });
     expect(boundedHistory.lifecycle.completed).toBeNull();
     expect(boundedHistory.countsComplete).toBe(false);
+  });
+
+  it("rejects queued content or disclosure metadata that does not match the validated proposal", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const authoritative = harness.store.load(harness.sessionId);
+      const tamperedText = authoritative.map((item) => {
+        if (item.type !== "DELIVERY_QUEUED" || item.payload.atom.deliveryId !== atom.deliveryId) {
+          return item;
+        }
+        return SessionEventSchema.parse({
+          ...item,
+          payload: {
+            atom: {
+              ...item.payload.atom,
+              content: {
+                medium: "TEXT",
+                text: "content that was never validated"
+              }
+            }
+          }
+        });
+      });
+      expect(() => projectReplayTimeline(tamperedText))
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+
+      const tamperedDisclosure = authoritative.map((item) => {
+        if (item.type !== "DELIVERY_QUEUED" || item.payload.atom.deliveryId !== atom.deliveryId) {
+          return item;
+        }
+        return SessionEventSchema.parse({
+          ...item,
+          payload: {
+            atom: {
+              ...item.payload.atom,
+              effectiveDisclosureLevel: 1
+            }
+          }
+        });
+      });
+      expect(() => projectSessionHistory(tamperedDisclosure))
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects verification provenance that does not match its formal proposal and generation basis", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const authoritative = harness.store.load(harness.sessionId);
+      const generation = harness.writer.getState().generations[harness.generationId];
+      const turn = authoritative.find((item) => item.type === "TURN_COMMITTED");
+      if (generation === undefined || turn?.type !== "TURN_COMMITTED") {
+        throw new Error("Missing generation fixture provenance");
+      }
+      const proposalRequestId = "request-formal-proposal";
+      const formal = event(
+        harness.sessionId,
+        authoritative.length + 1,
+        "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED",
+        {
+          generationId: harness.generationId,
+          proposalRequestId,
+          proposal: {
+            candidateFormalInterpretation: "candidate statement",
+            interpretationConfidence: 0.95
+          }
+        },
+        "PROVIDER"
+      );
+      const mismatchedRequest = event(
+        harness.sessionId,
+        authoritative.length + 2,
+        "VERIFICATION_REQUESTED",
+        {
+          verificationRequestId: "request-formal-verification",
+          verifier: "deterministic-verifier",
+          basis: generation.basis,
+          candidateFormalInterpretation: "different statement",
+          interpretationConfidence: 0.95,
+          evidenceKey: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "CLAIM", claimId: "formal-claim" },
+            dimension: "CORRECTNESS"
+          },
+          evidenceEventIds: [turn.eventId],
+          sourceGenerationId: harness.generationId,
+          sourceProposalRequestId: proposalRequestId
+        }
+      );
+
+      expect(() => projectSessionHistory([
+        ...authoritative,
+        formal,
+        mismatchedRequest
+      ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("enforces hard upper limits on caller-supplied replay bounds", () => {
+    const history = base("session-hard-bounds" as SessionId, "hard-bounds");
+    expect(() => projectReplayTimeline(history, {
+      bounds: { maxEvents: DEFAULT_REPLAY_BOUNDS.maxEvents + 1 }
+    })).toThrow(RangeError);
+    expect(() => projectSessionHistory(history, {
+      bounds: { maxTextPreviewChars: 0 }
+    })).toThrow(RangeError);
   });
 
   it("rejects reducer-valid delivery transitions that violate generation and exposure authority", async () => {

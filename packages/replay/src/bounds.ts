@@ -34,44 +34,63 @@ export interface TextPreview {
   readonly truncated: boolean;
 }
 
-function positiveSafeInteger(name: string, value: number): number {
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new RangeError(`${name} must be a positive safe integer`);
+function boundedPositiveSafeInteger(
+  name: keyof ReplayBounds,
+  value: number,
+  maximum: number
+): number {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) {
+    throw new RangeError(`${name} must be a positive safe integer within the replay hard limit`);
   }
   return value;
 }
 
 export function resolveReplayBounds(overrides: Partial<ReplayBounds> = {}): ReplayBounds {
   return {
-    maxEvents: positiveSafeInteger("maxEvents", overrides.maxEvents ?? DEFAULT_REPLAY_BOUNDS.maxEvents),
-    maxTimelineEntries: positiveSafeInteger(
+    maxEvents: boundedPositiveSafeInteger(
+      "maxEvents",
+      overrides.maxEvents ?? DEFAULT_REPLAY_BOUNDS.maxEvents,
+      DEFAULT_REPLAY_BOUNDS.maxEvents
+    ),
+    maxTimelineEntries: boundedPositiveSafeInteger(
       "maxTimelineEntries",
-      overrides.maxTimelineEntries ?? DEFAULT_REPLAY_BOUNDS.maxTimelineEntries
+      overrides.maxTimelineEntries ?? DEFAULT_REPLAY_BOUNDS.maxTimelineEntries,
+      DEFAULT_REPLAY_BOUNDS.maxTimelineEntries
     ),
-    maxSessions: positiveSafeInteger("maxSessions", overrides.maxSessions ?? DEFAULT_REPLAY_BOUNDS.maxSessions),
-    maxTextPreviewChars: positiveSafeInteger(
+    maxSessions: boundedPositiveSafeInteger(
+      "maxSessions",
+      overrides.maxSessions ?? DEFAULT_REPLAY_BOUNDS.maxSessions,
+      DEFAULT_REPLAY_BOUNDS.maxSessions
+    ),
+    maxTextPreviewChars: boundedPositiveSafeInteger(
       "maxTextPreviewChars",
-      overrides.maxTextPreviewChars ?? DEFAULT_REPLAY_BOUNDS.maxTextPreviewChars
+      overrides.maxTextPreviewChars ?? DEFAULT_REPLAY_BOUNDS.maxTextPreviewChars,
+      DEFAULT_REPLAY_BOUNDS.maxTextPreviewChars
     ),
-    maxDisclosureIds: positiveSafeInteger(
+    maxDisclosureIds: boundedPositiveSafeInteger(
       "maxDisclosureIds",
-      overrides.maxDisclosureIds ?? DEFAULT_REPLAY_BOUNDS.maxDisclosureIds
+      overrides.maxDisclosureIds ?? DEFAULT_REPLAY_BOUNDS.maxDisclosureIds,
+      DEFAULT_REPLAY_BOUNDS.maxDisclosureIds
     ),
-    maxProvenanceIds: positiveSafeInteger(
+    maxProvenanceIds: boundedPositiveSafeInteger(
       "maxProvenanceIds",
-      overrides.maxProvenanceIds ?? DEFAULT_REPLAY_BOUNDS.maxProvenanceIds
+      overrides.maxProvenanceIds ?? DEFAULT_REPLAY_BOUNDS.maxProvenanceIds,
+      DEFAULT_REPLAY_BOUNDS.maxProvenanceIds
     ),
-    maxEvidenceHistoryEntries: positiveSafeInteger(
+    maxEvidenceHistoryEntries: boundedPositiveSafeInteger(
       "maxEvidenceHistoryEntries",
-      overrides.maxEvidenceHistoryEntries ?? DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries
+      overrides.maxEvidenceHistoryEntries ?? DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries,
+      DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries
     ),
-    maxVerificationEntries: positiveSafeInteger(
+    maxVerificationEntries: boundedPositiveSafeInteger(
       "maxVerificationEntries",
-      overrides.maxVerificationEntries ?? DEFAULT_REPLAY_BOUNDS.maxVerificationEntries
+      overrides.maxVerificationEntries ?? DEFAULT_REPLAY_BOUNDS.maxVerificationEntries,
+      DEFAULT_REPLAY_BOUNDS.maxVerificationEntries
     ),
-    maxGenerationEntries: positiveSafeInteger(
+    maxGenerationEntries: boundedPositiveSafeInteger(
       "maxGenerationEntries",
-      overrides.maxGenerationEntries ?? DEFAULT_REPLAY_BOUNDS.maxGenerationEntries
+      overrides.maxGenerationEntries ?? DEFAULT_REPLAY_BOUNDS.maxGenerationEntries,
+      DEFAULT_REPLAY_BOUNDS.maxGenerationEntries
     )
   };
 }
@@ -85,12 +104,16 @@ export function truncationInfo(total: number, limit: number): TruncationInfo {
 }
 
 export function previewText(value: string, limit: number): TextPreview {
-  const characters = Array.from(value);
-  const truncated = characters.length > limit;
+  let originalLength = 0;
+  let text = "";
+  for (const character of value) {
+    if (originalLength < limit) text += character;
+    originalLength += 1;
+  }
   return {
-    text: truncated ? characters.slice(0, limit).join("") : value,
-    originalLength: characters.length,
-    truncated
+    text: originalLength > limit ? text : value,
+    originalLength,
+    truncated: originalLength > limit
   };
 }
 

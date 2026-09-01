@@ -18,8 +18,7 @@ export type ReplayProjectionIssueCode =
   | "UNKNOWN_EVENT_SEMANTICS"
   | "EVENT_LIMIT_REACHED"
   | "TIMELINE_LIMIT_REACHED"
-  | "CURRENT_STATE_UNAVAILABLE"
-  | "LATE_GENERATION_EVENT_AFTER_SUPERSESSION";
+  | "CURRENT_STATE_UNAVAILABLE";
 
 export interface ReplayProjectionIssue {
   readonly code: ReplayProjectionIssueCode;
@@ -270,7 +269,6 @@ export interface ReplayGenerationHistoryEntry {
   };
   readonly deliveryIds: readonly string[];
   readonly deliveryIdsTruncation: TruncationInfo;
-  readonly lateEventAfterSupersession: boolean;
   readonly statusIsCurrent: boolean;
 }
 

@@ -102,7 +102,7 @@ function projectEvidenceValue(
   value: SessionState["studentEvidence"][string],
   bounds: ReplayBounds
 ): ReplayEvidenceValue {
-  const evidenceIds = takeBounded([...value.evidenceEventIds], bounds.maxProvenanceIds);
+  const evidenceIds = takeBounded(value.evidenceEventIds, bounds.maxProvenanceIds);
   return {
     value: value.value,
     inferenceConfidence: value.inferenceConfidence,
@@ -199,14 +199,16 @@ function verificationHistoryFrom(
         verifier: event.payload.verifier,
         basis: event.payload.basis,
         evidenceKey: event.payload.evidenceKey,
-        evidenceEventIds: takeBounded(
-          [...event.payload.evidenceEventIds],
-          bounds.maxProvenanceIds
-        ).values,
-        evidenceEventIdsTruncation: takeBounded(
-          [...event.payload.evidenceEventIds],
-          bounds.maxProvenanceIds
-        ).truncation,
+        ...(() => {
+          const evidenceEventIds = takeBounded(
+            event.payload.evidenceEventIds,
+            bounds.maxProvenanceIds
+          );
+          return {
+            evidenceEventIds: evidenceEventIds.values,
+            evidenceEventIdsTruncation: evidenceEventIds.truncation
+          };
+        })(),
         candidateFormalInterpretation: previewText(
           event.payload.candidateFormalInterpretation,
           bounds.maxTextPreviewChars
@@ -285,8 +287,6 @@ interface MutableGenerationHistory {
   formalInterpretation?: ReplayGenerationHistoryEntry["formalInterpretation"];
   superseded?: ReplayGenerationHistoryEntry["superseded"];
   deliveryIds: string[];
-  lateEventAfterSupersession: boolean;
-  supersededSequence?: number;
 }
 
 function generationHistoryFrom(
@@ -306,7 +306,6 @@ function generationHistoryFrom(
         startProvenance: item.provenance,
         status: "ACTIVE",
         deliveryIds: [],
-        lateEventAfterSupersession: false
       });
       continue;
     }
@@ -332,14 +331,6 @@ function generationHistoryFrom(
     if (current === undefined) {
       throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
     }
-    if (
-      current.supersededSequence !== undefined
-      && event.sequence > current.supersededSequence
-      && event.type !== "DELIVERY_QUEUED"
-    ) {
-      current.lateEventAfterSupersession = true;
-    }
-
     switch (event.type) {
       case "GENERATION_CONTEXT_COMPILED":
         current.contextManifest = {
@@ -351,9 +342,10 @@ function generationHistoryFrom(
         };
         break;
       case "MODEL_PROPOSAL_RECEIVED": {
-        const ids = [...event.payload.proposal.claimedDisclosureIds]
-          .sort((left, right) => left.localeCompare(right));
-        const boundedIds = takeBounded(ids, bounds.maxDisclosureIds);
+        const boundedIds = takeBounded(
+          event.payload.proposal.claimedDisclosureIds,
+          bounds.maxDisclosureIds
+        );
         current.proposalMetadata = {
           realizedAction: event.payload.proposal.realizedAction,
           claimedDisclosureLevel: event.payload.proposal.claimedDisclosureLevel,
@@ -384,7 +376,6 @@ function generationHistoryFrom(
         break;
       case "MODEL_GENERATION_SUPERSEDED":
         current.status = "SUPERSEDED";
-        current.supersededSequence = event.sequence;
         current.superseded = {
           reason: previewText(event.payload.reason, bounds.maxTextPreviewChars),
           provenance: item.provenance
@@ -419,7 +410,7 @@ function generationHistoryFrom(
       ...(entry.superseded === undefined ? {} : { superseded: entry.superseded }),
       ...(() => {
         const deliveryIds = takeBounded(
-          [...entry.deliveryIds].sort((left, right) => left.localeCompare(right)),
+          entry.deliveryIds,
           bounds.maxProvenanceIds
         );
         return {
@@ -427,7 +418,6 @@ function generationHistoryFrom(
           deliveryIdsTruncation: deliveryIds.truncation
         };
       })(),
-      lateEventAfterSupersession: entry.lateEventAfterSupersession,
       statusIsCurrent: state !== undefined
     }));
   return takeBounded(ordered, bounds.maxGenerationEntries);

@@ -1,9 +1,14 @@
 import {
   evidenceKeyToString,
+  generationBasesEqual,
   isEvidenceValueAllowed,
+  type DeliveryAtom,
+  type DisclosureAnalysis,
   type EvidenceKey,
+  type FormalInterpretationProposal,
   type EventId,
   type GenerationId,
+  type InterviewerProposal,
   type SessionId
 } from "../../domain/src/index.js";
 import {
@@ -55,6 +60,35 @@ function generationPhase(
   return phase;
 }
 
+function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+function boardActionsEqual(
+  left: NonNullable<InterviewerProposal["boardActions"]>[number],
+  right: NonNullable<InterviewerProposal["boardActions"]>[number]
+): boolean {
+  return left.operation === right.operation
+    && left.layer === right.layer
+    && left.content === right.content
+    && left.targetShapeId === right.targetShapeId
+    && left.expectedShapeRevision === right.expectedShapeRevision
+    && left.annotationPurpose === right.annotationPurpose;
+}
+
+function deliveryContentIsAuthorized(
+  proposal: InterviewerProposal,
+  content: DeliveryAtom["content"]
+): boolean {
+  if (content.medium === "TEXT" || content.medium === "AUDIO") {
+    return proposal.speechText !== undefined && content.text === proposal.speechText;
+  }
+  return (proposal.boardActions ?? []).some((action) =>
+    boardActionsEqual(action, content.action)
+  );
+}
+
 export interface ValidatedReplayPrefix {
   readonly state: SessionState;
   readonly validatedThroughSequence: number;
@@ -67,6 +101,11 @@ export function validateKnownReplayPrefix(
 ): ValidatedReplayPrefix {
   let state = initialSessionState(sessionId);
   const generationPhases = new Map<GenerationId, GenerationPhase>();
+  const validatedAnalyses = new Map<GenerationId, DisclosureAnalysis>();
+  const formalProposals = new Map<string, {
+    readonly generationId: GenerationId;
+    readonly proposal: FormalInterpretationProposal;
+  }>();
   const usedTurnEpisodes = new Set<string>();
   const evidenceAliases = new Map<string, string>();
   let problemPresented = false;
@@ -157,7 +196,7 @@ export function validateKnownReplayPrefix(
           registerEvidenceIdentity(evidenceAliases, event.payload.key);
           break;
 
-        case "VERIFICATION_REQUESTED":
+        case "VERIFICATION_REQUESTED": {
           if (
             state.problem?.id !== event.payload.evidenceKey.problemId
             || event.payload.evidenceKey.subject.kind !== "CLAIM"
@@ -165,7 +204,29 @@ export function validateKnownReplayPrefix(
           ) fail();
           assertPriorEventIds(state, event.payload.evidenceEventIds);
           if (isGenerationBasisStillCompatible(event.payload.basis, state) !== "COMPATIBLE") fail();
+
+          const hasSourceGeneration = event.payload.sourceGenerationId !== undefined;
+          const hasSourceProposal = event.payload.sourceProposalRequestId !== undefined;
+          if (hasSourceGeneration !== hasSourceProposal) fail();
+          if (
+            event.payload.sourceGenerationId !== undefined
+            && event.payload.sourceProposalRequestId !== undefined
+          ) {
+            const source = formalProposals.get(event.payload.sourceProposalRequestId);
+            const generation = state.generations[event.payload.sourceGenerationId];
+            if (
+              source === undefined
+              || source.generationId !== event.payload.sourceGenerationId
+              || generation === undefined
+              || source.proposal.candidateFormalInterpretation
+                !== event.payload.candidateFormalInterpretation
+              || source.proposal.interpretationConfidence
+                !== event.payload.interpretationConfidence
+              || !generationBasesEqual(event.payload.basis, generation.basis)
+            ) fail();
+          }
           break;
+        }
 
         case "PEDAGOGICAL_ACTION_SELECTED":
           if (state.turns[event.payload.turnId] === undefined) fail();
@@ -183,8 +244,17 @@ export function validateKnownReplayPrefix(
           break;
 
         case "MODEL_PROPOSAL_RECEIVED":
+          if (generationPhase(generationPhases, event.payload.generationId) !== "ACTIVE") fail();
+          generationPhases.set(event.payload.generationId, "PROPOSAL_RECEIVED");
+          break;
+
         case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
           if (generationPhase(generationPhases, event.payload.generationId) !== "ACTIVE") fail();
+          if (formalProposals.has(event.payload.proposalRequestId)) fail();
+          formalProposals.set(event.payload.proposalRequestId, {
+            generationId: event.payload.generationId,
+            proposal: event.payload.proposal
+          });
           generationPhases.set(event.payload.generationId, "PROPOSAL_RECEIVED");
           break;
 
@@ -194,10 +264,27 @@ export function validateKnownReplayPrefix(
           generationPhases.set(event.payload.generationId, "REJECTED");
           break;
 
-        case "PROPOSAL_VALIDATED":
+        case "PROPOSAL_VALIDATED": {
           if (generationPhase(generationPhases, event.payload.generationId) !== "PROPOSAL_RECEIVED") fail();
+          const generation = state.generations[event.payload.generationId];
+          const proposal = generation?.proposal;
+          const request = generation === undefined
+            ? undefined
+            : state.pedagogicalActions[generation.basis.turnId];
+          if (
+            generation === undefined
+            || proposal === undefined
+            || request === undefined
+            || proposal.realizedAction !== request.requiredAction
+            || event.payload.analysis.status !== "SAFE"
+            || event.payload.analysis.confidence !== 1
+            || event.payload.analysis.effectiveDisclosureLevel > request.maximumDisclosure
+            || proposal.claimedDisclosureLevel < event.payload.analysis.effectiveDisclosureLevel
+          ) fail();
+          validatedAnalyses.set(event.payload.generationId, event.payload.analysis);
           generationPhases.set(event.payload.generationId, "VALIDATED");
           break;
+        }
 
         case "MODEL_GENERATION_SUPERSEDED": {
           const phase = generationPhase(generationPhases, event.payload.generationId);
@@ -211,10 +298,27 @@ export function validateKnownReplayPrefix(
           break;
         }
 
-        case "DELIVERY_QUEUED":
+        case "DELIVERY_QUEUED": {
           if (state.deliveries[event.payload.atom.deliveryId] !== undefined) fail();
           if (generationPhase(generationPhases, event.payload.atom.generationId) !== "VALIDATED") fail();
+          const generation = state.generations[event.payload.atom.generationId];
+          const analysis = validatedAnalyses.get(event.payload.atom.generationId);
+          if (
+            generation?.proposal === undefined
+            || analysis === undefined
+            || event.payload.atom.effectiveDisclosureLevel
+              !== analysis.effectiveDisclosureLevel
+            || !arraysEqual(
+              event.payload.atom.disclosureIds,
+              analysis.effectiveDisclosureIds
+            )
+            || !deliveryContentIsAuthorized(
+              generation.proposal,
+              event.payload.atom.content
+            )
+          ) fail();
           break;
+        }
 
         case "DELIVERY_CANCELLED": {
           const delivery = state.deliveries[event.payload.deliveryId];
