@@ -76,6 +76,26 @@ describe("normalized tldraw board changes", () => {
     ]);
   });
 
+  it("drops non-finite geometry points from normalized mutations", () => {
+    const shape = studentShape({
+      type: "draw",
+      x: 0,
+      y: 0,
+      props: {
+        segments: [{
+          type: "free",
+          points: [
+            { x: Number.POSITIVE_INFINITY, y: 1 },
+            { x: 2, y: Number.NaN },
+            { x: 3, y: 4 }
+          ]
+        }]
+      }
+    });
+
+    expect(normalizeStudentShape(shape, bounds)?.points).toEqual([{ x: 3, y: 4 }]);
+  });
+
   it("normalizes arrows, text, and formula metadata", () => {
     const arrow = studentShape({
       type: "arrow",

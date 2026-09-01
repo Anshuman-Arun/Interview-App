@@ -519,9 +519,7 @@ export class RealTldrawEditorBridge implements TldrawEditor {
         : STUDENT_LAYER;
     const origin = typeof shape.meta?.["origin"] === "string"
       ? shape.meta["origin"]
-      : isProtectedLayer(layer)
-        ? "AI"
-        : "STUDENT";
+      : originForLayer(layer);
     const meta = toNativeMeta(shape.meta, layer, origin);
     const nativeProps = legacyPropsToNative(shape.type, shape.props);
 
@@ -583,11 +581,16 @@ function withAdapterMutationToken(shape: TLShapePartialRecord, token: number): T
   };
 }
 
-function collectAdapterMutationToken(meta: unknown, target: Set<number>): void {
+function adapterMutationToken(meta: unknown): number | undefined {
   const token = metadata(meta)[ADAPTER_MUTATION_TOKEN];
-  if (typeof token === "number" && Number.isSafeInteger(token) && token > 0) {
-    target.add(token);
-  }
+  return typeof token === "number" && Number.isSafeInteger(token) && token > 0
+    ? token
+    : undefined;
+}
+
+function collectAdapterMutationToken(meta: unknown, target: Set<number>): void {
+  const token = adapterMutationToken(meta);
+  if (token !== undefined) target.add(token);
 }
 
 function withoutAdapterMutationToken(meta: Record<string, unknown>): Record<string, unknown> {

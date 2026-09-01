@@ -115,7 +115,12 @@ function asPoint(value: unknown): { x: number; y: number } | null {
   if (!isRecord(value)) return null;
   const x = value["x"];
   const y = value["y"];
-  return typeof x === "number" && typeof y === "number" ? { x, y } : null;
+  return typeof x === "number"
+    && Number.isFinite(x)
+    && typeof y === "number"
+    && Number.isFinite(y)
+    ? { x, y }
+    : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
