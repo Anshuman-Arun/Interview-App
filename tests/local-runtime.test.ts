@@ -448,7 +448,7 @@ describe("local worker lifecycle manager", () => {
     const runtime = manager();
     runtime.register(definition("stubborn", "ignore-shutdown", {
       shutdownTimeoutMs: 40,
-      terminationTimeoutMs: 80,
+      terminationTimeoutMs: process.platform === "win32" ? 500 : 80,
       gracefulShutdown: () => undefined
     }));
     await runtime.start("stubborn");
@@ -803,6 +803,7 @@ describe("local worker lifecycle manager", () => {
       fetch: (() => proxiedResponsePromise) as unknown as typeof globalThis.fetch
     });
     proxied.register(definition("proxy-http-response", "ready", {
+      terminationTimeoutMs: process.platform === "win32" ? 500 : 150,
       readiness: {
         kind: "HTTP_LOOPBACK",
         url: "http://127.0.0.1:43199/health",
