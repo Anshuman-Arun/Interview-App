@@ -169,7 +169,7 @@ describe("speech protocol hard bounds", () => {
     buffer.append(first, false);
     first.bytes[0] = 255;
     expect(buffer.materialize()[0]).toBe(0);
-    expect(() => buffer.append(second, false)).toThrow(/sample rate/u);
+    expect(() => buffer.append(second, false)).toThrow(/format changed/u);
 
     const skippedPcm = new Float32Array(320);
     const skipped = snapshotPcmFrame({
@@ -220,7 +220,7 @@ describe("speech protocol hard bounds", () => {
       runtimeVersion: "test",
       async score() { return 1.1; }
     };
-    expect(() => new SileroVadBackend(runtime, "https://example.invalid/silero.onnx")).toThrow(/local path/u);
+    expect(() => new SileroVadBackend(runtime, "https://example.invalid/silero.onnx")).toThrow(/local filesystem path/u);
     expect(() => new SileroVadBackend(runtime, "models/silero/model.onnx\nother")).toThrow(/local filesystem path/u);
     expect(() => new SileroVadBackend(runtime, "file:/tmp/silero.onnx")).toThrow(/local filesystem path/u);
     expect(() => new SileroVadBackend(runtime, "\\\\server\\share\\silero.onnx")).toThrow(/local filesystem path/u);
