@@ -139,9 +139,12 @@ discarded and are never promoted into authoritative verification outcomes.
 
 Generation history retains GenerationId, GenerationBasis, provider, safe context
 manifest hashes, non-content proposal metadata, supersession provenance, and
-downstream DeliveryIds. Current-schema histories that attempt to authorize or start
-delivery from a superseded/rejected/incompatible generation fail replay validation
-rather than being made to look current.
+downstream DeliveryIds. In incomplete histories, the status records the latest
+state actually observed in the validated prefix (for example PROPOSAL_RECEIVED)
+while `statusIsCurrent: false` makes clear that a hidden tail may have changed it.
+Current-schema histories that attempt to authorize or start delivery from a
+superseded/rejected/incompatible generation fail replay validation rather than being
+made to look current.
 
 ## Lifecycle and recovery
 
@@ -207,7 +210,10 @@ Cross-session aggregation is conservative. A supplied summary claiming
 `projectSessionHistory` can actually produce: its event count cannot exceed the
 replay hard limit, and its turn/exposure counts cannot exceed its authoritative
 event count. This keeps aggregate integer arithmetic inside the range of genuine
-projections.
+projections. The selector scans every lightweight identity/sort envelope so
+duplicate SessionIds cannot hide outside the result window, but retains raw/envelope
+references only for the deterministic top `maxSessions` candidates before deep
+validation.
 
 - repeated attempts and evaluation deltas require exact problem ID **and version**;
 - evidence patterns require exact structured evidence-key identity;

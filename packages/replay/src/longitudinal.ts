@@ -291,6 +291,28 @@ function compareSessionEnvelopes(
   return compareReplayStrings(left.envelope.sessionId, right.envelope.sessionId);
 }
 
+function insertBoundedCandidate(
+  candidates: SelectedSessionInput[],
+  candidate: SelectedSessionInput,
+  maxSessions: number
+): void {
+  if (maxSessions <= 0) return;
+  let low = 0;
+  let high = candidates.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const current = candidates[middle];
+    if (current === undefined || compareSessionEnvelopes(candidate, current) < 0) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+  if (low >= maxSessions && candidates.length >= maxSessions) return;
+  candidates.splice(low, 0, candidate);
+  if (candidates.length > maxSessions) candidates.pop();
+}
+
 function selectAndParseSessionSummaries(
   values: readonly unknown[],
   maxSessions: number
@@ -314,17 +336,20 @@ function selectAndParseSessionSummaries(
         throw new ReplayProjectionError("DUPLICATE_SESSION");
       }
       seenSessionIds.add(parsed.data.sessionId);
-      candidates.push({ raw, envelope: parsed.data });
+      insertBoundedCandidate(
+        candidates,
+        { raw, envelope: parsed.data },
+        maxSessions
+      );
     }
   } catch (error) {
     if (error instanceof ReplayProjectionError) throw error;
     throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
   }
 
-  return candidates
-    .sort(compareSessionEnvelopes)
-    .slice(0, maxSessions)
-    .map((candidate) => parseSelectedSessionSummary(candidate.raw));
+  return candidates.map((candidate) =>
+    parseSelectedSessionSummary(candidate.raw)
+  );
 }
 
 function compareSessions(

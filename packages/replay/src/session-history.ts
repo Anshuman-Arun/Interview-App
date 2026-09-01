@@ -357,6 +357,7 @@ function generationHistoryFrom(
         };
         break;
       case "MODEL_PROPOSAL_RECEIVED":
+        current.status = "PROPOSAL_RECEIVED";
         current.proposalMetadata = {
           realizedAction: event.payload.proposal.realizedAction,
           claimedDisclosureLevel: event.payload.proposal.claimedDisclosureLevel,
@@ -367,6 +368,7 @@ function generationHistoryFrom(
         };
         break;
       case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
+        current.status = "PROPOSAL_RECEIVED";
         current.formalInterpretation = {
           proposalRequestId: event.payload.proposalRequestId,
           candidateFormalInterpretationPersisted: true,

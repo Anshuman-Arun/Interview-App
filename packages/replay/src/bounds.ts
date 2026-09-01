@@ -38,64 +38,58 @@ export interface TextPreview {
 }
 
 function boundedPositiveSafeInteger(
-  name: keyof ReplayBounds,
   value: number,
   maximum: number
 ): number {
   if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) {
-    throw new RangeError(`${name} must be a positive safe integer within the replay hard limit`);
+    throw new RangeError("Invalid replay bounds");
   }
   return value;
 }
 
 export function resolveReplayBounds(overrides: Partial<ReplayBounds> = {}): ReplayBounds {
-  return {
-    maxEvents: boundedPositiveSafeInteger(
-      "maxEvents",
-      overrides.maxEvents ?? DEFAULT_REPLAY_BOUNDS.maxEvents,
-      DEFAULT_REPLAY_BOUNDS.maxEvents
-    ),
-    maxTimelineEntries: boundedPositiveSafeInteger(
-      "maxTimelineEntries",
-      overrides.maxTimelineEntries ?? DEFAULT_REPLAY_BOUNDS.maxTimelineEntries,
-      DEFAULT_REPLAY_BOUNDS.maxTimelineEntries
-    ),
-    maxSessions: boundedPositiveSafeInteger(
-      "maxSessions",
-      overrides.maxSessions ?? DEFAULT_REPLAY_BOUNDS.maxSessions,
-      DEFAULT_REPLAY_BOUNDS.maxSessions
-    ),
-    maxTextPreviewChars: boundedPositiveSafeInteger(
-      "maxTextPreviewChars",
-      overrides.maxTextPreviewChars ?? DEFAULT_REPLAY_BOUNDS.maxTextPreviewChars,
-      DEFAULT_REPLAY_BOUNDS.maxTextPreviewChars
-    ),
-    maxDisclosureIds: boundedPositiveSafeInteger(
-      "maxDisclosureIds",
-      overrides.maxDisclosureIds ?? DEFAULT_REPLAY_BOUNDS.maxDisclosureIds,
-      DEFAULT_REPLAY_BOUNDS.maxDisclosureIds
-    ),
-    maxProvenanceIds: boundedPositiveSafeInteger(
-      "maxProvenanceIds",
-      overrides.maxProvenanceIds ?? DEFAULT_REPLAY_BOUNDS.maxProvenanceIds,
-      DEFAULT_REPLAY_BOUNDS.maxProvenanceIds
-    ),
-    maxEvidenceHistoryEntries: boundedPositiveSafeInteger(
-      "maxEvidenceHistoryEntries",
-      overrides.maxEvidenceHistoryEntries ?? DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries,
-      DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries
-    ),
-    maxVerificationEntries: boundedPositiveSafeInteger(
-      "maxVerificationEntries",
-      overrides.maxVerificationEntries ?? DEFAULT_REPLAY_BOUNDS.maxVerificationEntries,
-      DEFAULT_REPLAY_BOUNDS.maxVerificationEntries
-    ),
-    maxGenerationEntries: boundedPositiveSafeInteger(
-      "maxGenerationEntries",
-      overrides.maxGenerationEntries ?? DEFAULT_REPLAY_BOUNDS.maxGenerationEntries,
-      DEFAULT_REPLAY_BOUNDS.maxGenerationEntries
-    )
-  };
+  try {
+    return {
+      maxEvents: boundedPositiveSafeInteger(
+        overrides.maxEvents ?? DEFAULT_REPLAY_BOUNDS.maxEvents,
+        DEFAULT_REPLAY_BOUNDS.maxEvents
+      ),
+      maxTimelineEntries: boundedPositiveSafeInteger(
+        overrides.maxTimelineEntries ?? DEFAULT_REPLAY_BOUNDS.maxTimelineEntries,
+        DEFAULT_REPLAY_BOUNDS.maxTimelineEntries
+      ),
+      maxSessions: boundedPositiveSafeInteger(
+        overrides.maxSessions ?? DEFAULT_REPLAY_BOUNDS.maxSessions,
+        DEFAULT_REPLAY_BOUNDS.maxSessions
+      ),
+      maxTextPreviewChars: boundedPositiveSafeInteger(
+        overrides.maxTextPreviewChars ?? DEFAULT_REPLAY_BOUNDS.maxTextPreviewChars,
+        DEFAULT_REPLAY_BOUNDS.maxTextPreviewChars
+      ),
+      maxDisclosureIds: boundedPositiveSafeInteger(
+        overrides.maxDisclosureIds ?? DEFAULT_REPLAY_BOUNDS.maxDisclosureIds,
+        DEFAULT_REPLAY_BOUNDS.maxDisclosureIds
+      ),
+      maxProvenanceIds: boundedPositiveSafeInteger(
+        overrides.maxProvenanceIds ?? DEFAULT_REPLAY_BOUNDS.maxProvenanceIds,
+        DEFAULT_REPLAY_BOUNDS.maxProvenanceIds
+      ),
+      maxEvidenceHistoryEntries: boundedPositiveSafeInteger(
+        overrides.maxEvidenceHistoryEntries ?? DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries,
+        DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries
+      ),
+      maxVerificationEntries: boundedPositiveSafeInteger(
+        overrides.maxVerificationEntries ?? DEFAULT_REPLAY_BOUNDS.maxVerificationEntries,
+        DEFAULT_REPLAY_BOUNDS.maxVerificationEntries
+      ),
+      maxGenerationEntries: boundedPositiveSafeInteger(
+        overrides.maxGenerationEntries ?? DEFAULT_REPLAY_BOUNDS.maxGenerationEntries,
+        DEFAULT_REPLAY_BOUNDS.maxGenerationEntries
+      )
+    };
+  } catch {
+    throw new RangeError("Invalid replay bounds");
+  }
 }
 
 export function truncationInfo(total: number, limit: number): TruncationInfo {

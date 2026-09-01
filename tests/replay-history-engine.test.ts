@@ -545,6 +545,35 @@ describe("replay/history projections", () => {
     }
   });
 
+  it("reports proposal-received as the observed generation state on an incomplete prefix", async () => {
+    const harness = await createCoreHarness();
+    try {
+      await authorizeSafeProbe(harness);
+      const events = harness.store.load(harness.sessionId);
+      const proposalReceived = events.find((item) =>
+        item.type === "MODEL_PROPOSAL_RECEIVED"
+        && item.payload.generationId === harness.generationId
+      );
+      if (proposalReceived === undefined) {
+        throw new Error("Missing proposal-received fixture");
+      }
+
+      const prefix = projectSessionHistory(events, {
+        bounds: { maxEvents: proposalReceived.sequence }
+      });
+      const generation = prefix.generationHistory.find((item) =>
+        item.generationId === harness.generationId
+      );
+      expect(prefix.currentStateAvailable).toBe(false);
+      expect(generation).toMatchObject({
+        status: "PROPOSAL_RECEIVED",
+        statusIsCurrent: false
+      });
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("retains generation basis, supersession, and downstream delivery provenance", async () => {
     const harness = await createCoreHarness();
     try {
@@ -1292,6 +1321,20 @@ describe("replay/history projections", () => {
     expect(() => projectSessionHistory(history, {
       bounds: { maxTextPreviewChars: 0 }
     })).toThrow(RangeError);
+
+    const throwingBounds = new Proxy({}, {
+      get: () => {
+        throw new Error("PRIVATE_REPLAY_BOUNDS_MARKER");
+      }
+    });
+    try {
+      projectReplayTimeline(history, { bounds: throwingBounds });
+      throw new Error("Expected throwing replay bounds rejection");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RangeError);
+      expect(String(error)).toContain("Invalid replay bounds");
+      expect(String(error)).not.toContain("PRIVATE_REPLAY_BOUNDS_MARKER");
+    }
   });
 
   it("rejects event sources that cannot author the claimed authoritative transition", async () => {
