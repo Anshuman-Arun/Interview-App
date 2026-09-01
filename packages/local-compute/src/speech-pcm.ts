@@ -122,17 +122,19 @@ export function advancePcmOrder(
   };
 }
 
-interface BufferedFrame {
-  readonly snapshot: PcmFrameSnapshot;
-  readonly speech: boolean;
-}
+const PCM_STORAGE_CHUNK_BYTES = 64 * 1024;
 
 export class BoundedPcmBuffer {
-  private readonly frames: BufferedFrame[] = [];
+  private readonly chunks: Uint8Array[] = [];
+  private allocatedBytes = 0;
+  private tailChunkUsed = 0;
   private byteLength = 0;
   private sampleCount = 0;
   private speechFrameCount = 0;
   private bufferOrder: PcmOrderState | undefined;
+  private firstEnvelope: SpeechPcmFrameEnvelope | undefined;
+  private lastEnvelope: SpeechPcmFrameEnvelope | undefined;
+  private lastDurationMs = 0;
 
   public constructor(private readonly maxBytes = MAX_SPEECH_BUFFERED_PCM_BYTES) {
     if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > MAX_SPEECH_BUFFERED_PCM_BYTES) {
@@ -146,8 +148,7 @@ export class BoundedPcmBuffer {
     }
 
     const ownedSnapshot = snapshotPcmFrame(snapshot.envelope, snapshot.bytes);
-    const first = this.frames[0]?.snapshot;
-    if (first !== undefined && ownedSnapshot.envelope.streamId !== first.envelope.streamId) {
+    if (this.firstEnvelope !== undefined && ownedSnapshot.envelope.streamId !== this.firstEnvelope.streamId) {
       throw new PcmAdmissionError("STREAM_CONFLICT", "PCM stream identity changed within one utterance");
     }
 
@@ -167,19 +168,27 @@ export class BoundedPcmBuffer {
       throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM utterance duration limit exceeded");
     }
 
-    this.frames.push({ snapshot: ownedSnapshot, speech });
+    this.appendBytes(ownedSnapshot.bytes);
     this.bufferOrder = nextOrder;
+    this.firstEnvelope ??= ownedSnapshot.envelope;
+    this.lastEnvelope = ownedSnapshot.envelope;
+    this.lastDurationMs = ownedSnapshot.durationMs;
     this.byteLength += ownedSnapshot.bytes.byteLength;
     this.sampleCount = nextSampleCount;
     if (speech) this.speechFrameCount += 1;
   }
 
   public clear(): void {
-    this.frames.length = 0;
+    this.chunks.length = 0;
+    this.allocatedBytes = 0;
+    this.tailChunkUsed = 0;
     this.byteLength = 0;
     this.sampleCount = 0;
     this.speechFrameCount = 0;
     this.bufferOrder = undefined;
+    this.firstEnvelope = undefined;
+    this.lastEnvelope = undefined;
+    this.lastDurationMs = 0;
   }
 
   public getByteLength(): number {
@@ -195,16 +204,24 @@ export class BoundedPcmBuffer {
   }
 
   public getDurationMs(): number {
-    const first = this.frames[0]?.snapshot;
-    return first === undefined ? 0 : this.sampleCount / first.envelope.sampleRate * 1_000;
+    return this.firstEnvelope === undefined
+      ? 0
+      : this.sampleCount / this.firstEnvelope.sampleRate * 1_000;
   }
 
   public materialize(): Uint8Array {
     const output = new Uint8Array(this.byteLength);
-    let offset = 0;
-    for (const frame of this.frames) {
-      output.set(frame.snapshot.bytes, offset);
-      offset += frame.snapshot.bytes.byteLength;
+    let targetOffset = 0;
+    let remaining = this.byteLength;
+    for (const chunk of this.chunks) {
+      if (remaining <= 0) break;
+      const used = Math.min(chunk.byteLength, remaining);
+      output.set(chunk.subarray(0, used), targetOffset);
+      targetOffset += used;
+      remaining -= used;
+    }
+    if (remaining !== 0) {
+      throw new PcmAdmissionError("INVALID_FRAME", "PCM storage accounting is inconsistent");
     }
     return output;
   }
@@ -214,27 +231,59 @@ export class BoundedPcmBuffer {
     if (!boundedStreamId.success) {
       throw new PcmAdmissionError("INVALID_FRAME", "PCM source basis stream identity is invalid");
     }
-    const first = this.frames[0]?.snapshot;
-    const last = this.frames.at(-1)?.snapshot;
+    const first = this.firstEnvelope;
+    const last = this.lastEnvelope;
     if (first === undefined || last === undefined || this.sampleCount <= 0) {
       throw new PcmAdmissionError("INVALID_FRAME", "Cannot derive an audio basis from an empty buffer");
     }
-    if (boundedStreamId.data !== first.envelope.streamId) {
+    if (boundedStreamId.data !== first.streamId) {
       throw new PcmAdmissionError("STREAM_CONFLICT", "PCM source basis stream identity does not match buffered audio");
     }
     const hash = createHash("sha256");
-    for (const frame of this.frames) hash.update(frame.snapshot.bytes);
+    let remaining = this.byteLength;
+    for (const chunk of this.chunks) {
+      if (remaining <= 0) break;
+      const used = Math.min(chunk.byteLength, remaining);
+      hash.update(chunk.subarray(0, used));
+      remaining -= used;
+    }
+    if (remaining !== 0) {
+      throw new PcmAdmissionError("INVALID_FRAME", "PCM storage accounting is inconsistent");
+    }
     return SourceAudioBasisSchema.parse({
       streamId: boundedStreamId.data,
-      firstSequence: first.envelope.sequence,
-      lastSequence: last.envelope.sequence,
-      startTimestampMs: first.envelope.timestampMs,
-      endTimestampMs: last.envelope.timestampMs + last.durationMs,
-      sampleRate: first.envelope.sampleRate,
-      channels: first.envelope.channels,
+      firstSequence: first.sequence,
+      lastSequence: last.sequence,
+      startTimestampMs: first.timestampMs,
+      endTimestampMs: last.timestampMs + this.lastDurationMs,
+      sampleRate: first.sampleRate,
+      channels: first.channels,
       sampleCount: this.sampleCount,
       pcmSha256: hash.digest("hex")
     });
+  }
+
+  private appendBytes(bytes: Uint8Array): void {
+    let sourceOffset = 0;
+    while (sourceOffset < bytes.byteLength) {
+      let tail = this.chunks.at(-1);
+      if (tail === undefined || this.tailChunkUsed === tail.byteLength) {
+        const remainingCapacity = this.maxBytes - this.allocatedBytes;
+        const capacity = Math.min(PCM_STORAGE_CHUNK_BYTES, remainingCapacity);
+        if (capacity <= 0) {
+          throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM storage allocation limit exceeded");
+        }
+        tail = new Uint8Array(capacity);
+        this.chunks.push(tail);
+        this.allocatedBytes += capacity;
+        this.tailChunkUsed = 0;
+      }
+
+      const writable = Math.min(tail.byteLength - this.tailChunkUsed, bytes.byteLength - sourceOffset);
+      tail.set(bytes.subarray(sourceOffset, sourceOffset + writable), this.tailChunkUsed);
+      this.tailChunkUsed += writable;
+      sourceOffset += writable;
+    }
   }
 }
 
