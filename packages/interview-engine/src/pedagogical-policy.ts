@@ -41,8 +41,8 @@ const PolicyProblemViewSchema = z.object({
   interviewer: z.object({
     reasoningGraph: ReasoningGraphSchema,
     protectedDisclosures: z.array(ProtectedDisclosureSchema).max(MAX_PROTECTED_DISCLOSURES)
-  }).loose()
-}).loose();
+  })
+});
 
 type PolicyProblemView = z.infer<typeof PolicyProblemViewSchema>;
 type EvidenceSubject = EvidenceKey["subject"];
@@ -212,22 +212,6 @@ function failClosedDecision(
     waitingPreferred: false,
     escalationJustified: false,
     target
-  };
-}
-
-function legacyNoProblemDecision(turnId: string): PolicyDecision {
-  return {
-    classification: "INSUFFICIENT_EVIDENCE",
-    interventionStage: "PROBE",
-    reasonCode: "MISSING_PROBLEM_CONTEXT",
-    realizationRequest: RealizationRequestSchema.parse({
-      requiredAction: "PROBE_JUSTIFICATION",
-      target: "the student's most recent asserted step",
-      maximumDisclosure: 0
-    }),
-    waitingPreferred: false,
-    escalationJustified: false,
-    target: { kind: "TURN", id: turnId }
   };
 }
 
@@ -1297,10 +1281,7 @@ export function decidePedagogicalPolicy(
 export function selectPedagogicalAction(
   state: Readonly<SessionState>,
   turnId: string,
-  problem?: InterviewProblem
+  problem: InterviewProblem
 ): RealizationRequest {
-  const turn = state.turns[turnId];
-  if (turn === undefined) throw new Error("Unknown turn " + turnId);
-  if (problem === undefined) return legacyNoProblemDecision(turnId).realizationRequest;
   return decidePedagogicalPolicy(state, turnId, problem).realizationRequest;
 }
