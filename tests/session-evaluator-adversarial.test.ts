@@ -26,6 +26,7 @@ import {
   type SessionState
 } from "../packages/events/src/index.js";
 import {
+  createProviderContextSpecFingerprintSync,
   evaluateInterviewSession,
   validateFallibleQualitativeEvaluationProposal
 } from "../packages/interview-engine/src/index.js";
@@ -36,7 +37,7 @@ const triangleDisclosure = DisclosureIdSchema.parse("disclosure_complete_monochr
 
 describe("grounded session evaluator adversarial cases", () => {
   it("accepts a valid alternate reasoning branch without requiring the skipped branch", () => {
-    let state = initialSessionState(newSessionId());
+    let state = boundState();
     state = complete(state, "model-relations", 10);
     state = complete(state, "choose-vertex", 20);
     state = complete(state, "complement-case", 30);
@@ -49,11 +50,11 @@ describe("grounded session evaluator adversarial cases", () => {
     expect(findMilestone(evaluation, "complement-case").achieved).toBe(true);
     expect(findMilestone(evaluation, "verify").achieved).toBe(true);
     expect(findMilestone(evaluation, "close-triangle").achieved).toBe(false);
-    expect(evaluation.scores.technicalCorrectness).toBe(100);
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
   });
 
   it("attributes multiple distinct hints only to milestones that reference them", () => {
-    let state = initialSessionState(newSessionId());
+    let state = boundState();
     state = complete(state, "choose-vertex", 20);
     state = complete(state, "close-triangle", 40);
     state = addDelivery(state, chooseDisclosure, 2, "EXPOSED", 5, "choose");
@@ -63,11 +64,12 @@ describe("grounded session evaluator adversarial cases", () => {
     expect(findMilestone(evaluation, "choose-vertex").assistanceLevel).toBe(2);
     expect(findMilestone(evaluation, "close-triangle").assistanceLevel).toBe(4);
     expect(evaluation.assistedMilestoneCount).toBe(2);
-    expect(evaluation.scores.independence).toBe(53);
+    expect(evaluation.scores.independence).toBeNull();
+    expect(evaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
   });
 
   it("does not penalize a milestone for an unrelated protected disclosure", () => {
-    let state = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
+    let state = complete(boundState(), "choose-vertex", 20);
     state = addDelivery(state, triangleDisclosure, 4, "EXPOSED", 5, "unrelated");
 
     const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
@@ -75,8 +77,8 @@ describe("grounded session evaluator adversarial cases", () => {
     expect(evaluation.scores.independence).toBe(100);
   });
 
-  it("degrades independence support when exposed assistance cannot be attributed to a milestone", () => {
-    let state = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
+  it("rejects exposed disclosure identities outside the exact problem definition", () => {
+    let state = complete(boundState(), "choose-vertex", 20);
     state = addDelivery(
       state,
       DisclosureIdSchema.parse("unmapped_disclosure"),
@@ -86,17 +88,13 @@ describe("grounded session evaluator adversarial cases", () => {
       "unmapped"
     );
 
-    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
-    expect(evaluation.scores.independence).toBe(100);
-    expect(evaluation.dimensionResults.independence.supportLevel).toBe("WEAK");
-    expect(evaluation.dimensionResults.independence.evidenceRefs).toContainEqual({
-      kind: "DELIVERY",
-      id: "delivery_adv_unmapped"
-    });
+    expect(() => evaluateInterviewSession(state, sixPeopleProblem)).toThrow(
+      "disclosure outside the exact problem definition"
+    );
   });
 
   it("abstains on hint responsiveness when exposure ordering is not authoritative", () => {
-    let apparentProgress = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
+    let apparentProgress = complete(boundState(), "choose-vertex", 20);
     apparentProgress = addDelivery(
       apparentProgress,
       chooseDisclosure,
@@ -116,7 +114,7 @@ describe("grounded session evaluator adversarial cases", () => {
 
   it("recognizes stale evidence followed by a fresh supported replacement as recovery", () => {
     const key = milestoneKey("model-relations", "CORRECTNESS");
-    let state = initialSessionState(newSessionId());
+    let state = boundState();
     state = setHistory(state, key, [
       { value: "CORRECT", sequence: 10, status: "STALE" },
       { value: "CORRECT", sequence: 20, status: "ACTIVE" }
@@ -127,7 +125,7 @@ describe("grounded session evaluator adversarial cases", () => {
 
   it("records incomplete and archived lifecycle context without completion-style prose", () => {
     const active: SessionState = {
-      ...initialSessionState(newSessionId()),
+      ...boundState(),
       started: true,
       status: "ACTIVE"
     };
@@ -162,7 +160,7 @@ describe("grounded session evaluator adversarial cases", () => {
   });
 
   it("produces FULL composite metadata when all positively weighted dimensions are grounded", () => {
-    let state = complete(initialSessionState(newSessionId()), "model-relations", 30);
+    let state = complete(boundState(), "model-relations", 30);
     state = setHistory(state, milestoneKey("model-relations", "CORRECTNESS"), [
       { value: "LOCAL_ERROR", sequence: 10, status: "SUPERSEDED" },
       { value: "CORRECT", sequence: 20, status: "ACTIVE" }
@@ -186,7 +184,7 @@ describe("grounded session evaluator adversarial cases", () => {
   });
 
   it("rejects zero-sum rubrics and unknown rubric fields", () => {
-    const state = initialSessionState(newSessionId());
+    const state = boundState();
     expect(() => evaluateInterviewSession(state, sixPeopleProblem, {
       correctnessWeight: 0,
       rigorWeight: 0,
@@ -207,7 +205,7 @@ describe("grounded session evaluator adversarial cases", () => {
   });
 
   it("is invariant to map insertion order", () => {
-    let state = complete(initialSessionState(newSessionId()), "model-relations", 30);
+    let state = complete(boundState(), "model-relations", 30);
     state = setHistory(state, milestoneKey("model-relations", "CORRECTNESS"), [
       { value: "CORRECT", sequence: 20, status: "ACTIVE" }
     ]);
@@ -227,7 +225,7 @@ describe("grounded session evaluator adversarial cases", () => {
   });
 
   it("keeps future qualitative model proposals fallible and provenance-bounded", () => {
-    let state = initialSessionState(newSessionId());
+    let state = boundState();
     state = setHistory(state, milestoneKey("model-relations", "JUSTIFICATION"), [
       { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
     ]);
@@ -262,7 +260,7 @@ describe("grounded session evaluator adversarial cases", () => {
   });
 
   it("never serializes protected fact text merely because its disclosure was exposed", () => {
-    let state = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
+    let state = complete(boundState(), "choose-vertex", 20);
     state = addDelivery(state, chooseDisclosure, 2, "EXPOSED", 5, "private-fact");
 
     const serialized = JSON.stringify(evaluateInterviewSession(state, sixPeopleProblem));
@@ -275,7 +273,7 @@ describe("grounded session evaluator adversarial cases", () => {
 
   it("fails structurally on a mismatched exact problem version", () => {
     const state: SessionState = {
-      ...initialSessionState(newSessionId()),
+      ...boundState(),
       problem: {
         id: sixPeopleProblem.id,
         version: "different-version",
@@ -299,7 +297,7 @@ describe("grounded session evaluator adversarial cases", () => {
       };
     }
     const state: SessionState = {
-      ...initialSessionState(newSessionId()),
+      ...boundState(),
       turns
     };
     expect(() => evaluateInterviewSession(state, sixPeopleProblem)).toThrow(
@@ -312,7 +310,7 @@ describe("grounded session evaluator adversarial cases", () => {
       fc.integer({ min: 0, max: 100 }),
       fc.string({ minLength: 1, maxLength: 200 }),
       (extraTurns, text) => {
-        let state = complete(initialSessionState(newSessionId()), "model-relations", 10);
+        let state = complete(boundState(), "model-relations", 10);
         state = setHistory(state, milestoneKey("model-relations", "JUSTIFICATION"), [
           { value: "INCOMPLETE", sequence: 11, status: "ACTIVE" }
         ]);
@@ -329,6 +327,18 @@ describe("grounded session evaluator adversarial cases", () => {
     ), { numRuns: 50 });
   });
 });
+
+function boundState(): SessionState {
+  return {
+    ...initialSessionState(newSessionId()),
+    problem: {
+      id: sixPeopleProblem.id,
+      version: sixPeopleProblem.version,
+      prompt: sixPeopleProblem.public.prompt,
+      providerContextSpecSha256: createProviderContextSpecFingerprintSync(sixPeopleProblem)
+    }
+  };
+}
 
 function findMilestone(
   evaluation: ReturnType<typeof evaluateInterviewSession>,
@@ -456,7 +466,11 @@ function addDelivery(
     deliveries: {
       ...state.deliveries,
       [deliveryId]: atom
-    }
+    },
+    disclosureLedger:
+      status === "EXPOSED" || status === "COMPLETED" || status === "POSSIBLY_EXPOSED"
+        ? Array.from(new Set([...state.disclosureLedger, disclosureId]))
+        : state.disclosureLedger
   };
 }
 
