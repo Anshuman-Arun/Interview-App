@@ -6,6 +6,8 @@ export interface VadObservation {
   readonly speechProbability: number;
 }
 
+export class VadBackendProtocolError extends Error {}
+
 export interface VadBackend {
   classify(frame: PcmFrameSnapshot, signal?: AbortSignal): Promise<VadObservation>;
 }
@@ -60,8 +62,14 @@ export class SileroVadBackend implements VadBackend {
       modelPath: this.modelPath,
       ...(signal === undefined ? {} : { signal })
     });
-    if (typeof rawProbability !== "number") throw new Error("Silero speech probability must be numeric");
-    validateProbability(rawProbability, "Silero speech probability");
+    if (typeof rawProbability !== "number") {
+      throw new VadBackendProtocolError("Silero speech probability must be numeric");
+    }
+    try {
+      validateProbability(rawProbability, "Silero speech probability");
+    } catch {
+      throw new VadBackendProtocolError("Silero speech probability is outside the bounded range");
+    }
     return { speechProbability: rawProbability };
   }
 }
