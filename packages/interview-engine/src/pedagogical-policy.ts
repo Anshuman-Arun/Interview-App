@@ -834,13 +834,11 @@ function collectExposedAssistance(
 ): CollectionResult<AssistanceSnapshot> {
   const rawDeliveries: unknown = state.deliveries;
   const rawGenerations: unknown = state.generations;
-  const rawActions: unknown = state.pedagogicalActions;
   const rawTurns: unknown = state.turns;
   const rawEpisodes: unknown = state.inputEpisodes;
   if (
     !isRecord(rawDeliveries)
     || !isRecord(rawGenerations)
-    || !isRecord(rawActions)
     || !isRecord(rawTurns)
     || !isRecord(rawEpisodes)
   ) {
@@ -870,8 +868,7 @@ function collectExposedAssistance(
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
 
-    const rawRequest = rawActions[basis.data.turnId];
-    const parsedRequest = RealizationRequestSchema.safeParse(rawRequest);
+    const parsedRequest = RealizationRequestSchema.safeParse(rawGeneration["pedagogicalAction"]);
     const rawTurn = rawTurns[basis.data.turnId];
     const rawEpisode = rawEpisodes[basis.data.inputEpisodeId];
     if (
