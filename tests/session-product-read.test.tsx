@@ -21,6 +21,7 @@ import {
   ReplayPanel
 } from "../apps/web/src/components/SessionReviewModal.js";
 import { createAndStartServer } from "../apps/server/src/server.js";
+import { SessionReadService } from "../apps/server/src/session-read-service.js";
 
 const TOKEN = "grounded_read_product_test_token_0000000000000001";
 const ORIGIN = "http://127.0.0.1:5173";
@@ -307,6 +308,46 @@ describe("grounded evaluation/replay product surface", () => {
     expect(server.store.eventCount(sessionId)).toBe(before);
   });
 
+  it("returns a structured exact-problem failure instead of evaluating against a substitute", async () => {
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      clientToken: TOKEN,
+      allowedOrigins: [ORIGIN],
+      databasePath: ":memory:"
+    });
+
+    const fetchWithOrigin = authenticatedFetch();
+    const command = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TOKEN,
+      fetchImpl: fetchWithOrigin
+    });
+    const sessionId = newSessionId();
+    await command.startSession(sessionId);
+    await command.completeSession(sessionId);
+    const before = server.store.eventCount(sessionId);
+
+    const isolated = new SessionReadService({
+      source: {
+        hasSession: (id) => server?.store.hasSession(id) ?? false,
+        listSessions: () => server?.store.listSessions() ?? [],
+        loadEvents: (id) => server?.store.load(id) ?? []
+      },
+      problemResolver: {
+        resolve: () => undefined
+      }
+    });
+    const result = isolated.readEvaluation(sessionId);
+
+    expect(result).toMatchObject({
+      available: false,
+      reason: "EXACT_PROBLEM_UNAVAILABLE"
+    });
+    expect(server.store.eventCount(sessionId)).toBe(before);
+  });
+
   it("fails closed for active sessions and malicious read paths without mutating authority", async () => {
     server = await createAndStartServer({
       host: "127.0.0.1",
@@ -338,6 +379,18 @@ describe("grounded evaluation/replay product surface", () => {
       available: false,
       reason: "SESSION_NOT_TERMINAL"
     });
+
+    await command.archiveSession(sessionId);
+    const archivedCount = server.store.eventCount(sessionId);
+    const archivedEvaluation = await reads.getEvaluation(sessionId);
+    expect(archivedEvaluation.available).toBe(true);
+    if (archivedEvaluation.available) {
+      expect(archivedEvaluation.evaluation.lifecycle).toEqual({
+        sessionStatus: "ARCHIVED",
+        completionState: "ARCHIVED_INCOMPLETE"
+      });
+    }
+    expect(server.store.eventCount(sessionId)).toBe(archivedCount);
 
     const badPath = await fetch(
       `${server.bound.command.url}/v1/read/sessions/%2e%2e%2fcommands/replay`,
