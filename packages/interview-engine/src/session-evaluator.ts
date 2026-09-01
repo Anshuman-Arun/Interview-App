@@ -19,10 +19,11 @@ import {
   type MilestoneEvaluation,
   type SessionEvaluation
 } from "../../domain/src/index.js";
-import type {
-  EvidenceRecordState,
-  SessionState,
-  VerificationRequestState
+import {
+  isGenerationBasisStillCompatible,
+  type EvidenceRecordState,
+  type SessionState,
+  type VerificationRequestState
 } from "../../events/src/index.js";
 import { createProviderContextSpecFingerprintSync } from "./context-compiler.js";
 
@@ -134,13 +135,13 @@ export function evaluateInterviewSession(
   const correctness = evaluateTechnicalCorrectness(
     activeEvidence,
     verificationByEvidenceKey,
-    state.contextEpoch
+    state
   );
   const rigor = evaluateRigor(
     problem,
     activeEvidence,
     verificationByEvidenceKey,
-    state.contextEpoch
+    state
   );
   const independence = evaluateIndependence(
     milestoneFacts,
@@ -1047,7 +1048,7 @@ function evaluateMilestones(
 function evaluateTechnicalCorrectness(
   activeEvidence: ReadonlyMap<string, EvidenceRecordState>,
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
-  currentContextEpoch: SessionState["contextEpoch"]
+  state: Readonly<SessionState>
 ): DimensionComputation {
   const sampleBySubject = new Map<string, {
     score: number;
@@ -1071,7 +1072,7 @@ function evaluateTechnicalCorrectness(
     ]);
     const currentRequests = currentVerificationRequests(
       verificationByEvidenceKey.get(key) ?? [],
-      currentContextEpoch
+      state
     );
     const supportingVerifications = supportingVerificationRequests(
       record,
@@ -1154,7 +1155,7 @@ function evaluateTechnicalCorrectness(
 
     const currentRequests = currentVerificationRequests(
       requests,
-      currentContextEpoch
+      state
     );
     if (currentRequests.length === 0) continue;
 
@@ -1240,7 +1241,7 @@ function evaluateRigor(
   problem: InterviewProblem,
   activeEvidence: ReadonlyMap<string, EvidenceRecordState>,
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
-  currentContextEpoch: SessionState["contextEpoch"]
+  state: Readonly<SessionState>
 ): DimensionComputation {
   const samples: Array<{
     score: number;
@@ -1267,7 +1268,7 @@ function evaluateRigor(
     );
     const currentRequests = currentVerificationRequests(
       verificationByEvidenceKey.get(evidenceKeyToString(correctnessKey)) ?? [],
-      currentContextEpoch
+      state
     );
     const contradictions = currentRequests.filter(
       (request) => request.result?.status === "CONTRADICTED"
@@ -1861,13 +1862,13 @@ function getActiveEvidence(
 
 function currentVerificationRequests(
   requests: readonly VerificationRequestState[],
-  currentContextEpoch: SessionState["contextEpoch"]
+  state: Readonly<SessionState>
 ): VerificationRequestState[] {
   return requests.filter(
     (request) =>
       request.status === "ACCEPTED" &&
       request.result !== undefined &&
-      request.basis.contextEpoch === currentContextEpoch
+      isGenerationBasisStillCompatible(request.basis, state) === "COMPATIBLE"
   );
 }
 

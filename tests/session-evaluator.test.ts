@@ -356,6 +356,41 @@ describe("grounded session evaluator", () => {
       .toBeNull();
   });
 
+  it("does not let a contradiction survive a later committed input on an incompatible basis", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "superseded-by-later-input" },
+      dimension: "CORRECTNESS"
+    };
+    const contradicted = withVerification(
+      boundState(),
+      key,
+      "CONTRADICTED",
+      10,
+      "before-later-input"
+    );
+    const later = withTurns(contradicted, 1, "later student work");
+    const laterTurn = later.turns[TurnIdSchema.parse("turn_eval_0")];
+    if (laterTurn === undefined) throw new Error("Expected later fixture turn");
+    const state: SessionState = {
+      ...later,
+      sequence: Math.max(later.sequence, 20),
+      lastCommittedInputSequence: 20,
+      turns: {
+        ...later.turns,
+        [laterTurn.turnId]: { ...laterTurn, committedSequence: 20 }
+      }
+    };
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.dimensionResults.technicalCorrectness.evidenceRefs)
+      .not.toContainEqual({
+        kind: "VERIFICATION_REQUEST",
+        id: "verification_before-later-input"
+      });
+  });
+
   it("does not treat a contradiction from a stale context epoch as current correctness", () => {
     const key: EvidenceKey = {
       problemId: sixPeopleProblem.id,
@@ -759,6 +794,7 @@ function withDelivery(
           boardRevision: zeroBoardRevision,
           problemStateRevision: zeroProblemStateRevision,
           policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
           turnId
         },
         provider: "fixture-provider",
@@ -781,13 +817,37 @@ function withVerification(
   label: string
 ): SessionState {
   const requestId = RequestIdSchema.parse("verification_" + label);
-  const turnId = TurnIdSchema.parse("turn_verification_" + label);
+  const turnId = TurnIdSchema.parse("turn_verification_basis_" + String(basisSequence));
+  const inputEpisodeId = InputEpisodeIdSchema.parse(
+    "episode_verification_basis_" + String(basisSequence)
+  );
   const confidence = status === "UNRESOLVED" ? 0.7 : 1;
   const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
-  const verificationSupportId = EventIdSchema.parse("verification_support_" + label);
+  const verificationSupportId = EventIdSchema.parse(
+    "turn_committed_verification_basis_" + String(basisSequence)
+  );
   const next: SessionState = {
     ...state,
+    sequence: Math.max(state.sequence, basisSequence),
+    lastCommittedInputSequence: basisSequence,
     eventIds: uniqueEventIds([...state.eventIds, verificationSupportId, requestedEventId]),
+    inputEpisodes: {
+      ...state.inputEpisodes,
+      [inputEpisodeId]: {
+        inputEpisodeId,
+        status: "COMMITTED",
+        inputs: [{ modality: "TYPING", semanticContent: "fixture verification input" }]
+      }
+    },
+    turns: {
+      ...state.turns,
+      [turnId]: {
+        turnId,
+        inputEpisodeId,
+        studentText: "fixture verification input",
+        committedSequence: basisSequence
+      }
+    },
     verificationRequests: {
       ...state.verificationRequests,
       [requestId]: {
@@ -834,12 +894,36 @@ function withPendingVerification(
   label: string
 ): SessionState {
   const requestId = RequestIdSchema.parse("verification_" + label);
-  const turnId = TurnIdSchema.parse("turn_verification_" + label);
-  const verificationSupportId = EventIdSchema.parse("verification_support_" + label);
+  const turnId = TurnIdSchema.parse("turn_verification_basis_" + String(basisSequence));
+  const inputEpisodeId = InputEpisodeIdSchema.parse(
+    "episode_verification_basis_" + String(basisSequence)
+  );
+  const verificationSupportId = EventIdSchema.parse(
+    "turn_committed_verification_basis_" + String(basisSequence)
+  );
   const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
   return {
     ...state,
+    sequence: Math.max(state.sequence, basisSequence),
+    lastCommittedInputSequence: basisSequence,
     eventIds: uniqueEventIds([...state.eventIds, verificationSupportId, requestedEventId]),
+    inputEpisodes: {
+      ...state.inputEpisodes,
+      [inputEpisodeId]: {
+        inputEpisodeId,
+        status: "COMMITTED",
+        inputs: [{ modality: "TYPING", semanticContent: "fixture verification input" }]
+      }
+    },
+    turns: {
+      ...state.turns,
+      [turnId]: {
+        turnId,
+        inputEpisodeId,
+        studentText: "fixture verification input",
+        committedSequence: basisSequence
+      }
+    },
     verificationRequests: {
       ...state.verificationRequests,
       [requestId]: {
@@ -852,6 +936,7 @@ function withPendingVerification(
           boardRevision: zeroBoardRevision,
           problemStateRevision: zeroProblemStateRevision,
           policyRevision: zeroPolicyRevision,
+          inputEpisodeId,
           turnId
         },
         candidateFormalInterpretation: "fixture",
