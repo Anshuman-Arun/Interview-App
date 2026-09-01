@@ -159,16 +159,21 @@ const safeRecognizerWordSchema = (maxLength: number) => z.string()
   .min(1)
   .max(maxLength)
   .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), { message: "Recognizer word metadata contains unsafe control/format characters" });
-const SafeModelIdentityPattern = /^[A-Za-z0-9][A-Za-z0-9._+:/@ -]*$/u;
 const safeModelIdentityTextSchema = (maxLength: number) => z.string()
   .min(1)
   .max(maxLength)
-  .regex(SafeModelIdentityPattern);
+  .refine(
+    (value) => Array.from(value).every((character) => {
+      const code = character.codePointAt(0);
+      return code !== undefined && code >= 0x20 && code <= 0x7E;
+    }),
+    { message: "Model identity must use bounded printable ASCII" }
+  );
 
 export const TranscriptWordTimingSchema = z.object({
   word: safeRecognizerWordSchema(128),
-  startMs: FiniteNonnegativeNumberSchema,
-  endMs: FiniteNonnegativeNumberSchema,
+  startMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  endMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
   confidence: z.number().min(0).max(1).optional()
 }).strict().superRefine((value, context) => {
   if (value.endMs < value.startMs) {
@@ -225,13 +230,13 @@ const WorkerEventBaseSchema = z.object({
 export const SpeechStartedEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("SPEECH_STARTED"),
   utteranceId: SpeechUtteranceIdSchema,
-  atTimestampMs: FiniteNonnegativeNumberSchema
+  atTimestampMs: SpeechTimestampMsSchema
 }).strict();
 
 export const SpeechPossibleEndpointEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("POSSIBLE_ENDPOINT"),
   utteranceId: SpeechUtteranceIdSchema,
-  silenceMs: FiniteNonnegativeNumberSchema
+  silenceMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS)
 }).strict();
 
 export const SpeechUtteranceFinalizedEventSchema = WorkerEventBaseSchema.extend({
@@ -239,7 +244,7 @@ export const SpeechUtteranceFinalizedEventSchema = WorkerEventBaseSchema.extend(
   utteranceId: SpeechUtteranceIdSchema,
   finalizationReason: SpeechFinalizationReasonSchema,
   speechFrameCount: NonnegativeSafeIntegerSchema,
-  durationMs: FiniteNonnegativeNumberSchema,
+  durationMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
   sourceAudioBasis: SourceAudioBasisSchema
 }).strict();
 
