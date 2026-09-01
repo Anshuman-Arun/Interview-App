@@ -191,6 +191,11 @@ describe("configured session product-read integration", () => {
       });
       expect(history.sessions.find((item) => item.sessionId === sessionId)?.evaluation)
         .toBeUndefined();
+      expect(history.longitudinal.includedSessionCount).toBe(0);
+      expect(history.longitudinal.sessionTruncation).toMatchObject({
+        truncated: true,
+        remainingCount: 1
+      });
       expect(server.store.eventCount(sessionId)).toBe(beforeReads);
     } finally {
       if (server !== undefined) await server.stop();
