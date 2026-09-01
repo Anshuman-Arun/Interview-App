@@ -3,7 +3,8 @@ import { normalizeInterpretationConfidence } from "./confidence.js";
 
 export * from "./combinatorial-counting-verifier.js";
 export * from "./integer-expression.js";
-export * from "./rational-expression.js";\nexport * from "./structured-statement-validation.js";
+export * from "./rational-expression.js";
+export * from "./structured-statement-validation.js";
 export * from "./finite-recurrence-verifier.js";
 export * from "./limits.js";
 export * from "./math-utils.js";
