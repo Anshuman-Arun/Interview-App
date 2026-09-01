@@ -254,8 +254,11 @@ function containsUnpairedSurrogate(value: string): boolean {
 function validateLocalPath(value: string, label: string): string {
   const path = value.trim();
   if (path.length === 0 || path.length > 1_024) throw new Error(`${label} is invalid`);
-  if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(path) || /[\p{Cc}\p{Cf}]/u.test(path)) {
-    throw new Error(`${label} must be an explicitly supplied safe local path, not a URL`);
+  const windowsDrivePath = /^[A-Za-z]:[\\/]/u.test(path);
+  const uriLikePath = /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(path);
+  const uncLikePath = /^(?:\\\\|\/\/)/u.test(path);
+  if ((uriLikePath && !windowsDrivePath) || uncLikePath || /[\p{Cc}\p{Cf}]/u.test(path)) {
+    throw new Error(`${label} must be an explicitly supplied safe local filesystem path`);
   }
   return path;
 }
