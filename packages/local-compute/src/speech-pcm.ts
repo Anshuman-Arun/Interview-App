@@ -36,6 +36,7 @@ export interface PcmFrameSnapshot {
 
 export interface PcmOrderState {
   readonly streamId: SpeechStreamId;
+  readonly firstSequence: number;
   readonly sampleRate: number;
   readonly channels: number;
   readonly sampleFormat: string;
@@ -100,6 +101,7 @@ export function advancePcmOrder(
     }
     return {
       streamId: envelope.streamId,
+      firstSequence: envelope.sequence,
       sampleRate: envelope.sampleRate,
       channels: envelope.channels,
       sampleFormat: envelope.sampleFormat,
@@ -309,6 +311,7 @@ export class BoundedPcmBuffer {
 function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
   return {
     streamId: frame.envelope.streamId,
+    firstSequence: frame.envelope.sequence,
     sampleRate: frame.envelope.sampleRate,
     channels: frame.envelope.channels,
     sampleFormat: frame.envelope.sampleFormat,
@@ -323,15 +326,17 @@ function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
 function validatePcmOrderState(prior: PcmOrderState): void {
   const streamId = SpeechStreamIdSchema.safeParse(prior.streamId);
   const sampleDerivedEndMs = prior.firstTimestampMs + prior.cumulativeDurationMs;
-  const frameCount = prior.lastSequence + 1;
+  const frameCount = prior.lastSequence - prior.firstSequence + 1;
   const minimumRepresentableDurationMs = frameCount / prior.sampleRate * 1_000;
   const maximumRepresentableDurationMs = frameCount * MAX_SPEECH_FRAME_DURATION_MS;
   if (!streamId.success
       || (prior.sampleRate !== 16_000 && prior.sampleRate !== 48_000)
       || prior.channels !== 1
       || prior.sampleFormat !== "F32LE"
+      || !Number.isSafeInteger(prior.firstSequence)
+      || prior.firstSequence < 0
       || !Number.isSafeInteger(prior.lastSequence)
-      || prior.lastSequence < 0
+      || prior.lastSequence < prior.firstSequence
       || !Number.isFinite(prior.firstTimestampMs)
       || prior.firstTimestampMs < 0
       || !Number.isFinite(prior.cumulativeDurationMs)
