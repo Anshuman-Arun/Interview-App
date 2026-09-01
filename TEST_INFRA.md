@@ -29,7 +29,7 @@ CI uses `pnpm test:ci` for the same full discovery with at most two workers, whi
 
 ### Static/release gates
 
-- `pnpm security:public` — public-release hygiene and accidental sensitive/local-data checks.
+- `pnpm security:public` — current tracked-working-tree hygiene and accidental sensitive/local-data checks. It does **not** audit Git history, GitHub issues/metadata, Actions artifacts, or dependency registries; those are separate public-release review surfaces.
 - `node scripts/check-architecture-boundaries.mjs` — frozen project dependency and authority-boundary enforcement.
 - `pnpm typecheck` — strict TypeScript validation.
 - `pnpm lint` — ESLint.
