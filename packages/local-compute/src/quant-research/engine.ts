@@ -925,6 +925,35 @@ function validateGeneratedScenario(state: InternalState): void {
   }
 }
 
+function assertExactActionHistory(
+  state: InternalState,
+  expectedKinds: readonly QuantResearchAction["kind"][],
+  context: string
+): void {
+  if (
+    state.acceptedActions.length !== expectedKinds.length ||
+    expectedKinds.some((kind, index) => state.acceptedActions[index]?.kind !== kind)
+  ) {
+    throw new Error(context + " action-history invariant violated");
+  }
+}
+
+function assertExactEvidenceHistory(
+  state: InternalState,
+  expected: readonly Readonly<{ category: QuantResearchEvidenceCategory; stage: string }>[],
+  context: string
+): void {
+  if (
+    state.evidence.length !== expected.length ||
+    expected.some((item, index) => {
+      const actual = state.evidence[index];
+      return actual?.category !== item.category || actual.stage !== item.stage;
+    })
+  ) {
+    throw new Error(context + " evidence-history invariant violated");
+  }
+}
+
 function assertStateInvariants(state: InternalState): void {
   if ((state.status === "COMPLETE") !== (state.stage === "COMPLETE")) throw new Error("Scenario completion invariant violated");
   if (state.acceptedActions.length > MAX_ACTIONS) throw new Error("Action limit invariant violated");
@@ -944,6 +973,28 @@ function assertStateInvariants(state: InternalState): void {
       if (state.observations.some((value) => typeof value !== "boolean")) throw new Error("Bayesian observation-type invariant violated");
       const successes = state.observations.filter(Boolean).length;
       if (state.successes !== successes) throw new Error("Bayesian success-count invariant violated");
+      const bayesianKinds = {
+        PRIOR_ESTIMATE: [],
+        POSTERIOR_UPDATE: ["SUBMIT_PROBABILITY"],
+        PRIOR_PERTURBATION: ["SUBMIT_PROBABILITY", "SUBMIT_PROBABILITY"],
+        COMPLETE: ["SUBMIT_PROBABILITY", "SUBMIT_PROBABILITY", "SUBMIT_PROBABILITY"]
+      } as const;
+      const bayesianEvidence = {
+        PRIOR_ESTIMATE: [],
+        POSTERIOR_UPDATE: [{ category: "CALIBRATION", stage: "PRIOR_ESTIMATE" }],
+        PRIOR_PERTURBATION: [
+          { category: "CALIBRATION", stage: "PRIOR_ESTIMATE" },
+          { category: "NUMERICAL_CORRECTNESS", stage: "POSTERIOR_UPDATE" }
+        ],
+        COMPLETE: [
+          { category: "CALIBRATION", stage: "PRIOR_ESTIMATE" },
+          { category: "NUMERICAL_CORRECTNESS", stage: "POSTERIOR_UPDATE" },
+          { category: "ADAPTATION", stage: "PRIOR_PERTURBATION" },
+          { category: "CONSISTENCY", stage: "PRIOR_PERTURBATION" }
+        ]
+      } as const;
+      assertExactActionHistory(state, bayesianKinds[state.stage], "Bayesian");
+      assertExactEvidenceHistory(state, bayesianEvidence[state.stage], "Bayesian");
       break;
     }
     case "SAMPLING_ESTIMATION": {
@@ -984,6 +1035,39 @@ function assertStateInvariants(state: InternalState): void {
       ) {
         throw new Error("Sampling perturbation invariant violated");
       }
+      const terminalEstimateCount = state.stage === "SAMPLING" ? 0 : state.stage === "OUTLIER_PERTURBATION" ? 1 : 2;
+      const requestCount = state.acceptedActions.length - terminalEstimateCount;
+      if (requestCount < 0) throw new Error("Sampling action-history invariant violated");
+      for (let index = 0; index < requestCount; index += 1) {
+        if (state.acceptedActions[index]?.kind !== "REQUEST_OBSERVATION") {
+          throw new Error("Sampling action-history invariant violated");
+        }
+      }
+      for (let index = requestCount; index < state.acceptedActions.length; index += 1) {
+        if (state.acceptedActions[index]?.kind !== "SUBMIT_NUMERIC_ESTIMATE") {
+          throw new Error("Sampling action-history invariant violated");
+        }
+      }
+      const requestedObservations = state.acceptedActions.slice(0, requestCount).reduce((total, action) => {
+        if (action.kind !== "REQUEST_OBSERVATION") throw new Error("Sampling action-history invariant violated");
+        return total + action.count;
+      }, 0);
+      if (requestedObservations !== state.revealed.length) throw new Error("Sampling request-total invariant violated");
+      if (state.stage !== "SAMPLING" && state.revealed.length < 2) throw new Error("Sampling estimate-prerequisite invariant violated");
+      const samplingEvidence = state.stage === "SAMPLING"
+        ? []
+        : state.stage === "OUTLIER_PERTURBATION"
+          ? [
+              { category: "NUMERICAL_CORRECTNESS" as const, stage: "SAMPLING" },
+              { category: "SAMPLE_EFFICIENCY" as const, stage: "SAMPLING" }
+            ]
+          : [
+              { category: "NUMERICAL_CORRECTNESS" as const, stage: "SAMPLING" },
+              { category: "SAMPLE_EFFICIENCY" as const, stage: "SAMPLING" },
+              { category: "ADAPTATION" as const, stage: "OUTLIER_PERTURBATION" },
+              { category: "ROBUSTNESS" as const, stage: "OUTLIER_PERTURBATION" }
+            ];
+      assertExactEvidenceHistory(state, samplingEvidence, "Sampling");
       break;
     }
     case "EXPERIMENTAL_ALLOCATION": {
@@ -1033,6 +1117,28 @@ function assertStateInvariants(state: InternalState): void {
           throw new Error("Experimental summary-value invariant violated");
         }
       }
+      const experimentalKinds = {
+        INITIAL_ALLOCATION: [],
+        EXPERIMENT_DECISION: ["ALLOCATE_SAMPLE"],
+        PERTURBED_ALLOCATION: ["ALLOCATE_SAMPLE", "CHOOSE_OPTION"],
+        COMPLETE: ["ALLOCATE_SAMPLE", "CHOOSE_OPTION", "ALLOCATE_SAMPLE"]
+      } as const;
+      const experimentalEvidence = {
+        INITIAL_ALLOCATION: [],
+        EXPERIMENT_DECISION: [{ category: "SAMPLE_EFFICIENCY", stage: "INITIAL_ALLOCATION" }],
+        PERTURBED_ALLOCATION: [
+          { category: "SAMPLE_EFFICIENCY", stage: "INITIAL_ALLOCATION" },
+          { category: "NUMERICAL_CORRECTNESS", stage: "EXPERIMENT_DECISION" }
+        ],
+        COMPLETE: [
+          { category: "SAMPLE_EFFICIENCY", stage: "INITIAL_ALLOCATION" },
+          { category: "NUMERICAL_CORRECTNESS", stage: "EXPERIMENT_DECISION" },
+          { category: "ADAPTATION", stage: "PERTURBED_ALLOCATION" },
+          { category: "SAMPLE_EFFICIENCY", stage: "PERTURBED_ALLOCATION" }
+        ]
+      } as const;
+      assertExactActionHistory(state, experimentalKinds[state.stage], "Experimental");
+      assertExactEvidenceHistory(state, experimentalEvidence[state.stage], "Experimental");
       break;
     }
     case "MODEL_COMPARISON": {
@@ -1083,6 +1189,22 @@ function assertStateInvariants(state: InternalState): void {
       if (expectsChoice ? state.firstChoice === undefined : state.firstChoice !== undefined) {
         throw new Error("Model first-choice invariant violated");
       }
+      const modelKinds = {
+        INITIAL_MODEL_CHOICE: [],
+        OUTLIER_MODEL_CHOICE: ["CHOOSE_OPTION"],
+        COMPLETE: ["CHOOSE_OPTION", "CHOOSE_OPTION"]
+      } as const;
+      const modelEvidence = {
+        INITIAL_MODEL_CHOICE: [],
+        OUTLIER_MODEL_CHOICE: [{ category: "NUMERICAL_CORRECTNESS", stage: "INITIAL_MODEL_CHOICE" }],
+        COMPLETE: [
+          { category: "NUMERICAL_CORRECTNESS", stage: "INITIAL_MODEL_CHOICE" },
+          { category: "ROBUSTNESS", stage: "OUTLIER_MODEL_CHOICE" },
+          { category: "CONSISTENCY", stage: "OUTLIER_MODEL_CHOICE" }
+        ]
+      } as const;
+      assertExactActionHistory(state, modelKinds[state.stage], "Model");
+      assertExactEvidenceHistory(state, modelEvidence[state.stage], "Model");
       break;
     }
     case "CONSTRAINED_OPTIMIZATION": {
@@ -1125,6 +1247,27 @@ function assertStateInvariants(state: InternalState): void {
       ) {
         throw new Error("Optimization optimum invariant violated");
       }
+      const optimizationKinds = {
+        BASE_OPTIMIZATION: [],
+        PERTURBED_OPTIMIZATION: ["SUBMIT_PARAMETERS"],
+        COMPLETE: ["SUBMIT_PARAMETERS", "SUBMIT_PARAMETERS"]
+      } as const;
+      const optimizationEvidence = {
+        BASE_OPTIMIZATION: [],
+        PERTURBED_OPTIMIZATION: [
+          { category: "CONSTRAINT_DISCIPLINE", stage: "BASE_OPTIMIZATION" },
+          { category: "OBJECTIVE_QUALITY", stage: "BASE_OPTIMIZATION" }
+        ],
+        COMPLETE: [
+          { category: "CONSTRAINT_DISCIPLINE", stage: "BASE_OPTIMIZATION" },
+          { category: "OBJECTIVE_QUALITY", stage: "BASE_OPTIMIZATION" },
+          { category: "CONSTRAINT_DISCIPLINE", stage: "PERTURBED_OPTIMIZATION" },
+          { category: "OBJECTIVE_QUALITY", stage: "PERTURBED_OPTIMIZATION" },
+          { category: "ADAPTATION", stage: "PERTURBED_OPTIMIZATION" }
+        ]
+      } as const;
+      assertExactActionHistory(state, optimizationKinds[state.stage], "Optimization");
+      assertExactEvidenceHistory(state, optimizationEvidence[state.stage], "Optimization");
       break;
     }
   }
