@@ -103,6 +103,21 @@ describe("generic interview session configuration", () => {
     expect(registry.get(ramseySession).getState().problem?.id).toBe(sixPeopleProblem.id);
     expect(registry.get(divisibilitySession).getState().problem?.id).toBe(divisibility.id);
     expect(registry.get(divisibilitySession).getState().problem?.version).toBe(divisibility.version);
+
+    await server.stop();
+    await registry.closeAll();
+    registry = new SessionRuntimeRegistry(store);
+    sessions = recoveryCoordinator(registry);
+    server = commandServer(sessions);
+    address = await server.start();
+
+    await expect(sessions.ensureRecovered(ramseySession)).resolves.toEqual([]);
+    await expect(sessions.ensureRecovered(divisibilitySession)).resolves.toEqual([]);
+    expect(registry.get(ramseySession).getState().configuration).toEqual(ramseyConfiguration);
+    expect(registry.get(divisibilitySession).getState().configuration)
+      .toEqual(divisibilityConfiguration);
+    expect(resolveSessionStateComposition(registry.get(divisibilitySession).getState()))
+      .toMatchObject({ mode: "OXFORD_MATHEMATICS", problem: { id: divisibility.id } });
   });
 
   it("initializes Quant Research after generic session start and replays the same generated definition", async () => {
@@ -245,6 +260,44 @@ describe("generic interview session configuration", () => {
     expect(SessionStartedResponseSchema.parse(await json(response)).problem?.id)
       .toBe(sixPeopleProblem.id);
     expect(store.eventCount(sessionId)).toBe(eventCount);
+  });
+
+  it("serializes concurrent starts so only one authoritative configuration can win", async () => {
+    const sessionId = newSessionId();
+    const firstConfiguration = oxfordConfiguration(
+      sixPeopleProblem.id,
+      sixPeopleProblem.version,
+      sixPeopleProblem.interviewer.difficulty
+    );
+    const secondProblem = getProblemByIdentity("oxford-divisibility-chain", "1.0.0");
+    expect(secondProblem).toBeDefined();
+    if (secondProblem === undefined) return;
+    const secondConfiguration = oxfordConfiguration(
+      secondProblem.id,
+      secondProblem.version,
+      secondProblem.interviewer.difficulty
+    );
+
+    const [first, second] = await Promise.all([
+      postStart(sessionId, firstConfiguration),
+      postStart(sessionId, secondConfiguration)
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 409]);
+
+    const state = registry.get(sessionId).getState();
+    expect(state.sequence).toBe(2);
+    expect(store.eventCount(sessionId)).toBe(2);
+    expect(
+      state.configuration?.mode === "OXFORD_MATHEMATICS"
+        ? [firstConfiguration.problem.id, secondConfiguration.problem.id]
+          .includes(state.configuration.problem.id)
+        : false
+    ).toBe(true);
+    expect(state.problem?.id).toBe(
+      state.configuration?.mode === "OXFORD_MATHEMATICS"
+        ? state.configuration.problem.id
+        : undefined
+    );
   });
 
   it("rejects any later attempt to mutate a started session configuration", async () => {
