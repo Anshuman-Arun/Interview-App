@@ -23,7 +23,7 @@ Every scenario is created from an explicit definition:
 }
 ```
 
-Definitions are strict runtime-validated plain objects. Unknown fields, accessor-backed values, unsupported scenario/generator/RNG versions, unsafe seeds, malformed bounds, deadlocked experiment budgets, no-op perturbations, non-meaningful outlier settings, zero-noise sampling/model configurations, and oversized configurations are rejected before scenario generation. Generated hidden state is then checked against family-specific invariants before use, including meaningful Bayesian updates, non-degenerate reachable samples, unambiguous experimental evidence, and perturbations that actually change the exact optimal allocation/solution.
+Definitions are strict runtime-validated plain objects. `parseQuantResearchDefinition()` returns a detached, runtime-frozen canonical definition/config suitable for authoritative replay persistence. Unknown fields, accessor-backed values, unsupported scenario/generator/RNG versions, unsafe seeds, malformed bounds, deadlocked experiment budgets, no-op perturbations, non-meaningful outlier settings, zero-noise sampling/model configurations, and oversized configurations are rejected before scenario generation. Generated hidden state is then checked against family-specific invariants before use, including meaningful Bayesian updates, non-degenerate reachable samples, unambiguous experimental evidence, and perturbations that actually change the exact optimal allocation/solution.
 
 ## Deterministic seed semantics
 
@@ -41,7 +41,7 @@ The implementation separates three concerns:
 
 `getDiagnostics()` is intentionally narrow and does not return the seed, configuration, latent truth, unrevealed observations, or exact scoring references. While a scenario is in progress, `getResult()` returns only status/identity/action count plus empty metrics/evidence; final deterministic evidence is released only after completion. `getState()`/`getResult()` return detached structured clones so caller mutation cannot alter engine state.
 
-The original scenario definition must be retained by application persistence for replay. The engine does not expose a convenience getter for it because that would make accidental candidate/provider projection of the seed/config easier.
+Application persistence must retain the canonical definition returned by `parseQuantResearchDefinition()`, not a caller-owned mutable input object. The engine does not expose a convenience hidden-definition getter because that would make accidental candidate/provider projection of the seed/config easier. A typical integration should canonicalize and persist the definition before constructing the engine, then project only `getState()` into candidate/provider context.
 
 ## Candidate action protocol
 
@@ -101,7 +101,7 @@ Threshold comparisons use a small machine-precision allowance so mathematically 
 
 Replay requires:
 
-1. the original scenario definition, including family, scenario version, generator version, RNG version, seed, and config; and
+1. the canonical parsed scenario definition, including family, scenario version, generator version, RNG version, seed, and config; and
 2. the ordered accepted candidate actions.
 
 `replayQuantResearch(definition, actions)` creates a fresh engine and reapplies those actions through the same runtime validation and transition path. It returns reconstructed public state, result, and accepted actions. The replay container itself is runtime validated, and replay input is bounded to the same maximum action count.
