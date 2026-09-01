@@ -599,6 +599,9 @@ describe("replay/history projections", () => {
         .toBe(history.evidenceHistory[0]?.evidenceEventId);
       expect(history.evidenceHistory[2]?.invalidatesEventId)
         .toBe(history.evidenceHistory[1]?.evidenceEventId);
+      expect(history.evidenceHistory.filter((item) => item.transition === "UPDATED")
+        .map((item) => item.finalStatus))
+        .toEqual(["SUPERSEDED", "STALE", "ACTIVE"]);
     } finally {
       harness.store.close();
     }
@@ -908,6 +911,61 @@ describe("replay/history projections", () => {
     expect(boundedHistory.countsComplete).toBe(false);
   });
 
+  it("rejects known state-changing events after completion or archival", () => {
+    const completedId = "session-terminal-completed" as SessionId;
+    const completed = [
+      ...base(completedId, "terminal-completed"),
+      event(completedId, 3, "SESSION_COMPLETED", {
+        completedAt: "2026-08-31T19:01:00.000Z"
+      }),
+      event(completedId, 4, "INPUT_EPISODE_STARTED", {
+        inputEpisodeId: "episode-after-completion"
+      }, "USER")
+    ];
+    expect(() => projectSessionHistory(completed))
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+
+    const archivedId = "session-terminal-archived" as SessionId;
+    const archived = [
+      ...base(archivedId, "terminal-archived"),
+      event(archivedId, 3, "SESSION_ARCHIVED", {
+        archivedAt: "2026-08-31T19:01:00.000Z"
+      }),
+      event(archivedId, 4, "SESSION_RESUMED", {
+        resumedAt: "2026-08-31T19:02:00.000Z"
+      })
+    ];
+    expect(() => projectReplayTimeline(archived))
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+  });
+
+  it("allows late renderer completion for an already exposed delivery after archival", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const coordinator = new DeliveryCoordinator(harness.writer);
+      await coordinator.markStarted(atom.deliveryId);
+      await coordinator.acknowledgeExposed(atom.deliveryId);
+      await harness.turns.completeSession();
+      await harness.turns.archiveSession();
+      await coordinator.acknowledgeCompleted(atom.deliveryId);
+
+      const projected = projectSessionHistory(
+        harness.store.load(harness.sessionId)
+      );
+      expect(projected.lifecycle.status).toBe("ARCHIVED");
+      expect(projected.timeline.entries.at(-1)).toMatchObject({
+        kind: "DELIVERY_COMPLETED",
+        delivery: {
+          status: "COMPLETED",
+          presentationState: "PRESENTED"
+        }
+      });
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("rejects queued content or disclosure metadata that does not match the validated proposal", async () => {
     const harness = await createCoreHarness();
     try {
@@ -1028,6 +1086,42 @@ describe("replay/history projections", () => {
         formal,
         mismatchedRequest
       ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("requires verification evidence provenance to include its committed Turn", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const authoritative = harness.store.load(harness.sessionId);
+      const generation = harness.writer.getState().generations[harness.generationId];
+      const unrelated = authoritative.find((item) => item.type === "SESSION_STARTED");
+      if (generation === undefined || unrelated === undefined) {
+        throw new Error("Missing verification provenance fixture");
+      }
+
+      const request = event(
+        harness.sessionId,
+        authoritative.length + 1,
+        "VERIFICATION_REQUESTED",
+        {
+          verificationRequestId: "request-missing-turn-provenance",
+          verifier: "deterministic-verifier",
+          basis: generation.basis,
+          candidateFormalInterpretation: "candidate statement",
+          interpretationConfidence: 0.9,
+          evidenceKey: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "CLAIM", claimId: "claim-missing-turn-provenance" },
+            dimension: "CORRECTNESS"
+          },
+          evidenceEventIds: [unrelated.eventId]
+        }
+      );
+
+      expect(() => projectSessionHistory([...authoritative, request]))
+        .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
     } finally {
       harness.store.close();
     }
@@ -1162,6 +1256,23 @@ describe("replay/history projections", () => {
         semanticContent: "invented board work"
       }, "USER")
     ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+  });
+
+  it("requires SPEECH InputEpisode semantics to come from TRANSCRIPT_FINALIZED", () => {
+    const sessionId = "session-speech-provenance" as SessionId;
+    const history = [
+      ...base(sessionId, "speech-provenance"),
+      event(sessionId, 3, "INPUT_EPISODE_STARTED", {
+        inputEpisodeId: "episode-speech-provenance"
+      }, "USER"),
+      event(sessionId, 4, "INPUT_EPISODE_UPDATED", {
+        inputEpisodeId: "episode-speech-provenance",
+        modality: "SPEECH",
+        semanticContent: "forged speech without STT provenance"
+      })
+    ];
+    expect(() => projectReplayTimeline(history))
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
   it("rejects turn text that is not the committed InputEpisode semantic content", () => {

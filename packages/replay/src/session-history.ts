@@ -141,17 +141,29 @@ function currentEvidenceFromState(
 
 function evidenceHistoryFrom(
   items: readonly NormalizedReplayEvent[],
-  bounds: ReplayBounds
+  bounds: ReplayBounds,
+  state: SessionState | undefined
 ): ReturnType<typeof takeBounded<ReplayEvidenceHistoryEntry>> {
+  const finalStatusByEvidenceEventId = new Map<EventId, "ACTIVE" | "SUPERSEDED" | "STALE">();
+  if (state !== undefined) {
+    for (const evidenceRecords of Object.values(state.evidenceHistory)) {
+      for (const record of evidenceRecords) {
+        finalStatusByEvidenceEventId.set(record.evidenceEventId, record.status);
+      }
+    }
+  }
+
   const records: ReplayEvidenceHistoryEntry[] = [];
   for (const item of items) {
     const event = item.event;
     if (event?.type === "STUDENT_EVIDENCE_UPDATED") {
+      const finalStatus = finalStatusByEvidenceEventId.get(event.eventId);
       records.push({
         sequence: event.sequence,
         evidenceEventId: event.eventId,
         transition: "UPDATED",
         key: event.payload.key,
+        ...(finalStatus === undefined ? {} : { finalStatus }),
         value: projectEvidenceValue(event.payload.value, bounds),
         ...(event.payload.supersedesEventId === undefined
           ? {}
@@ -439,7 +451,7 @@ function interventionIdentity(input: {
   return JSON.stringify([
     input.turnId,
     input.disclosureLevel,
-    input.disclosureIds,
+    [...input.disclosureIds].sort(compareReplayStrings),
     input.deliveryStatus
   ]);
 }
@@ -645,7 +657,7 @@ export function projectSessionHistory(
     bounds,
     true
   );
-  const evidence = evidenceHistoryFrom(semanticItems, bounds);
+  const evidence = evidenceHistoryFrom(semanticItems, bounds, state);
   const currentEvidence = state === undefined
     ? takeBounded<ReplayCurrentEvidence>([], bounds.maxEvidenceHistoryEntries)
     : currentEvidenceFromState(state, bounds);

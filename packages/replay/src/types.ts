@@ -201,6 +201,7 @@ export interface ReplayEvidenceHistoryEntry {
   readonly evidenceEventId: EventId;
   readonly transition: "UPDATED" | "INVALIDATED";
   readonly key: EvidenceKey;
+  readonly finalStatus?: "ACTIVE" | "SUPERSEDED" | "STALE";
   readonly value?: ReplayEvidenceValue;
   readonly supersedesEventId?: EventId;
   readonly invalidatesEventId?: EventId;

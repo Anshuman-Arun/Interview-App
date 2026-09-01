@@ -96,15 +96,20 @@ actually authorized.
 ## Evidence and verification history
 
 Evidence projection keeps every authoritative update and invalidation, plus the
-latest ACTIVE evidence when complete replay is available. Superseded and stale
-records therefore remain inspectable rather than being flattened into the final
-value. Provider `EVIDENCE_PROPOSED` payloads are not exposed in the timeline:
+latest ACTIVE evidence when complete replay is available. For a complete replay,
+each committed evidence-update record is also labeled with its final authoritative
+status (ACTIVE, SUPERSEDED, or STALE). That status is omitted when the event stream
+is truncated or crosses an unknown semantic boundary, so incomplete history is
+never presented as a final evidence judgment. Provider `EVIDENCE_PROPOSED` payloads are not exposed in the timeline:
 rejected proposals are non-authoritative, and successful proposals become
 inspectable only through the resulting authoritative `STUDENT_EVIDENCE_UPDATED`
 event.
 
 Verification projection links each request to its verifier, GenerationBasis,
-evidence scope, interpretation provenance, and accepted/discarded callback. VERIFIED,
+evidence scope, interpretation provenance, and accepted/discarded callback. Every
+verification request must include provenance for the committed Turn named by its
+basis; additional supporting event IDs may be present, so this check does not
+overfit the current one-ID producer shape. VERIFIED,
 CONTRADICTED, and UNRESOLVED are retained exactly. Discarded callbacks remain
 discarded and are never promoted into authoritative verification outcomes.
 
@@ -117,7 +122,11 @@ rather than being made to look current.
 ## Lifecycle and recovery
 
 Session completion is inferred only from an authoritative `SESSION_COMPLETED`
-event/state replay. Absence of later events never implies completion. Session
+event/state replay. Absence of later events never implies completion. Once a
+session is COMPLETED or ARCHIVED, replay rejects new semantic work; the only
+post-terminal delivery transition admitted is a renderer `DELIVERY_COMPLETED`
+acknowledgement for an atom that was already authoritatively EXPOSED. This preserves
+the real renderer race without reopening the session. Session
 resumption is counted from `SESSION_RESUMED`; `RECOVERY`-source
 `DELIVERY_POSSIBLY_EXPOSED` events are counted separately without assuming that
 every such event proves an application crash. Empty, active,

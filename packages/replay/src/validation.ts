@@ -523,6 +523,12 @@ export function validateKnownReplayPrefix(
 
       if (!state.started && event.type !== "SESSION_STARTED") fail();
       if (state.started && event.type === "SESSION_STARTED") fail();
+      if (state.status === "ARCHIVED" && event.type !== "DELIVERY_COMPLETED") fail();
+      if (
+        state.status === "COMPLETED"
+        && event.type !== "SESSION_ARCHIVED"
+        && event.type !== "DELIVERY_COMPLETED"
+      ) fail();
       if (
         state.started
         && state.problem === undefined
@@ -587,6 +593,10 @@ export function validateKnownReplayPrefix(
 
         case "INPUT_EPISODE_UPDATED":
           assertBoundedIdentifier(event.payload.inputEpisodeId);
+          if (
+            event.payload.modality === "SPEECH"
+            && consumedPendingKind !== "SPEECH_INPUT_UPDATE"
+          ) fail();
           if (event.payload.modality === "WHITEBOARD") {
             if (
               previousEvent?.type !== "BOARD_PATCH_COMMITTED"
@@ -745,8 +755,14 @@ export function validateKnownReplayPrefix(
             || event.payload.evidenceKey.subject.kind !== "CLAIM"
             || event.payload.evidenceKey.dimension !== "CORRECTNESS"
           ) fail();
+          const basisTurn = state.turns[event.payload.basis.turnId];
+          const basisTurnEventId = basisTurn === undefined
+            ? undefined
+            : state.eventIds[basisTurn.committedSequence - 1];
           if (
-            !event.payload.evidenceEventIds.every((eventId) =>
+            basisTurnEventId === undefined
+            || !event.payload.evidenceEventIds.includes(basisTurnEventId)
+            || !event.payload.evidenceEventIds.every((eventId) =>
               state.eventIds.includes(eventId)
             )
             || isGenerationBasisStillCompatible(event.payload.basis, state)
