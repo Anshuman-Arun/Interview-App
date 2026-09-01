@@ -79,6 +79,17 @@ export class SessionWriter {
     for (let index = 0; index < drafts.length; index += 1) {
       const draft = drafts[index];
       if (draft === undefined) continue;
+      if (
+        draft.type === "SESSION_STARTED"
+        && (
+          typeof draft.payload !== "object"
+          || draft.payload === null
+          || !Object.hasOwn(draft.payload, "configuration")
+          || (draft.payload as { readonly configuration?: unknown }).configuration === undefined
+        )
+      ) {
+        throw new Error("New SESSION_STARTED events require authoritative session configuration");
+      }
       const event = SessionEventSchema.parse({
         eventId: newEventId(),
         sessionId: this.sessionId,
