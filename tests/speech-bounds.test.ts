@@ -186,6 +186,50 @@ describe("speech protocol hard bounds", () => {
     expect(SpeechModelIdentitySchema.safeParse({ name: "model", version: "v\n1" }).success).toBe(false);
   });
 
+  it("normalizes hostile PCM metadata/order accessors to stable admission errors", () => {
+    const throwingEnvelope = Object.defineProperty({}, "protocolVersion", {
+      enumerable: true,
+      get() { throw new Error("credential=pcm-envelope-secret"); }
+    });
+    expect(() => snapshotPcmFrame(throwingEnvelope, new Float32Array(1)))
+      .toThrowError(expect.objectContaining({
+        name: "Error",
+        code: "INVALID_FRAME",
+        message: "PCM frame metadata is invalid"
+      }));
+
+    const pcm = new Float32Array(320);
+    const first = snapshotPcmFrame({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "throwing-order-state",
+      sequence: 0,
+      sampleRate: 16_000,
+      channels: 1,
+      sampleFormat: "F32LE",
+      frameSamples: 320,
+      payloadByteLength: pcm.byteLength,
+      timestampMs: 0
+    }, pcm);
+    const base = advancePcmOrder(undefined, first);
+    const hostilePrior = { ...base };
+    Object.defineProperty(hostilePrior, "lastSequence", {
+      enumerable: true,
+      get() { throw new Error("credential=pcm-order-secret"); }
+    });
+    const second = snapshotPcmFrame({
+      ...first.envelope,
+      requestId: newRequestId(),
+      sequence: 1,
+      timestampMs: 20
+    }, pcm);
+    expect(() => advancePcmOrder(hostilePrior as never, second))
+      .toThrowError(expect.objectContaining({
+        code: "INVALID_FRAME",
+        message: "Prior PCM ordering state is invalid"
+      }));
+  });
+
   it("snapshots accessor-backed PCM ordering state before validation and use", () => {
     const pcm = new Float32Array(320);
     const first = snapshotPcmFrame({
