@@ -858,14 +858,13 @@ describe("microphone capture lifecycle", () => {
   it("preserves terminal disposal if getUserMedia capability lookup disposes during admission", async () => {
     const media = {} as AudioMediaDevicesLike;
     const contexts: FakeCaptureContext[] = [];
-    let capture: BrowserMicrophoneCapture;
     Object.defineProperty(media, "getUserMedia", {
       get: () => {
         void capture.dispose();
         return async () => new FakeStream(new FakeTrack());
       }
     });
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
       createAudioContext: () => {
         const context = new FakeCaptureContext();
@@ -886,7 +885,6 @@ describe("microphone capture lifecycle", () => {
   it("abandons start if getUserMedia capability lookup stops capture reentrantly", async () => {
     const media = {} as AudioMediaDevicesLike;
     const contexts: FakeCaptureContext[] = [];
-    let capture: BrowserMicrophoneCapture;
     let stopping: Promise<void> | undefined;
     Object.defineProperty(media, "getUserMedia", {
       get: () => {
@@ -894,7 +892,7 @@ describe("microphone capture lifecycle", () => {
         return async () => new FakeStream(new FakeTrack());
       }
     });
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
       createAudioContext: () => {
         const context = new FakeCaptureContext();
@@ -1200,7 +1198,6 @@ describe("microphone capture lifecycle", () => {
   });
 
   it("does not overwrite disposal triggered during hostile capture error classification", async () => {
-    let capture: BrowserMicrophoneCapture;
     const hostileError = {};
     Object.defineProperty(hostileError, "name", {
       get: () => {
@@ -1211,7 +1208,7 @@ describe("microphone capture lifecycle", () => {
     const media: AudioMediaDevicesLike = {
       getUserMedia: () => Promise.reject(hostileError)
     };
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
       createAudioContext: () => new FakeCaptureContext(),
       now: () => 0
@@ -1226,7 +1223,6 @@ describe("microphone capture lifecycle", () => {
   });
 
   it("does not overwrite stop triggered during hostile capture error classification", async () => {
-    let capture: BrowserMicrophoneCapture;
     let stopping: Promise<void> | undefined;
     const hostileError = {};
     Object.defineProperty(hostileError, "name", {
@@ -1238,7 +1234,7 @@ describe("microphone capture lifecycle", () => {
     const media: AudioMediaDevicesLike = {
       getUserMedia: () => Promise.reject(hostileError)
     };
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
       createAudioContext: () => new FakeCaptureContext(),
       now: () => 0
@@ -1333,7 +1329,6 @@ describe("microphone capture lifecycle", () => {
     const media = new FakeMediaDevices();
     const context = new FakeCaptureContext();
     context.state = "suspended";
-    let capture: BrowserMicrophoneCapture;
     let stopping: Promise<void> | undefined;
     Object.defineProperty(context, "sampleRate", {
       get: () => {
@@ -1341,7 +1336,7 @@ describe("microphone capture lifecycle", () => {
         return 16_000;
       }
     });
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
       createAudioContext: () => context,
       now: () => 0
@@ -1362,7 +1357,6 @@ describe("microphone capture lifecycle", () => {
     const media = new FakeMediaDevices();
     const context = new FakeCaptureContext();
     context.state = "suspended";
-    let capture: BrowserMicrophoneCapture;
     let resumeCalls = 0;
     Object.defineProperty(context, "resume", {
       get: () => {
@@ -1372,7 +1366,7 @@ describe("microphone capture lifecycle", () => {
         };
       }
     });
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
       createAudioContext: () => context,
       now: () => 0
@@ -1562,7 +1556,6 @@ describe("microphone capture lifecycle", () => {
     const media = new FakeMediaDevices();
     const context = new FakeCaptureContext();
     const frames: AudioFrame[] = [];
-    let capture: BrowserMicrophoneCapture;
     let stopping: Promise<void> | undefined;
     let clockGetterReads = 0;
     let clockCalls = 0;
@@ -1578,7 +1571,7 @@ describe("microphone capture lifecycle", () => {
         };
       }
     } satisfies BrowserMicrophoneCaptureEnvironment;
-    capture = new BrowserMicrophoneCapture(environment);
+    const capture = new BrowserMicrophoneCapture(environment);
 
     await capture.start({ onFrame: (frame) => frames.push(frame) });
     context.processor.emit([new Float32Array([0.25])]);
@@ -1597,10 +1590,9 @@ describe("microphone capture lifecycle", () => {
     const media = new FakeMediaDevices();
     const context = new FakeCaptureContext();
     const frames: AudioFrame[] = [];
-    let capture: BrowserMicrophoneCapture;
     let stopping: Promise<void> | undefined;
     let clockReads = 0;
-    capture = new BrowserMicrophoneCapture({
+    const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
       createAudioContext: () => context,
       now: () => {
@@ -3518,8 +3510,7 @@ describe("queued browser audio playback", () => {
         return proxyGet(target, property, receiver);
       }
     });
-    let playback!: BrowserAudioPlayback;
-    playback = new BrowserAudioPlayback(() => {
+    const playback = new BrowserAudioPlayback(() => {
       playback.cancel("factory-cancel-no-inspect");
       return element;
     });
@@ -3538,8 +3529,7 @@ describe("queued browser audio playback", () => {
 
   it("does not lose a same-id cancellation fired reentrantly by the element factory", async () => {
     const element = new FakeAudioElement();
-    let playback!: BrowserAudioPlayback;
-    playback = new BrowserAudioPlayback(() => {
+    const playback = new BrowserAudioPlayback(() => {
       playback.cancel("factory-cancel");
       return element;
     });
@@ -3563,8 +3553,7 @@ describe("queued browser audio playback", () => {
     element.setSinkId = async () => {
       sinkCalls += 1;
     };
-    let playback: BrowserAudioPlayback;
-    playback = new BrowserAudioPlayback(() => {
+    const playback = new BrowserAudioPlayback(() => {
       playback.dispose();
       return element;
     });
@@ -3584,7 +3573,6 @@ describe("queued browser audio playback", () => {
 
   it("does not invoke addEventListener if its getter disposes playback reentrantly", async () => {
     const base = new FakeAudioElement();
-    let playback: BrowserAudioPlayback;
     let addCalls = 0;
     const element = new Proxy(base, {
       get(target, property, receiver) {
@@ -3597,7 +3585,7 @@ describe("queued browser audio playback", () => {
         return proxyGet(target, property, receiver);
       }
     });
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
 
     const handle = playback.enqueue({
       id: "listener-getter-dispose",
@@ -3613,14 +3601,13 @@ describe("queued browser audio playback", () => {
 
   it("removes a listener added during reentrant disposal while listener setup is in progress", async () => {
     const element = new FakeAudioElement();
-    let playback: BrowserAudioPlayback;
     let disposed = false;
     element.onAddListener = () => {
       if (disposed) return;
       disposed = true;
       playback.dispose();
     };
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
 
     const handle = playback.enqueue({
       id: "listener-dispose",
@@ -3636,7 +3623,6 @@ describe("queued browser audio playback", () => {
 
   it("re-scrubs late media mutation from a reentrant preload setter", async () => {
     const base = new FakeAudioElement();
-    let playback!: BrowserAudioPlayback;
     let triggered = false;
     const element = new Proxy(base, {
       set(target, property, value, receiver) {
@@ -3648,7 +3634,7 @@ describe("queued browser audio playback", () => {
         return Reflect.set(target, property, value, receiver);
       }
     });
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
 
     const handle = playback.enqueue({ id: "preload-race", source: "/initial.wav" });
 
@@ -3660,7 +3646,6 @@ describe("queued browser audio playback", () => {
 
   it("does not invoke setSinkId if its getter cancels playback reentrantly", async () => {
     const base = new FakeAudioElement();
-    let playback: BrowserAudioPlayback;
     let sinkCalls = 0;
     const element = new Proxy(base, {
       get(target, property, receiver) {
@@ -3673,7 +3658,7 @@ describe("queued browser audio playback", () => {
         return proxyGet(target, property, receiver);
       }
     });
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
     const handle = playback.enqueue({
       id: "sink-getter-dispose",
       source: "/a.wav",
@@ -3688,12 +3673,11 @@ describe("queued browser audio playback", () => {
 
   it("re-scrubs media mutated after setSinkId reentrantly settles the item", async () => {
     const element = new FakeAudioElement();
-    let playback!: BrowserAudioPlayback;
     element.setSinkId = async () => {
       playback.cancel("sink-late");
       element.src = "/late-sink.wav";
     };
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
 
     const handle = playback.enqueue({
       id: "sink-late",
@@ -3710,13 +3694,12 @@ describe("queued browser audio playback", () => {
 
   it("re-scrubs late sink mutation even when setSinkId never settles after cancellation", async () => {
     const element = new FakeAudioElement();
-    let playback!: BrowserAudioPlayback;
     element.setSinkId = () => {
       playback.cancel("sink-never");
       element.src = "/late-sink-never.wav";
       return new Promise<void>(() => undefined);
     };
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
 
     const handle = playback.enqueue({
       id: "sink-never",
@@ -3926,7 +3909,6 @@ describe("queued browser audio playback", () => {
 
   it("does not invoke play if its method getter cancels playback reentrantly", async () => {
     const base = new FakeAudioElement();
-    let playback: BrowserAudioPlayback;
     let playCalls = 0;
     const element = new Proxy(base, {
       get(target, property, receiver) {
@@ -3939,7 +3921,7 @@ describe("queued browser audio playback", () => {
         return proxyGet(target, property, receiver);
       }
     });
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
     const handle = playback.enqueue({
       id: "play-getter-dispose",
       source: "/a.wav"
@@ -3954,7 +3936,6 @@ describe("queued browser audio playback", () => {
 
   it("re-scrubs a source setter that mutates media after reentrant cancellation", async () => {
     const base = new FakeAudioElement();
-    let playback!: BrowserAudioPlayback;
     let triggered = false;
     const element = new Proxy(base, {
       set(target, property, value, receiver) {
@@ -3966,7 +3947,7 @@ describe("queued browser audio playback", () => {
         return Reflect.set(target, property, value, receiver);
       }
     });
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
 
     const handle = playback.enqueue({
       id: "hostile-source",
@@ -3981,13 +3962,12 @@ describe("queued browser audio playback", () => {
 
   it("re-scrubs late play mutation even when play never settles after cancellation", async () => {
     const element = new FakeAudioElement();
-    let playback!: BrowserAudioPlayback;
     element.play = () => {
       playback.cancel("play-never");
       element.src = "/late-play-never.wav";
       return new Promise<void>(() => undefined);
     };
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
 
     const handle = playback.enqueue({
       id: "play-never",
@@ -4005,13 +3985,12 @@ describe("queued browser audio playback", () => {
 
   it("re-scrubs media mutated after play reentrantly settles the item", async () => {
     const element = new FakeAudioElement();
-    let playback!: BrowserAudioPlayback;
     element.play = () => {
       playback.cancel("hostile-play");
       element.src = "/late-after-cancel.wav";
       return Promise.resolve();
     };
-    playback = new BrowserAudioPlayback(() => element);
+    const playback = new BrowserAudioPlayback(() => element);
 
     const handle = playback.enqueue({
       id: "hostile-play",
