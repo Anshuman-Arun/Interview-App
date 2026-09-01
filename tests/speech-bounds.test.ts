@@ -259,7 +259,7 @@ describe("speech protocol hard bounds", () => {
     }, pcm);
     let priorError: unknown;
     try {
-      advancePcmOrder(hostilePrior as never, second);
+      advancePcmOrder(hostilePrior, second);
     } catch (error) {
       priorError = error;
     }
