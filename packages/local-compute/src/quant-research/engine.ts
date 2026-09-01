@@ -1079,10 +1079,8 @@ function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
   }
   if (!isArray) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be an array");
   const replayActions = actionsInput as unknown[];
-  let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
-    keys = Reflect.ownKeys(replayActions);
     lengthDescriptor = Object.getOwnPropertyDescriptor(replayActions, "length");
   } catch {
     throw new QuantResearchError("INVALID_REPLAY", "Replay actions could not be safely inspected");
@@ -1098,7 +1096,13 @@ function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
   }
   const length = lengthDescriptor.value as number;
   if (length > MAX_ACTIONS) throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Replay action list exceeds the maximum size");
-  if (keys.length > length + 1) throw new QuantResearchError("INVALID_REPLAY", "Replay actions contains too many properties");
+  let keys: readonly PropertyKey[];
+  try {
+    keys = Reflect.ownKeys(replayActions);
+  } catch {
+    throw new QuantResearchError("INVALID_REPLAY", "Replay actions could not be safely inspected");
+  }
+  if (keys.length !== length + 1) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be dense without extra properties");
   const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
   for (const key of keys) {
     if (typeof key !== "string" || !allowedKeys.has(key)) {
