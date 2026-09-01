@@ -17,9 +17,11 @@ import {
   type DisclosureLevel,
   type EvidenceKey,
   type EvidenceValue,
+  type GenerationBasis,
   type InterviewProblem,
   type RealizationRequest,
-  type SocraticAction
+  type SocraticAction,
+  type VerificationResult
 } from "../../domain/src/index.js";
 import {
   isGenerationBasisStillCompatible,
@@ -213,6 +215,18 @@ interface VerificationSignal {
   readonly target: PolicyTarget;
   readonly status: "VERIFIED" | "CONTRADICTED" | "UNRESOLVED";
   readonly sequence: number;
+}
+
+interface VerificationEvidenceLink {
+  readonly key: EvidenceKey;
+  readonly basis: GenerationBasis;
+  readonly result: VerificationResult;
+  readonly resultSequence: number;
+}
+
+interface VerificationSnapshot {
+  readonly signals: readonly VerificationSignal[];
+  readonly evidenceLinks: ReadonlyMap<string, VerificationEvidenceLink>;
 }
 
 interface AssistanceRecord {
@@ -665,7 +679,8 @@ function validateGraphContext(problem: unknown): CollectionResult<GraphContext> 
 
 function collectActiveEvidence(
   state: Readonly<SessionState>,
-  graph: GraphContext
+  graph: GraphContext,
+  verificationEvidenceLinks: ReadonlyMap<string, VerificationEvidenceLink>
 ): CollectionResult<readonly ActiveEvidenceSignal[]> {
   const rawHistories: unknown = state.evidenceHistory;
   if (!isRecord(rawHistories)) {
@@ -796,6 +811,24 @@ function collectActiveEvidence(
     }
     activeKeys.add(storedKey);
 
+    let staleVerificationDerivedEvidence = false;
+    for (const provenanceEventId of value.evidenceEventIds) {
+      const verificationLink = verificationEvidenceLinks.get(provenanceEventId);
+      if (verificationLink === undefined) continue;
+      if (
+        evidenceKeyToString(verificationLink.key) !== storedKey
+        || value.value !== "CORRECT"
+        || value.inferenceConfidence !== verificationLink.result.interpretationConfidence
+        || verificationLink.result.status !== "VERIFIED"
+        || verificationLink.resultSequence >= value.lastUpdatedSequence
+      ) {
+        return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+      }
+      if (isGenerationBasisStillCompatible(verificationLink.basis, state) !== "COMPATIBLE") {
+        staleVerificationDerivedEvidence = true;
+      }
+    }
+
     if (key.problemId !== graph.problem.id) continue;
 
     if (
@@ -810,6 +843,8 @@ function collectActiveEvidence(
     ) {
       return { ok: false, reasonCode: "INVALID_REASONING_TARGET" };
     }
+
+    if (staleVerificationDerivedEvidence) continue;
 
     signals.push({
       key,
@@ -841,7 +876,7 @@ function collectActiveEvidence(
 function collectVerificationSignals(
   state: Readonly<SessionState>,
   graph: GraphContext
-): CollectionResult<readonly VerificationSignal[]> {
+): CollectionResult<VerificationSnapshot> {
   const rawRequests: unknown = state.verificationRequests;
   if (!isRecord(rawRequests)) {
     return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
@@ -860,6 +895,7 @@ function collectVerificationSignals(
   });
 
   const signals: VerificationSignal[] = [];
+  const evidenceLinks = new Map<string, VerificationEvidenceLink>();
   let totalVerificationProvenanceIds = 0;
   for (const [requestKey, rawRequest] of entries) {
     if (!isRecord(rawRequest)) {
@@ -926,6 +962,18 @@ function collectVerificationSignals(
     if (key.data.subject.kind !== "CLAIM" || key.data.dimension !== "CORRECTNESS") {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
+    if (result.data.status === "VERIFIED") {
+      if (evidenceLinks.has(requestedEventId)) {
+        return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+      }
+      evidenceLinks.set(requestedEventId, {
+        key: key.data,
+        basis: basis.data,
+        result: result.data,
+        resultSequence
+      });
+    }
+
     if (key.data.problemId !== graph.problem.id) continue;
     if (isGenerationBasisStillCompatible(basis.data, state) !== "COMPATIBLE") {
       continue;
@@ -941,7 +989,13 @@ function collectVerificationSignals(
   }
 
   signals.sort(compareVerification);
-  return { ok: true, value: signals };
+  return {
+    ok: true,
+    value: {
+      signals,
+      evidenceLinks
+    }
+  };
 }
 
 function collectExposedAssistance(
@@ -1961,10 +2015,14 @@ export function decidePedagogicalPolicy(
     return failClosedDecision(turnId, "PROBLEM_DEFINITION_MISMATCH");
   }
 
-  const evidenceResult = collectActiveEvidence(state, graph);
-  if (!evidenceResult.ok) return failClosedDecision(turnId, evidenceResult.reasonCode);
   const verificationResult = collectVerificationSignals(state, graph);
   if (!verificationResult.ok) return failClosedDecision(turnId, verificationResult.reasonCode);
+  const evidenceResult = collectActiveEvidence(
+    state,
+    graph,
+    verificationResult.value.evidenceLinks
+  );
+  if (!evidenceResult.ok) return failClosedDecision(turnId, evidenceResult.reasonCode);
   const assistanceResult = collectExposedAssistance(state, graph);
   if (!assistanceResult.ok) return failClosedDecision(turnId, assistanceResult.reasonCode);
   const ledgerResult = validateDisclosureLedger(state, graph, assistanceResult.value.disclosedIds);
@@ -1972,7 +2030,7 @@ export function decidePedagogicalPolicy(
 
   let classification = classifyProgress(
     evidenceResult.value,
-    verificationResult.value,
+    verificationResult.value.signals,
     graph,
     turnId
   );
