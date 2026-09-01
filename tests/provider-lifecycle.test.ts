@@ -51,6 +51,49 @@ describe("provider lifecycle remains subordinate to application state", () => {
     }
   });
 
+  it("admits at most one nonterminal generation for a turn under concurrent starts", async () => {
+    const harness = await createCoreHarness();
+    try {
+      await harness.turns.supersedeGeneration(
+        harness.generationId,
+        "prepare concurrent generation regression"
+      );
+
+      const results = await Promise.allSettled([
+        harness.turns.startGeneration(
+          harness.inputEpisodeId,
+          harness.turnId,
+          "mock-provider-a"
+        ),
+        harness.turns.startGeneration(
+          harness.inputEpisodeId,
+          harness.turnId,
+          "mock-provider-b"
+        )
+      ]);
+
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const rejected = results.find((result) => result.status === "rejected");
+      expect(rejected).toBeDefined();
+      if (rejected?.status === "rejected") {
+        expect(String(rejected.reason)).toMatch(/prior nonterminal generation/u);
+      }
+
+      const nonterminal = Object.values(harness.writer.getState().generations).filter(
+        (generation) =>
+          generation.basis.turnId === harness.turnId
+          && (
+            generation.status === "ACTIVE"
+            || generation.status === "PROPOSAL_RECEIVED"
+            || generation.status === "VALIDATED"
+          )
+      );
+      expect(nonterminal).toHaveLength(1);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("allows an application-controlled provider switch while late output from the first stays inert", async () => {
     const harness = await createCoreHarness();
     try {
