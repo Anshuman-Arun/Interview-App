@@ -1,7 +1,6 @@
-// @vitest-environment happy-dom
-
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { Window } from "happy-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   newSessionId,
@@ -19,6 +18,23 @@ import { createAndStartServer } from "../apps/server/src/server.js";
 
 const TOKEN = "grounded_product_flow_e2e_token_000000000000001";
 const ORIGIN = "http://127.0.0.1:5173";
+
+const testWindow = new Window({ url: ORIGIN });
+Object.defineProperties(globalThis, {
+  window: { configurable: true, value: testWindow },
+  self: { configurable: true, value: testWindow },
+  document: { configurable: true, value: testWindow.document },
+  navigator: { configurable: true, value: testWindow.navigator },
+  Element: { configurable: true, value: testWindow.Element },
+  HTMLElement: { configurable: true, value: testWindow.HTMLElement },
+  HTMLButtonElement: { configurable: true, value: testWindow.HTMLButtonElement },
+  Node: { configurable: true, value: testWindow.Node },
+  Event: { configurable: true, value: testWindow.Event },
+  MouseEvent: { configurable: true, value: testWindow.MouseEvent },
+  MutationObserver: { configurable: true, value: testWindow.MutationObserver }
+});
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
+  .IS_REACT_ACT_ENVIRONMENT = true;
 
 function authenticatedFetch(): typeof fetch {
   return async (input, init = {}) => {
