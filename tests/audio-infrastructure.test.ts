@@ -50,6 +50,10 @@ function proxyGet(target: object, property: PropertyKey, receiver: unknown): unk
   return value;
 }
 
+function rejectHostileFixture(value: Error): Promise<never> {
+  return Promise.reject(value);
+}
+
 describe("bounded audio buffering", () => {
   it("preserves order, drops oldest on overflow, clears, and remains reusable", () => {
     const buffer = new BoundedAudioFrameBuffer(2);
@@ -403,7 +407,7 @@ describe("browser audio devices", () => {
       }
     });
     const manager = new BrowserAudioDeviceManager({
-      enumerateDevices: () => Promise.reject(hostileError as Error)
+      enumerateDevices: () => rejectHostileFixture(hostileError as Error)
     });
 
     expect(await manager.enumerate()).toEqual({
@@ -754,7 +758,7 @@ class FakeCaptureContext implements CaptureAudioContextLike {
   public async resume(): Promise<void> {
     this.resumeCount += 1;
     await this.resumeGate;
-    if (this.resumeError !== undefined) await Promise.reject(this.resumeError as Error);
+    if (this.resumeError !== undefined) await rejectHostileFixture(this.resumeError as Error);
     this.state = "running";
   }
 
@@ -1198,7 +1202,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError as Error)
+      getUserMedia: () => rejectHostileFixture(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1224,7 +1228,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError as Error)
+      getUserMedia: () => rejectHostileFixture(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1247,7 +1251,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError as Error)
+      getUserMedia: () => rejectHostileFixture(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -4094,7 +4098,7 @@ describe("queued browser audio playback", () => {
     const setup = playbackFixture();
     const hostileElement = setup.elements[0];
     if (hostileElement === undefined) throw new Error("Expected playback element");
-    hostileElement.play = () => Promise.reject(hostileError as Error);
+    hostileElement.play = () => rejectHostileFixture(hostileError as Error);
     const first = setup.playback.enqueue({ id: "hostile", source: "/hostile.wav" });
     const second = setup.playback.enqueue({ id: "next", source: "/next.wav" });
 
