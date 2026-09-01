@@ -232,7 +232,7 @@ describe("generic interview session configuration", () => {
     expect(started.problem).toMatchObject({
       id: problem.id,
       version: problem.version,
-      title: "A Divisibility Pair in {1,…,2n}",
+      title: "A Divisibility Pair in {1,...,2n}",
       prompt: problem.public.prompt
     });
     expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
