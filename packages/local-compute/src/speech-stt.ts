@@ -142,7 +142,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
     if (!(input.pcmBytes instanceof Uint8Array)) {
       throw new Error("Moonshine PCM input must be a Uint8Array");
     }
-    if (input.pcmBytes.buffer instanceof SharedArrayBuffer) {
+    if (isSharedBackingBuffer(input.pcmBytes.buffer)) {
       throw new Error("Moonshine PCM input must not use shared mutable backing storage");
     }
     const expectedBytes = sourceAudioBasis.sampleCount * sourceAudioBasis.channels * 4;
@@ -301,17 +301,7 @@ function sameAudioBasis(left: SourceAudioBasis, right: SourceAudioBasis): boolea
 }
 
 function isUnsafeTranscriptCharacter(character: string): boolean {
-  const code = character.codePointAt(0);
-  if (code === undefined) return true;
-  if ((code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) || code === 0x7F) return true;
-  return code === 0x061C
-    || code === 0x200B
-    || code === 0x200E
-    || code === 0x200F
-    || code === 0x2060
-    || code === 0xFEFF
-    || (code >= 0x202A && code <= 0x202E)
-    || (code >= 0x2066 && code <= 0x2069);
+  return /[\p{Cc}\p{Cf}]/u.test(character);
 }
 
 function containsUnpairedSurrogate(value: string): boolean {
@@ -482,4 +472,9 @@ function bindOptionalRuntimeFunction<T extends (...args: never[]) => unknown>(
   if (value === undefined) return undefined;
   if (typeof value !== "function") throw new Error(`${label} must be a function when provided`);
   return value.bind(owner) as T;
+}
+
+
+function isSharedBackingBuffer(buffer: ArrayBufferLike): boolean {
+  return typeof SharedArrayBuffer !== "undefined" && buffer instanceof SharedArrayBuffer;
 }
