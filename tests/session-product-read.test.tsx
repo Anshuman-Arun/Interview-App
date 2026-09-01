@@ -791,6 +791,11 @@ describe("grounded evaluation/replay product surface", () => {
       limit: 100,
       remainingCount: unsafeIds.length
     });
+    expect(history.longitudinal.sessionTruncation).toEqual({
+      truncated: true,
+      limit: 100,
+      remainingCount: unsafeIds.length
+    });
 
     const client = new BrowserSessionReadClient({
       baseUrl: "http://127.0.0.1:43123",
@@ -869,6 +874,11 @@ describe("grounded evaluation/replay product surface", () => {
       limit: 100,
       remainingCount: 1
     });
+    expect(history.longitudinal.sessionTruncation).toEqual({
+      truncated: true,
+      limit: 100,
+      remainingCount: 3
+    });
   });
 
   it("isolates corrupt and oversized histories behind bounded structured reads", () => {
@@ -902,6 +912,11 @@ describe("grounded evaluation/replay product surface", () => {
       eventCount: DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
       readStatus: "BUDGET_EXCLUDED"
     }]);
+    expect(oversizedHistory.longitudinal.sessionTruncation).toEqual({
+      truncated: true,
+      limit: 100,
+      remainingCount: 1
+    });
     expect(loadCalls).toBe(0);
 
     const corrupt = new SessionReadService({
@@ -923,12 +938,18 @@ describe("grounded evaluation/replay product surface", () => {
       available: false,
       reason: "AUTHORITATIVE_HISTORY_UNAVAILABLE"
     });
-    expect(corrupt.readHistory().sessions).toEqual([{
+    const corruptHistory = corrupt.readHistory();
+    expect(corruptHistory.sessions).toEqual([{
       sessionId,
       status: "UNKNOWN",
       eventCount: 2,
       readStatus: "UNAVAILABLE"
     }]);
+    expect(corruptHistory.longitudinal.sessionTruncation).toEqual({
+      truncated: true,
+      limit: 100,
+      remainingCount: 1
+    });
   });
 
   it("fails closed for active sessions and malicious read paths without mutating authority", async () => {
