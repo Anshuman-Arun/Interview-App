@@ -137,7 +137,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       ...(this.configPath === undefined ? {} : { configPath: this.configPath }),
       ...(this.supportsAbort ? { signal } : {})
     }));
-    return {
+    return validateTranscriptCandidate({
       requestId,
       utteranceId,
       text: runtimeResult.text,
@@ -146,7 +146,12 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       ...(runtimeResult.words === undefined ? {} : { words: runtimeResult.words }),
       model: this.modelIdentity,
       sourceAudioBasis
-    };
+    }, {
+      requestId,
+      utteranceId,
+      sourceAudioBasis,
+      modelIdentity: this.modelIdentity
+    });
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
