@@ -1122,16 +1122,19 @@ function evaluateErrorRecovery(
   let recoveryCount = 0;
   let failureCount = 0;
   const refs: EvaluationEvidenceRef[] = [];
+  const opportunityConfidences: number[] = [];
   const unresolvedApproachErrors: Array<{
     approachId: string;
     dimension: EvidenceKey["dimension"];
     sequence: number;
+    confidence: number;
     refs: EvaluationEvidenceRef[];
   }> = [];
   const positiveApproachRecords: Array<{
     approachId: string;
     dimension: EvidenceKey["dimension"];
     sequence: number;
+    confidence: number;
     refs: EvaluationEvidenceRef[];
   }> = [];
 
@@ -1153,6 +1156,7 @@ function evaluateErrorRecovery(
     let inErrorEpisode = false;
     let errorRefs: EvaluationEvidenceRef[] = [];
     let errorSequence = 0;
+    let errorConfidence = 1;
     for (const record of records) {
       const recordRefs = [
         evaluationRef("EVIDENCE_EVENT", record.evidenceEventId),
@@ -1168,20 +1172,26 @@ function evaluateErrorRecovery(
       if (!inErrorEpisode && negative) {
         inErrorEpisode = true;
         errorSequence = record.value.lastUpdatedSequence;
+        errorConfidence = record.value.inferenceConfidence;
         errorRefs = recordRefs;
         continue;
       }
 
       if (inErrorEpisode && negative) {
         errorSequence = record.value.lastUpdatedSequence;
+        errorConfidence = Math.min(errorConfidence, record.value.inferenceConfidence);
         errorRefs.push(...recordRefs);
         continue;
       }
 
       if (inErrorEpisode && positive) {
         recoveryCount += 1;
+        opportunityConfidences.push(
+          Math.min(errorConfidence, record.value.inferenceConfidence)
+        );
         refs.push(...errorRefs, ...recordRefs);
         inErrorEpisode = false;
+        errorConfidence = 1;
         errorRefs = [];
       }
     }
@@ -1193,10 +1203,12 @@ function evaluateErrorRecovery(
           approachId: subject.approachId,
           dimension: records[0]?.key.dimension ?? "PROGRESS",
           sequence: errorSequence,
+          confidence: errorConfidence,
           refs: uniqueRefs(errorRefs)
         });
       } else {
         failureCount += 1;
+        opportunityConfidences.push(errorConfidence);
         refs.push(...errorRefs);
       }
     }
@@ -1211,6 +1223,7 @@ function evaluateErrorRecovery(
             approachId: subject.approachId,
             dimension: record.key.dimension,
             sequence: record.value.lastUpdatedSequence,
+            confidence: record.value.inferenceConfidence,
             refs: [evaluationRef("EVIDENCE_EVENT", record.evidenceEventId)]
           });
         }
@@ -1234,9 +1247,11 @@ function evaluateErrorRecovery(
     );
     if (switched === undefined) {
       failureCount += 1;
+      opportunityConfidences.push(error.confidence);
       refs.push(...error.refs);
     } else {
       recoveryCount += 1;
+      opportunityConfidences.push(Math.min(error.confidence, switched.confidence));
       refs.push(...error.refs, ...switched.refs);
     }
   }
@@ -1255,7 +1270,11 @@ function evaluateErrorRecovery(
   return {
     result: scoredDimension(
       roundScore((recoveryCount / opportunities) * 100),
-      supportFromGroundedCount(opportunities),
+      supportFromCount(
+        opportunities,
+        minimumNumber(opportunityConfidences),
+        false
+      ),
       uniqueRefs(refs)
     ),
     recoveryCount,
