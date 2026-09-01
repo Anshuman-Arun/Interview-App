@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   QUANT_RESEARCH_GENERATOR_VERSION,
   QUANT_RESEARCH_RNG_VERSION,
+  QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
   QuantResearchEngine,
   QuantResearchError,
