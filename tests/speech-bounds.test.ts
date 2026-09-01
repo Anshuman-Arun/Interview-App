@@ -191,12 +191,16 @@ describe("speech protocol hard bounds", () => {
       enumerable: true,
       get() { throw new Error("credential=pcm-envelope-secret"); }
     });
-    expect(() => snapshotPcmFrame(throwingEnvelope, new Float32Array(1)))
-      .toThrowError(expect.objectContaining({
-        name: "Error",
-        code: "INVALID_FRAME",
-        message: "PCM frame metadata is invalid"
-      }));
+    let envelopeError: unknown;
+    try {
+      snapshotPcmFrame(throwingEnvelope, new Float32Array(1));
+    } catch (error) {
+      envelopeError = error;
+    }
+    expect(envelopeError).toMatchObject({
+      code: "INVALID_FRAME",
+      message: "PCM frame metadata is invalid"
+    });
 
     const pcm = new Float32Array(320);
     const first = snapshotPcmFrame({
@@ -223,11 +227,31 @@ describe("speech protocol hard bounds", () => {
       sequence: 1,
       timestampMs: 20
     }, pcm);
-    expect(() => advancePcmOrder(hostilePrior as never, second))
-      .toThrowError(expect.objectContaining({
-        code: "INVALID_FRAME",
-        message: "Prior PCM ordering state is invalid"
-      }));
+    let priorError: unknown;
+    try {
+      advancePcmOrder(hostilePrior as never, second);
+    } catch (error) {
+      priorError = error;
+    }
+    expect(priorError).toMatchObject({
+      code: "INVALID_FRAME",
+      message: "Prior PCM ordering state is invalid"
+    });
+
+    const hostileFrame = Object.defineProperty({}, "envelope", {
+      enumerable: true,
+      get() { throw new Error("credential=pcm-frame-secret"); }
+    });
+    let frameError: unknown;
+    try {
+      advancePcmOrder(base, hostileFrame as never);
+    } catch (error) {
+      frameError = error;
+    }
+    expect(frameError).toMatchObject({
+      code: "INVALID_FRAME",
+      message: "PCM order frame metadata is invalid"
+    });
   });
 
   it("snapshots accessor-backed PCM ordering state before validation and use", () => {
