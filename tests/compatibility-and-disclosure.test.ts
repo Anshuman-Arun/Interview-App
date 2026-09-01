@@ -390,6 +390,177 @@ describe("compatibility and disclosure gates", () => {
     }
   });
 
+  it("attributes mixed proposal disclosures to the exact delivery atom that exposes them", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+      expect(disclosure).toBeDefined();
+      if (disclosure === undefined) throw new Error("missing protected disclosure");
+
+      const initialState = harness.writer.getState();
+      const turn = initialState.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = initialState.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const completeSetup = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "attribution-evidence",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "COMPLETE",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+      expect(completeSetup.committed).toBe(true);
+
+      const localError = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "attribution-evidence",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "choose-vertex" },
+            dimension: "CORRECTNESS"
+          },
+          proposedValue: "LOCAL_ERROR",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+      expect(localError.committed).toBe(true);
+
+      const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([
+        "Check only the local step.",
+        "Focus on the incident relationships.",
+        "safe speech",
+        "safe purpose"
+      ]));
+      const delivery = new DeliveryCoordinator(harness.writer);
+
+      const exposeCurrentIntervention = async (
+        expectedAction: "CHECK_LOCAL_STEP" | "FOCUS_ATTENTION",
+        speechText: string
+      ) => {
+        const request = await harness.turns.selectAction(harness.turnId, sixPeopleProblem);
+        expect(request.requiredAction).toBe(expectedAction);
+        const generation = await harness.turns.startGeneration(
+          harness.inputEpisodeId,
+          harness.turnId,
+          "attribution-test"
+        );
+        const processed = await harness.turns.processProposal({
+          envelope: createCommandEnvelope({
+            sessionId: harness.sessionId,
+            producer: "attribution-test",
+            inputEpisodeId: harness.inputEpisodeId,
+            turnId: harness.turnId,
+            generationId: generation.generationId,
+            contextEpoch: generation.basis.contextEpoch,
+            sourceRevision: generation.basis.committedInputSequence
+          }),
+          problem: sixPeopleProblem,
+          proposal: {
+            realizedAction: expectedAction,
+            claimedDisclosureLevel: 0,
+            claimedDisclosureIds: [],
+            speechText
+          },
+          validator
+        });
+        expect(processed.accepted).toBe(true);
+        const atom = processed.deliveryAtoms[0];
+        expect(atom).toBeDefined();
+        if (atom === undefined) throw new Error("missing intervention atom");
+        await delivery.markStarted(atom.deliveryId);
+        await delivery.acknowledgeExposed(atom.deliveryId);
+        await harness.turns.supersedeGeneration(
+          generation.generationId,
+          "advance attribution regression"
+        );
+      };
+
+      await exposeCurrentIntervention("CHECK_LOCAL_STEP", "Check only the local step.");
+      await exposeCurrentIntervention("FOCUS_ATTENTION", "Focus on the incident relationships.");
+
+      const request = await harness.turns.selectAction(harness.turnId, sixPeopleProblem);
+      expect(request).toMatchObject({
+        requiredAction: "DIRECTIONAL_NUDGE",
+        maximumDisclosure: disclosure.minimumDisclosureLevel
+      });
+      expect(request.allowedDisclosureIds).toContain(disclosure.id);
+
+      const generation = await harness.turns.startGeneration(
+        harness.inputEpisodeId,
+        harness.turnId,
+        "attribution-test"
+      );
+      const processed = await harness.turns.processProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "attribution-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId,
+          generationId: generation.generationId,
+          contextEpoch: generation.basis.contextEpoch,
+          sourceRevision: generation.basis.committedInputSequence
+        }),
+        problem: sixPeopleProblem,
+        proposal: {
+          realizedAction: "DIRECTIONAL_NUDGE",
+          claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+          claimedDisclosureIds: [disclosure.id],
+          speechText: "safe speech",
+          boardActions: [{
+            operation: "write_text",
+            layer: "AI_ANNOTATION",
+            content: disclosure.fact,
+            annotationPurpose: "safe purpose"
+          }]
+        },
+        validator
+      });
+      expect(processed.accepted).toBe(true);
+      const speechAtom = processed.deliveryAtoms.find((atom) => atom.content.medium === "TEXT");
+      const boardAtom = processed.deliveryAtoms.find((atom) => atom.content.medium === "WHITEBOARD");
+      expect(speechAtom).toBeDefined();
+      expect(boardAtom).toBeDefined();
+      if (speechAtom === undefined || boardAtom === undefined) {
+        throw new Error("missing mixed proposal atoms");
+      }
+
+      expect(speechAtom.disclosureIds).toEqual([]);
+      expect(speechAtom.effectiveDisclosureLevel).toBe(0);
+      expect(boardAtom.disclosureIds).toEqual([disclosure.id]);
+      expect(boardAtom.effectiveDisclosureLevel).toBe(disclosure.minimumDisclosureLevel);
+
+      await delivery.markStarted(speechAtom.deliveryId);
+      await delivery.acknowledgeExposed(speechAtom.deliveryId);
+      expect(harness.writer.getState().disclosureLedger).not.toContain(disclosure.id);
+
+      await delivery.markStarted(boardAtom.deliveryId);
+      await delivery.acknowledgeExposed(boardAtom.deliveryId);
+      expect(harness.writer.getState().disclosureLedger).toContain(disclosure.id);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("runtime validation prevents AI mutation of the student layer", () => {
     expect(() => BoardActionSchema.parse({
       operation: "highlight",
