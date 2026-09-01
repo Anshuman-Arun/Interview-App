@@ -68,15 +68,23 @@ function normalizeLimits(limits: unknown): Readonly<ImageValidationLimits> {
 
   const parsedLimits = ImageValidationLimitsOverrideSchema.safeParse(ownLimits);
   if (!parsedLimits.success) throw new RangeError("Image validation limits are invalid or contain unknown keys");
-  const merged = {
-    ...DEFAULT_IMAGE_VALIDATION_LIMITS,
-    ...parsedLimits.data
-  };
   const normalized = {
-    maxEncodedBytes: asSafePositiveInteger(merged.maxEncodedBytes, "maxEncodedBytes"),
-    maxWidth: asSafePositiveInteger(merged.maxWidth, "maxWidth"),
-    maxHeight: asSafePositiveInteger(merged.maxHeight, "maxHeight"),
-    maxPixels: asSafePositiveInteger(merged.maxPixels, "maxPixels")
+    maxEncodedBytes: asSafePositiveInteger(
+      parsedLimits.data.maxEncodedBytes ?? DEFAULT_IMAGE_VALIDATION_LIMITS.maxEncodedBytes,
+      "maxEncodedBytes"
+    ),
+    maxWidth: asSafePositiveInteger(
+      parsedLimits.data.maxWidth ?? DEFAULT_IMAGE_VALIDATION_LIMITS.maxWidth,
+      "maxWidth"
+    ),
+    maxHeight: asSafePositiveInteger(
+      parsedLimits.data.maxHeight ?? DEFAULT_IMAGE_VALIDATION_LIMITS.maxHeight,
+      "maxHeight"
+    ),
+    maxPixels: asSafePositiveInteger(
+      parsedLimits.data.maxPixels ?? DEFAULT_IMAGE_VALIDATION_LIMITS.maxPixels,
+      "maxPixels"
+    )
   };
   if (normalized.maxEncodedBytes > HARD_IMAGE_VALIDATION_LIMITS.maxEncodedBytes
       || normalized.maxWidth > HARD_IMAGE_VALIDATION_LIMITS.maxWidth
