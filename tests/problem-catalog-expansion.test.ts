@@ -713,9 +713,9 @@ describe("curated problem bank", () => {
 describe("Socratic policy integration across the curated problem catalog", () => {
   it("selects the conservative initial application-owned action for every approved problem", () => {
     for (const [index, problem] of problemCatalog.entries()) {
-      const turnId = TurnIdSchema.parse(`turn_catalog_policy_${index}`);
-      const inputEpisodeId = InputEpisodeIdSchema.parse(`episode_catalog_policy_${index}`);
-      const eventId = EventIdSchema.parse(`event_catalog_policy_${index}`);
+      const turnId = TurnIdSchema.parse(`turn_catalog_policy_${String(index)}`);
+      const inputEpisodeId = InputEpisodeIdSchema.parse(`episode_catalog_policy_${String(index)}`);
+      const eventId = EventIdSchema.parse(`event_catalog_policy_${String(index)}`);
       const state = {
         ...initialSessionState(newSessionId()),
         sequence: 1,
