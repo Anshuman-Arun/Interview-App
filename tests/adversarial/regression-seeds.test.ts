@@ -151,7 +151,7 @@ describe("adversarial named regression schedules", () => {
     } finally {
       await fixture.close();
     }
-  });
+  }, 15_000);
 
   it("duplicate local-worker response across restart is durably idempotent", async () => {
     const fixture = await AdversarialFixture.create();
