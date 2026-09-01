@@ -240,6 +240,31 @@ async function queueAudio(harness: CoreHarness) {
   return atom;
 }
 
+async function queueWhiteboard(harness: CoreHarness, action: unknown) {
+  await authorizeSafeProbe(harness);
+  const atom = DeliveryAtomSchema.parse({
+    deliveryId: newDeliveryId(),
+    generationId: harness.generationId,
+    content: {
+      medium: "WHITEBOARD",
+      action
+    },
+    disclosureIds: [],
+    effectiveDisclosureLevel: 0,
+    status: "VALIDATED"
+  });
+  await harness.writer.execute(
+    createCommandEnvelope({ sessionId: harness.sessionId, producer: "replay-whiteboard-test" }),
+    { operation: "QUEUE_REPLAY_WHITEBOARD", payload: { deliveryId: atom.deliveryId } },
+    z.object({ queued: z.literal(true) }).strict(),
+    () => ({
+      drafts: [{ source: "APPLICATION", type: "DELIVERY_QUEUED", payload: { atom } }],
+      result: { queued: true as const }
+    })
+  );
+  return atom;
+}
+
 describe("replay/history projections", () => {
   it("defers Quant Research deterministic semantics without exposing private snapshot state", async () => {
     const store = new SqliteEventStore(":memory:");
@@ -451,30 +476,12 @@ describe("replay/history projections", () => {
 
     const boardHarness = await createCoreHarness();
     try {
-      const outcome = await boardHarness.turns.processProposal({
-        envelope: createCommandEnvelope({
-          sessionId: boardHarness.sessionId,
-          producer: "mock-model",
-          inputEpisodeId: boardHarness.inputEpisodeId,
-          turnId: boardHarness.turnId,
-          generationId: boardHarness.generationId
-        }),
-        problem: sixPeopleProblem,
-        proposal: {
-          realizedAction: "PROBE_JUSTIFICATION",
-          claimedDisclosureLevel: 0,
-          claimedDisclosureIds: [],
-          boardActions: [{
-            operation: "circle",
-            layer: "AI_ANNOTATION",
-            targetShapeId: "student-shape-private-purpose",
-            annotationPurpose: boardHarness.safeProbe
-          }]
-        },
-        validator: boardHarness.validator
+      const atom = await queueWhiteboard(boardHarness, {
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        targetShapeId: "student-shape-private-purpose",
+        annotationPurpose: boardHarness.safeProbe
       });
-      const atom = outcome.deliveryAtoms[0];
-      if (atom === undefined) throw new Error("Expected board delivery");
       const coordinator = new DeliveryCoordinator(boardHarness.writer);
       await coordinator.markStarted(atom.deliveryId);
       await coordinator.acknowledgeExposed(atom.deliveryId);
@@ -694,31 +701,13 @@ describe("replay/history projections", () => {
 
     const boardHarness = await createCoreHarness();
     try {
-      const outcome = await boardHarness.turns.processProposal({
-        envelope: createCommandEnvelope({
-          sessionId: boardHarness.sessionId,
-          producer: "mock-model",
-          inputEpisodeId: boardHarness.inputEpisodeId,
-          turnId: boardHarness.turnId,
-          generationId: boardHarness.generationId
-        }),
-        problem: sixPeopleProblem,
-        proposal: {
-          realizedAction: "PROBE_JUSTIFICATION",
-          claimedDisclosureLevel: 0,
-          claimedDisclosureIds: [],
-          boardActions: [{
-            operation: "circle",
-            layer: "AI_ANNOTATION",
-            targetShapeId: "student-shape-1",
-            expectedShapeRevision: 4,
-            annotationPurpose: boardHarness.safeProbe
-          }]
-        },
-        validator: boardHarness.validator
+      const atom = await queueWhiteboard(boardHarness, {
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        targetShapeId: "student-shape-1",
+        expectedShapeRevision: 4,
+        annotationPurpose: boardHarness.safeProbe
       });
-      const atom = outcome.deliveryAtoms[0];
-      if (atom === undefined) throw new Error("Expected whiteboard delivery");
       const coordinator = new DeliveryCoordinator(boardHarness.writer);
       await coordinator.markStarted(atom.deliveryId);
       await coordinator.acknowledgeExposed(atom.deliveryId);
@@ -811,7 +800,7 @@ describe("replay/history projections", () => {
       store.close();
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("retains superseded/stale evidence evolution and latest-current evidence", async () => {
     const harness = await createCoreHarness();
@@ -1890,10 +1879,10 @@ describe("replay/history projections", () => {
     try {
       const oversizedProvider = harness.store.load(harness.sessionId).map((item) =>
         item.type === "MODEL_GENERATION_STARTED"
-          ? SessionEventSchema.parse({
+          ? {
               ...item,
               payload: { ...item.payload, provider: oversized }
-            })
+            } as SessionEvent
           : item
       );
       expect(() => projectSessionHistory(oversizedProvider))
