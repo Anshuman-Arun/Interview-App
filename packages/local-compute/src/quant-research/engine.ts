@@ -1304,15 +1304,25 @@ function assertStateInvariants(state: InternalState): void {
   }
 }
 
+function initializeValidatedScenario(definition: QuantResearchScenarioDefinition): InternalState {
+  try {
+    const state = initialize(definition);
+    assertStateInvariants(state);
+    validateGeneratedScenario(state);
+    return state;
+  } catch (error) {
+    if (error instanceof QuantResearchError) throw error;
+    throw new QuantResearchError("INVALID_DEFINITION", "Generated scenario failed deterministic validation");
+  }
+}
+
 export class QuantResearchEngine {
   #state: InternalState;
   #applyingAction = false;
 
   public constructor(definitionInput: unknown) {
     const definition = parseQuantResearchDefinition(definitionInput);
-    this.#state = initialize(definition);
-    assertStateInvariants(this.#state);
-    validateGeneratedScenario(this.#state);
+    this.#state = initializeValidatedScenario(definition);
   }
 
   public applyAction(actionInput: unknown): QuantResearchTransition {
