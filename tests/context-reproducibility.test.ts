@@ -199,16 +199,13 @@ describe("generation context reproducibility", () => {
 
     const compatibilityHarness = await createCoreHarness();
     const missingEpisodeId = newInputEpisodeId();
-    const generation = await compatibilityHarness.turns.startGeneration(
-      missingEpisodeId,
-      compatibilityHarness.turnId,
-      "mock-model"
-    );
-    const compatibility = await new ContextCoordinator(compatibilityHarness.writer).compileForGeneration({
-      generationId: generation.generationId,
-      problem: sixPeopleProblem
-    });
-    expect(compatibility.value).toMatchObject({ compiled: false, reason: "COMPATIBILITY_UNKNOWN" });
+    await expect(
+      compatibilityHarness.turns.startGeneration(
+        missingEpisodeId,
+        compatibilityHarness.turnId,
+        "mock-model"
+      )
+    ).rejects.toThrow(/committed InputEpisode/u);
     compatibilityHarness.store.close();
 
     const mismatchHarness = await createCoreHarness();
