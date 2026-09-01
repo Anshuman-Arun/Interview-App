@@ -364,7 +364,7 @@ describe("deterministic Quant Research interview engine", () => {
     action.count = 10;
     expect(engine.getAcceptedActions()).toEqual([{ actionId: "alias-action", kind: "REQUEST_OBSERVATION", count: 2 }]);
 
-    const accepted = engine.getAcceptedActions() as Array<{ actionId: string }>;
+    const accepted = engine.getAcceptedActions() as unknown as Array<{ actionId: string }>;
     accepted[0]!.actionId = "external-mutation";
     expect(engine.getAcceptedActions()[0]?.actionId).toBe("alias-action");
 
