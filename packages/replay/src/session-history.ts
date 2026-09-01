@@ -353,6 +353,7 @@ function generationHistoryFrom(
       }
       case "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED":
         current.formalInterpretation = {
+          proposalRequestId: event.payload.proposalRequestId,
           preview: previewText(
             event.payload.proposal.candidateFormalInterpretation,
             bounds.maxTextPreviewChars

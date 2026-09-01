@@ -122,7 +122,10 @@ export function projectLongitudinalHistory(
       problemGroups.set(problemKey, group);
     }
 
-    if (!session.currentStateAvailable) continue;
+    if (
+      !session.currentStateAvailable
+      || session.currentEvidenceTruncation.truncated
+    ) continue;
     for (const evidence of session.currentEvidence) {
       const group = evidenceGroups.get(evidence.keyString) ?? {
         sessionIds: new Set<string>(),
@@ -230,28 +233,37 @@ export function projectLongitudinalHistory(
     })
   );
 
+  const assistanceEligible = included.filter((session) => session.currentStateAvailable);
+  const evidenceExcluded = included.filter((session) =>
+    !session.currentStateAvailable
+    || session.currentEvidenceTruncation.truncated
+  ).length;
+
   return {
     totalInputSessions: sessionSummaries.length,
     includedSessionCount: included.length,
     sessionTruncation: truncationInfo(sessionSummaries.length, bounds.maxSessions),
     completedSessions: included.filter((session) => session.lifecycle.completed).length,
     problemsAttempted: exactProblems.size,
-    sessionsWithAssistance: included.filter((session) =>
+    assistanceEligibleSessionCount: assistanceEligible.length,
+    sessionsWithAssistance: assistanceEligible.filter((session) =>
       session.counts.exposedInterventions > 0
       || session.counts.possiblyExposedInterventions > 0
     ).length,
-    totalExposedInterventions: included.reduce(
+    totalExposedInterventions: assistanceEligible.reduce(
       (sum, session) => sum + session.counts.exposedInterventions,
       0
     ),
-    totalPossiblyExposedInterventions: included.reduce(
+    totalPossiblyExposedInterventions: assistanceEligible.reduce(
       (sum, session) => sum + session.counts.possiblyExposedInterventions,
       0
     ),
+    sessionsExcludedFromAssistanceStatistics: included.length - assistanceEligible.length,
     repeatedProblems,
     evaluationStatistics,
     improvement,
     evidencePatterns,
+    sessionsExcludedFromEvidencePatterns: evidenceExcluded,
     sessionsWithIncompleteProjection: included.filter((session) => !session.currentStateAvailable).length,
     comparability: {
       problems: "EXACT_PROBLEM_ID_AND_VERSION",

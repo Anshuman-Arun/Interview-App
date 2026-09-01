@@ -244,6 +244,7 @@ export interface ReplayGenerationHistoryEntry {
     readonly provenance: ReplayEventProvenance;
   };
   readonly formalInterpretation?: {
+    readonly proposalRequestId: string;
     readonly preview: TextPreview;
     readonly provenance: ReplayEventProvenance;
   };
@@ -376,13 +377,16 @@ export interface LongitudinalHistoryProjection {
   readonly sessionTruncation: TruncationInfo;
   readonly completedSessions: number;
   readonly problemsAttempted: number;
+  readonly assistanceEligibleSessionCount: number;
   readonly sessionsWithAssistance: number;
   readonly totalExposedInterventions: number;
   readonly totalPossiblyExposedInterventions: number;
+  readonly sessionsExcludedFromAssistanceStatistics: number;
   readonly repeatedProblems: readonly LongitudinalRepeatedProblem[];
   readonly evaluationStatistics: readonly LongitudinalEvaluationStatistics[];
   readonly improvement: readonly LongitudinalImprovementRecord[];
   readonly evidencePatterns: readonly LongitudinalEvidencePattern[];
+  readonly sessionsExcludedFromEvidencePatterns: number;
   readonly sessionsWithIncompleteProjection: number;
   readonly comparability: {
     readonly problems: "EXACT_PROBLEM_ID_AND_VERSION";

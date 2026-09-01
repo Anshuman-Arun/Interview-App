@@ -138,32 +138,52 @@ export function normalizeReplayEvents(
   bounds: ReplayBounds,
   upcasters = new EventUpcasterRegistry()
 ): NormalizedReplayHistory {
-  if (!Array.isArray(rawEvents)) throw new ReplayProjectionError("INVALID_INPUT");
+  if (!Array.isArray(rawEvents as unknown)) throw new ReplayProjectionError("INVALID_INPUT");
 
-  const withMetadata = rawEvents.map((raw) => {
+  const selectedCount = Math.min(rawEvents.length, bounds.maxEvents);
+  const selectedBySequence = new Map<number, {
+    readonly raw: unknown;
+    readonly metadata: SafeEventMetadata;
+  }>();
+  let sessionId: z.infer<typeof SessionIdSchema> | null = null;
+
+  for (const raw of rawEvents) {
     const parsed = SafeEventMetadataSchema.safeParse(raw);
     if (!parsed.success) throw new ReplayProjectionError("INVALID_EVENT_METADATA");
-    return { raw, metadata: parsed.data };
-  });
+    const metadata = parsed.data;
+    sessionId ??= metadata.sessionId;
+    if (metadata.sessionId !== sessionId) throw new ReplayProjectionError("MIXED_SESSION_IDS");
 
-  withMetadata.sort((left, right) => left.metadata.sequence - right.metadata.sequence);
-
-  let sessionId: z.infer<typeof SessionIdSchema> | null = null;
-  let expectedSequence = 1;
-  for (const item of withMetadata) {
-    sessionId ??= item.metadata.sessionId;
-    if (item.metadata.sessionId !== sessionId) throw new ReplayProjectionError("MIXED_SESSION_IDS");
-    if (item.metadata.sequence !== expectedSequence) throw new ReplayProjectionError("INVALID_EVENT_SEQUENCE");
-    expectedSequence += 1;
+    if (metadata.sequence <= selectedCount) {
+      if (selectedBySequence.has(metadata.sequence)) {
+        throw new ReplayProjectionError("INVALID_EVENT_SEQUENCE");
+      }
+      selectedBySequence.set(metadata.sequence, { raw, metadata });
+    }
   }
 
-  const selected = withMetadata.slice(0, bounds.maxEvents);
+  const selected: Array<{
+    readonly raw: unknown;
+    readonly metadata: SafeEventMetadata;
+  }> = [];
+  for (let sequence = 1; sequence <= selectedCount; sequence += 1) {
+    const item = selectedBySequence.get(sequence);
+    if (item === undefined) throw new ReplayProjectionError("INVALID_EVENT_SEQUENCE");
+    selected.push(item);
+  }
+
   const events: NormalizedReplayEvent[] = [];
   let hasUnknownEvents = false;
 
   for (const item of selected) {
     const metadata = item.metadata;
-    if (metadata.schemaVersion > CURRENT_EVENT_SCHEMA_VERSION) {
+    if (
+      metadata.schemaVersion > CURRENT_EVENT_SCHEMA_VERSION
+      || (
+        metadata.schemaVersion === CURRENT_EVENT_SCHEMA_VERSION
+        && !KNOWN_EVENT_TYPES.has(metadata.type)
+      )
+    ) {
       hasUnknownEvents = true;
       events.push({
         raw: item.raw,

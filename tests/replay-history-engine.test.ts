@@ -201,6 +201,10 @@ describe("replay/history projections", () => {
     const cancelledHarness = await createCoreHarness();
     try {
       const atom = await authorizeSafeProbe(cancelledHarness);
+      const queued = projectReplayTimeline(cancelledHarness.store.load(cancelledHarness.sessionId))
+        .entries.find((entry) => entry.kind === "DELIVERY_QUEUED");
+      expect(queued?.delivery?.presentationState).toBe("AUTHORIZED");
+      expect(queued?.delivery?.status).toBe("QUEUED");
       await new DeliveryCoordinator(cancelledHarness.writer)
         .cancelBeforeExposure(atom.deliveryId, "cancelled before renderer exposure");
       const cancelled = projectReplayTimeline(cancelledHarness.store.load(cancelledHarness.sessionId))
@@ -498,6 +502,17 @@ describe("replay/history projections", () => {
     expect(unknown.timeline.entries[0]?.kind).toBe("UNKNOWN_EVENT");
     expect(JSON.stringify(unknown)).not.toContain(privateMarker);
 
+    const currentSchemaUnknown = {
+      ...future,
+      eventId: "event-current-unknown",
+      schemaVersion: CURRENT_EVENT_SCHEMA_VERSION,
+      type: "UNRECOGNIZED_CURRENT_SCHEMA_EVENT"
+    };
+    const currentUnknownProjection = projectReplayTimeline([currentSchemaUnknown]);
+    expect(currentUnknownProjection.complete).toBe(false);
+    expect(currentUnknownProjection.entries[0]?.kind).toBe("UNKNOWN_EVENT");
+    expect(JSON.stringify(currentUnknownProjection)).not.toContain(privateMarker);
+
     const longText = "🙂".repeat(20);
     const boundedEvents = [
       ...base("session-bounds" as SessionId, "bounds"),
@@ -648,6 +663,9 @@ describe("longitudinal projection", () => {
 
     expect(result.completedSessions).toBe(3);
     expect(result.problemsAttempted).toBe(2);
+    expect(result.assistanceEligibleSessionCount).toBe(3);
+    expect(result.sessionsExcludedFromAssistanceStatistics).toBe(0);
+    expect(result.sessionsExcludedFromEvidencePatterns).toBe(0);
     expect(result.repeatedProblems).toEqual([{
       problemId: "same",
       problemVersion: "1",
