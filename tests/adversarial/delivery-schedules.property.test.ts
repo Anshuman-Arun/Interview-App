@@ -210,7 +210,7 @@ async function releaseExposed(
   label: string
 ): Promise<void> {
   const status = requireDeliveryState(model, deliveryId);
-  if (status === "DELIVERING") {
+  if (status === "DELIVERING" || status === "POSSIBLY_EXPOSED") {
     await fixture.release(label);
     model.noteDelivery(deliveryId, "EXPOSED");
     return;
