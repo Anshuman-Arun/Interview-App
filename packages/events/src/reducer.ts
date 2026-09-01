@@ -185,7 +185,13 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         ...state,
         verificationRequests: {
           ...state.verificationRequests,
-          [event.payload.verificationRequestId]: { ...request, status: "ACCEPTED", result: event.payload.result }
+          [event.payload.verificationRequestId]: {
+            ...request,
+            status: "ACCEPTED",
+            result: event.payload.result,
+            resultEventId: event.eventId,
+            resultSequence: event.sequence
+          }
         }
       };
       break;
