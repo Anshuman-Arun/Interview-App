@@ -362,7 +362,7 @@ function parseExperimentalConfig(value: unknown): ExperimentalAllocationConfig {
 function parseModelConfig(value: unknown): ModelComparisonConfig {
   const record = asRecord(value, "Model comparison config", failDefinition);
   assertExactKeys(record, ["observationCount", "noiseRadius", "outlierShift"], "Model comparison config", failDefinition);
-  const noiseRadius = boundedInteger(record.noiseRadius, 0, 10, "noiseRadius", failDefinition);
+  const noiseRadius = boundedInteger(record.noiseRadius, 1, 10, "noiseRadius", failDefinition);
   const outlierShift = boundedInteger(record.outlierShift, 1, 50, "outlierShift", failDefinition);
   if (outlierShift <= 2 * noiseRadius) failDefinition("outlierShift must move the perturbed point outside the ordinary model-noise envelope");
   return {
