@@ -10,6 +10,10 @@ const builtInUpcasters: readonly EventUpcaster[] = [{
   fromVersion: 1,
   toVersion: 2,
   upcast: (event) => ({ ...event, schemaVersion: 2 })
+}, {
+  fromVersion: 2,
+  toVersion: 3,
+  upcast: (event) => ({ ...event, schemaVersion: 3 })
 }];
 
 export class EventUpcasterRegistry {
