@@ -780,16 +780,22 @@ describe("Real tldraw mounted browser integration", () => {
 
     const aiBeforeUpdate = bridge.getShape(aiId);
     const systemBeforeUpdate = bridge.getShape(systemId);
+    const nativeAiId = createShapeId(aiId.replace(/^shape:/u, ""));
+    const nativeAiBeforeUpdate = bridge.getNativeEditor().getShape(nativeAiId);
+    const nativeSystemBeforeUpdate = bridge.getNativeEditor().getShape(systemId);
+    if (nativeAiBeforeUpdate === undefined || nativeSystemBeforeUpdate === undefined) {
+      throw new Error("Protected native shapes disappeared before update test");
+    }
     await act(async () => {
       bridge.getNativeEditor().updateShapes([
         {
-          id: createShapeId(aiId.replace(/^shape:/u, "")),
-          type: aiBeforeUpdate?.type ?? "geo",
+          id: nativeAiId,
+          type: nativeAiBeforeUpdate.type,
           x: 999
         },
         {
           id: systemId,
-          type: systemBeforeUpdate?.type ?? "geo",
+          type: nativeSystemBeforeUpdate.type,
           x: 999
         }
       ]);
