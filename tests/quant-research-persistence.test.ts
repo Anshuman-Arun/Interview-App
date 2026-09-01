@@ -75,6 +75,70 @@ describe("Quant Research authoritative persistence", () => {
   });
 
 
+  it("persists and replays a completed vertical slice for every Quant Research family", async () => {
+    const actionsFor = (family: QuantResearchScenarioDefinition["family"]): readonly unknown[] => {
+      switch (family) {
+        case "BAYESIAN_UPDATING":
+          return [
+            { actionId: "family-b1", kind: "SUBMIT_PROBABILITY", value: 0.5 },
+            { actionId: "family-b2", kind: "SUBMIT_PROBABILITY", value: 0.5 },
+            { actionId: "family-b3", kind: "SUBMIT_PROBABILITY", value: 0.5 }
+          ];
+        case "SAMPLING_ESTIMATION":
+          return [
+            { actionId: "family-s1", kind: "REQUEST_OBSERVATION", count: 2 },
+            { actionId: "family-s2", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 0 },
+            { actionId: "family-s3", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 0 }
+          ];
+        case "EXPERIMENTAL_ALLOCATION":
+          return [
+            { actionId: "family-e1", kind: "ALLOCATE_SAMPLE", a: 2, b: 4 },
+            { actionId: "family-e2", kind: "CHOOSE_OPTION", option: "A" },
+            { actionId: "family-e3", kind: "ALLOCATE_SAMPLE", a: 2, b: 5 }
+          ];
+        case "MODEL_COMPARISON":
+          return [
+            { actionId: "family-m1", kind: "CHOOSE_OPTION", option: "CONSTANT" },
+            { actionId: "family-m2", kind: "CHOOSE_OPTION", option: "CONSTANT" }
+          ];
+        case "CONSTRAINED_OPTIMIZATION":
+          return [
+            { actionId: "family-o1", kind: "SUBMIT_PARAMETERS", values: [0, 0] },
+            { actionId: "family-o2", kind: "SUBMIT_PARAMETERS", values: [0, 0] }
+          ];
+      }
+    };
+
+    for (const definition of persistenceDefinitions) {
+      const store = new SqliteEventStore(":memory:");
+      const sessionId = newSessionId();
+      const writer = SessionWriter.open(store, sessionId);
+      try {
+        const coordinator = new QuantResearchCoordinator(writer);
+        await coordinator.initialize(definition);
+        for (const action of actionsFor(definition.family)) {
+          await coordinator.applyAction(action);
+        }
+        expect(coordinator.replay().result.status).toBe("COMPLETE");
+        const beforeRestart = coordinator.replay();
+        await writer.close();
+
+        const reopened = SessionWriter.open(store, sessionId);
+        try {
+          const afterRestart = new QuantResearchCoordinator(reopened).replay();
+          expect(afterRestart).toEqual(beforeRestart);
+          expect(afterRestart.state.family).toBe(definition.family);
+          expect(afterRestart.result.acceptedActionCount).toBe(actionsFor(definition.family).length);
+        } finally {
+          await reopened.close();
+        }
+      } finally {
+        await writer.close();
+        store.close();
+      }
+    }
+  });
+
   it("persists the complete vertical slice and reconstructs it exactly after restart", async () => {
     const store = new SqliteEventStore(":memory:");
     const sessionId = newSessionId();
