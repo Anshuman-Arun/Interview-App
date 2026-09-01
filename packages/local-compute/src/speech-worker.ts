@@ -490,9 +490,7 @@ export class SpeechWorkerCore {
     }
 
     if (step.speechStarted) context.speechConfirmed = true;
-    if (!context.speechConfirmed
-        && step.state === "SILENCE"
-        && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
+    if (!context.speechConfirmed && context.preSpeechElapsedMs >= this.maxPreSpeechDurationMs) {
       const events = [this.event(frame.envelope.requestId, frame.envelope.streamId, {
         type: "UTTERANCE_DISCARDED",
         ...(context.utteranceId === undefined ? {} : { utteranceId: context.utteranceId }),
