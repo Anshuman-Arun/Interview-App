@@ -47,6 +47,10 @@ const LIMITS = {
   reasoningEdges: 50_000,
   approaches: 10_000,
   protectedDisclosures: 20_000,
+  generations: 20_000,
+  evidenceHistories: 50_000,
+  studentEvidence: 50_000,
+  disclosureLedger: 20_000,
   events: 250_000,
   evidenceProvenanceRefs: 150_000,
   verificationProvenanceRefs: 100_000,
@@ -680,6 +684,18 @@ function assertEvaluationInputBounds(
   const turnCount = Object.keys(state.turns).length;
   if (turnCount > LIMITS.turns) {
     throw new Error("Evaluation input exceeds the supported turn bound");
+  }
+  if (Object.keys(state.generations).length > LIMITS.generations) {
+    throw new Error("Evaluation input exceeds the supported generation bound");
+  }
+  if (Object.keys(state.evidenceHistory).length > LIMITS.evidenceHistories) {
+    throw new Error("Evaluation input exceeds the supported evidence-history-key bound");
+  }
+  if (Object.keys(state.studentEvidence).length > LIMITS.studentEvidence) {
+    throw new Error("Evaluation input exceeds the supported student-evidence bound");
+  }
+  if (state.disclosureLedger.length > LIMITS.disclosureLedger) {
+    throw new Error("Evaluation input exceeds the supported disclosure-ledger bound");
   }
   if (state.eventIds.length > LIMITS.events) {
     throw new Error("Evaluation input exceeds the supported authoritative-event bound");

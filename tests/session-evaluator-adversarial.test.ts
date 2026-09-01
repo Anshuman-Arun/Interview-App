@@ -547,6 +547,31 @@ describe("grounded session evaluator adversarial cases", () => {
     );
   });
 
+  it("rejects pathological generation volume before traversing generation state", () => {
+    const generations: Record<string, SessionState["generations"][string]> = {};
+    for (let index = 0; index < 20_001; index += 1) {
+      const generationId = GenerationIdSchema.parse("generation_bound_" + String(index));
+      generations[generationId] = {
+        generationId,
+        basis: {
+          contextEpoch: zeroContextEpoch,
+          committedInputSequence: 1,
+          transcriptRevision: zeroTranscriptRevision,
+          boardRevision: zeroBoardRevision,
+          problemStateRevision: zeroProblemStateRevision,
+          policyRevision: zeroPolicyRevision,
+          turnId: TurnIdSchema.parse("turn_generation_bound")
+        },
+        provider: "fixture-provider",
+        status: "ACTIVE"
+      };
+    }
+    expect(() => evaluateInterviewSession({
+      ...boundState(),
+      generations
+    }, sixPeopleProblem)).toThrow("supported generation bound");
+  });
+
   it("rejects pathological turn volume instead of silently truncating", () => {
     const turns: Record<string, SessionState["turns"][string]> = {};
     for (let index = 0; index < 10_001; index += 1) {
