@@ -139,6 +139,18 @@ function boundedScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function boundedRelativeScore(ratio: number, exact: boolean): number {
+  if (!Number.isFinite(ratio)) throw new Error("Non-finite relative score");
+  if (exact) return 100;
+  return Math.min(99, boundedScore(ratio * 100));
+}
+
+function aggregateScores(values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  if (values.every((value) => value === 100)) return 100;
+  return Math.min(99, boundedScore(values.reduce((sum, value) => sum + value, 0) / values.length));
+}
+
 function distanceWithin(error: number, threshold: number): boolean {
   const tolerance = Number.EPSILON * 8 * Math.max(1, Math.abs(error), Math.abs(threshold));
   return error <= threshold + tolerance;
@@ -374,7 +386,12 @@ function experimentalOptimum(costA: number, costB: number, noiseA: number, noise
   return { variance: bestVariance, allocations };
 }
 
-function allocationEfficiency(
+interface AllocationQuality {
+  readonly ratio: number;
+  readonly score: number;
+}
+
+function allocationQuality(
   a: number,
   b: number,
   costA: number,
@@ -382,10 +399,14 @@ function allocationEfficiency(
   noiseA: number,
   noiseB: number,
   budget: number
-): number {
+): AllocationQuality {
   const candidateVariance = allocationVariance(a, b, noiseA, noiseB);
   const optimum = experimentalOptimum(costA, costB, noiseA, noiseB, budget);
-  return Math.max(0, Math.min(1, rationalRatioToNumber(optimum.variance, candidateVariance)));
+  const ratio = Math.max(0, Math.min(1, rationalRatioToNumber(optimum.variance, candidateVariance)));
+  return {
+    ratio,
+    score: boundedRelativeScore(ratio, compareRational(candidateVariance, optimum.variance) === 0)
+  };
 }
 
 function transition(state: InternalState, action: QuantResearchAction): InternalState {
@@ -485,14 +506,14 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
     validateExperimentalAllocation(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.totalBudget);
     const summaryA = mean(state.sequenceA.slice(0, allocation.a));
     const summaryB = mean(state.sequenceB.slice(0, allocation.b));
-    const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
+    const quality = allocationQuality(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
     let next = appendAction(state, action, {
       stage: "EXPERIMENT_DECISION",
       initialAllocation: { a: allocation.a, b: allocation.b },
       summaryA,
       summaryB
     });
-    next = appendEvidence(next, [evidence("SAMPLE_EFFICIENCY", state.stage, efficiency * 100, "Initial sample allocation was scored against the best feasible information allocation.")]);
+    next = appendEvidence(next, [evidence("SAMPLE_EFFICIENCY", state.stage, quality.score, "Initial sample allocation was scored against the best feasible information allocation.")]);
     return next;
   }
   if (state.stage === "EXPERIMENT_DECISION") {
@@ -506,11 +527,11 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
   if (state.stage === "PERTURBED_ALLOCATION") {
     const allocation = requireAction(state, action, "ALLOCATE_SAMPLE");
     validateExperimentalAllocation(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.totalBudget);
-    const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
+    const quality = allocationQuality(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
-      evidence("ADAPTATION", state.stage, efficiency * 100, "Adaptation quality reflects allocation efficiency under the changed experiment costs."),
-      evidence("SAMPLE_EFFICIENCY", state.stage, efficiency * 100, "Perturbed allocation was scored against the new feasible information frontier.")
+      evidence("ADAPTATION", state.stage, quality.score, "Adaptation quality reflects allocation efficiency under the changed experiment costs."),
+      evidence("SAMPLE_EFFICIENCY", state.stage, quality.score, "Perturbed allocation was scored against the new feasible information frontier.")
     ]);
     return next;
   }
@@ -553,10 +574,11 @@ function transitionOptimization(state: OptimizationState, action: QuantResearchA
     const feasible = isFeasible(x, y, state.config.budget, state.config.maxX, state.config.maxY);
     const value = feasible ? objective(x, y, state.coefficientX, state.coefficientY, state.basePenalty) : 0;
     const quality = feasible ? objectiveQuality(value, state.baseBestObjective) : 0;
+    const qualityScore = feasible ? boundedRelativeScore(quality, value === state.baseBestObjective) : 0;
     let next = appendAction(state, action, { stage: "PERTURBED_OPTIMIZATION" });
     next = appendEvidence(next, [
       evidence("CONSTRAINT_DISCIPLINE", state.stage, feasible ? 100 : 0, "Submitted parameters were checked against all stated constraints."),
-      evidence("OBJECTIVE_QUALITY", state.stage, quality * 100, "Objective quality was measured against the exact best feasible application-owned objective.")
+      evidence("OBJECTIVE_QUALITY", state.stage, qualityScore, "Objective quality was measured against the exact best feasible application-owned objective.")
     ]);
     return next;
   }
@@ -566,11 +588,12 @@ function transitionOptimization(state: OptimizationState, action: QuantResearchA
     const feasible = isFeasible(x, y, state.config.perturbedBudget, state.config.maxX, state.config.maxY);
     const value = feasible ? objective(x, y, state.coefficientX, state.coefficientY, state.config.perturbedPenalty) : 0;
     const quality = feasible ? objectiveQuality(value, state.perturbedBestObjective) : 0;
+    const qualityScore = feasible ? boundedRelativeScore(quality, value === state.perturbedBestObjective) : 0;
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
       evidence("CONSTRAINT_DISCIPLINE", state.stage, feasible ? 100 : 0, "Revised parameters were checked against the perturbed constraints."),
-      evidence("OBJECTIVE_QUALITY", state.stage, quality * 100, "Perturbed objective quality was compared with the new exact optimum."),
-      evidence("ADAPTATION", state.stage, quality * 100, "Adaptation quality reflects objective quality under the changed constraint and loss function.")
+      evidence("OBJECTIVE_QUALITY", state.stage, qualityScore, "Perturbed objective quality was compared with the new exact optimum."),
+      evidence("ADAPTATION", state.stage, qualityScore, "Adaptation quality reflects objective quality under the changed constraint and loss function.")
     ]);
     return next;
   }
@@ -749,9 +772,13 @@ function resultFor(state: InternalState): QuantResearchResult {
     sums.set(item.category, { total: current.total + item.score, count: current.count + 1 });
   }
   const metrics: Partial<Record<QuantResearchEvidenceCategory, number>> = {};
-  for (const [category, aggregate] of sums) metrics[category] = boundedScore(aggregate.total / aggregate.count);
+  for (const [category, aggregate] of sums) {
+    const categoryScores = state.evidence.filter((item) => item.category === category).map((item) => item.score);
+    if (categoryScores.length !== aggregate.count) throw new Error("Evidence aggregation invariant violated");
+    metrics[category] = aggregateScores(categoryScores);
+  }
   const metricValues = Object.values(metrics);
-  const overallScore = metricValues.length === 0 ? 0 : boundedScore(metricValues.reduce((sum, value) => sum + value, 0) / metricValues.length);
+  const overallScore = aggregateScores(metricValues);
   return {
     status: state.status,
     family: state.family,
@@ -812,24 +839,6 @@ function validateGeneratedScenario(state: InternalState): void {
       if (hasSharedPair(base.allocations, perturbed.allocations)) {
         throw new QuantResearchError("INVALID_DEFINITION", "Experiment cost perturbation leaves an optimal allocation unchanged");
       }
-      for (const allocation of base.allocations) {
-        const remainsFeasible =
-          allocation.a * state.config.perturbedCostA + allocation.b * state.config.perturbedCostB <= state.config.totalBudget;
-        if (
-          remainsFeasible &&
-          boundedScore(allocationEfficiency(
-            allocation.a,
-            allocation.b,
-            state.config.perturbedCostA,
-            state.config.perturbedCostB,
-            state.config.noiseA,
-            state.config.noiseB,
-            state.config.totalBudget
-          ) * 100) === 100
-        ) {
-          throw new QuantResearchError("INVALID_DEFINITION", "Experiment perturbation does not require adaptation for full credit");
-        }
-      }
       const minA = Math.min(...state.sequenceA);
       const maxA = Math.max(...state.sequenceA);
       const minB = Math.min(...state.sequenceB);
@@ -861,20 +870,6 @@ function validateGeneratedScenario(state: InternalState): void {
       );
       if (hasSharedOptimizationPoint(base, perturbed)) {
         throw new QuantResearchError("INVALID_DEFINITION", "Optimization perturbation leaves an exact optimum unchanged");
-      }
-      for (const point of base) {
-        if (!isFeasible(point.x, point.y, state.config.perturbedBudget, state.config.maxX, state.config.maxY)) continue;
-        const perturbedValue = objective(
-          point.x,
-          point.y,
-          state.coefficientX,
-          state.coefficientY,
-          state.config.perturbedPenalty
-        );
-        const perturbedQuality = objectiveQuality(perturbedValue, state.perturbedBestObjective);
-        if (boundedScore(perturbedQuality * 100) === 100) {
-          throw new QuantResearchError("INVALID_DEFINITION", "Optimization perturbation does not require adaptation for full credit");
-        }
       }
       break;
     }
