@@ -304,8 +304,7 @@ export const GroundedEvaluationReadModelSchema = z.object({
 
   for (const milestone of evaluation.milestones) {
     if (
-      (milestone.achieved && milestone.achievedAtTurnId === undefined)
-      || (!milestone.achieved && milestone.achievedAtTurnId !== undefined)
+      (!milestone.achieved && milestone.achievedAtTurnId !== undefined)
       || (milestone.achieved && milestone.supportLevel === "INSUFFICIENT")
     ) {
       context.addIssue({
