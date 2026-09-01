@@ -19,7 +19,8 @@ const SENSITIVE_BASENAMES = new Set([
   "service_account.json",
   "application_default_credentials.json",
   ".netrc",
-  ".git-credentials"
+  ".git-credentials",
+  ".envrc"
 ]);
 
 const SENSITIVE_RELATIVE_PATHS = new Set([
@@ -30,6 +31,8 @@ const SENSITIVE_RELATIVE_PATHS = new Set([
 ]);
 
 const SENSITIVE_EXTENSIONS = new Set([
+  ".env",
+  ".envrc",
   ".pem",
   ".key",
   ".p12",
@@ -79,7 +82,7 @@ const CONTENT_RULES = [
   },
   {
     code: "PACKAGE_AUTH",
-    pattern: /(?:^|\n)\s*(?:\/\/[^\s=]+:)?_authToken\s*=\s*(?!\$\{|\[REDACTED\]|<)[^\s#]+/gimu,
+    pattern: /(?:^|\n)\s*(?:\/\/[^\s=]+:)?(?:_authToken|_auth|_password)\s*=\s*(?!\$\{|\[REDACTED\]|<)[^\s#]+/gimu,
     message: "tracked package-manager configuration contains a literal authentication token"
   }
 ];
@@ -157,7 +160,10 @@ function checkSensitivePath(relativePath, violations) {
     });
   }
 
-  if (basename === ".env" || (basename.startsWith(".env.") && basename !== ".env.example")) {
+  if (
+    lowerBasename === ".env"
+    || (lowerBasename.startsWith(".env.") && lowerBasename !== ".env.example")
+  ) {
     violations.push({
       code: "SENSITIVE_FILE",
       file: normalized,

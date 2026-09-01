@@ -56,6 +56,26 @@ describe("public-release hygiene checker", () => {
     expect(result.status).toBe(0);
   });
 
+  it("allows the documented environment example file", () => {
+    const root = createFixture({
+      ".env.example": "EXAMPLE=value\n"
+    });
+    const result = runChecker(root);
+    expect(result.status).toBe(0);
+  });
+
+  it("allows package-manager credentials supplied by safe placeholders", () => {
+    const root = createFixture({
+      ".npmrc": [
+        "//registry.npmjs.org/:_authToken=${NPM_TOKEN}",
+        "_auth=${NPM_AUTH}",
+        "_password=[REDACTED]"
+      ].join("\n") + "\n"
+    });
+    const result = runChecker(root);
+    expect(result.status).toBe(0);
+  });
+
   const prohibitedCases: readonly {
     readonly name: string;
     readonly expectedCode: string;
@@ -65,6 +85,21 @@ describe("public-release hygiene checker", () => {
       name: "tracked environment file",
       expectedCode: "SENSITIVE_FILE",
       files: { ".env": "EXAMPLE=value\n" }
+    },
+    {
+      name: "mixed-case tracked environment file",
+      expectedCode: "SENSITIVE_FILE",
+      files: { ".Env.production": "EXAMPLE=value\n" }
+    },
+    {
+      name: "environment file with .env extension",
+      expectedCode: "SENSITIVE_FILE",
+      files: { "production.env": "EXAMPLE=value\n" }
+    },
+    {
+      name: "direnv environment file",
+      expectedCode: "SENSITIVE_FILE",
+      files: { ".envrc": "export EXAMPLE=value\n" }
     },
     {
       name: "local Windows user path",
@@ -100,6 +135,16 @@ describe("public-release hygiene checker", () => {
       name: "literal package-manager auth token",
       expectedCode: "PACKAGE_AUTH",
       files: { ".npmrc": "_auth" + "Token=" + "A".repeat(24) + "\n" }
+    },
+    {
+      name: "legacy package-manager auth credential",
+      expectedCode: "PACKAGE_AUTH",
+      files: { ".npmrc": "_auth=" + "A".repeat(24) + "\n" }
+    },
+    {
+      name: "legacy package-manager password credential",
+      expectedCode: "PACKAGE_AUTH",
+      files: { ".npmrc": "_password=" + "A".repeat(24) + "\n" }
     },
     {
       name: "binary tracked file",

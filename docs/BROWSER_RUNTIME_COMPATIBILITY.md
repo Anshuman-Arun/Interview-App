@@ -85,11 +85,9 @@ It separately confirms that `ids.ts` contains the Web Crypto implementation and 
 
 ## Limits
 
-This slice does not add Vite, React, or a browser build pipeline.
+This historical slice did not add Vite, React, or a browser build pipeline.
 
-The static import guard proves that the current shared runtime graph does not import Node builtins. It does not prove that every third-party dependency is browser-compatible or that the eventual frontend bundle is correctly configured.
-
-A later browser-shell/build slice should still run an actual Vite production build and browser smoke test.
+The static import guard proves that the shared runtime graph it covers does not import Node builtins; that remains a separate invariant from bundler compatibility. The current repository now also has a React/Vite browser shell and authoritative CI runs `pnpm build:web`, so the production bundle is validated in addition to this static import-graph check. Browser behavior is covered by the repository's browser/integration tests; this document should no longer be read as saying the build pipeline is absent.
 
 ## Authority boundary
 

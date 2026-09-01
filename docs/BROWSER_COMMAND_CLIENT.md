@@ -154,7 +154,9 @@ Authoritative mutation remains entirely server-side after authentication and pro
 
 `apps/web/src/index.ts` exports the command client together with the renderer client and authenticated renderer-stream consumer. The command server's exact-Origin CORS boundary is covered by a dedicated real-loopback suite.
 
-The repository does not yet contain the final Vite/browser build harness. This slice is validated through TypeScript, ESLint, Node's standards-compatible `fetch`/Web API implementation, and real loopback server integration tests. A later browser-build slice should verify the complete dependency graph under the actual browser bundle.
+The repository now contains the React/Vite browser shell, and authoritative CI runs a production Vite build in addition to the transport tests described here. That build verifies the current browser bundle graph rather than relying only on Node's standards-compatible `fetch`/Web API implementation.
+
+The default bare-browser `App` still has no built-in way to acquire the loopback server's client token. The current secure end-to-end product host is Electron, whose trusted bootstrap supplies a non-secret renderer marker and injects the real per-launch credential at the desktop boundary. This distinction is documented in the root `README.md` and `PROJECT.md`.
 
 ## Project credential constraint
 

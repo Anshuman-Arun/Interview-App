@@ -390,21 +390,15 @@ The deterministic fake synthesizer additionally guarantees byte-stable PCM for e
 
 The Kokoro adapter explicitly does **not** promise byte-identical neural audio. Model/runtime/GPU behavior must be benchmarked before any stronger claim is made.
 
-## Future integration
+## Current integration status and remaining wiring
 
-This branch intentionally does not depend on these currently open PRs.
+Browser audio capture/playback, secure local worker lifecycle management, and bounded local model-asset management now exist in the repository. This TTS core intentionally does not compose them itself, and none of those infrastructure modules makes live TTS a product feature.
 
-### PR #32 — local audio capture/playback infrastructure
+Remaining integration should:
 
-Integration should adapt validated `AUDIO_CHUNK` PCM into the browser playback queue. Physical `playing`/completion events from that layer, not this worker, feed renderer acknowledgement semantics.
-
-### PR #35 — secure local worker lifecycle manager
-
-Integration should place any external Kokoro process/runtime behind the lifecycle manager. This TTS core must not begin spawning/killing processes itself when that PR lands.
-
-### PR #37 — secure local model asset/cache manager
-
-Integration should resolve and integrity-check the Kokoro model/config with the asset manager, then pass the resulting trusted explicit paths into the injected Kokoro runtime. This TTS core must not download or cache models itself.
+- adapt validated `AUDIO_CHUNK` PCM into the browser playback queue, with physical `playing`/completion events from that layer—not this worker—feeding renderer acknowledgement semantics;
+- place any external Kokoro process/runtime behind the local lifecycle manager rather than adding process spawning/killing to this core;
+- resolve and integrity-check the Kokoro model/config through the model-asset boundary, then pass trusted explicit paths into the injected Kokoro runtime rather than adding download/cache ownership here.
 
 ## Explicitly deferred
 
