@@ -4,8 +4,8 @@ const NonBlankStringSchema = z.string().refine(
   (value) => value.trim().length > 0,
   { message: "Expected non-blank text" }
 );
-const PositiveFiniteNumberSchema = z.number().finite().positive();
-const NonnegativeFiniteNumberSchema = z.number().finite().nonnegative();
+const PositiveFiniteNumberSchema = z.number().positive();
+const NonnegativeFiniteNumberSchema = z.number().nonnegative();
 const PositiveSafeIntegerSchema = z.number().refine(
   (value) => Number.isSafeInteger(value) && value > 0,
   { message: "Expected a positive safe integer" }
@@ -14,7 +14,7 @@ const NonnegativeSafeIntegerSchema = z.number().refine(
   (value) => Number.isSafeInteger(value) && value >= 0,
   { message: "Expected a non-negative safe integer" }
 );
-const ProbabilitySchema = z.number().finite().min(0).max(1);
+const ProbabilitySchema = z.number().min(0).max(1);
 
 export const OrderSideSchema = z.enum(["BUY", "SELL"]);
 export type OrderSide = z.infer<typeof OrderSideSchema>;
@@ -104,17 +104,17 @@ export type TradingGameConfig = z.infer<typeof TradingGameConfigSchema>;
 
 export const TradingGameResultSchema = z.object({
   gameType: TradingGameTypeSchema,
-  totalPnL: z.number().finite(),
-  realizedPnL: z.number().finite(),
-  unrealizedPnL: z.number().finite(),
+  totalPnL: z.number(),
+  realizedPnL: z.number(),
+  unrealizedPnL: z.number(),
   finalPosition: z.number().refine(Number.isSafeInteger, {
     message: "finalPosition must be a safe integer"
   }),
-  finalCash: z.number().finite(),
+  finalCash: z.number(),
   tradeCount: NonnegativeSafeIntegerSchema,
   maxDrawdown: NonnegativeFiniteNumberSchema,
   averageSpread: NonnegativeFiniteNumberSchema,
   quoteComplianceRate: ProbabilitySchema,
-  score: z.number().finite().min(0).max(100)
+  score: z.number().min(0).max(100)
 }).strict();
 export type TradingGameResult = z.infer<typeof TradingGameResultSchema>;
