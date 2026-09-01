@@ -181,7 +181,14 @@ export const SessionEvaluationReadResponseSchema = z.discriminatedUnion("availab
     available: z.literal(false),
     reason: GroundedReadFailureReasonSchema
   }).strict()
-]);
+]).superRefine((response, context) => {
+  if (response.available && response.evaluation.sessionId !== response.sessionId) {
+    context.addIssue({
+      code: "custom",
+      message: "Evaluation read response session identity is inconsistent"
+    });
+  }
+});
 export type SessionEvaluationReadResponse = z.infer<typeof SessionEvaluationReadResponseSchema>;
 
 const TextPreviewReadSchema = z.object({
@@ -210,6 +217,15 @@ export const ReplayReadCategorySchema = z.enum([
   "SYSTEM"
 ]);
 export type ReplayReadCategory = z.infer<typeof ReplayReadCategorySchema>;
+
+const REPLAY_DELIVERY_EVENT_KINDS = new Set([
+  "DELIVERY_QUEUED",
+  "DELIVERY_STARTED",
+  "DELIVERY_EXPOSED",
+  "DELIVERY_COMPLETED",
+  "DELIVERY_CANCELLED",
+  "DELIVERY_POSSIBLY_EXPOSED"
+]);
 
 export const ReplayReadEntrySchema = z.object({
   sequence: PositiveSafeIntegerSchema,
@@ -270,7 +286,42 @@ export const ReplayReadEntrySchema = z.object({
     value: z.string().min(1).max(128).optional(),
     inferenceConfidence: z.number().min(0).max(1).optional()
   }).strict().optional()
-}).strict();
+}).strict().superRefine((entry, context) => {
+  const textMayBeRendered =
+    entry.kind === "TURN_COMMITTED"
+    || entry.kind === "BOARD_PATCH_COMMITTED"
+    || entry.kind === "DELIVERY_EXPOSED";
+  if (entry.text !== undefined && !textMayBeRendered) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay read text is not allowed for this event kind"
+    });
+  }
+
+  if (
+    entry.delivery !== undefined
+    && !REPLAY_DELIVERY_EVENT_KINDS.has(entry.kind)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay delivery detail is attached to a non-delivery event"
+    });
+  }
+
+  if (
+    entry.kind !== "DELIVERY_EXPOSED"
+    && entry.delivery !== undefined
+    && (
+      entry.delivery.contentWithheld !== true
+      || entry.delivery.boardAction !== undefined
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Non-exposed delivery content must remain withheld"
+    });
+  }
+});
 export type ReplayReadEntry = z.infer<typeof ReplayReadEntrySchema>;
 
 export const SessionReplayReadModelSchema = z.object({
@@ -347,7 +398,14 @@ export const SessionReplayReadResponseSchema = z.discriminatedUnion("available",
     available: z.literal(false),
     reason: GroundedReadFailureReasonSchema
   }).strict()
-]);
+]).superRefine((response, context) => {
+  if (response.available && response.replay.sessionId !== response.sessionId) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay read response session identity is inconsistent"
+    });
+  }
+});
 export type SessionReplayReadResponse = z.infer<typeof SessionReplayReadResponseSchema>;
 
 const ScoreBreakdownReadSchema = z.object({
