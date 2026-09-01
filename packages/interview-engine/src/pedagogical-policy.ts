@@ -1469,7 +1469,10 @@ function targetDisclosureAuthorization(
       cursor += 1;
       if (current === undefined) continue;
       for (const predecessorId of graph.predecessors.get(current) ?? []) {
-        if (relevantMilestoneIds.has(predecessorId)) continue;
+        if (
+          relevantMilestoneIds.has(predecessorId)
+          || !completed.has(predecessorId)
+        ) continue;
         const predecessor = graph.problem.interviewer.reasoningGraph.milestones.find(
           (item) => item.id === predecessorId
         );
