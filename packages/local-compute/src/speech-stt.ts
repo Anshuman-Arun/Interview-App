@@ -24,7 +24,8 @@ export interface RecognizerAudioInput {
   readonly sourceAudioBasis: SourceAudioBasis;
 }
 
-export type RecognizerCancellationCapability = "NONE" | "RUNTIME_ABORT";
+export const RecognizerCancellationCapabilitySchema = z.enum(["NONE", "RUNTIME_ABORT"]);
+export type RecognizerCancellationCapability = z.infer<typeof RecognizerCancellationCapabilitySchema>;
 
 export interface SpeechRecognizer {
   readonly modelIdentity: SpeechModelIdentity;
