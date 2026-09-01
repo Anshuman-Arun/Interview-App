@@ -533,6 +533,36 @@ describe("grounded evaluation/replay product surface", () => {
     }).success).toBe(false);
   });
 
+  it("rejects forged composite support and inconsistent collection truncation", () => {
+    const projected = projectGroundedEvaluationReadModel(evaluationFixture());
+
+    expect(GroundedEvaluationReadModelSchema.safeParse({
+      ...projected,
+      composite: {
+        ...projected.composite,
+        supportLevel: "STRONG"
+      }
+    }).success).toBe(false);
+
+    expect(GroundedEvaluationReadModelSchema.safeParse({
+      ...projected,
+      milestoneTruncation: {
+        truncated: true,
+        limit: 2,
+        remainingCount: 1
+      }
+    }).success).toBe(false);
+
+    expect(GroundedEvaluationReadModelSchema.safeParse({
+      ...projected,
+      strengthsTruncation: {
+        truncated: true,
+        limit: 2,
+        remainingCount: 1
+      }
+    }).success).toBe(false);
+  });
+
   it("rejects an oversized response before JSON parsing", async () => {
     const client = new BrowserSessionReadClient({
       baseUrl: "http://127.0.0.1:43123",
