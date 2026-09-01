@@ -127,7 +127,12 @@ describe("deterministic verification admission", () => {
       status: "VERIFIED",
       evidenceCommitted: true
     });
-    expect(admitted.appendedEventCount).toBe(2);
+    expect(admitted.appendedEventCount).toBe(3);
+    expect(harness.store.load(harness.sessionId).slice(-3).map((event) => event.type)).toEqual([
+      "VERIFICATION_RESULT_ACCEPTED",
+      "STUDENT_EVIDENCE_UPDATED",
+      "MODEL_GENERATION_SUPERSEDED"
+    ]);
     expect(harness.writer.getState().verificationRequests[work.verificationRequestId]).toMatchObject({
       status: "ACCEPTED",
       result: { status: "VERIFIED", verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME }
@@ -166,7 +171,11 @@ describe("deterministic verification admission", () => {
     const admitted = await coordinator.processResult({ envelope: verificationEnvelope(harness, work), result, verifier });
 
     expect(admitted.value).toMatchObject({ accepted: true, status: "UNRESOLVED", evidenceCommitted: false });
-    expect(admitted.appendedEventCount).toBe(1);
+    expect(admitted.appendedEventCount).toBe(2);
+    expect(harness.store.load(harness.sessionId).slice(-2).map((event) => event.type)).toEqual([
+      "VERIFICATION_RESULT_ACCEPTED",
+      "MODEL_GENERATION_SUPERSEDED"
+    ]);
     expect(harness.writer.getState().studentEvidence[evidenceKeyToString(claimEvidenceKey)]).toBeUndefined();
     harness.store.close();
   });
