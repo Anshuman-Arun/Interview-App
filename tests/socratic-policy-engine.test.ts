@@ -1348,4 +1348,81 @@ describe("target-scoped disclosure validator", () => {
     });
     expect(result.accepted).toBe(false);
   });
+
+  it("rejects an analyzer result explicitly marked UNSAFE", () => {
+    const validator = new DisclosureValidator({
+      analyze: () => ({
+        status: "UNSAFE",
+        effectiveDisclosureLevel: 0,
+        effectiveDisclosureIds: [],
+        confidence: 1,
+        reason: "synthetic unsafe result"
+      })
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "CLARIFY",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "safe-looking text"
+      },
+      request: {
+        requiredAction: "CLARIFY",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: []
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) expect(result.reason).toMatch(/unsafe/i);
+  });
+
+  it("rejects a malformed custom analyzer result instead of trusting its TypeScript type", () => {
+    const validator = new DisclosureValidator({
+      analyze: () => ({
+        status: "SAFE",
+        effectiveDisclosureLevel: 0,
+        effectiveDisclosureIds: [],
+        confidence: 2,
+        reason: "invalid confidence"
+      })
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "CLARIFY",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "safe-looking text"
+      },
+      request: {
+        requiredAction: "CLARIFY",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: []
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) expect(result.reason).toMatch(/invalid result/i);
+  });
+
+  it("fails closed if the analyzer throws", () => {
+    const validator = new DisclosureValidator({
+      analyze: () => {
+        throw new Error("analyzer implementation failure");
+      }
+    });
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "CLARIFY",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "safe-looking text"
+      },
+      request: {
+        requiredAction: "CLARIFY",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: []
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) expect(result.reason).toMatch(/analyzer failed/i);
+  });
 });
