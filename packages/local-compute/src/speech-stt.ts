@@ -204,14 +204,17 @@ const MoonshineRuntimeResultSchema = z.object({
 
 function parseMoonshineRuntimeResult(raw: unknown): z.infer<typeof MoonshineRuntimeResultSchema> {
   if (!isRecord(raw)) throw new Error("Moonshine runtime result must be an object");
+  assertAllowedOwnEnumerableKeys(raw, MOONSHINE_RESULT_KEYS, "Moonshine runtime result");
   if (typeof raw.text !== "string") throw new Error("Moonshine runtime transcript must be text");
   if (raw.text.length > MAX_SPEECH_TRANSCRIPT_CHARS) {
     throw new Error("Moonshine runtime transcript exceeds maximum length");
   }
-  if (Array.isArray(raw.words) && raw.words.length > MAX_SPEECH_WORD_TIMINGS) {
-    throw new Error("Moonshine runtime word timings exceed maximum entry count");
-  }
-  return MoonshineRuntimeResultSchema.parse(raw);
+  preflightWordTimings(raw.words, "Moonshine runtime word timings");
+  return MoonshineRuntimeResultSchema.parse({
+    text: raw.text,
+    ...(raw.confidence === undefined ? {} : { confidence: raw.confidence }),
+    ...(raw.words === undefined ? {} : { words: raw.words })
+  });
 }
 
 export interface TranscriptValidationBasis {
@@ -229,11 +232,21 @@ export function validateTranscriptCandidate(raw: unknown, expected: TranscriptVa
     ? undefined
     : SpeechModelIdentitySchema.parse(expected.modelIdentity);
   if (!isRecord(raw)) throw new Error("Recognizer result must be an object");
-  if (Array.isArray(raw.words) && raw.words.length > MAX_SPEECH_WORD_TIMINGS) {
-    throw new Error("Recognizer word timing metadata exceeds maximum entry count");
-  }
+  assertAllowedOwnEnumerableKeys(raw, TRANSCRIPT_CANDIDATE_KEYS, "Recognizer result");
+  preflightWordTimings(raw.words, "Recognizer word timing metadata");
+  preflightNestedRecord(raw.model, MODEL_IDENTITY_KEYS, "Recognizer model identity");
+  preflightNestedRecord(raw.sourceAudioBasis, SOURCE_AUDIO_BASIS_KEYS, "Recognizer source audio basis");
   const normalizedText = normalizeTranscriptText(raw.text);
-  const candidate = TranscriptCandidateSchema.parse({ ...raw, text: normalizedText });
+  const candidate = TranscriptCandidateSchema.parse({
+    requestId: raw.requestId,
+    utteranceId: raw.utteranceId,
+    text: normalizedText,
+    isFinal: raw.isFinal,
+    ...(raw.confidence === undefined ? {} : { confidence: raw.confidence }),
+    ...(raw.words === undefined ? {} : { words: raw.words }),
+    model: raw.model,
+    sourceAudioBasis: raw.sourceAudioBasis
+  });
   if (candidate.requestId !== expectedRequestId) throw new Error("Recognizer result requestId does not match request");
   if (candidate.utteranceId !== expectedUtteranceId) throw new Error("Recognizer result utteranceId does not match utterance");
   if (!sameAudioBasis(candidate.sourceAudioBasis, expectedSourceAudioBasis)) {
@@ -328,6 +341,59 @@ function validateRuntimeIdentity(value: unknown, label: string): void {
 function validateBoolean(value: unknown, label: string): boolean {
   if (typeof value !== "boolean") throw new Error(`${label} must be boolean`);
   return value;
+}
+
+const TRANSCRIPT_CANDIDATE_KEYS = new Set([
+  "requestId",
+  "utteranceId",
+  "text",
+  "isFinal",
+  "confidence",
+  "words",
+  "model",
+  "sourceAudioBasis"
+]);
+const MOONSHINE_RESULT_KEYS = new Set(["text", "confidence", "words"]);
+const WORD_TIMING_KEYS = new Set(["word", "startMs", "endMs", "confidence"]);
+const MODEL_IDENTITY_KEYS = new Set(["name", "version"]);
+const SOURCE_AUDIO_BASIS_KEYS = new Set([
+  "streamId",
+  "firstSequence",
+  "lastSequence",
+  "startTimestampMs",
+  "endTimestampMs",
+  "sampleRate",
+  "channels",
+  "sampleCount",
+  "pcmSha256"
+]);
+
+function preflightWordTimings(value: unknown, label: string): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) return;
+  if (value.length > MAX_SPEECH_WORD_TIMINGS) {
+    throw new Error(`${label} exceeds maximum entry count`);
+  }
+  for (const word of value) {
+    preflightNestedRecord(word, WORD_TIMING_KEYS, "Recognizer word timing");
+  }
+}
+
+function preflightNestedRecord(value: unknown, allowed: ReadonlySet<string>, label: string): void {
+  if (!isRecord(value)) return;
+  assertAllowedOwnEnumerableKeys(value, allowed, label);
+}
+
+function assertAllowedOwnEnumerableKeys(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  label: string
+): void {
+  for (const key in value) {
+    if (Object.prototype.hasOwnProperty.call(value, key) && !allowed.has(key)) {
+      throw new Error(`${label} contains an unexpected field`);
+    }
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
