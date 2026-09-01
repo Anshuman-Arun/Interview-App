@@ -98,6 +98,18 @@ function claimKey(
   };
 }
 
+function approachKey(
+  problem: InterviewProblem,
+  approachId: string,
+  dimension: EvidenceKey["dimension"]
+): EvidenceKey {
+  return {
+    problemId: problem.id,
+    subject: { kind: "APPROACH", approachId },
+    dimension
+  };
+}
+
 function withEvidence(
   state: SessionState,
   key: EvidenceKey,
@@ -509,10 +521,17 @@ describe("production Socratic policy engine", () => {
       action: "FOCUS_ATTENTION",
       maximumDisclosure: 1
     });
-    const decision = decidePedagogicalPolicy(state, turnId, problem);
     const branchDisclosure = problem.interviewer.protectedDisclosures.at(-1);
-    expect(decision.realizationRequest.requiredAction).toBe("DIRECTIONAL_NUDGE");
     expect(branchDisclosure).toBeDefined();
+    if (branchDisclosure !== undefined) {
+      state = {
+        ...state,
+        disclosureLedger: [branchDisclosure.id]
+      };
+    }
+
+    const decision = decidePedagogicalPolicy(state, turnId, problem);
+    expect(decision.realizationRequest.requiredAction).toBe("DIRECTIONAL_NUDGE");
     if (branchDisclosure !== undefined) {
       expect(decision.realizationRequest.allowedDisclosureIds ?? []).not.toContain(branchDisclosure.id);
     }
@@ -729,6 +748,83 @@ describe("production Socratic policy engine", () => {
     expect(decidePedagogicalPolicy(reordered, turnId, sixPeopleProblem)).toEqual(
       decidePedagogicalPolicy(state, turnId, sixPeopleProblem)
     );
+  });
+
+  it("recognizes authoritative approach-level completion without inventing missing milestone facts", () => {
+    const { state: base, turnId } = makeState();
+    const state = withEvidence(
+      base,
+      approachKey(sixPeopleProblem, "graph-complement", "PROGRESS"),
+      "COMPLETE"
+    );
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("COMPLETED_PRIMARY_APPROACH");
+    expect(decision.realizationRequest.requiredAction).toBe("ASK_ALTERNATE_SOLUTION");
+    expect(decision.realizationRequest.target).toBe("approach:two-colour-graph");
+  });
+
+  it("fails closed when the active evidence projection disagrees with evidence history", () => {
+    const { state: base, turnId } = makeState();
+    const valid = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "model-relations", "PROGRESS"),
+      "PROGRESSING"
+    );
+    const malformed: SessionState = {
+      ...valid,
+      studentEvidence: {}
+    };
+    const decision = decidePedagogicalPolicy(malformed, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest.requiredAction).toBe("CLARIFY");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("rejects a rating that is valid globally but impossible for its evidence dimension", () => {
+    const { state: base, turnId } = makeState();
+    const malformed = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "model-relations", "CORRECTNESS"),
+      "PROGRESSING"
+    );
+    const decision = decidePedagogicalPolicy(malformed, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("handles an empty committed turn conservatively", () => {
+    const { state: base, turnId } = makeState();
+    const turn = base.turns[turnId];
+    expect(turn).toBeDefined();
+    if (turn === undefined) throw new Error("missing turn");
+    const state: SessionState = {
+      ...base,
+      turns: {
+        ...base.turns,
+        [turnId]: { ...turn, studentText: "" }
+      }
+    };
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("INSUFFICIENT_EVIDENCE");
+    expect(decision.realizationRequest.requiredAction).toBe("PROBE_JUSTIFICATION");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("does not depend on the wall clock", () => {
+    const { state: base, turnId } = makeState();
+    const state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "model-relations", "PROGRESS"),
+      "PROGRESSING"
+    );
+    const before = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    const dateNow = Date.now;
+    try {
+      Date.now = () => 4_102_444_800_000;
+      expect(decidePedagogicalPolicy(state, turnId, sixPeopleProblem)).toEqual(before);
+    } finally {
+      Date.now = dateNow;
+    }
   });
 
   it("keeps protected solution text out of policy diagnostics", () => {
