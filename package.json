@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -20,6 +20,10 @@
     "start:server": "tsx apps/server/src/server.ts",
     "demo": "tsx apps/server/src/run-synthetic.ts",
     "check": "node scripts/check-public-release.mjs && tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts",
+    "build:desktop": "tsc -p apps/desktop/tsconfig.json",
+    "test:desktop": "vitest run tests/desktop-electron-bootstrap.test.ts tests/desktop-electron-adversarial.test.ts tests/desktop-hook-bootstrap.test.tsx",
+    "dev:desktop": "pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js",
+    "start:desktop": "pnpm build:web && pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production",
     "security:public": "node scripts/check-public-release.mjs"
   },
   "dependencies": {
@@ -41,6 +45,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0",
     "vite": "^8.2.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "electron": "44.0.0",
+    "happy-dom": "^20.12.0"
   }
 }

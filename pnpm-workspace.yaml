@@ -3,4 +3,5 @@ packages:
   - "packages/*"
 nodeLinker: hoisted
 allowBuilds:
+  electron: true
   esbuild: false

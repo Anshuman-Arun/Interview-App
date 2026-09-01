@@ -19,7 +19,19 @@ export default tseslint.config(
     }
   },
   {
-    files: ["scripts/**/*.mjs"],
+    files: ["scripts/**/*.mjs", "apps/desktop/**/*.cjs"],
     extends: [tseslint.configs.disableTypeChecked]
+  },
+  {
+    files: ["apps/desktop/**/*.cjs"],
+    languageOptions: {
+      globals: {
+        require: "readonly",
+        URL: "readonly"
+      }
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off"
+    }
   }
 );
