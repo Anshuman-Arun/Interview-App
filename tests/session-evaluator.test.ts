@@ -25,6 +25,7 @@ import {
   type SessionState
 } from "../packages/events/src/index.js";
 import {
+  createProviderContextSpecFingerprintSync,
   evaluateInterviewSession,
   generateEvaluationMarkdown
 } from "../packages/interview-engine/src/index.js";
@@ -35,7 +36,7 @@ const chooseDisclosure = DisclosureIdSchema.parse("disclosure_choose_person_pige
 describe("grounded session evaluator", () => {
   it("abstains for an empty session instead of fabricating a score", () => {
     const evaluation = evaluateInterviewSession(
-      initialSessionState(newSessionId()),
+      boundState(),
       sixPeopleProblem,
       {},
       { evaluatedAt: "2026-08-31T20:00:00.000Z" }
@@ -51,9 +52,9 @@ describe("grounded session evaluator", () => {
   });
 
   it("regression: turn count and word count do not create achievement, rigor, or communication evidence", () => {
-    const one = withTurns(initialSessionState(newSessionId()), 1, "short");
+    const one = withTurns(boundState(), 1, "short");
     const many = withTurns(
-      initialSessionState(newSessionId()),
+      boundState(),
       25,
       Array.from({ length: 100 }, () => "word").join(" ")
     );
@@ -70,14 +71,14 @@ describe("grounded session evaluator", () => {
   });
 
   it("uses only active scoped evidence for milestone achievement", () => {
-    let active = initialSessionState(newSessionId());
+    let active = boundState();
     active = setHistory(active, milestoneKey("model-relations", "PROGRESS"), [
       { value: "COMPLETE", sequence: 10, status: "ACTIVE" }
     ]);
     expect(milestone(evaluateInterviewSession(active, sixPeopleProblem), "model-relations").achieved)
       .toBe(true);
 
-    let stale = initialSessionState(newSessionId());
+    let stale = boundState();
     stale = setHistory(stale, milestoneKey("model-relations", "PROGRESS"), [
       { value: "COMPLETE", sequence: 5, status: "STALE" }
     ]);
@@ -103,13 +104,13 @@ describe("grounded session evaluator", () => {
       subject: { kind: "CLAIM", claimId: "contradicted-claim" },
       dimension: "CORRECTNESS"
     };
-    let mixed = initialSessionState(newSessionId());
+    let mixed = boundState();
     mixed = withVerification(mixed, verifiedKey, "VERIFIED", 10, "verified");
     mixed = withVerification(mixed, contradictedKey, "CONTRADICTED", 20, "contradicted");
     expect(evaluateInterviewSession(mixed, sixPeopleProblem).scores.technicalCorrectness).toBe(50);
 
     const unresolved = withVerification(
-      initialSessionState(newSessionId()),
+      boundState(),
       verifiedKey,
       "UNRESOLVED",
       10,
@@ -120,14 +121,14 @@ describe("grounded session evaluator", () => {
   });
 
   it("scores rigor from justification evidence, not from verification-request count", () => {
-    let rigorous = initialSessionState(newSessionId());
+    let rigorous = boundState();
     rigorous = setHistory(rigorous, milestoneKey("model-relations", "JUSTIFICATION"), [
       { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
     ]);
     expect(evaluateInterviewSession(rigorous, sixPeopleProblem).scores.rigor).toBe(100);
 
     const pending = withPendingVerification(
-      withTurns(initialSessionState(newSessionId()), 20, "not evidence"),
+      withTurns(boundState(), 20, "not evidence"),
       milestoneKey("model-relations", "CORRECTNESS"),
       30,
       "pending"
@@ -138,7 +139,7 @@ describe("grounded session evaluator", () => {
   });
 
   it("deduplicates repeated exposure and ignores queued or cancelled assistance", () => {
-    let state = completeMilestone(initialSessionState(newSessionId()), "choose-vertex", 20);
+    let state = completeMilestone(boundState(), "choose-vertex", 20);
     state = withDelivery(state, chooseDisclosure, 2, "EXPOSED", 5, "first");
     state = withDelivery(state, chooseDisclosure, 2, "COMPLETED", 5, "repeat");
     state = withDelivery(state, chooseDisclosure, 4, "CANCELLED", 4, "cancelled");
@@ -147,46 +148,49 @@ describe("grounded session evaluator", () => {
     const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
     expect(evaluation.disclosedInterventions).toHaveLength(2);
     expect(milestone(evaluation, "choose-vertex").assistanceDisclosureIds).toEqual([chooseDisclosure]);
-    expect(evaluation.scores.independence).toBe(75);
+    expect(evaluation.scores.independence).toBeNull();
+    expect(evaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
+    expect(evaluation.disclosedInterventions.map((item) => item.deliveryStatus))
+      .toEqual(["EXPOSED", "COMPLETED"]);
   });
 
   it("treats POSSIBLY_EXPOSED conservatively and never mistakes generation basis for exposure time", () => {
-    let uncertain = completeMilestone(initialSessionState(newSessionId()), "choose-vertex", 20);
+    let uncertain = completeMilestone(boundState(), "choose-vertex", 20);
     uncertain = withDelivery(uncertain, chooseDisclosure, 2, "POSSIBLY_EXPOSED", 5, "possible");
     const uncertainEvaluation = evaluateInterviewSession(uncertain, sixPeopleProblem);
-    expect(uncertainEvaluation.scores.independence).toBe(75);
-    expect(uncertainEvaluation.dimensionResults.independence.supportLevel).toBe("WEAK");
+    expect(uncertainEvaluation.scores.independence).toBeNull();
+    expect(uncertainEvaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
     expect(uncertainEvaluation.disclosedInterventions[0]?.deliveryStatus).toBe("POSSIBLY_EXPOSED");
 
-    let laterBasis = completeMilestone(initialSessionState(newSessionId()), "choose-vertex", 10);
+    let laterBasis = completeMilestone(boundState(), "choose-vertex", 10);
     laterBasis = withDelivery(laterBasis, chooseDisclosure, 2, "EXPOSED", 20, "later-basis");
     const laterBasisEvaluation = evaluateInterviewSession(laterBasis, sixPeopleProblem);
-    expect(laterBasisEvaluation.scores.independence).toBe(75);
-    expect(laterBasisEvaluation.dimensionResults.independence.supportLevel).toBe("WEAK");
+    expect(laterBasisEvaluation.scores.independence).toBeNull();
+    expect(laterBasisEvaluation.dimensionResults.independence.supportLevel).toBe("INSUFFICIENT");
   });
 
   it("scores error recovery only from actual evidence transitions", () => {
     const key = milestoneKey("model-relations", "CORRECTNESS");
-    let recovered = initialSessionState(newSessionId());
+    let recovered = boundState();
     recovered = setHistory(recovered, key, [
       { value: "LOCAL_ERROR", sequence: 10, status: "SUPERSEDED" },
       { value: "CORRECT", sequence: 20, status: "ACTIVE" }
     ]);
     expect(evaluateInterviewSession(recovered, sixPeopleProblem).scores.errorRecovery).toBe(100);
 
-    let unresolved = initialSessionState(newSessionId());
+    let unresolved = boundState();
     unresolved = setHistory(unresolved, key, [
       { value: "LOCAL_ERROR", sequence: 10, status: "SUPERSEDED" },
       { value: "STRUCTURAL_ERROR", sequence: 20, status: "ACTIVE" }
     ]);
     expect(evaluateInterviewSession(unresolved, sixPeopleProblem).scores.errorRecovery).toBe(0);
 
-    expect(evaluateInterviewSession(withTurns(initialSessionState(newSessionId()), 40, "turn"), sixPeopleProblem)
+    expect(evaluateInterviewSession(withTurns(boundState(), 40, "turn"), sixPeopleProblem)
       .scores.errorRecovery).toBeNull();
   });
 
   it("renormalizes partial composites and rejects malformed rubrics", () => {
-    let state = initialSessionState(newSessionId());
+    let state = boundState();
     state = setHistory(state, milestoneKey("model-relations", "CORRECTNESS"), [
       { value: "CORRECT", sequence: 10, status: "ACTIVE" }
     ]);
@@ -213,7 +217,7 @@ describe("grounded session evaluator", () => {
   });
 
   it("is deterministic, timestamp-independent for scoring, and omits raw private content", () => {
-    let state = completeMilestone(initialSessionState(newSessionId()), "choose-vertex", 20);
+    let state = completeMilestone(boundState(), "choose-vertex", 20);
     state = withTurns(state, 1, "PRIVATE_TRANSCRIPT_SENTINEL");
     state = withDelivery(
       state,
@@ -245,6 +249,18 @@ describe("grounded session evaluator", () => {
   });
 });
 
+function boundState(): SessionState {
+  return {
+    ...initialSessionState(newSessionId()),
+    problem: {
+      id: sixPeopleProblem.id,
+      version: sixPeopleProblem.version,
+      prompt: sixPeopleProblem.public.prompt,
+      providerContextSpecSha256: createProviderContextSpecFingerprintSync(sixPeopleProblem)
+    }
+  };
+}
+
 function milestone(
   evaluation: ReturnType<typeof evaluateInterviewSession>,
   milestoneId: string
@@ -272,6 +288,8 @@ function setHistory(
     readonly value: EvidenceRating;
     readonly sequence: number;
     readonly status: EvidenceRecordState["status"];
+    readonly evidenceEventIds?: readonly ReturnType<typeof EventIdSchema.parse>[];
+    readonly confidence?: number;
   }[]
 ): SessionState {
   const keyString = evidenceKeyToString(key);
@@ -284,8 +302,10 @@ function setHistory(
       key,
       value: {
         value: spec.value,
-        inferenceConfidence: 0.95,
-        evidenceEventIds: [EventIdSchema.parse("support_" + String(spec.sequence) + "_" + String(index))],
+        inferenceConfidence: spec.confidence ?? 0.95,
+        evidenceEventIds: spec.evidenceEventIds === undefined
+          ? [EventIdSchema.parse("support_" + String(spec.sequence) + "_" + String(index))]
+          : [...spec.evidenceEventIds],
         lastUpdatedSequence: spec.sequence
       },
       status: spec.status,
@@ -376,7 +396,11 @@ function withDelivery(
         status: "VALIDATED"
       }
     },
-    deliveries: { ...state.deliveries, [deliveryId]: atom }
+    deliveries: { ...state.deliveries, [deliveryId]: atom },
+    disclosureLedger:
+      status === "EXPOSED" || status === "COMPLETED" || status === "POSSIBLY_EXPOSED"
+        ? Array.from(new Set([...state.disclosureLedger, disclosureId]))
+        : state.disclosureLedger
   };
 }
 
@@ -390,7 +414,8 @@ function withVerification(
   const requestId = RequestIdSchema.parse("verification_" + label);
   const turnId = TurnIdSchema.parse("turn_verification_" + label);
   const confidence = status === "UNRESOLVED" ? 0.7 : 1;
-  return {
+  const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
+  const next: SessionState = {
     ...state,
     verificationRequests: {
       ...state.verificationRequests,
@@ -410,7 +435,7 @@ function withVerification(
         interpretationConfidence: confidence,
         evidenceKey: key,
         evidenceEventIds: [EventIdSchema.parse("verification_support_" + label)],
-        requestedEventId: EventIdSchema.parse("verification_requested_" + label),
+        requestedEventId,
         status: "ACCEPTED",
         result: {
           status,
@@ -421,6 +446,14 @@ function withVerification(
       }
     }
   };
+  if (status !== "VERIFIED") return next;
+  return setHistory(next, key, [{
+    value: "CORRECT",
+    sequence: basisSequence + 2,
+    status: "ACTIVE",
+    confidence,
+    evidenceEventIds: [requestedEventId]
+  }]);
 }
 
 function withPendingVerification(
