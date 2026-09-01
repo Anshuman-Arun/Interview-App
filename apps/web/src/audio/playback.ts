@@ -620,8 +620,8 @@ export class BrowserAudioPlayback {
       Reflect.apply(addEventListener, element, [type, listener]);
     } catch (error) {
       if (!this.isActivePending(pending)) {
-        const removeEventListener = pending.removeEventListener;
-        if (removeEventListener !== undefined) {
+        const removeEventListener: unknown = pending.removeEventListener;
+        if (typeof removeEventListener === "function") {
           safely(() => Reflect.apply(removeEventListener, element, [type, listener]));
         }
         this.releaseDetachedElement(element);
@@ -632,8 +632,8 @@ export class BrowserAudioPlayback {
 
     if (this.isActivePending(pending)) return true;
 
-    const removeEventListener = pending.removeEventListener;
-    if (removeEventListener !== undefined) {
+    const removeEventListener: unknown = pending.removeEventListener;
+    if (typeof removeEventListener === "function") {
       safely(() => Reflect.apply(removeEventListener, element, [type, listener]));
     }
     this.releaseDetachedElement(element);

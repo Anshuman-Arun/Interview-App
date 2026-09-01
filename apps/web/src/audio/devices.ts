@@ -40,7 +40,7 @@ export class BrowserAudioDeviceManager {
     }
     let enumerateDevices: unknown;
     try {
-      enumerateDevices = Reflect.get(mediaDevices, "enumerateDevices") as unknown;
+      enumerateDevices = Reflect.get(mediaDevices, "enumerateDevices");
     } catch (error) {
       if (isPermissionDenied(error)) {
         return { status: "PERMISSION_DENIED", devices: [] };
@@ -96,8 +96,8 @@ export class BrowserAudioDeviceManager {
     let addEventListener: unknown;
     let removeEventListener: unknown;
     try {
-      addEventListener = Reflect.get(mediaDevices, "addEventListener") as unknown;
-      removeEventListener = Reflect.get(mediaDevices, "removeEventListener") as unknown;
+      addEventListener = Reflect.get(mediaDevices, "addEventListener");
+      removeEventListener = Reflect.get(mediaDevices, "removeEventListener");
     } catch (error) {
       throw new AudioInfrastructureError(
         isPermissionDenied(error) ? "PERMISSION_DENIED" : "UNSUPPORTED",
