@@ -516,6 +516,13 @@ export class SpeechWorkerCore {
       step = VoiceActivityStepSchema.parse(
         context.vad.step(observation.speechProbability, frame.durationMs)
       );
+      const postStepSnapshot = VoiceActivitySnapshotSchema.parse(context.vad.snapshot());
+      if (step.state !== postStepSnapshot.state
+          || step.speechMs !== postStepSnapshot.speechMs
+          || step.silenceMs !== postStepSnapshot.silenceMs
+          || step.utteranceMs !== postStepSnapshot.utteranceMs) {
+        throw new Error("VAD step disagrees with post-step state");
+      }
     } catch {
       this.abandonStream(context);
       throw new SpeechWorkerCoreError("INTERNAL_ERROR", "VAD state machine returned an invalid state");
