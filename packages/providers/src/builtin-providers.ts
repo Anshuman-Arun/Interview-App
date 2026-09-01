@@ -17,9 +17,8 @@ const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 const registerProviderDefinitions = ProviderRegistry.prototype.registerMany;
 /* eslint-enable @typescript-eslint/unbound-method */
 
-function isProviderControlPlaneError(value: unknown): value is ProviderControlPlaneError {
-  return ProviderControlPlaneError.isControlPlaneError(value);
-}
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of the private-brand checker.
+const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
 
 const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
 const PROPOSAL_KEYS = Object.freeze([
