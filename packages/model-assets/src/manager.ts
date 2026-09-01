@@ -257,7 +257,7 @@ function validateOptionalAbortSignal(value: unknown): AbortSignal | undefined {
 }
 
 function isSignalAborted(signal: AbortSignal | undefined): boolean {
-  return isSignalAborted(signal);
+  return signal?.aborted === true;
 }
 
 function modelAssetErrorCode(error: unknown): ModelAssetErrorCode {
