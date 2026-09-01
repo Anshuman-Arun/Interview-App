@@ -533,7 +533,25 @@ describe("curated problem bank", () => {
     const root = graph.milestones.find((milestone) => !incomingTargets.has(milestone.id));
     if (root === undefined) throw new Error("Expected graph root");
     delete root.optionalPrerequisiteIds;
-    delete root.protectedDisclosureIds;
+
+    const disclosureReferenceCounts = new Map<string, number>();
+    for (const milestone of graph.milestones) {
+      for (const disclosureId of milestone.protectedDisclosureIds ?? []) {
+        disclosureReferenceCounts.set(
+          disclosureId,
+          (disclosureReferenceCounts.get(disclosureId) ?? 0) + 1
+        );
+      }
+    }
+    const disclosureMilestone = graph.milestones.find((milestone) =>
+      (milestone.protectedDisclosureIds ?? []).some(
+        (disclosureId) => disclosureReferenceCounts.get(disclosureId) === 1
+      )
+    );
+    if (disclosureMilestone === undefined) {
+      throw new Error("Expected singly referenced disclosure fixture");
+    }
+    delete disclosureMilestone.protectedDisclosureIds;
 
     expect(() => assertReasoningGraphFixtureIntegrity(graph as never)).not.toThrow();
 
