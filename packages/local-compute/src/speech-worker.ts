@@ -17,6 +17,7 @@ import {
   MAX_SPEECH_PRE_SPEECH_DURATION_MS,
   MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
   MAX_SPEECH_REMEMBERED_MESSAGES,
+  MAX_SPEECH_UTTERANCE_DURATION_MS,
   MAX_SPEECH_REMEMBERED_RESULT_CHARS,
   MAX_SPEECH_VAD_TIMEOUT_MS,
   SpeechCancelRequestSchema,
@@ -73,6 +74,7 @@ interface StreamContext {
   readonly streamId: SpeechStreamId;
   readonly vad: VoiceActivityStateMachine;
   readonly endpointing: AdaptiveEndpointingPolicy;
+  readonly endpointMaximumMs: number;
   readonly buffer: BoundedPcmBuffer;
   processingTail: Promise<void>;
   order: PcmOrderState | undefined;
@@ -763,14 +765,36 @@ export class SpeechWorkerCore {
   ): EndpointingDecision {
     try {
       const snapshot = VoiceActivitySnapshotSchema.parse(context.vad.snapshot());
-      return EndpointingDecisionSchema.parse(context.endpointing.decide({
+      const decision = EndpointingDecisionSchema.parse(context.endpointing.decide({
         ...snapshot,
         ...(options.forceMaximumDuration === true
-          ? { utteranceMs: context.endpointing.getMaximumUtteranceMs() }
+          ? { utteranceMs: context.endpointMaximumMs }
           : {}),
         ...(options.explicitFlush === undefined ? {} : { explicitFlush: options.explicitFlush }),
         ...(options.appearsIncomplete === undefined ? {} : { appearsIncomplete: options.appearsIncomplete })
       }));
+      if (options.explicitFlush === true) {
+        if (decision.kind === "CONTINUE"
+            || (decision.kind === "FINALIZE" && decision.reason !== "FLUSH")) {
+          throw new Error("Endpointing returned an invalid explicit-flush decision");
+        }
+      } else if (decision.kind === "FINALIZE" && decision.reason === "FLUSH") {
+        throw new Error("Endpointing returned FLUSH without an explicit flush");
+      }
+      if (options.forceMaximumDuration === true) {
+        if (decision.kind === "CONTINUE"
+            || (decision.kind === "FINALIZE" && decision.reason !== "MAX_DURATION")) {
+          throw new Error("Endpointing returned an invalid maximum-duration decision");
+        }
+      } else if (decision.kind === "FINALIZE" && decision.reason === "MAX_DURATION"
+          && snapshot.utteranceMs + 0.001 < context.endpointMaximumMs) {
+        throw new Error("Endpointing finalized for maximum duration before reaching the configured maximum");
+      }
+      if (decision.kind === "FINALIZE" && decision.reason === "SILENCE"
+          && snapshot.state !== "POSSIBLE_END") {
+        throw new Error("Endpointing finalized for silence outside a possible-end state");
+      }
+      return decision;
     } catch {
       this.abandonStream(context);
       throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Endpointing policy failed");
@@ -782,7 +806,7 @@ export class SpeechWorkerCore {
       const snapshot = VoiceActivitySnapshotSchema.parse(context.vad.snapshot());
       return context.utteranceId !== undefined
         && context.buffer.getSampleCount() > 0
-        && snapshot.utteranceMs + nextFrameDurationMs > context.endpointing.getMaximumUtteranceMs() + 0.001;
+        && snapshot.utteranceMs + nextFrameDurationMs > context.endpointMaximumMs + 0.001;
     } catch {
       this.abandonStream(context);
       throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Speech endpoint state could not be inspected");
@@ -821,6 +845,12 @@ export class SpeechWorkerCore {
       if (this.allocatedVadStates.has(vad) || this.allocatedEndpointingPolicies.has(endpointing)) {
         throw new Error("Speech stream factories reused mutable state objects");
       }
+      const endpointMaximumMs = endpointing.getMaximumUtteranceMs();
+      if (!Number.isFinite(endpointMaximumMs)
+          || endpointMaximumMs <= 0
+          || endpointMaximumMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
+        throw new Error("Speech endpoint maximum duration is invalid");
+      }
       const buffer = new BoundedPcmBuffer(this.maxBufferedPcmBytes);
       this.allocatedVadStates.add(vad);
       this.allocatedEndpointingPolicies.add(endpointing);
@@ -828,6 +858,7 @@ export class SpeechWorkerCore {
         streamId,
         vad,
         endpointing,
+        endpointMaximumMs,
         buffer,
         processingTail: Promise.resolve(),
         order: undefined,
