@@ -325,18 +325,19 @@ export class BrowserAudioPlayback {
     let element: BrowserAudioElementLike | undefined;
     let elementSetupKey: object | undefined;
     try {
-      element = this.createAudio();
-      if (pending.settled || this.current !== pending) {
+      const elementValue: unknown = this.createAudio();
+      if (!this.isActivePending(pending)) {
         return;
       }
-      if (typeof element !== "object" || element === null) {
+      if (typeof elementValue !== "object" || elementValue === null) {
         throw new AudioInfrastructureError(
           "PLAYBACK_FAILED",
           "Audio element factory returned a non-object value"
         );
       }
+      element = elementValue as BrowserAudioElementLike;
 
-      const setupKey: object = element;
+      const setupKey: object = elementValue;
       elementSetupKey = setupKey;
       const existingSetupOwner = this.elementSetupOwners.get(setupKey);
       if (existingSetupOwner !== undefined && existingSetupOwner !== pending) {
@@ -350,29 +351,30 @@ export class BrowserAudioPlayback {
 
       let pause: BrowserAudioElementLike["pause"];
       try {
-        pause = element.pause;
+        const pauseValue = readUnknownProperty(element, "pause");
+        if (typeof pauseValue !== "function") {
+          throw new AudioInfrastructureError(
+            "PLAYBACK_FAILED",
+            "Browser audio element does not expose callable pause"
+          );
+        }
+        pause = pauseValue as BrowserAudioElementLike["pause"];
       } catch (error) {
-        if (pending.settled || this.current !== pending) {
+        if (!this.isActivePending(pending)) {
           this.releaseElement(pending);
           return;
         }
         throw error;
       }
-      if (typeof pause !== "function") {
-        throw new AudioInfrastructureError(
-          "PLAYBACK_FAILED",
-          "Browser audio element does not expose callable pause"
-        );
-      }
       pending.pause = pause;
 
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         this.releaseElement(pending);
         return;
       }
 
       element.preload = "auto";
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         this.releaseDetachedElement(element);
         return;
       }
@@ -387,7 +389,7 @@ export class BrowserAudioPlayback {
           this.releaseDetachedElement(element);
           return;
         }
-        if (pending.settled || this.current !== pending) {
+        if (!this.isActivePending(pending)) {
           this.releaseDetachedElement(element);
           return;
         }
@@ -400,8 +402,8 @@ export class BrowserAudioPlayback {
         && priorSinkState !== "";
 
       if (explicitOutput || mustResetDefaultOutput) {
-        const setSinkId = element.setSinkId;
-        if (pending.settled || this.current !== pending) {
+        const setSinkId = readUnknownProperty(element, "setSinkId");
+        if (!this.isActivePending(pending)) {
           this.releaseDetachedElement(element);
           return;
         }
@@ -419,17 +421,17 @@ export class BrowserAudioPlayback {
 
         let sinkOperation: Promise<void>;
         try {
-          sinkOperation = Promise.resolve(setSinkId.call(element, requestedSinkId));
+          const sinkResult: unknown = Reflect.apply(setSinkId, element, [requestedSinkId]);
+          sinkOperation = Promise.resolve(sinkResult).then(() => undefined);
         } catch (error) {
-          if (pending.settled || this.current !== pending) {
+          if (!this.isActivePending(pending)) {
             this.releaseDetachedElement(element);
             return;
           }
           throw mapOutputSelectionError(error);
         }
 
-        let trackedSinkOperation: Promise<void>;
-        trackedSinkOperation = sinkOperation.then(
+        const trackedSinkOperation: Promise<void> = sinkOperation.then(
           () => {
             if (this.elementSinkOperations.get(setupKey) === trackedSinkOperation) {
               this.elementSinkStates.set(setupKey, requestedSinkId);
@@ -460,7 +462,7 @@ export class BrowserAudioPlayback {
         }
       }
 
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         this.releaseDetachedElement(element);
         return;
       }
@@ -473,7 +475,7 @@ export class BrowserAudioPlayback {
           void invoke(pending.request.callbacks?.onStarted).catch(() => undefined);
         },
         ended: (): void => {
-          if (pending.settled || this.current !== pending) return;
+          if (!this.isActivePending(pending)) return;
           if (!pending.hasStarted) {
             this.failCurrent(
               pending,
@@ -487,7 +489,7 @@ export class BrowserAudioPlayback {
           this.completeCurrent(pending);
         },
         error: (): void => {
-          if (pending.settled || this.current !== pending) return;
+          if (!this.isActivePending(pending)) return;
           this.failCurrent(
             pending,
             new AudioInfrastructureError("PLAYBACK_FAILED", "Browser audio element reported a playback error")
@@ -499,19 +501,19 @@ export class BrowserAudioPlayback {
       if (!this.attachCurrentListener(pending, element, "ended", listeners.ended)) return;
       if (!this.attachCurrentListener(pending, element, "error", listeners.error)) return;
 
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         this.releaseDetachedElement(element);
         return;
       }
 
       element.src = pending.request.source;
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         this.releaseDetachedElement(element);
         return;
       }
 
-      const play = element.play;
-      if (pending.settled || this.current !== pending) {
+      const play = readUnknownProperty(element, "play");
+      if (!this.isActivePending(pending)) {
         this.releaseDetachedElement(element);
         return;
       }
@@ -523,9 +525,10 @@ export class BrowserAudioPlayback {
       }
       let playOperation: Promise<void>;
       try {
-        playOperation = play.call(element);
+        const playResult: unknown = Reflect.apply(play, element, []);
+        playOperation = Promise.resolve(playResult).then(() => undefined);
       } catch (error) {
-        if (pending.settled || this.current !== pending) {
+        if (!this.isActivePending(pending)) {
           this.releaseDetachedElement(element);
           return;
         }
@@ -544,12 +547,12 @@ export class BrowserAudioPlayback {
         throw playOutcome.error;
       }
 
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         this.releaseDetachedElement(element);
         return;
       }
     } catch (error) {
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         if (
           element !== undefined
           && (
@@ -583,43 +586,43 @@ export class BrowserAudioPlayback {
   ): boolean {
     let addEventListener: BrowserAudioElementLike["addEventListener"];
     try {
-      addEventListener = element.addEventListener;
+      const addEventListenerValue = readUnknownProperty(element, "addEventListener");
+      if (typeof addEventListenerValue !== "function") {
+        throw new AudioInfrastructureError(
+          "PLAYBACK_FAILED",
+          "Browser audio element does not expose callable event listener registration"
+        );
+      }
+      addEventListener = addEventListenerValue as BrowserAudioElementLike["addEventListener"];
       if (pending.removeEventListener === undefined) {
-        const removeEventListener = element.removeEventListener;
+        const removeEventListener = readUnknownProperty(element, "removeEventListener");
         if (typeof removeEventListener !== "function") {
           throw new AudioInfrastructureError(
             "PLAYBACK_FAILED",
             "Browser audio element does not expose callable event listener removal"
           );
         }
-        pending.removeEventListener = removeEventListener;
+        pending.removeEventListener = removeEventListener as BrowserAudioElementLike["removeEventListener"];
       }
     } catch (error) {
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         this.releaseDetachedElement(element);
         return false;
       }
       throw error;
     }
 
-    if (pending.settled || this.current !== pending) {
+    if (!this.isActivePending(pending)) {
       this.releaseDetachedElement(element);
       return false;
     }
-    if (typeof addEventListener !== "function") {
-      throw new AudioInfrastructureError(
-        "PLAYBACK_FAILED",
-        "Browser audio element does not expose callable event listener registration"
-      );
-    }
-
     try {
-      addEventListener.call(element, type, listener);
+      Reflect.apply(addEventListener, element, [type, listener]);
     } catch (error) {
-      if (pending.settled || this.current !== pending) {
+      if (!this.isActivePending(pending)) {
         const removeEventListener = pending.removeEventListener;
         if (removeEventListener !== undefined) {
-          safely(() => removeEventListener.call(element, type, listener));
+          safely(() => Reflect.apply(removeEventListener, element, [type, listener]));
         }
         this.releaseDetachedElement(element);
         return false;
@@ -627,11 +630,11 @@ export class BrowserAudioPlayback {
       throw error;
     }
 
-    if (!pending.settled && this.current === pending) return true;
+    if (this.isActivePending(pending)) return true;
 
     const removeEventListener = pending.removeEventListener;
     if (removeEventListener !== undefined) {
-      safely(() => removeEventListener.call(element, type, listener));
+      safely(() => Reflect.apply(removeEventListener, element, [type, listener]));
     }
     this.releaseDetachedElement(element);
     return false;
@@ -704,12 +707,17 @@ export class BrowserAudioPlayback {
   }
 
   private releaseDetachedElement(element: BrowserAudioElementLike, shouldPause = true): void {
-    if (shouldPause) safely(() => element.pause());
+    if (shouldPause) {
+      safely(() => {
+        const pause = readUnknownProperty(element, "pause");
+        if (typeof pause === "function") Reflect.apply(pause, element, []);
+      });
+    }
     let sourceAttributeRemoved = false;
     try {
-      const removeAttribute = element.removeAttribute;
-      if (removeAttribute !== undefined) {
-        removeAttribute.call(element, "src");
+      const removeAttribute = readUnknownProperty(element, "removeAttribute");
+      if (typeof removeAttribute === "function") {
+        Reflect.apply(removeAttribute, element, ["src"]);
         sourceAttributeRemoved = true;
       }
     } catch {
@@ -744,11 +752,15 @@ export class BrowserAudioPlayback {
     }
 
     if (pause !== undefined) {
-      safely(() => pause.call(element));
+      safely(() => Reflect.apply(pause, element, []));
       this.releaseDetachedElement(element, false);
     } else {
       this.releaseDetachedElement(element);
     }
+  }
+
+  private isActivePending(pending: PendingPlayback): boolean {
+    return !pending.settled && this.current === pending;
   }
 
   private recordAdmissionMutation(id: string): void {
@@ -803,62 +815,46 @@ function validatePlayableAudioIdentity(request: Pick<PlayableAudio, "id">): void
 }
 
 function validatePlayableAudioPayload(request: PlayableAudio): void {
-  if (typeof request.source !== "string" || request.source.trim().length === 0) {
+  if (request.source.trim().length === 0) {
     throw new AudioInfrastructureError("INVALID_REQUEST", "Audio playback source must be a non-blank string");
   }
-  if (request.outputDeviceId !== undefined) {
-    if (typeof request.outputDeviceId !== "string") {
-      throw new AudioInfrastructureError(
-        "INVALID_REQUEST",
-        "Audio playback output device id must be a string"
-      );
-    }
-    if (
-      request.outputDeviceId.length > 0
-      && request.outputDeviceId.trim().length === 0
-    ) {
-      throw new AudioInfrastructureError(
-        "INVALID_REQUEST",
-        "Audio playback output device id must not be whitespace-only"
-      );
-    }
-  }
-  if (request.callbacks !== undefined) {
-    if (
-      typeof request.callbacks !== "object"
-      || request.callbacks === null
-      || Array.isArray(request.callbacks)
-    ) {
-      throw new AudioInfrastructureError(
-        "INVALID_REQUEST",
-        "Audio playback callbacks must be a callback object"
-      );
-    }
-    for (const [name, callback] of Object.entries(request.callbacks)) {
-      if (!PLAYBACK_CALLBACK_NAMES.has(name)) {
-        throw new AudioInfrastructureError(
-          "INVALID_REQUEST",
-          `Unknown audio playback callback ${name}`
-        );
-      }
-      if (callback !== undefined && typeof callback !== "function") {
-        throw new AudioInfrastructureError(
-          "INVALID_REQUEST",
-          `Audio playback callback ${name} must be callable`
-        );
-      }
-    }
+  if (
+    request.outputDeviceId !== undefined
+    && request.outputDeviceId.length > 0
+    && request.outputDeviceId.trim().length === 0
+  ) {
+    throw new AudioInfrastructureError(
+      "INVALID_REQUEST",
+      "Audio playback output device id must not be whitespace-only"
+    );
   }
 }
 
-function snapshotPlayableAudioIdentity(request: PlayableAudio): Pick<PlayableAudio, "id"> {
-  return { id: request.id };
+function snapshotPlayableAudioIdentity(request: unknown): Pick<PlayableAudio, "id"> {
+  if (typeof request !== "object" || request === null) {
+    throw new AudioInfrastructureError("INVALID_REQUEST", "Audio playback request must be an object");
+  }
+  const id = readUnknownProperty(request, "id");
+  return { id: id as string };
 }
 
-function snapshotPlayableAudioPayload(request: PlayableAudio, id: string): PlayableAudio {
-  const source = request.source;
-  const outputDeviceId = request.outputDeviceId;
-  const requestCallbacks = request.callbacks;
+function snapshotPlayableAudioPayload(request: unknown, id: string): PlayableAudio {
+  if (typeof request !== "object" || request === null) {
+    throw new AudioInfrastructureError("INVALID_REQUEST", "Audio playback request must be an object");
+  }
+  const source = readUnknownProperty(request, "source");
+  const outputDeviceId = readUnknownProperty(request, "outputDeviceId");
+  const requestCallbacks = readUnknownProperty(request, "callbacks");
+  if (typeof source !== "string") {
+    throw new AudioInfrastructureError("INVALID_REQUEST", "Audio playback source must be a string");
+  }
+  if (outputDeviceId !== undefined && typeof outputDeviceId !== "string") {
+    throw new AudioInfrastructureError(
+      "INVALID_REQUEST",
+      "Audio playback output device id must be a string"
+    );
+  }
+
   let callbacks: { readonly callbacks?: BrowserAudioPlaybackCallbacks } = {};
   if (requestCallbacks !== undefined) {
     if (
@@ -872,7 +868,8 @@ function snapshotPlayableAudioPayload(request: PlayableAudio, id: string): Playa
       );
     }
 
-    for (const name of Object.keys(requestCallbacks)) {
+    const callbackNames = Object.keys(requestCallbacks);
+    for (const name of callbackNames) {
       if (!PLAYBACK_CALLBACK_NAMES.has(name)) {
         throw new AudioInfrastructureError(
           "INVALID_REQUEST",
@@ -894,14 +891,27 @@ function snapshotPlayableAudioPayload(request: PlayableAudio, id: string): Playa
   };
 }
 
-function snapshotPlaybackCallbacks(
-  callbacks: BrowserAudioPlaybackCallbacks
-): BrowserAudioPlaybackCallbacks {
-  const onStarted = callbacks.onStarted;
-  const onCompleted = callbacks.onCompleted;
-  const onCancelled = callbacks.onCancelled;
-  const onInterrupted = callbacks.onInterrupted;
-  const onFailed = callbacks.onFailed;
+function snapshotPlaybackCallbacks(callbacks: object): BrowserAudioPlaybackCallbacks {
+  const onStarted = readUnknownProperty(callbacks, "onStarted");
+  const onCompleted = readUnknownProperty(callbacks, "onCompleted");
+  const onCancelled = readUnknownProperty(callbacks, "onCancelled");
+  const onInterrupted = readUnknownProperty(callbacks, "onInterrupted");
+  const onFailed = readUnknownProperty(callbacks, "onFailed");
+
+  for (const [name, callback] of [
+    ["onStarted", onStarted],
+    ["onCompleted", onCompleted],
+    ["onCancelled", onCancelled],
+    ["onInterrupted", onInterrupted],
+    ["onFailed", onFailed]
+  ] as const) {
+    if (callback !== undefined && typeof callback !== "function") {
+      throw new AudioInfrastructureError(
+        "INVALID_REQUEST",
+        `Audio playback callback ${name} must be callable`
+      );
+    }
+  }
 
   return {
     ...(onStarted === undefined ? {} : { onStarted }),
@@ -909,7 +919,11 @@ function snapshotPlaybackCallbacks(
     ...(onCancelled === undefined ? {} : { onCancelled }),
     ...(onInterrupted === undefined ? {} : { onInterrupted }),
     ...(onFailed === undefined ? {} : { onFailed })
-  };
+  } as BrowserAudioPlaybackCallbacks;
+}
+
+function readUnknownProperty(value: object, property: PropertyKey): unknown {
+  return Reflect.get(value, property) as unknown;
 }
 
 function defaultAudioElement(): BrowserAudioElementLike {
