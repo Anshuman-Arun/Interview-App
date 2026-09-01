@@ -115,6 +115,21 @@ const HUGGING_FACE_TOKEN_FIXTURE = fixture(
   "_",
   "abcdefghijklmnopqrstuvwxyz123456"
 );
+const AWS_ACCESS_KEY_FIXTURE = fixture(
+  "AK",
+  "IA",
+  "ABCDEFGHIJKLMNOP"
+);
+const AWS_TEMP_ACCESS_KEY_FIXTURE = fixture(
+  "AS",
+  "IA",
+  "ABCDEFGHIJKLMNOP"
+);
+const SLACK_TOKEN_FIXTURE = fixture(
+  "xox",
+  "b-",
+  "abcdefghij1234567890"
+);
 const CREDENTIAL_URL_FIXTURE = fixture(
   "postgres://",
   "user:",
@@ -406,6 +421,9 @@ describe("provider configuration secret exclusion", () => {
       GITHUB_PAT_FIXTURE,
       GITLAB_TOKEN_FIXTURE,
       HUGGING_FACE_TOKEN_FIXTURE,
+      AWS_ACCESS_KEY_FIXTURE,
+      AWS_TEMP_ACCESS_KEY_FIXTURE,
+      SLACK_TOKEN_FIXTURE,
       "token=raw-private-token",
       "token=abcdefghijklmnopqrst",
       "secret=P@ssword-123456",
