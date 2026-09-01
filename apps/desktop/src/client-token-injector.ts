@@ -198,6 +198,8 @@ function isExactSessionReadEndpoint(value: string, commandOrigin: string): boole
   return (
     sessionId.length > 0
     && sessionId.length <= 512
+    && sessionId !== "."
+    && sessionId !== ".."
     && !containsUnsafeReadPathCharacter(sessionId)
   );
 }
