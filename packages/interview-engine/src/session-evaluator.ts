@@ -4,6 +4,7 @@ import {
   evidenceKeyToString,
   isDisclosedStatus,
   type CompositeDimensionName,
+  type DisclosureId,
   type DisclosureLevel,
   type DisclosedInterventionRecord,
   type EvaluationDimensionResult,
@@ -69,7 +70,7 @@ export interface EvaluationOptions {
 }
 
 interface DisclosureExposure {
-  readonly disclosureId: string;
+  readonly disclosureId: DisclosureId;
   readonly level: DisclosureLevel;
   readonly possiblyExposed: boolean;
   readonly earliestBasisSequence?: number;
@@ -327,10 +328,10 @@ function collectDisclosureData(
   problem: InterviewProblem
 ): {
   readonly interventions: readonly DisclosedInterventionRecord[];
-  readonly exposuresByDisclosureId: ReadonlyMap<string, DisclosureExposure>;
+  readonly exposuresByDisclosureId: ReadonlyMap<DisclosureId, DisclosureExposure>;
   readonly unattributedAssistanceRefs: readonly EvaluationEvidenceRef[];
 } {
-  const disclosureToMilestones = new Map<string, string[]>();
+  const disclosureToMilestones = new Map<DisclosureId, string[]>();
   for (const milestone of problem.interviewer.reasoningGraph.milestones) {
     for (const disclosureId of milestone.protectedDisclosureIds) {
       const current = disclosureToMilestones.get(disclosureId) ?? [];
@@ -339,7 +340,7 @@ function collectDisclosureData(
     }
   }
 
-  const exposuresMutable = new Map<string, {
+  const exposuresMutable = new Map<DisclosureId, {
     level: DisclosureLevel;
     possiblyExposed: boolean;
     earliestBasisSequence?: number;
@@ -418,7 +419,7 @@ function collectDisclosureData(
     }
   }
 
-  const exposures = new Map<string, DisclosureExposure>();
+  const exposures = new Map<DisclosureId, DisclosureExposure>();
   for (const [disclosureId, exposure] of exposuresMutable) {
     exposures.set(disclosureId, {
       disclosureId,
@@ -442,7 +443,7 @@ function evaluateMilestones(
   problem: InterviewProblem,
   activeEvidence: ReadonlyMap<string, EvidenceRecordState>,
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
-  exposuresByDisclosureId: ReadonlyMap<string, DisclosureExposure>
+  exposuresByDisclosureId: ReadonlyMap<DisclosureId, DisclosureExposure>
 ): readonly MilestoneFacts[] {
   const graph = problem.interviewer.reasoningGraph;
   const milestoneById = new Map(graph.milestones.map((milestone) => [milestone.id, milestone] as const));
@@ -587,7 +588,7 @@ function evaluateMilestones(
     }
 
     let assistanceLevel: DisclosureLevel = 0;
-    const assistanceDisclosureIds: string[] = [];
+    const assistanceDisclosureIds: DisclosureId[] = [];
     const priorAssistanceRefs: EvaluationEvidenceRef[] = [];
     let attributionUncertain = false;
 
@@ -871,7 +872,7 @@ function evaluateIndependence(
 function evaluateHintResponsiveness(
   problem: InterviewProblem,
   milestoneFacts: readonly MilestoneFacts[],
-  exposuresByDisclosureId: ReadonlyMap<string, DisclosureExposure>
+  exposuresByDisclosureId: ReadonlyMap<DisclosureId, DisclosureExposure>
 ): DimensionComputation {
   const factsByMilestone = new Map(
     milestoneFacts.map((item) => [item.evaluation.milestoneId, item] as const)
