@@ -1025,7 +1025,7 @@ function evaluateMilestones(
 
     for (const disclosureId of milestone.protectedDisclosureIds) {
       const exposure = exposuresByDisclosureId.get(disclosureId);
-      if (exposure === undefined) continue;
+      if (exposure === undefined || exposure.level === 0) continue;
 
       attributionUncertain = true;
       assistanceLevel = Math.max(assistanceLevel, exposure.level) as DisclosureLevel;
