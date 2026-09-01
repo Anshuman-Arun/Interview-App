@@ -1586,15 +1586,16 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       }).toThrow();
     });
 
-    it("accepts zero expectedShapeRevision", () => {
-      const action = BoardActionSchema.parse({
-        operation: "circle",
-        layer: "AI_ANNOTATION",
-        targetShapeId: "v1",
-        expectedShapeRevision: 0,
-        annotationPurpose: "initial revision"
-      });
-      expect(action.expectedShapeRevision).toBe(0);
+    it("rejects zero expectedShapeRevision in schema", () => {
+      expect(() => {
+        BoardActionSchema.parse({
+          operation: "circle",
+          layer: "AI_ANNOTATION",
+          targetShapeId: "v1",
+          expectedShapeRevision: 0,
+          annotationPurpose: "initial revision"
+        });
+      }).toThrow(/positive safe integer/u);
     });
 
     it("does not attach when expectedShapeRevision is higher than current shape revision", async () => {

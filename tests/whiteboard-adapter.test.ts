@@ -305,6 +305,65 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       expect(shapesAfter.find((s) => s.id === aiShape?.id)).toBeUndefined();
     });
 
+    it("uses annotation creation metadata rather than page order for targetless erase", async () => {
+      const base = new InMemoryTldrawEditor();
+      base.createShapes([
+        {
+          id: "shape:ai_newer",
+          type: "note",
+          x: 0,
+          y: 0,
+          props: { text: "newer" },
+          meta: {
+            layer: "AI_ANNOTATION",
+            origin: "AI",
+            shapeRevision: 1,
+            annotationPurpose: "newer",
+            operation: "write_text",
+            createdAt: "2026-08-30T20:00:01.000Z"
+          }
+        },
+        {
+          id: "shape:ai_older",
+          type: "note",
+          x: 0,
+          y: 0,
+          props: { text: "older" },
+          meta: {
+            layer: "AI_ANNOTATION",
+            origin: "AI",
+            shapeRevision: 1,
+            annotationPurpose: "older",
+            operation: "write_text",
+            createdAt: "2026-08-30T20:00:00.000Z"
+          }
+        }
+      ]);
+      const newerShape = base.getShape("shape:ai_newer");
+      const olderShape = base.getShape("shape:ai_older");
+      if (newerShape === undefined || olderShape === undefined) {
+        throw new Error("AI ordering fixture shapes were not created");
+      }
+      const editor = {
+        getShape: (id: string) => base.getShape(id),
+        getCurrentPageShapes: () => [newerShape, olderShape],
+        createShapes: base.createShapes.bind(base),
+        deleteShapes: base.deleteShapes.bind(base),
+        updateShapes: base.updateShapes.bind(base),
+        getShapePageBounds: base.getShapePageBounds.bind(base)
+      };
+      const adapter = new TldrawWhiteboardAdapter(editor);
+
+      await adapter.applyAiOverlayAction({
+        operation: "erase_ai_annotation",
+        layer: "AI_ANNOTATION",
+        annotationPurpose: "erase newest"
+      });
+
+      expect(base.getShape("shape:ai_newer")).toBeUndefined();
+      expect(base.getShape("shape:ai_older")).toBeDefined();
+    });
+
     it("executes 'erase_ai_annotation' without targetShapeId by deleting most recent AI shape", async () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
@@ -742,6 +801,56 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
 
       unlisten?.();
       expect(listenerRegistered).toBe(false);
+    });
+
+    it("rejects malformed target revision and blank action metadata before rendering", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+
+      for (const expectedShapeRevision of [
+        0,
+        -1,
+        1.5,
+        Number.MAX_SAFE_INTEGER + 1
+      ]) {
+        await expect(adapter.applyAiOverlayAction({
+          operation: "circle",
+          layer: "AI_ANNOTATION",
+          targetShapeId: "shape:target",
+          expectedShapeRevision,
+          annotationPurpose: "test"
+        })).rejects.toThrow(/positive safe integer/u);
+      }
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        targetShapeId: "shape:target",
+        expectedShapeRevision: Number.POSITIVE_INFINITY,
+        annotationPurpose: "test"
+      })).rejects.toThrow();
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        expectedShapeRevision: 1,
+        annotationPurpose: "test"
+      })).rejects.toThrow(/requires targetShapeId/u);
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        targetShapeId: "   ",
+        annotationPurpose: "test"
+      })).rejects.toThrow(/targetShapeId must be non-blank/u);
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        annotationPurpose: "   "
+      })).rejects.toThrow(/annotationPurpose must be non-blank/u);
+
+      expect(editor.getCurrentPageShapes()).toEqual([]);
     });
 
     it("rejects unrecognized action operations at runtime schema validation", async () => {

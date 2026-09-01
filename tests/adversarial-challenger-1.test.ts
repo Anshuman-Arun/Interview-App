@@ -686,7 +686,7 @@ describe("Adversarial Test 3: Shape Revision Mismatch & Stale Reference Refusal"
     };
 
     await expect(adapter.applyAiOverlayAction(orphanAction)).rejects.toThrow(
-      StaleShapeRevisionError
+      /expectedShapeRevision requires targetShapeId/u
     );
 
     expect(editor.getCurrentPageShapes()).toHaveLength(0);

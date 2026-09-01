@@ -11,15 +11,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:replay": "vitest run tests/replay.test.ts tests/vertical-slice.test.ts tests/quant-research-engine.test.ts tests/quant-research-persistence.test.ts",
-    "test:property": "vitest run tests/concurrency.property.test.ts tests/quant-research-engine.property.test.ts tests/formal-interpretation-routing.property.test.ts",
+    "test:replay": "vitest run tests/replay.test.ts tests/replay-history-engine.test.ts tests/vertical-slice.test.ts tests/quant-research-engine.test.ts tests/quant-research-persistence.test.ts",
+    "test:property": "vitest run tests/concurrency.property.test.ts tests/replay-history.property.test.ts tests/quant-research-engine.property.test.ts tests/formal-interpretation-routing.property.test.ts",
     "test:e2e": "vitest run tests/e2e-typed-interview.test.ts",
     "dev:web": "vite apps/web",
     "build:web": "vite build apps/web",
     "dev:server": "tsx apps/server/src/server.ts",
     "start:server": "tsx apps/server/src/server.ts",
     "demo": "tsx apps/server/src/run-synthetic.ts",
-    "check": "node scripts/check-public-release.mjs && tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts",
+    "check": "node scripts/check-public-release.mjs && node scripts/check-architecture-boundaries.mjs && tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/replay-history-engine.test.ts tests/vertical-slice.test.ts",
     "build:desktop": "tsc -p apps/desktop/tsconfig.json",
     "test:desktop": "vitest run tests/desktop-electron-bootstrap.test.ts tests/desktop-electron-adversarial.test.ts tests/desktop-hook-bootstrap.test.tsx",
     "dev:desktop": "pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js",
@@ -31,7 +31,8 @@
     "pngjs": "^7.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "tldraw": "^5.3.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
