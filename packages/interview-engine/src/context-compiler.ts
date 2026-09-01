@@ -192,18 +192,34 @@ export function compileContext(input: {
     throw new Error("Context compilation requires the authoritative pedagogical action for the turn");
   }
 
-  const knownDisclosureIds = new Set(input.problem.interviewer.protectedDisclosures.map((item) => item.id));
+  const disclosureById = new Map<
+    z.infer<typeof DisclosureIdSchema>,
+    (typeof input.problem.interviewer.protectedDisclosures)[number]
+  >();
+  for (const disclosure of input.problem.interviewer.protectedDisclosures) {
+    if (disclosureById.has(disclosure.id)) {
+      throw new Error("Bound problem contains duplicate protected disclosure IDs");
+    }
+    disclosureById.set(disclosure.id, disclosure);
+  }
+
   const delivered = new Set<z.infer<typeof DisclosureIdSchema>>();
   for (const disclosureId of input.state.disclosureLedger) {
-    if (!knownDisclosureIds.has(disclosureId) || delivered.has(disclosureId)) {
+    if (!disclosureById.has(disclosureId) || delivered.has(disclosureId)) {
       throw new Error("Disclosure ledger is inconsistent with the bound problem definition");
     }
     delivered.add(disclosureId);
   }
 
   const allowed = new Set(request.allowedDisclosureIds ?? []);
-  if ([...allowed].some((id) => !knownDisclosureIds.has(id))) {
-    throw new Error("Realization request authorizes an unknown protected disclosure");
+  for (const disclosureId of allowed) {
+    const disclosure = disclosureById.get(disclosureId);
+    if (disclosure === undefined) {
+      throw new Error("Realization request authorizes an unknown protected disclosure");
+    }
+    if (disclosure.minimumDisclosureLevel > request.maximumDisclosure) {
+      throw new Error("Realization request authorizes a protected disclosure above its numeric ceiling");
+    }
   }
 
   return CompiledContextSchema.parse({
