@@ -26,7 +26,7 @@ export const SpeechSampleFormatSchema = z.literal("F32LE");
 
 const NonnegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const PositiveSafeIntegerSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-const FiniteNonnegativeNumberSchema = z.number().finite().nonnegative();
+const FiniteNonnegativeNumberSchema = z.number().nonnegative();
 
 export const SpeechPcmFrameEnvelopeSchema = z.object({
   protocolVersion: SpeechProtocolVersionSchema,
@@ -124,7 +124,7 @@ export const TranscriptWordTimingSchema = z.object({
   word: z.string().min(1).max(128),
   startMs: FiniteNonnegativeNumberSchema,
   endMs: FiniteNonnegativeNumberSchema,
-  confidence: z.number().finite().min(0).max(1).optional()
+  confidence: z.number().min(0).max(1).optional()
 }).strict().superRefine((value, context) => {
   if (value.endMs < value.startMs) {
     context.addIssue({ code: "custom", message: "Word timing end precedes start", path: ["endMs"] });
@@ -143,7 +143,7 @@ export const TranscriptCandidateSchema = z.object({
   utteranceId: UtteranceIdSchema,
   text: z.string().max(MAX_SPEECH_TRANSCRIPT_CHARS),
   isFinal: z.boolean(),
-  confidence: z.number().finite().min(0).max(1).optional(),
+  confidence: z.number().min(0).max(1).optional(),
   words: z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS).optional(),
   model: SpeechModelIdentitySchema,
   sourceAudioBasis: SourceAudioBasisSchema
