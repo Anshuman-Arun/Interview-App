@@ -7,6 +7,7 @@ import {
   type DeliveryId
 } from "../../../packages/domain/src/index.js";
 import type { WhiteboardPresenter } from "./renderer-client.js";
+import type { NormalizedStudentMutationSource } from "./whiteboard/normalized-board.js";
 
 export class StudentShapeImmutableError extends Error {
   public constructor(message: string) {
@@ -42,6 +43,7 @@ export interface CanvasShapeMeta {
   readonly operation?: string;
   readonly isEquation?: boolean;
   readonly createdAt: string;
+  readonly lastModifiedAt?: string;
 }
 
 export interface TLShapeBounds {
@@ -132,6 +134,7 @@ export interface ApplyAiOverlayOptions {
   readonly generationId?: string;
 }
 
+/** Headless editor used by adapter unit tests only; the browser surface uses real tldraw. */
 export class InMemoryTldrawEditor implements TldrawEditor {
   private readonly shapes = new Map<string, TLShapeRecord>();
   public store?: {
@@ -237,6 +240,20 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     return this.editor;
   }
 
+  public getBoardRevision(): number {
+    return this.localBoardRevision;
+  }
+
+  /**
+   * Records one normalized student mutation observed from the real editor.
+   * Adapter-originated mutations are already counted by create/update methods;
+   * direct editor transactions advance the sole BoardRevision authority once.
+   */
+  public observeNormalizedStudentMutation(source: NormalizedStudentMutationSource): void {
+    if (source === "ADAPTER") return;
+    this.advanceBoardRevision();
+  }
+
   public async presentWhiteboard(action: BoardAction, deliveryId: DeliveryId): Promise<void> {
     await this.applyAiOverlayAction(action, { deliveryId });
   }
@@ -307,7 +324,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       if (layer === "STUDENT" || layer === undefined) {
         const bounds = this.resolveShapeBounds(editor, shape);
         const text = typeof shape.props?.["text"] === "string" ? shape.props["text"] : undefined;
-        const shapeRevision = typeof shape.meta?.["shapeRevision"] === "number" ? shape.meta["shapeRevision"] : 1;
+        const shapeRevision = readShapeRevision(shape.meta?.["shapeRevision"], shape.id);
         studentShapes.push({
           id: shape.id,
           type: shape.type,
@@ -325,7 +342,11 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
         const deliveryId = typeof shape.meta?.["deliveryId"] === "string" ? shape.meta["deliveryId"] : undefined;
         const purpose = typeof shape.meta?.["annotationPurpose"] === "string" ? shape.meta["annotationPurpose"] : "";
         const targetShapeId = typeof shape.meta?.["targetShapeId"] === "string" ? shape.meta["targetShapeId"] : undefined;
-        const targetShapeRevision = typeof shape.meta?.["targetShapeRevision"] === "number" ? shape.meta["targetShapeRevision"] : undefined;
+        const targetShapeRevision = readOptionalShapeRevision(
+          shape.meta?.["targetShapeRevision"],
+          shape.id,
+          "targetShapeRevision"
+        );
         aiAnnotations.push({
           id: shape.id,
           operation,
@@ -388,13 +409,25 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }): TLShapeRecord {
     const editor = this.requireEditor();
     const shapeId = shape.id ?? `shape:student_${generateId()}`;
+    if (editor.getShape(shapeId) !== undefined) {
+      throw new Error(`Student shape ${shapeId} already exists`);
+    }
     const revision = shape.shapeRevision ?? 1;
+    if (!Number.isSafeInteger(revision) || revision < 1) {
+      throw new Error("Student shape revision must be a positive safe integer");
+    }
+    if (!Number.isFinite(shape.x) || !Number.isFinite(shape.y)) {
+      throw new Error("Student shape coordinates must be finite numbers");
+    }
+    this.assertStudentMutationCanAdvance();
+    const now = new Date().toISOString();
 
     const meta: CanvasShapeMeta = {
       layer: "STUDENT",
       shapeRevision: revision,
       origin: "STUDENT",
-      createdAt: new Date().toISOString()
+      createdAt: now,
+      lastModifiedAt: now
     };
 
     const newShape: TLShapePartialRecord = {
@@ -407,12 +440,12 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     };
 
     editor.createShapes([newShape]);
-    this.localBoardRevision += 1;
 
     const created = editor.getShape(shapeId);
     if (created === undefined) {
       throw new Error(`Failed to create student shape ${shapeId}`);
     }
+    this.advanceBoardRevision();
     return created;
   }
 
@@ -435,14 +468,37 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       throw new Error(`Shape ${shapeId} is not a student-owned shape`);
     }
 
-    const currentRevision = typeof existing.meta?.["shapeRevision"] === "number" ? existing.meta["shapeRevision"] : 1;
-    const nextRevision = currentRevision + 1;
+    if (
+      (updates.x !== undefined && !Number.isFinite(updates.x))
+      || (updates.y !== undefined && !Number.isFinite(updates.y))
+    ) {
+      throw new Error("Student shape coordinates must be finite numbers");
+    }
 
-    const updatedMeta: CanvasShapeMeta = {
+    const hasCoordinateChange =
+      (updates.x !== undefined && updates.x !== existing.x)
+      || (updates.y !== undefined && updates.y !== existing.y);
+    const hasPropsChange = updates.props !== undefined
+      && Object.entries(updates.props).some(([key, value]) => !Object.is(existing.props?.[key], value));
+    if (!hasCoordinateChange && !hasPropsChange) {
+      return existing;
+    }
+
+    const currentRevision = readShapeRevision(existing.meta?.["shapeRevision"], shapeId);
+    if (currentRevision >= Number.MAX_SAFE_INTEGER) {
+      throw new Error("Student shape revision cannot exceed Number.MAX_SAFE_INTEGER");
+    }
+    const nextRevision = currentRevision + 1;
+    this.assertStudentMutationCanAdvance();
+    const now = new Date().toISOString();
+
+    const updatedMeta = {
+      ...existing.meta,
       layer: "STUDENT",
       shapeRevision: nextRevision,
       origin: "STUDENT",
-      createdAt: typeof existing.meta?.["createdAt"] === "string" ? existing.meta["createdAt"] : new Date().toISOString()
+      createdAt: typeof existing.meta?.["createdAt"] === "string" ? existing.meta["createdAt"] : now,
+      lastModifiedAt: now
     };
 
     editor.updateShapes([
@@ -451,16 +507,35 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
         ...(updates.x !== undefined ? { x: updates.x } : {}),
         ...(updates.y !== undefined ? { y: updates.y } : {}),
         ...(updates.props !== undefined ? { props: updates.props } : {}),
-        meta: { ...updatedMeta }
+        meta: updatedMeta
       }
     ]);
 
-    this.localBoardRevision += 1;
     const updated = editor.getShape(shapeId);
     if (updated === undefined) {
       throw new Error(`Failed to update student shape ${shapeId}`);
     }
+    this.advanceBoardRevision();
     return updated;
+  }
+
+  public assertStudentMutationCanAdvance(): void {
+    this.assertBoardRevisionCanAdvance();
+  }
+
+  private assertBoardRevisionCanAdvance(): void {
+    if (
+      !Number.isSafeInteger(this.localBoardRevision)
+      || this.localBoardRevision < 0
+      || this.localBoardRevision >= Number.MAX_SAFE_INTEGER
+    ) {
+      throw new Error("BoardRevision cannot exceed Number.MAX_SAFE_INTEGER");
+    }
+  }
+
+  private advanceBoardRevision(): void {
+    this.assertStudentMutationCanAdvance();
+    this.localBoardRevision += 1;
   }
 
   private validateTargetRevision(editor: TldrawEditor, action: BoardAction): void {
@@ -477,8 +552,11 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     }
 
     if (action.expectedShapeRevision !== undefined) {
-      const actualRevision = targetShape.meta?.["shapeRevision"];
-      if (typeof actualRevision !== "number" || actualRevision !== action.expectedShapeRevision) {
+      const actualRevision = readShapeRevision(
+        targetShape.meta?.["shapeRevision"],
+        targetShape.id
+      );
+      if (actualRevision !== action.expectedShapeRevision) {
         throw new StaleShapeRevisionError(
           `Target shape "${action.targetShapeId}" revision mismatch: expected ${String(action.expectedShapeRevision)}, got ${String(actualRevision)}`
         );
@@ -495,7 +573,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const h = targetBounds.height + padding * 2;
 
     const meta = this.createAiMeta(action, options);
-    const shapeId = `shape:ai_circle_${generateId()}`;
+    const shapeId = allocateUniqueShapeId(editor, "ai_circle");
 
     const circleShape: TLShapePartialRecord = {
       id: shapeId,
@@ -527,7 +605,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const h = targetBounds.height + padding * 2;
 
     const meta = this.createAiMeta(action, options);
-    const shapeId = `shape:ai_highlight_${generateId()}`;
+    const shapeId = allocateUniqueShapeId(editor, "ai_highlight");
 
     const highlightShape: TLShapePartialRecord = {
       id: shapeId,
@@ -560,7 +638,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const startY = targetCenterY - 90;
 
     const meta = this.createAiMeta(action, options);
-    const shapeId = `shape:ai_arrow_${generateId()}`;
+    const shapeId = allocateUniqueShapeId(editor, "ai_arrow");
 
     const arrowShape: TLShapePartialRecord = {
       id: shapeId,
@@ -591,7 +669,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     const startY = targetCenterY - 60;
 
     const meta = this.createAiMeta(action, options);
-    const shapeId = `shape:ai_point_${generateId()}`;
+    const shapeId = allocateUniqueShapeId(editor, "ai_point");
 
     const pointShape: TLShapePartialRecord = {
       id: shapeId,
@@ -624,7 +702,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     }
 
     const meta = this.createAiMeta(action, options);
-    const shapeId = `shape:ai_text_${generateId()}`;
+    const shapeId = allocateUniqueShapeId(editor, "ai_text");
 
     const textShape: TLShapePartialRecord = {
       id: shapeId,
@@ -657,7 +735,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       ...this.createAiMeta(action, options),
       isEquation: true
     };
-    const shapeId = `shape:ai_equation_${generateId()}`;
+    const shapeId = allocateUniqueShapeId(editor, "ai_equation");
 
     const equationShape: TLShapePartialRecord = {
       id: shapeId,
@@ -703,16 +781,22 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     }
 
     const shapes = editor.getCurrentPageShapes();
-    const aiShapes = shapes.filter((s) => s.meta?.["layer"] === "AI_ANNOTATION");
+    const aiShapes = shapes.filter((shape) => shape.meta?.["layer"] === "AI_ANNOTATION");
 
-    if (aiShapes.length === 0) {
-      return;
-    }
+    if (aiShapes.length === 0) return;
 
-    const latest = aiShapes[aiShapes.length - 1];
-    if (latest !== undefined) {
-      editor.deleteShapes([latest.id]);
+    let latest = aiShapes[0];
+    let latestTime = annotationCreatedAtMs(latest);
+    for (let index = 1; index < aiShapes.length; index += 1) {
+      const candidate = aiShapes[index];
+      if (candidate === undefined) continue;
+      const candidateTime = annotationCreatedAtMs(candidate);
+      if (candidateTime >= latestTime) {
+        latest = candidate;
+        latestTime = candidateTime;
+      }
     }
+    if (latest !== undefined) editor.deleteShapes([latest.id]);
   }
 
   private resolveTargetBounds(editor: TldrawEditor, targetShapeId?: string): TLShapeBounds {
@@ -737,16 +821,24 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   private resolveShapeBounds(editor: TldrawEditor, shape: TLShapeRecord): TLShapeBounds {
     if (typeof editor.getShapePageBounds === "function") {
       const bounds = editor.getShapePageBounds(shape.id);
-      if (bounds !== undefined) return bounds;
+      if (bounds !== undefined) return this.validateShapeBounds(shape.id, bounds);
     }
 
     const props = shape.props ?? {};
-    const width = typeof props["w"] === "number" ? props["w"] : typeof props["width"] === "number" ? props["width"] : 100;
-    const height = typeof props["h"] === "number" ? props["h"] : typeof props["height"] === "number" ? props["height"] : 100;
+    const width = typeof props["w"] === "number"
+      ? props["w"]
+      : typeof props["width"] === "number"
+        ? props["width"]
+        : 100;
+    const height = typeof props["h"] === "number"
+      ? props["h"]
+      : typeof props["height"] === "number"
+        ? props["height"]
+        : 100;
     const x = shape.x;
     const y = shape.y;
 
-    return {
+    return this.validateShapeBounds(shape.id, {
       x,
       y,
       width,
@@ -755,7 +847,24 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       minY: y,
       maxX: x + width,
       maxY: y + height
-    };
+    });
+  }
+
+  private validateShapeBounds(shapeId: string, bounds: TLShapeBounds): TLShapeBounds {
+    for (const [name, value] of [
+      ["x", bounds.x],
+      ["y", bounds.y],
+      ["width", bounds.width],
+      ["height", bounds.height]
+    ] as const) {
+      if (!Number.isFinite(value)) {
+        throw new Error(`Shape ${shapeId} has non-finite ${name} bounds`);
+      }
+    }
+    if (bounds.width < 0 || bounds.height < 0) {
+      throw new Error(`Shape ${shapeId} has negative bounds dimensions`);
+    }
+    return bounds;
   }
 
   private createAiMeta(action: BoardAction, options?: ApplyAiOverlayOptions): CanvasShapeMeta {
@@ -781,6 +890,41 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     }
     return this.editor;
   }
+}
+
+function annotationCreatedAtMs(shape: TLShapeRecord | undefined): number {
+  const raw = shape?.meta?.["createdAt"];
+  if (typeof raw !== "string") return Number.NEGATIVE_INFINITY;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+function readShapeRevision(value: unknown, shapeId: string): number {
+  if (value === undefined) return 1;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 1) {
+    return value;
+  }
+  throw new Error(`Shape ${shapeId} has an invalid shape revision`);
+}
+
+function readOptionalShapeRevision(
+  value: unknown,
+  shapeId: string,
+  label: string
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 1) {
+    return value;
+  }
+  throw new Error(`Shape ${shapeId} has an invalid ${label}`);
+}
+
+function allocateUniqueShapeId(editor: TldrawEditor, prefix: string): string {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const candidate = `shape:${prefix}_${generateId()}`;
+    if (editor.getShape(candidate) === undefined) return candidate;
+  }
+  throw new Error(`Unable to allocate a unique ${prefix} whiteboard shape ID`);
 }
 
 function generateId(): string {

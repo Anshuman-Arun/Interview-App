@@ -45,7 +45,7 @@ Interview-App/
 
 ### Prerequisites
 
-- **Node.js**: $\ge 22.5.0$ (Node 22.17.1 LTS recommended)
+- **Node.js**: $\ge 22.12.0$ (required by the pinned `tldraw@5.3.2` dependency; current Node 22 LTS is recommended)
 - **pnpm**: `11.19.0` (managed via `corepack enable && corepack pnpm`)
 
 ### Installation
