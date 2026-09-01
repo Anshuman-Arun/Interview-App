@@ -814,15 +814,6 @@ export class InterpretationCoordinator {
     if (generation === undefined) {
       return failed("STALE", "UNKNOWN_GENERATION", candidateCount, request.requestId);
     }
-    if (generation.status !== "ACTIVE") {
-      const sameRequestAlreadyOpened = Object.values(state.verificationRequests).some((verificationRequest) =>
-        verificationRequest.sourceGenerationId === request.generationId
-        && verificationRequest.sourceProposalRequestId === request.requestId
-      );
-      if (!sameRequestAlreadyOpened) {
-        return failed("STALE", "GENERATION_NOT_ACTIVE", candidateCount, request.requestId);
-      }
-    }
     if (!generationBasesEqual(generation.basis, request.basis)) {
       return failed("SOURCE_MISMATCH", "BASIS_MISMATCH", candidateCount, request.requestId);
     }
@@ -833,6 +824,16 @@ export class InterpretationCoordinator {
     }
     if (compatibility === "UNKNOWN") {
       return failed("STALE", "BASIS_UNKNOWN", candidateCount, request.requestId);
+    }
+
+    if (generation.status !== "ACTIVE") {
+      const sameRequestAlreadyOpened = Object.values(state.verificationRequests).some((verificationRequest) =>
+        verificationRequest.sourceGenerationId === request.generationId
+        && verificationRequest.sourceProposalRequestId === request.requestId
+      );
+      if (!sameRequestAlreadyOpened) {
+        return failed("STALE", "GENERATION_NOT_ACTIVE", candidateCount, request.requestId);
+      }
     }
 
     const turn = state.turns[request.source.turnId];

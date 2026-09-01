@@ -96,7 +96,9 @@ export class DeliveryCoordinator {
       const atom = state.deliveries[deliveryId];
       if (atom === undefined) throw new Error("Unknown delivery acknowledgement");
       if (atom.status === "EXPOSED" || atom.status === "COMPLETED") return { drafts: [], result: true };
-      if (atom.status !== "DELIVERING") throw new Error(`Cannot expose delivery in ${atom.status}`);
+      if (atom.status !== "DELIVERING" && atom.status !== "POSSIBLY_EXPOSED") {
+        throw new Error(`Cannot expose delivery in ${atom.status}`);
+      }
       return { drafts: [{ source: "RENDERER", type: "DELIVERY_EXPOSED", payload: { deliveryId } }], result: true };
     });
     return result.value;

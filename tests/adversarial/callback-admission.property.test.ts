@@ -72,10 +72,12 @@ async function executeCallbackOperation(
     case "TRANSCRIPT_CORRECTION":
       await fixture.turns.correctTranscript("callback schedule transcript correction");
       model.noteTranscriptCorrection();
+      model.notePolicyOutputInvalidation();
       return;
     case "BOARD_REVISION":
       await fixture.turns.commitBoardPatch("callback schedule board revision");
       model.noteBoardRevision();
+      model.notePolicyOutputInvalidation();
       return;
     case "RESTART":
       await fixture.restart();
@@ -124,7 +126,7 @@ async function releaseVerifier(
     fixture.verificationWork.verificationRequestId,
     result.value
   );
-
+  if (result.value.accepted) model.notePolicyOutputInvalidation();
 }
 
 async function processTamperedWorker(

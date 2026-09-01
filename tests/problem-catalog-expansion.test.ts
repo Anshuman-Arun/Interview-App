@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { InterviewProblem } from "../packages/domain/src/index.js";
+import {
+  EventIdSchema,
+  InputEpisodeIdSchema,
+  TurnIdSchema,
+  newSessionId,
+  type InterviewProblem
+} from "../packages/domain/src/index.js";
 import {
   ALL_PROBLEMS,
   EXPERT_REVIEW_METADATA,
@@ -21,10 +27,18 @@ import {
   oxfordCuratedEntries,
   oxfordCuratedReviewEntries,
   problemCatalog,
+  sixPeopleProblem,
   quantCuratedEntries,
   quantCuratedReviewEntries
 } from "../packages/problems/src/index.js";
 import { quantMontyHallSpec } from "../packages/problems/src/curated/quant-monty-hall.js";
+import {
+  ClosedWorldDisclosureAnalyzer,
+  DisclosureValidator,
+  createProviderContextSpecFingerprintSync,
+  selectPedagogicalAction
+} from "../packages/interview-engine/src/index.js";
+import { initialSessionState } from "../packages/events/src/index.js";
 
 const NEW_PROBLEM_IDS = [
   "oxford-domino-chessboard",
@@ -693,4 +707,87 @@ describe("curated problem bank", () => {
     )).toThrow(/duplicate follow-up/iu);
   });
 
+});
+
+
+describe("Socratic policy integration across the curated problem catalog", () => {
+  it("selects the conservative initial application-owned action for every approved problem", () => {
+    for (const [index, problem] of problemCatalog.entries()) {
+      const turnId = TurnIdSchema.parse(`turn_catalog_policy_${String(index)}`);
+      const inputEpisodeId = InputEpisodeIdSchema.parse(`episode_catalog_policy_${String(index)}`);
+      const eventId = EventIdSchema.parse(`event_catalog_policy_${String(index)}`);
+      const state = {
+        ...initialSessionState(newSessionId()),
+        sequence: 1,
+        started: true,
+        status: "ACTIVE" as const,
+        problem: {
+          id: problem.id,
+          version: problem.version,
+          prompt: problem.public.prompt,
+          providerContextSpecSha256: createProviderContextSpecFingerprintSync(problem)
+        },
+        lastCommittedInputSequence: 1,
+        eventIds: [eventId],
+        inputEpisodes: {
+          [inputEpisodeId]: {
+            inputEpisodeId,
+            status: "COMMITTED" as const,
+            inputs: [{
+              modality: "TYPING" as const,
+              semanticContent: "I am starting to formalize the problem."
+            }]
+          }
+        },
+        turns: {
+          [turnId]: {
+            turnId,
+            inputEpisodeId,
+            committedSequence: 1,
+            studentText: "I am starting to formalize the problem."
+          }
+        }
+      };
+
+      const request = selectPedagogicalAction(state, turnId, problem);
+      expect(request).toMatchObject({
+        requiredAction: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0,
+        target: `turn:${turnId}`
+      });
+    }
+  });
+
+  it("requires explicit target authorization even when a protected fact fits the numeric ceiling", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    if (disclosure === undefined) throw new Error("Expected protected disclosure");
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([]));
+    const proposal = {
+      realizedAction: "EXPLICIT_HINT" as const,
+      claimedDisclosureLevel: disclosure.minimumDisclosureLevel,
+      claimedDisclosureIds: [disclosure.id],
+      speechText: disclosure.fact
+    };
+
+    const unscoped = validator.validate({
+      proposal,
+      request: {
+        requiredAction: "EXPLICIT_HINT",
+        maximumDisclosure: disclosure.minimumDisclosureLevel
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(unscoped.accepted).toBe(false);
+
+    const scoped = validator.validate({
+      proposal,
+      request: {
+        requiredAction: "EXPLICIT_HINT",
+        maximumDisclosure: disclosure.minimumDisclosureLevel,
+        allowedDisclosureIds: [disclosure.id]
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(scoped.accepted).toBe(true);
+  });
 });

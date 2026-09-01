@@ -16,11 +16,11 @@ function withDeliveryStatus(state: SessionState, deliveryId: string, status: Del
   const allowed: Readonly<Record<DeliveryAtom["status"], readonly DeliveryAtom["status"][]>> = {
     VALIDATED: ["QUEUED"],
     QUEUED: ["DELIVERING", "CANCELLED"],
-    DELIVERING: ["EXPOSED", "CANCELLED", "POSSIBLY_EXPOSED"],
+    DELIVERING: ["EXPOSED", "POSSIBLY_EXPOSED"],
     EXPOSED: ["COMPLETED"],
     COMPLETED: [],
     CANCELLED: [],
-    POSSIBLY_EXPOSED: []
+    POSSIBLY_EXPOSED: ["EXPOSED"]
   };
   if (!allowed[current.status].includes(status)) {
     throw new Error(`Invalid delivery transition ${current.status} -> ${status}`);
@@ -245,7 +245,13 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         ...state,
         verificationRequests: {
           ...state.verificationRequests,
-          [event.payload.verificationRequestId]: { ...request, status: "ACCEPTED", result: event.payload.result }
+          [event.payload.verificationRequestId]: {
+            ...request,
+            status: "ACCEPTED",
+            result: event.payload.result,
+            resultEventId: event.eventId,
+            resultSequence: event.sequence
+          }
         }
       };
       break;
@@ -319,9 +325,23 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "PEDAGOGICAL_ACTION_SELECTED":
       next = { ...state, pedagogicalActions: { ...state.pedagogicalActions, [event.payload.turnId]: event.payload.request } };
       break;
-    case "MODEL_GENERATION_STARTED":
-      next = { ...state, generations: { ...state.generations, [event.payload.generationId]: { generationId: event.payload.generationId, basis: event.payload.basis, provider: event.payload.provider, status: "ACTIVE" } } };
+    case "MODEL_GENERATION_STARTED": {
+      const pedagogicalAction = state.pedagogicalActions[event.payload.basis.turnId];
+      next = {
+        ...state,
+        generations: {
+          ...state.generations,
+          [event.payload.generationId]: {
+            generationId: event.payload.generationId,
+            basis: event.payload.basis,
+            provider: event.payload.provider,
+            ...(pedagogicalAction === undefined ? {} : { pedagogicalAction }),
+            status: "ACTIVE"
+          }
+        }
+      };
       break;
+    }
     case "GENERATION_CONTEXT_COMPILED": {
       const generation = state.generations[event.payload.generationId];
       if (generation === undefined || generation.status !== "ACTIVE") throw new Error("Context compilation requires an active generation");
@@ -348,9 +368,18 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "MODEL_GENERATION_SUPERSEDED":
       next = updateGeneration(state, event.payload.generationId, { status: "SUPERSEDED" });
       break;
-    case "PROPOSAL_VALIDATED":
-      next = updateGeneration(state, event.payload.generationId, { status: "VALIDATED" });
+    case "PROPOSAL_VALIDATED": {
+      const generation = state.generations[event.payload.generationId];
+      if (generation === undefined) throw new Error("Unknown generation");
+      next = updateGeneration(state, event.payload.generationId, {
+        status: "VALIDATED",
+        interviewerProposalValidated: true,
+        ...(generation.proposal === undefined
+          ? {}
+          : { validatedInterviewerProposal: generation.proposal })
+      });
       break;
+    }
     case "PROPOSAL_REJECTED":
       next = updateGeneration(state, event.payload.generationId, { status: "REJECTED" });
       break;

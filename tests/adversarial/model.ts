@@ -95,6 +95,18 @@ export class AdversarialModel {
     this.generations.set(generationId, status);
   }
 
+  public notePolicyOutputInvalidation(): void {
+    for (const [generationId, status] of this.generations) {
+      if (status === "ACTIVE" || status === "PROPOSAL_RECEIVED" || status === "VALIDATED") {
+        this.generations.set(generationId, "SUPERSEDED");
+      }
+    }
+    for (const [deliveryId, status] of this.deliveries) {
+      if (status === "QUEUED") this.deliveries.set(deliveryId, "CANCELLED");
+      else if (status === "DELIVERING") this.deliveries.set(deliveryId, "POSSIBLY_EXPOSED");
+    }
+  }
+
   public noteRequest(
     family: "worker" | "verifier" | "vision",
     requestId: RequestId,

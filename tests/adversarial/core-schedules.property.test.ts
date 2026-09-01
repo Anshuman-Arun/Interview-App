@@ -75,23 +75,31 @@ async function executeCoreOperation(
     case "BOARD_REVISION":
       await fixture.turns.commitBoardPatch("adversarial board revision");
       model.noteBoardRevision();
+      model.notePolicyOutputInvalidation();
       return;
     case "TYPED_INPUT_COMMIT": {
       const committed = await fixture.turns.commitInput(
         "A later typed commitment changes the authoritative response basis."
       );
       model.noteCommittedInput(committed.inputEpisodeId, committed.turnId);
+      model.notePolicyOutputInvalidation();
       return;
     }
     case "TRANSCRIPT_CORRECTION":
       await fixture.turns.correctTranscript("adversarial corrected transcript");
       model.noteTranscriptCorrection();
+      model.notePolicyOutputInvalidation();
       return;
     case "SUPERSEDE_GENERATION":
       await supersedeInitialGeneration(fixture, model);
       return;
     case "PROVIDER_SWITCH": {
-      if (model.generations.get(fixture.initialGenerationId) === "ACTIVE") {
+      const initialStatus = model.generations.get(fixture.initialGenerationId);
+      if (
+        initialStatus === "ACTIVE"
+        || initialStatus === "PROPOSAL_RECEIVED"
+        || initialStatus === "VALIDATED"
+      ) {
         await fixture.turns.supersedeGeneration(
           fixture.initialGenerationId,
           "adversarial provider switch"
@@ -106,6 +114,7 @@ async function executeCoreOperation(
       const committed = await fixture.proposeEvidence("PROGRESSING");
       expect(committed).toBe(true);
       model.noteEvidence(MILESTONE_EVIDENCE_KEY, "PROGRESSING");
+      model.notePolicyOutputInvalidation();
       return;
     }
     case "START_QUEUED_DELIVERY": {
