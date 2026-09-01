@@ -104,7 +104,6 @@ export interface QuantResearchPublicState {
   readonly visibleData: readonly QuantResearchPublicDatum[];
   readonly acceptedActionCount: number;
   readonly actionLimit: number;
-  readonly evidence: readonly QuantResearchEvidence[];
 }
 
 export interface QuantResearchResult {
@@ -153,7 +152,9 @@ export class QuantResearchError extends Error {
 
 const MAX_SEED = 0xffff_ffff;
 const MAX_ACTION_VECTOR = 8;
+const MAX_ABS_NUMERIC_INPUT = 1_000_000;
 const ACTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
+const REGISTRY_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,32}$/u;
 
 function failDefinition(message: string): never {
   throw new QuantResearchError("INVALID_DEFINITION", message);
@@ -167,6 +168,9 @@ function asRecord(value: unknown, context: string, fail: (message: string) => ne
   if (typeof value !== "object" || value === null || Array.isArray(value)) fail(context + " must be an object");
   const prototype = Object.getPrototypeOf(value) as object | null;
   if (prototype !== Object.prototype && prototype !== null) fail(context + " must be a plain object");
+  for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(value))) {
+    if (descriptor.get !== undefined || descriptor.set !== undefined) fail(context + " must not contain accessor properties");
+  }
   return value as Record<string, unknown>;
 }
 
@@ -184,6 +188,32 @@ function finiteNumber(value: unknown, context: string, fail: (message: string) =
   return value;
 }
 
+function boundedFiniteNumber(value: unknown, min: number, max: number, context: string, fail: (message: string) => never): number {
+  const number = finiteNumber(value, context, fail);
+  if (number < min || number > max) fail(context + " is outside the allowed numeric range");
+  return number;
+}
+
+function finiteNumberVector(value: unknown): readonly number[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_ACTION_VECTOR) {
+    failAction("values must contain between 1 and 8 entries");
+  }
+  const allowedKeys = new Set(["length", ...Array.from({ length: value.length }, (_item, index) => String(index))]);
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string" || !allowedKeys.has(key)) failAction("values contains unsupported properties");
+  }
+  const result: number[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.prototype.hasOwnProperty.call(value, index)) failAction("values must be a dense array");
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (descriptor === undefined || descriptor.get !== undefined || descriptor.set !== undefined) {
+      failAction("values must contain only data properties");
+    }
+    result.push(boundedFiniteNumber(value[index], -MAX_ABS_NUMERIC_INPUT, MAX_ABS_NUMERIC_INPUT, `values[${String(index)}]`, failAction));
+  }
+  return result;
+}
+
 function boundedInteger(value: unknown, min: number, max: number, context: string, fail: (message: string) => never): number {
   const number = finiteNumber(value, context, fail);
   if (!Number.isSafeInteger(number) || number < min || number > max) fail(context + " is outside the allowed integer range");
@@ -193,12 +223,19 @@ function boundedInteger(value: unknown, min: number, max: number, context: strin
 function parseBayesianConfig(value: unknown): BayesianUpdatingConfig {
   const record = asRecord(value, "Bayesian config", failDefinition);
   assertExactKeys(record, ["priorAlpha", "priorBeta", "observationCount", "perturbedPriorAlpha", "perturbedPriorBeta"], "Bayesian config", failDefinition);
+  const priorAlpha = boundedInteger(record.priorAlpha, 1, 100, "priorAlpha", failDefinition);
+  const priorBeta = boundedInteger(record.priorBeta, 1, 100, "priorBeta", failDefinition);
+  const perturbedPriorAlpha = boundedInteger(record.perturbedPriorAlpha, 1, 100, "perturbedPriorAlpha", failDefinition);
+  const perturbedPriorBeta = boundedInteger(record.perturbedPriorBeta, 1, 100, "perturbedPriorBeta", failDefinition);
+  if (priorAlpha === perturbedPriorAlpha && priorBeta === perturbedPriorBeta) {
+    failDefinition("Perturbed Bayesian prior must differ from the initial prior");
+  }
   return {
-    priorAlpha: boundedInteger(record.priorAlpha, 1, 100, "priorAlpha", failDefinition),
-    priorBeta: boundedInteger(record.priorBeta, 1, 100, "priorBeta", failDefinition),
+    priorAlpha,
+    priorBeta,
     observationCount: boundedInteger(record.observationCount, 2, 32, "observationCount", failDefinition),
-    perturbedPriorAlpha: boundedInteger(record.perturbedPriorAlpha, 1, 100, "perturbedPriorAlpha", failDefinition),
-    perturbedPriorBeta: boundedInteger(record.perturbedPriorBeta, 1, 100, "perturbedPriorBeta", failDefinition)
+    perturbedPriorAlpha,
+    perturbedPriorBeta
   };
 }
 
@@ -211,25 +248,36 @@ function parseSamplingConfig(value: unknown): SamplingEstimationConfig {
   const centerMin = boundedInteger(record.centerMin, -100, 100, "centerMin", failDefinition);
   const centerMax = boundedInteger(record.centerMax, -100, 100, "centerMax", failDefinition);
   if (centerMin > centerMax) failDefinition("centerMin cannot exceed centerMax");
+  const noiseRadius = boundedInteger(record.noiseRadius, 0, 20, "noiseRadius", failDefinition);
+  const outlierShift = boundedInteger(record.outlierShift, 1, 50, "outlierShift", failDefinition);
+  if (outlierShift <= noiseRadius) failDefinition("outlierShift must exceed the ordinary sampling noise radius");
   return {
     maxSamples,
     populationSize,
     centerMin,
     centerMax,
-    noiseRadius: boundedInteger(record.noiseRadius, 0, 20, "noiseRadius", failDefinition),
-    outlierShift: boundedInteger(record.outlierShift, 1, 50, "outlierShift", failDefinition)
+    noiseRadius,
+    outlierShift
   };
 }
 
 function parseExperimentalConfig(value: unknown): ExperimentalAllocationConfig {
   const record = asRecord(value, "Experimental allocation config", failDefinition);
   assertExactKeys(record, ["totalBudget", "costA", "costB", "perturbedCostA", "perturbedCostB", "noiseA", "noiseB"], "Experimental allocation config", failDefinition);
+  const totalBudget = boundedInteger(record.totalBudget, 4, 100, "totalBudget", failDefinition);
+  const costA = boundedInteger(record.costA, 1, 20, "costA", failDefinition);
+  const costB = boundedInteger(record.costB, 1, 20, "costB", failDefinition);
+  const perturbedCostA = boundedInteger(record.perturbedCostA, 1, 20, "perturbedCostA", failDefinition);
+  const perturbedCostB = boundedInteger(record.perturbedCostB, 1, 20, "perturbedCostB", failDefinition);
+  if (costA + costB > totalBudget) failDefinition("Initial budget must allow at least one sample from each experiment");
+  if (Math.min(perturbedCostA, perturbedCostB) > totalBudget) failDefinition("Perturbed costs leave no feasible sample allocation");
+  if (costA === perturbedCostA && costB === perturbedCostB) failDefinition("Perturbed experiment costs must differ from the initial costs");
   return {
-    totalBudget: boundedInteger(record.totalBudget, 4, 100, "totalBudget", failDefinition),
-    costA: boundedInteger(record.costA, 1, 20, "costA", failDefinition),
-    costB: boundedInteger(record.costB, 1, 20, "costB", failDefinition),
-    perturbedCostA: boundedInteger(record.perturbedCostA, 1, 20, "perturbedCostA", failDefinition),
-    perturbedCostB: boundedInteger(record.perturbedCostB, 1, 20, "perturbedCostB", failDefinition),
+    totalBudget,
+    costA,
+    costB,
+    perturbedCostA,
+    perturbedCostB,
     noiseA: boundedInteger(record.noiseA, 1, 10, "noiseA", failDefinition),
     noiseB: boundedInteger(record.noiseB, 1, 10, "noiseB", failDefinition)
   };
@@ -238,10 +286,13 @@ function parseExperimentalConfig(value: unknown): ExperimentalAllocationConfig {
 function parseModelConfig(value: unknown): ModelComparisonConfig {
   const record = asRecord(value, "Model comparison config", failDefinition);
   assertExactKeys(record, ["observationCount", "noiseRadius", "outlierShift"], "Model comparison config", failDefinition);
+  const noiseRadius = boundedInteger(record.noiseRadius, 0, 10, "noiseRadius", failDefinition);
+  const outlierShift = boundedInteger(record.outlierShift, 1, 50, "outlierShift", failDefinition);
+  if (outlierShift <= 2 * noiseRadius) failDefinition("outlierShift must move the perturbed point outside the ordinary model-noise envelope");
   return {
     observationCount: boundedInteger(record.observationCount, 6, 30, "observationCount", failDefinition),
-    noiseRadius: boundedInteger(record.noiseRadius, 0, 10, "noiseRadius", failDefinition),
-    outlierShift: boundedInteger(record.outlierShift, 1, 50, "outlierShift", failDefinition)
+    noiseRadius,
+    outlierShift
   };
 }
 
@@ -298,7 +349,11 @@ export function parseQuantResearchAction(input: unknown): QuantResearchAction {
       return { actionId: parseActionId(record.actionId), kind: record.kind, count: boundedInteger(record.count, 1, 32, "count", failAction) };
     case "SUBMIT_NUMERIC_ESTIMATE":
       assertExactKeys(record, ["actionId", "kind", "value"], "Candidate action", failAction);
-      return { actionId: parseActionId(record.actionId), kind: record.kind, value: finiteNumber(record.value, "estimate", failAction) };
+      return {
+        actionId: parseActionId(record.actionId),
+        kind: record.kind,
+        value: boundedFiniteNumber(record.value, -MAX_ABS_NUMERIC_INPUT, MAX_ABS_NUMERIC_INPUT, "estimate", failAction)
+      };
     case "ALLOCATE_SAMPLE":
       assertExactKeys(record, ["actionId", "kind", "a", "b"], "Candidate action", failAction);
       return {
@@ -315,11 +370,7 @@ export function parseQuantResearchAction(input: unknown): QuantResearchAction {
       return { actionId: parseActionId(record.actionId), kind: record.kind, option: record.option };
     case "SUBMIT_PARAMETERS": {
       assertExactKeys(record, ["actionId", "kind", "values"], "Candidate action", failAction);
-      if (!Array.isArray(record.values) || record.values.length === 0 || record.values.length > MAX_ACTION_VECTOR) {
-        failAction("values must contain between 1 and 8 entries");
-      }
-      const values = record.values.map((value, index) => finiteNumber(value, `values[${String(index)}]`, failAction));
-      return { actionId: parseActionId(record.actionId), kind: record.kind, values };
+      return { actionId: parseActionId(record.actionId), kind: record.kind, values: finiteNumberVector(record.values) };
     }
     default:
       failAction("Unknown candidate action kind");
@@ -331,13 +382,30 @@ export interface QuantResearchFamilyRegistration {
   readonly version: string;
 }
 
-export function assertUniqueQuantResearchRegistrations(registrations: readonly QuantResearchFamilyRegistration[]): void {
-  if (registrations.length === 0 || registrations.length > QUANT_RESEARCH_FAMILIES.length) {
+export function assertUniqueQuantResearchRegistrations(registrationsInput: unknown): void {
+  if (!Array.isArray(registrationsInput) || registrationsInput.length === 0 || registrationsInput.length > QUANT_RESEARCH_FAMILIES.length) {
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry size is invalid");
   }
   const seen = new Set<string>();
-  for (const registration of registrations) {
-    if (!QUANT_RESEARCH_FAMILIES.includes(registration.family) || registration.version.length === 0 || registration.version.length > 32) {
+  for (const entry of registrationsInput) {
+    let registration: Record<string, unknown>;
+    try {
+      registration = asRecord(entry, "Scenario registry entry", (message) => {
+        throw new QuantResearchError("INVALID_REGISTRY", message);
+      });
+      assertExactKeys(registration, ["family", "version"], "Scenario registry entry", (message) => {
+        throw new QuantResearchError("INVALID_REGISTRY", message);
+      });
+    } catch (error) {
+      if (error instanceof QuantResearchError) throw error;
+      throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry entry is invalid");
+    }
+    if (
+      typeof registration.family !== "string" ||
+      !QUANT_RESEARCH_FAMILIES.includes(registration.family as QuantResearchFamily) ||
+      typeof registration.version !== "string" ||
+      !REGISTRY_VERSION_PATTERN.test(registration.version)
+    ) {
       throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry entry is invalid");
     }
     const key = registration.family + "@" + registration.version;
