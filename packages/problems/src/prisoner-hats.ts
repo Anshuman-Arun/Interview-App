@@ -25,14 +25,13 @@ export const prisonerHatsProblem: InterviewProblem = {
     reasoningGraph: {
       version: "1.0.0",
       approaches: [
-        { id: "parity-mod-2", label: "Parity sum modulo 2" },
-        { id: "binary-encoding", label: "Binary code reduction" }
+        { id: "parity-mod-2", label: "Parity sum modulo 2" }
       ],
       milestones: [
         {
           id: "communication-constraint",
           description: "Recognize that the 100th prisoner can transmit exactly one bit of collective information to all other prisoners.",
-          approachIds: ["parity-mod-2", "binary-encoding"],
+          approachIds: ["parity-mod-2"],
           optionalPrerequisiteIds: [],
           protectedDisclosureIds: []
         },
@@ -46,14 +45,14 @@ export const prisonerHatsProblem: InterviewProblem = {
         {
           id: "subsequent-deduction",
           description: "Explain how each subsequent prisoner k computes their hat color from the parity of visible hats and past guesses.",
-          approachIds: ["parity-mod-2", "binary-encoding"],
+          approachIds: ["parity-mod-2"],
           optionalPrerequisiteIds: ["define-parity-sum"],
           protectedDisclosureIds: [subsequentDeductionDisclosure]
         },
         {
           id: "induction-guarantee",
           description: "Prove by induction that prisoners 99 down to 1 are guaranteed 100% survival, ensuring >= 99 pardons.",
-          approachIds: ["parity-mod-2", "binary-encoding"],
+          approachIds: ["parity-mod-2"],
           optionalPrerequisiteIds: ["subsequent-deduction"],
           protectedDisclosureIds: []
         }

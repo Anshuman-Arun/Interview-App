@@ -19,7 +19,13 @@ const missingDisclosure = DisclosureIdSchema.parse("disclosure_fixture_missing")
 describe("problem fixture integrity", () => {
   it("accepts the existing Oxford six-person fixture and catalog", () => {
     expect(() => assertInterviewProblemIntegrity(sixPeopleProblem)).not.toThrow();
-    expect(problemCatalog).toContain(sixPeopleProblem);
+    const catalogEntry = problemCatalog.find(
+      (problem) =>
+        problem.id === sixPeopleProblem.id
+        && problem.version === sixPeopleProblem.version
+    );
+    expect(catalogEntry).toEqual(sixPeopleProblem);
+    expect(catalogEntry).not.toBe(sixPeopleProblem);
     expect(Object.isFrozen(problemCatalog)).toBe(true);
   });
 
