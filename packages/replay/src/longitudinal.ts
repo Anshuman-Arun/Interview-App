@@ -128,7 +128,7 @@ export function projectLongitudinalHistory(
         sessionIds: new Set<string>(),
         values: new Map<string, number>()
       };
-      const sessionIdentity = session.sessionId ?? `anonymous:${session.knownThroughSequence}`;
+      const sessionIdentity = session.sessionId ?? `anonymous:${String(session.knownThroughSequence)}`;
       if (!group.sessionIds.has(sessionIdentity)) {
         group.sessionIds.add(sessionIdentity);
         group.values.set(
@@ -182,8 +182,6 @@ export function projectLongitudinalHistory(
           || current?.sessionId === null
           || previous?.evaluation === undefined
           || current?.evaluation === undefined
-          || previous === undefined
-          || current === undefined
         ) {
           continue;
         }

@@ -62,17 +62,6 @@ function safeReplay(
   }
 }
 
-function eventProvenance(
-  byEventId: ReadonlyMap<EventId, ReplayEventProvenance>,
-  eventId: EventId
-): ReplayEventProvenance {
-  const provenance = byEventId.get(eventId);
-  if (provenance === undefined) {
-    throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
-  }
-  return provenance;
-}
-
 function lifecycleFrom(
   items: readonly NormalizedReplayEvent[],
   state: SessionState | undefined
@@ -461,11 +450,11 @@ function directDeliveryCounts(events: readonly SessionEvent[]): {
 } {
   return {
     exposed: new Set(events.filter((event) => event.type === "DELIVERY_EXPOSED")
-      .map((event) => event.type === "DELIVERY_EXPOSED" ? event.payload.deliveryId : "")).size,
+      .map((event) => event.payload.deliveryId)).size,
     possible: new Set(events.filter((event) => event.type === "DELIVERY_POSSIBLY_EXPOSED")
-      .map((event) => event.type === "DELIVERY_POSSIBLY_EXPOSED" ? event.payload.deliveryId : "")).size,
+      .map((event) => event.payload.deliveryId)).size,
     cancelled: new Set(events.filter((event) => event.type === "DELIVERY_CANCELLED")
-      .map((event) => event.type === "DELIVERY_CANCELLED" ? event.payload.deliveryId : "")).size
+      .map((event) => event.payload.deliveryId)).size
   };
 }
 
@@ -487,13 +476,12 @@ export function projectSessionHistory(
   const bounds = resolveReplayBounds(options.bounds);
   const normalized = normalizeReplayEvents(rawEvents, bounds);
   const events = knownEvents(normalized.events);
-  const stateAvailable =
-    normalized.sessionId !== null
-    && !normalized.hasUnknownEvents
-    && !normalized.eventTruncation.truncated;
-  const state = stateAvailable && normalized.sessionId !== null
-    ? safeReplay(normalized.sessionId, events)
-    : undefined;
+  const state =
+    normalized.sessionId === null
+    || normalized.hasUnknownEvents
+    || normalized.eventTruncation.truncated
+      ? undefined
+      : safeReplay(normalized.sessionId, events);
 
   const problemEvent = [...normalized.events].reverse()
     .find((item) => item.event?.type === "PROBLEM_PRESENTED");

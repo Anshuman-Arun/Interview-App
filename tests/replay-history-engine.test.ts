@@ -443,7 +443,7 @@ describe("replay/history projections", () => {
       })
     ];
     expect(() => projectSessionHistory(duplicate))
-      .toThrowError(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+      .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
   it("handles lifecycle states, mixed v1/v2 upcasts, future events, and explicit bounds safely", () => {
@@ -569,7 +569,7 @@ describe("replay/history projections", () => {
     expect(projectSessionHistory(valid, { evaluation }).evaluation?.scores.compositeScore).toBe(82);
     expect(() => projectSessionHistory(valid, {
       evaluation: { ...evaluation, problemVersion: "2.0.0" }
-    })).toThrowError(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
+    })).toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
   });
 });
 
@@ -675,6 +675,6 @@ describe("longitudinal projection", () => {
       remainingCount: 1
     });
     expect(() => projectLongitudinalHistory([first, first]))
-      .toThrowError(expect.objectContaining({ code: "DUPLICATE_SESSION" }));
+      .toThrow(expect.objectContaining({ code: "DUPLICATE_SESSION" }));
   });
 });
