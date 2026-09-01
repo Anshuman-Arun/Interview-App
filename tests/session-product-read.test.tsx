@@ -249,7 +249,7 @@ describe("grounded evaluation/replay product surface", () => {
             category: "RECOVERY",
             stateValidation: "VALIDATED",
             source: "RECOVERY",
-            relations: { deliveryId: "delivery_uncertain" },
+            relations: { deliveryId: "delivery_uncertain", generationId: "generation_uncertain" },
             delivery: {
               medium: "TEXT",
               status: "POSSIBLY_EXPOSED",
@@ -285,7 +285,7 @@ describe("grounded evaluation/replay product surface", () => {
       category: "RECOVERY",
       stateValidation: "VALIDATED",
       source: "RECOVERY",
-      relations: { deliveryId: "delivery_smuggled" },
+      relations: { deliveryId: "delivery_smuggled", generationId: "generation_smuggled" },
       text: {
         text: "secret possibly exposed answer",
         originalLength: 30,
@@ -397,7 +397,7 @@ describe("grounded evaluation/replay product surface", () => {
       category: "RECOVERY",
       stateValidation: "VALIDATED",
       source: "RECOVERY",
-      relations: { deliveryId: "delivery_bad" },
+      relations: { deliveryId: "delivery_bad", generationId: "generation_bad" },
       delivery: {
         medium: "TEXT",
         status: "COMPLETED",
