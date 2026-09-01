@@ -192,10 +192,6 @@ function withAssistance(
       ? {}
       : { allowedDisclosureIds: [...input.allowedDisclosureIds] })
   };
-  const disclosedStatus = input.status === undefined
-    || input.status === "EXPOSED"
-    || input.status === "COMPLETED"
-    || input.status === "POSSIBLY_EXPOSED";
   return {
     ...state,
     turns: {
@@ -240,9 +236,7 @@ function withAssistance(
         status: input.status ?? "EXPOSED"
       }
     },
-    disclosureLedger: disclosedStatus
-      ? Array.from(new Set([...state.disclosureLedger, ...disclosureIds]))
-      : state.disclosureLedger
+    disclosureLedger: Array.from(new Set([...state.disclosureLedger, ...disclosureIds]))
   };
 }
 
