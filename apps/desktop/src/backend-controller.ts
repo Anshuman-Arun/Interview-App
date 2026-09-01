@@ -112,7 +112,7 @@ function snapshotServerConfig(config: ServerConfig): ServerConfig {
     "allowedOrigins",
     "databasePath"
   ]);
-  for (const key of Object.keys(config as Record<string, unknown>)) {
+  for (const key of Object.keys(config)) {
     if (!supportedKeys.has(key)) {
       throw new Error(`Desktop backend configuration contains unsupported field "${key}"`);
     }
