@@ -2,13 +2,13 @@ export const QUANT_RESEARCH_VERSION = "1.0.0" as const;
 export const QUANT_RESEARCH_GENERATOR_VERSION = "quant-research-generator-v1" as const;
 export const QUANT_RESEARCH_RNG_VERSION = "xorshift32-rejection-v1" as const;
 
-export const QUANT_RESEARCH_FAMILIES = [
+export const QUANT_RESEARCH_FAMILIES = Object.freeze([
   "BAYESIAN_UPDATING",
   "SAMPLING_ESTIMATION",
   "EXPERIMENTAL_ALLOCATION",
   "MODEL_COMPARISON",
   "CONSTRAINED_OPTIMIZATION"
-] as const;
+] as const);
 
 export type QuantResearchFamily = (typeof QUANT_RESEARCH_FAMILIES)[number];
 
