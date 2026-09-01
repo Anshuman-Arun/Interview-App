@@ -612,7 +612,7 @@ describe("grounded session evaluator", () => {
   });
 
   it("rejects inconsistent serialized lifecycle and assistance metadata", () => {
-    let state = completeMilestone(boundState(), "model-relations", 10);
+    const state = completeMilestone(boundState(), "model-relations", 10);
     const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
 
     expect(() => SessionEvaluationSchema.parse({
