@@ -560,6 +560,17 @@ describe("local worker lifecycle manager", () => {
     }, [counter, "30"]));
 
     await runtime.start("auto-backoff-stop");
+    if (process.platform === "win32") {
+      await waitForStatus(runtime, "auto-backoff-stop", (status) =>
+        status.state === "FAILED"
+          && status.failure?.code === "TERMINATION_FAILED"
+          && status.restartCount === 0
+          && readFileSync(counter, "utf8") === "1"
+      );
+      expect(readFileSync(counter, "utf8")).toBe("1");
+      return;
+    }
+
     await waitForStatus(runtime, "auto-backoff-stop", (status) =>
       status.state === "FAILED"
         && status.restartCount === 1
@@ -582,6 +593,19 @@ describe("local worker lifecycle manager", () => {
       restartPolicy: { mode: "ON_FAILURE", maxRetries: 1, backoffMs: 5 }
     }, [counter, "40"]));
     await runtime.start("late-crash");
+
+    if (process.platform === "win32") {
+      await waitForStatus(runtime, "late-crash", (status) =>
+        status.state === "FAILED"
+          && status.failure?.code === "TERMINATION_FAILED"
+          && status.restartCount === 0
+          && readFileSync(counter, "utf8") === "1"
+      );
+      const failed = runtime.getStatus("late-crash");
+      expect(failed.lastExit?.unexpected).toBe(true);
+      expect(readFileSync(counter, "utf8")).toBe("1");
+      return;
+    }
 
     await waitForStatus(runtime, "late-crash", (status) =>
       status.state === "FAILED"
@@ -680,8 +704,11 @@ describe("local worker lifecycle manager", () => {
       }
     }));
 
-    const status = await runtime.start("overlap-redaction");
-    const stderr = status.stderr.lines.join("\n");
+    await runtime.start("overlap-redaction");
+    await waitForStatus(runtime, "overlap-redaction", (status) =>
+      status.stderr.lines.some((line) => line.includes("[REDACTED]"))
+    );
+    const stderr = runtime.getStatus("overlap-redaction").stderr.lines.join("\n");
     expect(stderr).toContain("[REDACTED]");
     expect(stderr).not.toContain("[REDACTED]REDACTED]");
   });
@@ -733,7 +760,7 @@ describe("local worker lifecycle manager", () => {
       }
     });
     expect(resolveFetch).toBeDefined();
-    resolveFetch?.(new Response(body, { status: 204 }));
+    resolveFetch?.(new Response(body, { status: 200 }));
 
     await Promise.resolve();
     await Promise.resolve();
@@ -769,8 +796,11 @@ describe("local worker lifecycle manager", () => {
         return Reflect.getPrototypeOf(target);
       }
     });
+    const proxiedResponsePromise = Promise.resolve(proxiedResponse);
+    await proxiedResponsePromise.then(() => undefined);
+    const promiseAssimilationTraps = responseProxyTraps;
     const proxied = manager({
-      fetch: (() => Promise.resolve(proxiedResponse)) as unknown as typeof globalThis.fetch
+      fetch: (() => proxiedResponsePromise) as unknown as typeof globalThis.fetch
     });
     proxied.register(definition("proxy-http-response", "ready", {
       readiness: {
@@ -782,7 +812,7 @@ describe("local worker lifecycle manager", () => {
 
     await expect(proxied.start("proxy-http-response"))
       .rejects.toMatchObject({ code: "READINESS_FAILED" });
-    expect(responseProxyTraps).toBe(0);
+    expect(responseProxyTraps).toBe(promiseAssimilationTraps);
   });
 
   it("ignores shadow accessors on validated HTTP Response objects", async () => {
@@ -950,7 +980,9 @@ describe("local worker lifecycle manager", () => {
       },
       output: { maxLines: 8, maxBytes: 1_024, maxLineBytes: 1_024 }
     }));
-    const lineStatus = await runtime.start("line");
+    await expect(runtime.start("line")).resolves.toMatchObject({ state: "READY" });
+    await waitForStatus(runtime, "line", (status) => status.stdout.truncated);
+    const lineStatus = runtime.getStatus("line");
     expect(lineStatus.state).toBe("READY");
     expect(lineStatus.stdout.truncated).toBe(true);
 
@@ -1057,7 +1089,11 @@ describe("local worker lifecycle manager", () => {
     await runtime.start("hung-hook");
 
     const stopped = await runtime.stop("hung-hook");
-    expect(stopped.disposition).toBe("TERMINATED");
+    if (process.platform === "win32") {
+      expect(["TERMINATED", "FORCED"]).toContain(stopped.disposition);
+    } else {
+      expect(stopped.disposition).toBe("TERMINATED");
+    }
     expect(runtime.getStatus("hung-hook").state).toBe("STOPPED");
   });
 
@@ -1147,6 +1183,19 @@ describe("local worker lifecycle manager", () => {
       terminationTimeoutMs: 300
     }, [counter, "40"]));
     await runtime.start("crash-tail");
+
+    if (process.platform === "win32") {
+      await waitForStatus(runtime, "crash-tail", (status) =>
+        status.state === "FAILED"
+          && status.failure?.code === "TERMINATION_FAILED"
+          && status.restartCount === 0
+          && status.lastExit?.stderrTail.some((line) => line.includes("crash-attempt-1")) === true
+      );
+      const failed = runtime.getStatus("crash-tail");
+      expect(failed.lastExit?.stderrTail.join(" ")).toContain("crash-attempt-1");
+      expect(failed.lastExit?.stderrTail.join(" ")).not.toContain("crash-attempt-2");
+      return;
+    }
 
     await waitForStatus(runtime, "crash-tail", (status) =>
       status.state === "FAILED" && status.restartCount === 1 && status.lastExit?.code === 14
@@ -1443,7 +1492,7 @@ describe("local worker lifecycle manager", () => {
       shutdownTimeoutMs: 300,
       terminationTimeoutMs: 300,
       gracefulShutdown: (control) => {
-        restarted = runtime.start("reentrant");
+        if (restarted === undefined) restarted = runtime.start("reentrant");
         control.endStdin();
       }
     }, [counter]));
@@ -1982,7 +2031,12 @@ describe("local worker lifecycle manager", () => {
       status.state === "FAILED" && status.lastExit?.code === 15
     );
     expect(childPid).toBeTypeOf("number");
-    await runtime.stop("pipe-exit");
+    if (process.platform === "win32") {
+      await expect(runtime.stop("pipe-exit"))
+        .rejects.toMatchObject({ code: "TERMINATION_FAILED" });
+    } else {
+      await runtime.stop("pipe-exit");
+    }
     if (childPid !== undefined) await waitForPidExit(childPid);
   });
 

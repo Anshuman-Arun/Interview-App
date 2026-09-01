@@ -943,19 +943,43 @@ export class LocalRuntimeManager {
         pid: child.pid as number,
         signal
       });
-      let decision: LocalReadinessDecision;
+      let observedDecision: LocalReadinessDecision | Promise<LocalReadinessDecision>;
       try {
-        decision = await awaitWithAbort(
-          Promise.resolve().then(() => strategy.probe(context)),
-          signal,
-          record.definition.id
-        );
+        observedDecision = strategy.probe(context);
       } catch {
         if (signal.aborted) {
           throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
         }
         await abortableDelay(intervalMs, signal, record.definition.id);
         continue;
+      }
+
+      let decision: LocalReadinessDecision;
+      if (
+        typeof observedDecision === "object"
+        && observedDecision !== null
+        && utilTypes.isProxy(observedDecision)
+      ) {
+        // Do not Promise-assimilate untrusted callback values. In particular,
+        // Promise resolution would probe a hostile/revoked proxy's "then"
+        // property before application-owned admission can reject it.
+        decision = observedDecision as LocalReadinessDecision;
+      } else if (utilTypes.isPromise(observedDecision)) {
+        try {
+          decision = await awaitWithAbort(
+            observedDecision as Promise<LocalReadinessDecision>,
+            signal,
+            record.definition.id
+          );
+        } catch {
+          if (signal.aborted) {
+            throw new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${record.definition.id}`);
+          }
+          await abortableDelay(intervalMs, signal, record.definition.id);
+          continue;
+        }
+      } else {
+        decision = observedDecision as LocalReadinessDecision;
       }
 
       const normalized = normalizeReadinessDecision(
@@ -2260,7 +2284,12 @@ async function terminateManagedTree(
 
   const treeForceVerified = await forceKillChildTree(child, platform, timeoutMs);
   const forced = await waitForManagedTreeExit(record, child, platform, timeoutMs);
-  if (!forced || (platform === "win32" && !treeForceVerified)) return "UNVERIFIED";
+  if (
+    !forced
+    || (platform === "win32" && !treeForceVerified && !treeTerminationVerified)
+  ) {
+    return "UNVERIFIED";
+  }
   return "FORCED";
 }
 
