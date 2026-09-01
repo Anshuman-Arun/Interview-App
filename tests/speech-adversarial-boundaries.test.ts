@@ -85,9 +85,9 @@ describe("speech worker adversarial callback boundaries", () => {
     const worker = new SpeechWorkerCore(options);
     expect(limitReads).toBe(1);
 
-    const first = frame(0, "getter-left");
+    const first = frame(0, true, "getter-left");
     await worker.submitFrame(first.envelope, first.pcm);
-    const second = frame(0, "getter-right");
+    const second = frame(0, true, "getter-right");
     await expect(worker.submitFrame(second.envelope, second.pcm)).rejects.toMatchObject({
       code: "RESOURCE_LIMIT"
     });
