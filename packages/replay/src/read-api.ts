@@ -138,6 +138,25 @@ export const GroundedEvaluationDimensionSchema = z.object({
   evidenceRefTruncation: ReadTruncationSchema,
   notScoredReason: BoundedTextSchema.optional()
 }).strict().superRefine((result, context) => {
+  if (
+    new Set(result.evidenceRefs.map((ref) => ref.kind + ":" + ref.id)).size
+      !== result.evidenceRefs.length
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Read dimension evidence references must be unique"
+    });
+  }
+  if (
+    result.evidenceRefTruncation.truncated
+      ? result.evidenceRefs.length !== result.evidenceRefTruncation.limit
+      : result.evidenceRefs.length > result.evidenceRefTruncation.limit
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Read dimension evidence truncation does not match the retained references"
+    });
+  }
   if (result.score === null && result.notScoredReason === undefined) {
     context.addIssue({
       code: "custom",
@@ -171,7 +190,36 @@ export const GroundedEvaluationMilestoneSchema = z.object({
   evidenceRefs: z.array(ReadEvidenceRefSchema).max(MAX_EVALUATION_READ_EVIDENCE_REFS),
   evidenceRefTruncation: ReadTruncationSchema,
   assistanceDisclosureCount: NonnegativeSafeIntegerSchema
-}).strict();
+}).strict().superRefine((milestone, context) => {
+  if (
+    new Set(milestone.evidenceRefs.map((ref) => ref.kind + ":" + ref.id)).size
+      !== milestone.evidenceRefs.length
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Milestone read evidence references must be unique"
+    });
+  }
+  if (
+    milestone.evidenceRefTruncation.truncated
+      ? milestone.evidenceRefs.length !== milestone.evidenceRefTruncation.limit
+      : milestone.evidenceRefs.length > milestone.evidenceRefTruncation.limit
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Milestone read evidence truncation is inconsistent"
+    });
+  }
+  if (
+    (milestone.assistanceLevel === 0)
+      !== (milestone.assistanceDisclosureCount === 0)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Milestone assistance level/count are inconsistent"
+    });
+  }
+});
 
 export const GroundedEvaluationInterventionSchema = z.object({
   deliveryId: BoundedIdentifierSchema,
@@ -182,7 +230,29 @@ export const GroundedEvaluationInterventionSchema = z.object({
   relatedMilestoneIds: z.array(BoundedIdentifierSchema)
     .max(MAX_EVALUATION_READ_RELATED_MILESTONES),
   relatedMilestoneTruncation: ReadTruncationSchema
-}).strict();
+}).strict().superRefine((intervention, context) => {
+  if (
+    new Set(intervention.relatedMilestoneIds).size
+      !== intervention.relatedMilestoneIds.length
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Intervention milestone associations must be unique"
+    });
+  }
+  if (
+    intervention.relatedMilestoneTruncation.truncated
+      ? intervention.relatedMilestoneIds.length
+        !== intervention.relatedMilestoneTruncation.limit
+      : intervention.relatedMilestoneIds.length
+        > intervention.relatedMilestoneTruncation.limit
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Intervention milestone truncation is inconsistent"
+    });
+  }
+});
 
 export const GroundedEvaluationReadModelSchema = z.object({
   sessionId: BoundedSessionIdSchema,
@@ -222,6 +292,18 @@ export const GroundedEvaluationReadModelSchema = z.object({
   const dimensions = new Map(
     evaluation.dimensions.map((dimension) => [dimension.name, dimension] as const)
   );
+  if (
+    new Set(evaluation.milestones.map((milestone) => milestone.milestoneId)).size
+      !== evaluation.milestones.length
+    || new Set(
+      evaluation.disclosedInterventions.map((intervention) => intervention.deliveryId)
+    ).size !== evaluation.disclosedInterventions.length
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Evaluation read collections must have unique authoritative identities"
+    });
+  }
   if (
     dimensions.size !== DIMENSION_ORDER.length
     || DIMENSION_ORDER.some((name) => !dimensions.has(name))
@@ -970,7 +1052,50 @@ export const LongitudinalReadModelSchema = z.object({
     evidence: z.literal("EXACT_EVIDENCE_KEY_ONLY"),
     skillTaxonomyAvailable: z.literal(false)
   }).strict()
-}).strict();
+}).strict().superRefine((history, context) => {
+  if (
+    history.completedSessions > history.includedSessionCount
+    || history.problemsAttempted > history.includedSessionCount
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Longitudinal aggregate counts exceed the included session population"
+    });
+  }
+  if (
+    history.evaluationStatistics.some(
+      (statistics) => statistics.sessionCount > history.includedSessionCount
+    )
+    || history.repeatedProblems.some(
+      (problem) =>
+        problem.attemptCount < 2
+        || problem.attemptCount > history.includedSessionCount
+    )
+    || history.improvement.some(
+      (record) => record.fromSessionId === record.toSessionId
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Longitudinal detail is inconsistent with the included session population"
+    });
+  }
+  const statisticKeys = history.evaluationStatistics.map(
+    (statistics) => JSON.stringify([statistics.problemId, statistics.problemVersion])
+  );
+  const repeatedKeys = history.repeatedProblems.map(
+    (problem) => JSON.stringify([problem.problemId, problem.problemVersion])
+  );
+  if (
+    new Set(statisticKeys).size !== statisticKeys.length
+    || new Set(repeatedKeys).size !== repeatedKeys.length
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Longitudinal problem aggregates must be unique"
+    });
+  }
+});
 export type LongitudinalReadModel = z.infer<typeof LongitudinalReadModelSchema>;
 
 export const SessionHistoryReadResponseSchema = z.object({
