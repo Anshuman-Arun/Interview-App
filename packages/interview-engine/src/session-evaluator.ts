@@ -175,8 +175,7 @@ export function evaluateInterviewSession(
     dimensionResults,
     correctness,
     rigor,
-    errorRecovery,
-    assistedMilestoneCount
+    errorRecovery
   );
   const lifecycle = evaluateLifecycle(state, turnsList.length);
   const summaryAssessment = buildSummary(
@@ -263,6 +262,12 @@ function assertEvaluationStateConsistency(
     problem.interviewer.reasoningGraph.approaches.map((approach) => approach.id)
   );
   const activeByKey = new Map<string, EvidenceRecordState>();
+  const protectedDisclosureById = new Map(
+    problem.interviewer.protectedDisclosures.map((disclosure) => [disclosure.id, disclosure] as const)
+  );
+  if (protectedDisclosureById.size !== problem.interviewer.protectedDisclosures.length) {
+    throw new Error("Evaluation problem contains duplicate protected-disclosure identities");
+  }
 
   for (const [storedKey, history] of Object.entries(state.evidenceHistory)) {
     if (history.length === 0) {
@@ -345,6 +350,42 @@ function assertEvaluationStateConsistency(
     ) {
       throw new Error("Evaluation verification evidence must be scoped to correctness");
     }
+  }
+
+  const exposedDisclosureIds = new Set<DisclosureId>();
+  for (const [deliveryId, delivery] of Object.entries(state.deliveries)) {
+    if (delivery.deliveryId !== deliveryId) {
+      throw new Error("Evaluation delivery identity does not match its state key");
+    }
+    if (state.generations[delivery.generationId] === undefined) {
+      throw new Error("Evaluation delivery references an unknown generation");
+    }
+
+    let minimumRequiredLevel: DisclosureLevel = 0;
+    for (const disclosureId of delivery.disclosureIds) {
+      const disclosure = protectedDisclosureById.get(disclosureId);
+      if (disclosure === undefined) {
+        throw new Error("Evaluation delivery references a disclosure outside the exact problem definition");
+      }
+      if (disclosure.minimumDisclosureLevel > minimumRequiredLevel) {
+        minimumRequiredLevel = disclosure.minimumDisclosureLevel;
+      }
+      if (isDisclosedStatus(delivery.status)) exposedDisclosureIds.add(disclosureId);
+    }
+    if (delivery.effectiveDisclosureLevel < minimumRequiredLevel) {
+      throw new Error("Evaluation delivery understates the problem-defined disclosure level");
+    }
+  }
+
+  const ledgerIds = new Set(state.disclosureLedger);
+  if (ledgerIds.size !== state.disclosureLedger.length) {
+    throw new Error("Evaluation disclosure ledger contains duplicate disclosure identities");
+  }
+  if (
+    ledgerIds.size !== exposedDisclosureIds.size ||
+    [...ledgerIds].some((disclosureId) => !exposedDisclosureIds.has(disclosureId))
+  ) {
+    throw new Error("Evaluation disclosure ledger does not match exposed delivery state");
   }
 
   if (state.status === "COMPLETED" && state.completedAt === undefined) {
@@ -473,6 +514,11 @@ function collectDisclosureData(
   readonly unattributedAssistanceRefs: readonly EvaluationEvidenceRef[];
 } {
   const disclosureToMilestones = new Map<DisclosureId, string[]>();
+  const disclosureLevelById = new Map(
+    problem.interviewer.protectedDisclosures.map(
+      (disclosure) => [disclosure.id, disclosure.minimumDisclosureLevel] as const
+    )
+  );
   for (const milestone of problem.interviewer.reasoningGraph.milestones) {
     for (const disclosureId of milestone.protectedDisclosureIds) {
       const current = disclosureToMilestones.get(disclosureId) ?? [];
@@ -504,7 +550,11 @@ function collectDisclosureData(
     ).sort();
 
     const deliveryStatus =
-      delivery.status === "POSSIBLY_EXPOSED" ? "POSSIBLY_EXPOSED" as const : "EXPOSED" as const;
+      delivery.status === "POSSIBLY_EXPOSED"
+        ? "POSSIBLY_EXPOSED" as const
+        : delivery.status === "COMPLETED"
+          ? "COMPLETED" as const
+          : "EXPOSED" as const;
     const medium = delivery.content.medium;
     const summary =
       deliveryStatus +
@@ -535,16 +585,21 @@ function collectDisclosureData(
     });
 
     for (const disclosureId of delivery.disclosureIds) {
+      const disclosureLevel = disclosureLevelById.get(disclosureId);
+      if (disclosureLevel === undefined) {
+        throw new Error("Evaluation cannot attribute an unknown protected disclosure");
+      }
+
       const current = exposuresMutable.get(disclosureId);
       const deliveryRef = evaluationRef("DELIVERY", delivery.deliveryId);
       if (current === undefined) {
         exposuresMutable.set(disclosureId, {
-          level: delivery.effectiveDisclosureLevel,
+          level: disclosureLevel,
           possiblyExposed: delivery.status === "POSSIBLY_EXPOSED",
           deliveryRefs: [deliveryRef]
         });
       } else {
-        current.level = Math.max(current.level, delivery.effectiveDisclosureLevel) as DisclosureLevel;
+        current.level = Math.max(current.level, disclosureLevel) as DisclosureLevel;
         current.possiblyExposed ||= delivery.status === "POSSIBLY_EXPOSED";
         current.deliveryRefs.push(deliveryRef);
       }
@@ -972,31 +1027,25 @@ function evaluateIndependence(
     };
   }
 
-  let total = 0;
-  let attributionUncertain = false;
-  const refs: EvaluationEvidenceRef[] = [];
-
-  for (const milestone of achieved) {
-    const assistanceCount = milestone.evaluation.assistanceDisclosureIds.length;
-    let milestoneScore = independenceScoreForLevel(milestone.evaluation.assistanceLevel);
-    if (assistanceCount > 1) {
-      milestoneScore = Math.max(0, milestoneScore - Math.min(20, (assistanceCount - 1) * 10));
-    }
-    total += milestoneScore;
-    attributionUncertain ||= milestone.attributionUncertain;
-    refs.push(...milestone.evaluation.evidenceRefs);
-  }
-
-  let supportLevel = supportFromGroundedCount(achieved.length);
-  if (attributionUncertain || unattributedAssistanceRefs.length > 0) {
-    supportLevel = minSupport(supportLevel, "WEAK");
+  const uncertain = achieved.filter((item) => item.attributionUncertain);
+  const uncertaintyRefs = uniqueRefs([
+    ...uncertain.flatMap((item) => item.priorAssistanceRefs),
+    ...unattributedAssistanceRefs
+  ]);
+  if (uncertain.length > 0 || unattributedAssistanceRefs.length > 0) {
+    return {
+      result: unsupportedDimension(
+        "Relevant protected assistance was exposed, but authoritative exposure ordering is unavailable, so independence cannot be scored without inventing before/after attribution.",
+        uncertaintyRefs
+      )
+    };
   }
 
   return {
     result: scoredDimension(
-      roundScore(total / achieved.length),
-      supportLevel,
-      uniqueRefs([...refs, ...unattributedAssistanceRefs])
+      100,
+      supportFromGroundedCount(achieved.length),
+      uniqueRefs(achieved.flatMap((item) => item.evaluation.evidenceRefs))
     )
   };
 }
@@ -1018,16 +1067,20 @@ function evaluateErrorRecovery(
   const refs: EvaluationEvidenceRef[] = [];
   const unresolvedApproachErrors: Array<{
     approachId: string;
+    dimension: EvidenceKey["dimension"];
     sequence: number;
     refs: EvaluationEvidenceRef[];
   }> = [];
   const positiveApproachRecords: Array<{
     approachId: string;
+    dimension: EvidenceKey["dimension"];
     sequence: number;
     refs: EvaluationEvidenceRef[];
   }> = [];
 
-  const histories = Object.values(state.evidenceHistory)
+  const histories = Object.entries(state.evidenceHistory)
+    .sort(([left], [right]) => compareStrings(left, right))
+    .map(([, history]) => history)
     .filter((history) => history.some((record) => record.key.problemId === problemId));
 
   for (const history of histories) {
@@ -1063,6 +1116,7 @@ function evaluateErrorRecovery(
       }
 
       if (inErrorEpisode && negative) {
+        errorSequence = record.value.lastUpdatedSequence;
         errorRefs.push(...recordRefs);
         continue;
       }
@@ -1080,6 +1134,7 @@ function evaluateErrorRecovery(
       if (subject?.kind === "APPROACH") {
         unresolvedApproachErrors.push({
           approachId: subject.approachId,
+          dimension: records[0]?.key.dimension ?? "PROGRESS",
           sequence: errorSequence,
           refs: uniqueRefs(errorRefs)
         });
@@ -1097,6 +1152,7 @@ function evaluateErrorRecovery(
         ) {
           positiveApproachRecords.push({
             approachId: subject.approachId,
+            dimension: record.key.dimension,
             sequence: record.value.lastUpdatedSequence,
             refs: [evaluationRef("EVIDENCE_EVENT", record.evidenceEventId)]
           });
@@ -1106,10 +1162,17 @@ function evaluateErrorRecovery(
 
   }
 
+  positiveApproachRecords.sort(
+    (left, right) =>
+      left.sequence - right.sequence ||
+      compareStrings(left.approachId, right.approachId)
+  );
+
   for (const error of unresolvedApproachErrors) {
     const switched = positiveApproachRecords.find(
       (candidate) =>
         candidate.approachId !== error.approachId &&
+        candidate.dimension === error.dimension &&
         candidate.sequence > error.sequence
     );
     if (switched === undefined) {
@@ -1240,7 +1303,7 @@ function buildStrengths(
   if (unassisted.length > 0) {
     strengths.push(
       String(unassisted.length) +
-      " achieved milestone(s) have no attributable prior protected disclosure."
+      " achieved milestone(s) have no attributable protected disclosure in the current exposure ledger."
     );
   }
 
@@ -1259,8 +1322,7 @@ function buildImprovementAreas(
   dimensions: EvaluationDimensionResults,
   correctness: DimensionComputation,
   rigor: DimensionComputation,
-  recovery: DimensionComputation,
-  assistedMilestoneCount: number
+  recovery: DimensionComputation
 ): string[] {
   const improvements: string[] = [];
 
@@ -1286,12 +1348,6 @@ function buildImprovementAreas(
     );
   }
 
-  if (assistedMilestoneCount > 0) {
-    improvements.push(
-      String(assistedMilestoneCount) +
-      " achieved milestone(s) are associated with prior exposed or possibly exposed protected assistance."
-    );
-  }
 
   if ((recovery.failureCount ?? 0) > 0) {
     improvements.push(
@@ -1431,15 +1487,6 @@ function rigorRatingScore(value: EvidenceRecordState["value"]["value"]): number 
   if (value === "INCOMPLETE") return 50;
   if (value === "UNJUSTIFIED") return 0;
   return null;
-}
-
-function independenceScoreForLevel(level: DisclosureLevel): number {
-  if (level === 0) return 100;
-  if (level === 1) return 90;
-  if (level === 2) return 75;
-  if (level === 3) return 55;
-  if (level === 4) return 30;
-  return 10;
 }
 
 function supportFromEvidenceRecords(
