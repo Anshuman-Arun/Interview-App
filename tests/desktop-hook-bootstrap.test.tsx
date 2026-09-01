@@ -28,7 +28,6 @@ describe("desktop hook bootstrap lifecycle", () => {
       Reflect.deleteProperty(globalThis, ACT_ENVIRONMENT_KEY);
     }
     vi.unstubAllGlobals();
-    delete (globalThis as typeof globalThis & { interviewDesktop?: unknown }).interviewDesktop;
   });
 
   it("reads desktop bootstrap exactly once across rerenders", async () => {
@@ -43,10 +42,7 @@ describe("desktop hook bootstrap lifecycle", () => {
       appVersion: "test",
       platform: "test"
     }));
-    Object.defineProperty(globalThis, "interviewDesktop", {
-      value: { getBootstrap },
-      configurable: true
-    });
+    vi.stubGlobal("interviewDesktop", { getBootstrap });
     vi.stubGlobal("fetch", async () => {
       throw new Error("network should not be used during hook initialization");
     });
