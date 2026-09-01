@@ -29,7 +29,7 @@ Definitions are strict runtime-validated plain objects. Unknown fields, accessor
 
 The engine never uses ambient randomness. `DeterministicRng` is seeded from the explicit safe-integer seed plus a namespace containing the family, scenario version, generator version, and RNG version. The scenario definition itself carries both `generatorVersion` and `rngVersion`. Runtime parsing rejects incompatible generator or RNG semantics rather than silently replaying a persisted seed under a different implementation. All random-looking observations and latent parameters are generated during initialization. State inspection does not consume RNG state.
 
-Identical `(family, version, generatorVersion, rngVersion, seed, config)` inputs therefore produce identical hidden state and, for an identical ordered action sequence, identical public state, evidence, and result. Golden version-1 fixtures pin representative generated instances so an RNG/generator change cannot silently retain the same scenario version.
+Identical `(family, version, generatorVersion, rngVersion, seed, config)` inputs therefore produce identical hidden state and, for an identical ordered action sequence, identical public state, evidence, and result. Public state/results/diagnostics retain the non-secret scenario/generator/RNG compatibility tuple so replay identity is not reduced to the scenario version alone. The compatibility registry is likewise keyed by the full tuple and is bounded independently of the family count so historical implementations can coexist for replay. Golden version-1 fixtures pin representative generated instances so an RNG/generator change cannot silently retain the same compatibility tuple.
 
 ## Hidden, public, and authoritative state
 
