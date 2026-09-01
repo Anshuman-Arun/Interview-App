@@ -129,10 +129,11 @@ describe("speech worker adversarial callback boundaries", () => {
       const fixture = frame(sequence, sequence < 6, "metadata-snapshot");
       events.push(...await worker.submitFrame(fixture.envelope, fixture.pcm));
     }
-    expect(events).toContainEqual(expect.objectContaining({
-      type: "TRANSCRIPT_CANDIDATE",
-      candidate: expect.objectContaining({ model: { name: "stable-model", version: "1" } })
-    }));
+    const transcript = events.find((event) => event.type === "TRANSCRIPT_CANDIDATE");
+    expect(transcript?.type).toBe("TRANSCRIPT_CANDIDATE");
+    if (transcript?.type === "TRANSCRIPT_CANDIDATE") {
+      expect(transcript.candidate.model).toEqual({ name: "stable-model", version: "1" });
+    }
   });
 
   it("rejects recognizer model-identity spoofing before emitting a transcript", async () => {
