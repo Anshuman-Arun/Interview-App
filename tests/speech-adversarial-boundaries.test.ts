@@ -162,6 +162,50 @@ describe("speech worker adversarial callback boundaries", () => {
     expect(worker.getActiveStreamCount()).toBe(0);
   });
 
+  it("rejects invalid endpoint maximums from an injected subclass", async () => {
+    class InvalidMaximumPolicy extends AdaptiveEndpointingPolicy {
+      public override getMaximumUtteranceMs() {
+        return Number.NaN;
+      }
+    }
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      endpointingFactory: () => new InvalidMaximumPolicy()
+    });
+    const fixture = frame(0, false, "invalid-endpoint-max");
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "Speech stream configuration could not be initialized"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
+  });
+
+  it("rejects shape-valid endpoint decisions that contradict an explicit flush", async () => {
+    class IgnoreFlushPolicy extends AdaptiveEndpointingPolicy {
+      public override decide() {
+        return { kind: "CONTINUE" } as const;
+      }
+    }
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      endpointingFactory: () => new IgnoreFlushPolicy()
+    });
+    const fixture = frame(0, true, "ignore-flush");
+    await worker.submitFrame(fixture.envelope, fixture.pcm);
+    await expect(worker.flush({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "ignore-flush",
+      type: "FLUSH_SPEECH"
+    })).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "Endpointing policy failed"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
+  });
+
   it("rejects malformed endpoint decisions from an injected subclass", async () => {
     class ForgedEndpointingPolicy extends AdaptiveEndpointingPolicy {
       public override decide() {
