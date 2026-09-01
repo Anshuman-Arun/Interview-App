@@ -140,6 +140,51 @@ describe("speech worker adversarial races and hard limits", () => {
     expect(subject.getDiagnostics()).toContainEqual(expect.objectContaining({ code: "VAD_TIMEOUT" }));
   });
 
+  it("suppresses a hung VAD request when cancellation wins before the VAD timeout", async () => {
+    let startedResolve: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { startedResolve = resolve; });
+    const vadBackend: VadBackend = {
+      async classify() {
+        startedResolve?.();
+        return new Promise(() => undefined);
+      }
+    };
+    const subject = worker({ vadBackend, vadTimeoutMs: 30 });
+    const fixture = frame(0, true, "cancel-vad");
+    const pending = subject.submitFrame(fixture.envelope, fixture.pcm);
+    await started;
+
+    const cancelled = await subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "cancel-vad",
+      type: "CANCEL_SPEECH"
+    });
+    expect(cancelled).toContainEqual(expect.objectContaining({ type: "SPEECH_CANCELLED" }));
+    await expect(pending).resolves.toEqual([]);
+  });
+
+  it("does not expire an active onset candidate merely because hysteresis exceeds the silence timeout", async () => {
+    const subject = worker({
+      maxPreSpeechDurationMs: 60,
+      vadStateFactory: () => new VoiceActivityStateMachine({
+        onsetThreshold: 0.5,
+        continuationThreshold: 0.5,
+        onsetHysteresisMs: 100
+      })
+    });
+    const events: SpeechWorkerEvent[] = [];
+    for (let sequence = 0; sequence < 5; sequence += 1) {
+      const fixture = frame(sequence, true, "long-onset");
+      events.push(...await subject.submitFrame(fixture.envelope, fixture.pcm));
+    }
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "SPEECH_STARTED",
+      atTimestampMs: 0
+    }));
+    expect(events.some((event) => event.type === "UTTERANCE_DISCARDED" && event.reason === "NO_SPEECH_TIMEOUT")).toBe(false);
+  });
+
   it("times out a hung recognizer without leaving the stream or request pending forever", async () => {
     const recognizer: SpeechRecognizer = {
       modelIdentity: { name: "hung-recognizer", version: "1" },
