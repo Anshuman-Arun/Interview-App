@@ -548,7 +548,9 @@ export class RealTldrawEditorBridge implements TldrawEditor {
       ...shapeMeta,
       layer,
       origin,
-      shapeRevision: positiveSafeRevision(shapeMeta["shapeRevision"], 1),
+      shapeRevision: shapeMeta["shapeRevision"] === undefined
+        ? 1
+        : shapeMeta["shapeRevision"],
       createdAt: stringMeta(shapeMeta["createdAt"], now),
       lastModifiedAt: stringMeta(shapeMeta["lastModifiedAt"], now)
     };
