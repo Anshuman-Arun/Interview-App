@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   MAX_SPEECH_BUFFERED_PCM_BYTES,
+  MAX_SPEECH_FRAME_DURATION_MS,
   MAX_SPEECH_TIMESTAMP_DRIFT_MS,
   MAX_SPEECH_UTTERANCE_DURATION_MS,
   SourceAudioBasisSchema,
@@ -83,6 +84,9 @@ export function advancePcmOrder(
   prior: PcmOrderState | undefined,
   frame: PcmFrameSnapshot
 ): PcmOrderState {
+  if (!isRecord(frame)) {
+    throw new PcmAdmissionError("INVALID_FRAME", "PCM order frame must be an object");
+  }
   const parsedEnvelope = SpeechPcmFrameEnvelopeSchema.safeParse(frame.envelope);
   if (!parsedEnvelope.success) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM order frame metadata is invalid");
@@ -108,9 +112,6 @@ export function advancePcmOrder(
 
   if (envelope.streamId !== prior.streamId) {
     throw new PcmAdmissionError("STREAM_CONFLICT", "PCM stream identity changed while advancing order state");
-  }
-  if (envelope.streamId !== prior.streamId) {
-    throw new PcmAdmissionError("STREAM_CONFLICT", "PCM stream identity changed within an ordering sequence");
   }
   if (envelope.sampleRate !== prior.sampleRate
       || envelope.channels !== prior.channels
@@ -157,6 +158,9 @@ export class BoundedPcmBuffer {
   }
 
   public append(snapshot: PcmFrameSnapshot, speech: boolean): void {
+    if (!isRecord(snapshot)) {
+      throw new PcmAdmissionError("INVALID_FRAME", "PCM snapshot must be an object");
+    }
     if (typeof speech !== "boolean") {
       throw new PcmAdmissionError("INVALID_FRAME", "PCM speech classification must be boolean");
     }
@@ -319,6 +323,7 @@ function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
 function validatePcmOrderState(prior: PcmOrderState): void {
   const streamId = SpeechStreamIdSchema.safeParse(prior.streamId);
   const sampleDerivedEndMs = prior.firstTimestampMs + prior.cumulativeDurationMs;
+  const maximumRepresentableDurationMs = (prior.lastSequence + 1) * MAX_SPEECH_FRAME_DURATION_MS;
   if (!streamId.success
       || (prior.sampleRate !== 16_000 && prior.sampleRate !== 48_000)
       || prior.channels !== 1
@@ -329,6 +334,8 @@ function validatePcmOrderState(prior: PcmOrderState): void {
       || prior.firstTimestampMs < 0
       || !Number.isFinite(prior.cumulativeDurationMs)
       || prior.cumulativeDurationMs <= 0
+      || !Number.isFinite(maximumRepresentableDurationMs)
+      || prior.cumulativeDurationMs > maximumRepresentableDurationMs + 0.001
       || !Number.isFinite(sampleDerivedEndMs)
       || sampleDerivedEndMs > Number.MAX_SAFE_INTEGER
       || !Number.isFinite(prior.nextEarliestTimestampMs)
@@ -343,4 +350,9 @@ function validatePcmOrderState(prior: PcmOrderState): void {
 
 function isSharedBackingBuffer(buffer: ArrayBufferLike): boolean {
   return typeof SharedArrayBuffer !== "undefined" && buffer instanceof SharedArrayBuffer;
+}
+
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
