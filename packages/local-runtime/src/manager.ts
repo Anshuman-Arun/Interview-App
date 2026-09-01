@@ -1895,16 +1895,17 @@ function normalizeReportedHandshake(
   const rawComponentVersion = dataDescriptorValue(descriptors, "componentVersion", fail);
   let componentVersion: string | undefined;
   if (rawComponentVersion !== undefined) {
-    if (typeof rawComponentVersion !== "string") {
+    if (typeof rawComponentVersion === "string") {
+      if (
+        rawComponentVersion.length === 0
+        || rawComponentVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength
+      ) {
+        fail("componentVersion must be a non-empty bounded string");
+      }
+      componentVersion = rawComponentVersion;
+    } else {
       fail("componentVersion must be a non-empty bounded string");
     }
-    if (
-      rawComponentVersion.length === 0
-      || rawComponentVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength
-    ) {
-      fail("componentVersion must be a non-empty bounded string");
-    }
-    componentVersion = rawComponentVersion;
   }
 
   const rawProtocolVersion = dataDescriptorValue(descriptors, "protocolVersion", fail);
@@ -1917,16 +1918,17 @@ function normalizeReportedHandshake(
   const rawModelVersionOrHash = dataDescriptorValue(descriptors, "modelVersionOrHash", fail);
   let modelVersionOrHash: string | undefined;
   if (rawModelVersionOrHash !== undefined) {
-    if (typeof rawModelVersionOrHash !== "string") {
+    if (typeof rawModelVersionOrHash === "string") {
+      if (
+        rawModelVersionOrHash.length === 0
+        || rawModelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength
+      ) {
+        fail("modelVersionOrHash must be a non-empty bounded string");
+      }
+      modelVersionOrHash = rawModelVersionOrHash;
+    } else {
       fail("modelVersionOrHash must be a non-empty bounded string");
     }
-    if (
-      rawModelVersionOrHash.length === 0
-      || rawModelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength
-    ) {
-      fail("modelVersionOrHash must be a non-empty bounded string");
-    }
-    modelVersionOrHash = rawModelVersionOrHash;
   }
 
   const rawCapabilities = dataDescriptorValue(descriptors, "capabilities", fail);
