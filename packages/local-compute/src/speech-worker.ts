@@ -20,6 +20,7 @@ import {
   MAX_SPEECH_REMEMBERED_RESULT_CHARS,
   MAX_SPEECH_VAD_TIMEOUT_MS,
   SpeechCancelRequestSchema,
+  SpeechControlRequestSchema,
   SpeechFlushRequestSchema,
   SpeechFrameHeuristicsSchema,
   SourceAudioBasisSchema,
@@ -238,6 +239,19 @@ export class SpeechWorkerCore {
         }
         return this.processFrame(context, frame, heuristics.data);
       });
+    });
+  }
+
+  public async handleControl(input: unknown): Promise<readonly SpeechWorkerEvent[]> {
+    const parsed = SpeechControlRequestSchema.safeParse(input);
+    if (!parsed.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech control request is invalid");
+    if (parsed.data.type === "FLUSH_SPEECH") return this.flush(parsed.data);
+    if (parsed.data.type === "CANCEL_SPEECH") return this.cancel(parsed.data);
+
+    const fingerprint = fingerprintParts(JSON.stringify(parsed.data));
+    return this.runIdempotent(parsed.data.requestId, fingerprint, async () => {
+      await this.shutdown();
+      return [];
     });
   }
 
