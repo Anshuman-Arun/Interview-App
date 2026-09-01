@@ -16,9 +16,11 @@ import {
   compileContext,
   createContextCompilationManifest,
   createProviderContextSpecFingerprint,
+  createProviderContextSpecFingerprintSync,
   type CompiledContext
 } from "./context-compiler.js";
 import { createCommandEnvelope } from "./envelopes.js";
+import { selectPedagogicalAction } from "./pedagogical-policy.js";
 import type { SessionWriter } from "./session-writer.js";
 
 const ContextCompilationFailureReasonSchema = z.enum([
@@ -31,6 +33,7 @@ const ContextCompilationFailureReasonSchema = z.enum([
   "PROBLEM_PROVENANCE_UNKNOWN",
   "PROBLEM_DEFINITION_MISMATCH",
   "ACTION_UNAVAILABLE",
+  "ACTION_STALE",
   "HASHING_UNAVAILABLE",
   "STATE_CHANGED_DURING_COMPILATION",
   "MANIFEST_CONFLICT"
@@ -76,9 +79,34 @@ function assessContext(
   if (state.problem.providerContextSpecSha256 === undefined) {
     return { ok: false, reason: "PROBLEM_PROVENANCE_UNKNOWN" };
   }
+  let suppliedProblemFingerprint: string;
+  try {
+    suppliedProblemFingerprint = createProviderContextSpecFingerprintSync(problem);
+  } catch {
+    return { ok: false, reason: "PROBLEM_DEFINITION_MISMATCH" };
+  }
+  if (state.problem.providerContextSpecSha256 !== suppliedProblemFingerprint) {
+    return { ok: false, reason: "PROBLEM_DEFINITION_MISMATCH" };
+  }
 
   const realizationRequest = state.pedagogicalActions[generation.basis.turnId];
-  if (realizationRequest === undefined) return { ok: false, reason: "ACTION_UNAVAILABLE" };
+  const generationRequest = generation.pedagogicalAction;
+  if (realizationRequest === undefined || generationRequest === undefined) {
+    return { ok: false, reason: "ACTION_UNAVAILABLE" };
+  }
+  if (canonicalJson(realizationRequest) !== canonicalJson(generationRequest)) {
+    return { ok: false, reason: "ACTION_STALE" };
+  }
+
+  const currentRequest = selectPedagogicalAction(
+    state,
+    generation.basis.turnId,
+    problem
+  );
+  if (canonicalJson(realizationRequest) !== canonicalJson(currentRequest)) {
+    return { ok: false, reason: "ACTION_STALE" };
+  }
+
   return {
     ok: true,
     context: compileContext({

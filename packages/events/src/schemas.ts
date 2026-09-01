@@ -17,6 +17,7 @@ import {
   InterviewerProposalSchema,
   PolicyRevisionSchema,
   ProviderContextSpecFingerprintSchema,
+  ProviderRuntimeNameSchema,
   ProblemStateRevisionSchema,
   RealizationRequestSchema,
   RequestIdSchema,
@@ -392,7 +393,11 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     reason: z.string().min(1)
   }).strict()),
   event("PEDAGOGICAL_ACTION_SELECTED", z.object({ turnId: TurnIdSchema, request: RealizationRequestSchema }).strict()),
-  event("MODEL_GENERATION_STARTED", z.object({ generationId: GenerationIdSchema, basis: GenerationBasisSchema, provider: z.string().min(1) }).strict()),
+  event("MODEL_GENERATION_STARTED", z.object({
+    generationId: GenerationIdSchema,
+    basis: GenerationBasisSchema,
+    provider: ProviderRuntimeNameSchema
+  }).strict()),
   event("GENERATION_CONTEXT_COMPILED", z.object({
     generationId: GenerationIdSchema,
     manifest: ContextCompilationManifestSchema

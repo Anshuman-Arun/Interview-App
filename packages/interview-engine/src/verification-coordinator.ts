@@ -24,6 +24,7 @@ import {
 import type { EventDraft } from "../../events/src/index.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
+import { invalidateUndeliveredPolicyOutput } from "./policy-output-invalidation.js";
 import type { SessionWriter } from "./session-writer.js";
 
 const VerifierIdSchema = z.string().trim().min(1).max(128);
@@ -283,6 +284,10 @@ export class VerificationCoordinator {
   }) {
     const verifier = VerifierIdSchema.parse(input.verifier);
     const evidenceKey = EvidenceKeySchema.parse(input.evidenceKey);
+    const interpretation = FormalInterpretationProposalSchema.parse({
+      candidateFormalInterpretation: input.candidateFormalInterpretation,
+      interpretationConfidence: input.interpretationConfidence
+    });
     const verificationRequestId = newRequestId();
     const envelope = CommandEnvelopeSchema.parse(input.envelope ?? createCommandEnvelope({
       sessionId: this.writer.sessionId,
@@ -299,17 +304,28 @@ export class VerificationCoordinator {
         inputEpisodeId: input.inputEpisodeId,
         turnId: input.turnId,
         verifier,
-        candidateFormalInterpretation: input.candidateFormalInterpretation,
-        interpretationConfidence: input.interpretationConfidence,
+        candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
+        interpretationConfidence: interpretation.interpretationConfidence,
         evidenceKey
       }
     }, VerificationWorkItemSchema, (state) => {
       if (state.status !== "ACTIVE") throw new Error("Verification requires an active session");
       const episode = state.inputEpisodes[input.inputEpisodeId];
       const turn = state.turns[input.turnId];
-      if (episode === undefined || episode.status !== "COMMITTED") throw new Error("Verification requires a committed InputEpisode");
-      if (turn === undefined || turn.inputEpisodeId !== input.inputEpisodeId) throw new Error("Verification Turn does not match its InputEpisode");
-      if (state.lastCommittedInputSequence === undefined) throw new Error("Verification requires a committed Turn");
+      if (
+        episode === undefined
+        || episode.inputEpisodeId !== input.inputEpisodeId
+        || episode.status !== "COMMITTED"
+      ) throw new Error("Verification requires a committed InputEpisode");
+      if (
+        turn === undefined
+        || turn.turnId !== input.turnId
+        || turn.inputEpisodeId !== input.inputEpisodeId
+      ) throw new Error("Verification Turn does not match its InputEpisode");
+      if (
+        state.lastCommittedInputSequence === undefined
+        || turn.committedSequence !== state.lastCommittedInputSequence
+      ) throw new Error("Verification requires the latest committed Turn");
       if (state.problem?.id !== evidenceKey.problemId) throw new Error("Verification evidence is scoped to a different problem");
       if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
         throw new Error("Phase 0 deterministic verification may commit only claim correctness evidence");
@@ -335,8 +351,8 @@ export class VerificationCoordinator {
         verificationRequestId: effectiveRequestId,
         verifier,
         basis,
-        candidateFormalInterpretation: input.candidateFormalInterpretation,
-        interpretationConfidence: input.interpretationConfidence,
+        candidateFormalInterpretation: interpretation.candidateFormalInterpretation,
+        interpretationConfidence: interpretation.interpretationConfidence,
         evidenceKey,
         evidenceEventIds: [evidenceEventId]
       });
@@ -412,6 +428,15 @@ export class VerificationCoordinator {
       if (recomputed === undefined) return discard("REQUEST_NOT_PENDING");
       if (!recomputed.ok) return discard(recomputed.reason);
       if (recomputed.result.verifier !== request.verifier) return discard("VERIFIER_IDENTITY_MISMATCH");
+      if (recomputed.result.interpretationConfidence !== request.interpretationConfidence) {
+        return discard("VERIFIER_OUTPUT_INVALID");
+      }
+      if (
+        recomputed.result.interpretationConfidence < 1
+        && recomputed.result.status !== "UNRESOLVED"
+      ) {
+        return discard("VERIFIER_OUTPUT_INVALID");
+      }
       if (!resultsEqual(supplied, recomputed.result)) return discard("RECOMPUTATION_MISMATCH");
 
       const drafts: EventDraft[] = [{
@@ -439,6 +464,10 @@ export class VerificationCoordinator {
           }
         });
       }
+      drafts.push(...invalidateUndeliveredPolicyOutput(
+        state,
+        "Authoritative verification changed before delivery"
+      ));
       return {
         drafts,
         result: {
