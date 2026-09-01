@@ -39,6 +39,7 @@ const PACKAGE_RULES = new Map([
   ["persistence", new Set(["domain", "events"])],
   ["providers", new Set(["domain"])],
   ["problems", new Set(["domain"])],
+  ["replay", new Set(["domain", "events"])],
   ["verification", new Set(["domain"])],
   ["whiteboard", new Set(["domain"])],
   ["local-compute", new Set(["domain"])],
