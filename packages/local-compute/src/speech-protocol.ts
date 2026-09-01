@@ -12,13 +12,14 @@ export const MAX_SPEECH_DIAGNOSTICS = 32;
 export const MAX_SPEECH_DIAGNOSTIC_CHARS = 256;
 
 export const SpeechProtocolVersionSchema = z.literal(SPEECH_PROTOCOL_VERSION);
+const SpeechIdentityPattern = /^[A-Za-z0-9._:-]+$/u;
 export const SpeechRequestIdSchema = RequestIdSchema.refine(
-  (value) => value.length <= 128,
-  { message: "Speech request ID exceeds maximum length" }
+  (value) => value.length <= 128 && SpeechIdentityPattern.test(value),
+  { message: "Speech request ID is invalid or exceeds maximum length" }
 );
 export const SpeechUtteranceIdSchema = UtteranceIdSchema.refine(
-  (value) => value.length <= 128,
-  { message: "Speech utterance ID exceeds maximum length" }
+  (value) => value.length <= 128 && SpeechIdentityPattern.test(value),
+  { message: "Speech utterance ID is invalid or exceeds maximum length" }
 );
 export const SpeechStreamIdSchema = z.string()
   .min(1)
@@ -66,6 +67,11 @@ export const SpeechPcmFrameEnvelopeSchema = z.object({
   }
 });
 export type SpeechPcmFrameEnvelope = z.infer<typeof SpeechPcmFrameEnvelopeSchema>;
+
+export const SpeechFrameHeuristicsSchema = z.object({
+  appearsIncomplete: z.boolean().optional()
+}).strict();
+export type SpeechFrameHeuristics = z.infer<typeof SpeechFrameHeuristicsSchema>;
 
 const SpeechControlBaseSchema = z.object({
   protocolVersion: SpeechProtocolVersionSchema,
@@ -172,6 +178,8 @@ export const SpeechWorkerErrorCodeSchema = z.enum([
   "RESOURCE_LIMIT",
   "STREAM_NOT_FOUND",
   "STREAM_FINALIZED",
+  "VAD_FAILURE",
+  "VAD_PROTOCOL_ERROR",
   "RECOGNIZER_FAILURE",
   "RECOGNIZER_PROTOCOL_ERROR",
   "CANCELLED",
