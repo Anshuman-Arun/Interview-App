@@ -49,6 +49,7 @@ export const SpeechSampleFormatSchema = z.literal("F32LE");
 const NonnegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const PositiveSafeIntegerSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const SpeechTimestampMsSchema = z.number().nonnegative().max(MAX_SPEECH_TIMESTAMP_MS);
+const SpeechEndTimestampMsSchema = z.number().nonnegative().max(Number.MAX_SAFE_INTEGER);
 
 export const SpeechPcmFrameEnvelopeSchema = z.object({
   protocolVersion: SpeechProtocolVersionSchema,
@@ -133,7 +134,7 @@ export const SourceAudioBasisSchema = z.object({
   firstSequence: NonnegativeSafeIntegerSchema,
   lastSequence: NonnegativeSafeIntegerSchema,
   startTimestampMs: SpeechTimestampMsSchema,
-  endTimestampMs: SpeechTimestampMsSchema,
+  endTimestampMs: SpeechEndTimestampMsSchema,
   sampleRate: SpeechSampleRateSchema,
   channels: SpeechChannelCountSchema,
   sampleCount: PositiveSafeIntegerSchema,
@@ -169,7 +170,13 @@ const safeBoundedMetadataTextSchema = (maxLength: number, label: string) => z.st
   .min(1)
   .max(maxLength)
   .refine((value) => value.trim().length > 0, { message: `${label} must not be blank` })
-  .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), { message: `${label} contains unsafe control/format characters` });
+  .refine((value) => !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value), { message: `${label} contains unsafe control/format/surrogate characters` });
+
+const SafeTranscriptTextSchema = z.string()
+  .max(MAX_SPEECH_TRANSCRIPT_CHARS)
+  .refine((value) => !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value), {
+    message: "Transcript text contains unsafe control/format/surrogate characters"
+  });
 
 const safeRecognizerWordSchema = (maxLength: number) =>
   safeBoundedMetadataTextSchema(maxLength, "Recognizer word metadata");
@@ -197,7 +204,7 @@ export type SpeechModelIdentity = z.infer<typeof SpeechModelIdentitySchema>;
 export const TranscriptCandidateSchema = z.object({
   requestId: SpeechRequestIdSchema,
   utteranceId: SpeechUtteranceIdSchema,
-  text: z.string().max(MAX_SPEECH_TRANSCRIPT_CHARS),
+  text: SafeTranscriptTextSchema,
   isFinal: z.boolean(),
   confidence: z.number().min(0).max(1).optional(),
   words: z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS).optional(),
