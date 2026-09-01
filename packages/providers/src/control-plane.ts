@@ -18,6 +18,7 @@ import {
 
 const OBJECT_FREEZE_INTRINSIC = Object.freeze;
 const OBJECT_SET_PROTOTYPE_OF_INTRINSIC = Object.setPrototypeOf;
+const OBJECT_HAS_OWN_INTRINSIC = Object.hasOwn;
 
 function objectFreeze<T extends object>(value: T): Readonly<T> {
   return OBJECT_FREEZE_INTRINSIC(value);
@@ -25,6 +26,10 @@ function objectFreeze<T extends object>(value: T): Readonly<T> {
 
 function objectSetPrototypeOf(value: object, prototype: object | null): void {
   OBJECT_SET_PROTOTYPE_OF_INTRINSIC(value, prototype);
+}
+
+function objectHasOwn(value: object, key: PropertyKey): boolean {
+  return OBJECT_HAS_OWN_INTRINSIC(value, key);
 }
 export {
   PROVIDER_CONFIGURATION_LIMITS,
@@ -272,10 +277,10 @@ const ProviderConfigurationEnvelopeSchema = z.unknown().transform((value, contex
 export const ProviderConfigurationSchema = ProviderConfigurationEnvelopeSchema
   .pipe(RawProviderConfigurationSchema)
   .transform((configuration) => {
-    const reasoning = Object.hasOwn(configuration, "reasoning")
+    const reasoning = objectHasOwn(configuration, "reasoning")
       ? configuration.reasoning
       : undefined;
-    const credentialRef = Object.hasOwn(configuration, "credentialRef")
+    const credentialRef = objectHasOwn(configuration, "credentialRef")
       ? configuration.credentialRef
       : undefined;
     return freezeNullPrototype({
@@ -992,7 +997,7 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
     const normalizedInput = freezeNullPrototype({
       resolved,
       ...(secretResolver === undefined ? {} : { secretResolver }),
-      ...(Object.hasOwn(inspected, "runtime")
+      ...(objectHasOwn(inspected, "runtime")
         ? { runtime: inspected.runtime }
         : {})
     }) satisfies ProviderAdapterFactoryInput;
@@ -1446,7 +1451,7 @@ function defineProviderValue(input: unknown): ProviderDefinition {
     );
   }
 
-  const adapterVersion = Object.hasOwn(metadataResult.data, "adapterVersion")
+  const adapterVersion = objectHasOwn(metadataResult.data, "adapterVersion")
     ? metadataResult.data.adapterVersion
     : undefined;
   if ((adapterFactory === undefined) !== (adapterVersion === undefined)) {

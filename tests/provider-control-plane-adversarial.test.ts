@@ -712,6 +712,42 @@ describe("provider configuration secret exclusion", () => {
   });
 });
 
+describe("control-plane own-property intrinsic hardening", () => {
+  it("preserves deep freezing and adapter-version pairing when Object.hasOwn is overridden", () => {
+    const originalHasOwn = Object.getOwnPropertyDescriptor(Object, "hasOwn");
+    if (originalHasOwn === undefined) {
+      throw new Error("Object.hasOwn intrinsic is unavailable");
+    }
+
+    try {
+      Object.defineProperty(Object, "hasOwn", {
+        configurable: true,
+        writable: true,
+        value() {
+          return false;
+        }
+      });
+
+      const parsed = ProviderConfigurationSchema.parse({
+        version: 1,
+        providerId: "settings-provider",
+        modelId: "settings-model",
+        enabled: true,
+        reasoning: { level: "high" }
+      });
+      expect(Object.isFrozen(parsed.reasoning)).toBe(true);
+      expect(Object.getPrototypeOf(parsed.reasoning)).toBeNull();
+
+      expect(() => defineProvider({
+        ...createSettingsProviderInput(),
+        adapterVersion: "1.0.0"
+      })).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+    } finally {
+      Object.defineProperty(Object, "hasOwn", originalHasOwn);
+    }
+  });
+});
+
 describe("control-plane immutability intrinsic hardening", () => {
   it("keeps frozen null-prototype outputs when Object mutation helpers are overridden", () => {
     const originalFreeze = Object.getOwnPropertyDescriptor(Object, "freeze");
