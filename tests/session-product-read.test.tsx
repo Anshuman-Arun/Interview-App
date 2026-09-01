@@ -236,7 +236,7 @@ describe("grounded evaluation/replay product surface", () => {
             relations: { turnId: "turn_1" },
             text: {
               text: "<img src=x onerror=alert(1)> student math",
-              originalLength: 45,
+              originalLength: 41,
               truncated: false
             }
           },
@@ -288,7 +288,7 @@ describe("grounded evaluation/replay product surface", () => {
       relations: { deliveryId: "delivery_smuggled" },
       text: {
         text: "secret possibly exposed answer",
-        originalLength: 32,
+        originalLength: 30,
         truncated: false
       },
       delivery: {
