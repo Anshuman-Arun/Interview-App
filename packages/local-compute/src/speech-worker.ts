@@ -44,7 +44,9 @@ import {
   type VadBackend
 } from "./speech-vad.js";
 import {
+  RecognizerCancellationCapabilitySchema,
   TranscriptResultGate,
+  type RecognizerCancellationCapability,
   type SpeechRecognizer
 } from "./speech-stt.js";
 
@@ -125,6 +127,8 @@ export class SpeechWorkerCore {
   private readonly inFlightMessages = new Map<RequestId, InFlightMessage>();
   private readonly diagnostics: SpeechWorkerDiagnostic[] = [];
   private readonly transcriptGate = new TranscriptResultGate();
+  private readonly recognizerModelIdentity;
+  private readonly recognizerCancellationCapability: RecognizerCancellationCapability;
   private readonly maxConcurrentStreams: number;
   private readonly maxBufferedPcmBytes: number;
   private readonly maxRememberedMessages: number;
@@ -137,7 +141,10 @@ export class SpeechWorkerCore {
   private shutdownPromise: Promise<void> | undefined;
 
   public constructor(private readonly options: SpeechWorkerCoreOptions) {
-    SpeechModelIdentitySchema.parse(options.recognizer.modelIdentity);
+    this.recognizerModelIdentity = SpeechModelIdentitySchema.parse(options.recognizer.modelIdentity);
+    this.recognizerCancellationCapability = RecognizerCancellationCapabilitySchema.parse(
+      options.recognizer.cancellationCapability
+    );
 
     this.maxConcurrentStreams = boundedPositiveSafeInteger(
       options.maxConcurrentStreams ?? MAX_SPEECH_CONCURRENT_STREAMS,
@@ -296,7 +303,7 @@ export class SpeechWorkerCore {
 
       if (context?.recognizing === true
           && recognitionRequestId !== undefined
-          && this.options.recognizer.cancellationCapability === "RUNTIME_ABORT"
+          && this.recognizerCancellationCapability === "RUNTIME_ABORT"
           && this.options.recognizer.cancel !== undefined) {
         if (await this.attemptRecognizerCancel(recognitionRequestId, request.streamId)) {
           cancellation = "RUNTIME_ABORT_REQUESTED";
@@ -329,7 +336,7 @@ export class SpeechWorkerCore {
       if (!context.recognizing) safeCancelVad(context.vad);
       if (context.recognizing
           && context.recognitionRequestId !== undefined
-          && this.options.recognizer.cancellationCapability === "RUNTIME_ABORT"
+          && this.recognizerCancellationCapability === "RUNTIME_ABORT"
           && this.options.recognizer.cancel !== undefined) {
         cancellations.push(this.attemptRecognizerCancel(context.recognitionRequestId, context.streamId));
       }
@@ -547,7 +554,7 @@ export class SpeechWorkerCore {
           requestId,
           utteranceId,
           sourceAudioBasis: basis,
-          modelIdentity: this.options.recognizer.modelIdentity
+          modelIdentity: this.recognizerModelIdentity
         });
         events.push(this.event(requestId, context.streamId, {
           type: "TRANSCRIPT_CANDIDATE",
@@ -640,25 +647,30 @@ export class SpeechWorkerCore {
     if (this.streams.size >= this.maxConcurrentStreams) {
       throw new SpeechWorkerCoreError("RESOURCE_LIMIT", "Maximum concurrent speech streams reached");
     }
-    const context: StreamContext = {
-      streamId,
-      vad: this.options.vadStateFactory?.() ?? new VoiceActivityStateMachine(),
-      endpointing: this.options.endpointingFactory?.() ?? new AdaptiveEndpointingPolicy(),
-      buffer: new BoundedPcmBuffer(this.maxBufferedPcmBytes),
-      processingTail: Promise.resolve(),
-      order: undefined,
-      utteranceId: undefined,
-      utteranceStartTimestampMs: undefined,
-      preSpeechElapsedMs: 0,
-      speechConfirmed: false,
-      terminal: false,
-      cancelled: false,
-      finalizationStarted: false,
-      recognizing: false,
-      vadAbort: undefined,
-      recognitionAbort: undefined,
-      recognitionRequestId: undefined
-    };
+    let context: StreamContext;
+    try {
+      context = {
+        streamId,
+        vad: this.options.vadStateFactory?.() ?? new VoiceActivityStateMachine(),
+        endpointing: this.options.endpointingFactory?.() ?? new AdaptiveEndpointingPolicy(),
+        buffer: new BoundedPcmBuffer(this.maxBufferedPcmBytes),
+        processingTail: Promise.resolve(),
+        order: undefined,
+        utteranceId: undefined,
+        utteranceStartTimestampMs: undefined,
+        preSpeechElapsedMs: 0,
+        speechConfirmed: false,
+        terminal: false,
+        cancelled: false,
+        finalizationStarted: false,
+        recognizing: false,
+        vadAbort: undefined,
+        recognitionAbort: undefined,
+        recognitionRequestId: undefined
+      };
+    } catch {
+      throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Speech stream configuration could not be initialized");
+    }
     this.streams.set(streamId, context);
     return context;
   }
