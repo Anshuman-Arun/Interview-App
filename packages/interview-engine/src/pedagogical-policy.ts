@@ -696,8 +696,9 @@ function inferActiveApproachId(
       && (signal.value.value === "PROGRESSING" || signal.value.value === "COMPLETE")
   );
   if (milestoneSignal?.key.subject.kind !== "MILESTONE") return undefined;
+  const milestoneId = milestoneSignal.key.subject.milestoneId;
   const milestone = graph.problem.interviewer.reasoningGraph.milestones.find(
-    (item) => item.id === milestoneSignal.key.subject.milestoneId
+    (item) => item.id === milestoneId
   );
   if (milestone === undefined || milestone.approachIds.length !== 1) return undefined;
   return milestone.approachIds[0];
