@@ -337,3 +337,12 @@ Only decisions left unfrozen by the architecture are recorded here.
 - Alternatives considered: trust every caller to retain the original object; persist the entire interviewer partition; compare only the public prompt; include private solutions in the fingerprint.
 - Consequences: provider-visible authoring substitutions fail closed, private solution material is neither hashed into provider-context identity nor persisted, and legacy schema-v1 sessions replay but cannot resume provider work because their missing fingerprint is `UNKNOWN`. Event schema v2 has a built-in v1 upcast path that preserves this uncertainty.
 - Reversible: fingerprint field names and canonicalization versions can migrate through upcasters; session binding and fail-closed treatment of missing provenance are not.
+
+## D043 — Rebuildable session_index projection and single logical session writer lifecycle
+
+- Decision: implement a local durable session index table in SQLite updated atomically alongside `session_events` during `appendIdempotent`, while maintaining `session_events` as the sole authoritative truth. The `session_index` projection can be rebuilt at any time via `rebuildSessionIndex()`. In addition, `SessionRuntimeRegistry` enforces a strict single-flight mutex per `SessionId` preventing concurrent writer instances in-process, with graceful writer drainage and closure.
+- Reason: fast session enumeration and summary queries must not require full event stream replay for every candidate session on dashboard load, but caching must never become authoritative truth. Writers must serialize operations and close cleanly on session teardown.
+- Alternatives considered: replaying all sessions from scratch on server startup; maintaining an external memory cache; allowing multiple writer instances per session.
+- Consequences: session listing is $O(1)$ relative to total event volume; sequence continuity checks fail closed with `CorruptEventStreamError` on any stream corruption; server restart seamlessly reloads all persisted sessions without data loss or duplicate execution.
+- Reversible: the projection schema and indexing strategy can be altered or dropped freely; single logical writer serialization and event-sourced authority are not.
+

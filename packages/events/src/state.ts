@@ -107,6 +107,11 @@ export interface SessionState {
   readonly sessionId: SessionId;
   readonly sequence: number;
   readonly started: boolean;
+  readonly status: "CREATED" | "ACTIVE" | "COMPLETED" | "ARCHIVED";
+  readonly completedAt?: string | undefined;
+  readonly archivedAt?: string | undefined;
+  readonly completionSummary?: string | undefined;
+  readonly archivalReason?: string | undefined;
   readonly problem?: {
     readonly id: string;
     readonly version: string;
@@ -139,6 +144,7 @@ export const initialSessionState = (sessionId: SessionId): SessionState => ({
   sessionId,
   sequence: 0,
   started: false,
+  status: "CREATED",
   contextEpoch: zeroContextEpoch,
   transcriptRevision: zeroTranscriptRevision,
   boardRevision: zeroBoardRevision,

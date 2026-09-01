@@ -32,14 +32,23 @@ export const CURRENT_EVENT_SCHEMA_VERSION = 2 as const;
 export const EventSourceSchema = z.enum(["APPLICATION", "USER", "PROVIDER", "RENDERER", "WORKER", "RECOVERY"]);
 export type EventSource = z.infer<typeof EventSourceSchema>;
 
+const PositiveSafeIntegerSchema = z.number().refine(
+  (value) => Number.isSafeInteger(value) && value > 0,
+  { message: "Expected a positive safe integer" }
+);
+const NonnegativeSafeIntegerSchema = z.number().refine(
+  (value) => Number.isSafeInteger(value) && value >= 0,
+  { message: "Expected a non-negative safe integer" }
+);
+
 const metadata = {
   eventId: EventIdSchema,
   sessionId: SessionIdSchema,
-  sequence: z.number().int().positive(),
+  sequence: PositiveSafeIntegerSchema,
   schemaVersion: z.literal(CURRENT_EVENT_SCHEMA_VERSION),
   source: EventSourceSchema,
   wallTime: z.iso.datetime(),
-  elapsedMs: z.number().int().nonnegative(),
+  elapsedMs: NonnegativeSafeIntegerSchema,
   causationId: RequestIdSchema,
   correlationId: RequestIdSchema
 };
@@ -141,7 +150,10 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   event("DELIVERY_CANCELLED", z.object({ deliveryId: DeliveryIdSchema, reason: z.string().min(1) }).strict()),
   event("DELIVERY_POSSIBLY_EXPOSED", z.object({ deliveryId: DeliveryIdSchema, reason: z.string().min(1) }).strict()),
   event("POLICY_REVISION_CHANGED", z.object({ policyRevision: PolicyRevisionSchema, contextEpoch: ContextEpochSchema, reason: z.string().min(1) }).strict()),
-  event("PROBLEM_STATE_REVISION_CHANGED", z.object({ problemStateRevision: ProblemStateRevisionSchema, contextEpoch: ContextEpochSchema, reason: z.string().min(1) }).strict())
+  event("PROBLEM_STATE_REVISION_CHANGED", z.object({ problemStateRevision: ProblemStateRevisionSchema, contextEpoch: ContextEpochSchema, reason: z.string().min(1) }).strict()),
+  event("SESSION_COMPLETED", z.object({ completedAt: z.iso.datetime(), summary: z.string().min(1).optional() }).strict()),
+  event("SESSION_ARCHIVED", z.object({ archivedAt: z.iso.datetime(), reason: z.string().min(1).optional() }).strict()),
+  event("SESSION_RESUMED", z.object({ resumedAt: z.iso.datetime() }).strict())
 ]);
 
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
