@@ -3,6 +3,7 @@ import {
   QUANT_RESEARCH_FAMILIES,
   QUANT_RESEARCH_GENERATOR_VERSION,
   QUANT_RESEARCH_RNG_VERSION,
+  QUANT_RESEARCH_VERIFIER_VERSION,
   QUANT_RESEARCH_VERSION,
   QuantResearchError,
   assertUniqueQuantResearchRegistrations,
@@ -13,6 +14,7 @@ import {
   type ExperimentalAllocationConfig,
   type ModelComparisonConfig,
   type QuantResearchAction,
+  type QuantResearchAuthoritativeSnapshot,
   type QuantResearchDiagnostics,
   type QuantResearchEvidence,
   type QuantResearchEvidenceCategory,
@@ -143,6 +145,16 @@ function rationalRatioToNumber(numerator: Rational, denominator: Rational): numb
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value !== "object" || value === null) return value;
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor !== undefined && "value" in descriptor) deepFreeze(descriptor.value);
+  }
+  Object.freeze(value);
+  return value;
 }
 
 function boundedScore(value: number): number {
@@ -660,6 +672,120 @@ function isFeasible(x: number, y: number, budget: number, maxX: number, maxY: nu
 function objectiveQuality(value: number, best: number): number {
   if (best <= 0) return value === best ? 1 : 0;
   return Math.max(0, Math.min(1, value / best));
+}
+
+function authoritativePersistenceSnapshot(state: InternalState): QuantResearchAuthoritativeSnapshot {
+  switch (state.family) {
+    case "BAYESIAN_UPDATING":
+      return {
+        family: state.family,
+        verifierVersion: QUANT_RESEARCH_VERIFIER_VERSION,
+        generatedParameters: {
+          observations: [...state.observations],
+          successes: state.successes
+        },
+        gradingData: {
+          priorPredictive: rational(state.config.priorAlpha, state.config.priorAlpha + state.config.priorBeta),
+          posterior: rational(
+            state.config.priorAlpha + state.successes,
+            state.config.priorAlpha + state.config.priorBeta + state.observations.length
+          ),
+          perturbedPosterior: rational(
+            state.config.perturbedPriorAlpha + state.successes,
+            state.config.perturbedPriorAlpha + state.config.perturbedPriorBeta + state.observations.length
+          )
+        }
+      };
+    case "SAMPLING_ESTIMATION": {
+      const outlierDirection = state.hiddenCenter % 2 === 0 ? 1 : -1;
+      return {
+        family: state.family,
+        verifierVersion: QUANT_RESEARCH_VERIFIER_VERSION,
+        generatedParameters: {
+          hiddenCenter: state.hiddenCenter,
+          hiddenPopulation: [...state.hiddenPopulation],
+          sampleOrder: [...state.sampleOrder],
+          contaminatedObservation: state.hiddenCenter + outlierDirection * state.config.outlierShift
+        },
+        gradingData: { validatedCenter: state.hiddenCenter }
+      };
+    }
+    case "EXPERIMENTAL_ALLOCATION": {
+      const base = experimentalOptimum(
+        state.config.costA,
+        state.config.costB,
+        state.config.noiseA,
+        state.config.noiseB,
+        state.config.totalBudget
+      );
+      const perturbed = experimentalOptimum(
+        state.config.perturbedCostA,
+        state.config.perturbedCostB,
+        state.config.noiseA,
+        state.config.noiseB,
+        state.config.totalBudget
+      );
+      return {
+        family: state.family,
+        verifierVersion: QUANT_RESEARCH_VERIFIER_VERSION,
+        generatedParameters: {
+          hiddenMeanA: state.hiddenMeanA,
+          hiddenMeanB: state.hiddenMeanB,
+          sequenceA: [...state.sequenceA],
+          sequenceB: [...state.sequenceB]
+        },
+        gradingData: {
+          baseOptimalVariance: base.variance,
+          baseOptimalAllocations: base.allocations.map((item) => ({ ...item })),
+          perturbedOptimalVariance: perturbed.variance,
+          perturbedOptimalAllocations: perturbed.allocations.map((item) => ({ ...item }))
+        }
+      };
+    }
+    case "MODEL_COMPARISON":
+      return {
+        family: state.family,
+        verifierVersion: QUANT_RESEARCH_VERIFIER_VERSION,
+        generatedParameters: {
+          hiddenModel: state.hiddenModel,
+          hiddenIntercept: state.hiddenIntercept,
+          hiddenSlope: state.hiddenSlope,
+          points: state.points.map((point) => ({ ...point })),
+          perturbedPoints: state.perturbedPoints.map((point) => ({ ...point }))
+        },
+        gradingData: { validatedModel: state.hiddenModel }
+      };
+    case "CONSTRAINED_OPTIMIZATION":
+      return {
+        family: state.family,
+        verifierVersion: QUANT_RESEARCH_VERIFIER_VERSION,
+        generatedParameters: {
+          coefficientX: state.coefficientX,
+          coefficientY: state.coefficientY,
+          basePenalty: state.basePenalty
+        },
+        gradingData: {
+          baseBestObjective: state.baseBestObjective,
+          baseOptimalPoints: optimalOptimizationPoints(
+            state.config.budget,
+            state.config.maxX,
+            state.config.maxY,
+            state.coefficientX,
+            state.coefficientY,
+            state.basePenalty
+          ).map((point) => ({ ...point })),
+          perturbedBestObjective: state.perturbedBestObjective,
+          perturbedOptimalPoints: optimalOptimizationPoints(
+            state.config.perturbedBudget,
+            state.config.maxX,
+            state.config.maxY,
+            state.coefficientX,
+            state.coefficientY,
+            state.config.perturbedPenalty
+          ).map((point) => ({ ...point }))
+        }
+      };
+  }
 }
 
 function publicState(state: InternalState): QuantResearchPublicState {
@@ -1347,6 +1473,10 @@ export class QuantResearchEngine {
     } finally {
       this.#applyingAction = false;
     }
+  }
+
+  public getAuthoritativePersistenceSnapshot(): QuantResearchAuthoritativeSnapshot {
+    return deepFreeze(clone(authoritativePersistenceSnapshot(this.#state)));
   }
 
   public getState(): QuantResearchPublicState {
