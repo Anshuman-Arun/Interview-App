@@ -17,6 +17,7 @@ import {
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   DEFAULT_REPLAY_BOUNDS,
+  ReplayReadEntrySchema,
   SessionReplayReadResponseSchema,
   projectGroundedEvaluationReadModel,
   projectSessionReplayReadModel,
@@ -265,6 +266,31 @@ describe("grounded evaluation/replay product surface", () => {
     expect(markup).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(markup).not.toContain("<img src=x onerror=alert(1)>");
     expect(markup).not.toContain("secret possibly exposed answer");
+
+    expect(ReplayReadEntrySchema.safeParse({
+      sequence: 3,
+      eventId: "event_smuggled_possible",
+      occurredAt: "2026-09-01T17:00:02.000Z",
+      kind: "DELIVERY_POSSIBLY_EXPOSED",
+      summary: "Delivery possibly exposed",
+      category: "RECOVERY",
+      stateValidation: "VALIDATED",
+      source: "RECOVERY",
+      relations: { deliveryId: "delivery_smuggled" },
+      text: {
+        text: "secret possibly exposed answer",
+        originalLength: 32,
+        truncated: false
+      },
+      delivery: {
+        medium: "TEXT",
+        status: "POSSIBLY_EXPOSED",
+        presentationState: "POSSIBLY_PRESENTED",
+        effectiveDisclosureLevel: 3,
+        disclosureIdCount: 1,
+        contentWithheld: true
+      }
+    }).success).toBe(false);
   });
 
   it("fails closed if an upstream replay object accidentally carries uncertain delivery text", () => {
