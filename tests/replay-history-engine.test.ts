@@ -197,6 +197,45 @@ describe("replay/history projections", () => {
       ).toBeUndefined();
       expect(JSON.stringify(queued)).not.toContain(queuedHarness.safeProbe);
 
+      const protectedMarker = "disclosure_unexposed_marker_must_stay_private";
+      const withProtectedMarker = queuedHarness.store.load(queuedHarness.sessionId)
+        .map((item) => {
+          if (item.type === "PROPOSAL_VALIDATED") {
+            return SessionEventSchema.parse({
+              ...item,
+              payload: {
+                ...item.payload,
+                analysis: {
+                  ...item.payload.analysis,
+                  effectiveDisclosureIds: [protectedMarker]
+                }
+              }
+            });
+          }
+          if (
+            item.type === "DELIVERY_QUEUED"
+            && item.payload.atom.deliveryId === atom.deliveryId
+          ) {
+            return SessionEventSchema.parse({
+              ...item,
+              payload: {
+                atom: {
+                  ...item.payload.atom,
+                  disclosureIds: [protectedMarker]
+                }
+              }
+            });
+          }
+          return item;
+        });
+      const protectedQueued = projectReplayTimeline(withProtectedMarker);
+      const protectedQueuedDelivery = protectedQueued.entries.find((entry) =>
+        entry.kind === "DELIVERY_QUEUED"
+      )?.delivery;
+      expect(protectedQueuedDelivery?.disclosure.disclosureIdCount).toBe(1);
+      expect(protectedQueuedDelivery?.disclosure.disclosureIds).toBeUndefined();
+      expect(JSON.stringify(protectedQueued)).not.toContain(protectedMarker);
+
       await new DeliveryCoordinator(queuedHarness.writer)
         .cancelBeforeExposure(atom.deliveryId, "cancel before exposure");
       const cancelled = projectSessionHistory(
@@ -509,7 +548,7 @@ describe("replay/history projections", () => {
       await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       const history = projectSessionHistory(store.load(sessionId));
 
-      expect(history.lifecycle.conservativeRecoveryCount).toBe(1);
+      expect(history.lifecycle.recoveryOriginPossiblyExposedCount).toBe(1);
       expect(history.counts.possiblyExposedInterventions).toBe(1);
       expect(history.timeline.entries.filter((entry) =>
         entry.kind === "DELIVERY_POSSIBLY_EXPOSED"
@@ -1588,6 +1627,37 @@ describe("longitudinal projection", () => {
     });
     expect(() => projectLongitudinalHistory([first, first]))
       .toThrow(expect.objectContaining({ code: "DUPLICATE_SESSION" }));
+  });
+
+  it("uses locale-independent code-unit ordering for deterministic aggregate output", () => {
+    const zeta = evaluated(
+      "session-order-zeta" as SessionId,
+      "Zeta",
+      "1",
+      60,
+      "PROGRESSING",
+      "2026-08-31T20:10:01.000Z"
+    );
+    const alpha = evaluated(
+      "session-order-alpha" as SessionId,
+      "alpha",
+      "1",
+      70,
+      "PROGRESSING",
+      "2026-08-31T20:11:01.000Z"
+    );
+    const accented = evaluated(
+      "session-order-accented" as SessionId,
+      "éclair",
+      "1",
+      80,
+      "PROGRESSING",
+      "2026-08-31T20:12:01.000Z"
+    );
+
+    const result = projectLongitudinalHistory([accented, alpha, zeta]);
+    expect(result.evaluationStatistics.map((entry) => entry.problemId))
+      .toEqual(["Zeta", "alpha", "éclair"]);
   });
 
   it("uses collision-safe structured identities for problems and evidence", () => {

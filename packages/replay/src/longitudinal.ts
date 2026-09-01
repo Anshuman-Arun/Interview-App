@@ -14,6 +14,7 @@ import {
   type ReplayBounds
 } from "./bounds.js";
 import {
+  compareReplayStrings,
   replayEvidenceIdentity,
   replayProblemIdentity
 } from "./identity.js";
@@ -203,9 +204,9 @@ function compareSessions(
   left: LongitudinalSessionInput,
   right: LongitudinalSessionInput
 ): number {
-  const timeOrder = sessionSortKey(left).localeCompare(sessionSortKey(right));
+  const timeOrder = compareReplayStrings(sessionSortKey(left), sessionSortKey(right));
   if (timeOrder !== 0) return timeOrder;
-  return left.sessionId.localeCompare(right.sessionId);
+  return compareReplayStrings(left.sessionId, right.sessionId);
 }
 
 function exactProblemKey(session: LongitudinalSessionInput): string | undefined {
@@ -381,28 +382,28 @@ export function projectLongitudinalHistory(
   }
 
   const evidencePatterns: LongitudinalEvidencePattern[] = [...evidenceGroups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareReplayStrings(left, right))
     .map(([, group]) => ({
       key: group.key,
       sessionCount: group.sessionIds.size,
       observedValues: Object.fromEntries(
-        [...group.values.entries()].sort(([left], [right]) => left.localeCompare(right))
+        [...group.values.entries()].sort(([left], [right]) => compareReplayStrings(left, right))
       )
     }));
 
   repeatedProblems.sort((left, right) =>
-    left.problemId.localeCompare(right.problemId)
-    || left.problemVersion.localeCompare(right.problemVersion)
+    compareReplayStrings(left.problemId, right.problemId)
+    || compareReplayStrings(left.problemVersion, right.problemVersion)
   );
   evaluationStatistics.sort((left, right) =>
-    left.problemId.localeCompare(right.problemId)
-    || left.problemVersion.localeCompare(right.problemVersion)
+    compareReplayStrings(left.problemId, right.problemId)
+    || compareReplayStrings(left.problemVersion, right.problemVersion)
   );
   improvement.sort((left, right) =>
-    left.problemId.localeCompare(right.problemId)
-    || left.problemVersion.localeCompare(right.problemVersion)
-    || left.fromSessionId.localeCompare(right.fromSessionId)
-    || left.toSessionId.localeCompare(right.toSessionId)
+    compareReplayStrings(left.problemId, right.problemId)
+    || compareReplayStrings(left.problemVersion, right.problemVersion)
+    || compareReplayStrings(left.fromSessionId, right.fromSessionId)
+    || compareReplayStrings(left.toSessionId, right.toSessionId)
   );
 
   const exactProblems = new Set(

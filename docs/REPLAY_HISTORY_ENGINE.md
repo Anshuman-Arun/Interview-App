@@ -32,7 +32,8 @@ authoritative-sequence normalization
 
 `sequence` is the primary chronology. Wall-clock timestamps are display metadata
 only. Raw input order, object insertion order, filesystem order, and map iteration
-are never used as authority.
+are never used as authority. When a stable secondary order is required, replay uses
+explicit UTF-16 code-unit comparison rather than locale-sensitive collation.
 
 ## Timeline semantics
 
@@ -79,7 +80,9 @@ delivery atom. AUDIO records only that an audio reference was stored; it does no
 assert that PCM/media is still available. WHITEBOARD replay preserves visible
 action operation/content and target/revision metadata without exposing the internal
 `annotationPurpose`. For QUEUED, DELIVERING, and CANCELLED atoms, only safe delivery
-metadata is projected; the atom content itself is withheld.
+metadata is projected; the atom content and exact disclosure IDs are withheld.
+Their effective disclosure level and disclosure-ID count remain available for audit
+without exposing protected-fact identifiers that were never presented.
 
 ## Evidence and verification history
 
@@ -103,8 +106,9 @@ rather than being made to look current.
 
 Session completion is inferred only from an authoritative `SESSION_COMPLETED`
 event/state replay. Absence of later events never implies completion. Session
-resumption is counted from `SESSION_RESUMED`; recovery-origin
-`DELIVERY_POSSIBLY_EXPOSED` events are counted separately. Empty, active,
+resumption is counted from `SESSION_RESUMED`; `RECOVERY`-source
+`DELIVERY_POSSIBLY_EXPOSED` events are counted separately without assuming that
+every such event proves an application crash. Empty, active,
 completed, archived, resumed, and crash-recovered streams are supported.
 
 When an unknown future event or event-limit truncation prevents a complete

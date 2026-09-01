@@ -60,8 +60,9 @@ export type ReplayPresentationState =
 
 export interface ReplayDisclosureSummary {
   readonly effectiveDisclosureLevel: DisclosureLevel;
-  readonly disclosureIds: readonly string[];
-  readonly truncation: TruncationInfo;
+  readonly disclosureIdCount: number;
+  readonly disclosureIds?: readonly string[];
+  readonly truncation?: TruncationInfo;
 }
 
 export interface ReplayBoardActionDetail {
@@ -297,7 +298,7 @@ export interface ReplaySessionLifecycle {
   readonly completed: boolean | null;
   readonly archived: boolean | null;
   readonly resumedCount: number;
-  readonly conservativeRecoveryCount: number;
+  readonly recoveryOriginPossiblyExposedCount: number;
   readonly startedAt?: string;
   readonly completedAt?: string;
   readonly archivedAt?: string;

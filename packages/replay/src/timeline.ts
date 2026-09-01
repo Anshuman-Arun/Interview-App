@@ -102,7 +102,10 @@ function deliveryDetail(
   status: DeliveryStatus,
   bounds: ReplayBounds
 ): ReplayDeliveryDetail {
-  const boundedIds = takeBounded(atom.disclosureIds, bounds.maxDisclosureIds);
+  const disclosed = isDisclosedStatus(status);
+  const boundedIds = disclosed
+    ? takeBounded(atom.disclosureIds, bounds.maxDisclosureIds)
+    : undefined;
   const base = {
     deliveryId: atom.deliveryId,
     generationId: atom.generationId,
@@ -111,12 +114,17 @@ function deliveryDetail(
     presentationState: presentationState(status),
     disclosure: {
       effectiveDisclosureLevel: atom.effectiveDisclosureLevel,
-      disclosureIds: boundedIds.values,
-      truncation: boundedIds.truncation
+      disclosureIdCount: atom.disclosureIds.length,
+      ...(boundedIds === undefined
+        ? {}
+        : {
+            disclosureIds: boundedIds.values,
+            truncation: boundedIds.truncation
+          })
     }
   } as const;
 
-  if (!isDisclosedStatus(status)) return base;
+  if (!disclosed) return base;
 
   if (atom.content.medium === "TEXT") {
     return {

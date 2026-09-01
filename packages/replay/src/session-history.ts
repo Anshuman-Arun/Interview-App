@@ -18,6 +18,7 @@ import {
   takeBounded,
   type ReplayBounds
 } from "./bounds.js";
+import { compareReplayStrings } from "./identity.js";
 import {
   normalizeReplayEvents,
   ReplayProjectionError,
@@ -62,7 +63,7 @@ function lifecycleFrom(
   const completed = items.findLast((item) => item.event?.type === "SESSION_COMPLETED");
   const archived = items.findLast((item) => item.event?.type === "SESSION_ARCHIVED");
   const resumedCount = items.filter((item) => item.event?.type === "SESSION_RESUMED").length;
-  const conservativeRecoveryCount = items.filter((item) =>
+  const recoveryOriginPossiblyExposedCount = items.filter((item) =>
     item.event?.type === "DELIVERY_POSSIBLY_EXPOSED" && item.provenance.source === "RECOVERY"
   ).length;
 
@@ -91,7 +92,7 @@ function lifecycleFrom(
     completed: completed !== undefined ? true : historyComplete ? false : null,
     archived: archived !== undefined ? true : historyComplete ? false : null,
     resumedCount,
-    conservativeRecoveryCount,
+    recoveryOriginPossiblyExposedCount,
     ...(startedAt === undefined ? {} : { startedAt }),
     ...(completedAt === undefined ? {} : { completedAt }),
     ...(archivedAt === undefined ? {} : { archivedAt }),
@@ -121,7 +122,7 @@ function currentEvidenceFromState(
   readonly truncation: ReturnType<typeof takeBounded<ReplayCurrentEvidence>>["truncation"];
 } {
   const current: ReplayCurrentEvidence[] = [];
-  const keys = Object.keys(state.evidenceHistory).sort((left, right) => left.localeCompare(right));
+  const keys = Object.keys(state.evidenceHistory).sort(compareReplayStrings);
   for (const keyString of keys) {
     const records = state.evidenceHistory[keyString] ?? [];
     const active = records.find((record) => record.status === "ACTIVE");
