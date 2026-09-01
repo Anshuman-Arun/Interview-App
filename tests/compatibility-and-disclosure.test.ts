@@ -209,7 +209,7 @@ describe("compatibility and disclosure gates", () => {
       });
 
       expect(result.accepted).toBe(false);
-      expect(result.reason).toMatch(/action is stale/u);
+      expect(result.reason).toMatch(/not active/u);
       expect(harness.writer.getState().generations[harness.generationId]?.status)
         .toBe("SUPERSEDED");
 
