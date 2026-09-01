@@ -10,7 +10,10 @@ import {
 } from "../packages/domain/src/index.js";
 import { createCommandEnvelope } from "../packages/interview-engine/src/envelopes.js";
 import { createFormalInterpretationRequest } from "../packages/interview-engine/src/formal-interpretation.js";
-import { FormalProtocolRoutingRegistry } from "../packages/interview-engine/src/formal-protocol-routing.js";
+import {
+  FORMAL_PROTOCOL_ROUTES,
+  FormalProtocolRoutingRegistry
+} from "../packages/interview-engine/src/formal-protocol-routing.js";
 import {
   DeterministicFormalInterpretationProvider,
   InterpretationCoordinator,
@@ -732,6 +735,125 @@ describe("privacy-safe diagnostics", () => {
       expect(JSON.stringify(result)).not.toContain("SECRET_CANONICAL_SOLUTION_SHOULD_NOT_LEAK");
       expect(JSON.stringify(coordinator.getDiagnostics())).not.toContain("SECRET_CANONICAL_SOLUTION_SHOULD_NOT_LEAK");
       expect(coordinator.getDiagnostics().every((diagnostic) => !("sourceText" in diagnostic))).toBe(true);
+    } finally {
+      harness.store.close();
+    }
+  });
+});
+
+
+describe("adversarial formal interpretation admission gaps", () => {
+  it("rejects unrelated provenance event IDs even when the authoritative turn event is present", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const authoritativeEventId = request.source.eventIds[0];
+      const unrelatedEventId = harness.writer.getState().eventIds.find((eventId) => eventId !== authoritativeEventId);
+      if (authoritativeEventId === undefined || unrelatedEventId === undefined) {
+        throw new Error("Expected both authoritative and unrelated persisted event provenance");
+      }
+      const forged = FormalInterpretationRequestSchema.parse({
+        ...request,
+        source: {
+          ...request.source,
+          eventIds: [authoritativeEventId, unrelatedEventId]
+        }
+      });
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(forged, []));
+      const result = await new InterpretationCoordinator(harness.writer, provider, routingScopes)
+        .interpretAndVerify(forged);
+      expect(result).toMatchObject({
+        status: "PROVENANCE_UNAVAILABLE",
+        reason: "SOURCE_EVENT_MISMATCH"
+      });
+      expect(provider.callCount).toBe(0);
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("treats an explicit zero-candidate provider result as abstention without dispatch", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, []));
+      const result = await new InterpretationCoordinator(harness.writer, provider, routingScopes)
+        .interpretAndVerify(request);
+      expect(result).toMatchObject({
+        status: "NO_SUPPORTED_INTERPRETATION",
+        reason: "NO_INTERPRETATION",
+        candidateCount: 0
+      });
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects malformed formal JSON before deterministic verifier dispatch", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, [
+        candidate(request, { statement: "not-json" })
+      ]));
+      const result = await new InterpretationCoordinator(harness.writer, provider, routingScopes)
+        .interpretAndVerify(request);
+      expect(result).toMatchObject({
+        status: "INVALID_PROPOSAL",
+        reason: "INVALID_JSON"
+      });
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("discards a verification request when the app-owned deterministic verifier throws", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, [
+        candidate(request)
+      ]));
+      const throwingDescriptors = DETERMINISTIC_MATH_VERIFIERS.map((descriptor) =>
+        descriptor.verifier === MODULAR_ARITHMETIC_VERIFIER_NAME
+          ? {
+              ...descriptor,
+              create: () => ({
+                verify: async () => {
+                  throw new Error("SECRET_VERIFIER_FAILURE_SHOULD_NOT_LEAK");
+                }
+              })
+            }
+          : descriptor
+      );
+      const router = new FormalProtocolRoutingRegistry(
+        routingScopes,
+        FORMAL_PROTOCOL_ROUTES,
+        throwingDescriptors
+      );
+      const coordinator = new InterpretationCoordinator(
+        harness.writer,
+        provider,
+        routingScopes,
+        { router }
+      );
+      const result = await coordinator.interpretAndVerify(request);
+      expect(result).toMatchObject({
+        status: "VERIFICATION_REJECTED",
+        reason: "VERIFICATION_RESULT_REJECTED"
+      });
+      const verificationRequests = Object.values(harness.writer.getState().verificationRequests);
+      expect(verificationRequests).toHaveLength(1);
+      expect(verificationRequests[0]).toMatchObject({
+        status: "DISCARDED",
+        discardReason: "VERIFIER_EXECUTION_FAILED"
+      });
+      expect(JSON.stringify(result)).not.toContain("SECRET_VERIFIER_FAILURE_SHOULD_NOT_LEAK");
+      expect(JSON.stringify(coordinator.getDiagnostics()))
+        .not.toContain("SECRET_VERIFIER_FAILURE_SHOULD_NOT_LEAK");
     } finally {
       harness.store.close();
     }
