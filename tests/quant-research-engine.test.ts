@@ -80,7 +80,7 @@ function visibleNumber(state: ReturnType<QuantResearchEngine["getState"]>, key: 
 describe("deterministic Quant Research interview engine", () => {
   it("shuffles undefined-valued elements according to deterministic Fisher-Yates draws", () => {
     const rng = new DeterministicRng(0, "test");
-    expect(rng.shuffle<number | undefined>([undefined, 1, 2])).toEqual([1, 2, undefined]);
+    expect(rng.shuffle([undefined, 1, 2])).toEqual([1, 2, undefined]);
   });
 
   it("registers exactly the five supported compatibility tuples", () => {
