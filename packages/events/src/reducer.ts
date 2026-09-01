@@ -58,6 +58,65 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         }
       };
       break;
+    case "QUANT_RESEARCH_SCENARIO_INITIALIZED": {
+      if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
+      if (
+        event.payload.definition.family !== event.payload.authoritativeSnapshot.family ||
+        state.problem?.id !== event.payload.definition.family ||
+        state.problem.version !== event.payload.definition.version
+      ) {
+        throw new Error("Quant Research initialization does not match the presented problem");
+      }
+      next = {
+        ...state,
+        quantResearch: {
+          definition: event.payload.definition,
+          authoritativeSnapshot: event.payload.authoritativeSnapshot,
+          actions: []
+        }
+      };
+      break;
+    }
+    case "QUANT_RESEARCH_ACTION_ACCEPTED": {
+      const quantResearch = state.quantResearch;
+      if (quantResearch === undefined) throw new Error("Quant Research scenario is not initialized");
+      if (quantResearch.result !== undefined) throw new Error("Quant Research scenario is already complete");
+      if (quantResearch.actions.some((action) => action.actionId === event.payload.action.actionId)) {
+        throw new Error("Quant Research action ID is already present in authoritative history");
+      }
+      next = {
+        ...state,
+        quantResearch: {
+          ...quantResearch,
+          actions: [...quantResearch.actions, event.payload.action]
+        }
+      };
+      break;
+    }
+    case "QUANT_RESEARCH_SCENARIO_COMPLETED": {
+      const quantResearch = state.quantResearch;
+      if (quantResearch === undefined) throw new Error("Quant Research scenario is not initialized");
+      if (quantResearch.result !== undefined) throw new Error("Quant Research scenario is already complete");
+      const result = event.payload.result;
+      if (
+        result.status !== "COMPLETE" ||
+        result.family !== quantResearch.definition.family ||
+        result.version !== quantResearch.definition.version ||
+        result.generatorVersion !== quantResearch.definition.generatorVersion ||
+        result.rngVersion !== quantResearch.definition.rngVersion ||
+        result.acceptedActionCount !== quantResearch.actions.length
+      ) {
+        throw new Error("Quant Research completion result does not match authoritative history");
+      }
+      next = {
+        ...state,
+        quantResearch: {
+          ...quantResearch,
+          result
+        }
+      };
+      break;
+    }
     case "UTTERANCE_STARTED":
       next = { ...state, utterances: { ...state.utterances, [event.payload.utteranceId]: { utteranceId: event.payload.utteranceId, status: "CAPTURING" } } };
       break;
