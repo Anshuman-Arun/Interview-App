@@ -75,6 +75,26 @@ describe("grounded session evaluator adversarial cases", () => {
     expect(evaluation.scores.independence).toBe(100);
   });
 
+  it("degrades independence support when exposed assistance cannot be attributed to a milestone", () => {
+    let state = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
+    state = addDelivery(
+      state,
+      DisclosureIdSchema.parse("unmapped_disclosure"),
+      3,
+      "EXPOSED",
+      5,
+      "unmapped"
+    );
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.independence).toBe(100);
+    expect(evaluation.dimensionResults.independence.supportLevel).toBe("WEAK");
+    expect(evaluation.dimensionResults.independence.evidenceRefs).toContainEqual({
+      kind: "DELIVERY",
+      id: "delivery_adv_unmapped"
+    });
+  });
+
   it("treats hint responsiveness as association and explicitly abstains without an opportunity", () => {
     let progress = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
     progress = addDelivery(progress, chooseDisclosure, 2, "EXPOSED", 5, "progress");

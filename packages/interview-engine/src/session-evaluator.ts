@@ -130,7 +130,10 @@ export function evaluateInterviewSession(
     milestoneFacts
   );
   const rigor = evaluateRigor(problem, activeEvidence);
-  const independence = evaluateIndependence(milestoneFacts);
+  const independence = evaluateIndependence(
+    milestoneFacts,
+    disclosureData.unattributedAssistanceRefs
+  );
   const communication = unsupportedDimension(
     "Current application-owned evidence does not contain a validated communication-quality signal."
   );
@@ -325,6 +328,7 @@ function collectDisclosureData(
 ): {
   readonly interventions: readonly DisclosedInterventionRecord[];
   readonly exposuresByDisclosureId: ReadonlyMap<string, DisclosureExposure>;
+  readonly unattributedAssistanceRefs: readonly EvaluationEvidenceRef[];
 } {
   const disclosureToMilestones = new Map<string, string[]>();
   for (const milestone of problem.interviewer.reasoningGraph.milestones) {
@@ -343,6 +347,7 @@ function collectDisclosureData(
   }>();
 
   const interventions: DisclosedInterventionRecord[] = [];
+  const unattributedAssistanceRefs: EvaluationEvidenceRef[] = [];
   const deliveries = Object.values(state.deliveries)
     .filter((delivery) => isDisclosedStatus(delivery.status))
     .sort((left, right) => left.deliveryId.localeCompare(right.deliveryId));
@@ -369,6 +374,13 @@ function collectDisclosureData(
       " with " +
       String(delivery.disclosureIds.length) +
       " disclosure reference(s).";
+
+    if (
+      delivery.effectiveDisclosureLevel > 0 &&
+      relatedMilestoneIds.length === 0
+    ) {
+      unattributedAssistanceRefs.push(evaluationRef("DELIVERY", delivery.deliveryId));
+    }
 
     interventions.push({
       deliveryId: delivery.deliveryId,
@@ -421,7 +433,8 @@ function collectDisclosureData(
 
   return {
     interventions,
-    exposuresByDisclosureId: exposures
+    exposuresByDisclosureId: exposures,
+    unattributedAssistanceRefs: uniqueRefs(unattributedAssistanceRefs)
   };
 }
 
@@ -514,7 +527,7 @@ function evaluateMilestones(
       : undefined;
 
     let supportLevel = supportFromEvidenceRecords(records, relevantVerificationRequests.length > 0);
-    if (achieved && directComplete && supportLevel === "WEAK" && (progress?.value.inferenceConfidence ?? 0) >= 0.8) {
+    if (achieved && directComplete && supportLevel === "WEAK" && progress.value.inferenceConfidence >= 0.8) {
       supportLevel = "MODERATE";
     }
 
@@ -814,7 +827,8 @@ function evaluateRigor(
 }
 
 function evaluateIndependence(
-  milestoneFacts: readonly MilestoneFacts[]
+  milestoneFacts: readonly MilestoneFacts[],
+  unattributedAssistanceRefs: readonly EvaluationEvidenceRef[]
 ): DimensionComputation {
   const achieved = milestoneFacts.filter((item) => item.evaluation.achieved);
   if (achieved.length === 0) {
@@ -841,13 +855,15 @@ function evaluateIndependence(
   }
 
   let supportLevel = supportFromGroundedCount(achieved.length);
-  if (attributionUncertain) supportLevel = minSupport(supportLevel, "WEAK");
+  if (attributionUncertain || unattributedAssistanceRefs.length > 0) {
+    supportLevel = minSupport(supportLevel, "WEAK");
+  }
 
   return {
     result: scoredDimension(
       roundScore(total / achieved.length),
       supportLevel,
-      uniqueRefs(refs)
+      uniqueRefs([...refs, ...unattributedAssistanceRefs])
     )
   };
 }

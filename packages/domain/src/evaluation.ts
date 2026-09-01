@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DisclosureLevelSchema } from "./pedagogy.js";
 import {
   DeliveryIdSchema,
+  DisclosureIdSchema,
   GenerationIdSchema,
   SessionIdSchema,
   TurnIdSchema
@@ -92,6 +93,12 @@ export const EvaluationDimensionResultSchema = z.object({
       message: "Insufficiently supported evaluation dimensions cannot have a score"
     });
   }
+  if (result.score === null && result.supportLevel !== "INSUFFICIENT") {
+    ctx.addIssue({
+      code: "custom",
+      message: "Unscored evaluation dimensions must have insufficient support"
+    });
+  }
 });
 export type EvaluationDimensionResult = z.infer<typeof EvaluationDimensionResultSchema>;
 
@@ -145,7 +152,7 @@ export const MilestoneEvaluationSchema = z.object({
   assistanceLevel: DisclosureLevelSchema,
   supportLevel: EvaluationSupportLevelSchema,
   evidenceRefs: z.array(EvaluationEvidenceRefSchema),
-  assistanceDisclosureIds: z.array(z.string().min(1)),
+  assistanceDisclosureIds: z.array(DisclosureIdSchema),
   approachIds: z.array(z.string().min(1)),
   notAchievedReason: z.string().min(1).optional()
 }).strict();
@@ -156,7 +163,7 @@ export const DisclosedInterventionRecordSchema = z.object({
   generationId: GenerationIdSchema,
   turnId: TurnIdSchema.optional(),
   disclosureLevel: DisclosureLevelSchema,
-  disclosureIds: z.array(z.string().min(1)),
+  disclosureIds: z.array(DisclosureIdSchema),
   relatedMilestoneIds: z.array(z.string().min(1)),
   deliveryStatus: z.enum(["EXPOSED", "POSSIBLY_EXPOSED"]),
   summary: z.string().min(1)
