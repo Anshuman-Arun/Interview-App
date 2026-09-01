@@ -251,6 +251,10 @@ describe("microphone lifecycle adversarial ordering", () => {
     await setup.capture.dispose();
     setup.getUserMedia?.resolve(setup.stream);
     await starting;
+    await waitForTestCondition(
+      () => setup.stream.track.stopCount === 1,
+      "late microphone stream cleanup after disposal"
+    );
 
     expect(setup.capture.state).toBe("DISPOSED");
     expect(setup.stream.track.stopCount).toBe(1);
