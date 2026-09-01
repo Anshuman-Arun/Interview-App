@@ -157,7 +157,10 @@ function checkSensitivePath(relativePath, violations) {
     });
   }
 
-  if (basename === ".env" || (basename.startsWith(".env.") && basename !== ".env.example")) {
+  if (
+    lowerBasename === ".env"
+    || (lowerBasename.startsWith(".env.") && lowerBasename !== ".env.example")
+  ) {
     violations.push({
       code: "SENSITIVE_FILE",
       file: normalized,
