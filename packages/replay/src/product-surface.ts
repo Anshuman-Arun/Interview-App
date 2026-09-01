@@ -190,6 +190,9 @@ export const ProductHistoryEvaluationSummarySchema = z.object({
 }).strict();
 
 export const ProductHistorySessionSchema = StoredSessionSummarySchema.extend({
+  sessionId: BoundedIdentifierSchema,
+  problemId: BoundedIdentifierSchema.optional(),
+  problemVersion: BoundedIdentifierSchema.optional(),
   reviewAvailable: z.boolean(),
   evaluation: ProductHistoryEvaluationSummarySchema.optional()
 }).strict();
