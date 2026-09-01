@@ -1175,7 +1175,7 @@ function classifyProgress(
     };
   }
 
-  const completedApproaches = findCompletedApproaches(scopedEvidence, graph);
+  const completedApproaches = findCompletedApproaches(actionable, graph);
   if (completedApproaches.length > 0) {
     const completedApproachId = completedApproaches[0];
     const alternateApproachId = graph.problem.interviewer.reasoningGraph.approaches
@@ -1335,10 +1335,8 @@ function targetDisclosureAuthorization(
   target: PolicyTarget,
   level: DisclosureLevel,
   graph: GraphContext,
-  completed: ReadonlySet<string>,
-  alreadyDisclosed: ReadonlySet<DisclosureId>
+  completed: ReadonlySet<string>
 ): readonly DisclosureId[] {
-  const allowed = new Set<DisclosureId>();
   if (level === 0 || target.kind !== "MILESTONE") return [];
 
   const milestone = graph.problem.interviewer.reasoningGraph.milestones.find((item) => item.id === target.id);
@@ -1346,15 +1344,32 @@ function targetDisclosureAuthorization(
     return [];
   }
 
+  const relevantMilestoneIds = new Set<string>([milestone.id]);
+  const queue = [milestone.id];
+  let cursor = 0;
+  while (cursor < queue.length) {
+    const current = queue[cursor];
+    cursor += 1;
+    if (current === undefined) continue;
+    for (const predecessorId of graph.predecessors.get(current) ?? []) {
+      if (relevantMilestoneIds.has(predecessorId)) continue;
+      relevantMilestoneIds.add(predecessorId);
+      queue.push(predecessorId);
+    }
+  }
+
+  const allowed = new Set<DisclosureId>();
   const byId = disclosureMap(graph);
-  for (const disclosureId of milestone.protectedDisclosureIds) {
-    const disclosure = byId.get(disclosureId);
-    if (
-      disclosure !== undefined
-      && !alreadyDisclosed.has(disclosureId)
-      && disclosure.minimumDisclosureLevel <= level
-    ) {
-      allowed.add(disclosureId);
+  for (const relevantMilestoneId of relevantMilestoneIds) {
+    const relevantMilestone = graph.problem.interviewer.reasoningGraph.milestones.find(
+      (item) => item.id === relevantMilestoneId
+    );
+    if (relevantMilestone === undefined) continue;
+    for (const disclosureId of relevantMilestone.protectedDisclosureIds) {
+      const disclosure = byId.get(disclosureId);
+      if (disclosure !== undefined && disclosure.minimumDisclosureLevel <= level) {
+        allowed.add(disclosureId);
+      }
     }
   }
   return [...allowed].sort();
@@ -1675,8 +1690,7 @@ export function decidePedagogicalPolicy(
     classification.target,
     plan.requestedDisclosure,
     graph,
-    completeMilestones,
-    ledgerResult.value
+    completeMilestones
   );
 
   const request = RealizationRequestSchema.parse({
