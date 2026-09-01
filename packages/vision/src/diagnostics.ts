@@ -56,7 +56,7 @@ export const VisionProcessingDiagnosticsSchema = z.preprocess(
     outputBytes: z.number().int().nonnegative().max(HARD_MAX_DIAGNOSTIC_OUTPUT_BYTES),
     cropCount: z.number().int().nonnegative().max(1),
     tileCount: z.number().int().nonnegative().max(512),
-    durationMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    durationMs: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER),
     outcome: VisionProcessingOutcomeSchema
   }).strict()
 ).superRefine((diagnostics, context) => {
