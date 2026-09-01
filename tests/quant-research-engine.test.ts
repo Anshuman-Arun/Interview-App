@@ -87,6 +87,7 @@ describe("deterministic Quant Research interview engine", () => {
   });
 
   it.each([
+    { ...bayesian, generatorVersion: "wrong-generator-version" },
     { ...bayesian, rngVersion: "wrong-rng-version" },
     { ...bayesian, seed: Number.MAX_SAFE_INTEGER + 1 },
     { ...bayesian, seed: -1 },
@@ -254,11 +255,68 @@ describe("deterministic Quant Research interview engine", () => {
     try {
       engine.applyAction({ actionId: "bad-stage", kind: "CHOOSE_OPTION", option: "A" });
     } catch (error) {
-      const serialized = JSON.stringify(error);
-      expect(serialized).not.toMatch(/center|population|seed|hidden/iu);
+      const rendered = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      expect(rendered).not.toMatch(/center|population|seed|hidden/iu);
     }
     expect(engine.getState()).toEqual(before);
     expect(engine.getAcceptedActions()).toHaveLength(0);
+  });
+
+  it("blocks reentrant action application triggered by validation traps", () => {
+    const engine = new QuantResearchEngine(sampling);
+    let nestedCode: QuantResearchError["code"] | undefined;
+    const target = { actionId: "outer", kind: "REQUEST_OBSERVATION", count: 2 };
+    const proxy = new Proxy(target, {
+      ownKeys(value) {
+        try {
+          engine.applyAction({ actionId: "nested", kind: "REQUEST_OBSERVATION", count: 2 });
+        } catch (error) {
+          if (error instanceof QuantResearchError) nestedCode = error.code;
+          else throw error;
+        }
+        return Reflect.ownKeys(value);
+      }
+    });
+
+    engine.applyAction(proxy);
+    expect(nestedCode).toBe("ACTION_NOT_ALLOWED");
+    expect(engine.getAcceptedActions().map((action) => action.actionId)).toEqual(["outer"]);
+    expect(engine.getState().acceptedActionCount).toBe(1);
+  });
+
+  it("does not retain mutable caller aliases for definitions, actions, or returned snapshots", () => {
+    const mutableDefinition = {
+      family: "SAMPLING_ESTIMATION",
+      version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION,
+      seed: 91,
+      config: { ...sampling.config }
+    };
+    const engine = new QuantResearchEngine(mutableDefinition);
+    const initial = engine.getState();
+    mutableDefinition.config.maxSamples = 32;
+    mutableDefinition.seed = 999;
+    expect(engine.getState()).toEqual(initial);
+
+    const action = { actionId: "alias-action", kind: "REQUEST_OBSERVATION", count: 2 };
+    engine.applyAction(action);
+    action.actionId = "mutated";
+    action.count = 10;
+    expect(engine.getAcceptedActions()).toEqual([{ actionId: "alias-action", kind: "REQUEST_OBSERVATION", count: 2 }]);
+
+    const accepted = engine.getAcceptedActions() as Array<{ actionId: string }>;
+    accepted[0]!.actionId = "external-mutation";
+    expect(engine.getAcceptedActions()[0]?.actionId).toBe("alias-action");
+
+    const state = engine.getState();
+    const observations = state.visibleData.find((item) => item.key === "observations")?.value as number[];
+    observations[0] = 999_999;
+    expect(engine.getState().visibleData.find((item) => item.key === "observations")?.value).not.toContain(999_999);
+
+    const registry = getQuantResearchRegistry() as Array<{ family: string; version: string }>;
+    registry[0]!.family = "tampered";
+    expect(getQuantResearchRegistry()[0]?.family).not.toBe("tampered");
   });
 
   it("duplicate action IDs fail closed without partial mutation", () => {
