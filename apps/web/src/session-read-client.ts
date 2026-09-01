@@ -163,9 +163,18 @@ export class BrowserSessionReadClient {
       );
     }
 
+    let responseText: string;
+    try {
+      responseText = await response.text();
+    } catch {
+      throw new BrowserSessionReadTransportError(
+        isSignalAborted(signal) ? "ABORTED" : "NETWORK"
+      );
+    }
+
     let payload: unknown;
     try {
-      payload = JSON.parse(await response.text()) as unknown;
+      payload = JSON.parse(responseText) as unknown;
     } catch {
       throw new BrowserSessionReadResponseError(
         "MALFORMED_JSON",
