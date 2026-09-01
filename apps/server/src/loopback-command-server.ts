@@ -220,12 +220,20 @@ export class LoopbackCommandServer {
         }
 
         try {
-          await new TurnCoordinator(writer).startConfiguredSession({
-            configuration: composition.configuration,
-            ...(composition.mode === "OXFORD_MATHEMATICS"
-              ? { problem: composition.problem }
-              : {})
-          }, envelope);
+          const turns = new TurnCoordinator(writer);
+          if (command.configuration === undefined) {
+            if (composition.mode !== "OXFORD_MATHEMATICS") {
+              throw new Error("Legacy START_SESSION resolved to an incompatible mode");
+            }
+            await turns.startSession(composition.problem, envelope);
+          } else {
+            await turns.startConfiguredSession({
+              configuration: composition.configuration,
+              ...(composition.mode === "OXFORD_MATHEMATICS"
+                ? { problem: composition.problem }
+                : {})
+            }, envelope);
+          }
         } catch (error) {
           if (error instanceof RequestIdConflictError) throw error;
           if (writer.getState().started) {
