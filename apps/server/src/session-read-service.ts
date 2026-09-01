@@ -325,7 +325,7 @@ export class SessionReadService {
       sessionId: SessionId;
       problemId?: string;
       problemVersion?: string;
-      status: StoredSessionSummary["status"];
+      status: StoredSessionSummary["status"] | "UNKNOWN";
       createdAt: string;
       updatedAt: string;
       eventCount: number;
