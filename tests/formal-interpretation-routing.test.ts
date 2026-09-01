@@ -859,3 +859,71 @@ describe("adversarial formal interpretation admission gaps", () => {
     }
   });
 });
+
+
+describe("interpretation cancellation linearization", () => {
+  it("refuses cancellation once deterministic verification dispatch has started", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, [
+        candidate(request)
+      ]));
+      let signalVerifierStarted: (() => void) | undefined;
+      const verifierStarted = new Promise<void>((resolve) => {
+        signalVerifierStarted = resolve;
+      });
+      let releaseVerifier: (() => void) | undefined;
+      const verifierGate = new Promise<void>((resolve) => {
+        releaseVerifier = resolve;
+      });
+      const realVerifier = new ModularArithmeticVerifier();
+      let firstCall = true;
+      const gatedDescriptors = DETERMINISTIC_MATH_VERIFIERS.map((descriptor) =>
+        descriptor.verifier === MODULAR_ARITHMETIC_VERIFIER_NAME
+          ? {
+              ...descriptor,
+              create: () => ({
+                verify: async (statement: string, interpretationConfidence: number) => {
+                  if (firstCall) {
+                    firstCall = false;
+                    if (signalVerifierStarted === undefined) {
+                      throw new Error("Verifier start signal was not initialized");
+                    }
+                    signalVerifierStarted();
+                    await verifierGate;
+                  }
+                  return realVerifier.verify(statement, interpretationConfidence);
+                }
+              })
+            }
+          : descriptor
+      );
+      const router = new FormalProtocolRoutingRegistry(
+        routingScopes,
+        FORMAL_PROTOCOL_ROUTES,
+        gatedDescriptors
+      );
+      const coordinator = new InterpretationCoordinator(
+        harness.writer,
+        provider,
+        routingScopes,
+        { router }
+      );
+
+      const execution = coordinator.interpretAndVerify(request);
+      await verifierStarted;
+      expect(coordinator.cancel(request.requestId)).toBe(false);
+      if (releaseVerifier === undefined) throw new Error("Expected verifier gate release function");
+      releaseVerifier();
+
+      expect(await execution).toMatchObject({
+        status: "ACCEPTED",
+        verificationStatus: "VERIFIED",
+        evidenceCommitted: true
+      });
+    } finally {
+      harness.store.close();
+    }
+  });
+});
