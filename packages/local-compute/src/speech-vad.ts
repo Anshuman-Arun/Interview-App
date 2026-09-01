@@ -25,7 +25,7 @@ export class DeterministicEnergyVadBackend implements VadBackend {
   }
 
   public async classify(frame: PcmFrameSnapshot): Promise<VadObservation> {
-    const boundedFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
+    const boundedFrame = snapshotVadFrame(frame);
     const view = new DataView(boundedFrame.bytes.buffer, boundedFrame.bytes.byteOffset, boundedFrame.bytes.byteLength);
     let squared = 0;
     const count = boundedFrame.bytes.byteLength / 4;
@@ -62,7 +62,11 @@ export class SileroVadBackend implements VadBackend {
   }
 
   public async classify(frame: PcmFrameSnapshot, signal?: AbortSignal): Promise<VadObservation> {
-    const boundedFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
+    if (signal !== undefined) {
+      validateAbortSignal(signal);
+      if (signal.aborted) throw abortError();
+    }
+    const boundedFrame = snapshotVadFrame(frame);
     const rawProbability = await this.scoreRuntime({
       pcmBytes: boundedFrame.bytes,
       sampleRate: boundedFrame.envelope.sampleRate,
@@ -87,6 +91,10 @@ export class ScriptedVadBackend implements VadBackend {
   private readonly probabilities: readonly number[];
 
   public constructor(probabilities: readonly number[]) {
+    if (!Array.isArray(probabilities)) throw new Error("Scripted VAD probabilities must be an array");
+    for (const probability of probabilities) {
+      validateProbability(probability, "Scripted VAD probability");
+    }
     this.probabilities = [...probabilities];
   }
 
@@ -494,4 +502,29 @@ function bindSileroScore(value: unknown, owner: unknown): SileroVadRuntime["scor
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+
+function snapshotVadFrame(frame: unknown): PcmFrameSnapshot {
+  if (!isRecord(frame)) throw new Error("VAD frame input must be an object");
+  try {
+    return snapshotPcmFrame(frame.envelope, frame.bytes);
+  } catch {
+    throw new Error("VAD frame input is invalid");
+  }
+}
+
+function validateAbortSignal(value: unknown): asserts value is AbortSignal {
+  if (!isRecord(value)
+      || typeof value.aborted !== "boolean"
+      || typeof value.addEventListener !== "function"
+      || typeof value.removeEventListener !== "function") {
+    throw new Error("VAD cancellation signal is invalid");
+  }
+}
+
+function abortError(): Error {
+  const error = new Error("VAD cancelled");
+  error.name = "AbortError";
+  return error;
 }
