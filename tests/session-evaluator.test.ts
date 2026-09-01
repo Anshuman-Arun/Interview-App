@@ -1033,8 +1033,3 @@ function placeEventBeforeSequence(
   throw new Error("Fixture has no authoritative sequence available for provenance");
 }
 
-function uniqueEventIds(
-  eventIds: readonly ReturnType<typeof EventIdSchema.parse>[]
-): ReturnType<typeof EventIdSchema.parse>[] {
-  return Array.from(new Set(eventIds));
-}
