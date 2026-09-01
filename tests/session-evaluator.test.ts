@@ -217,6 +217,42 @@ describe("grounded session evaluator", () => {
     expect(evaluation.dimensionResults.rigor.supportLevel).toBe("WEAK");
   });
 
+  it("does not force rigor to zero when deterministic correctness itself is unresolved", () => {
+    const correctnessKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "ambiguous-rigor-claim" },
+      dimension: "CORRECTNESS"
+    };
+    const justificationKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "ambiguous-rigor-claim" },
+      dimension: "JUSTIFICATION"
+    };
+
+    let state = setHistory(boundState(), justificationKey, [
+      { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
+    ]);
+    state = withVerification(
+      state,
+      correctnessKey,
+      "CONTRADICTED",
+      10,
+      "ambiguous-rigor-contradicted"
+    );
+    state = withVerification(
+      state,
+      correctnessKey,
+      "UNRESOLVED",
+      10,
+      "ambiguous-rigor-unresolved"
+    );
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.scores.rigor).toBe(100);
+    expect(evaluation.dimensionResults.rigor.supportLevel).toBe("WEAK");
+  });
+
   it("uses an unambiguous deterministic contradiction when model correctness is UNKNOWN", () => {
     const key: EvidenceKey = {
       problemId: sixPeopleProblem.id,
