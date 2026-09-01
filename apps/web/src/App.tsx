@@ -344,6 +344,16 @@ export const App: React.FC = () => {
                 </button>
               </div>
 
+              {historyLoading && historyRead === null ? (
+                <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                  Loading grounded history…
+                </div>
+              ) : historyError !== null && historyRead === null ? (
+                <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                  {historyError}
+                </div>
+              ) : null}
+
               {historyRead !== null ? (
                 <section
                   className="rounded-lg border border-slate-200 bg-slate-50 p-3"
