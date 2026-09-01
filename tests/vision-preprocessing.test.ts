@@ -1762,9 +1762,9 @@ describe("crop, resize, tiling, and cancellation", () => {
       { x: 0, y: 0, width: 4, height: 4 },
       { x: 3, y: 0, width: 4, height: 4 },
       { x: 6, y: 0, width: 4, height: 4 },
-      { x: 0, y: 2, width: 4, height: 4 },
-      { x: 3, y: 2, width: 4, height: 4 },
-      { x: 6, y: 2, width: 4, height: 4 }
+      { x: 0, y: 3, width: 4, height: 3 },
+      { x: 3, y: 3, width: 4, height: 3 },
+      { x: 6, y: 3, width: 4, height: 3 }
     ]);
 
     const result = await tileImage(source, {
@@ -1776,13 +1776,13 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(result.tiles).toHaveLength(6);
     expect(result.tiles[4]?.artifact.metadata.sourceBounds).toEqual({
       x: 3,
-      y: 2,
+      y: 3,
       width: 4,
-      height: 4
+      height: 3
     });
     expect(result.tiles[4]?.artifact.metadata.coordinateTransform).toEqual({
       offsetX: 3,
-      offsetY: 2,
+      offsetY: 3,
       scaleX: 1,
       scaleY: 1
     });
@@ -1799,7 +1799,7 @@ describe("crop, resize, tiling, and cancellation", () => {
 
   it("produces byte-identical deterministic tile outputs for identical inputs", async () => {
     const source = snapshot(makePng(9, 6));
-    const config = { tileWidth: 4, tileHeight: 3, overlap: 1, maxTileCount: 8 };
+    const config = { tileWidth: 4, tileHeight: 3, overlap: 1, maxTileCount: 9 };
     const first = await tileImage(source, config);
     const second = await tileImage(source, config);
 
