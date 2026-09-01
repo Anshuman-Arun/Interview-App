@@ -13,6 +13,7 @@ import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
   ProviderCoordinator,
+  createCommandEnvelope,
   SessionRuntimeRegistry,
   TurnCoordinator
 } from "../packages/interview-engine/src/index.js";
@@ -138,6 +139,61 @@ describe("application-owned ProviderCoordinator", () => {
       expect(harness.store.load(harness.sessionId).filter((event) => event.type === "MODEL_PROPOSAL_RECEIVED"))
         .toHaveLength(1);
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(1);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("fails before provider use when new evidence makes the stored pedagogical action stale", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      const state = harness.writer.getState();
+      const turn = state.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = state.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "evidence-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+      expect(evidence.committed).toBe(true);
+
+      let verificationCalls = 0;
+      let sessionCreations = 0;
+      const provider = testProvider(async () => {
+        sessionCreations += 1;
+        return proposalSession();
+      }, () => { verificationCalls += 1; });
+
+      const execution = await harness.coordinator.start(startInput(harness, provider));
+      const outcome = await execution.completion;
+
+      expect(outcome).toMatchObject({
+        status: "FAILED",
+        stage: "CONTEXT",
+        code: "ACTION_STALE"
+      });
+      expect(verificationCalls).toBe(0);
+      expect(sessionCreations).toBe(0);
+      expect(harness.writer.getState().generations[execution.generationId]?.status)
+        .toBe("SUPERSEDED");
     } finally {
       harness.store.close();
     }
