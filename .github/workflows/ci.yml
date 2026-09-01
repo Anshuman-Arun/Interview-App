@@ -68,6 +68,12 @@ jobs:
       - name: Build browser application
         run: pnpm build:web
 
+      - name: Build Electron desktop runtime
+        run: pnpm build:desktop
+
+      - name: Run Electron desktop bootstrap tests
+        run: pnpm test:desktop
+
       - name: Run complete Vitest suite
         run: pnpm test
 
