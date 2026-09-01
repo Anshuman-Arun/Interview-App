@@ -21,7 +21,9 @@ import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   DEFAULT_REPLAY_BOUNDS,
   SessionReplayReadResponseSchema,
-  projectGroundedEvaluationReadModel
+  projectGroundedEvaluationReadModel,
+  projectSessionReplayReadModel,
+  type SessionHistoryProjection
 } from "../packages/replay/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
 import { BrowserSessionReadClient } from "../apps/web/src/session-read-client.js";
@@ -266,6 +268,123 @@ describe("grounded evaluation/replay product surface", () => {
     expect(markup).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(markup).not.toContain("<img src=x onerror=alert(1)>");
     expect(markup).not.toContain("secret possibly exposed answer");
+  });
+
+  it("fails closed if an upstream replay object accidentally carries uncertain delivery text", () => {
+    const sessionId = SessionIdSchema.parse("session_uncertain_fail_closed");
+    const projection = {
+      sessionId,
+      lifecycle: {
+        status: "COMPLETED",
+        historyComplete: true,
+        started: true,
+        completed: true,
+        archived: false,
+        resumedCount: 1,
+        recoveryOriginPossiblyExposedCount: 1
+      },
+      counts: {
+        turns: 0,
+        inputEpisodes: 0,
+        utterances: 0,
+        generations: 1,
+        deliveries: 1,
+        exposedInterventions: 0,
+        possiblyExposedInterventions: 1,
+        cancelledInterventions: 0
+      },
+      currentStateAvailable: true,
+      validatedThroughSequence: 1,
+      observedThroughSequence: 1,
+      countsComplete: true,
+      totalEventCount: 1,
+      timeline: {
+        sessionId,
+        totalEventCount: 1,
+        entries: [{
+          kind: "DELIVERY_POSSIBLY_EXPOSED",
+          summary: "Delivery possibly exposed",
+          stateValidation: "VALIDATED",
+          provenance: {
+            eventId: "event_uncertain",
+            sessionId,
+            sequence: 1,
+            persistedSchemaVersion: 1,
+            persistedType: "DELIVERY_POSSIBLY_EXPOSED",
+            source: "RECOVERY",
+            wallTime: "2026-09-01T17:00:00.000Z",
+            elapsedMs: 10,
+            causationId: "request_uncertain",
+            correlationId: "request_uncertain"
+          },
+          relations: { deliveryId: "delivery_uncertain" },
+          delivery: {
+            deliveryId: "delivery_uncertain",
+            generationId: "generation_uncertain",
+            medium: "TEXT",
+            persistedAtomStatus: "POSSIBLY_EXPOSED",
+            status: "POSSIBLY_EXPOSED",
+            presentationState: "POSSIBLY_PRESENTED",
+            disclosure: {
+              effectiveDisclosureLevel: 3,
+              disclosureIdCount: 1,
+              disclosureIds: ["private_disclosure_id"]
+            },
+            text: {
+              text: "SECRET UNCERTAIN INTERVIEWER CONTENT",
+              originalLength: 36,
+              truncated: false
+            }
+          }
+        }],
+        eventTruncation: {
+          truncated: false,
+          limit: DEFAULT_REPLAY_BOUNDS.maxEvents,
+          remainingCount: 0
+        },
+        timelineTruncation: {
+          truncated: false,
+          limit: 1_000,
+          remainingCount: 0
+        },
+        complete: true,
+        issues: [],
+        bounds: DEFAULT_REPLAY_BOUNDS
+      },
+      evidenceHistory: [],
+      evidenceHistoryTruncation: { truncated: false, limit: 1, remainingCount: 0 },
+      evidenceHistoryComplete: true,
+      currentEvidence: [],
+      currentEvidenceTruncation: { truncated: false, limit: 1, remainingCount: 0 },
+      evidenceSummary: {
+        recordedUpdates: 0,
+        recordedInvalidations: 0,
+        currentActive: 0,
+        superseded: 0,
+        stale: 0
+      },
+      verificationHistory: [],
+      verificationTruncation: { truncated: false, limit: 1, remainingCount: 0 },
+      verificationHistoryComplete: true,
+      verificationSummary: {
+        statusIsCurrent: true,
+        pending: 0,
+        verified: 0,
+        contradicted: 0,
+        unresolved: 0,
+        discarded: 0
+      },
+      generationHistory: [],
+      generationTruncation: { truncated: false, limit: 1, remainingCount: 0 },
+      generationHistoryComplete: true
+    } as unknown as SessionHistoryProjection;
+
+    const model = projectSessionReplayReadModel(projection);
+    expect(model.entries).toHaveLength(1);
+    expect(model.entries[0]?.text).toBeUndefined();
+    expect(model.entries[0]?.delivery?.contentWithheld).toBe(true);
+    expect(JSON.stringify(model)).not.toContain("SECRET UNCERTAIN INTERVIEWER CONTENT");
+    expect(JSON.stringify(model)).not.toContain("private_disclosure_id");
   });
 
   it("reads completed evaluation, replay, and history without appending or acknowledging events", async () => {
