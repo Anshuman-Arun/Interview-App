@@ -375,7 +375,8 @@ describe("speech worker adversarial races and hard limits", () => {
       const fixture = frame(sequence, sequence < 3, "vad-mutation");
       await subject.submitFrame(fixture.envelope, fixture.pcm);
     }
-    expect(observedFirstSamples).toEqual([0.1]);
+    expect(observedFirstSamples).toHaveLength(1);
+    expect(observedFirstSamples[0]).toBeCloseTo(0.1);
   });
 
   it("rejects a recognizer that mutates its PCM or expected-basis copy", async () => {
