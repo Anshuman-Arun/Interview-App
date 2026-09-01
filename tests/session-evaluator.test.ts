@@ -150,16 +150,19 @@ describe("grounded session evaluator", () => {
     expect(evaluation.scores.independence).toBe(75);
   });
 
-  it("treats POSSIBLY_EXPOSED assistance conservatively and does not penalize provably later hints", () => {
+  it("treats POSSIBLY_EXPOSED conservatively and never mistakes generation basis for exposure time", () => {
     let uncertain = completeMilestone(initialSessionState(newSessionId()), "choose-vertex", 20);
     uncertain = withDelivery(uncertain, chooseDisclosure, 2, "POSSIBLY_EXPOSED", 5, "possible");
     const uncertainEvaluation = evaluateInterviewSession(uncertain, sixPeopleProblem);
     expect(uncertainEvaluation.scores.independence).toBe(75);
+    expect(uncertainEvaluation.dimensionResults.independence.supportLevel).toBe("WEAK");
     expect(uncertainEvaluation.disclosedInterventions[0]?.deliveryStatus).toBe("POSSIBLY_EXPOSED");
 
-    let late = completeMilestone(initialSessionState(newSessionId()), "choose-vertex", 10);
-    late = withDelivery(late, chooseDisclosure, 2, "EXPOSED", 20, "late");
-    expect(evaluateInterviewSession(late, sixPeopleProblem).scores.independence).toBe(100);
+    let laterBasis = completeMilestone(initialSessionState(newSessionId()), "choose-vertex", 10);
+    laterBasis = withDelivery(laterBasis, chooseDisclosure, 2, "EXPOSED", 20, "later-basis");
+    const laterBasisEvaluation = evaluateInterviewSession(laterBasis, sixPeopleProblem);
+    expect(laterBasisEvaluation.scores.independence).toBe(75);
+    expect(laterBasisEvaluation.dimensionResults.independence.supportLevel).toBe("WEAK");
   });
 
   it("scores error recovery only from actual evidence transitions", () => {

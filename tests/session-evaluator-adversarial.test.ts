@@ -95,28 +95,23 @@ describe("grounded session evaluator adversarial cases", () => {
     });
   });
 
-  it("treats hint responsiveness as association and explicitly abstains without an opportunity", () => {
-    let progress = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
-    progress = addDelivery(progress, chooseDisclosure, 2, "EXPOSED", 5, "progress");
-    const progressEvaluation = evaluateInterviewSession(progress, sixPeopleProblem);
-    expect(progressEvaluation.scores.hintResponsiveness).toBe(100);
-    expect(progressEvaluation.dimensionResults.hintResponsiveness.supportLevel).toBe("WEAK");
-
-    const noProgress = addDelivery(
-      initialSessionState(newSessionId()),
+  it("abstains on hint responsiveness when exposure ordering is not authoritative", () => {
+    let apparentProgress = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
+    apparentProgress = addDelivery(
+      apparentProgress,
       chooseDisclosure,
       2,
       "EXPOSED",
       5,
-      "no-progress"
+      "apparent-progress"
     );
-    expect(evaluateInterviewSession(noProgress, sixPeopleProblem).scores.hintResponsiveness)
-      .toBe(0);
 
-    const noHint = complete(initialSessionState(newSessionId()), "choose-vertex", 20);
-    const noHintEvaluation = evaluateInterviewSession(noHint, sixPeopleProblem);
-    expect(noHintEvaluation.scores.hintResponsiveness).toBeNull();
-    expect(noHintEvaluation.dimensionResults.hintResponsiveness.notScoredReason).toBeDefined();
+    const evaluation = evaluateInterviewSession(apparentProgress, sixPeopleProblem);
+    expect(evaluation.scores.hintResponsiveness).toBeNull();
+    expect(evaluation.dimensionResults.hintResponsiveness.supportLevel).toBe("INSUFFICIENT");
+    expect(evaluation.dimensionResults.hintResponsiveness.notScoredReason).toContain(
+      "exposure ordering"
+    );
   });
 
   it("recognizes stale evidence followed by a fresh supported replacement as recovery", () => {
