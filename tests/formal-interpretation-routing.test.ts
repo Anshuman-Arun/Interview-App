@@ -955,24 +955,28 @@ describe("formal interpretation session authority", () => {
 });
 
 
-describe("provider cancellation capacity release", () => {
-  it("settles a cancelled hung provider request and releases the in-flight slot", async () => {
+describe("provider cancellation capacity accounting", () => {
+  it("settles cancellation promptly without allowing unbounded detached provider work", async () => {
     const harness = await createCoreHarness();
     try {
       const firstRequest = formalRequest(harness);
       const secondRequest = formalRequest(harness);
+      const thirdRequest = formalRequest(harness);
       let signalProviderStarted: (() => void) | undefined;
       const providerStarted = new Promise<void>((resolve) => {
         signalProviderStarted = resolve;
       });
-      const neverSettles = new Promise<unknown>(() => undefined);
+      let releaseFirstProvider: ((value: unknown) => void) | undefined;
+      const firstProviderWork = new Promise<unknown>((resolve) => {
+        releaseFirstProvider = resolve;
+      });
       const provider = new DeterministicFormalInterpretationProvider((request) => {
         if (request.requestId === firstRequest.requestId) {
           if (signalProviderStarted === undefined) {
             throw new Error("Provider start signal was not initialized");
           }
           signalProviderStarted();
-          return neverSettles;
+          return firstProviderWork;
         }
         return providerResultFor(request, [candidate(request)]);
       });
@@ -988,8 +992,21 @@ describe("provider cancellation capacity release", () => {
       expect(coordinator.cancel(firstRequest.requestId)).toBe(true);
       expect(await firstExecution).toMatchObject({ status: "STALE", reason: "CANCELLED" });
 
-      const secondExecution = await coordinator.interpretAndVerify(secondRequest);
-      expect(secondExecution).toMatchObject({
+      const whileProviderStillHung = await coordinator.interpretAndVerify(secondRequest);
+      expect(whileProviderStillHung).toMatchObject({
+        status: "RESOURCE_LIMIT",
+        reason: "PROVIDER_IN_FLIGHT_LIMIT"
+      });
+      expect(provider.callCount).toBe(1);
+
+      if (releaseFirstProvider === undefined) throw new Error("Expected provider release function");
+      releaseFirstProvider(providerResultFor(firstRequest, []));
+      await firstProviderWork;
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const afterProviderSettles = await coordinator.interpretAndVerify(thirdRequest);
+      expect(afterProviderSettles).toMatchObject({
         status: "ACCEPTED",
         verificationStatus: "VERIFIED"
       });
