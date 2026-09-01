@@ -82,7 +82,13 @@ export function advancePcmOrder(
   prior: PcmOrderState | undefined,
   frame: PcmFrameSnapshot
 ): PcmOrderState {
-  const { envelope, durationMs } = frame;
+  const parsedEnvelope = SpeechPcmFrameEnvelopeSchema.safeParse(frame.envelope);
+  if (!parsedEnvelope.success) {
+    throw new PcmAdmissionError("INVALID_FRAME", "PCM order frame metadata is invalid");
+  }
+  const envelope = parsedEnvelope.data;
+  const durationMs = envelope.frameSamples / envelope.sampleRate * 1_000;
+  if (prior !== undefined) validatePcmOrderState(prior);
   if (prior === undefined) {
     if (envelope.sequence !== 0) {
       throw new PcmAdmissionError("OUT_OF_ORDER_FRAME", "A new PCM stream must begin at sequence zero");
@@ -298,4 +304,21 @@ function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
     lastSequence: frame.envelope.sequence,
     nextEarliestTimestampMs: frame.envelope.timestampMs + frame.durationMs
   };
+}
+
+
+function validatePcmOrderState(prior: PcmOrderState): void {
+  if ((prior.sampleRate !== 16_000 && prior.sampleRate !== 48_000)
+      || prior.channels !== 1
+      || prior.sampleFormat !== "F32LE"
+      || !Number.isSafeInteger(prior.lastSequence)
+      || prior.lastSequence < 0
+      || !Number.isFinite(prior.firstTimestampMs)
+      || prior.firstTimestampMs < 0
+      || !Number.isFinite(prior.cumulativeDurationMs)
+      || prior.cumulativeDurationMs <= 0
+      || !Number.isFinite(prior.nextEarliestTimestampMs)
+      || prior.nextEarliestTimestampMs < prior.firstTimestampMs) {
+    throw new PcmAdmissionError("INVALID_FRAME", "Prior PCM ordering state is invalid");
+  }
 }
