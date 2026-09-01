@@ -19,7 +19,8 @@
     "dev:server": "tsx apps/server/src/server.ts",
     "start:server": "tsx apps/server/src/server.ts",
     "demo": "tsx apps/server/src/run-synthetic.ts",
-    "check": "tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts"
+    "check": "node scripts/check-public-release.mjs && tsc -p tsconfig.json --noEmit && eslint . && vitest run && vitest run tests/replay.test.ts tests/vertical-slice.test.ts",
+    "security:public": "node scripts/check-public-release.mjs"
   },
   "dependencies": {
     "katex": "^0.18.4",
