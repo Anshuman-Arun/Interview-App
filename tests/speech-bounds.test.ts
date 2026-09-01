@@ -194,12 +194,24 @@ describe("speech protocol hard bounds", () => {
       timestampMs: 20
     }, pcm);
     expect(() => advancePcmOrder(state, otherStream)).toThrow(/stream identity/u);
-    expect(() => advancePcmOrder({ ...state, cumulativeDurationMs: Number.NaN }, snapshotPcmFrame({
+    const next = snapshotPcmFrame({
       ...first.envelope,
       requestId: newRequestId(),
       sequence: 1,
       timestampMs: 20
-    }, pcm))).toThrow(/PCM ordering state/u);
+    }, pcm);
+    expect(() => advancePcmOrder({ ...state, cumulativeDurationMs: Number.NaN }, next))
+      .toThrow(/PCM ordering state/u);
+    expect(() => advancePcmOrder({
+      ...state,
+      cumulativeDurationMs: 20,
+      nextEarliestTimestampMs: 400
+    }, next)).toThrow(/PCM ordering state/u);
+    expect(() => advancePcmOrder({
+      ...state,
+      cumulativeDurationMs: Number.MAX_VALUE,
+      nextEarliestTimestampMs: Number.MAX_VALUE
+    }, next)).toThrow(/PCM ordering state/u);
   });
 
   it("enforces buffer/cache hard limits even when helpers are used directly", () => {
