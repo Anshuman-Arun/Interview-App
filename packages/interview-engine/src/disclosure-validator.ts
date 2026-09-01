@@ -142,6 +142,48 @@ function protectedMetadataFormulationCount(
   );
 }
 
+function combineSafeAnalyses(
+  analyses: readonly DisclosureAnalysis[],
+  deterministicIds: readonly DisclosureId[],
+  deterministicLevel: DisclosureLevel,
+  additionalIds: readonly DisclosureId[],
+  disclosureById: ReadonlyMap<DisclosureId, ProtectedDisclosure>
+): DisclosureAnalysis {
+  if (analyses.length === 0) {
+    throw new Error("Cannot combine an empty disclosure-analysis realization");
+  }
+
+  const effectiveIds = Array.from(new Set([
+    ...deterministicIds,
+    ...analyses.flatMap((item) => item.effectiveDisclosureIds),
+    ...additionalIds
+  ]));
+  let metadataFloor: DisclosureLevel = deterministicLevel;
+  for (const disclosureId of effectiveIds) {
+    const disclosure = disclosureById.get(disclosureId);
+    if (disclosure === undefined) {
+      throw new Error("Cannot combine an unknown protected disclosure identity");
+    }
+    if (disclosure.minimumDisclosureLevel > metadataFloor) {
+      metadataFloor = disclosure.minimumDisclosureLevel;
+    }
+  }
+
+  const analyzedLevel = analyses.reduce<DisclosureLevel>(
+    (maximum, item) =>
+      item.effectiveDisclosureLevel > maximum ? item.effectiveDisclosureLevel : maximum,
+    0
+  );
+  const effectiveLevel = analyzedLevel > metadataFloor ? analyzedLevel : metadataFloor;
+  return {
+    status: "SAFE",
+    effectiveDisclosureLevel: effectiveLevel,
+    effectiveDisclosureIds: effectiveIds,
+    confidence: Math.min(...analyses.map((item) => item.confidence)),
+    reason: analyses.map((item) => item.reason).join("; ")
+  };
+}
+
 export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
   private readonly safeTexts: ReadonlySet<string>;
 
@@ -202,8 +244,17 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
   }
 }
 
+export interface RealizationDisclosureAnalyses {
+  readonly speech: DisclosureAnalysis | null;
+  readonly boardActions: readonly DisclosureAnalysis[];
+}
+
 export type ProposalValidation =
-  | { readonly accepted: true; readonly analysis: DisclosureAnalysis }
+  | {
+      readonly accepted: true;
+      readonly analysis: DisclosureAnalysis;
+      readonly realizations: RealizationDisclosureAnalyses;
+    }
   | { readonly accepted: false; readonly reason: string; readonly analysis?: DisclosureAnalysis };
 
 export class DisclosureValidator {
