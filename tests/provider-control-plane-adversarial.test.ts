@@ -718,6 +718,7 @@ describe("control-plane own-property intrinsic hardening", () => {
       throw new Error("Object.hasOwn intrinsic is unavailable");
     }
 
+    let malformedDefinitionError: unknown;
     try {
       Object.defineProperty(Object, "hasOwn", {
         configurable: true,
@@ -737,13 +738,19 @@ describe("control-plane own-property intrinsic hardening", () => {
       expect(Object.isFrozen(parsed.reasoning)).toBe(true);
       expect(Object.getPrototypeOf(parsed.reasoning)).toBeNull();
 
-      expect(() => defineProvider({
-        ...createSettingsProviderInput(),
-        adapterVersion: "1.0.0"
-      })).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+      try {
+        defineProvider({
+          ...createSettingsProviderInput(),
+          adapterVersion: "1.0.0"
+        });
+      } catch (error) {
+        malformedDefinitionError = error;
+      }
     } finally {
       Object.defineProperty(Object, "hasOwn", originalHasOwn);
     }
+    expect(malformedDefinitionError)
+      .toMatchObject({ code: "MALFORMED_DEFINITION" });
   });
 });
 
