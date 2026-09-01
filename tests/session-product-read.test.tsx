@@ -10,10 +10,7 @@ import {
   newSessionId,
   type SessionId
 } from "../packages/domain/src/index.js";
-import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
 import {
-  ClosedWorldDisclosureAnalyzer,
-  DisclosureValidator,
   TurnCoordinator,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
@@ -607,8 +604,6 @@ describe("grounded evaluation/replay product surface", () => {
 
     const sessionId = newSessionId();
     await command.startSession(sessionId);
-    const before = server.store.eventCount(sessionId);
-
     const evaluation = await reads.getEvaluation(sessionId);
     expect(evaluation).toMatchObject({
       available: false,
