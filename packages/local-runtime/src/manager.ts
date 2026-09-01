@@ -943,7 +943,7 @@ export class LocalRuntimeManager {
         pid: child.pid as number,
         signal
       });
-      let observedDecision: LocalReadinessDecision | Promise<LocalReadinessDecision>;
+      let observedDecision: unknown;
       try {
         observedDecision = strategy.probe(context);
       } catch {
@@ -954,7 +954,7 @@ export class LocalRuntimeManager {
         continue;
       }
 
-      let decision: LocalReadinessDecision;
+      let decision: unknown;
       if (
         typeof observedDecision === "object"
         && observedDecision !== null
@@ -963,11 +963,11 @@ export class LocalRuntimeManager {
         // Do not Promise-assimilate untrusted callback values. In particular,
         // Promise resolution would probe a hostile/revoked proxy's "then"
         // property before application-owned admission can reject it.
-        decision = observedDecision as LocalReadinessDecision;
+        decision = observedDecision;
       } else if (utilTypes.isPromise(observedDecision)) {
         try {
           decision = await awaitWithAbort(
-            observedDecision as Promise<LocalReadinessDecision>,
+            observedDecision,
             signal,
             record.definition.id
           );
@@ -979,7 +979,7 @@ export class LocalRuntimeManager {
           continue;
         }
       } else {
-        decision = observedDecision as LocalReadinessDecision;
+        decision = observedDecision;
       }
 
       const normalized = normalizeReadinessDecision(
