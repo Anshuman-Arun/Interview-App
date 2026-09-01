@@ -119,6 +119,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   public constructor(options: MoonshineRecognizerOptions) {
     const rawOptions: unknown = options;
     if (!isRecord(rawOptions)) throw new Error("Moonshine recognizer options must be an object");
+    assertAllowedMoonshineOptionKeys(rawOptions);
     const rawRuntime = rawOptions.runtime;
     if (!isRecord(rawRuntime)) throw new Error("Moonshine runtime must be an object");
 
@@ -516,4 +517,21 @@ function bindMoonshineCancel(
 
 function isSharedBackingBuffer(buffer: ArrayBufferLike): boolean {
   return typeof SharedArrayBuffer !== "undefined" && buffer instanceof SharedArrayBuffer;
+}
+
+
+const MOONSHINE_OPTION_KEYS = new Set([
+  "runtime",
+  "modelPath",
+  "configPath",
+  "modelName",
+  "modelVersion"
+]);
+
+function assertAllowedMoonshineOptionKeys(value: Record<string, unknown>): void {
+  for (const key of Object.keys(value)) {
+    if (!MOONSHINE_OPTION_KEYS.has(key)) {
+      throw new Error("Moonshine recognizer options contain an unexpected field");
+    }
+  }
 }
