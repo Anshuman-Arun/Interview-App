@@ -1,6 +1,7 @@
 import {
   MAX_SPEECH_TRANSCRIPT_CHARS,
   MAX_SPEECH_UTTERANCE_DURATION_MS,
+  MAX_SPEECH_WORD_TIMINGS,
   TranscriptCandidateSchema,
   type SourceAudioBasis,
   type SpeechModelIdentity,
@@ -129,16 +130,25 @@ export interface TranscriptValidationBasis {
   readonly requestId: RequestId;
   readonly utteranceId: UtteranceId;
   readonly sourceAudioBasis: SourceAudioBasis;
+  readonly modelIdentity?: SpeechModelIdentity;
 }
 
 export function validateTranscriptCandidate(raw: unknown, expected: TranscriptValidationBasis): TranscriptCandidate {
   if (!isRecord(raw)) throw new Error("Recognizer result must be an object");
+  if (Array.isArray(raw.words) && raw.words.length > MAX_SPEECH_WORD_TIMINGS) {
+    throw new Error("Recognizer word timing metadata exceeds maximum entry count");
+  }
   const normalizedText = normalizeTranscriptText(raw.text);
   const candidate = TranscriptCandidateSchema.parse({ ...raw, text: normalizedText });
   if (candidate.requestId !== expected.requestId) throw new Error("Recognizer result requestId does not match request");
   if (candidate.utteranceId !== expected.utteranceId) throw new Error("Recognizer result utteranceId does not match utterance");
   if (!sameAudioBasis(candidate.sourceAudioBasis, expected.sourceAudioBasis)) {
     throw new Error("Recognizer result source audio basis does not match request");
+  }
+  if (expected.modelIdentity !== undefined
+      && (candidate.model.name !== expected.modelIdentity.name
+        || candidate.model.version !== expected.modelIdentity.version)) {
+    throw new Error("Recognizer result model identity does not match configured recognizer");
   }
 
   const utteranceDurationMs = expected.sourceAudioBasis.endTimestampMs - expected.sourceAudioBasis.startTimestampMs;
@@ -153,6 +163,7 @@ export function validateTranscriptCandidate(raw: unknown, expected: TranscriptVa
 
 export function normalizeTranscriptText(value: unknown): string {
   if (typeof value !== "string") throw new Error("Recognizer transcript text must be a string");
+  if (value.length > MAX_SPEECH_TRANSCRIPT_CHARS) throw new Error("Recognizer transcript exceeds maximum length");
   if (containsUnpairedSurrogate(value)) throw new Error("Recognizer transcript contains invalid Unicode");
   const normalized = value
     .split("")
