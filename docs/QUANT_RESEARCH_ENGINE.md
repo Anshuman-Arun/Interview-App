@@ -68,11 +68,11 @@ The candidate chooses how many observations to request from a seeded finite popu
 
 ### Experimental allocation
 
-The candidate allocates a bounded budget between two noisy experiments, with the initial comparison requiring at least one observation from each arm, sees deterministic sample summaries, selects the higher-mean option, and then reallocates after experiment costs change. Allocation quality is compared with the exact bounded information frontier under the same feasibility rules as the candidate action.
+The candidate allocates a bounded budget between two noisy experiments, with every comparison allocation requiring at least one observation from each arm, sees deterministic sample summaries, selects the higher-mean option, and then reallocates after experiment costs change. The information objective is the reciprocal variance of the estimated mean difference, using the exact variance of the engine's discrete-uniform noise model; allocation quality is compared with the exact bounded frontier under the same feasibility rules as the candidate action.
 
 ### Model comparison
 
-The candidate distinguishes a constant versus linear latent data-generating family from deterministic noisy observations and reassesses after a single disclosed outlier perturbation. Evidence captures initial correctness, robustness, and consistency.
+The candidate distinguishes a constant versus linear latent data-generating family from deterministic noisy observations and reassesses after a single disclosed outlier perturbation. Linear instances are generated with a disclosed minimum slope magnitude relative to the ordinary noise radius, making the baseline families deterministically distinguishable; after perturbation, the public state preserves both baseline and perturbed observations. Evidence captures initial correctness, robustness, and consistency.
 
 ### Constrained optimization
 
