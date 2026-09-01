@@ -42,7 +42,7 @@ export function snapshotOwnEnumerableRecord(
     }
   }
 
-  const snapshot: Record<string, unknown> = Object.create(null);
+  const snapshot: Record<string, unknown> = { __proto__: null };
   for (const key of keys) {
     let isOwn: boolean;
     try {
