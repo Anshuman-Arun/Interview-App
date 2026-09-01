@@ -123,10 +123,12 @@ export class BrowserMicrophoneCapture {
 
     const capabilityOperation = this.operation;
     let mediaDevices: AudioMediaDevicesLike | undefined;
-    let getUserMedia: AudioMediaDevicesLike["getUserMedia"];
+    let getUserMedia: unknown;
     try {
       mediaDevices = this.environment.mediaDevices;
-      getUserMedia = mediaDevices?.getUserMedia;
+      getUserMedia = mediaDevices === undefined
+        ? undefined
+        : readUnknownProperty(mediaDevices, "getUserMedia");
     } catch (error) {
       this.assertUsable();
       if (this.operation !== capabilityOperation) return;
@@ -158,7 +160,7 @@ export class BrowserMicrophoneCapture {
     let source: CaptureAudioNodeLike | undefined;
     let processor: CaptureScriptProcessorLike | undefined;
     let trackEnded: (() => void) | undefined;
-    let trackEndedDuringStart = false;
+    const trackEndedDuringStart = { value: false };
     let releaseAcquisition: (() => void) | undefined;
     let releaseSetup: (() => void) | undefined;
 
@@ -166,15 +168,18 @@ export class BrowserMicrophoneCapture {
       const acquisition = await this.acquireStream(
         operation,
         startAbort.signal,
-        () => getUserMedia.call(mediaDevices, {
-          audio: {
-            channelCount,
-            ...(deviceId === undefined || deviceId === "" || deviceId === "default"
-              ? {}
-              : { deviceId: { exact: deviceId } })
-          },
-          video: false
-        })
+        () => {
+          const acquisitionResult: unknown = Reflect.apply(getUserMedia, mediaDevices, [{
+            audio: {
+              channelCount,
+              ...(deviceId === undefined || deviceId === "" || deviceId === "default"
+                ? {}
+                : { deviceId: { exact: deviceId } })
+            },
+            video: false
+          }]);
+          return Promise.resolve(acquisitionResult).then(toAudioMediaStream);
+        }
       );
       if (acquisition === undefined) return;
       stream = acquisition.stream;
@@ -186,7 +191,7 @@ export class BrowserMicrophoneCapture {
         return;
       }
 
-      const getAudioTracks = stream.getAudioTracks;
+      const getAudioTracks = readUnknownProperty(stream, "getAudioTracks");
       this.throwIfOperationSuperseded(operation);
       if (typeof getAudioTracks !== "function") {
         throw new AudioInfrastructureError(
@@ -194,9 +199,9 @@ export class BrowserMicrophoneCapture {
           "Microphone stream does not expose a callable getAudioTracks method"
         );
       }
-      const streamTracks = getAudioTracks.call(stream);
+      const streamTracks: unknown = Reflect.apply(getAudioTracks, stream, []);
       this.throwIfOperationSuperseded(operation);
-      if (!Array.isArray(streamTracks)) {
+      if (!isUnknownArray(streamTracks)) {
         throw new AudioInfrastructureError(
           "CAPTURE_FAILED",
           "Microphone stream audio tracks must be returned as an array"
@@ -214,13 +219,14 @@ export class BrowserMicrophoneCapture {
             "Microphone stream contained malformed audio track metadata"
           );
         }
-        if (ownedTrackSet.has(track)) continue;
+        const ownedTrack = track as AudioMediaStreamTrackLike;
+        if (ownedTrackSet.has(ownedTrack)) continue;
 
-        const stopTrack = track.stop;
+        const stopTrack = readUnknownProperty(track, "stop");
         this.throwIfOperationSuperseded(operation);
-        const addEndedListener = track.addEventListener;
+        const addEndedListener = readUnknownProperty(track, "addEventListener");
         this.throwIfOperationSuperseded(operation);
-        const removeEndedListener = track.removeEventListener;
+        const removeEndedListener = readUnknownProperty(track, "removeEventListener");
         this.throwIfOperationSuperseded(operation);
         if (
           typeof stopTrack !== "function"
@@ -232,8 +238,8 @@ export class BrowserMicrophoneCapture {
             "Microphone stream contained an audio track without required lifecycle methods"
           );
         }
-        ownedTrackSet.add(track);
-        ownedTracks.push(track);
+        ownedTrackSet.add(ownedTrack);
+        ownedTracks.push(ownedTrack);
       }
       this.throwIfOperationSuperseded(operation);
       if (tracks.length === 0) {
@@ -243,9 +249,18 @@ export class BrowserMicrophoneCapture {
         throw new AudioInfrastructureError("DEVICE_UNAVAILABLE", "Microphone stream contained an ended audio track");
       }
 
-      const createAudioContext = this.environment.createAudioContext;
+      const createAudioContext = readUnknownProperty(this.environment, "createAudioContext");
       this.throwIfOperationSuperseded(operation);
-      context = createAudioContext.call(this.environment);
+      if (typeof createAudioContext !== "function") {
+        throw new AudioInfrastructureError("UNSUPPORTED", "Audio context factory is unavailable");
+      }
+      const contextValue: unknown = Reflect.apply(createAudioContext, this.environment, []);
+      this.throwIfOperationSuperseded(operation);
+      if (!isCaptureAudioContextLike(contextValue)) {
+        closeUnknownAudioContext(contextValue);
+        throw new AudioInfrastructureError("UNSUPPORTED", "Required Web Audio capture APIs are unavailable");
+      }
+      context = contextValue;
       this.throwIfOperationSuperseded(operation);
       const captureSampleRate = readCaptureContextSampleRate(context);
       this.throwIfOperationSuperseded(operation);
@@ -255,20 +270,38 @@ export class BrowserMicrophoneCapture {
         return;
       }
 
-      const createMediaStreamSource = context.createMediaStreamSource;
+      const createMediaStreamSource = readUnknownProperty(context, "createMediaStreamSource");
       this.throwIfOperationSuperseded(operation);
-      source = createMediaStreamSource.call(context, stream);
+      if (typeof createMediaStreamSource !== "function") {
+        throw new AudioInfrastructureError(
+          "CAPTURE_FAILED",
+          "Audio context does not expose callable createMediaStreamSource"
+        );
+      }
+      const sourceValue: unknown = Reflect.apply(createMediaStreamSource, context, [stream]);
       this.throwIfOperationSuperseded(operation);
-      this.validateCaptureNode(source, "media stream source", operation);
+      this.validateCaptureNode(sourceValue, "media stream source", operation);
+      source = sourceValue;
 
-      const createScriptProcessor = context.createScriptProcessor;
+      const createScriptProcessor = readUnknownProperty(context, "createScriptProcessor");
       this.throwIfOperationSuperseded(operation);
-      processor = createScriptProcessor.call(context, frameSize, channelCount, 1);
+      if (typeof createScriptProcessor !== "function") {
+        throw new AudioInfrastructureError(
+          "CAPTURE_FAILED",
+          "Audio context does not expose callable createScriptProcessor"
+        );
+      }
+      const processorValue: unknown = Reflect.apply(
+        createScriptProcessor,
+        context,
+        [frameSize, channelCount, 1]
+      );
       this.throwIfOperationSuperseded(operation);
-      this.validateCaptureNode(processor, "script processor", operation);
+      this.validateCaptureNode(processorValue, "script processor", operation);
+      processor = processorValue as CaptureScriptProcessorLike;
       trackEnded = (): void => {
         if (this.stateValue === "STARTING" && this.isCurrent(operation)) {
-          trackEndedDuringStart = true;
+          trackEndedDuringStart.value = true;
           return;
         }
         void this.fail(
@@ -279,33 +312,45 @@ export class BrowserMicrophoneCapture {
       };
 
       for (const track of tracks) {
-        const addEndedListener = track.addEventListener;
+        const addEndedListener = readUnknownProperty(track, "addEventListener");
         this.throwIfOperationSuperseded(operation);
-        addEndedListener.call(track, "ended", trackEnded);
+        if (typeof addEndedListener !== "function") {
+          throw new AudioInfrastructureError(
+            "CAPTURE_FAILED",
+            "Microphone track lost ended-listener registration capability"
+          );
+        }
+        Reflect.apply(addEndedListener, track, ["ended", trackEnded]);
         this.throwIfOperationSuperseded(operation);
       }
       const trackEndedAfterListenerInstall = this.anyTrackEnded(tracks, operation);
-      if (trackEndedDuringStart || trackEndedAfterListenerInstall) {
+      if (readSetupLatch(trackEndedDuringStart) || trackEndedAfterListenerInstall) {
         throw new AudioInfrastructureError(
           "DEVICE_UNAVAILABLE",
           "Microphone device became unavailable during capture setup"
         );
       }
 
-      const sourceConnect = source.connect;
+      const sourceConnect = readUnknownProperty(source, "connect");
       this.throwIfOperationSuperseded(operation);
-      sourceConnect.call(source, processor);
+      if (typeof sourceConnect !== "function") {
+        throw new AudioInfrastructureError("CAPTURE_FAILED", "Audio media stream source lost connect capability");
+      }
+      Reflect.apply(sourceConnect, source, [processor]);
       this.throwIfOperationSuperseded(operation);
 
-      const destination = context.destination;
+      const destination: unknown = readUnknownProperty(context, "destination");
       this.throwIfOperationSuperseded(operation);
-      const processorConnect = processor.connect;
+      const processorConnect = readUnknownProperty(processor, "connect");
       this.throwIfOperationSuperseded(operation);
-      processorConnect.call(processor, destination);
+      if (typeof processorConnect !== "function") {
+        throw new AudioInfrastructureError("CAPTURE_FAILED", "Audio script processor lost connect capability");
+      }
+      Reflect.apply(processorConnect, processor, [destination]);
       this.throwIfOperationSuperseded(operation);
 
       const trackEndedAfterConnect = this.anyTrackEnded(tracks, operation);
-      if (trackEndedDuringStart || trackEndedAfterConnect) {
+      if (readSetupLatch(trackEndedDuringStart) || trackEndedAfterConnect) {
         throw new AudioInfrastructureError(
           "DEVICE_UNAVAILABLE",
           "Microphone device became unavailable during capture setup"
@@ -322,7 +367,7 @@ export class BrowserMicrophoneCapture {
       this.throwIfOperationSuperseded(operation);
       this.lastCapturedAtMs = this.startedAtMs;
       const trackEndedBeforeHandler = this.anyTrackEnded(tracks, operation);
-      if (trackEndedDuringStart || trackEndedBeforeHandler) {
+      if (readSetupLatch(trackEndedDuringStart) || trackEndedBeforeHandler) {
         throw new AudioInfrastructureError(
           "DEVICE_UNAVAILABLE",
           "Microphone device became unavailable during capture setup"
@@ -333,7 +378,7 @@ export class BrowserMicrophoneCapture {
       processor.onaudioprocess = (event): void => {
         if (this.stateValue !== "CAPTURING" || !this.isCurrent(operation)) return;
         try {
-          const inputBuffer = event.inputBuffer;
+          const inputBuffer: unknown = event.inputBuffer;
           this.throwIfOperationSuperseded(operation);
           const consumerResult: unknown = onFrame(
             this.makeFrame(
@@ -368,7 +413,7 @@ export class BrowserMicrophoneCapture {
       this.throwIfOperationSuperseded(operation);
 
       const trackEndedAfterHandler = this.anyTrackEnded(tracks, operation);
-      if (trackEndedDuringStart || trackEndedAfterHandler) {
+      if (readSetupLatch(trackEndedDuringStart) || trackEndedAfterHandler) {
         throw new AudioInfrastructureError(
           "DEVICE_UNAVAILABLE",
           "Microphone device became unavailable during capture setup"
@@ -554,19 +599,19 @@ export class BrowserMicrophoneCapture {
   }
 
   private validateCaptureNode(
-    node: CaptureAudioNodeLike,
+    node: unknown,
     label: string,
     operation: number
-  ): void {
+  ): asserts node is CaptureAudioNodeLike {
     if (typeof node !== "object" || node === null) {
       throw new AudioInfrastructureError(
         "CAPTURE_FAILED",
         `Audio ${label} factory returned a non-object value`
       );
     }
-    const connect = node.connect;
+    const connect = readUnknownProperty(node, "connect");
     this.throwIfOperationSuperseded(operation);
-    const disconnect = node.disconnect;
+    const disconnect = readUnknownProperty(node, "disconnect");
     this.throwIfOperationSuperseded(operation);
     if (typeof connect !== "function" || typeof disconnect !== "function") {
       throw new AudioInfrastructureError(
@@ -581,7 +626,7 @@ export class BrowserMicrophoneCapture {
     operation: number
   ): boolean {
     for (const track of tracks) {
-      const readyState = track.readyState;
+      const readyState: unknown = readUnknownProperty(track, "readyState");
       this.throwIfOperationSuperseded(operation);
       if (
         readyState !== undefined
@@ -599,31 +644,40 @@ export class BrowserMicrophoneCapture {
   }
 
   private makeFrame(
-    buffer: CaptureAudioBufferLike,
+    buffer: unknown,
     expectedSampleRate: number,
     expectedChannelCount: number,
     maximumSampleCount: number,
     operation: number
   ): AudioFrame {
-    const sampleRate = buffer.sampleRate;
+    if (typeof buffer !== "object" || buffer === null) {
+      throw new RangeError("Audio input buffer must be an object");
+    }
+
+    const sampleRate: unknown = readUnknownProperty(buffer, "sampleRate");
     this.throwIfOperationSuperseded(operation);
-    if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
+    if (typeof sampleRate !== "number" || !Number.isFinite(sampleRate) || sampleRate <= 0) {
       throw new RangeError("Audio input buffer sample rate must be a positive finite number");
     }
     if (sampleRate !== expectedSampleRate) {
       throw new RangeError("Audio input buffer sample rate changed within a capture cycle");
     }
 
-    const channelCount = buffer.numberOfChannels;
+    const channelCount: unknown = readUnknownProperty(buffer, "numberOfChannels");
     this.throwIfOperationSuperseded(operation);
-    if (!Number.isSafeInteger(channelCount) || channelCount < 1 || channelCount > MAX_SCRIPT_PROCESSOR_CHANNELS) {
+    if (
+      typeof channelCount !== "number"
+      || !Number.isSafeInteger(channelCount)
+      || channelCount < 1
+      || channelCount > MAX_SCRIPT_PROCESSOR_CHANNELS
+    ) {
       throw new RangeError("Audio input buffer channel count must be an integer from 1 through 32");
     }
     if (channelCount !== expectedChannelCount) {
       throw new RangeError("Audio input buffer channel count changed within a capture cycle");
     }
 
-    const getChannelData = buffer.getChannelData;
+    const getChannelData = readUnknownProperty(buffer, "getChannelData");
     this.throwIfOperationSuperseded(operation);
     if (typeof getChannelData !== "function") {
       throw new RangeError("Audio input buffer must expose getChannelData");
@@ -632,7 +686,7 @@ export class BrowserMicrophoneCapture {
     const channels: Float32Array[] = [];
     let sampleCount: number | undefined;
     for (let channel = 0; channel < channelCount; channel += 1) {
-      const channelSamples = getChannelData.call(buffer, channel);
+      const channelSamples: unknown = Reflect.apply(getChannelData, buffer, [channel]);
       this.throwIfOperationSuperseded(operation);
       if (!(channelSamples instanceof Float32Array)) {
         throw new RangeError("Audio input buffer channel data must be Float32Array PCM");
@@ -811,16 +865,18 @@ export class BrowserMicrophoneCapture {
   }
 }
 
-function snapshotMicrophoneCaptureOptions(options: MicrophoneCaptureOptions): MicrophoneCaptureOptions {
+function snapshotMicrophoneCaptureOptions(options: unknown): MicrophoneCaptureOptions {
   if (typeof options !== "object" || options === null) {
     throw new TypeError("Audio capture options must be an object");
   }
 
-  const deviceId = options.deviceId;
-  const frameSize = options.frameSize ?? DEFAULT_FRAME_SIZE;
-  const channelCount = options.channelCount ?? 1;
-  const onFrame = options.onFrame;
-  const onError = options.onError;
+  const deviceId: unknown = readUnknownProperty(options, "deviceId");
+  const frameSizeValue: unknown = readUnknownProperty(options, "frameSize");
+  const channelCountValue: unknown = readUnknownProperty(options, "channelCount");
+  const onFrame: unknown = readUnknownProperty(options, "onFrame");
+  const onError: unknown = readUnknownProperty(options, "onError");
+  const frameSize = frameSizeValue ?? DEFAULT_FRAME_SIZE;
+  const channelCount = channelCountValue ?? 1;
 
   if (deviceId !== undefined) {
     if (typeof deviceId !== "string") {
@@ -836,12 +892,17 @@ function snapshotMicrophoneCaptureOptions(options: MicrophoneCaptureOptions): Mi
   if (onError !== undefined && typeof onError !== "function") {
     throw new TypeError("Audio capture onError callback must be callable");
   }
-  if (!SCRIPT_PROCESSOR_FRAME_SIZES.has(frameSize)) {
+  if (typeof frameSize !== "number" || !SCRIPT_PROCESSOR_FRAME_SIZES.has(frameSize)) {
     throw new RangeError(
       "Audio capture frame size must be one of 256, 512, 1024, 2048, 4096, 8192, or 16384 samples"
     );
   }
-  if (!Number.isInteger(channelCount) || channelCount < 1 || channelCount > MAX_SCRIPT_PROCESSOR_CHANNELS) {
+  if (
+    typeof channelCount !== "number"
+    || !Number.isInteger(channelCount)
+    || channelCount < 1
+    || channelCount > MAX_SCRIPT_PROCESSOR_CHANNELS
+  ) {
     throw new RangeError("Audio capture channel count must be an integer from 1 through 32");
   }
 
@@ -957,17 +1018,17 @@ async function ensureCaptureContextRunning(
   context: CaptureAudioContextLike,
   signal: AbortSignal
 ): Promise<boolean> {
-  if (signal.aborted) return false;
+  if (isSignalAborted(signal)) return false;
 
-  const initialState = context.state;
-  if (signal.aborted) return false;
+  const initialState: unknown = readUnknownProperty(context, "state");
+  if (isSignalAborted(signal)) return false;
   if (initialState === undefined || initialState === "running") return true;
   if (initialState === "closed") {
     throw new AudioInfrastructureError("CAPTURE_FAILED", "Audio context is already closed");
   }
 
-  const resume = context.resume;
-  if (signal.aborted) return false;
+  const resume = readUnknownProperty(context, "resume");
+  if (isSignalAborted(signal)) return false;
   if (typeof resume !== "function") {
     throw new AudioInfrastructureError(
       "UNSUPPORTED",
@@ -977,7 +1038,8 @@ async function ensureCaptureContextRunning(
 
   let resumePromise: Promise<void>;
   try {
-    resumePromise = Promise.resolve(resume.call(context));
+    const resumeResult: unknown = Reflect.apply(resume, context, []);
+    resumePromise = Promise.resolve(resumeResult).then(() => undefined);
   } catch (error) {
     throw mapAudioContextResumeError(error);
   }
@@ -1082,7 +1144,7 @@ async function waitForPromiseOrAbort(
   promise: Promise<void>,
   signal: AbortSignal
 ): Promise<boolean> {
-  if (signal.aborted) return false;
+  if (isSignalAborted(signal)) return false;
 
   return new Promise<boolean>((resolve) => {
     let settled = false;
@@ -1103,23 +1165,22 @@ async function waitForPromiseOrAbort(
 }
 
 function stopStreamAudioTracks(
-  stream: AudioMediaStreamLike,
+  stream: unknown,
   alreadyOwned: readonly AudioMediaStreamTrackLike[] = []
 ): void {
+  if (typeof stream !== "object" || stream === null) return;
+
   const handled = new Set<AudioMediaStreamTrackLike>(alreadyOwned);
-  const stopReturnedTracks = (tracks: readonly AudioMediaStreamTrackLike[]): boolean => {
-    if (!Array.isArray(tracks)) return false;
-    for (let index = 0; index < tracks.length; index += 1) {
-      let track: AudioMediaStreamTrackLike | undefined;
+  const stopReturnedTracks = (tracks: unknown): boolean => {
+    if (!isUnknownArray(tracks)) return false;
+    for (const track of tracks) {
+      if (typeof track !== "object" || track === null) continue;
+      const ownedTrack = track as AudioMediaStreamTrackLike;
+      if (handled.has(ownedTrack)) continue;
+      handled.add(ownedTrack);
       try {
-        track = tracks[index];
-      } catch {
-        continue;
-      }
-      if (track === undefined || handled.has(track)) continue;
-      handled.add(track);
-      try {
-        track.stop();
+        const stop = readUnknownProperty(track, "stop");
+        if (typeof stop === "function") Reflect.apply(stop, track, []);
       } catch {
         // Continue attempting to stop other independently accessible tracks.
       }
@@ -1128,10 +1189,10 @@ function stopStreamAudioTracks(
   };
 
   try {
-    const getAudioTracks = stream.getAudioTracks;
+    const getAudioTracks = readUnknownProperty(stream, "getAudioTracks");
     if (typeof getAudioTracks === "function") {
       try {
-        stopReturnedTracks(getAudioTracks.call(stream));
+        stopReturnedTracks(Reflect.apply(getAudioTracks, stream, []));
       } catch {
         // Continue to getTracks(), which real MediaStream also exposes.
       }
@@ -1141,9 +1202,9 @@ function stopStreamAudioTracks(
   }
 
   try {
-    const getTracks = stream.getTracks;
+    const getTracks = readUnknownProperty(stream, "getTracks");
     if (typeof getTracks !== "function") return;
-    stopReturnedTracks(getTracks.call(stream));
+    stopReturnedTracks(Reflect.apply(getTracks, stream, []));
   } catch {
     // Best-effort late-stream cleanup cannot access any remaining tracks.
   }
@@ -1194,9 +1255,9 @@ function mapCaptureError(error: unknown): AudioInfrastructureError {
 function closeUnknownAudioContext(value: unknown): void {
   try {
     if (typeof value !== "object" || value === null) return;
-    const close = Reflect.get(value, "close");
+    const close: unknown = Reflect.get(value, "close");
     if (typeof close !== "function") return;
-    const result = Reflect.apply(close, value, []);
+    const result: unknown = Reflect.apply(close, value, []);
     void Promise.resolve(result).catch(() => undefined);
   } catch {
     // Capability detection still reports UNSUPPORTED even if partial cleanup is impossible.
@@ -1206,17 +1267,46 @@ function closeUnknownAudioContext(value: unknown): void {
 function isCaptureAudioContextLike(value: unknown): value is CaptureAudioContextLike {
   try {
     if (typeof value !== "object" || value === null) return false;
-    const sampleRate = Reflect.get(value, "sampleRate");
+    const sampleRate: unknown = Reflect.get(value, "sampleRate");
+    const createMediaStreamSource: unknown = Reflect.get(value, "createMediaStreamSource");
+    const createScriptProcessor: unknown = Reflect.get(value, "createScriptProcessor");
+    const close: unknown = Reflect.get(value, "close");
     return typeof sampleRate === "number"
       && Number.isFinite(sampleRate)
       && sampleRate > 0
       && "destination" in value
-      && typeof Reflect.get(value, "createMediaStreamSource") === "function"
-      && typeof Reflect.get(value, "createScriptProcessor") === "function"
-      && typeof Reflect.get(value, "close") === "function";
+      && typeof createMediaStreamSource === "function"
+      && typeof createScriptProcessor === "function"
+      && typeof close === "function";
   } catch {
     return false;
   }
+}
+
+function readUnknownProperty(value: object, property: PropertyKey): unknown {
+  return Reflect.get(value, property) as unknown;
+}
+
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+function toAudioMediaStream(value: unknown): AudioMediaStreamLike {
+  if (typeof value !== "object" || value === null) {
+    throw new AudioInfrastructureError(
+      "CAPTURE_FAILED",
+      "Microphone acquisition returned a non-object stream"
+    );
+  }
+  return value as AudioMediaStreamLike;
+}
+
+function readSetupLatch(latch: { readonly value: boolean }): boolean {
+  return latch.value;
+}
+
+function isSignalAborted(signal: AbortSignal): boolean {
+  return signal.aborted;
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
