@@ -60,6 +60,15 @@ describe("speech protocol hard bounds", () => {
       ...sourceBasis(),
       endTimestampMs: 1_000
     }).success).toBe(false);
+    expect(SourceAudioBasisSchema.safeParse({
+      ...sourceBasis(),
+      endTimestampMs: 100
+    }).success).toBe(false);
+    expect(SourceAudioBasisSchema.safeParse({
+      ...sourceBasis(),
+      firstSequence: 0,
+      lastSequence: 0
+    }).success).toBe(false);
     const basis = sourceBasis();
     const words = Array.from({ length: MAX_SPEECH_WORD_TIMINGS + 1 }, (_, index) => ({
       word: "x",
