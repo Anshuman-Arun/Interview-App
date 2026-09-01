@@ -81,12 +81,7 @@ export class SessionWriter {
       if (draft === undefined) continue;
       if (
         draft.type === "SESSION_STARTED"
-        && (
-          typeof draft.payload !== "object"
-          || draft.payload === null
-          || !Object.hasOwn(draft.payload, "configuration")
-          || (draft.payload as { readonly configuration?: unknown }).configuration === undefined
-        )
+        && draft.payload.configuration === undefined
       ) {
         throw new Error("New SESSION_STARTED events require authoritative session configuration");
       }
