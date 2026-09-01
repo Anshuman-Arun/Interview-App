@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The post-interview evaluator is a deterministic read model over application-owned session state and the exact InterviewProblem version. It does not create authoritative student evidence, reinterpret the transcript, call a model, or infer performance from activity volume.
+The post-interview evaluator is a deterministic read model over application-owned session state and the exact session-bound InterviewProblem definition. It does not create authoritative student evidence, reinterpret the transcript, call a model, or infer performance from activity volume. For started sessions, the supplied problem must match the session's ID, version, public prompt, and provider-context fingerprint.
 
 Flow:
 
@@ -41,9 +41,9 @@ Adding words or meaningless turns cannot improve a grounded score.
 
 The evaluator reads:
 
-- active scoped evidence from SessionState.evidenceHistory;
-- evidence history transitions for recovery analysis;
-- accepted deterministic verification results;
+- active scoped evidence from SessionState.evidenceHistory, cross-checked against SessionState.studentEvidence;
+- valid supersession history for recovery analysis;
+- accepted deterministic verification results and their application-owned request/evidence provenance;
 - the problem's versioned, approach-aware reasoning graph;
 - exposed, completed, or possibly exposed deliveries;
 - generation basis metadata for generation provenance, but not as a substitute for exposure chronology;
@@ -51,7 +51,7 @@ The evaluator reads:
 
 It does not copy the private canonical solution, full transcript, or delivered hint text into SessionEvaluation.
 
-Stale and superseded evidence is useful only for historical transition analysis such as error recovery. It cannot establish current milestone achievement or current correctness.
+Superseded evidence may participate in historical negative-to-positive recovery transitions. STALE evidence has been explicitly invalidated and is excluded from current scoring and from error-recovery opportunities. Neither stale nor superseded evidence can establish current milestone achievement or current correctness.
 
 ## Milestone achievement
 
@@ -80,17 +80,22 @@ Technical correctness is computed over distinct grounded subjects.
 Sources include:
 
 - active scoped CORRECTNESS evidence;
-- accepted deterministic verifier results;
-- grounded milestone achievement when no more specific correctness sample exists for that milestone.
+- specifically linked VERIFIED requests when the active evidence record cites that verification request's authoritative request event;
+- unambiguous current-context CONTRADICTED verifier outcomes.
+
+Milestone completion is not a correctness sample. A PROGRESS = COMPLETE record can establish milestone achievement without establishing technical correctness.
 
 | Grounded result | Score contribution |
 | --- | ---: |
-| CORRECT / VERIFIED | 100 |
+| CORRECT, including specifically verifier-backed CORRECT | 100 |
 | LOCAL_ERROR | 50 |
-| STRUCTURAL_ERROR / CONTRADICTED | 0 |
-| UNKNOWN / UNRESOLVED | no score contribution |
+| STRUCTURAL_ERROR | 0 |
+| unambiguous current CONTRADICTED | 0 |
+| UNKNOWN / UNRESOLVED / conflicting current verifier outcomes | no score contribution |
 
-UNRESOLVED is retained as provenance but never treated as correctness. Absence of contradiction is not correctness.
+The current SessionState retains verification request provenance but not the authoritative sequence of the later VERIFICATION_RESULT_ACCEPTED event. Request ordering is therefore not treated as result-acceptance ordering. If accepted current verifier outcomes conflict, or a current CORRECT model inference conflicts with an accepted deterministic contradiction, the affected subject is treated as unresolved rather than choosing an invented winner.
+
+A VERIFIED request is never resurrected from historical request state after its committed correctness evidence has been invalidated or superseded. Absence of contradiction is not correctness.
 
 ## Rigor
 
@@ -106,9 +111,11 @@ Rigor is based on active scoped JUSTIFICATION evidence:
 A current correctness error on the same subject constrains the rigor contribution:
 
 - STRUCTURAL_ERROR caps the contribution at 0;
-- LOCAL_ERROR caps it at 50.
+- LOCAL_ERROR caps it at 50;
+- an unambiguous deterministic contradiction caps it at 0 when no active CORRECT record conflicts with that contradiction;
+- unresolved or conflicting deterministic correctness evidence degrades rigor support instead of inventing certainty.
 
-Turn count, response length, and unused verification requests do not affect rigor.
+Turn count, response length, verification-request count, and unrelated or historical VERIFIED requests do not affect rigor.
 
 ## Communication
 
@@ -126,28 +133,20 @@ Only deliveries whose authoritative status is EXPOSED, COMPLETED, or POSSIBLY_EX
 
 Queued, delivering-but-unacknowledged, validated-only, and cancelled atoms do not count as exposed assistance.
 
-Assistance is attributed through protected disclosure IDs. A delivery affects a milestone only when the milestone references that disclosure ID. The same disclosure exposed more than once is deduplicated for the milestone's distinct-assistance count.
-
-For a grounded achieved milestone, the base independence mapping is:
-
-| Highest attributable disclosure level | Milestone independence |
-| --- | ---: |
-| 0 | 100 |
-| 1 | 90 |
-| 2 | 75 |
-| 3 | 55 |
-| 4 | 30 |
-| 5 | 10 |
-
-Multiple distinct relevant disclosure IDs may reduce the milestone score further, bounded by 20 additional points. Re-rendering the same disclosed fact does not create another penalty.
+Assistance association is derived through protected disclosure IDs. A delivery is associated with a milestone only when the milestone references that disclosure ID. Re-rendering the same disclosure does not create duplicate disclosure identities. For a multi-disclosure atom, each milestone's assistanceLevel is derived from that disclosure's problem-defined minimum level rather than smearing the atom-wide maximum level onto every referenced milestone.
 
 The current SessionState records generation basis but not the authoritative event sequence at which a delivery became EXPOSED, COMPLETED, or POSSIBLY_EXPOSED. Generation basis is therefore never treated as exposure time.
 
-When a protected disclosure is relevant to an achieved milestone, the evaluator conservatively attributes that assistance and degrades independence support to WEAK because before/after ordering cannot be established from SessionState alone. It does not invent a precise chronology.
+Because before/after exposure ordering is unavailable, the evaluator does not apply a guessed numeric assistance penalty. Independence follows a fail-closed rule:
 
-POSSIBLY_EXPOSED is treated as exposure for evaluation, matching the architecture's crash-uncertainty rule.
+- with no grounded achieved milestone, independence is not scored;
+- if relevant protected assistance was exposed or possibly exposed for an achieved milestone, independence is not scored;
+- if exposed level-positive assistance cannot be mapped to a milestone, independence is not scored;
+- only when at least one milestone is grounded as achieved and the exposure ledger contains no relevant or unattributed assistance does independence score 100.
 
-Independence is not scored when no milestone has grounded achievement evidence.
+The null result in assistance-ambiguous cases is intentional: a protected disclosure may have been exposed before or after the candidate's progress, and SessionState alone cannot prove which. Milestone assistance IDs/levels remain structural exposure associations, not causal claims that the disclosure caused achievement.
+
+POSSIBLY_EXPOSED is treated as exposure for this ambiguity check, matching the architecture's crash-uncertainty rule.
 
 ## Hint responsiveness
 
@@ -161,13 +160,15 @@ Until evaluation receives authoritative exposure ordering, hint responsiveness r
 
 Error recovery is based on evidence-history transitions, not session length.
 
-An error episode can begin from LOCAL_ERROR, STRUCTURAL_ERROR, MISUNDERSTOOD_PROBLEM, UNJUSTIFIED, REGRESSING, or evidence invalidated as STALE.
+An error episode can begin from a non-stale LOCAL_ERROR, STRUCTURAL_ERROR, MISUNDERSTOOD_PROBLEM, UNJUSTIFIED, or REGRESSING record.
 
-A later supported replacement such as CORRECT, UNDERSTANDS, JUSTIFIED, COMPLETE, or PROGRESSING records recovery.
+A later non-stale supported replacement such as CORRECT, UNDERSTANDS, JUSTIFIED, COMPLETE, or PROGRESSING records recovery. A STALE record is invalidated evidence, not proof that the student made an error, so stale-to-fresh revalidation by itself is not scored as error recovery.
 
-Repeated negative evidence without a later supported replacement records an unrecovered episode. A later supported different APPROACH can record a grounded approach-switch recovery.
+Repeated negative evidence without a later supported replacement records an unrecovered episode. A later supported different APPROACH can record a grounded approach-switch recovery only on the same evidence dimension and only after the latest unresolved error on the abandoned approach.
 
-If no error opportunity exists, error recovery is not scored. The evaluator does not award 100 merely for avoiding a recorded error.
+Approach-switch lookup is indexed by evidence dimension and sequence so the declared evidence bound cannot degrade into a quadratic recovery scan.
+
+If no grounded negative evidence creates an error opportunity, error recovery is not scored. The evaluator does not award 100 merely for avoiding a recorded error.
 
 ## Support levels
 
@@ -182,7 +183,7 @@ These are bounded deterministic categories, not probabilities.
 
 Where an authoritative evidence record has inferenceConfidence, that recorded value may affect the categorical support bucket. Where a verifier has interpretation confidence, that recorded value may affect verifier-backed support.
 
-For structural signals such as grounded achieved milestones or recovery opportunities, support uses deterministic coverage counts directly. No synthetic probabilistic confidence is generated.
+Grounded coverage counts can strengthen structural support, while recorded evidence inferenceConfidence and verifier interpretationConfidence can constrain it. Recovery support is tied to the recorded confidence of the negative and replacement evidence rather than to episode count alone. Repeated model-inferred evidence cannot become STRONG merely by being repeated. No synthetic probabilistic confidence is generated.
 
 INSUFFICIENT always implies score = null.
 
@@ -190,9 +191,11 @@ INSUFFICIENT always implies score = null.
 
 Evaluation results retain compact references rather than copied source content.
 
-Reference kinds are EVIDENCE_EVENT, VERIFICATION_REQUEST, DELIVERY, TURN, and MILESTONE.
+Reference kinds are EVIDENCE_EVENT, VERIFICATION_REQUEST, DELIVERY, TURN, and MILESTONE. Evidence and verification provenance IDs used by scoring are checked against SessionState.eventIds; an invented or missing event reference fails evaluation structurally rather than becoming support.
 
-Milestone results also retain the protected disclosure IDs attributed as assistance and the milestone's valid approach IDs.
+VERIFIED provenance is attached to current correctness only when the active evidence record specifically cites that verification request's authoritative request event. Historical VERIFIED requests with the same EvidenceKey are not treated as current support merely because the key matches.
+
+Milestone results also retain the protected disclosure IDs structurally associated with exposure and the milestone's valid approach IDs.
 
 A future replay UI can resolve these references against authoritative history to explain a result without embedding transcripts or protected solution text into the evaluation object.
 
@@ -213,7 +216,7 @@ Composite metadata is:
 - PARTIAL: one or more positively weighted dimensions was unsupported and omitted;
 - NOT_SCORED: no positively weighted dimension was supported.
 
-Unknown dimensions are never silently assigned 0 or 100.
+Unknown dimensions are never silently assigned 0 or 100. SessionEvaluationSchema also cross-checks the serialized score breakdown, included/omitted dimensions, composite status, renormalized composite score, and composite support level so a tampered but individually well-typed result cannot claim inconsistent composite metadata.
 
 The rubric is strict:
 
@@ -222,6 +225,15 @@ The rubric is strict:
 - unknown fields are rejected.
 
 A Partial<EvaluationRubric> call still merges with defaults first. If that effective rubric no longer sums to 1, evaluation rejects it rather than silently normalizing malformed intent.
+
+## Grounded feedback
+
+Strength and improvement text is derived from the same counted evidence facts as the dimensions. It does not use generic score bands such as "80+ is a strength" or "below 70 needs improvement."
+
+- correctness/rigor strength statements require positively grounded subjects, no negative subjects in that dimension, and at least MODERATE support;
+- correctness/rigor improvement statements are emitted whenever grounded negative subjects remain, regardless of the overall average;
+- an independence strength is emitted only when independence itself was scoreable at 100, so unattributed or timing-ambiguous assistance suppresses that claim;
+- recovery is called a strength only when grounded recovery episodes exist and no recorded recovery opportunity remains unresolved.
 
 ## Lifecycle and incomplete sessions
 
@@ -233,7 +245,7 @@ Evaluation reports both sessionStatus and a derived completion state:
 - ARCHIVED_INCOMPLETE;
 - ARCHIVED_COMPLETED.
 
-Summary language reports lifecycle context separately from score. An incomplete or archived-incomplete session is not described as though the candidate completed an interview.
+Summary language reports lifecycle context separately from score. An incomplete or archived-incomplete session is not described as though the candidate completed an interview. Evaluator input validation also rejects contradictory lifecycle projections such as a CREATED session marked started, an ACTIVE session carrying terminal timestamps, or terminal states missing their required timestamp.
 
 ## Determinism and timestamp handling
 
@@ -251,16 +263,29 @@ Object/map insertion order does not affect evaluation output.
 
 Evaluation rejects structurally pathological input instead of silently truncating it.
 
-Current explicit bounds cover:
+Current explicit safety ceilings cover:
 
-- turns;
-- evidence-history records;
-- deliveries;
-- verification requests;
-- reasoning-graph milestones;
-- disclosure references.
+| Input | Ceiling |
+| --- | ---: |
+| turns | 10,000 |
+| authoritative event IDs | 250,000 |
+| evidence-history records | 50,000 |
+| evidence provenance references | 150,000 |
+| deliveries | 20,000 |
+| delivery disclosure references | 50,000 |
+| verification requests | 20,000 |
+| verification provenance references | 100,000 |
+| reasoning-graph milestones | 5,000 |
+| reasoning-graph edges | 50,000 |
+| approaches | 10,000 |
+| protected disclosures | 20,000 |
+| aggregate milestone reasoning references | 100,000 |
+| auxiliary problem items, including formulations/common errors/extensions | 100,000 |
+| problem-definition string characters processed for fingerprint validation | 2,000,000 |
 
-Errors identify the structural bound or identity problem. They do not copy transcripts, canonical solutions, provider secrets, or raw provider/worker error payloads.
+These ceilings are execution-safety limits, not score heuristics. Evaluation rejects an oversized input instead of truncating it. Aggregate bounds cover nested provenance/reference arrays so a small top-level object count cannot hide unbounded work.
+
+Errors identify the structural bound or identity problem. They do not copy transcripts, canonical solutions, provider secrets, protected disclosure facts, or raw provider/worker error payloads.
 
 ## Future fallible qualitative evaluator
 
@@ -277,7 +302,7 @@ evaluation-model-seam.ts defines a deliberately non-authoritative boundary:
             v
     optional future application policy
 
-The current seam accepts a communication proposal only when every cited evidence reference is in the application-supplied allowlist.
+The current seam accepts a communication proposal only when the proposal is schema-valid and every cited evidence reference is in the application-supplied allowlist. Malformed fallible proposals fail closed as INVALID_PROPOSAL rather than throwing through the evaluator boundary.
 
 Passing that provenance check does not make the proposed score authoritative. The deterministic SessionEvaluation scorer does not consume these proposals in this implementation.
 
