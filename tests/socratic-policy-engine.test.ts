@@ -1086,6 +1086,36 @@ describe("production Socratic policy engine", () => {
     }
   });
 
+  it("targets the newest active contradiction instead of the alphabetically first one", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "model-relations", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(sixPeopleProblem, "model-relations", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "STRUCTURAL_ERROR"
+    );
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("AMBIGUOUS_STATEMENT");
+    expect(decision.reasonCode).toBe("CONFLICTING_ACTIVE_SIGNALS");
+    expect(decision.realizationRequest.target).toBe("milestone:choose-vertex");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
   it("does not let an older error on an abandoned branch override newer alternate-branch progress", () => {
     const { state: base, turnId } = makeState();
     let state = withEvidence(
