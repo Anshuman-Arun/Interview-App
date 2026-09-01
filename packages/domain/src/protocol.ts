@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DeliveryCommandSchema, DeliveryStatusSchema } from "./delivery.js";
+import { InterviewCatalogEntrySchema, InterviewSessionConfigurationSchema } from "./session-configuration.js";
 import {
   DeliveryIdSchema,
   InputEpisodeIdSchema,
@@ -64,7 +65,18 @@ const ProtocolCommandBaseSchema = z.object({
 
 export const StartSessionCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("START_SESSION"),
-  problemId: z.string().min(1).optional()
+  /**
+   * New callers should provide configuration. problemId is a legacy Ramsey-only
+   * compatibility field and may not be combined with configuration.
+   */
+  configuration: InterviewSessionConfigurationSchema.optional(),
+  problemId: z.string().min(1).max(128).optional()
+}).strict();
+
+export const ListInterviewCatalogCommandSchema = z.object({
+  protocolVersion: ProtocolVersionSchema,
+  requestId: RequestIdSchema,
+  type: z.literal("LIST_INTERVIEW_CATALOG")
 }).strict();
 
 export const ListSessionsCommandSchema = z.object({
@@ -113,6 +125,7 @@ export const AcknowledgeDeliveryCompletedCommandSchema = ProtocolCommandBaseSche
 
 export const ClientCommandSchema = z.discriminatedUnion("type", [
   StartSessionCommandSchema,
+  ListInterviewCatalogCommandSchema,
   ListSessionsCommandSchema,
   ResumeSessionCommandSchema,
   CompleteSessionCommandSchema,
@@ -133,7 +146,14 @@ const ResponseBaseSchema = z.object({
 export const SessionStartedResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("SESSION_STARTED"),
-  sessionId: SessionIdSchema
+  sessionId: SessionIdSchema,
+  configuration: InterviewSessionConfigurationSchema.optional()
+}).strict();
+
+export const InterviewCatalogResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("INTERVIEW_CATALOG"),
+  entries: z.array(InterviewCatalogEntrySchema).max(256)
 }).strict();
 
 export const SessionsListResponseSchema = ResponseBaseSchema.extend({
@@ -149,7 +169,9 @@ export const SessionResumedResponseSchema = ResponseBaseSchema.extend({
   sequence: NonnegativeSafeIntegerSchema,
   started: z.boolean(),
   status: SessionStatusSchema,
+  configuration: InterviewSessionConfigurationSchema.optional(),
   problemId: z.string().min(1).optional(),
+  problemVersion: z.string().min(1).optional(),
   contextEpoch: z.number().int().nonnegative(),
   deliveryStatuses: z.record(DeliveryIdSchema, DeliveryStatusSchema),
   history: z.array(SessionHistoryEntrySchema).default([])
@@ -183,6 +205,9 @@ export const SessionSummaryResponseSchema = ResponseBaseSchema.extend({
   sequence: NonnegativeSafeIntegerSchema,
   started: z.boolean(),
   status: SessionStatusSchema.optional(),
+  configuration: InterviewSessionConfigurationSchema.optional(),
+  problemId: z.string().min(1).optional(),
+  problemVersion: z.string().min(1).optional(),
   contextEpoch: z.number().int().nonnegative(),
   deliveryStatuses: z.record(DeliveryIdSchema, DeliveryStatusSchema),
   history: z.array(SessionHistoryEntrySchema).default([])
@@ -205,6 +230,7 @@ export const DeliveryAcknowledgedResponseSchema = ResponseBaseSchema.extend({
 
 export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [
   SessionStartedResponseSchema,
+  InterviewCatalogResponseSchema,
   SessionsListResponseSchema,
   SessionResumedResponseSchema,
   SessionCompletedResponseSchema,
