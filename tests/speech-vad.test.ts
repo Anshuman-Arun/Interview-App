@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   AdaptiveEndpointingPolicy,
+  ScriptedVadBackend,
   VoiceActivityStateMachine
 } from "../packages/local-compute/src/speech-vad.js";
 
@@ -39,6 +40,13 @@ describe("deterministic voice activity state machine", () => {
     expect(() => vad.step(1, 20)).toThrow();
     vad.reset();
     expect(vad.snapshot().state).toBe("SILENCE");
+  });
+
+  it("snapshots scripted backend inputs so caller mutation cannot change results", async () => {
+    const probabilities = [1, 0];
+    const backend = new ScriptedVadBackend(probabilities);
+    probabilities[0] = 0;
+    await expect(backend.classify({} as never)).resolves.toEqual({ speechProbability: 1 });
   });
 
   it("is deterministic for arbitrary bounded VAD observations", () => {
