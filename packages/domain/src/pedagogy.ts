@@ -28,8 +28,10 @@ export type DisclosureLevel = z.infer<typeof DisclosureLevelSchema>;
 
 export const RealizationRequestSchema = z.object({
   requiredAction: SocraticActionSchema,
-  target: z.string().min(1).optional(),
+  target: z.string().trim().min(1).max(512).optional(),
   maximumDisclosure: DisclosureLevelSchema,
-  allowedDisclosureIds: z.array(DisclosureIdSchema).max(256).optional()
+  allowedDisclosureIds: z.array(DisclosureIdSchema).max(256)
+    .refine((ids) => new Set(ids).size === ids.length, "Allowed disclosure IDs must be unique")
+    .optional()
 }).strict();
 export type RealizationRequest = z.infer<typeof RealizationRequestSchema>;
