@@ -30,10 +30,10 @@ const QuantResearchFamilySchema = z.enum([
   "CONSTRAINED_OPTIMIZATION"
 ]);
 const QuantResearchPublicValueSchema = z.union([
-  z.number().finite(),
+  z.number(),
   z.string(),
   z.boolean(),
-  z.array(z.number().finite()).max(128),
+  z.array(z.number()).max(128),
   z.array(z.string()).max(128)
 ]);
 const QuantResearchPublicStateSchema = z.object({
