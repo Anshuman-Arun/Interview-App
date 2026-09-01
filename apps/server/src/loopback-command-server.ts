@@ -5,8 +5,10 @@ import {
   ClientCommandSchema,
   ProtocolErrorResponseSchema,
   ProtocolSuccessResponseSchema,
+  SessionIdSchema,
   type ClientCommand,
   type LocalTransportSecurity,
+  type SessionId,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse
 } from "../../../packages/domain/src/index.js";
@@ -16,7 +18,9 @@ import {
   createCommandEnvelope
 } from "../../../packages/interview-engine/src/index.js";
 import { RequestIdConflictError } from "../../../packages/persistence/src/index.js";
+import { MAX_REPLAY_IDENTIFIER_CHARS } from "../../../packages/replay/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import type { SessionReadService } from "./session-read-service.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import {
   listInterviewCatalogEntries,
@@ -29,7 +33,9 @@ import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compat
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const COMMAND_PATH = "/v1/commands";
-const CORS_ALLOWED_METHOD = "POST";
+const SESSION_READ_HISTORY_PATH = "/v1/read/sessions";
+const CORS_COMMAND_METHOD = "POST";
+const CORS_READ_METHOD = "GET";
 const CORS_ALLOWED_HEADERS: ReadonlySet<string> = new Set([
   "content-type",
   "x-interview-client-token"
@@ -39,6 +45,7 @@ const CORS_ALLOW_HEADERS = "content-type, x-interview-client-token";
 export interface LoopbackCommandServerOptions {
   readonly security: LocalTransportSecurity;
   readonly sessions: SessionRecoveryCoordinator;
+  readonly reads?: SessionReadService;
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly port?: number;
 }
@@ -115,14 +122,29 @@ export class LoopbackCommandServer {
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const origin = headerValue(request, "origin");
     try {
-      if (request.method === "OPTIONS" && request.url === COMMAND_PATH) {
+      if (request.method === "OPTIONS") {
+        const allowedMethod = allowedPreflightMethod(request.url);
+        if (allowedMethod === undefined) {
+          throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
+        }
         this.authorizeOrigin(origin);
-        assertValidPreflight(request);
-        sendPreflight(response, origin);
+        assertValidPreflight(request, allowedMethod);
+        sendPreflight(response, origin, allowedMethod);
         return;
       }
       this.authorize(request, origin);
-      if (request.method !== "POST" || request.url !== COMMAND_PATH) {
+
+      if (request.method === CORS_READ_METHOD) {
+        const route = parseReadRoute(request.url);
+        if (route === undefined || this.options.reads === undefined) {
+          throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
+        }
+        const result = this.dispatchRead(route);
+        sendJson(response, 200, result, origin);
+        return;
+      }
+
+      if (request.method !== CORS_COMMAND_METHOD || request.url !== COMMAND_PATH) {
         throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
       }
       const contentType = headerValue(request, "content-type");
@@ -158,6 +180,25 @@ export class LoopbackCommandServer {
 
   private allowedOrigin(origin: string | undefined): boolean {
     return origin !== undefined && this.options.security.allowedOrigins.has(origin);
+  }
+
+  private dispatchRead(route: ReadRoute): unknown {
+    const reads = this.options.reads;
+    if (reads === undefined) {
+      throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
+    }
+
+    if (route.kind === "HISTORY") {
+      return reads.readHistory();
+    }
+
+    const result = route.kind === "EVALUATION"
+      ? reads.readEvaluation(route.sessionId)
+      : reads.readReplay(route.sessionId);
+    if (result === null) {
+      throw new ProtocolHttpError(404, "NOT_FOUND", "Session not found");
+    }
+    return result;
   }
 
   private async dispatch(command: ClientCommand): Promise<ProtocolSuccessResponse> {
@@ -407,6 +448,60 @@ export class LoopbackCommandServer {
 
 }
 
+type ReadRoute =
+  | { readonly kind: "HISTORY" }
+  | { readonly kind: "EVALUATION"; readonly sessionId: SessionId }
+  | { readonly kind: "REPLAY"; readonly sessionId: SessionId };
+
+function parseReadRoute(rawUrl: string | undefined): ReadRoute | undefined {
+  if (rawUrl === undefined || rawUrl.includes("?") || rawUrl.includes("#")) {
+    return undefined;
+  }
+  if (rawUrl === SESSION_READ_HISTORY_PATH) {
+    return { kind: "HISTORY" };
+  }
+
+  const match = /^\/v1\/read\/sessions\/([^/]+)\/(evaluation|replay)$/u.exec(rawUrl);
+  if (match === null) return undefined;
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(match[1] ?? "");
+  } catch {
+    return undefined;
+  }
+  if (
+    decoded.length === 0
+    || decoded.length > MAX_REPLAY_IDENTIFIER_CHARS
+    || decoded === "."
+    || decoded === ".."
+    || containsUnsafeReadPathCharacter(decoded)
+  ) {
+    return undefined;
+  }
+
+  const parsed = SessionIdSchema.safeParse(decoded);
+  if (!parsed.success) return undefined;
+  return match[2] === "evaluation"
+    ? { kind: "EVALUATION", sessionId: parsed.data }
+    : { kind: "REPLAY", sessionId: parsed.data };
+}
+
+function containsUnsafeReadPathCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (character === "/" || character === "\\" || code <= 31 || code === 127) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | undefined {
+  if (rawUrl === COMMAND_PATH) return CORS_COMMAND_METHOD;
+  return parseReadRoute(rawUrl) === undefined ? undefined : CORS_READ_METHOD;
+}
+
 function toBoundAddress(host: "127.0.0.1" | "::1", address: AddressInfo): BoundLoopbackAddress {
   const bracketedHost = host === "::1" ? `[${host}]` : host;
   return { host, port: address.port, url: `http://${bracketedHost}:${String(address.port)}` };
@@ -461,13 +556,16 @@ function classifyError(error: unknown): ProtocolHttpError {
   return new ProtocolHttpError(500, "INTERNAL_ERROR", "Command could not be completed");
 }
 
-function assertValidPreflight(request: IncomingMessage): void {
+function assertValidPreflight(
+  request: IncomingMessage,
+  allowedMethod: "GET" | "POST"
+): void {
   const requestedMethod = headerValue(request, "access-control-request-method");
-  if (requestedMethod?.trim().toUpperCase() !== CORS_ALLOWED_METHOD) {
+  if (requestedMethod?.trim().toUpperCase() !== allowedMethod) {
     throw new ProtocolHttpError(
       400,
       "INVALID_COMMAND",
-      "CORS preflight requests may target only POST"
+      "CORS preflight method does not match the requested endpoint"
     );
   }
 
@@ -486,11 +584,15 @@ function assertValidPreflight(request: IncomingMessage): void {
   }
 }
 
-function sendPreflight(response: ServerResponse, origin: string | undefined): void {
+function sendPreflight(
+  response: ServerResponse,
+  origin: string | undefined,
+  allowedMethod: "GET" | "POST"
+): void {
   if (origin === undefined) throw new Error("Allowed preflight is missing Origin");
   response.writeHead(204, {
     "access-control-allow-origin": origin,
-    "access-control-allow-methods": CORS_ALLOWED_METHOD,
+    "access-control-allow-methods": allowedMethod,
     "access-control-allow-headers": CORS_ALLOW_HEADERS,
     "access-control-max-age": "300",
     "cache-control": "no-store",
@@ -503,7 +605,7 @@ function sendPreflight(response: ServerResponse, origin: string | undefined): vo
 function sendJson(
   response: ServerResponse,
   status: number,
-  body: ProtocolSuccessResponse | ProtocolErrorResponse,
+  body: unknown,
   origin?: string
 ): void {
   const json = JSON.stringify(body);

@@ -51,6 +51,7 @@ export function installDesktopClientTokenInjector(
     "/v1/renderer-stream"
   );
   const endpoints = new Set([commandUrl, rendererStreamUrl]);
+  const commandOrigin = new URL(commandUrl).origin;
   const filterOrigins = [...new Set(
     [...endpoints].map((endpoint) => `${new URL(endpoint).origin}/*`)
   )];
@@ -64,8 +65,12 @@ export function installDesktopClientTokenInjector(
       details.webContentsId !== input.webContentsId
       || trustedMainFrame === null
       || details.frame !== trustedMainFrame
-      || details.method !== "POST"
-      || !endpoints.has(details.url)
+      || !isAllowedBackendRequest(
+        details.method,
+        details.url,
+        endpoints,
+        commandOrigin
+      )
       || !hasExactSingleHeaderValue(
         details.requestHeaders,
         "x-interview-client-token",
@@ -147,4 +152,64 @@ function hasExactSingleHeaderValue(
     ([key]) => key.toLowerCase() === name.toLowerCase()
   );
   return matches.length === 1 && matches[0]?.[1] === expectedValue;
+}
+
+
+function isAllowedBackendRequest(
+  method: string,
+  url: string,
+  postEndpoints: ReadonlySet<string>,
+  commandOrigin: string
+): boolean {
+  if (method === "POST") return postEndpoints.has(url);
+  if (method !== "GET") return false;
+  return isExactSessionReadEndpoint(url, commandOrigin);
+}
+
+function isExactSessionReadEndpoint(value: string, commandOrigin: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (
+    parsed.origin !== commandOrigin
+    || parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+  ) {
+    return false;
+  }
+  if (parsed.pathname === "/v1/read/sessions") return true;
+
+  const match = /^\/v1\/read\/sessions\/([^/]+)\/(evaluation|replay)$/u.exec(
+    parsed.pathname
+  );
+  if (match === null) return false;
+
+  let sessionId: string;
+  try {
+    sessionId = decodeURIComponent(match[1] ?? "");
+  } catch {
+    return false;
+  }
+  return (
+    sessionId.length > 0
+    && sessionId.length <= 512
+    && sessionId !== "."
+    && sessionId !== ".."
+    && !containsUnsafeReadPathCharacter(sessionId)
+  );
+}
+
+function containsUnsafeReadPathCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (character === "/" || character === "\\" || code <= 31 || code === 127) {
+      return true;
+    }
+  }
+  return false;
 }

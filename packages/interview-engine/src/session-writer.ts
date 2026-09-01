@@ -315,6 +315,18 @@ export class SessionRuntimeRegistry {
     return this.store.listSessions();
   }
 
+  public sessionCount(): number {
+    return this.store.sessionCount();
+  }
+
+  public listRecentSessionIds(limit: number): readonly SessionId[] {
+    return this.store.listRecentSessionIds(limit);
+  }
+
+  public eventCount(sessionId: SessionId): number {
+    return this.store.eventCount(sessionId);
+  }
+
   public loadEvents(sessionId: SessionId): readonly SessionEvent[] {
     return this.store.load(sessionId);
   }
