@@ -1692,6 +1692,32 @@ describe("microphone capture lifecycle", () => {
     expect(capture.state).toBe("FAILED");
   });
 
+  it("bounds hostile microphone track collections before Web Audio setup", async () => {
+    const tracks = Array.from({ length: 33 }, () => new FakeTrack());
+    let contextCreations = 0;
+    const capture = new BrowserMicrophoneCapture({
+      mediaDevices: {
+        getUserMedia: async () => ({
+          getAudioTracks: () => tracks
+        })
+      },
+      createAudioContext: () => {
+        contextCreations += 1;
+        return new FakeCaptureContext();
+      },
+      now: () => 0
+    });
+
+    await expect(capture.start({ onFrame: () => undefined })).rejects.toMatchObject({
+      code: "CAPTURE_FAILED"
+    });
+
+    expect(contextCreations).toBe(0);
+    expect(tracks.slice(0, 32).every((track) => track.stopCount === 1)).toBe(true);
+    expect(tracks[32]?.stopCount).toBe(0);
+    expect(capture.state).toBe("FAILED");
+  });
+
   it("rejects malformed microphone track readyState values before Web Audio setup", async () => {
     const track = new FakeTrack("invalid-state" as MediaStreamTrackState);
     const context = new FakeCaptureContext();
