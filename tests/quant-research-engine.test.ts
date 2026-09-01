@@ -81,7 +81,7 @@ describe("deterministic Quant Research interview engine", () => {
     [{ ...sampling, config: { ...sampling.config, maxSamples: 33 } }, "oversized sample budget"],
     [{ ...model, config: { ...model.config, extra: true } }, "unknown config field"],
     [{ ...optimization, extra: true }, "unknown definition field"]
-  ] as const)("rejects malformed definitions: %s (%s)", (definition) => {
+  ] as const)("rejects malformed definitions: %s (%s)", (definition, _description) => {
     expectCode(() => new QuantResearchEngine(definition), "INVALID_DEFINITION");
   });
 
