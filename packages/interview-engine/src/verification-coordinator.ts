@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   CommandEnvelopeSchema,
+  CommandFingerprintSchema,
   EvidenceKeySchema,
   EvidenceValueSchema,
   EventIdSchema,
@@ -48,6 +49,7 @@ export type VerificationWorkItem = z.infer<typeof VerificationWorkItemSchema>;
 
 const FormalInterpretationDiscardReasonSchema = z.enum([
   "MISSING_GENERATION_ID",
+  "SESSION_NOT_ACTIVE",
   "UNKNOWN_GENERATION",
   "GENERATION_NOT_ACTIVE",
   "CALLBACK_BASIS_MISMATCH",
@@ -72,6 +74,7 @@ export type FormalInterpretationAdmissionResult = z.infer<typeof FormalInterpret
 
 const VerificationDiscardReasonSchema = z.enum([
   "UNKNOWN_REQUEST",
+  "SESSION_NOT_ACTIVE",
   "REQUEST_NOT_PENDING",
   "CALLBACK_BASIS_MISMATCH",
   "COMPATIBILITY_INCOMPATIBLE",
@@ -130,20 +133,41 @@ export class VerificationCoordinator {
     readonly proposal: unknown;
     readonly verifier: string;
     readonly evidenceKey: EvidenceKey;
+    readonly expectedProblemVersion?: string;
+    readonly sourceRequestFingerprint?: string;
   }) {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const proposal = FormalInterpretationProposalSchema.parse(input.proposal);
     const verifier = VerifierIdSchema.parse(input.verifier);
     const evidenceKey = EvidenceKeySchema.parse(input.evidenceKey);
+    const expectedProblemVersion = input.expectedProblemVersion === undefined
+      ? undefined
+      : z.string().min(1).max(128).parse(input.expectedProblemVersion);
+    const sourceRequestFingerprint = input.sourceRequestFingerprint === undefined
+      ? undefined
+      : CommandFingerprintSchema.parse(input.sourceRequestFingerprint);
     const verificationRequestId = newRequestId();
 
     return this.writer.execute(envelope, {
       operation: "REQUEST_VERIFICATION_FROM_PROPOSAL",
-      payload: { proposal, verifier, evidenceKey }
+      payload: {
+        proposal,
+        verifier,
+        evidenceKey,
+        ...(expectedProblemVersion === undefined ? {} : { expectedProblemVersion }),
+        ...(sourceRequestFingerprint === undefined ? {} : { sourceRequestFingerprint })
+      }
     }, FormalInterpretationAdmissionResultSchema, (state) => {
       const generationId = envelope.generationId;
       if (generationId === undefined) {
         return { drafts: [], result: { accepted: false as const, reason: "MISSING_GENERATION_ID" as const } };
+      }
+
+      if (state.status !== "ACTIVE") {
+        return {
+          drafts: [],
+          result: { accepted: false as const, generationId, reason: "SESSION_NOT_ACTIVE" as const }
+        };
       }
 
       const generation = state.generations[generationId];
@@ -196,7 +220,10 @@ export class VerificationCoordinator {
       if (compatibility === "INCOMPATIBLE") return reject("COMPATIBILITY_INCOMPATIBLE", true);
       if (compatibility === "UNKNOWN") return reject("COMPATIBILITY_UNKNOWN", true);
 
-      if (state.problem?.id !== evidenceKey.problemId) {
+      if (
+        state.problem?.id !== evidenceKey.problemId
+        || (expectedProblemVersion !== undefined && state.problem.version !== expectedProblemVersion)
+      ) {
         return reject("PROBLEM_SCOPE_MISMATCH", false);
       }
       if (evidenceKey.subject.kind !== "CLAIM" || evidenceKey.dimension !== "CORRECTNESS") {
@@ -276,6 +303,7 @@ export class VerificationCoordinator {
         evidenceKey
       }
     }, VerificationWorkItemSchema, (state) => {
+      if (state.status !== "ACTIVE") throw new Error("Verification requires an active session");
       const episode = state.inputEpisodes[input.inputEpisodeId];
       const turn = state.turns[input.turnId];
       if (episode === undefined || episode.status !== "COMMITTED") throw new Error("Verification requires a committed InputEpisode");
@@ -362,6 +390,8 @@ export class VerificationCoordinator {
         }],
         result: { accepted: false as const, verificationRequestId, reason }
       });
+
+      if (state.status !== "ACTIVE") return discard("SESSION_NOT_ACTIVE");
 
       if (
         envelope.inputEpisodeId !== request.basis.inputEpisodeId
