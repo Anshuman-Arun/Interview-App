@@ -656,10 +656,40 @@ export const ReplayReadEntrySchema = z.object({
     });
   }
 
+  const isUnknownBoundaryEntry =
+    entry.stateValidation === "UNKNOWN_EVENT"
+    || entry.stateValidation === "UNAVAILABLE_AFTER_UNKNOWN";
+  if (
+    (entry.kind === "UNKNOWN_EVENT") !== (entry.stateValidation === "UNKNOWN_EVENT")
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Unknown replay events require the unknown-event validation state"
+    });
+  }
+  if (
+    isUnknownBoundaryEntry
+    && (
+      Object.keys(entry.relations).length !== 0
+      || entry.text !== undefined
+      || entry.delivery !== undefined
+      || entry.verification !== undefined
+      || entry.evidence !== undefined
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay payload must remain withheld at an unknown semantic boundary"
+    });
+  }
+
   const textMayBeRendered =
-    entry.kind === "TURN_COMMITTED"
-    || entry.kind === "BOARD_PATCH_COMMITTED"
-    || entry.kind === "DELIVERY_EXPOSED";
+    !isUnknownBoundaryEntry
+    && (
+      entry.kind === "TURN_COMMITTED"
+      || entry.kind === "BOARD_PATCH_COMMITTED"
+      || entry.kind === "DELIVERY_EXPOSED"
+    );
   if (entry.text !== undefined && !textMayBeRendered) {
     context.addIssue({
       code: "custom",
