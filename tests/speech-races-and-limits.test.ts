@@ -287,6 +287,32 @@ describe("speech worker adversarial races and hard limits", () => {
     await expect(pending).resolves.toEqual([]);
   });
 
+  it("replays completed frame and flush outcomes after shutdown while rejecting new work", async () => {
+    const frameSubject = worker();
+    const completedFrame = frame(0, false, "replay-after-shutdown");
+    const firstFrameResult = await frameSubject.submitFrame(completedFrame.envelope, completedFrame.pcm);
+    await frameSubject.shutdown();
+    await expect(frameSubject.submitFrame(completedFrame.envelope, completedFrame.pcm))
+      .resolves.toEqual(firstFrameResult);
+
+    const newFrame = frame(0, false, "new-after-shutdown");
+    await expect(frameSubject.submitFrame(newFrame.envelope, newFrame.pcm))
+      .rejects.toMatchObject({ code: "SHUTTING_DOWN" });
+
+    const flushSubject = worker();
+    const speech = frame(0, true, "flush-replay-after-shutdown");
+    await flushSubject.submitFrame(speech.envelope, speech.pcm);
+    const flushRequest = {
+      protocolVersion: 1 as const,
+      requestId: newRequestId(),
+      streamId: "flush-replay-after-shutdown",
+      type: "FLUSH_SPEECH" as const
+    };
+    const firstFlushResult = await flushSubject.flush(flushRequest);
+    await flushSubject.shutdown();
+    await expect(flushSubject.flush(flushRequest)).resolves.toEqual(firstFlushResult);
+  });
+
   it("runtime-rejects malformed control messages", async () => {
     const subject = worker();
     await expect(subject.handleControl({
