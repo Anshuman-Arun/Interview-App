@@ -59,7 +59,7 @@ Evidence remains scoped to its problem plus claim/milestone/skill/approach subje
 
 Evidence below the actionable confidence threshold is not promoted into a confident correction or progress claim. A newer low-confidence inference can force clarification rather than silently losing to older confident evidence.
 
-Accepted deterministic verification is also application-owned evidence. The policy validates request/result identity, result-arrival ordering, verifier identity, interpretation confidence, evidence provenance, claim/correctness scope, and `GenerationBasis` compatibility. Low-interpretation-confidence accepted results are treated as unresolved rather than confidently verified/contradicted.
+Accepted deterministic verification is also application-owned evidence. The policy validates request/result identity, result-arrival ordering, verifier identity, interpretation confidence, evidence provenance, claim/correctness scope, and `GenerationBasis` compatibility. Low-interpretation-confidence accepted results are treated as unresolved rather than confidently verified/contradicted. A `CORRECT` evidence record derived from verification inherits that same basis freshness through its verification-request provenance; stale or malformed verification mirrors cannot remain actionable after the verification itself becomes incompatible.
 
 ## Reasoning graph and alternate approaches
 
@@ -80,7 +80,7 @@ A completed primary approach triggers an alternate-solution request when another
 
 Escalation is evidence/history-driven, not turn-count-driven.
 
-Only assistance that reached `EXPOSED`, `COMPLETED`, or `POSSIBLY_EXPOSED` counts as prior disclosed assistance. Cancelled or merely queued content does not. Assistance is tied to the generation-bound action snapshot and exact target, not to a generic "latest step" label.
+Only assistance that reached `EXPOSED`, `COMPLETED`, or `POSSIBLY_EXPOSED` counts as prior disclosed assistance. Cancelled or merely queued content does not. Assistance is tied to the generation-bound action snapshot and exact target, not to a generic "latest step" label. Historical assistance must also correspond to a recorded, schema-valid interviewer proposal and to a realization that proposal actually contained; a forged `VALIDATED` status or unrelated exposed atom fails closed.
 
 A first stagnation/error never jumps directly to an explicit hint. Repeated exposed interventions progress through lower-disclosure actions first. An explicit hint is available only when the graph/disclosure metadata authorizes a new protected fact at the appropriate level. Once high-disclosure assistance was exposed or possibly exposed for the target, the policy suppresses repeated high disclosure and returns to clarification rather than forgetting the help.
 
