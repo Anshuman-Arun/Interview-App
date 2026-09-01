@@ -79,18 +79,6 @@ function milestoneKey(
   };
 }
 
-function approachKey(
-  problem: InterviewProblem,
-  approachId: string,
-  dimension: EvidenceKey["dimension"]
-): EvidenceKey {
-  return {
-    problemId: problem.id,
-    subject: { kind: "APPROACH", approachId },
-    dimension
-  };
-}
-
 function claimKey(
   problem: InterviewProblem,
   claimId: string,
