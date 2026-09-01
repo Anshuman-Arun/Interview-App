@@ -312,7 +312,7 @@ export const ReplayReadEntrySchema = z.object({
     entry.kind !== "DELIVERY_EXPOSED"
     && entry.delivery !== undefined
     && (
-      entry.delivery.contentWithheld !== true
+      !entry.delivery.contentWithheld
       || entry.delivery.boardAction !== undefined
     )
   ) {
