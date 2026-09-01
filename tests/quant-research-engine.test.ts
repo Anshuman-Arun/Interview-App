@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DeterministicRng } from "../packages/local-compute/src/quant-research/deterministic-rng.js";
 import {
   QUANT_RESEARCH_FAMILIES,
   QUANT_RESEARCH_GENERATOR_VERSION,
@@ -77,6 +78,11 @@ function visibleNumber(state: ReturnType<QuantResearchEngine["getState"]>, key: 
 }
 
 describe("deterministic Quant Research interview engine", () => {
+  it("shuffles undefined-valued elements according to deterministic Fisher-Yates draws", () => {
+    const rng = new DeterministicRng(0, "test");
+    expect(rng.shuffle<number | undefined>([undefined, 1, 2])).toEqual([1, 2, undefined]);
+  });
+
   it("registers exactly the five supported compatibility tuples", () => {
     expect(getQuantResearchRegistry()).toHaveLength(5);
     expect(new Set(getQuantResearchRegistry().map((item) => item.family)).size).toBe(5);
