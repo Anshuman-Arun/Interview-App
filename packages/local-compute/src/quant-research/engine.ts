@@ -119,7 +119,7 @@ function clone<T>(value: T): T {
 }
 
 function boundedScore(value: number): number {
-  if (!Number.isFinite(value)) return 0;
+  if (!Number.isFinite(value)) throw new Error("Non-finite evidence score");
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
