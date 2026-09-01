@@ -69,12 +69,12 @@ function evidenceSubjectId(key: EvidenceKey): string {
  * evidence IDs may themselves contain "|".
  */
 export function evidenceKeyIdentity(key: EvidenceKey): string {
-  return JSON.stringify([
+  return `[${[
     key.problemId,
     key.subject.kind,
     evidenceSubjectId(key),
     key.dimension
-  ]);
+  ].map((part) => JSON.stringify(part)).join(",")}]`;
 }
 
 export function evidenceKeysEqual(left: EvidenceKey, right: EvidenceKey): boolean {
