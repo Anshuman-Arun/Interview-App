@@ -25,9 +25,9 @@ Definitions are strict runtime-validated plain objects. Unknown fields, accessor
 
 ## Deterministic seed semantics
 
-The engine never uses ambient randomness. `DeterministicRng` is seeded from the explicit safe-integer seed plus the family/version namespace. All random-looking observations and latent parameters are generated during initialization. State inspection does not consume RNG state.
+The engine never uses ambient randomness. `DeterministicRng` is seeded from the explicit safe-integer seed plus the family/version namespace. The exported `QUANT_RESEARCH_RNG_VERSION` identifies the current RNG semantics and should be persisted alongside the scenario definition by future integration code. All random-looking observations and latent parameters are generated during initialization. State inspection does not consume RNG state.
 
-Identical `(family, version, seed, config)` inputs therefore produce identical hidden state and, for an identical ordered action sequence, identical public state, evidence, and result.
+Identical `(family, version, seed, config)` inputs therefore produce identical hidden state and, for an identical ordered action sequence, identical public state, evidence, and result. Golden version-1 fixtures pin representative generated instances so an RNG/generator change cannot silently retain the same scenario version.
 
 ## Hidden, public, and authoritative state
 
