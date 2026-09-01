@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SessionEvaluationSchema,
   SessionIdSchema,
@@ -445,10 +445,12 @@ describe("grounded evaluation/replay product surface", () => {
     await turns.completeSession();
 
     const before = server.store.eventCount(sessionId);
+    const mutableIndexRead = vi.spyOn(server.store, "listSessions");
     const evaluation = await reads.getEvaluation(sessionId);
     const replay = await reads.getReplay(sessionId);
     const history = await reads.getHistory();
     const after = server.store.eventCount(sessionId);
+    expect(mutableIndexRead).not.toHaveBeenCalled();
 
     expect(evaluation.available).toBe(true);
     if (evaluation.available) {
@@ -502,7 +504,10 @@ describe("grounded evaluation/replay product surface", () => {
     const isolated = new SessionReadService({
       source: {
         hasSession: (id) => server?.store.hasSession(id) ?? false,
-        listSessions: () => server?.store.listSessions() ?? [],
+        sessionCount: () => server?.store.sessionCount() ?? 0,
+        listRecentSessionIds: (limit) =>
+          server?.store.listRecentSessionIds(limit) ?? [],
+        eventCount: (id) => server?.store.eventCount(id) ?? 0,
         loadEvents: (id) => server?.store.load(id) ?? []
       },
       problemResolver: {
@@ -516,6 +521,66 @@ describe("grounded evaluation/replay product surface", () => {
       reason: "EXACT_PROBLEM_UNAVAILABLE"
     });
     expect(server.store.eventCount(sessionId)).toBe(before);
+  });
+
+  it("isolates corrupt and oversized histories behind bounded structured reads", () => {
+    const sessionId = SessionIdSchema.parse("session_bounded_failure_fixture");
+    let loadCalls = 0;
+    const oversized = new SessionReadService({
+      source: {
+        hasSession: () => true,
+        sessionCount: () => 1,
+        listRecentSessionIds: () => [sessionId],
+        eventCount: () => DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
+        loadEvents: () => {
+          loadCalls += 1;
+          throw new Error("must not load oversized history");
+        }
+      }
+    });
+
+    expect(oversized.readEvaluation(sessionId)).toMatchObject({
+      available: false,
+      reason: "READ_LIMIT_EXCEEDED"
+    });
+    expect(oversized.readReplay(sessionId)).toMatchObject({
+      available: false,
+      reason: "READ_LIMIT_EXCEEDED"
+    });
+    const oversizedHistory = oversized.readHistory();
+    expect(oversizedHistory.sessions).toEqual([{
+      sessionId,
+      status: "UNKNOWN",
+      eventCount: DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
+      readStatus: "BUDGET_EXCLUDED"
+    }]);
+    expect(loadCalls).toBe(0);
+
+    const corrupt = new SessionReadService({
+      source: {
+        hasSession: () => true,
+        sessionCount: () => 1,
+        listRecentSessionIds: () => [sessionId],
+        eventCount: () => 2,
+        loadEvents: () => {
+          throw new Error("corrupt persisted event stream");
+        }
+      }
+    });
+    expect(corrupt.readEvaluation(sessionId)).toMatchObject({
+      available: false,
+      reason: "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+    });
+    expect(corrupt.readReplay(sessionId)).toMatchObject({
+      available: false,
+      reason: "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+    });
+    expect(corrupt.readHistory().sessions).toEqual([{
+      sessionId,
+      status: "UNKNOWN",
+      eventCount: 2,
+      readStatus: "UNAVAILABLE"
+    }]);
   });
 
   it("fails closed for active sessions and malicious read paths without mutating authority", async () => {
