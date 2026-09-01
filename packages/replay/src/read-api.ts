@@ -103,6 +103,10 @@ export const GroundedEvaluationDimensionSchema = z.object({
   }
 });
 
+export type GroundedEvaluationDimension = z.infer<
+  typeof GroundedEvaluationDimensionSchema
+>;
+
 export const GroundedEvaluationMilestoneSchema = z.object({
   milestoneId: BoundedIdentifierSchema,
   achieved: z.boolean(),
