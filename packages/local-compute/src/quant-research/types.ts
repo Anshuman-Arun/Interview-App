@@ -391,7 +391,9 @@ function parseOptimizationConfig(value: unknown): ConstrainedOptimizationConfig 
   };
 }
 
-export function parseQuantResearchDefinition(input: unknown): QuantResearchScenarioDefinition {
+let parsingDefinition = false;
+
+function parseQuantResearchDefinitionUnchecked(input: unknown): QuantResearchScenarioDefinition {
   const record = asRecord(input, "Scenario definition", failDefinition);
   assertExactKeys(record, ["family", "version", "generatorVersion", "rngVersion", "seed", "config"], "Scenario definition", failDefinition);
   if (record.version !== QUANT_RESEARCH_VERSION) failDefinition("Unsupported scenario version");
@@ -414,12 +416,24 @@ export function parseQuantResearchDefinition(input: unknown): QuantResearchScena
   }
 }
 
+export function parseQuantResearchDefinition(input: unknown): QuantResearchScenarioDefinition {
+  if (parsingDefinition) failDefinition("Reentrant scenario definition validation is not allowed");
+  parsingDefinition = true;
+  try {
+    return parseQuantResearchDefinitionUnchecked(input);
+  } finally {
+    parsingDefinition = false;
+  }
+}
+
 function parseActionId(value: unknown): string {
   if (typeof value !== "string" || !ACTION_ID_PATTERN.test(value)) failAction("actionId must be 1-64 safe identifier characters");
   return value;
 }
 
-export function parseQuantResearchAction(input: unknown): QuantResearchAction {
+let parsingAction = false;
+
+function parseQuantResearchActionUnchecked(input: unknown): QuantResearchAction {
   const record = asRecord(input, "Candidate action", failAction);
   if (typeof record.kind !== "string") failAction("Candidate action kind is required");
   switch (record.kind) {
@@ -462,6 +476,16 @@ export function parseQuantResearchAction(input: unknown): QuantResearchAction {
   }
 }
 
+export function parseQuantResearchAction(input: unknown): QuantResearchAction {
+  if (parsingAction) failAction("Reentrant candidate action validation is not allowed");
+  parsingAction = true;
+  try {
+    return parseQuantResearchActionUnchecked(input);
+  } finally {
+    parsingAction = false;
+  }
+}
+
 export interface QuantResearchFamilyRegistration {
   readonly family: QuantResearchFamily;
   readonly version: string;
@@ -469,7 +493,9 @@ export interface QuantResearchFamilyRegistration {
   readonly rngVersion: string;
 }
 
-export function assertUniqueQuantResearchRegistrations(registrationsInput: unknown): void {
+let validatingRegistry = false;
+
+function assertUniqueQuantResearchRegistrationsUnchecked(registrationsInput: unknown): void {
   if (!safeIsArray(registrationsInput, "Scenario registry", (message) => {
     throw new QuantResearchError("INVALID_REGISTRY", message);
   })) {
@@ -542,5 +568,15 @@ export function assertUniqueQuantResearchRegistrations(registrationsInput: unkno
     const key = registration.family + "@" + registration.version + "@" + registration.generatorVersion + "@" + registration.rngVersion;
     if (seen.has(key)) throw new QuantResearchError("INVALID_REGISTRY", "Duplicate scenario compatibility registration");
     seen.add(key);
+  }
+}
+
+export function assertUniqueQuantResearchRegistrations(registrationsInput: unknown): void {
+  if (validatingRegistry) throw new QuantResearchError("INVALID_REGISTRY", "Reentrant scenario registry validation is not allowed");
+  validatingRegistry = true;
+  try {
+    assertUniqueQuantResearchRegistrationsUnchecked(registrationsInput);
+  } finally {
+    validatingRegistry = false;
   }
 }
