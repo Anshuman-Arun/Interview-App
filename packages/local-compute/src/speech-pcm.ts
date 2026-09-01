@@ -34,6 +34,7 @@ export interface PcmFrameSnapshot {
 }
 
 export interface PcmOrderState {
+  readonly streamId: SpeechStreamId;
   readonly sampleRate: number;
   readonly channels: number;
   readonly sampleFormat: string;
@@ -94,6 +95,7 @@ export function advancePcmOrder(
       throw new PcmAdmissionError("OUT_OF_ORDER_FRAME", "A new PCM stream must begin at sequence zero");
     }
     return {
+      streamId: envelope.streamId,
       sampleRate: envelope.sampleRate,
       channels: envelope.channels,
       sampleFormat: envelope.sampleFormat,
@@ -104,6 +106,9 @@ export function advancePcmOrder(
     };
   }
 
+  if (envelope.streamId !== prior.streamId) {
+    throw new PcmAdmissionError("STREAM_CONFLICT", "PCM stream identity changed while advancing order state");
+  }
   if (envelope.sampleRate !== prior.sampleRate
       || envelope.channels !== prior.channels
       || envelope.sampleFormat !== prior.sampleFormat) {
@@ -296,6 +301,7 @@ export class BoundedPcmBuffer {
 
 function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
   return {
+    streamId: frame.envelope.streamId,
     sampleRate: frame.envelope.sampleRate,
     channels: frame.envelope.channels,
     sampleFormat: frame.envelope.sampleFormat,
@@ -320,5 +326,23 @@ function validatePcmOrderState(prior: PcmOrderState): void {
       || !Number.isFinite(prior.nextEarliestTimestampMs)
       || prior.nextEarliestTimestampMs < prior.firstTimestampMs) {
     throw new PcmAdmissionError("INVALID_FRAME", "Prior PCM ordering state is invalid");
+  }
+}
+
+
+function validatePcmOrderState(value: PcmOrderState): void {
+  if (!SpeechStreamIdSchema.safeParse(value.streamId).success
+      || (value.sampleRate !== 16_000 && value.sampleRate !== 48_000)
+      || value.channels !== 1
+      || value.sampleFormat !== "F32LE"
+      || !Number.isFinite(value.firstTimestampMs)
+      || value.firstTimestampMs < 0
+      || !Number.isFinite(value.cumulativeDurationMs)
+      || value.cumulativeDurationMs <= 0
+      || !Number.isSafeInteger(value.lastSequence)
+      || value.lastSequence < 0
+      || !Number.isFinite(value.nextEarliestTimestampMs)
+      || value.nextEarliestTimestampMs < value.firstTimestampMs) {
+    throw new PcmAdmissionError("INVALID_FRAME", "PCM order state is invalid");
   }
 }
