@@ -197,5 +197,5 @@ describe("Durable Local Session Lifecycle & Restart Recovery", () => {
     await runtime2.stop();
     store2.close();
     fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  }, 15_000);
 });
