@@ -82,7 +82,7 @@ describe("desktop secure bootstrap", () => {
 
     expect(() => createSecureWebPreferences("relative/preload.cjs"))
       .toThrow(/absolute filesystem path/u);
-    expect(() => createSecureWebPreferences("" as never))
+    expect(() => createSecureWebPreferences(""))
       .toThrow(/absolute filesystem path/u);
     expect(() => createSecureWebPreferences(123 as never))
       .toThrow(/absolute filesystem path/u);
