@@ -602,9 +602,10 @@ function addDelivery(
   basisSequence: number,
   label: string
 ): SessionState {
-  const disclosureIds = Array.isArray(disclosureInput)
-    ? [...disclosureInput]
-    : [disclosureInput as DisclosureId];
+  const disclosureIds: DisclosureId[] =
+    typeof disclosureInput === "string"
+      ? [disclosureInput]
+      : [...disclosureInput];
   const generationId = GenerationIdSchema.parse("generation_adv_" + label);
   const deliveryId = DeliveryIdSchema.parse("delivery_adv_" + label);
   const turnId = TurnIdSchema.parse("turn_adv_" + label);
