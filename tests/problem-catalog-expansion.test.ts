@@ -272,8 +272,11 @@ describe("curated problem bank", () => {
     };
     const catalog = createProblemCatalog([mutable as unknown as InterviewProblem]);
 
+    const firstMutableMilestone = mutable.interviewer.reasoningGraph.milestones[0];
+    if (firstMutableMilestone === undefined) throw new Error("Expected milestone fixture");
+
     mutable.public.prompt = "MUTATED AFTER ADMISSION";
-    mutable.interviewer.reasoningGraph.milestones[0]!.description = "MUTATED AFTER ADMISSION";
+    firstMutableMilestone.description = "MUTATED AFTER ADMISSION";
 
     expect(catalog[0]?.public.prompt).not.toBe("MUTATED AFTER ADMISSION");
     expect(catalog[0]?.interviewer.reasoningGraph.milestones[0]?.description)
@@ -310,15 +313,31 @@ describe("curated problem bank", () => {
       verificationNotes: string;
     };
     const entry = authorCuratedProblem(mutableSpec);
+    const firstApproach = mutableSpec.approaches[0];
+    const firstMilestone = mutableSpec.milestones[0];
+    const firstEdge = mutableSpec.edges[0];
+    const firstCommonError = mutableSpec.commonErrors[0];
+    const firstExtension = mutableSpec.extensions[0];
+    const firstHint = mutableSpec.hints[0];
+    if (
+      firstApproach === undefined
+      || firstMilestone === undefined
+      || firstEdge === undefined
+      || firstCommonError === undefined
+      || firstExtension === undefined
+      || firstHint === undefined
+    ) {
+      throw new Error("Expected mutable authoring fixture entries");
+    }
 
     mutableSpec.givenInformation[0] = "MUTATED";
-    mutableSpec.approaches[0]!.label = "MUTATED";
-    mutableSpec.milestones[0]!.approachIds[0] = "MUTATED";
-    mutableSpec.edges[0]!.from = "MUTATED";
-    mutableSpec.commonErrors[0]!.description = "MUTATED";
+    firstApproach.label = "MUTATED";
+    firstMilestone.approachIds[0] = "MUTATED";
+    firstEdge.from = "MUTATED";
+    firstCommonError.description = "MUTATED";
     mutableSpec.followUps[0] = "MUTATED";
-    mutableSpec.extensions[0]!.prompt = "MUTATED";
-    mutableSpec.hints[0]!.formulations[0] = "MUTATED";
+    firstExtension.prompt = "MUTATED";
+    firstHint.formulations[0] = "MUTATED";
 
     expect(entry.problem.public.givenInformation).not.toContain("MUTATED");
     expect(entry.problem.interviewer.reasoningGraph.approaches[0]?.label).not.toBe("MUTATED");
@@ -604,9 +623,11 @@ describe("curated problem bank", () => {
     const secondVersion = { ...original, version: "2.0.0" };
 
     expect(createProblemCatalog([original, secondVersion])).toHaveLength(2);
+    const firstMetadata = PROBLEM_METADATA[0];
+    if (firstMetadata === undefined) throw new Error("Expected problem metadata fixture");
     expect(() => assertProblemBankIntegrity(
       [original, secondVersion],
-      [PROBLEM_METADATA[0]!, { ...PROBLEM_METADATA[0]!, title: "Second version" }]
+      [firstMetadata, { ...firstMetadata, title: "Second version" }]
     )).toThrow(/duplicate problem ID/i);
   });
 
