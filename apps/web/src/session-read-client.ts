@@ -129,7 +129,7 @@ export class BrowserSessionReadClient {
     parse: (value: unknown) => TResult,
     signal: AbortSignal | undefined
   ): Promise<TResult> {
-    if (signal?.aborted === true) {
+    if (isSignalAborted(signal)) {
       throw new BrowserSessionReadTransportError("ABORTED");
     }
 
@@ -151,7 +151,7 @@ export class BrowserSessionReadClient {
       response = await this.#fetchImpl(`${this.#baseUrl}${path}`, init);
     } catch {
       throw new BrowserSessionReadTransportError(
-        signal?.aborted === true ? "ABORTED" : "NETWORK"
+        isSignalAborted(signal) ? "ABORTED" : "NETWORK"
       );
     }
 
@@ -225,4 +225,8 @@ function normalizeLoopbackBaseUrl(input: string): string {
   }
 
   return parsed.origin;
+}
+
+function isSignalAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted ?? false;
 }
