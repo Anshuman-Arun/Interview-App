@@ -119,6 +119,81 @@ export interface VoiceActivityStep extends VoiceActivitySnapshot {
   readonly falseStart: boolean;
 }
 
+const VoiceActivityStateSchema = z.enum([
+  "SILENCE",
+  "POSSIBLE_SPEECH",
+  "SPEECH",
+  "POSSIBLE_END",
+  "FINALIZED",
+  "CANCELLED"
+]);
+
+export const VoiceActivitySnapshotSchema = z.object({
+  state: VoiceActivityStateSchema,
+  speechMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  silenceMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  utteranceMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS)
+}).strict().superRefine((value, context) => {
+  if (value.speechMs > value.utteranceMs + 0.001
+      || value.silenceMs > value.utteranceMs + 0.001
+      || value.speechMs + value.silenceMs > value.utteranceMs + 0.001) {
+    context.addIssue({ code: "custom", message: "VAD snapshot durations are inconsistent" });
+  }
+  if (value.state === "SILENCE"
+      && (value.speechMs !== 0 || value.silenceMs !== 0 || value.utteranceMs !== 0)) {
+    context.addIssue({ code: "custom", message: "Silent VAD snapshot must have zero durations" });
+  }
+  if (value.state === "POSSIBLE_SPEECH"
+      && (value.speechMs !== 0 || value.silenceMs !== 0 || value.utteranceMs <= 0)) {
+    context.addIssue({ code: "custom", message: "Possible-speech VAD snapshot is inconsistent" });
+  }
+  if (value.state === "SPEECH"
+      && (value.speechMs <= 0 || value.silenceMs !== 0 || value.utteranceMs <= 0)) {
+    context.addIssue({ code: "custom", message: "Speech VAD snapshot is inconsistent" });
+  }
+  if (value.state === "POSSIBLE_END"
+      && (value.speechMs <= 0 || value.silenceMs <= 0 || value.utteranceMs <= 0)) {
+    context.addIssue({ code: "custom", message: "Possible-end VAD snapshot is inconsistent" });
+  }
+});
+
+export const VoiceActivityStepSchema = z.object({
+  state: VoiceActivityStateSchema,
+  speechMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  silenceMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  utteranceMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  speechClassified: z.boolean(),
+  speechStarted: z.boolean(),
+  possibleEndpoint: z.boolean(),
+  falseStart: z.boolean()
+}).strict().superRefine((value, context) => {
+  const snapshot = VoiceActivitySnapshotSchema.safeParse({
+    state: value.state,
+    speechMs: value.speechMs,
+    silenceMs: value.silenceMs,
+    utteranceMs: value.utteranceMs
+  });
+  if (!snapshot.success) {
+    context.addIssue({ code: "custom", message: "VAD step contains an inconsistent snapshot" });
+  }
+  if (value.state === "FINALIZED" || value.state === "CANCELLED") {
+    context.addIssue({ code: "custom", message: "VAD step cannot enter a terminal state" });
+  }
+  if (value.possibleEndpoint !== (value.state === "POSSIBLE_END")) {
+    context.addIssue({ code: "custom", message: "VAD possible-endpoint flag disagrees with state" });
+  }
+  if (value.speechStarted && (value.state !== "SPEECH" || !value.speechClassified)) {
+    context.addIssue({ code: "custom", message: "VAD speech-start flag is inconsistent" });
+  }
+  if (value.falseStart && (value.state !== "SILENCE" || value.speechClassified || value.speechStarted)) {
+    context.addIssue({ code: "custom", message: "VAD false-start flag is inconsistent" });
+  }
+  const shouldClassifySpeech = value.state === "POSSIBLE_SPEECH" || value.state === "SPEECH";
+  if (!value.falseStart && value.speechClassified !== shouldClassifySpeech) {
+    context.addIssue({ code: "custom", message: "VAD speech classification disagrees with state" });
+  }
+});
+
 const DEFAULT_VAD_CONFIG: VoiceActivityConfig = {
   onsetThreshold: 0.65,
   continuationThreshold: 0.45,
@@ -305,6 +380,15 @@ export type EndpointingDecision =
   | { readonly kind: "CONTINUE" }
   | { readonly kind: "DISCARD"; readonly reason: "TOO_SHORT" }
   | { readonly kind: "FINALIZE"; readonly reason: "SILENCE" | "MAX_DURATION" | "FLUSH" };
+
+export const EndpointingDecisionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("CONTINUE") }).strict(),
+  z.object({ kind: z.literal("DISCARD"), reason: z.literal("TOO_SHORT") }).strict(),
+  z.object({
+    kind: z.literal("FINALIZE"),
+    reason: z.enum(["SILENCE", "MAX_DURATION", "FLUSH"])
+  }).strict()
+]);
 
 const DEFAULT_ENDPOINT_CONFIG: EndpointingConfig = {
   minimumSpeechMs: 120,
