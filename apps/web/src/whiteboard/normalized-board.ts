@@ -37,21 +37,39 @@ export function normalizeStudentShape(
   const revision = revisionFromMeta(shape.meta?.["shapeRevision"]);
   const text = typeof shape.props?.["text"] === "string" ? shape.props["text"] : undefined;
   const points = normalizePoints(shape);
+  const normalizedBounds = validateBounds(bounds);
 
   return {
     id: shape.id,
     type,
-    bounds: {
-      x: bounds.x,
-      y: bounds.y,
-      width: Math.max(0, bounds.width),
-      height: Math.max(0, bounds.height)
-    },
+    bounds: normalizedBounds,
     ...(points !== undefined ? { points } : {}),
     ...(text !== undefined ? { text } : {}),
     revision,
     createdAt,
     lastModifiedAt
+  };
+}
+
+function validateBounds(bounds: TLShapeBounds): StudentShape["bounds"] {
+  for (const [name, value] of [
+    ["x", bounds.x],
+    ["y", bounds.y],
+    ["width", bounds.width],
+    ["height", bounds.height]
+  ] as const) {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Student shape has non-finite ${name} bounds`);
+    }
+  }
+  if (bounds.width < 0 || bounds.height < 0) {
+    throw new Error("Student shape bounds dimensions must be non-negative");
+  }
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height
   };
 }
 
