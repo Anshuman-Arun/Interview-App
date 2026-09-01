@@ -284,7 +284,7 @@ async function coordinatorHarness() {
   const turns = new TurnCoordinator(writer);
   await turns.startSession(sixPeopleProblem);
   const { inputEpisodeId, turnId } = await turns.commitInput("I have a claim, but I have not justified it yet.");
-  await turns.selectAction(turnId);
+  await turns.selectAction(turnId, sixPeopleProblem);
   const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([SAFE_PROBE]));
   return {
     store,
