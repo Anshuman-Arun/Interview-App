@@ -660,9 +660,13 @@ describe("local model asset manager", () => {
       await rename(staging, detached);
     } catch (error) {
       if (process.platform !== "win32") throw error;
-      expect(error).toMatchObject({
-        code: expect.stringMatching(/^(?:EPERM|EACCES|EBUSY)$/u)
-      });
+      const errorCode = typeof error === "object"
+        && error !== null
+        && "code" in error
+        && typeof error.code === "string"
+        ? error.code
+        : undefined;
+      expect(["EPERM", "EACCES", "EBUSY"]).toContain(errorCode);
       release.resolve();
       await expect(installation).resolves.toEqual(expect.any(String));
       return;
