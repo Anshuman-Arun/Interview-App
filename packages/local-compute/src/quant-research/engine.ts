@@ -285,6 +285,18 @@ function objective(x: number, y: number, coefficientX: number, coefficientY: num
   return coefficientX * x + coefficientY * y - penalty * x * y;
 }
 
+function discreteUniformNoiseVariance(radius: number): number {
+  return radius * (radius + 1) / 3;
+}
+
+function allocationInformation(a: number, b: number, noiseA: number, noiseB: number): number {
+  if (a <= 0 || b <= 0) return 0;
+  const varianceA = discreteUniformNoiseVariance(noiseA);
+  const varianceB = discreteUniformNoiseVariance(noiseB);
+  const differenceVariance = varianceA / a + varianceB / b;
+  return differenceVariance <= 0 ? 0 : 1 / differenceVariance;
+}
+
 function allocationEfficiency(
   a: number,
   b: number,
@@ -292,16 +304,14 @@ function allocationEfficiency(
   costB: number,
   noiseA: number,
   noiseB: number,
-  budget: number,
-  requireBothExperiments: boolean
+  budget: number
 ): number {
-  const information = a / (noiseA * noiseA) + b / (noiseB * noiseB);
+  const information = allocationInformation(a, b, noiseA, noiseB);
   let best = 0;
-  for (let candidateA = 0; candidateA <= 100; candidateA += 1) {
-    for (let candidateB = 0; candidateB <= 100; candidateB += 1) {
-      if (requireBothExperiments ? candidateA === 0 || candidateB === 0 : candidateA === 0 && candidateB === 0) continue;
+  for (let candidateA = 1; candidateA <= 100; candidateA += 1) {
+    for (let candidateB = 1; candidateB <= 100; candidateB += 1) {
       if (candidateA * costA + candidateB * costB > budget) continue;
-      best = Math.max(best, candidateA / (noiseA * noiseA) + candidateB / (noiseB * noiseB));
+      best = Math.max(best, allocationInformation(candidateA, candidateB, noiseA, noiseB));
     }
   }
   return best === 0 ? 0 : Math.min(1, information / best);
@@ -404,7 +414,7 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
     validateExperimentalAllocation(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.totalBudget, true);
     const summaryA = allocation.a === 0 ? 0 : mean(state.sequenceA.slice(0, allocation.a));
     const summaryB = allocation.b === 0 ? 0 : mean(state.sequenceB.slice(0, allocation.b));
-    const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.noiseA, state.config.noiseB, state.config.totalBudget, true);
+    const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.costA, state.config.costB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
     let next = appendAction(state, action, {
       stage: "EXPERIMENT_DECISION",
       initialAllocation: { a: allocation.a, b: allocation.b },
@@ -424,8 +434,8 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
   }
   if (state.stage === "PERTURBED_ALLOCATION") {
     const allocation = requireAction(state, action, "ALLOCATE_SAMPLE");
-    validateExperimentalAllocation(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.totalBudget, false);
-    const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.noiseA, state.config.noiseB, state.config.totalBudget, false);
+    validateExperimentalAllocation(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.totalBudget, true);
+    const efficiency = allocationEfficiency(allocation.a, allocation.b, state.config.perturbedCostA, state.config.perturbedCostB, state.config.noiseA, state.config.noiseB, state.config.totalBudget);
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
       evidence("ADAPTATION", state.stage, efficiency * 100, "Adaptation quality reflects allocation efficiency under the changed experiment costs."),
@@ -439,9 +449,6 @@ function transitionExperimental(state: ExperimentalState, action: QuantResearchA
 function validateExperimentalAllocation(a: number, b: number, costA: number, costB: number, budget: number, requireBothExperiments: boolean): void {
   if (requireBothExperiments && (a === 0 || b === 0)) {
     throw new QuantResearchError("ACTION_NOT_ALLOWED", "Initial allocation must sample both experiments before experiment comparison");
-  }
-  if (!requireBothExperiments && a === 0 && b === 0) {
-    throw new QuantResearchError("ACTION_NOT_ALLOWED", "At least one experiment must receive samples");
   }
   if (a * costA + b * costB > budget) throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Sample allocation exceeds the public experiment budget");
 }
