@@ -113,10 +113,16 @@ function reconstructEngine(state: Readonly<SessionState>): QuantResearchEngine {
     if (recomputedResult.status === "COMPLETE") {
       throw new Error("Quant Research completion event is missing from authoritative history");
     }
+    if (state.status === "COMPLETED") {
+      throw new Error("Session is completed without a persisted Quant Research completion result");
+    }
   } else {
     const storedResult = QuantResearchResultEventSchema.parse(persisted.result);
     if (recomputedResult.status !== "COMPLETE" || !sameCanonicalJson(recomputedResult, storedResult)) {
       throw new Error("Persisted Quant Research result does not match deterministic replay");
+    }
+    if (state.status !== "COMPLETED" && state.status !== "ARCHIVED") {
+      throw new Error("Persisted Quant Research completion is missing the terminal session lifecycle event");
     }
   }
   return engine;
