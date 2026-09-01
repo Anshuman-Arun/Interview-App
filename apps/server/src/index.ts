@@ -1,3 +1,4 @@
+export * from "./interview-session-composition.js";
 export * from "./local-interview-transport-runtime.js";
 export * from "./loopback-command-server.js";
 export * from "./renderer-stream-server.js";
