@@ -27,6 +27,7 @@ export type QualitativeProposalValidation =
   | {
       readonly accepted: false;
       readonly reason:
+        | "INVALID_PROPOSAL"
         | "NO_GROUNDED_EVIDENCE"
         | "UNSUPPORTED_EVIDENCE_REFERENCE";
     };
@@ -40,7 +41,11 @@ export function validateFallibleQualitativeEvaluationProposal(
   facts: GroundedQualitativeEvaluationFacts,
   rawProposal: unknown
 ): QualitativeProposalValidation {
-  const proposal = FallibleQualitativeEvaluationProposalSchema.parse(rawProposal);
+  const parsed = FallibleQualitativeEvaluationProposalSchema.safeParse(rawProposal);
+  if (!parsed.success) {
+    return { accepted: false, reason: "INVALID_PROPOSAL" };
+  }
+  const proposal = parsed.data;
   if (facts.allowedEvidenceRefs.length === 0) {
     return { accepted: false, reason: "NO_GROUNDED_EVIDENCE" };
   }
