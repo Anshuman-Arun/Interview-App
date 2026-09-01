@@ -155,6 +155,7 @@ export class QuantResearchError extends Error {
 
 const MAX_SEED = 0xffff_ffff;
 const MAX_ACTION_VECTOR = 8;
+const MAX_RECORD_KEYS = 16;
 const MAX_ABS_NUMERIC_INPUT = 1_000_000;
 const ACTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
 const REGISTRY_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,32}$/u;
@@ -186,6 +187,7 @@ function asRecord(value: unknown, context: string, fail: (message: string) => ne
     fail(context + " could not be safely inspected");
   }
   if (prototype !== Object.prototype && prototype !== null) fail(context + " must be a plain object");
+  if (keys.length > MAX_RECORD_KEYS) fail(context + " contains too many properties");
   const snapshot = Object.create(null) as Record<string, unknown>;
   for (const key of keys) {
     if (typeof key !== "string") fail(context + " contains an unsupported property key");
@@ -238,6 +240,7 @@ function finiteNumberVector(value: unknown): readonly number[] {
   } catch {
     failAction("values could not be safely inspected");
   }
+  if (keys.length > MAX_ACTION_VECTOR + 1) failAction("values contains too many properties");
   if (
     lengthDescriptor === undefined ||
     lengthDescriptor.get !== undefined ||
@@ -249,6 +252,7 @@ function finiteNumberVector(value: unknown): readonly number[] {
     failAction("values must contain between 1 and 8 entries");
   }
   const length = lengthDescriptor.value as number;
+  if (keys.length > length + 1) throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry contains too many properties");
   const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
   for (const key of keys) {
     if (typeof key !== "string" || !allowedKeys.has(key)) failAction("values contains unsupported properties");
