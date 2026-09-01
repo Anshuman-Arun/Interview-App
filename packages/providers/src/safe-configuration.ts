@@ -146,6 +146,7 @@ export const PROVIDER_CONFIGURATION_LIMITS = objectFreeze({
 
 const PROVIDER_DEFINITION_MAX_NODES = 16_384;
 
+/* eslint-disable @typescript-eslint/unbound-method -- Captured intrinsics are invoked only via Reflect.apply. */
 const SET_HAS_INTRINSIC = Set.prototype.has;
 const SET_ADD_INTRINSIC = Set.prototype.add;
 const WEAK_SET_HAS_INTRINSIC = WeakSet.prototype.has;
@@ -156,6 +157,7 @@ const STRING_NORMALIZE_INTRINSIC = String.prototype.normalize;
 const STRING_TRIM_INTRINSIC = String.prototype.trim;
 const STRING_TO_LOWER_CASE_INTRINSIC = String.prototype.toLowerCase;
 const STRING_CHAR_CODE_AT_INTRINSIC = String.prototype.charCodeAt;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
   const result: unknown = REFLECT_APPLY_INTRINSIC(SET_HAS_INTRINSIC, set, [value]);
@@ -254,8 +256,10 @@ export class ProviderConfigurationSafetyError extends Error {
   }
 }
 
+/* eslint-disable @typescript-eslint/unbound-method -- Capture prevents monkey-patching of the private-brand checker. */
 const isProviderConfigurationSafetyError =
   ProviderConfigurationSafetyError.isSafetyError;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 export type SafeProviderConfigurationPrimitive = string | number | boolean | null;
 export type SafeProviderConfigurationValue =
@@ -780,11 +784,17 @@ export const SafeProviderConfigurationValueSchema: z.ZodType<SafeProviderConfigu
     }
   });
 
+function isSafeProviderConfigurationRecord(
+  value: SafeProviderConfigurationValue
+): value is SafeProviderConfigurationRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export const SafeProviderConfigurationRecordSchema: z.ZodType<SafeProviderConfigurationRecord> =
   z.unknown().transform((value, context) => {
     try {
       const inspected = inspectSafeProviderConfigurationValue(value);
-      if (typeof inspected !== "object" || inspected === null || Array.isArray(inspected)) {
+      if (!isSafeProviderConfigurationRecord(inspected)) {
         context.addIssue({ code: "custom", message: "MALFORMED_CONFIGURATION" });
         return z.NEVER;
       }

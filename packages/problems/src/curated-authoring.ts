@@ -67,6 +67,40 @@ const HINT_LEVELS: readonly CuratedHintLevel[] = [1, 2, 3, 4, 5];
 
 export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEntry {
   assertCanonicalIdentifier(spec.id, "Problem id");
+
+  const mode: unknown = spec.mode;
+  if (mode !== "OXFORD_MATHEMATICS" && mode !== "QUANT") {
+    throw new Error(`Problem "${spec.id}" has invalid mode`);
+  }
+  const requestedReviewStatus: unknown = spec.reviewStatus;
+  if (
+    requestedReviewStatus !== undefined
+    && requestedReviewStatus !== "ready"
+    && requestedReviewStatus !== "expert-review"
+  ) {
+    throw new Error(`Problem "${spec.id}" has invalid review status`);
+  }
+  const hintsValue: unknown = spec.hints;
+  if (!Array.isArray(hintsValue) || hintsValue.length !== HINT_LEVELS.length) {
+    throw new Error(`Problem "${spec.id}" must define exactly five hint stages`);
+  }
+
+  const hintByLevel = new Map<CuratedHintLevel, CuratedHintSpec>();
+  for (const hint of spec.hints) {
+    if (!HINT_LEVELS.includes(hint.level)) {
+      throw new Error(`Problem "${spec.id}" defines invalid hint stage ${String(hint.level)}`);
+    }
+    if (hintByLevel.has(hint.level)) {
+      throw new Error(`Problem "${spec.id}" defines duplicate hint level ${String(hint.level)}`);
+    }
+    hintByLevel.set(hint.level, hint);
+  }
+  for (const level of HINT_LEVELS) {
+    if (!hintByLevel.has(level)) {
+      throw new Error(`Problem "${spec.id}" must define hint level ${String(level)}`);
+    }
+  }
+
   const title = canonicalMetadata(spec.title, `Problem "${spec.id}" title`);
   const category = canonicalMetadata(spec.category, `Problem "${spec.id}" category`);
   const followUps = canonicalUniqueMetadataList(
@@ -74,19 +108,7 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
     `Problem "${spec.id}" follow-up`
   );
   const topics = compileTopics(category, spec.topics);
-  if (spec.mode !== "OXFORD_MATHEMATICS" && spec.mode !== "QUANT") {
-    throw new Error(`Problem "${spec.id}" has invalid mode "${String(spec.mode)}"`);
-  }
-  if (
-    spec.reviewStatus !== undefined
-    && spec.reviewStatus !== "ready"
-    && spec.reviewStatus !== "expert-review"
-  ) {
-    throw new Error(`Problem "${spec.id}" has invalid review status "${String(spec.reviewStatus)}"`);
-  }
-  if (spec.hints.length !== HINT_LEVELS.length) {
-    throw new Error(`Problem "${spec.id}" must define exactly five hint stages`);
-  }
+
   const reviewStatus = spec.reviewStatus ?? "ready";
   let reviewNotes: string | undefined;
   if (reviewStatus === "expert-review") {
@@ -103,22 +125,6 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
     );
   }
 
-  const hintByLevel = new Map<CuratedHintLevel, CuratedHintSpec>();
-  for (const hint of spec.hints) {
-    if (!HINT_LEVELS.includes(hint.level)) {
-      throw new Error(`Problem "${spec.id}" defines invalid hint stage ${String(hint.level)}`);
-    }
-    if (hintByLevel.has(hint.level)) {
-      throw new Error(`Problem "${spec.id}" defines duplicate hint level ${hint.level}`);
-    }
-    hintByLevel.set(hint.level, hint);
-  }
-  for (const level of HINT_LEVELS) {
-    if (!hintByLevel.has(level)) {
-      throw new Error(`Problem "${spec.id}" must define hint level ${level}`);
-    }
-  }
-
   const disclosureIds = new Map(
     HINT_LEVELS.map((level) => [level, disclosureIdFor(spec.id, level)] as const)
   );
@@ -127,7 +133,7 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
   const milestones = spec.milestones.map((milestone) => {
     const protectedDisclosureIds = (milestone.hintLevels ?? []).map((level) => {
       const id = disclosureIds.get(level);
-      if (id === undefined) throw new Error(`Missing generated hint disclosure for level ${level}`);
+      if (id === undefined) throw new Error(`Missing generated hint disclosure for level ${String(level)}`);
       usedHintLevels.add(level);
       return id;
     });
@@ -142,15 +148,15 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
 
   for (const level of HINT_LEVELS) {
     if (!usedHintLevels.has(level)) {
-      throw new Error(`Problem "${spec.id}" defines hint level ${level} but no milestone references it`);
+      throw new Error(`Problem "${spec.id}" defines hint level ${String(level)} but no milestone references it`);
     }
   }
 
   const protectedDisclosures = HINT_LEVELS.map((stage) => {
     const hint = hintByLevel.get(stage);
     const id = disclosureIds.get(stage);
-    if (hint === undefined || id === undefined) throw new Error(`Missing hint material for level ${stage}`);
-    const minimumDisclosureLevel = reviewedDisclosureLevelFor(spec.id, stage) as DisclosureLevel;
+    if (hint === undefined || id === undefined) throw new Error(`Missing hint material for level ${String(stage)}`);
+    const minimumDisclosureLevel: DisclosureLevel = reviewedDisclosureLevelFor(spec.id, stage);
     return {
       id,
       fact: hint.text,
@@ -215,7 +221,7 @@ function deepFreeze<T>(value: T): T {
 
 function disclosureIdFor(problemId: string, level: CuratedHintLevel) {
   const safe = problemId.replace(/[^a-z0-9]+/giu, "_").replace(/^_+|_+$/gu, "");
-  return DisclosureIdSchema.parse(`disclosure_${safe}_hint_${level}`);
+  return DisclosureIdSchema.parse(`disclosure_${safe}_hint_${String(level)}`);
 }
 
 function assertCanonicalIdentifier(value: string, label: string): void {

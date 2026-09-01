@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { InterviewProblem } from "../packages/domain/src/index.js";
 import {
   ALL_PROBLEMS,
   EXPERT_REVIEW_METADATA,
@@ -269,10 +270,13 @@ describe("curated problem bank", () => {
       };
       private: { canonicalSolution: string; verificationNotes: string };
     };
-    const catalog = createProblemCatalog([mutable]);
+    const catalog = createProblemCatalog([mutable as unknown as InterviewProblem]);
+
+    const firstMutableMilestone = mutable.interviewer.reasoningGraph.milestones[0];
+    if (firstMutableMilestone === undefined) throw new Error("Expected milestone fixture");
 
     mutable.public.prompt = "MUTATED AFTER ADMISSION";
-    mutable.interviewer.reasoningGraph.milestones[0]!.description = "MUTATED AFTER ADMISSION";
+    firstMutableMilestone.description = "MUTATED AFTER ADMISSION";
 
     expect(catalog[0]?.public.prompt).not.toBe("MUTATED AFTER ADMISSION");
     expect(catalog[0]?.interviewer.reasoningGraph.milestones[0]?.description)
@@ -309,15 +313,31 @@ describe("curated problem bank", () => {
       verificationNotes: string;
     };
     const entry = authorCuratedProblem(mutableSpec);
+    const firstApproach = mutableSpec.approaches[0];
+    const firstMilestone = mutableSpec.milestones[0];
+    const firstEdge = mutableSpec.edges[0];
+    const firstCommonError = mutableSpec.commonErrors[0];
+    const firstExtension = mutableSpec.extensions[0];
+    const firstHint = mutableSpec.hints[0];
+    if (
+      firstApproach === undefined
+      || firstMilestone === undefined
+      || firstEdge === undefined
+      || firstCommonError === undefined
+      || firstExtension === undefined
+      || firstHint === undefined
+    ) {
+      throw new Error("Expected mutable authoring fixture entries");
+    }
 
     mutableSpec.givenInformation[0] = "MUTATED";
-    mutableSpec.approaches[0]!.label = "MUTATED";
-    mutableSpec.milestones[0]!.approachIds[0] = "MUTATED";
-    mutableSpec.edges[0]!.from = "MUTATED";
-    mutableSpec.commonErrors[0]!.description = "MUTATED";
+    firstApproach.label = "MUTATED";
+    firstMilestone.approachIds[0] = "MUTATED";
+    firstEdge.from = "MUTATED";
+    firstCommonError.description = "MUTATED";
     mutableSpec.followUps[0] = "MUTATED";
-    mutableSpec.extensions[0]!.prompt = "MUTATED";
-    mutableSpec.hints[0]!.formulations[0] = "MUTATED";
+    firstExtension.prompt = "MUTATED";
+    firstHint.formulations[0] = "MUTATED";
 
     expect(entry.problem.public.givenInformation).not.toContain("MUTATED");
     expect(entry.problem.interviewer.reasoningGraph.approaches[0]?.label).not.toBe("MUTATED");
@@ -513,7 +533,25 @@ describe("curated problem bank", () => {
     const root = graph.milestones.find((milestone) => !incomingTargets.has(milestone.id));
     if (root === undefined) throw new Error("Expected graph root");
     delete root.optionalPrerequisiteIds;
-    delete root.protectedDisclosureIds;
+
+    const disclosureReferenceCounts = new Map<string, number>();
+    for (const milestone of graph.milestones) {
+      for (const disclosureId of milestone.protectedDisclosureIds ?? []) {
+        disclosureReferenceCounts.set(
+          disclosureId,
+          (disclosureReferenceCounts.get(disclosureId) ?? 0) + 1
+        );
+      }
+    }
+    const disclosureMilestone = graph.milestones.find((milestone) =>
+      (milestone.protectedDisclosureIds ?? []).some(
+        (disclosureId) => disclosureReferenceCounts.get(disclosureId) === 1
+      )
+    );
+    if (disclosureMilestone === undefined) {
+      throw new Error("Expected singly referenced disclosure fixture");
+    }
+    delete disclosureMilestone.protectedDisclosureIds;
 
     expect(() => assertReasoningGraphFixtureIntegrity(graph as never)).not.toThrow();
 
@@ -603,9 +641,11 @@ describe("curated problem bank", () => {
     const secondVersion = { ...original, version: "2.0.0" };
 
     expect(createProblemCatalog([original, secondVersion])).toHaveLength(2);
+    const firstMetadata = PROBLEM_METADATA[0];
+    if (firstMetadata === undefined) throw new Error("Expected problem metadata fixture");
     expect(() => assertProblemBankIntegrity(
       [original, secondVersion],
-      [PROBLEM_METADATA[0]!, { ...PROBLEM_METADATA[0]!, title: "Second version" }]
+      [firstMetadata, { ...firstMetadata, title: "Second version" }]
     )).toThrow(/duplicate problem ID/i);
   });
 

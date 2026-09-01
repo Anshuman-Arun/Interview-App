@@ -14,7 +14,7 @@ export const quantHiddenCoinBayesSpec: CuratedProblemSpec = {
     {"id":"priors","description":"State the equal prior odds for A and B.","approachIds":["bayes-formula","odds-update"],"hintLevels":[1]},
     {"id":"likelihoods","description":"Compute the likelihood of HHH under each coin.","approachIds":["bayes-formula","odds-update"],"prerequisiteIds":["priors"],"hintLevels":[2]},
     {"id":"likelihood-ratio","description":"Compare the likelihoods or multiply priors by them.","approachIds":["bayes-formula","odds-update"],"prerequisiteIds":["likelihoods"],"hintLevels":[3]},
-    {"id":"normalize-posterior","description":"Normalize the two posterior weights.","approachIds":["bayes-formula"],"prerequisiteIds":["likelihood-ratio"],"hintLevels":[4]},
+    {"id":"normalize-posterior","description":"Normalize the two posterior weights.","approachIds":["bayes-formula","odds-update"],"prerequisiteIds":["likelihood-ratio"],"hintLevels":[4]},
     {"id":"posterior-answer","description":"State and interpret the posterior probability for Coin B.","approachIds":["bayes-formula","odds-update"],"prerequisiteIds":["normalize-posterior"],"hintLevels":[5]}
   ],
   "edges":[{"from":"priors","to":"likelihoods"},{"from":"likelihoods","to":"likelihood-ratio"},{"from":"likelihood-ratio","to":"normalize-posterior"},{"from":"normalize-posterior","to":"posterior-answer"}],
