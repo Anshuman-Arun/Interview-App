@@ -26,10 +26,16 @@ export const InterventionPolicySchema = z.enum([
 ]);
 export type InterventionPolicy = z.infer<typeof InterventionPolicySchema>;
 
+const CommonSecretValuePattern =
+  /^(?:sk[-_][a-z0-9_-]{16,}|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|glpat-[a-z0-9_-]{20,}|hf_[a-z0-9]{20,}|xox[baprs]-[a-z0-9-]{10,})$/u;
+
 const ProviderMachineIdSchema = z.string()
   .min(1)
   .max(64)
-  .regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u);
+  .regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u)
+  .refine((value) => !CommonSecretValuePattern.test(value), {
+    message: "Provider selection identifiers must not contain credential material"
+  });
 
 export const ProviderSelectionReferenceSchema = z.object({
   providerId: ProviderMachineIdSchema,
