@@ -46,7 +46,7 @@ interface MatchPlan {
 export class LimitOrderBook {
   private bids: LimitOrder[] = []; // sorted descending by price, then ascending by timestamp
   private asks: LimitOrder[] = []; // sorted ascending by price, then ascending by timestamp
-  private lastTradePrice?: number;
+  private lastTradePrice: number | undefined;
   private totalVolume = 0;
   private activeMakerQuotes = new Map<string, { bidId?: string; askId?: string }>();
   private readonly generatedIds = new Set<string>();
