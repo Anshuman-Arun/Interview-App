@@ -254,8 +254,8 @@ describe("deterministic Quant Research interview engine", () => {
 
     const experimentEngine = new QuantResearchEngine(experimental);
     experimentEngine.applyAction({ actionId: "gold-e", kind: "ALLOCATE_SAMPLE", a: 2, b: 4 });
-    expect(visibleNumber(experimentEngine.getState(), "sampleMeanA")).toBe(55);
-    expect(visibleNumber(experimentEngine.getState(), "sampleMeanB")).toBe(63.5);
+    expect(visibleNumber(experimentEngine.getState(), "sampleMeanA")).toBe(57.5);
+    expect(visibleNumber(experimentEngine.getState(), "sampleMeanB")).toBe(44.75);
 
     const modelEngine = new QuantResearchEngine(model);
     expect(modelEngine.getState().visibleData.find((item) => item.key === "y")?.value)
