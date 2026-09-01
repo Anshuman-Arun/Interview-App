@@ -41,19 +41,21 @@ export interface SileroVadRuntime {
 }
 
 export class SileroVadBackend implements VadBackend {
+  private readonly modelPath: string;
+
   public constructor(
     private readonly runtime: SileroVadRuntime,
-    private readonly modelPath: string
+    modelPath: string
   ) {
-    validateLocalModelPath(modelPath, "Silero model path");
+    this.modelPath = validateLocalModelPath(modelPath, "Silero model path");
     validateRuntimeIdentity(runtime.runtimeVersion, "Silero runtime version");
   }
 
   public async classify(frame: PcmFrameSnapshot, signal?: AbortSignal): Promise<VadObservation> {
     const rawProbability = await this.runtime.score({
-      pcmBytes: frame.bytes,
+      pcmBytes: new Uint8Array(frame.bytes),
       sampleRate: frame.envelope.sampleRate,
-      modelPath: this.modelPath.trim(),
+      modelPath: this.modelPath,
       ...(signal === undefined ? {} : { signal })
     });
     if (typeof rawProbability !== "number") throw new Error("Silero speech probability must be numeric");
@@ -111,8 +113,9 @@ export class VoiceActivityStateMachine {
   private speechMs = 0;
   private silenceMs = 0;
   private utteranceMs = 0;
+  private readonly config: VoiceActivityConfig;
 
-  public constructor(private readonly config: VoiceActivityConfig = DEFAULT_VAD_CONFIG) {
+  public constructor(config: VoiceActivityConfig = DEFAULT_VAD_CONFIG) {
     validateProbability(config.onsetThreshold, "onsetThreshold");
     validateProbability(config.continuationThreshold, "continuationThreshold");
     if (config.continuationThreshold > config.onsetThreshold) {
@@ -124,6 +127,11 @@ export class VoiceActivityStateMachine {
     if (config.onsetHysteresisMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
       throw new Error("Onset hysteresis cannot exceed the maximum utterance duration");
     }
+    this.config = Object.freeze({
+      onsetThreshold: config.onsetThreshold,
+      continuationThreshold: config.continuationThreshold,
+      onsetHysteresisMs: config.onsetHysteresisMs
+    });
   }
 
   public step(probability: number, durationMs: number): VoiceActivityStep {
@@ -193,6 +201,7 @@ export class VoiceActivityStateMachine {
   }
 
   public cancel(): void {
+    if (this.state === "FINALIZED") throw new Error("Finalized VAD cannot be cancelled");
     this.state = "CANCELLED";
   }
 
@@ -268,15 +277,17 @@ const DEFAULT_ENDPOINT_CONFIG: EndpointingConfig = {
 };
 
 export class AdaptiveEndpointingPolicy {
-  public constructor(private readonly config: EndpointingConfig = DEFAULT_ENDPOINT_CONFIG) {
+  private readonly config: EndpointingConfig;
+
+  public constructor(config: EndpointingConfig = DEFAULT_ENDPOINT_CONFIG) {
     for (const [name, value] of Object.entries(config)) {
       if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be positive`);
     }
     if (config.minimumSilenceMs > config.maximumPauseMs) {
       throw new Error("Minimum endpoint silence cannot exceed maximum pause");
     }
-    if (config.incompleteSilenceMs < config.minimumSilenceMs || config.incompleteSilenceMs > config.maximumPauseMs) {
-      throw new Error("Incomplete-utterance silence must be within the endpoint pause bounds");
+    if (config.incompleteSilenceMs < config.minimumSilenceMs) {
+      throw new Error("Incomplete-utterance silence cannot be shorter than normal endpoint silence");
     }
     if (config.maximumUtteranceMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
       throw new Error("Endpointing cannot exceed the global utterance duration limit");
@@ -284,6 +295,13 @@ export class AdaptiveEndpointingPolicy {
     if (config.minimumSpeechMs > config.maximumUtteranceMs) {
       throw new Error("Minimum speech duration cannot exceed maximum utterance duration");
     }
+    this.config = Object.freeze({
+      minimumSpeechMs: config.minimumSpeechMs,
+      minimumSilenceMs: config.minimumSilenceMs,
+      incompleteSilenceMs: config.incompleteSilenceMs,
+      maximumPauseMs: config.maximumPauseMs,
+      maximumUtteranceMs: config.maximumUtteranceMs
+    });
   }
 
   public getMaximumUtteranceMs(): number {
@@ -292,6 +310,9 @@ export class AdaptiveEndpointingPolicy {
 
   public decide(input: EndpointingInput): EndpointingDecision {
     const boundedInput = EndpointingInputSchema.parse(input);
+    if (boundedInput.state === "FINALIZED" || boundedInput.state === "CANCELLED") {
+      throw new Error("Endpointing cannot advance a terminal VAD state");
+    }
     if (boundedInput.explicitFlush === true) {
       return boundedInput.speechMs < this.config.minimumSpeechMs
         ? { kind: "DISCARD", reason: "TOO_SHORT" }
@@ -322,7 +343,7 @@ function validateProbability(value: number, label: string): void {
   }
 }
 
-function validateLocalModelPath(value: string, label: string): void {
+function validateLocalModelPath(value: string, label: string): string {
   const path = value.trim();
   if (path.length === 0 || path.length > 1_024) throw new Error(`${label} is invalid`);
   const windowsDrivePath = /^[A-Za-z]:[\\/]/u.test(path);
@@ -331,6 +352,7 @@ function validateLocalModelPath(value: string, label: string): void {
   if ((uriLikePath && !windowsDrivePath) || uncLikePath || /[\p{Cc}\p{Cf}]/u.test(path)) {
     throw new Error(`${label} must be an explicitly supplied safe local filesystem path`);
   }
+  return path;
 }
 
 function validateRuntimeIdentity(value: unknown, label: string): void {
