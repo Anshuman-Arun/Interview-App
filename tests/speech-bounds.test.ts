@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { newRequestId, newUtteranceId } from "../packages/domain/src/index.js";
 import {
+  MAX_SPEECH_BUFFERED_PCM_BYTES,
   MAX_SPEECH_TIMESTAMP_MS,
+  MAX_SPEECH_TRANSCRIPT_RESULT_CACHE,
   MAX_SPEECH_WORD_TIMINGS,
   SourceAudioBasisSchema,
   SpeechPcmFrameEnvelopeSchema,
   TranscriptCandidateSchema,
   type SourceAudioBasis
 } from "../packages/local-compute/src/speech-protocol.js";
-import { snapshotPcmFrame } from "../packages/local-compute/src/speech-pcm.js";
+import { BoundedPcmBuffer, snapshotPcmFrame } from "../packages/local-compute/src/speech-pcm.js";
 import {
   MoonshineSpeechRecognizer,
+  TranscriptResultGate,
   type RecognizerAudioInput
 } from "../packages/local-compute/src/speech-stt.js";
 import { SileroVadBackend } from "../packages/local-compute/src/speech-vad.js";
@@ -80,6 +83,41 @@ describe("speech protocol hard bounds", () => {
       model: { name: "fake\nmodel", version: "1" },
       sourceAudioBasis: basis
     }).success).toBe(false);
+  });
+
+  it("enforces buffer/cache hard limits even when helpers are used directly", () => {
+    expect(() => new BoundedPcmBuffer(MAX_SPEECH_BUFFERED_PCM_BYTES + 1)).toThrow(/hard speech bound/u);
+    expect(() => new TranscriptResultGate(MAX_SPEECH_TRANSCRIPT_RESULT_CACHE + 1)).toThrow(/hard speech cache limit/u);
+
+    const mono16 = new Float32Array(320);
+    const first = snapshotPcmFrame({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "direct-buffer",
+      sequence: 0,
+      sampleRate: 16_000,
+      channels: 1,
+      sampleFormat: "F32LE",
+      frameSamples: 320,
+      payloadByteLength: mono16.byteLength,
+      timestampMs: 0
+    }, mono16);
+    const mono48 = new Float32Array(960);
+    const second = snapshotPcmFrame({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "direct-buffer",
+      sequence: 1,
+      sampleRate: 48_000,
+      channels: 1,
+      sampleFormat: "F32LE",
+      frameSamples: 960,
+      payloadByteLength: mono48.byteLength,
+      timestampMs: 20
+    }, mono48);
+    const buffer = new BoundedPcmBuffer();
+    buffer.append(first, false);
+    expect(() => buffer.append(second, false)).toThrow(/sample rate/u);
   });
 
   it("enforces the global utterance-duration limit before Moonshine runtime invocation", async () => {
