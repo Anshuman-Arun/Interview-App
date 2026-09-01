@@ -721,7 +721,8 @@ export interface QuantResearchReplayOutput {
 }
 
 export function replayQuantResearch(definitionInput: unknown, actionsInput: readonly unknown[]): QuantResearchReplayOutput {
-  if (!Array.isArray(actionsInput) || actionsInput.length > MAX_ACTIONS) {
+  if (!Array.isArray(actionsInput)) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be an array");
+  if (actionsInput.length > MAX_ACTIONS) {
     throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Replay action list exceeds the maximum size");
   }
   const engine = new QuantResearchEngine(definitionInput);
