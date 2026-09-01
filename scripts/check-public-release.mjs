@@ -82,7 +82,7 @@ const CONTENT_RULES = [
   },
   {
     code: "PACKAGE_AUTH",
-    pattern: /(?:^|\n)\s*(?:\/\/[^\s=]+:)?_authToken\s*=\s*(?!\$\{|\[REDACTED\]|<)[^\s#]+/gimu,
+    pattern: /(?:^|\n)\s*(?:\/\/[^\s=]+:)?(?:_authToken|_auth|_password)\s*=\s*(?!\$\{|\[REDACTED\]|<)[^\s#]+/gimu,
     message: "tracked package-manager configuration contains a literal authentication token"
   }
 ];
