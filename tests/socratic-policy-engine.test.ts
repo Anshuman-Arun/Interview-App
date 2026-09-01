@@ -428,12 +428,15 @@ describe("production Socratic policy engine", () => {
     const deliveryId = Object.keys(assisted.deliveries).at(-1);
     expect(deliveryId).toBeDefined();
     if (deliveryId === undefined) throw new Error("missing delivery");
+    const assistedDelivery = assisted.deliveries[deliveryId];
+    expect(assistedDelivery).toBeDefined();
+    if (assistedDelivery === undefined) throw new Error("missing delivery state");
     state = {
       ...assisted,
       deliveries: {
         ...assisted.deliveries,
         [deliveryId]: {
-          ...assisted.deliveries[deliveryId],
+          ...assistedDelivery,
           status: "CANCELLED"
         }
       }
