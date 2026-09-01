@@ -183,6 +183,40 @@ describe("speech worker adversarial races and hard limits", () => {
     await expect(rightFrame).resolves.toEqual([]);
   });
 
+  it("keeps a shutdown control path available when ordinary request capacity is saturated", async () => {
+    const vadBackend: VadBackend = {
+      async classify() {
+        return new Promise(() => undefined);
+      }
+    };
+    const subject = worker({ vadBackend, maxInFlightRequests: 1, vadTimeoutMs: 20 });
+    const fixture = frame(0, false, "shutdown-reserve");
+    const pending = subject.submitFrame(fixture.envelope, fixture.pcm);
+
+    const shutdownRequest = {
+      protocolVersion: 1 as const,
+      requestId: newRequestId(),
+      type: "SHUTDOWN_SPEECH_WORKER" as const
+    };
+    await expect(subject.handleControl(shutdownRequest)).resolves.toEqual([]);
+    await expect(subject.handleControl(shutdownRequest)).resolves.toEqual([]);
+    await expect(subject.submitFrame(
+      frame(0, false, "after-shutdown").envelope,
+      frame(0, false, "after-shutdown").pcm
+    )).rejects.toMatchObject({ code: "SHUTTING_DOWN" });
+    await expect(pending).resolves.toEqual([]);
+  });
+
+  it("runtime-rejects malformed control messages", async () => {
+    const subject = worker();
+    await expect(subject.handleControl({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      type: "SHUTDOWN_SPEECH_WORKER",
+      unexpected: true
+    })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+  });
+
   it("remembers stable failures so a failed RequestId cannot later be reused with different content", async () => {
     const subject = worker();
     const requestId = newRequestId();
