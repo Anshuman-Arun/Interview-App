@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ContextEpochSchema,
   DeliveryIdSchema,
   DisclosureIdSchema,
   EventIdSchema,
@@ -117,6 +118,80 @@ describe("grounded session evaluator", () => {
       "unresolved"
     );
     expect(evaluateInterviewSession(unresolved, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+  });
+
+  it("requires specific verifier provenance before upgrading correctness support", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "provenance-claim" },
+      dimension: "CORRECTNESS"
+    };
+    const verified = withVerification(boundState(), key, "VERIFIED", 10, "provenance");
+    const verifiedEvaluation = evaluateInterviewSession(verified, sixPeopleProblem);
+    expect(verifiedEvaluation.scores.technicalCorrectness).toBe(100);
+    expect(verifiedEvaluation.dimensionResults.technicalCorrectness.supportLevel)
+      .toBe("MODERATE");
+    expect(verifiedEvaluation.dimensionResults.technicalCorrectness.evidenceRefs)
+      .toContainEqual({
+        kind: "VERIFICATION_REQUEST",
+        id: "verification_provenance"
+      });
+
+    const unlinked = setHistory(verified, key, [{
+      value: "CORRECT",
+      sequence: 20,
+      status: "ACTIVE",
+      evidenceEventIds: [EventIdSchema.parse("unrelated_support_event")]
+    }]);
+    const unlinkedEvaluation = evaluateInterviewSession(unlinked, sixPeopleProblem);
+    expect(unlinkedEvaluation.scores.technicalCorrectness).toBe(100);
+    expect(unlinkedEvaluation.dimensionResults.technicalCorrectness.supportLevel)
+      .toBe("WEAK");
+    expect(unlinkedEvaluation.dimensionResults.technicalCorrectness.evidenceRefs)
+      .not.toContainEqual({
+        kind: "VERIFICATION_REQUEST",
+        id: "verification_provenance"
+      });
+  });
+
+  it("does not resurrect invalidated verified evidence from historical verifier state", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "stale-verified-claim" },
+      dimension: "CORRECTNESS"
+    };
+    let state = withVerification(boundState(), key, "VERIFIED", 10, "stale-verified");
+    state = setHistory(state, key, [{
+      value: "CORRECT",
+      sequence: 12,
+      status: "STALE",
+      evidenceEventIds: [EventIdSchema.parse("verification_requested_stale-verified")]
+    }]);
+
+    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+  });
+
+  it("does not treat a contradiction from a stale context epoch as current correctness", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "stale-contradiction" },
+      dimension: "CORRECTNESS"
+    };
+    const contradicted = withVerification(
+      boundState(),
+      key,
+      "CONTRADICTED",
+      10,
+      "stale-contradiction"
+    );
+    const state: SessionState = {
+      ...contradicted,
+      contextEpoch: ContextEpochSchema.parse(1)
+    };
+
+    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.technicalCorrectness)
       .toBeNull();
   });
 
