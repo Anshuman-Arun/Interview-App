@@ -86,6 +86,18 @@ describe("generic interview session configuration", () => {
 
     expect(ramsey.configuration).toEqual(ramseyConfiguration);
     expect(other.configuration).toEqual(divisibilityConfiguration);
+    expect(ramsey.problem).toMatchObject({
+      id: sixPeopleProblem.id,
+      version: sixPeopleProblem.version,
+      prompt: sixPeopleProblem.public.prompt
+    });
+    expect(other.problem).toMatchObject({
+      id: divisibility.id,
+      version: divisibility.version,
+      prompt: divisibility.public.prompt
+    });
+    expect(JSON.stringify(ramsey.problem)).not.toContain(sixPeopleProblem.private.canonicalSolution);
+    expect(JSON.stringify(ramsey.problem)).not.toContain("protectedDisclosures");
     expect(registry.get(ramseySession).getState().problem?.id).toBe(sixPeopleProblem.id);
     expect(registry.get(divisibilitySession).getState().problem?.id).toBe(divisibility.id);
     expect(registry.get(divisibilitySession).getState().problem?.version).toBe(divisibility.version);
@@ -152,6 +164,16 @@ describe("generic interview session configuration", () => {
       await json(await postStart(sessionId, configuration))
     );
     expect(started.configuration).toEqual(configuration);
+    expect(started.problem).toBeUndefined();
+    const persistedConfiguration = registry.get(sessionId).getState().configuration;
+    expect(persistedConfiguration).toEqual(configuration);
+    expect(Object.isFrozen(persistedConfiguration)).toBe(true);
+    expect(Object.isFrozen(persistedConfiguration?.providerSelection)).toBe(true);
+    expect(Object.isFrozen(
+      persistedConfiguration?.mode === "QUANT_TRADING"
+        ? persistedConfiguration.scenario
+        : undefined
+    )).toBe(true);
     expect(registry.get(sessionId).getState().problem).toBeUndefined();
 
     await server.stop();
@@ -189,6 +211,12 @@ describe("generic interview session configuration", () => {
     const sessionId = newSessionId();
     const started = await client.startConfiguredSession(sessionId, configuration);
     expect(started.configuration).toEqual(configuration);
+    expect(started.problem).toMatchObject({
+      id: problem.id,
+      version: problem.version,
+      title: "A Divisibility Pair in {1,…,2n}",
+      prompt: problem.public.prompt
+    });
     expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
   });
 
@@ -309,6 +337,17 @@ describe("generic interview session configuration", () => {
       durationMinutes: 10_000,
       interventionPolicy: "BALANCED"
     })).toThrow();
+
+    expect(() => resolveInterviewSessionConfiguration({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: { id: "BASIC_MARKET_MAKING", version: QUANT_TRADER_SCENARIO_VERSION },
+      interventionPolicy: "BALANCED",
+      providerSelection: {
+        providerId: "unregistered-provider",
+        modelId: "unregistered-model"
+      }
+    })).toThrow(/provider selection identity/);
   });
 
   it("enumerates only bounded public launch metadata", async () => {
