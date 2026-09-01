@@ -123,7 +123,7 @@ describe("local worker lifecycle manager", () => {
       }
     });
     expect(() => new LocalRuntimeManager({
-      parentEnvironment: accessorParentEnvironment as NodeJS.ProcessEnv
+      parentEnvironment: accessorParentEnvironment
     })).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
     expect(parentEnvironmentGetterCalls).toBe(0);
 
@@ -165,7 +165,8 @@ describe("local worker lifecycle manager", () => {
     const proxiedSignal = new Proxy(new AbortController().signal, {
       get: (target, key, receiver) => {
         signalProxyTraps += 1;
-        return Reflect.get(target, key, receiver);
+        const result: unknown = Reflect.get(target, key, receiver);
+        return result;
       },
       getPrototypeOf: (target) => {
         signalProxyTraps += 1;
@@ -333,7 +334,7 @@ describe("local worker lifecycle manager", () => {
       .rejects.toMatchObject({ code: "PROCESS_EXITED" });
 
     const http = manager({
-      fetch: (() => new Promise<Response>(() => undefined)) as typeof globalThis.fetch
+      fetch: () => new Promise<Response>(() => undefined)
     });
     http.register(definition("http-exit-race", "crash", {
       startupTimeoutMs: 500,
@@ -711,7 +712,7 @@ describe("local worker lifecycle manager", () => {
       resolveFetch = resolve;
     });
     const runtime = manager({
-      fetch: (() => deferred) as typeof globalThis.fetch
+      fetch: () => deferred
     });
     runtime.register(definition("late-http-response", "ready", {
       startupTimeoutMs: 80,
@@ -843,12 +844,17 @@ describe("local worker lifecycle manager", () => {
     const inputs: string[] = [];
     let calls = 0;
     const runtime = manager({
-      fetch: ((input) => {
+      fetch: (input) => {
         calls += 1;
-        inputs.push(String(input));
+        const observedUrl = typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+        inputs.push(observedUrl);
         if (input instanceof URL) input.hostname = "example.com";
         return Promise.resolve(new Response(null, { status: calls >= 2 ? 204 : 503 }));
-      }) as typeof globalThis.fetch
+      }
     });
     runtime.register(definition("immutable-http-target", "ready", {
       startupTimeoutMs: 500,
@@ -869,7 +875,11 @@ describe("local worker lifecycle manager", () => {
     let requestedUrl: string | undefined;
     const runtime = manager({
       fetch: (input) => {
-        requestedUrl = String(input);
+        requestedUrl = typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
         return Promise.resolve(new Response(null, { status: 204 }));
       }
     });
@@ -920,7 +930,7 @@ describe("local worker lifecycle manager", () => {
     const runtime = manager({
       fetch: (() => {
         let attempt = 0;
-        return (_input: string | URL | Request, _init?: RequestInit) => {
+        return () => {
           attempt += 1;
           return Promise.resolve(new Response("probe", { status: attempt < 2 ? 503 : 200 }));
         };
@@ -1584,7 +1594,7 @@ describe("local worker lifecycle manager", () => {
       restartPolicy: { mode: "ON_FAILURE", maxRetries: 2, backoffMs: 5 },
       readiness: {
         kind: "CUSTOM_LOCAL",
-        probe: () => revokedDecision.proxy as unknown as { readonly ready: boolean }
+        probe: () => revokedDecision.proxy
       }
     }));
     await expect(returned.start("revoked-decision"))
@@ -1605,7 +1615,7 @@ describe("local worker lifecycle manager", () => {
         kind: "CUSTOM_LOCAL",
         probe: () => ({
           ready: true,
-          handshake: accessorHandshake as LocalComponentHandshake
+          handshake: accessorHandshake
         })
       }
     }));
@@ -1624,6 +1634,7 @@ describe("local worker lifecycle manager", () => {
         intervalMs: 5,
         probe: () => {
           throwingProbeCalls += 1;
+          // eslint-disable-next-line @typescript-eslint/only-throw-error -- Deliberately tests a revoked non-Error rejection from hostile callback code.
           throw revokedThrown.proxy;
         }
       }
@@ -1715,10 +1726,10 @@ describe("local worker lifecycle manager", () => {
 
     let fetchCalls = 0;
     const fetchSpoof = manager({
-      fetch: (() => {
+      fetch: () => {
         fetchCalls += 1;
         return Promise.reject(new LocalRuntimeError("READINESS_FAILED", "spoofed fetch failure"));
-      }) as typeof globalThis.fetch
+      }
     });
     fetchSpoof.register(definition("spoofed-fetch-error", "ready", {
       startupTimeoutMs: 120,
@@ -2030,7 +2041,7 @@ describe("local worker lifecycle manager", () => {
       }
     });
     expect(() => buildLocalEnvironment({
-      values: nestedValues as Readonly<Record<string, string>>
+      values: nestedValues
     }, {})).toThrow(/accessor/u);
     expect(nestedGetterCalls).toBe(0);
 
@@ -2085,7 +2096,7 @@ describe("local worker lifecycle manager", () => {
     });
     expect(() => buildLocalEnvironment(
       undefined,
-      parent as NodeJS.ProcessEnv,
+      parent,
       process.platform
     )).toThrow(/may not contain accessors/iu);
     expect(parentGetterCalls).toBe(0);
@@ -2112,7 +2123,7 @@ describe("local worker lifecycle manager", () => {
     });
     const hiddenInherited = buildLocalEnvironment(
       { inherit: ["SAFE_PARENT"] },
-      hiddenParent as NodeJS.ProcessEnv
+      hiddenParent
     );
     expect(hiddenInherited.environment).not.toHaveProperty("SAFE_PARENT");
 
@@ -2448,10 +2459,9 @@ describe("local worker lifecycle manager", () => {
     await runtime.start("proxy-hook-error");
     await runtime.stop("proxy-hook-error");
     expect(shutdownErrorProxyTraps).toBe(0);
-    expect(runtime.getStatus("proxy-hook-error").failure).toMatchObject({
-      code: "GRACEFUL_SHUTDOWN_FAILED",
-      message: expect.stringContaining("unknown error")
-    });
+    const failure = runtime.getStatus("proxy-hook-error").failure;
+    expect(failure?.code).toBe("GRACEFUL_SHUTDOWN_FAILED");
+    expect(failure?.message).toContain("unknown error");
   });
 
   it("does not invoke hostile error message accessors while reporting shutdown failures", async () => {
