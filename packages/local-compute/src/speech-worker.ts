@@ -17,6 +17,7 @@ import {
   MAX_SPEECH_PRE_SPEECH_DURATION_MS,
   MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
   MAX_SPEECH_REMEMBERED_MESSAGES,
+  MAX_SPEECH_REMEMBERED_RESULT_CHARS,
   MAX_SPEECH_VAD_TIMEOUT_MS,
   SpeechCancelRequestSchema,
   SpeechFlushRequestSchema,
@@ -85,13 +86,15 @@ type RememberedMessage =
   | {
       readonly fingerprint: string;
       readonly kind: "EVENTS";
-      readonly events: readonly SpeechWorkerEvent[];
+      readonly serializedEvents: string;
+      readonly costChars: number;
     }
   | {
       readonly fingerprint: string;
       readonly kind: "ERROR";
       readonly code: SpeechWorkerErrorCode;
       readonly message: string;
+      readonly costChars: number;
     };
 
 interface InFlightMessage {
@@ -130,6 +133,7 @@ export class SpeechWorkerCore {
   private readonly cancellationReserveClaims = new Set<SpeechStreamId>();
   private readonly diagnostics: SpeechWorkerDiagnostic[] = [];
   private readonly transcriptGate = new TranscriptResultGate();
+  private rememberedResultChars = 0;
   private readonly recognizerModelIdentity: SpeechModelIdentity;
   private readonly recognizerCancellationCapability: RecognizerCancellationCapability;
   private readonly maxConcurrentStreams: number;
@@ -797,14 +801,19 @@ export class SpeechWorkerCore {
     if (remembered.kind === "ERROR") {
       throw new SpeechWorkerCoreError(remembered.code, remembered.message);
     }
-    return cloneEvents(remembered.events);
+    return parseSerializedEvents(remembered.serializedEvents);
   }
 
   private rememberEvents(requestId: RequestId, fingerprint: string, events: readonly SpeechWorkerEvent[]): void {
+    const serializedEvents = JSON.stringify(cloneEvents(events));
+    if (serializedEvents.length > MAX_SPEECH_REMEMBERED_RESULT_CHARS) {
+      throw new SpeechWorkerCoreError("RESOURCE_LIMIT", "Speech replay result exceeds cache memory budget");
+    }
     this.rememberOutcome(requestId, {
       fingerprint,
       kind: "EVENTS",
-      events: cloneEvents(events)
+      serializedEvents,
+      costChars: serializedEvents.length + fingerprint.length
     });
   }
 
@@ -813,15 +822,25 @@ export class SpeechWorkerCore {
       fingerprint,
       kind: "ERROR",
       code: error.code,
-      message: error.message
+      message: error.message,
+      costChars: fingerprint.length + error.code.length + error.message.length
     });
   }
 
   private rememberOutcome(requestId: RequestId, outcome: RememberedMessage): void {
+    const previous = this.messages.get(requestId);
+    if (previous !== undefined) this.rememberedResultChars -= previous.costChars;
     this.messages.set(requestId, outcome);
-    if (this.messages.size <= this.maxRememberedMessages) return;
-    const oldest = this.messages.keys().next().value;
-    if (oldest !== undefined) this.messages.delete(oldest);
+    this.rememberedResultChars += outcome.costChars;
+
+    while (this.messages.size > this.maxRememberedMessages
+        || this.rememberedResultChars > MAX_SPEECH_REMEMBERED_RESULT_CHARS) {
+      const oldest = this.messages.keys().next().value;
+      if (oldest === undefined) break;
+      const evicted = this.messages.get(oldest);
+      this.messages.delete(oldest);
+      if (evicted !== undefined) this.rememberedResultChars -= evicted.costChars;
+    }
   }
 
   private async attemptRecognizerCancel(requestId: RequestId, streamId: SpeechStreamId): Promise<boolean> {
@@ -927,6 +946,12 @@ function safeCancelVad(vad: VoiceActivityStateMachine): void {
 
 function cloneEvents(events: readonly SpeechWorkerEvent[]): SpeechWorkerEvent[] {
   return events.map((event) => SpeechWorkerEventSchema.parse(event));
+}
+
+function parseSerializedEvents(serialized: string): SpeechWorkerEvent[] {
+  const parsed: unknown = JSON.parse(serialized);
+  if (!Array.isArray(parsed)) throw new SpeechWorkerCoreError("INTERNAL_ERROR", "Remembered speech result is invalid");
+  return parsed.map((event) => SpeechWorkerEventSchema.parse(event));
 }
 
 function translatePcmError(error: unknown): SpeechWorkerCoreError {
