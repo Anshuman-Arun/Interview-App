@@ -308,6 +308,56 @@ describe("compatibility and disclosure gates", () => {
     }
   });
 
+  it("barge-in supersedes a validated generation and cancels queued output before exposure", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("VALIDATED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
+
+      await harness.turns.beginUtterance();
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("CANCELLED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("board revision marks already-started stale output POSSIBLY_EXPOSED", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+      await harness.turns.commitBoardPatch("student replaced the relevant board argument");
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("transcript correction marks already-started stale output POSSIBLY_EXPOSED", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+      await harness.turns.correctTranscript("corrected student reasoning");
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("runtime validation prevents AI mutation of the student layer", () => {
     expect(() => BoardActionSchema.parse({
       operation: "highlight",
