@@ -137,11 +137,8 @@ export class BoundedPcmBuffer {
 
   public append(snapshot: PcmFrameSnapshot, speech: boolean): void {
     const first = this.frames[0]?.snapshot;
-    if (first !== undefined
-        && (snapshot.envelope.sampleRate !== first.envelope.sampleRate
-          || snapshot.envelope.channels !== first.envelope.channels
-          || snapshot.envelope.sampleFormat !== first.envelope.sampleFormat)) {
-      throw new PcmAdmissionError("STREAM_CONFLICT", "PCM buffer format changed within one utterance");
+    if (first !== undefined && snapshot.envelope.sampleRate !== first.envelope.sampleRate) {
+      throw new PcmAdmissionError("STREAM_CONFLICT", "PCM sample rate changed within one utterance");
     }
     if (this.byteLength + snapshot.bytes.byteLength > this.maxBytes) {
       throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM buffer limit exceeded");
