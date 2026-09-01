@@ -10,6 +10,7 @@ import {
   type SessionState
 } from "../../../packages/events/src/index.js";
 import {
+  createProviderContextSpecFingerprintSync,
   evaluateInterviewSession
 } from "../../../packages/interview-engine/src/index.js";
 import {
@@ -445,6 +446,19 @@ export class SessionReadService {
       state.problem.version
     );
     if (problem === undefined) {
+      return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };
+    }
+
+    try {
+      if (
+        state.problem.providerContextSpecSha256 === undefined
+        || problem.public.prompt !== state.problem.prompt
+        || createProviderContextSpecFingerprintSync(problem)
+          !== state.problem.providerContextSpecSha256
+      ) {
+        return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };
+      }
+    } catch {
       return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };
     }
 
