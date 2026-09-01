@@ -445,7 +445,13 @@ export class SessionReadService {
         }
       }
 
-      longitudinalInputs.push(history);
+      // Longitudinal statistics are keyed by exact problem identity. Some
+      // authoritative configured modes (currently Quant Trading) intentionally
+      // have no InterviewProblem, so keep their history card/replay available
+      // without coercing them into problem-comparison statistics.
+      if (history.problem !== undefined) {
+        longitudinalInputs.push(history);
+      }
       cards.push({
         ...cardBase,
         readStatus: "AVAILABLE",
