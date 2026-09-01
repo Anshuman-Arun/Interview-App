@@ -100,6 +100,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   public readonly cancellationCapability: RecognizerCancellationCapability;
   private readonly modelPath: string;
   private readonly configPath: string | undefined;
+  private readonly supportsAbort: boolean;
 
   public constructor(private readonly options: MoonshineRecognizerOptions) {
     this.modelPath = validateLocalPath(options.modelPath, "Moonshine model path");
@@ -107,8 +108,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       ? undefined
       : validateLocalPath(options.configPath, "Moonshine config path");
     validateRuntimeIdentity(options.runtime.runtimeVersion, "Moonshine runtime version");
-    if (typeof options.runtime.supportsAbort !== "boolean") throw new Error("Moonshine runtime abort capability must be boolean");
-    if (typeof options.runtime.transcribe !== "function") throw new Error("Moonshine runtime transcribe callback is required");
+    this.supportsAbort = validateBoolean(options.runtime.supportsAbort, "Moonshine runtime abort capability");
     const name = options.modelName?.trim() || "moonshine";
     this.modelIdentity = SpeechModelIdentitySchema.parse({
       name,
@@ -134,7 +134,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       sampleRate: sourceAudioBasis.sampleRate,
       modelPath: this.modelPath,
       ...(this.configPath === undefined ? {} : { configPath: this.configPath }),
-      ...(this.options.runtime.supportsAbort ? { signal } : {})
+      ...(this.supportsAbort ? { signal } : {})
     }));
     return {
       requestId,
@@ -149,7 +149,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
-    if (!this.options.runtime.supportsAbort || this.options.runtime.cancel === undefined) return false;
+    if (!this.supportsAbort || this.options.runtime.cancel === undefined) return false;
     return (await this.options.runtime.cancel(requestId)) === true;
   }
 }
@@ -253,10 +253,15 @@ function validateLocalPath(value: string, label: string): string {
   return path;
 }
 
-function validateRuntimeIdentity(value: string, label: string): void {
+function validateRuntimeIdentity(value: unknown, label: string): void {
   if (typeof value !== "string" || value.length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
     throw new Error(`${label} is invalid`);
   }
+}
+
+function validateBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") throw new Error(`${label} must be boolean`);
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
