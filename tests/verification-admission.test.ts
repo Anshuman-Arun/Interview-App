@@ -171,6 +171,42 @@ describe("deterministic verification admission", () => {
     harness.store.close();
   });
 
+  it("rejects a verifier that reports a confident status from a low-confidence interpretation", async () => {
+    const harness = await createCoreHarness();
+    const coordinator = new VerificationCoordinator(harness.writer);
+    const work = await issue(
+      coordinator,
+      harness,
+      completeGraphStatement(6, () => "ACQUAINTANCE"),
+      0.6
+    );
+    const invalidLowConfidenceResult: VerificationResult = {
+      status: "CONTRADICTED",
+      interpretationConfidence: 0.6,
+      verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+      reason: "misbehaving verifier should have abstained"
+    };
+    const verifier: DeterministicVerifier = {
+      verify: () => Promise.resolve(invalidLowConfidenceResult)
+    };
+
+    const admitted = await coordinator.processResult({
+      envelope: verificationEnvelope(harness, work),
+      result: invalidLowConfidenceResult,
+      verifier
+    });
+
+    expect(admitted.value).toMatchObject({
+      accepted: false,
+      reason: "VERIFIER_OUTPUT_INVALID"
+    });
+    expect(harness.writer.getState().verificationRequests[work.verificationRequestId]?.status)
+      .toBe("DISCARDED");
+    expect(harness.writer.getState().studentEvidence[evidenceKeyToString(claimEvidenceKey)])
+      .toBeUndefined();
+    harness.store.close();
+  });
+
   it("records a contradicted complete K5 interpretation without positive evidence", async () => {
     const harness = await createCoreHarness();
     const coordinator = new VerificationCoordinator(harness.writer);
