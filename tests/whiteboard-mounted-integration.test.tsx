@@ -30,7 +30,7 @@ const hadActEnvironment = Object.prototype.hasOwnProperty.call(
   globalThis,
   ACT_ENVIRONMENT_KEY
 );
-const previousActEnvironment = Reflect.get(globalThis, ACT_ENVIRONMENT_KEY);
+const previousActEnvironment: unknown = Reflect.get(globalThis, ACT_ENVIRONMENT_KEY);
 const originalDocumentFontsDescriptor = Object.getOwnPropertyDescriptor(
   document,
   "fonts"
