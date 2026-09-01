@@ -367,11 +367,11 @@ export function ReplayPanel({
           <div className="mt-2 flex flex-wrap gap-1">
             {response.replay.issues.map((issue, index) => (
               <span
-                key={`${issue.code}:${issue.sequence ?? "none"}:${index}`}
+                key={issue.code + ":" + (issue.sequence === undefined ? "none" : String(issue.sequence)) + ":" + String(index)}
                 className="rounded bg-white border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600"
               >
                 {issue.code}
-                {issue.sequence === undefined ? "" : ` @ ${issue.sequence}`}
+                {issue.sequence === undefined ? "" : " @ " + String(issue.sequence)}
               </span>
             ))}
           </div>
@@ -498,7 +498,7 @@ export function ReplayPanel({
                     {entry.evidence.value === undefined ? "" : ` · ${entry.evidence.value}`}
                     {entry.evidence.inferenceConfidence === undefined
                       ? ""
-                      : ` · recorded confidence ${entry.evidence.inferenceConfidence}`}
+                      : " · recorded confidence " + String(entry.evidence.inferenceConfidence)}
                   </p>
                 </div>
               ) : null}
