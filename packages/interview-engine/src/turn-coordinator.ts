@@ -451,14 +451,19 @@ export class TurnCoordinator {
     return result.value;
   }
 
-  public async selectAction(turnId: TurnId): Promise<RealizationRequest> {
+  public async selectAction(turnId: TurnId, problem?: InterviewProblem): Promise<RealizationRequest> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "pedagogical-policy", turnId });
     const result = await this.writer.execute(envelope, {
       operation: "SELECT_PEDAGOGICAL_ACTION",
-      payload: { turnId }
+      payload: {
+        turnId,
+        ...(problem === undefined ? {} : { problemId: problem.id, problemVersion: problem.version })
+      }
     }, RealizationRequestSchema, (state) => {
       assertSessionActive(state, "select pedagogical action");
-      const request = selectPedagogicalAction(state, turnId);
+      const existing = state.pedagogicalActions[turnId];
+      if (existing !== undefined) return { drafts: [], result: existing };
+      const request = selectPedagogicalAction(state, turnId, problem);
       return { drafts: [{ source: "APPLICATION", type: "PEDAGOGICAL_ACTION_SELECTED", payload: { turnId, request } }], result: request };
     });
     return result.value;
