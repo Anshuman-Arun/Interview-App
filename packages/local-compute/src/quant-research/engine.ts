@@ -993,8 +993,9 @@ function assertStateInvariants(state: InternalState): void {
           { category: "CONSISTENCY", stage: "PRIOR_PERTURBATION" }
         ]
       } as const;
-      assertExactActionHistory(state, bayesianKinds[state.stage], "Bayesian");
-      assertExactEvidenceHistory(state, bayesianEvidence[state.stage], "Bayesian");
+      const bayesianStage = state.stage as keyof typeof bayesianKinds;
+      assertExactActionHistory(state, bayesianKinds[bayesianStage], "Bayesian");
+      assertExactEvidenceHistory(state, bayesianEvidence[bayesianStage], "Bayesian");
       break;
     }
     case "SAMPLING_ESTIMATION": {
@@ -1137,8 +1138,9 @@ function assertStateInvariants(state: InternalState): void {
           { category: "SAMPLE_EFFICIENCY", stage: "PERTURBED_ALLOCATION" }
         ]
       } as const;
-      assertExactActionHistory(state, experimentalKinds[state.stage], "Experimental");
-      assertExactEvidenceHistory(state, experimentalEvidence[state.stage], "Experimental");
+      const experimentalStage = state.stage as keyof typeof experimentalKinds;
+      assertExactActionHistory(state, experimentalKinds[experimentalStage], "Experimental");
+      assertExactEvidenceHistory(state, experimentalEvidence[experimentalStage], "Experimental");
       break;
     }
     case "MODEL_COMPARISON": {
@@ -1203,8 +1205,9 @@ function assertStateInvariants(state: InternalState): void {
           { category: "CONSISTENCY", stage: "OUTLIER_MODEL_CHOICE" }
         ]
       } as const;
-      assertExactActionHistory(state, modelKinds[state.stage], "Model");
-      assertExactEvidenceHistory(state, modelEvidence[state.stage], "Model");
+      const modelStage = state.stage as keyof typeof modelKinds;
+      assertExactActionHistory(state, modelKinds[modelStage], "Model");
+      assertExactEvidenceHistory(state, modelEvidence[modelStage], "Model");
       break;
     }
     case "CONSTRAINED_OPTIMIZATION": {
@@ -1266,8 +1269,9 @@ function assertStateInvariants(state: InternalState): void {
           { category: "ADAPTATION", stage: "PERTURBED_OPTIMIZATION" }
         ]
       } as const;
-      assertExactActionHistory(state, optimizationKinds[state.stage], "Optimization");
-      assertExactEvidenceHistory(state, optimizationEvidence[state.stage], "Optimization");
+      const optimizationStage = state.stage as keyof typeof optimizationKinds;
+      assertExactActionHistory(state, optimizationKinds[optimizationStage], "Optimization");
+      assertExactEvidenceHistory(state, optimizationEvidence[optimizationStage], "Optimization");
       break;
     }
   }
