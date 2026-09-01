@@ -304,6 +304,53 @@ describe("Moonshine-compatible adapter seam", () => {
     expect(transcribeCalls).toBe(0);
   });
 
+  it("validates Moonshine cancellation IDs even when no explicit cancel hook exists", async () => {
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime: {
+        runtimeVersion: "test-runtime",
+        supportsAbort: false,
+        async transcribe() { return { text: "ok" }; }
+      },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    await expect(recognizer.cancel("x".repeat(129) as never)).rejects.toThrow();
+    await expect(recognizer.cancel(newRequestId())).resolves.toBe(false);
+  });
+
+  it("rejects unknown Moonshine direct-input fields and reads accessors once", async () => {
+    let transcribeCalls = 0;
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime: {
+        runtimeVersion: "test-runtime",
+        supportsAbort: false,
+        async transcribe() {
+          transcribeCalls += 1;
+          return { text: "ok" };
+        }
+      },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    const input = recognizerInput();
+    await expect(recognizer.recognize(
+      { ...input, typoField: true } as never,
+      new AbortController().signal
+    )).rejects.toThrow(/unexpected field/u);
+
+    const reads = { requestId: 0, utteranceId: 0, pcmBytes: 0, basis: 0 };
+    const accessorInput = {
+      get requestId() { reads.requestId += 1; return input.requestId; },
+      get utteranceId() { reads.utteranceId += 1; return input.utteranceId; },
+      get pcmBytes() { reads.pcmBytes += 1; return input.pcmBytes; },
+      get sourceAudioBasis() { reads.basis += 1; return input.sourceAudioBasis; }
+    };
+    await expect(recognizer.recognize(accessorInput as never, new AbortController().signal))
+      .resolves.toMatchObject({ text: "ok" });
+    expect(reads).toEqual({ requestId: 1, utteranceId: 1, pcmBytes: 1, basis: 1 });
+    expect(transcribeCalls).toBe(1);
+  });
+
   it("rejects PCM whose byte length does not match its claimed source basis", async () => {
     const input = recognizerInput();
     const recognizer = new MoonshineSpeechRecognizer({
