@@ -253,18 +253,20 @@ describe("generic interview session configuration", () => {
     expect((await postStart(sessionId, configuration)).status).toBe(200);
     const state = registry.get(sessionId).getState();
     expect(state.problem).toBeDefined();
-    if (state.problem === undefined) return;
+    const persistedProblem = state.problem;
+    if (persistedProblem === undefined) return;
 
     expect(() => resolveSessionStateComposition({
       ...state,
-      problem: { ...state.problem, prompt: "same-id substituted prompt" }
+      problem: { ...persistedProblem, prompt: "same-id substituted prompt" }
     })).toThrow(/does not match/);
 
     expect(() => resolveSessionStateComposition({
       ...state,
       problem: {
-        ...state.problem,
-        providerContextSpecSha256: "0".repeat(64) as typeof state.problem.providerContextSpecSha256
+        ...persistedProblem,
+        providerContextSpecSha256:
+          "0".repeat(64) as NonNullable<typeof persistedProblem.providerContextSpecSha256>
       }
     })).toThrow(/provenance/);
   });
