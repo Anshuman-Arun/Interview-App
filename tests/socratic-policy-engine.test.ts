@@ -1150,6 +1150,22 @@ describe("production Socratic policy engine", () => {
     expect(decision.realizationRequest.maximumDisclosure).toBe(0);
   });
 
+  it("bounds malformed direct TurnIds without echoing attacker-sized targets", () => {
+    const { state } = makeState();
+    const oversizedTurnId = "x".repeat(10_000);
+    const decision = decidePedagogicalPolicy(state, oversizedTurnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest.target).toBe("turn:invalid-turn");
+    expect(JSON.stringify(decision).length).toBeLessThan(2_000);
+  });
+
+  it("does not treat prototype properties as authoritative turns", () => {
+    const { state } = makeState();
+    const decision = decidePedagogicalPolicy(state, "__proto__", sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
   it("fails closed when the direct policy API is asked about a stale committed turn", () => {
     const { state: base, turnId } = makeState();
     const staleTurn = base.turns[turnId];
