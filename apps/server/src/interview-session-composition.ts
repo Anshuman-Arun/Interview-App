@@ -32,6 +32,32 @@ export type InterviewSessionComposition =
       configuration: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_RESEARCH" }>;
     }>;
 
+
+export function createLegacyDefaultSessionConfiguration(
+  legacyProblemId?: string
+): InterviewSessionConfiguration {
+  const expectedId = "oxford-six-people";
+  if (legacyProblemId !== undefined && legacyProblemId !== expectedId) {
+    throw new Error("Legacy START_SESSION supports only the historical Ramsey problem");
+  }
+  const problem = getProblemById(expectedId);
+  const metadata = getProblemMetadataById(expectedId);
+  if (
+    problem === undefined
+    || metadata?.mode !== "OXFORD_MATHEMATICS"
+    || metadata.reviewStatus !== "ready"
+  ) {
+    throw new Error("Legacy Ramsey problem is not available");
+  }
+  return InterviewSessionConfigurationSchema.parse({
+    configurationVersion: 1,
+    mode: "OXFORD_MATHEMATICS",
+    problem: { id: problem.id, version: problem.version },
+    difficulty: problem.interviewer.difficulty,
+    interventionPolicy: "BALANCED"
+  });
+}
+
 export function resolveInterviewSessionConfiguration(
   input: unknown
 ): InterviewSessionComposition {
