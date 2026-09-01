@@ -539,7 +539,7 @@ function publicPrompt(state: InternalState): string {
       if (state.stage === "PRIOR_PERTURBATION") return "Recompute the posterior probability using the changed prior and the same revealed observations.";
       return "Scenario complete.";
     case "SAMPLING_ESTIMATION":
-      if (state.stage === "SAMPLING") return "Request a bounded number of observations, then submit an estimate of the latent population center.";
+      if (state.stage === "SAMPLING") return "Observations come from a finite population built from an unknown integer center plus bounded symmetric integer noise. Request observations, then estimate the center.";
       if (state.stage === "OUTLIER_PERTURBATION") return "One contaminated observation has been introduced. Submit a revised estimate of the unchanged latent center.";
       return "Scenario complete.";
     case "EXPERIMENTAL_ALLOCATION":
@@ -584,6 +584,9 @@ function publicData(state: InternalState): readonly QuantResearchPublicDatum[] {
       if ((state.stage === "OUTLIER_PERTURBATION" || state.status === "COMPLETE") && state.outlier !== undefined) values.push(state.outlier);
       return [
         datum("maxSamples", "Maximum observation budget", state.config.maxSamples),
+        datum("populationSize", "Finite population size", state.config.populationSize),
+        datum("noiseRadius", "Ordinary symmetric integer-noise radius", state.config.noiseRadius),
+        datum("samplingWithoutReplacement", "Sampling without replacement", true),
         datum("observations", "Revealed observations", values),
         datum("contaminationIntroduced", "Contamination introduced", state.stage === "OUTLIER_PERTURBATION" || state.status === "COMPLETE")
       ];
@@ -610,6 +613,7 @@ function publicData(state: InternalState): readonly QuantResearchPublicDatum[] {
       return [
         datum("x", "x observations", points.map((point) => point.x)),
         datum("y", "y observations", points.map((point) => point.y)),
+        datum("noiseRadius", "Ordinary additive-noise radius", state.config.noiseRadius),
         datum("outlierIntroduced", "Outlier introduced", state.stage === "OUTLIER_MODEL_CHOICE" || state.status === "COMPLETE")
       ];
     }
