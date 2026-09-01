@@ -754,8 +754,8 @@ describe("grounded evaluation/replay product surface", () => {
       clientToken: TOKEN,
       fetchImpl: vi.fn()
     });
-    expect(() => client.getReplay(SessionIdSchema.parse("..")))
-      .toThrow("cannot be addressed");
+    await expect(client.getReplay(SessionIdSchema.parse("..")))
+      .rejects.toThrow("cannot be addressed");
   });
 
   it("returns a structured exact-problem failure instead of evaluating against a substitute", async () => {
