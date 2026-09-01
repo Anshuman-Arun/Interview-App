@@ -1,6 +1,7 @@
 import type {
   InputEpisodeId,
   InterviewerProposal,
+  RealizationRequest,
   SessionId,
   TurnId
 } from "../../../packages/domain/src/index.js";
@@ -78,6 +79,8 @@ export class ServerTurnOrchestrator {
       const hasDeliveries = Object.values(state.deliveries).some(
         (d) => Object.values(state.generations).some((g) => g.generationId === d.generationId && g.basis.turnId === turnId)
       );
+      const existingAction = state.pedagogicalActions[turnId];
+      if (existingAction?.requiredAction === "WAIT") continue;
 
       // Clean up stranded in-flight generations from pre-crash processes
       const strandedGenerations = Object.values(state.generations).filter(
@@ -109,17 +112,22 @@ export class ServerTurnOrchestrator {
     if (existingGeneration !== undefined) {
       return;
     }
+    if (currentState.pedagogicalActions[input.turnId]?.requiredAction === "WAIT") {
+      return;
+    }
 
     const turns = new TurnCoordinator(writer);
 
     // 1. Pedagogical policy selects the required action
-    const realizationRequest = await turns.selectAction(input.turnId);
+    const realizationRequest = await turns.selectAction(input.turnId, sixPeopleProblem);
+    if (realizationRequest.requiredAction === "WAIT") {
+      return;
+    }
 
-    // 2. Select contextual Oxford Socratic probe based on maximumDisclosure authorized
+    // 2. Realize only wording/content already authorized by application policy
     const proposal = this.createInterviewerProposal(
       input.studentText,
-      realizationRequest.requiredAction,
-      realizationRequest.maximumDisclosure
+      realizationRequest
     );
 
     // 3. MockModelAdapter with zero metered spend
@@ -160,39 +168,42 @@ export class ServerTurnOrchestrator {
 
   private createInterviewerProposal(
     studentText: string,
-    requiredAction: InterviewerProposal["realizedAction"],
-    maximumDisclosure: number
+    request: RealizationRequest
   ): InterviewerProposal {
     const text = studentText.toLowerCase();
+    const allowedDisclosureIds = new Set(request.allowedDisclosureIds ?? []);
 
-    // If policy authorizes level 4 disclosure and student reached PHP milestone
+    const completeTriangle = sixPeopleProblem.interviewer.protectedDisclosures[1];
     if (
-      maximumDisclosure >= 4 &&
-      (text.includes("pigeonhole") || text.includes("3") || text.includes("three") || text.includes("same color") || text.includes("same colour"))
+      request.maximumDisclosure >= 4
+      && completeTriangle !== undefined
+      && allowedDisclosureIds.has(completeTriangle.id)
+      && (text.includes("pigeonhole") || text.includes("3") || text.includes("three") || text.includes("same color") || text.includes("same colour"))
     ) {
-      const completeTriangle = sixPeopleProblem.interviewer.protectedDisclosures[1];
       return {
-        realizedAction: requiredAction,
+        realizedAction: request.requiredAction,
         claimedDisclosureLevel: 4,
-        claimedDisclosureIds: completeTriangle !== undefined ? [completeTriangle.id] : [],
+        claimedDisclosureIds: [completeTriangle.id],
         speechText: "Consider the three endpoints connected to vertex A by edges of the same color. What happens if any edge between them shares that color, and what happens if none of them do?"
       };
     }
 
-    // If policy authorizes level 2 disclosure
-    if (maximumDisclosure >= 2) {
-      const choosePerson = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    const choosePerson = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    if (
+      request.maximumDisclosure >= 2
+      && choosePerson !== undefined
+      && allowedDisclosureIds.has(choosePerson.id)
+    ) {
       return {
-        realizedAction: requiredAction,
+        realizedAction: request.requiredAction,
         claimedDisclosureLevel: 2,
-        claimedDisclosureIds: choosePerson !== undefined ? [choosePerson.id] : [],
+        claimedDisclosureIds: [choosePerson.id],
         speechText: "Why must at least three edges share the same color from vertex A?"
       };
     }
 
-    // Default zero-disclosure probe
     return {
-      realizedAction: requiredAction,
+      realizedAction: request.requiredAction,
       claimedDisclosureLevel: 0,
       claimedDisclosureIds: [],
       speechText: "What relations exist between vertex A and the other five people?"
