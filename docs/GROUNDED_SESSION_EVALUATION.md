@@ -43,7 +43,7 @@ The evaluator reads:
 
 - active scoped evidence from SessionState.evidenceHistory, cross-checked against SessionState.studentEvidence;
 - valid supersession history for recovery analysis;
-- accepted deterministic verification results and their application-owned request/evidence provenance;
+- accepted deterministic verification results, their application-owned request/evidence provenance, and current GenerationBasis compatibility where a standalone verifier outcome is used;
 - the problem's versioned, approach-aware reasoning graph;
 - exposed, completed, or possibly exposed deliveries;
 - generation basis metadata for generation provenance, but not as a substitute for exposure chronology;
@@ -52,6 +52,8 @@ The evaluator reads:
 It does not copy the private canonical solution, full transcript, or delivered hint text into SessionEvaluation.
 
 Superseded evidence may participate in historical negative-to-positive recovery transitions. STALE evidence has been explicitly invalidated and is excluded from current scoring and from error-recovery opportunities. Neither stale nor superseded evidence can establish current milestone achievement or current correctness.
+
+Evidence chronology is checked against the authoritative event index. An evidence record's lastUpdatedSequence must point to that record's own STUDENT_EVIDENCE_UPDATED event identity, and every cited provenance event must occur earlier. This prevents a corrupted projection from manufacturing error/recovery ordering by editing sequence numbers.
 
 ## Milestone achievement
 
@@ -93,9 +95,17 @@ Milestone completion is not a correctness sample. A PROGRESS = COMPLETE record c
 | unambiguous current CONTRADICTED | 0 |
 | UNKNOWN / UNRESOLVED / conflicting current verifier outcomes | no score contribution |
 
-The current SessionState retains verification request provenance but not the authoritative sequence of the later VERIFICATION_RESULT_ACCEPTED event. Request ordering is therefore not treated as result-acceptance ordering. If accepted current verifier outcomes conflict, or a current CORRECT model inference conflicts with an accepted deterministic contradiction, the affected subject is treated as unresolved rather than choosing an invented winner.
+The current SessionState retains verification request provenance but not the authoritative sequence of the later VERIFICATION_RESULT_ACCEPTED event. Request ordering is therefore not treated as result-acceptance ordering. Standalone CONTRADICTED or UNRESOLVED outcomes are considered current only while their complete GenerationBasis remains compatible with the current session state: committed input, transcript, board, problem-state, policy, context epoch, and turn/episode provenance must still match. A later committed input therefore prevents an old contradiction from leaking into current correctness.
 
-A VERIFIED request is never resurrected from historical request state after its committed correctness evidence has been invalidated or superseded. Absence of contradiction is not correctness.
+If simultaneously current accepted verifier outcomes conflict, or a current CORRECT model inference conflicts with an accepted deterministic contradiction, the affected subject is treated as unresolved rather than choosing an invented winner.
+
+A VERIFIED request is never resurrected from historical request state after its committed correctness evidence has been invalidated or superseded. Verifier-backed support requires the exact evidence chain committed by VerificationCoordinator: CORRECT, matching interpretation confidence, the original verification provenance events, and the authoritative verification-request event. Every accepted VERIFIED request must have that historical correctness evidence somewhere in evidenceHistory, even if the record is later superseded or invalidated. Absence of contradiction is not correctness.
+
+### Claim-granularity resistance
+
+CLAIM identifiers are not an authoritative versioned claim catalog, so the evaluator does not let a fallible producer multiply weight merely by inventing more IDs for the same observation. Unverified claim-scoped correctness records with the same normalized authoritative provenance-event set form one scoring unit. If multiple such records disagree, the conservative lowest grounded score is used for that unit and provenance/support are merged conservatively.
+
+Verifier-backed claims remain distinct because their authoritative verifier-request provenance distinguishes the deterministic checks. Structured MILESTONE, APPROACH, and SKILL subjects retain their explicit subject identity.
 
 ## Rigor
 
@@ -115,7 +125,7 @@ A current correctness error on the same subject constrains the rigor contributio
 - an unambiguous deterministic contradiction caps it at 0 when no active CORRECT record conflicts with that contradiction;
 - unresolved or conflicting deterministic correctness evidence degrades rigor support instead of inventing certainty.
 
-Turn count, response length, verification-request count, and unrelated or historical VERIFIED requests do not affect rigor.
+Turn count, response length, verification-request count, and unrelated or historical VERIFIED requests do not affect rigor. Claim-scoped justification records with identical normalized authoritative provenance are likewise one rigor scoring unit, so claim-ID splitting cannot manufacture extra weight.
 
 ## Communication
 
@@ -134,6 +144,8 @@ Only deliveries whose authoritative status is EXPOSED, COMPLETED, or POSSIBLY_EX
 Queued, delivering-but-unacknowledged, validated-only, and cancelled atoms do not count as exposed assistance.
 
 Assistance association is derived through protected disclosure IDs. A delivery is associated with a milestone only when the milestone references that disclosure ID. Re-rendering the same disclosure does not create duplicate disclosure identities. For a multi-disclosure atom, each milestone's assistanceLevel is derived from that disclosure's problem-defined minimum level rather than smearing the atom-wide maximum level onto every referenced milestone.
+
+A protected disclosure whose problem-defined minimum level is 0 is not positive assistance and does not create independence timing ambiguity. Conversely, if a delivery's authoritative effectiveDisclosureLevel is greater than the highest level explained by its recognized disclosure IDs, that residual positive severity is retained as unattributed assistance rather than disappearing behind a mapped level-zero or lower-level disclosure.
 
 The current SessionState records generation basis but not the authoritative event sequence at which a delivery became EXPOSED, COMPLETED, or POSSIBLY_EXPOSED. Generation basis is therefore never treated as exposure time.
 
@@ -191,7 +203,7 @@ INSUFFICIENT always implies score = null.
 
 Evaluation results retain compact references rather than copied source content.
 
-Reference kinds are EVIDENCE_EVENT, VERIFICATION_REQUEST, DELIVERY, TURN, and MILESTONE. Evidence and verification provenance IDs used by scoring are checked against SessionState.eventIds; an invented or missing event reference fails evaluation structurally rather than becoming support.
+Reference kinds are EVIDENCE_EVENT, VERIFICATION_REQUEST, DELIVERY, TURN, and MILESTONE. Evidence and verification provenance IDs used by scoring are checked against SessionState.eventIds; an invented or missing event reference fails evaluation structurally rather than becoming support. Verification request events must occur after their committed-input basis, and their source evidence must not come from beyond that basis.
 
 VERIFIED provenance is attached to current correctness only when the active evidence record specifically cites that verification request's authoritative request event. Historical VERIFIED requests with the same EvidenceKey are not treated as current support merely because the key matches.
 
@@ -245,7 +257,7 @@ Evaluation reports both sessionStatus and a derived completion state:
 - ARCHIVED_INCOMPLETE;
 - ARCHIVED_COMPLETED.
 
-Summary language reports lifecycle context separately from score. An incomplete or archived-incomplete session is not described as though the candidate completed an interview. Evaluator input validation also rejects contradictory lifecycle projections such as a CREATED session marked started, an ACTIVE session carrying terminal timestamps, or terminal states missing their required timestamp.
+Summary language reports lifecycle context separately from score. An incomplete or archived-incomplete session is not described as though the candidate completed an interview. Evaluator input validation also rejects contradictory lifecycle projections such as a CREATED session marked started, an ACTIVE session carrying terminal timestamps, or terminal states missing their required timestamp. Serialized lifecycle metadata is cross-validated as well, so CREATED/ACTIVE/COMPLETED cannot be paired with the wrong derived completion state.
 
 ## Determinism and timestamp handling
 
@@ -258,6 +270,23 @@ If no timestamp is supplied, the evaluator uses an authoritative terminal sessio
 Changing evaluatedAt cannot alter scores, support, provenance, milestones, or feedback.
 
 Object/map insertion order does not affect evaluation output.
+
+## Authoritative state projection checks
+
+Because evaluation consumes SessionState rather than replaying raw events itself, it validates the projection fields that materially affect scoring:
+
+- session and turn sequences must be safe and in bounds;
+- committed turn sequences are unique;
+- every committed turn references a COMMITTED InputEpisode;
+- lastCommittedInputSequence equals the latest committed turn sequence;
+- generation bases reference an existing turn, and any stored inputEpisodeId must match that turn;
+- evidence update sequence/provenance ordering is consistent with SessionState.eventIds;
+- accepted verification request provenance fits its committed-input basis;
+- accepted VERIFIED results retain their atomically committed historical correctness evidence;
+- delivery disclosure IDs are unique, known to the exact problem, and cannot understate the problem-defined disclosure minimum;
+- the disclosure ledger equals the union of authoritatively exposed/completed/possibly-exposed delivery disclosures.
+
+These checks reject corrupted/tampered projections rather than allowing projection metadata to alter verifier freshness, recovery ordering, or independence.
 
 ## Resource bounds and diagnostics
 
@@ -304,7 +333,7 @@ evaluation-model-seam.ts defines a deliberately non-authoritative boundary:
 
 The current seam accepts a communication proposal only when the proposal is schema-valid and every cited evidence reference is in the application-supplied allowlist. Malformed fallible proposals fail closed as INVALID_PROPOSAL rather than throwing through the evaluator boundary.
 
-Passing that provenance check does not make the proposed score authoritative. The deterministic SessionEvaluation scorer does not consume these proposals in this implementation.
+Passing that provenance check does not make the proposed score authoritative. Duplicate qualitative proposal evidence references are rejected, and the deterministic SessionEvaluation scorer does not consume these proposals in this implementation.
 
 No model or network call is made by session evaluation.
 
