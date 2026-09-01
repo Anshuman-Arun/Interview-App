@@ -128,13 +128,13 @@ export const SourceAudioBasisSchema = z.object({
 });
 export type SourceAudioBasis = z.infer<typeof SourceAudioBasisSchema>;
 
-const SafeRecognizerMetadataTextSchema = z.string()
+const safeRecognizerMetadataTextSchema = (maxLength: number) => z.string()
   .min(1)
-  .max(128)
+  .max(maxLength)
   .refine((value) => !/\p{Cc}/u.test(value), { message: "Recognizer metadata contains control characters" });
 
 export const TranscriptWordTimingSchema = z.object({
-  word: SafeRecognizerMetadataTextSchema,
+  word: safeRecognizerMetadataTextSchema(128),
   startMs: FiniteNonnegativeNumberSchema,
   endMs: FiniteNonnegativeNumberSchema,
   confidence: z.number().min(0).max(1).optional()
@@ -146,8 +146,8 @@ export const TranscriptWordTimingSchema = z.object({
 export type TranscriptWordTiming = z.infer<typeof TranscriptWordTimingSchema>;
 
 export const SpeechModelIdentitySchema = z.object({
-  name: SafeRecognizerMetadataTextSchema.max(100),
-  version: SafeRecognizerMetadataTextSchema.max(100)
+  name: safeRecognizerMetadataTextSchema(100),
+  version: safeRecognizerMetadataTextSchema(100)
 }).strict();
 export type SpeechModelIdentity = z.infer<typeof SpeechModelIdentitySchema>;
 
