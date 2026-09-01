@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { InterviewProblem } from "../packages/domain/src/index.js";
 import {
   ALL_PROBLEMS,
   EXPERT_REVIEW_METADATA,
@@ -269,7 +270,7 @@ describe("curated problem bank", () => {
       };
       private: { canonicalSolution: string; verificationNotes: string };
     };
-    const catalog = createProblemCatalog([mutable]);
+    const catalog = createProblemCatalog([mutable as unknown as InterviewProblem]);
 
     mutable.public.prompt = "MUTATED AFTER ADMISSION";
     mutable.interviewer.reasoningGraph.milestones[0]!.description = "MUTATED AFTER ADMISSION";
