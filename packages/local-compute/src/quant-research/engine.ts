@@ -195,7 +195,7 @@ function mean(values: readonly number[]): number {
 }
 
 function initialize(definition: QuantResearchScenarioDefinition): InternalState {
-  const rng = new DeterministicRng(definition.seed, definition.family + "@" + definition.version);
+  const rng = new DeterministicRng(definition.seed, definition.family + "@" + definition.version + "@" + definition.rngVersion);
   const common = {
     family: definition.family,
     version: definition.version,
@@ -1098,6 +1098,7 @@ function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
   }
   const length = lengthDescriptor.value as number;
   if (length > MAX_ACTIONS) throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Replay action list exceeds the maximum size");
+  if (keys.length > length + 1) throw new QuantResearchError("INVALID_REPLAY", "Replay actions contains too many properties");
   const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
   for (const key of keys) {
     if (typeof key !== "string" || !allowedKeys.has(key)) {
