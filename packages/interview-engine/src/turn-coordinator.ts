@@ -8,6 +8,7 @@ import {
   GenerationBasisSchema,
   GenerationIdSchema,
   InputEpisodeIdSchema,
+  InterviewSessionConfigurationSchema,
   InterviewerProposalSchema,
   EvidenceProposalSchema,
   EvidenceKeySchema,
@@ -34,6 +35,7 @@ import {
   type GenerationId,
   type InputEpisodeId,
   type InterviewProblem,
+  type InterviewSessionConfiguration,
   type InterviewerProposal,
   type EvidenceProposal,
   type RealizationRequest,
@@ -247,21 +249,92 @@ export class TurnCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
 
   public async startSession(problem: InterviewProblem, commandEnvelope?: CommandEnvelope): Promise<void> {
-    const providerContextSpecSha256 = createProviderContextSpecFingerprintSync(problem);
-    const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "application" }));
+    return this.startConfiguredSession({
+      configuration: {
+        configurationVersion: 1,
+        mode: "OXFORD_MATHEMATICS",
+        problem: { id: problem.id, version: problem.version },
+        difficulty: problem.interviewer.difficulty,
+        interventionPolicy: "BALANCED"
+      },
+      problem
+    }, commandEnvelope);
+  }
+
+  public async startConfiguredSession(
+    input: {
+      readonly configuration: InterviewSessionConfiguration;
+      readonly problem?: InterviewProblem;
+    },
+    commandEnvelope?: CommandEnvelope
+  ): Promise<void> {
+    const configuration = InterviewSessionConfigurationSchema.parse(input.configuration);
+    const envelope = CommandEnvelopeSchema.parse(
+      commandEnvelope ?? createCommandEnvelope({
+        sessionId: this.writer.sessionId,
+        producer: "application"
+      })
+    );
+
+    let problemDraft: EventDraft | undefined;
+    let problemIdentity: CommandIdentityValue = null;
+    if (configuration.mode === "OXFORD_MATHEMATICS") {
+      const problem = input.problem;
+      if (problem === undefined) {
+        throw new Error("Oxford session configuration requires a resolved problem");
+      }
+      if (
+        problem.id !== configuration.problem.id
+        || problem.version !== configuration.problem.version
+      ) {
+        throw new Error("Resolved problem does not match session configuration");
+      }
+      if (
+        configuration.difficulty !== undefined
+        && configuration.difficulty !== problem.interviewer.difficulty
+      ) {
+        throw new Error("Configured difficulty does not match the resolved problem");
+      }
+      const providerContextSpecSha256 = createProviderContextSpecFingerprintSync(problem);
+      problemIdentity = commandIdentityValue({
+        problemId: problem.id,
+        problemVersion: problem.version,
+        prompt: problem.public.prompt,
+        providerContextSpecSha256
+      });
+      problemDraft = {
+        source: "APPLICATION",
+        type: "PROBLEM_PRESENTED",
+        payload: {
+          problemId: problem.id,
+          problemVersion: problem.version,
+          prompt: problem.public.prompt,
+          providerContextSpecSha256
+        }
+      };
+    } else if (input.problem !== undefined) {
+      throw new Error("Quant session configuration cannot bind an Oxford InterviewProblem");
+    }
+
     await this.writer.execute(envelope, {
       operation: "START_SESSION",
-      payload: { problemId: problem.id, problemVersion: problem.version, prompt: problem.public.prompt, providerContextSpecSha256 }
+      payload: {
+        configuration: commandIdentityValue(configuration),
+        problem: problemIdentity
+      }
     }, StartedResultSchema, (state) => {
       if (state.started) throw new Error("Session already started");
       return {
         drafts: [
-          { source: "APPLICATION", type: "SESSION_STARTED", payload: { startedAt: new Date().toISOString() } },
           {
             source: "APPLICATION",
-            type: "PROBLEM_PRESENTED",
-            payload: { problemId: problem.id, problemVersion: problem.version, prompt: problem.public.prompt, providerContextSpecSha256 }
-          }
+            type: "SESSION_STARTED",
+            payload: {
+              startedAt: new Date().toISOString(),
+              configuration
+            }
+          },
+          ...(problemDraft === undefined ? [] : [problemDraft])
         ],
         result: { started: true }
       };
