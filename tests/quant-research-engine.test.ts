@@ -75,9 +75,14 @@ function visibleNumber(state: ReturnType<QuantResearchEngine["getState"]>, key: 
 }
 
 describe("deterministic Quant Research interview engine", () => {
-  it("registers exactly the five supported family/version pairs", () => {
+  it("registers exactly the five supported compatibility tuples", () => {
     expect(getQuantResearchRegistry()).toHaveLength(5);
     expect(new Set(getQuantResearchRegistry().map((item) => item.family)).size).toBe(5);
+    for (const item of getQuantResearchRegistry()) {
+      expect(item.version).toBe(QUANT_RESEARCH_VERSION);
+      expect(item.generatorVersion).toBe(QUANT_RESEARCH_GENERATOR_VERSION);
+      expect(item.rngVersion).toBe(QUANT_RESEARCH_RNG_VERSION);
+    }
   });
 
   it("keeps the exported family whitelist immutable at runtime", () => {
@@ -92,11 +97,23 @@ describe("deterministic Quant Research interview engine", () => {
     ]);
   });
 
-  it("rejects duplicate family/version registrations", () => {
+  it("rejects duplicate compatibility registrations but permits multiple historical versions", () => {
+    const current = {
+      family: "BAYESIAN_UPDATING",
+      version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION
+    } as const;
+    expect(() => assertUniqueQuantResearchRegistrations([current, current])).toThrow(/Duplicate/);
+
     expect(() => assertUniqueQuantResearchRegistrations([
-      { family: "BAYESIAN_UPDATING", version: QUANT_RESEARCH_VERSION },
-      { family: "BAYESIAN_UPDATING", version: QUANT_RESEARCH_VERSION }
-    ])).toThrow(/Duplicate/);
+      current,
+      { ...current, version: "0.9.0" },
+      { ...current, version: "0.8.0" },
+      { ...current, version: "0.7.0" },
+      { ...current, generatorVersion: "quant-research-generator-v0" },
+      { ...current, rngVersion: "xorshift32-rejection-v0" }
+    ])).not.toThrow();
   });
 
   it.each([
@@ -587,6 +604,8 @@ describe("deterministic Quant Research interview engine", () => {
       status: "IN_PROGRESS",
       family: "MODEL_COMPARISON",
       version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION,
       acceptedActionCount: 1,
       overallScore: 0,
       metrics: {},
@@ -670,7 +689,7 @@ describe("deterministic Quant Research interview engine", () => {
     expect(replayKeysInvoked).toBe(false);
 
     let registryKeysInvoked = false;
-    const oversizedRegistry = new Proxy(new Array<unknown>(6), {
+    const oversizedRegistry = new Proxy(new Array<unknown>(65), {
       ownKeys() {
         registryKeysInvoked = true;
         throw new Error("registry ownKeys should not run");
@@ -727,11 +746,21 @@ describe("deterministic Quant Research interview engine", () => {
     expect(versionGetterInvoked).toBe(false);
 
     let iteratorInvoked = false;
-    const registryWithIterator: unknown[] = [{ family: "BAYESIAN_UPDATING", version: QUANT_RESEARCH_VERSION }];
+    const registryWithIterator: unknown[] = [{
+      family: "BAYESIAN_UPDATING",
+      version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION
+    }];
     Object.defineProperty(registryWithIterator, Symbol.iterator, {
       value: function* () {
         iteratorInvoked = true;
-        yield { family: "MODEL_COMPARISON", version: QUANT_RESEARCH_VERSION };
+        yield {
+          family: "MODEL_COMPARISON",
+          version: QUANT_RESEARCH_VERSION,
+          generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+          rngVersion: QUANT_RESEARCH_RNG_VERSION
+        };
       }
     });
     expectCode(() => assertUniqueQuantResearchRegistrations(registryWithIterator), "INVALID_REGISTRY");
