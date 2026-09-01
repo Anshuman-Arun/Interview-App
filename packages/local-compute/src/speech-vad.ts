@@ -150,6 +150,10 @@ export class VoiceActivityStateMachine {
     if (this.state === "FINALIZED" || this.state === "CANCELLED") {
       throw new Error(`Cannot advance VAD in terminal state ${this.state}`);
     }
+    if (this.state !== "SILENCE"
+        && this.utteranceMs + durationMs > MAX_SPEECH_UTTERANCE_DURATION_MS + 0.001) {
+      throw new Error("VAD utterance duration would exceed the global limit");
+    }
 
     let speechStarted = false;
     let falseStart = false;
