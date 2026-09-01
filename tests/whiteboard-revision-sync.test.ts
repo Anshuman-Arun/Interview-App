@@ -4,6 +4,7 @@ import {
   TldrawWhiteboardAdapter,
   type TldrawEditor
 } from "../apps/web/src/tldraw-whiteboard-adapter.js";
+import { RealTldrawEditorBridge } from "../apps/web/src/whiteboard/real-tldraw-editor.js";
 
 describe("TldrawWhiteboardAdapter board revision authority", () => {
   it("counts each direct editor student transaction exactly once", () => {
@@ -161,6 +162,33 @@ describe("TldrawWhiteboardAdapter board revision authority", () => {
       targetShapeId: "shape:corrupt-revision",
       expectedShapeRevision: 1
     })).resolves.toBeUndefined();
+  });
+
+  it("preserves corrupt persisted real-editor revisions for fail-closed validation", () => {
+    const nativeShape = {
+      id: "shape:corrupt-persisted",
+      typeName: "shape",
+      type: "geo",
+      x: 10,
+      y: 20,
+      props: { geo: "rectangle", w: 100, h: 50 },
+      meta: {
+        layer: "STUDENT",
+        origin: "STUDENT",
+        shapeRevision: 0,
+        createdAt: "2026-08-30T00:00:00.000Z"
+      }
+    };
+    const nativeEditor = {
+      getShape: () => nativeShape,
+      getCurrentPageShapes: () => [nativeShape],
+      getShapePageBounds: () => ({ x: 10, y: 20, w: 100, h: 50 })
+    } as unknown as ConstructorParameters<typeof RealTldrawEditorBridge>[0];
+    const bridge = new RealTldrawEditorBridge(nativeEditor);
+    const adapter = new TldrawWhiteboardAdapter(bridge);
+
+    expect(bridge.getShape(nativeShape.id)?.meta?.["shapeRevision"]).toBe(0);
+    expect(() => adapter.getCanvasSnapshot()).toThrow(/invalid shape revision/u);
   });
 
   it("fails closed when every generated AI overlay id collides", async () => {
