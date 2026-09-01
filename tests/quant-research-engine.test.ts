@@ -108,6 +108,31 @@ describe("deterministic Quant Research interview engine", () => {
     expectCode(() => new QuantResearchEngine(bayesian).applyAction(action), "INVALID_ACTION");
   });
 
+  it("pins version-1 deterministic generation with golden instances", () => {
+    const bayesEngine = new QuantResearchEngine(bayesian);
+    bayesEngine.applyAction({ actionId: "gold-b", kind: "SUBMIT_PROBABILITY", value: 0.4 });
+    expect(visibleNumber(bayesEngine.getState(), "successes")).toBe(3);
+    expect(visibleNumber(bayesEngine.getState(), "failures")).toBe(5);
+
+    const samplingEngine = new QuantResearchEngine(sampling);
+    samplingEngine.applyAction({ actionId: "gold-s", kind: "REQUEST_OBSERVATION", count: 4 });
+    expect(samplingEngine.getState().visibleData.find((item) => item.key === "observations")?.value)
+      .toEqual([16, 23, 22, 20]);
+
+    const experimentEngine = new QuantResearchEngine(experimental);
+    experimentEngine.applyAction({ actionId: "gold-e", kind: "ALLOCATE_SAMPLE", a: 2, b: 4 });
+    expect(visibleNumber(experimentEngine.getState(), "sampleMeanA")).toBe(55);
+    expect(visibleNumber(experimentEngine.getState(), "sampleMeanB")).toBe(58.5);
+
+    const modelEngine = new QuantResearchEngine(model);
+    expect(modelEngine.getState().visibleData.find((item) => item.key === "y")?.value)
+      .toEqual([6, 10, 13, 21, 22, 28, 33, 40, 44, 47]);
+
+    const optimizationEngine = new QuantResearchEngine(optimization);
+    expect(optimizationEngine.getState().visibleData.find((item) => item.key === "objective")?.value)
+      .toBe("12*x + 10*y - 0*x*y");
+  });
+
   it("same seed/config produces identical public progression and result", () => {
     const left = new QuantResearchEngine(bayesian);
     const right = new QuantResearchEngine(bayesian);
