@@ -962,7 +962,7 @@ function findConflictTarget(
   for (const signal of verification) targets.set(targetToString(signal.target), signal.target);
 
   const conflicts: Array<{ readonly target: PolicyTarget; readonly sequence: number }> = [];
-  for (const [targetKey, target] of targets) {
+  for (const target of targets.values()) {
     const subjectSignals = evidence.filter((signal) => sameTarget(signal.target, target));
     const targetVerification = verification.filter((signal) => sameTarget(signal.target, target));
     const values = new Set(subjectSignals.map((signal) => signal.value.value));
@@ -990,7 +990,6 @@ function findConflictTarget(
       target,
       sequence: Math.max(newestEvidenceSequence, newestVerificationSequence)
     });
-    void targetKey;
   }
 
   conflicts.sort((left, right) => {
