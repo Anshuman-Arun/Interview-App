@@ -717,15 +717,16 @@ describe("speech worker adversarial races and hard limits", () => {
     });
 
     const streamIds = ["cancel-budget-a", "cancel-budget-b"];
-    for (let index = 0; index < streamIds.length; index += 1) {
-      const streamId = streamIds[index]!;
+    for (const [index, streamId] of streamIds.entries()) {
       for (let sequence = 0; sequence < 3; sequence += 1) {
         const fixture = frame(sequence, true, streamId);
         await subject.submitFrame(fixture.envelope, fixture.pcm);
       }
       const endpoint = frame(3, false, streamId);
       const finalizing = subject.submitFrame(endpoint.envelope, endpoint.pcm);
-      await recognitionStarted[index]!.promise;
+      const started = recognitionStarted[index];
+      if (started === undefined) throw new Error("Missing recognition-start signal in test");
+      await started.promise;
       await subject.cancel({
         protocolVersion: 1,
         requestId: newRequestId(),
