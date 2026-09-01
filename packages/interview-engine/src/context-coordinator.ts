@@ -16,6 +16,7 @@ import {
   compileContext,
   createContextCompilationManifest,
   createProviderContextSpecFingerprint,
+  createProviderContextSpecFingerprintSync,
   type CompiledContext
 } from "./context-compiler.js";
 import { createCommandEnvelope } from "./envelopes.js";
@@ -77,6 +78,15 @@ function assessContext(
   }
   if (state.problem.providerContextSpecSha256 === undefined) {
     return { ok: false, reason: "PROBLEM_PROVENANCE_UNKNOWN" };
+  }
+  let suppliedProblemFingerprint: string;
+  try {
+    suppliedProblemFingerprint = createProviderContextSpecFingerprintSync(problem);
+  } catch {
+    return { ok: false, reason: "PROBLEM_DEFINITION_MISMATCH" };
+  }
+  if (state.problem.providerContextSpecSha256 !== suppliedProblemFingerprint) {
+    return { ok: false, reason: "PROBLEM_DEFINITION_MISMATCH" };
   }
 
   const realizationRequest = state.pedagogicalActions[generation.basis.turnId];
