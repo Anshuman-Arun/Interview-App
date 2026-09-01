@@ -116,4 +116,4 @@ This subsystem does not implement:
 - desktop orchestration;
 - post-session history UI.
 
-A legacy call to `selectPedagogicalAction` without an `InterviewProblem` remains a zero-disclosure justification probe for compatibility with older harnesses. Production server orchestration passes the problem and therefore uses the graph-aware engine.
+`InterviewProblem` is required at the policy-selection boundary. There is no no-problem placeholder fallback: callers must supply the application-owned problem context, and its ID/version must match the problem presented in authoritative session state.
