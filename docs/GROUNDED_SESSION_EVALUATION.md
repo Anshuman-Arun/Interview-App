@@ -207,8 +207,6 @@ Reference kinds are EVIDENCE_EVENT, VERIFICATION_REQUEST, DELIVERY, TURN, and MI
 
 VERIFIED provenance is attached to current correctness only when the active evidence record specifically cites that verification request's authoritative request event. Historical VERIFIED requests with the same EvidenceKey are not treated as current support merely because the key matches.
 
-Milestone results also retain the protected disclosure IDs structurally associated with exposure and the milestone's valid approach IDs.
-
 A future replay UI can resolve these references against authoritative history to explain a result without embedding transcripts or protected solution text into the evaluation object.
 
 Milestone results retain protected disclosure IDs structurally associated with exposure and the milestone's valid approach IDs. The legacy description field is preserved for compatibility, but it contains only an ordinal structural label such as "Reasoning milestone 2". Evaluation output never copies the interviewer-owned reasoning-graph description, because that text can contain solution-bearing material.
@@ -277,13 +275,14 @@ Object/map insertion order does not affect evaluation output.
 
 Because evaluation consumes SessionState rather than replaying raw events itself, it validates the projection fields that materially affect scoring:
 
-- session and turn sequences must be safe and in bounds;
-- committed turn sequences are unique;
+- session sequence must be a nonnegative safe integer and exactly equal the authoritative event-history length;
+- committed turn sequences are unique and in bounds;
 - every committed turn references a COMMITTED InputEpisode;
 - lastCommittedInputSequence equals the latest committed turn sequence;
-- generation bases reference an existing turn, and any stored inputEpisodeId must match that turn;
+- generation bases reference an existing turn, their committedInputSequence equals that turn's committed sequence, and any stored inputEpisodeId matches that turn;
 - evidence update sequence/provenance ordering is consistent with SessionState.eventIds;
-- accepted verification request provenance fits its committed-input basis;
+- verification bases reference an existing committed turn with matching committedInputSequence/inputEpisodeId;
+- verification source provenance is exactly the committed-turn event that VerificationCoordinator records, and the request event follows that basis;
 - accepted VERIFIED results retain their atomically committed historical correctness evidence;
 - delivery disclosure IDs are unique, known to the exact problem, and cannot understate the problem-defined disclosure minimum;
 - the disclosure ledger equals the union of authoritatively exposed/completed/possibly-exposed delivery disclosures.

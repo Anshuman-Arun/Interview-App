@@ -491,6 +491,39 @@ describe("grounded session evaluator", () => {
     );
   });
 
+  it("rejects a generation basis committed-input projection that does not match its turn", () => {
+    const state = withDelivery(
+      boundState(),
+      chooseDisclosure,
+      2,
+      "EXPOSED",
+      5,
+      "generation-basis-integrity"
+    );
+    const generationId = GenerationIdSchema.parse(
+      "generation_generation-basis-integrity"
+    );
+    const generation = state.generations[generationId];
+    if (generation === undefined) throw new Error("Expected generation fixture");
+    const corrupted: SessionState = {
+      ...state,
+      generations: {
+        ...state.generations,
+        [generationId]: {
+          ...generation,
+          basis: {
+            ...generation.basis,
+            committedInputSequence: generation.basis.committedInputSequence + 1
+          }
+        }
+      }
+    };
+
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem)).toThrow(
+      "generation basis committed input does not match its turn"
+    );
+  });
+
   it("rejects verification basis or provenance that does not match its committed turn", () => {
     const key: EvidenceKey = {
       problemId: sixPeopleProblem.id,
