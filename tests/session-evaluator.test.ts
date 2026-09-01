@@ -845,7 +845,7 @@ function withDelivery(
     status
   };
 
-  let eventIds = placeEventAtSequence([...state.eventIds], turnEventId, basisSequence);
+  const eventIds = placeEventAtSequence([...state.eventIds], turnEventId, basisSequence);
   const inputEpisodes = {
     ...state.inputEpisodes,
     [inputEpisodeId]: {
