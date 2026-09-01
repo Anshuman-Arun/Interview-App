@@ -97,16 +97,23 @@ export class ProviderControlPlaneError extends Error {
   }
 }
 
-function isProviderControlPlaneError(
-  value: unknown
-): value is ProviderControlPlaneError {
-  return ProviderControlPlaneError.isControlPlaneError(value);
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents later monkey-patching of the private-brand checker.
+const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
+
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Captured intrinsic is invoked only via Reflect.apply.
+const REGEXP_TEST_INTRINSIC = RegExp.prototype.test;
+
+function controlPlaneRegExpTest(pattern: RegExp, value: string): boolean {
+  const result: unknown = REFLECT_APPLY_INTRINSIC(REGEXP_TEST_INTRINSIC, pattern, [value]);
+  return result === true;
 }
 
 const MachineIdSchema = z.string()
   .min(1)
   .max(64)
-  .regex(MACHINE_ID_PATTERN)
+  .refine((value) => controlPlaneRegExpTest(MACHINE_ID_PATTERN, value), {
+    message: "INVALID_MACHINE_ID"
+  })
   .refine((value) => !containsSecretLikeConfigurationText(value), {
     message: "SECRET_IN_CONFIGURATION"
   });
@@ -405,11 +412,8 @@ class ResolvedProviderConfigurationValue implements ResolvedProviderConfiguratio
   }
 }
 
-function isResolvedProviderConfiguration(
-  value: unknown
-): value is ResolvedProviderConfigurationValue {
-  return ResolvedProviderConfigurationValue.isResolved(value);
-}
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of the private-brand checker.
+const isResolvedProviderConfiguration = ResolvedProviderConfigurationValue.isResolved;
 
 export interface ProviderAdapterFactoryInput {
   readonly resolved: ResolvedProviderConfiguration;
@@ -1069,18 +1073,11 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
   }
 }
 
-function isRegisteredProviderAdapterFactory(
-  value: unknown
-): value is RegisteredProviderAdapterFactory {
-  return RegisteredProviderAdapterFactory.isRegistered(value);
-}
-
-function registeredProviderAdapterFactoryBelongsTo(
-  value: RegisteredProviderAdapterFactory,
-  providerId: ProviderId
-): boolean {
-  return RegisteredProviderAdapterFactory.belongsToProvider(value, providerId);
-}
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of private-brand validation.
+const isRegisteredProviderAdapterFactory = RegisteredProviderAdapterFactory.isRegistered;
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Capture prevents monkey-patching of factory ownership validation.
+const registeredProviderAdapterFactoryBelongsTo =
+  RegisteredProviderAdapterFactory.belongsToProvider;
 
 function normalizeFactory(
   factory: unknown,
@@ -2182,11 +2179,11 @@ export function resolveProviderConfiguration(input: {
   const requirements = requirementsProperty.present
     ? captureCapabilityRequirements(requirementsProperty.value)
     : undefined;
-  return resolveParsedProviderConfiguration({
+  return resolveParsedProviderConfiguration(freezeNullPrototype({
     registry: registryProperty.value,
     configuration: parsed,
     ...(requirements === undefined ? {} : { requirements })
-  });
+  }));
 }
 
 export function resolveAdapterFactory(
@@ -2291,10 +2288,10 @@ export async function evaluateProviderReadiness(input: {
 
   let resolved: ResolvedProviderConfigurationValue;
   try {
-    resolved = resolveParsedProviderConfiguration({
+    resolved = resolveParsedProviderConfiguration(freezeNullPrototype({
       registry,
       configuration: parsed
-    });
+    }));
   } catch (error) {
     const reason = isProviderControlPlaneError(error)
       ? error.code
