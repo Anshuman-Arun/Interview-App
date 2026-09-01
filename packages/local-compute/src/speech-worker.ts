@@ -83,6 +83,7 @@ interface RememberedMessage {
 
 interface InFlightMessage {
   readonly fingerprint: string;
+  readonly token: object;
   readonly promise: Promise<readonly SpeechWorkerEvent[]>;
 }
 
@@ -470,7 +471,7 @@ export class SpeechWorkerCore {
       events.push(...await this.finalizeAndRecognize(context, frame.envelope.requestId, decision.reason));
     }
 
-    return context.cancelled || this.shuttingDown ? [] : events;
+    return this.shouldSuppressLateResult(context) ? [] : events;
   }
 
   private async finalizeAndRecognize(
@@ -566,7 +567,7 @@ export class SpeechWorkerCore {
       this.streams.delete(context.streamId);
       this.rememberClosedStream(context.streamId);
     }
-    return context.cancelled || this.shuttingDown ? [] : events;
+    return this.shouldSuppressLateResult(context) ? [] : events;
   }
 
   private endpointDecision(
@@ -684,7 +685,7 @@ export class SpeechWorkerCore {
       return active.promise.then((events) => cloneEvents(events));
     }
 
-    let tracked: InFlightMessage;
+    const token = {};
     const canonical = Promise.resolve()
       .then(operation)
       .then((events) => {
@@ -693,9 +694,9 @@ export class SpeechWorkerCore {
         return cloned;
       })
       .finally(() => {
-        if (this.inFlightMessages.get(requestId) === tracked) this.inFlightMessages.delete(requestId);
+        if (this.inFlightMessages.get(requestId)?.token === token) this.inFlightMessages.delete(requestId);
       });
-    tracked = { fingerprint, promise: canonical };
+    const tracked: InFlightMessage = { fingerprint, token, promise: canonical };
     this.inFlightMessages.set(requestId, tracked);
     return canonical.then((events) => cloneEvents(events));
   }
@@ -717,15 +718,15 @@ export class SpeechWorkerCore {
   }
 
   private async attemptRecognizerCancel(requestId: RequestId, streamId: SpeechStreamId): Promise<boolean> {
-    const cancel = this.options.recognizer.cancel;
-    if (cancel === undefined) return false;
+    const recognizer = this.options.recognizer;
+    if (recognizer.cancel === undefined) return false;
     try {
       const result = await withTimeout(
-        Promise.resolve().then(async () => cancel.call(this.options.recognizer, requestId)),
+        Promise.resolve().then(async () => recognizer.cancel?.(requestId) ?? false),
         this.cancellationTimeoutMs,
         () => undefined
       );
-      return result === true;
+      return result;
     } catch (error) {
       this.rememberDiagnostic({
         code: error instanceof OperationTimeoutError ? "CANCELLATION_TIMEOUT" : "CANCELLATION_FAILURE",
@@ -733,6 +734,10 @@ export class SpeechWorkerCore {
       });
       return false;
     }
+  }
+
+  private shouldSuppressLateResult(context: StreamContext): boolean {
+    return context.cancelled || this.shuttingDown;
   }
 
   private event(
@@ -799,7 +804,7 @@ function withTimeout<T>(
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        reject(error);
+        reject(error instanceof Error ? error : new Error("Speech worker operation failed"));
       }
     );
   });
