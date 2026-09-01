@@ -141,45 +141,100 @@ describe("grounded session evaluator", () => {
       .toBeNull();
   });
 
-  it("uses the latest authoritative request event for conflicting standalone verification", () => {
+  it("does not invent acceptance chronology for conflicting standalone verification", () => {
     const key: EvidenceKey = {
       problemId: sixPeopleProblem.id,
       subject: { kind: "CLAIM", claimId: "changing-formalization" },
       dimension: "CORRECTNESS"
     };
 
-    let latestUnresolved = withVerification(
+    let firstOrder = withVerification(
       boundState(),
       key,
       "CONTRADICTED",
       10,
       "old-contradiction"
     );
-    latestUnresolved = withVerification(
-      latestUnresolved,
+    firstOrder = withVerification(
+      firstOrder,
       key,
       "UNRESOLVED",
       10,
       "new-unresolved"
     );
-    expect(evaluateInterviewSession(latestUnresolved, sixPeopleProblem).scores.technicalCorrectness)
+    expect(evaluateInterviewSession(firstOrder, sixPeopleProblem).scores.technicalCorrectness)
       .toBeNull();
 
-    let latestContradicted = withVerification(
+    let reverseOrder = withVerification(
       boundState(),
       key,
       "UNRESOLVED",
       10,
       "old-unresolved"
     );
-    latestContradicted = withVerification(
-      latestContradicted,
+    reverseOrder = withVerification(
+      reverseOrder,
       key,
       "CONTRADICTED",
       10,
       "new-contradiction"
     );
-    expect(evaluateInterviewSession(latestContradicted, sixPeopleProblem).scores.technicalCorrectness)
+    expect(evaluateInterviewSession(reverseOrder, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+  });
+
+  it("does not let a current positive model inference silently override a deterministic contradiction", () => {
+    const correctnessKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "conflicted-claim" },
+      dimension: "CORRECTNESS"
+    };
+    const justificationKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "conflicted-claim" },
+      dimension: "JUSTIFICATION"
+    };
+
+    let state = setHistory(boundState(), correctnessKey, [
+      { value: "CORRECT", sequence: 10, status: "ACTIVE" }
+    ]);
+    state = setHistory(state, justificationKey, [
+      { value: "JUSTIFIED", sequence: 11, status: "ACTIVE" }
+    ]);
+    state = withVerification(
+      state,
+      correctnessKey,
+      "CONTRADICTED",
+      10,
+      "conflicting-deterministic"
+    );
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.technicalCorrectness).toBeNull();
+    expect(evaluation.dimensionResults.technicalCorrectness.notScoredReason)
+      .toContain("conflicting");
+    expect(evaluation.scores.rigor).toBe(100);
+    expect(evaluation.dimensionResults.rigor.supportLevel).toBe("WEAK");
+  });
+
+  it("uses an unambiguous deterministic contradiction when model correctness is UNKNOWN", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "unknown-but-contradicted" },
+      dimension: "CORRECTNESS"
+    };
+    let state = setHistory(boundState(), key, [
+      { value: "UNKNOWN", sequence: 10, status: "ACTIVE" }
+    ]);
+    state = withVerification(
+      state,
+      key,
+      "CONTRADICTED",
+      10,
+      "unknown-contradiction"
+    );
+
+    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.technicalCorrectness)
       .toBe(0);
   });
 
