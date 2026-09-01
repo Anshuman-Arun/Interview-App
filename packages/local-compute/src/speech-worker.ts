@@ -161,63 +161,66 @@ export class SpeechWorkerCore {
   private shutdownPromise: Promise<void> | undefined;
 
   public constructor(options: SpeechWorkerCoreOptions) {
-    this.classifyVad = bindWorkerVadClassifier(
-      (options.vadBackend as unknown as { classify?: unknown }).classify,
-      options.vadBackend
-    );
-    this.recognizeSpeech = bindWorkerRecognizer(
-      (options.recognizer as unknown as { recognize?: unknown }).recognize,
-      options.recognizer
-    );
-    this.cancelRecognition = bindWorkerRecognizerCancel(
-      (options.recognizer as unknown as { cancel?: unknown }).cancel,
-      options.recognizer
-    );
-    this.utteranceIdFactory = options.utteranceIdFactory;
-    this.endpointingFactory = options.endpointingFactory;
-    this.vadStateFactory = options.vadStateFactory;
-    this.recognizerModelIdentity = SpeechModelIdentitySchema.parse(options.recognizer.modelIdentity);
+    const rawOptions: unknown = options;
+    if (!isRecord(rawOptions)) throw new Error("Speech worker options must be an object");
+    const rawVadBackend = rawOptions.vadBackend;
+    const rawRecognizer = rawOptions.recognizer;
+    if (!isRecord(rawVadBackend)) throw new Error("Speech worker VAD backend must be an object");
+    if (!isRecord(rawRecognizer)) throw new Error("Speech worker recognizer must be an object");
+
+    this.classifyVad = bindWorkerVadClassifier(rawVadBackend.classify, rawVadBackend);
+    this.recognizeSpeech = bindWorkerRecognizer(rawRecognizer.recognize, rawRecognizer);
+    this.cancelRecognition = bindWorkerRecognizerCancel(rawRecognizer.cancel, rawRecognizer);
+
+    validateOptionalFunction(rawOptions.utteranceIdFactory, "Speech utterance ID factory");
+    validateOptionalFunction(rawOptions.endpointingFactory, "Speech endpointing factory");
+    validateOptionalFunction(rawOptions.vadStateFactory, "Speech VAD state factory");
+    this.utteranceIdFactory = rawOptions.utteranceIdFactory as SpeechWorkerCoreOptions["utteranceIdFactory"];
+    this.endpointingFactory = rawOptions.endpointingFactory as SpeechWorkerCoreOptions["endpointingFactory"];
+    this.vadStateFactory = rawOptions.vadStateFactory as SpeechWorkerCoreOptions["vadStateFactory"];
+
+    this.recognizerModelIdentity = SpeechModelIdentitySchema.parse(rawRecognizer.modelIdentity);
     this.recognizerCancellationCapability = RecognizerCancellationCapabilitySchema.parse(
-      options.recognizer.cancellationCapability
+      rawRecognizer.cancellationCapability
     );
 
     this.maxConcurrentStreams = boundedPositiveSafeInteger(
-      options.maxConcurrentStreams ?? MAX_SPEECH_CONCURRENT_STREAMS,
+      rawOptions.maxConcurrentStreams === undefined ? MAX_SPEECH_CONCURRENT_STREAMS : rawOptions.maxConcurrentStreams,
       MAX_SPEECH_CONCURRENT_STREAMS,
       "maxConcurrentStreams"
     );
     this.maxBufferedPcmBytes = boundedPositiveSafeInteger(
-      options.maxBufferedPcmBytes ?? MAX_SPEECH_BUFFERED_PCM_BYTES,
+      rawOptions.maxBufferedPcmBytes === undefined ? MAX_SPEECH_BUFFERED_PCM_BYTES : rawOptions.maxBufferedPcmBytes,
       MAX_SPEECH_BUFFERED_PCM_BYTES,
       "maxBufferedPcmBytes"
     );
     this.maxRememberedMessages = boundedPositiveSafeInteger(
-      options.maxRememberedMessages ?? MAX_SPEECH_REMEMBERED_MESSAGES,
+      rawOptions.maxRememberedMessages === undefined ? MAX_SPEECH_REMEMBERED_MESSAGES : rawOptions.maxRememberedMessages,
       MAX_SPEECH_REMEMBERED_MESSAGES,
       "maxRememberedMessages"
     );
     this.maxInFlightRequests = boundedPositiveSafeInteger(
-      options.maxInFlightRequests ?? MAX_SPEECH_IN_FLIGHT_REQUESTS,
+      rawOptions.maxInFlightRequests === undefined ? MAX_SPEECH_IN_FLIGHT_REQUESTS : rawOptions.maxInFlightRequests,
       MAX_SPEECH_IN_FLIGHT_REQUESTS,
       "maxInFlightRequests"
     );
     this.maxPreSpeechDurationMs = boundedPositiveSafeInteger(
-      options.maxPreSpeechDurationMs ?? MAX_SPEECH_PRE_SPEECH_DURATION_MS,
+      rawOptions.maxPreSpeechDurationMs === undefined ? MAX_SPEECH_PRE_SPEECH_DURATION_MS : rawOptions.maxPreSpeechDurationMs,
       MAX_SPEECH_PRE_SPEECH_DURATION_MS,
       "maxPreSpeechDurationMs"
     );
     this.vadTimeoutMs = boundedPositiveSafeInteger(
-      options.vadTimeoutMs ?? DEFAULT_SPEECH_VAD_TIMEOUT_MS,
+      rawOptions.vadTimeoutMs === undefined ? DEFAULT_SPEECH_VAD_TIMEOUT_MS : rawOptions.vadTimeoutMs,
       MAX_SPEECH_VAD_TIMEOUT_MS,
       "vadTimeoutMs"
     );
     this.recognizerTimeoutMs = boundedPositiveSafeInteger(
-      options.recognizerTimeoutMs ?? DEFAULT_SPEECH_RECOGNIZER_TIMEOUT_MS,
+      rawOptions.recognizerTimeoutMs === undefined ? DEFAULT_SPEECH_RECOGNIZER_TIMEOUT_MS : rawOptions.recognizerTimeoutMs,
       MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
       "recognizerTimeoutMs"
     );
     this.cancellationTimeoutMs = boundedPositiveSafeInteger(
-      options.cancellationTimeoutMs ?? DEFAULT_SPEECH_CANCELLATION_TIMEOUT_MS,
+      rawOptions.cancellationTimeoutMs === undefined ? DEFAULT_SPEECH_CANCELLATION_TIMEOUT_MS : rawOptions.cancellationTimeoutMs,
       MAX_SPEECH_CANCELLATION_TIMEOUT_MS,
       "cancellationTimeoutMs"
     );
@@ -1068,8 +1071,8 @@ function fingerprintParts(...parts: readonly string[]): string {
   return hash.digest("hex");
 }
 
-function boundedPositiveSafeInteger(value: number, maximum: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) {
+function boundedPositiveSafeInteger(value: unknown, maximum: number, label: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > maximum) {
     throw new Error(`${label} must be a positive safe integer no greater than ${String(maximum)}`);
   }
   return value;
@@ -1093,4 +1096,15 @@ function bindWorkerRecognizerCancel(
   if (value === undefined) return undefined;
   if (typeof value !== "function") throw new Error("Speech recognizer cancel callback must be a function when provided");
   return value.bind(owner) as NonNullable<SpeechRecognizer["cancel"]>;
+}
+
+
+function validateOptionalFunction(value: unknown, label: string): void {
+  if (value !== undefined && typeof value !== "function") {
+    throw new Error(`${label} must be a function when provided`);
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
