@@ -323,7 +323,9 @@ function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
 function validatePcmOrderState(prior: PcmOrderState): void {
   const streamId = SpeechStreamIdSchema.safeParse(prior.streamId);
   const sampleDerivedEndMs = prior.firstTimestampMs + prior.cumulativeDurationMs;
-  const maximumRepresentableDurationMs = (prior.lastSequence + 1) * MAX_SPEECH_FRAME_DURATION_MS;
+  const frameCount = prior.lastSequence + 1;
+  const minimumRepresentableDurationMs = frameCount / prior.sampleRate * 1_000;
+  const maximumRepresentableDurationMs = frameCount * MAX_SPEECH_FRAME_DURATION_MS;
   if (!streamId.success
       || (prior.sampleRate !== 16_000 && prior.sampleRate !== 48_000)
       || prior.channels !== 1
@@ -334,7 +336,9 @@ function validatePcmOrderState(prior: PcmOrderState): void {
       || prior.firstTimestampMs < 0
       || !Number.isFinite(prior.cumulativeDurationMs)
       || prior.cumulativeDurationMs <= 0
+      || !Number.isFinite(minimumRepresentableDurationMs)
       || !Number.isFinite(maximumRepresentableDurationMs)
+      || prior.cumulativeDurationMs + 0.001 < minimumRepresentableDurationMs
       || prior.cumulativeDurationMs > maximumRepresentableDurationMs + 0.001
       || !Number.isFinite(sampleDerivedEndMs)
       || sampleDerivedEndMs > Number.MAX_SAFE_INTEGER
