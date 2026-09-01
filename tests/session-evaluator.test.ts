@@ -7,6 +7,7 @@ import {
   GenerationIdSchema,
   InputEpisodeIdSchema,
   RequestIdSchema,
+  SessionEvaluationSchema,
   TurnIdSchema,
   evidenceKeyToString,
   newSessionId,
@@ -140,6 +141,48 @@ describe("grounded session evaluator", () => {
       .toBeNull();
   });
 
+  it("uses the latest authoritative request event for conflicting standalone verification", () => {
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "changing-formalization" },
+      dimension: "CORRECTNESS"
+    };
+
+    let latestUnresolved = withVerification(
+      boundState(),
+      key,
+      "CONTRADICTED",
+      10,
+      "old-contradiction"
+    );
+    latestUnresolved = withVerification(
+      latestUnresolved,
+      key,
+      "UNRESOLVED",
+      10,
+      "new-unresolved"
+    );
+    expect(evaluateInterviewSession(latestUnresolved, sixPeopleProblem).scores.technicalCorrectness)
+      .toBeNull();
+
+    let latestContradicted = withVerification(
+      boundState(),
+      key,
+      "UNRESOLVED",
+      10,
+      "old-unresolved"
+    );
+    latestContradicted = withVerification(
+      latestContradicted,
+      key,
+      "CONTRADICTED",
+      10,
+      "new-contradiction"
+    );
+    expect(evaluateInterviewSession(latestContradicted, sixPeopleProblem).scores.technicalCorrectness)
+      .toBe(0);
+  });
+
   it("requires specific verifier provenance before upgrading correctness support", () => {
     const key: EvidenceKey = {
       problemId: sixPeopleProblem.id,
@@ -245,6 +288,24 @@ describe("grounded session evaluator", () => {
     expect(evaluation.summaryAssessment).toContain("1 current correctness subject");
   });
 
+  it("rejects evidence provenance that is not present in authoritative event history", () => {
+    const key = milestoneKey("model-relations", "JUSTIFICATION");
+    const state = setHistory(boundState(), key, [
+      { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
+    ]);
+    const active = state.evidenceHistory[evidenceKeyToString(key)]?.[0];
+    const supportEvent = active?.value.evidenceEventIds[0];
+    if (supportEvent === undefined) throw new Error("Expected fixture support event");
+    const corrupted: SessionState = {
+      ...state,
+      eventIds: state.eventIds.filter((eventId) => eventId !== supportEvent)
+    };
+
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem)).toThrow(
+      "evidence provenance references an unknown authoritative event"
+    );
+  });
+
   it("scores rigor from justification evidence, not from verification-request count", () => {
     let rigorous = boundState();
     rigorous = setHistory(rigorous, milestoneKey("model-relations", "JUSTIFICATION"), [
@@ -339,6 +400,23 @@ describe("grounded session evaluator", () => {
       communicationWeight: 0,
       errorRecoveryWeight: 0
     })).toThrow("weights must sum to 1");
+  });
+
+  it("rejects tampered composite metadata even when individual scores are schema-valid", () => {
+    let state = boundState();
+    state = setHistory(state, milestoneKey("model-relations", "CORRECTNESS"), [
+      { value: "CORRECT", sequence: 10, status: "ACTIVE" }
+    ]);
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(() => SessionEvaluationSchema.parse({
+      ...evaluation,
+      composite: {
+        ...evaluation.composite,
+        status: "FULL",
+        includedDimensions: ["technicalCorrectness", "communication"],
+        omittedDimensions: []
+      }
+    })).toThrow();
   });
 
   it("is deterministic, timestamp-independent for scoring, and omits raw private content", () => {
@@ -480,9 +558,14 @@ function setHistory(
         )
       : { ...state.studentEvidence, [keyString]: active.value };
 
+  const historyEventIds = history.flatMap((record) => [
+    record.evidenceEventId,
+    ...record.value.evidenceEventIds
+  ]);
   return {
     ...state,
     sequence: Math.max(state.sequence, ...specs.map((spec) => spec.sequence)),
+    eventIds: uniqueEventIds([...state.eventIds, ...historyEventIds]),
     studentEvidence,
     evidenceHistory: { ...state.evidenceHistory, [keyString]: history }
   };
@@ -575,8 +658,10 @@ function withVerification(
   const turnId = TurnIdSchema.parse("turn_verification_" + label);
   const confidence = status === "UNRESOLVED" ? 0.7 : 1;
   const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
+  const verificationSupportId = EventIdSchema.parse("verification_support_" + label);
   const next: SessionState = {
     ...state,
+    eventIds: uniqueEventIds([...state.eventIds, verificationSupportId, requestedEventId]),
     verificationRequests: {
       ...state.verificationRequests,
       [requestId]: {
@@ -594,7 +679,7 @@ function withVerification(
         candidateFormalInterpretation: "fixture",
         interpretationConfidence: confidence,
         evidenceKey: key,
-        evidenceEventIds: [EventIdSchema.parse("verification_support_" + label)],
+        evidenceEventIds: [verificationSupportId],
         requestedEventId,
         status: "ACCEPTED",
         result: {
@@ -624,8 +709,11 @@ function withPendingVerification(
 ): SessionState {
   const requestId = RequestIdSchema.parse("verification_" + label);
   const turnId = TurnIdSchema.parse("turn_verification_" + label);
+  const verificationSupportId = EventIdSchema.parse("verification_support_" + label);
+  const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
   return {
     ...state,
+    eventIds: uniqueEventIds([...state.eventIds, verificationSupportId, requestedEventId]),
     verificationRequests: {
       ...state.verificationRequests,
       [requestId]: {
@@ -643,10 +731,16 @@ function withPendingVerification(
         candidateFormalInterpretation: "fixture",
         interpretationConfidence: 1,
         evidenceKey: key,
-        evidenceEventIds: [EventIdSchema.parse("verification_support_" + label)],
-        requestedEventId: EventIdSchema.parse("verification_requested_" + label),
+        evidenceEventIds: [verificationSupportId],
+        requestedEventId,
         status: "PENDING"
       }
     }
   };
+}
+
+function uniqueEventIds(
+  eventIds: readonly ReturnType<typeof EventIdSchema.parse>[]
+): ReturnType<typeof EventIdSchema.parse>[] {
+  return Array.from(new Set(eventIds));
 }

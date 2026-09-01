@@ -18,7 +18,8 @@ import {
   type DisclosureId,
   type EvidenceKey,
   type EvidenceRating,
-  type EvaluationRubric
+  type EvaluationRubric,
+  type InterviewProblem
 } from "../packages/domain/src/index.js";
 import {
   initialSessionState,
@@ -148,7 +149,7 @@ describe("grounded session evaluator adversarial cases", () => {
     );
   });
 
-  it("recognizes stale evidence followed by a fresh supported replacement as recovery", () => {
+  it("does not misclassify invalidated stale evidence as student error recovery", () => {
     const key = milestoneKey("model-relations", "CORRECTNESS");
     let state = boundState();
     state = setHistory(state, key, [
@@ -156,7 +157,7 @@ describe("grounded session evaluator adversarial cases", () => {
       { value: "CORRECT", sequence: 20, status: "ACTIVE" }
     ]);
 
-    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.errorRecovery).toBe(100);
+    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.errorRecovery).toBeNull();
   });
 
   it("records incomplete and archived lifecycle context without completion-style prose", () => {
@@ -321,6 +322,111 @@ describe("grounded session evaluator adversarial cases", () => {
     );
   });
 
+  it("rejects duplicate reasoning identities and unknown protected-disclosure references", () => {
+    const firstMilestone = sixPeopleProblem.interviewer.reasoningGraph.milestones[0];
+    if (firstMilestone === undefined) throw new Error("Expected fixture milestone");
+
+    const duplicateMilestoneProblem: InterviewProblem = {
+      ...sixPeopleProblem,
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        reasoningGraph: {
+          ...sixPeopleProblem.interviewer.reasoningGraph,
+          milestones: [
+            ...sixPeopleProblem.interviewer.reasoningGraph.milestones,
+            firstMilestone
+          ]
+        }
+      }
+    };
+    expect(() => evaluateInterviewSession(
+      boundStateFor(duplicateMilestoneProblem),
+      duplicateMilestoneProblem
+    )).toThrow("duplicate reasoning-graph milestone");
+
+    const missingDisclosure = DisclosureIdSchema.parse("missing_protected_disclosure");
+    const unknownDisclosureProblem: InterviewProblem = {
+      ...sixPeopleProblem,
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        reasoningGraph: {
+          ...sixPeopleProblem.interviewer.reasoningGraph,
+          milestones: sixPeopleProblem.interviewer.reasoningGraph.milestones.map(
+            (milestone, index) => index === 0
+              ? {
+                  ...milestone,
+                  protectedDisclosureIds: [
+                    ...milestone.protectedDisclosureIds,
+                    missingDisclosure
+                  ]
+                }
+              : milestone
+          )
+        }
+      }
+    };
+    expect(() => evaluateInterviewSession(
+      boundStateFor(unknownDisclosureProblem),
+      unknownDisclosureProblem
+    )).toThrow("unknown protected disclosure");
+  });
+
+  it("rejects pathological aggregate evidence provenance before traversing it", () => {
+    const key = milestoneKey("model-relations", "JUSTIFICATION");
+    const oversized = Array.from(
+      { length: 150_001 },
+      () => EventIdSchema.parse("oversized_provenance")
+    );
+    const state = setHistory(boundState(), key, [
+      {
+        value: "JUSTIFIED",
+        sequence: 10,
+        status: "ACTIVE"
+      }
+    ]);
+    const keyString = evidenceKeyToString(key);
+    const active = state.evidenceHistory[keyString]?.[0];
+    if (active === undefined) throw new Error("Expected active fixture evidence");
+    const corrupted: SessionState = {
+      ...state,
+      evidenceHistory: {
+        ...state.evidenceHistory,
+        [keyString]: [{
+          ...active,
+          value: {
+            ...active.value,
+            evidenceEventIds: oversized
+          }
+        }]
+      },
+      studentEvidence: {
+        ...state.studentEvidence,
+        [keyString]: {
+          ...active.value,
+          evidenceEventIds: oversized
+        }
+      }
+    };
+
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem)).toThrow(
+      "supported evidence-provenance bound"
+    );
+  });
+
+  it("rejects pathological problem fingerprint input before hashing it", () => {
+    const oversizedProblem: InterviewProblem = {
+      ...sixPeopleProblem,
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        difficulty: "x".repeat(2_000_001)
+      }
+    };
+
+    expect(() => evaluateInterviewSession(boundState(), oversizedProblem)).toThrow(
+      "supported fingerprint-input bound"
+    );
+  });
+
   it("rejects pathological turn volume instead of silently truncating", () => {
     const turns: Record<string, SessionState["turns"][string]> = {};
     for (let index = 0; index < 10_001; index += 1) {
@@ -476,15 +582,19 @@ describe("grounded session evaluator adversarial cases", () => {
 });
 
 function boundState(): SessionState {
+  return boundStateFor(sixPeopleProblem);
+}
+
+function boundStateFor(problem: InterviewProblem): SessionState {
   return {
     ...initialSessionState(newSessionId()),
     started: true,
     status: "ACTIVE",
     problem: {
-      id: sixPeopleProblem.id,
-      version: sixPeopleProblem.version,
-      prompt: sixPeopleProblem.public.prompt,
-      providerContextSpecSha256: createProviderContextSpecFingerprintSync(sixPeopleProblem)
+      id: problem.id,
+      version: problem.version,
+      prompt: problem.public.prompt,
+      providerContextSpecSha256: createProviderContextSpecFingerprintSync(problem)
     }
   };
 }
@@ -597,9 +707,14 @@ function setHistory(
       )
     : { ...state.studentEvidence, [keyString]: active.value };
 
+  const historyEventIds = history.flatMap((record) => [
+    record.evidenceEventId,
+    ...record.value.evidenceEventIds
+  ]);
   return {
     ...state,
     sequence: Math.max(state.sequence, ...specs.map((item) => item.sequence)),
+    eventIds: uniqueEventIds([...state.eventIds, ...historyEventIds]),
     studentEvidence,
     evidenceHistory: {
       ...state.evidenceHistory,
@@ -677,4 +792,10 @@ function addTurns(
     };
   }
   return { ...state, turns };
+}
+
+function uniqueEventIds(
+  eventIds: readonly ReturnType<typeof EventIdSchema.parse>[]
+): ReturnType<typeof EventIdSchema.parse>[] {
+  return Array.from(new Set(eventIds));
 }
