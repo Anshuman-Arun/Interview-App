@@ -198,6 +198,16 @@ function isExactSessionReadEndpoint(value: string, commandOrigin: string): boole
   return (
     sessionId.length > 0
     && sessionId.length <= 512
-    && !/[\\/\u0000-\u001F\u007F]/u.test(sessionId)
+    && !containsUnsafeReadPathCharacter(sessionId)
   );
+}
+
+function containsUnsafeReadPathCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (character === "/" || character === "\\" || code <= 31 || code === 127) {
+      return true;
+    }
+  }
+  return false;
 }
