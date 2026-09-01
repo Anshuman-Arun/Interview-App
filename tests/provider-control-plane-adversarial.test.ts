@@ -80,6 +80,64 @@ function settingsConfiguration(settings: unknown) {
   };
 }
 
+function fixture(...parts: readonly string[]): string {
+  return parts.join("");
+}
+
+const LONG_SK_FIXTURE = fixture("sk", "-", "abcdefghijklmnopqrstuvwxyz");
+const GOOGLE_API_KEY_FIXTURE = fixture(
+  "AI",
+  "za",
+  "123456789012345678901234567890"
+);
+const GITHUB_TOKEN_FIXTURE = fixture(
+  "gh",
+  "p_",
+  "abcdefghijklmnopqrstuvwxyz1234567890"
+);
+const GITHUB_SHORT_TOKEN_FIXTURE = fixture(
+  "gh",
+  "p_",
+  "abcdefghijklmnopqrstuvwxyz"
+);
+const GITHUB_PAT_FIXTURE = fixture(
+  "github_",
+  "pat_",
+  "abcdefghijklmnopqrstuvwxyz_1234567890"
+);
+const GITLAB_TOKEN_FIXTURE = fixture(
+  "gl",
+  "pat-",
+  "abcdefghijklmnopqrstuvwxyz123456"
+);
+const HUGGING_FACE_TOKEN_FIXTURE = fixture(
+  "hf",
+  "_",
+  "abcdefghijklmnopqrstuvwxyz123456"
+);
+const CREDENTIAL_URL_FIXTURE = fixture(
+  "postgres://",
+  "user:",
+  "p%40ssw0rd",
+  "@",
+  "example",
+  ".com/database"
+);
+const PRIVATE_KEY_FIXTURE = fixture(
+  "-----BEGIN ",
+  "PRIVATE KEY-----",
+  "\nprivate-material\n",
+  "-----END ",
+  "PRIVATE KEY-----"
+);
+const PGP_PRIVATE_KEY_FIXTURE = fixture(
+  "-----BEGIN PGP ",
+  "PRIVATE KEY BLOCK-----",
+  "\nprivate-material\n",
+  "-----END PGP ",
+  "PRIVATE KEY BLOCK-----"
+);
+
 describe("provider secret-classifier intrinsic hardening", () => {
   it("does not let RegExp or String prototype overrides disable secret detection", () => {
     const originalRegExpExec = Object.getOwnPropertyDescriptor(RegExp.prototype, "exec");
@@ -180,7 +238,7 @@ describe("provider secret-classifier intrinsic hardening", () => {
       basicDetected = containsSecretLikeConfigurationText("Basic YTpi");
       assignmentDetected = containsSecretLikeConfigurationText("password=hunter2");
       commonTokenDetected = containsSecretLikeConfigurationText(
-        "ghp_abcdefghijklmnopqrstuvwxyz"
+        GITHUB_SHORT_TOKEN_FIXTURE
       );
       try {
         inspectSafeProviderConfigurationValue({
@@ -342,12 +400,12 @@ describe("provider configuration secret exclusion", () => {
       "Basic YTpi",
       "Basic YTo",
       "Basic Og",
-      "AIza123456789012345678901234567890",
+      GOOGLE_API_KEY_FIXTURE,
       "sk_abcdefghijklmnopqrstuvwxyz",
-      "ghp_abcdefghijklmnopqrstuvwxyz1234567890",
-      "github_pat_abcdefghijklmnopqrstuvwxyz_1234567890",
-      "glpat-abcdefghijklmnopqrstuvwxyz123456",
-      "hf_abcdefghijklmnopqrstuvwxyz123456",
+      GITHUB_TOKEN_FIXTURE,
+      GITHUB_PAT_FIXTURE,
+      GITLAB_TOKEN_FIXTURE,
+      HUGGING_FACE_TOKEN_FIXTURE,
       "token=raw-private-token",
       "token=abcdefghijklmnopqrst",
       "secret=P@ssword-123456",
@@ -402,9 +460,9 @@ describe("provider configuration secret exclusion", () => {
       "http_authorization: Bearer abc",
       "auth_header=Basic YTpi",
       "Basic dXNlcjpwYXNz)",
-      "postgres://user:p%40ssw0rd@example.com/database",
-      "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----",
-      "-----BEGIN PGP PRIVATE KEY BLOCK-----\nprivate-material\n-----END PGP PRIVATE KEY BLOCK-----"
+      CREDENTIAL_URL_FIXTURE,
+      PRIVATE_KEY_FIXTURE,
+      PGP_PRIVATE_KEY_FIXTURE
     ]) {
       expect(() => validateProviderConfiguration(settingsConfiguration({ endpoint: value })))
         .toThrow(expect.objectContaining({ code: "SECRET_IN_CONFIGURATION" }));
@@ -558,14 +616,14 @@ describe("provider configuration secret exclusion", () => {
     for (const configuration of [
       {
         version: 1,
-        providerId: "sk-abcdefghijklmnopqrstuvwxyz",
+        providerId: LONG_SK_FIXTURE,
         modelId: "settings-model",
         enabled: true
       },
       {
         version: 1,
         providerId: "settings-provider",
-        modelId: "sk-abcdefghijklmnopqrstuvwxyz",
+        modelId: LONG_SK_FIXTURE,
         enabled: true
       },
       {
@@ -581,7 +639,7 @@ describe("provider configuration secret exclusion", () => {
         modelId: "settings-model",
         enabled: true,
         credentialRef: {
-          id: "sk-abcdefghijklmnopqrstuvwxyz",
+          id: LONG_SK_FIXTURE,
           purpose: "API_KEY"
         }
       }
