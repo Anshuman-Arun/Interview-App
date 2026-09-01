@@ -38,6 +38,11 @@ function recognizerInput(): RecognizerAudioInput {
 }
 
 describe("transcript validation", () => {
+  it("bounds fake-recognizer cancellation identities even when called directly from JavaScript", async () => {
+    const recognizer = new DeterministicFakeRecognizer();
+    await expect(recognizer.cancel("x".repeat(129) as never)).rejects.toThrow();
+  });
+
   it("accepts deterministic and empty final transcripts", async () => {
     const input = recognizerInput();
     const recognizer = new DeterministicFakeRecognizer((value) => ({
@@ -138,6 +143,36 @@ describe("transcript validation", () => {
 });
 
 describe("Moonshine-compatible adapter seam", () => {
+  it("runtime-rejects malformed or typoed adapter configuration", () => {
+    const runtime = {
+      runtimeVersion: "test-runtime",
+      supportsAbort: false,
+      async transcribe() { return { text: "ok" }; }
+    };
+    expect(() => new MoonshineSpeechRecognizer(null as never)).toThrow(/options must be an object/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime: null,
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "1"
+    } as never)).toThrow(/runtime must be an object/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "1",
+      modelVerison: "typo"
+    } as never)).toThrow(/unexpected field/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: 1
+    } as never)).toThrow(/model version must be a string/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime: { ...runtime, transcribe: "not-a-function" },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "1"
+    } as never)).toThrow(/transcribe callback is required/u);
+  });
+
   it("requires explicit safe local model paths and never treats URLs/control characters as model sources", () => {
     const runtime = {
       runtimeVersion: "test-runtime",
@@ -188,6 +223,20 @@ describe("Moonshine-compatible adapter seam", () => {
       modelVersion: "model-v1"
     });
     await expect(recognizer.recognize(input, new AbortController().signal)).rejects.toThrow();
+  });
+
+  it("runtime-rejects malformed direct recognition input", async () => {
+    const recognizer = new MoonshineSpeechRecognizer({
+      runtime: {
+        runtimeVersion: "test-runtime",
+        supportsAbort: false,
+        async transcribe() { return { text: "should not run" }; }
+      },
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "model-v1"
+    });
+    await expect(recognizer.recognize(null as never, new AbortController().signal))
+      .rejects.toThrow(/input must be an object/u);
   });
 
   it("rejects PCM whose byte length does not match its claimed source basis", async () => {
