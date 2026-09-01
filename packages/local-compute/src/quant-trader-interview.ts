@@ -671,7 +671,7 @@ export class QuantTraderInterviewEngine {
     }
 
     const marketStateAfterAction = this.orderBook.getMarketState();
-    this.portfolio.updateMarkPrice(this.fairValueValue);
+    const portfolio = this.portfolio.updateMarkPrice(this.fairValueValue);
     const risk = this.portfolio.checkRiskLimits(this.fairValueValue);
     if (risk.breached && risk.reason !== undefined) {
       this.recordRiskBreach("POST_ROUND", risk.reason);
@@ -902,7 +902,7 @@ export class QuantTraderInterviewEngine {
       fairValue: update.fairValue,
       label: update.label ?? "PUBLIC_INFORMATION_UPDATE"
     });
-    const portfolio = this.portfolio.updateMarkPrice(this.fairValueValue);
+    this.portfolio.updateMarkPrice(this.fairValueValue);
     const risk = this.portfolio.checkRiskLimits(this.fairValueValue);
     if (risk.breached && risk.reason !== undefined) {
       this.recordRiskBreach("FAIR_VALUE_UPDATE", risk.reason);
