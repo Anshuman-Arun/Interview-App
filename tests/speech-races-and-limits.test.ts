@@ -134,19 +134,27 @@ describe("speech worker adversarial races and hard limits", () => {
   });
 
   it("does not let duplicate cancellation requests consume every overflow reserve slot", async () => {
+    let hold = false;
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const vadBackend: VadBackend = {
       async classify() {
-        await gate;
+        if (hold) await gate;
         return { speechProbability: 0 };
       }
     };
-    const subject = worker({ vadBackend, maxInFlightRequests: 1, maxConcurrentStreams: 2 });
-    const left = frame(0, false, "reserve-left");
-    const right = frame(0, false, "reserve-right");
-    const first = subject.submitFrame(left.envelope, left.pcm);
-    const rightStart = subject.submitFrame(right.envelope, right.pcm).catch(() => []);
+    const subject = worker({ vadBackend, maxInFlightRequests: 2, maxConcurrentStreams: 2 });
+
+    for (const streamId of ["reserve-left", "reserve-right"]) {
+      const initial = frame(0, false, streamId);
+      await subject.submitFrame(initial.envelope, initial.pcm);
+    }
+
+    hold = true;
+    const leftPending = frame(1, false, "reserve-left");
+    const rightPending = frame(1, false, "reserve-right");
+    const leftFrame = subject.submitFrame(leftPending.envelope, leftPending.pcm);
+    const rightFrame = subject.submitFrame(rightPending.envelope, rightPending.pcm);
 
     const cancelLeft = subject.cancel({
       protocolVersion: 1,
@@ -161,17 +169,18 @@ describe("speech worker adversarial races and hard limits", () => {
       type: "CANCEL_SPEECH"
     })).rejects.toMatchObject({ code: "RESOURCE_LIMIT" });
 
-    await expect(subject.cancel({
+    const cancelRight = subject.cancel({
       protocolVersion: 1,
       requestId: newRequestId(),
       streamId: "reserve-right",
       type: "CANCEL_SPEECH"
-    })).resolves.toContainEqual(expect.objectContaining({ type: "SPEECH_CANCELLED" }));
+    });
 
+    await expect(cancelLeft).resolves.toContainEqual(expect.objectContaining({ type: "SPEECH_CANCELLED" }));
+    await expect(cancelRight).resolves.toContainEqual(expect.objectContaining({ type: "SPEECH_CANCELLED" }));
     release?.();
-    await cancelLeft;
-    await first;
-    await rightStart;
+    await expect(leftFrame).resolves.toEqual([]);
+    await expect(rightFrame).resolves.toEqual([]);
   });
 
   it("remembers stable failures so a failed RequestId cannot later be reused with different content", async () => {
@@ -316,7 +325,7 @@ describe("speech worker adversarial races and hard limits", () => {
       cancellationCapability: "NONE",
       async recognize(input) {
         input.pcmBytes[0] = 1;
-        input.sourceAudioBasis.pcmSha256 = "f".repeat(64);
+        (input.sourceAudioBasis as { pcmSha256: string }).pcmSha256 = "f".repeat(64);
         return validRaw(input, "mutating");
       }
     };
