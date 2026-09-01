@@ -57,51 +57,53 @@ const SafeEventMetadataSchema = z.object({
 
 type SafeEventMetadata = z.infer<typeof SafeEventMetadataSchema>;
 
-const KNOWN_EVENT_TYPES = new Set<string>([
-  "SESSION_STARTED",
-  "PROBLEM_PRESENTED",
-  "UTTERANCE_STARTED",
-  "UTTERANCE_DISCARDED",
-  "INPUT_EPISODE_STARTED",
-  "INPUT_EPISODE_UPDATED",
-  "INPUT_EPISODE_COMMITTED",
-  "TURN_COMMITTED",
-  "TRANSCRIPT_FINALIZED",
-  "TRANSCRIPT_CORRECTED",
-  "BOARD_PATCH_COMMITTED",
-  "VISION_REQUESTED",
-  "VISION_RESULT_ACCEPTED",
-  "VISION_RESULT_DISCARDED",
-  "LOCAL_COMPUTE_REQUESTED",
-  "LOCAL_COMPUTE_RESULT_ACCEPTED",
-  "LOCAL_COMPUTE_RESULT_DISCARDED",
-  "VERIFICATION_REQUESTED",
-  "VERIFICATION_RESULT_ACCEPTED",
-  "VERIFICATION_RESULT_DISCARDED",
-  "EVIDENCE_PROPOSED",
-  "STUDENT_EVIDENCE_UPDATED",
-  "STUDENT_EVIDENCE_INVALIDATED",
-  "PEDAGOGICAL_ACTION_SELECTED",
-  "MODEL_GENERATION_STARTED",
-  "GENERATION_CONTEXT_COMPILED",
-  "MODEL_PROPOSAL_RECEIVED",
-  "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED",
-  "FORMAL_INTERPRETATION_PROPOSAL_REJECTED",
-  "MODEL_GENERATION_SUPERSEDED",
-  "PROPOSAL_VALIDATED",
-  "PROPOSAL_REJECTED",
-  "DELIVERY_QUEUED",
-  "DELIVERY_STARTED",
-  "DELIVERY_EXPOSED",
-  "DELIVERY_COMPLETED",
-  "DELIVERY_CANCELLED",
-  "DELIVERY_POSSIBLY_EXPOSED",
-  "POLICY_REVISION_CHANGED",
-  "PROBLEM_STATE_REVISION_CHANGED",
-  "SESSION_COMPLETED",
-  "SESSION_ARCHIVED",
-  "SESSION_RESUMED"
-] satisfies readonly EventType[]);
+const KNOWN_EVENT_TYPE_MAP = {
+  SESSION_STARTED: true,
+  PROBLEM_PRESENTED: true,
+  UTTERANCE_STARTED: true,
+  UTTERANCE_DISCARDED: true,
+  INPUT_EPISODE_STARTED: true,
+  INPUT_EPISODE_UPDATED: true,
+  INPUT_EPISODE_COMMITTED: true,
+  TURN_COMMITTED: true,
+  TRANSCRIPT_FINALIZED: true,
+  TRANSCRIPT_CORRECTED: true,
+  BOARD_PATCH_COMMITTED: true,
+  VISION_REQUESTED: true,
+  VISION_RESULT_ACCEPTED: true,
+  VISION_RESULT_DISCARDED: true,
+  LOCAL_COMPUTE_REQUESTED: true,
+  LOCAL_COMPUTE_RESULT_ACCEPTED: true,
+  LOCAL_COMPUTE_RESULT_DISCARDED: true,
+  VERIFICATION_REQUESTED: true,
+  VERIFICATION_RESULT_ACCEPTED: true,
+  VERIFICATION_RESULT_DISCARDED: true,
+  EVIDENCE_PROPOSED: true,
+  STUDENT_EVIDENCE_UPDATED: true,
+  STUDENT_EVIDENCE_INVALIDATED: true,
+  PEDAGOGICAL_ACTION_SELECTED: true,
+  MODEL_GENERATION_STARTED: true,
+  GENERATION_CONTEXT_COMPILED: true,
+  MODEL_PROPOSAL_RECEIVED: true,
+  FORMAL_INTERPRETATION_PROPOSAL_RECEIVED: true,
+  FORMAL_INTERPRETATION_PROPOSAL_REJECTED: true,
+  MODEL_GENERATION_SUPERSEDED: true,
+  PROPOSAL_VALIDATED: true,
+  PROPOSAL_REJECTED: true,
+  DELIVERY_QUEUED: true,
+  DELIVERY_STARTED: true,
+  DELIVERY_EXPOSED: true,
+  DELIVERY_COMPLETED: true,
+  DELIVERY_CANCELLED: true,
+  DELIVERY_POSSIBLY_EXPOSED: true,
+  POLICY_REVISION_CHANGED: true,
+  PROBLEM_STATE_REVISION_CHANGED: true,
+  SESSION_COMPLETED: true,
+  SESSION_ARCHIVED: true,
+  SESSION_RESUMED: true
+} as const satisfies Readonly<Record<EventType, true>>;
+
+const KNOWN_EVENT_TYPES = new Set<string>(Object.keys(KNOWN_EVENT_TYPE_MAP));
 
 export interface NormalizedReplayEvent {
   readonly raw: unknown;
@@ -206,13 +208,26 @@ export function normalizeReplayEvents(
 
     try {
       const event = upcasters.toCurrent(item.raw);
+      if (
+        event.eventId !== metadata.eventId
+        || event.sessionId !== metadata.sessionId
+        || event.sequence !== metadata.sequence
+        || event.source !== metadata.source
+        || event.wallTime !== metadata.wallTime
+        || event.elapsedMs !== metadata.elapsedMs
+        || event.causationId !== metadata.causationId
+        || event.correlationId !== metadata.correlationId
+      ) {
+        throw new ReplayProjectionError("INVALID_EVENT_SCHEMA");
+      }
       events.push({
         raw: item.raw,
         metadata,
         event,
         provenance: provenanceFor(metadata, event)
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ReplayProjectionError) throw error;
       if (
         metadata.schemaVersion < CURRENT_EVENT_SCHEMA_VERSION
         || KNOWN_EVENT_TYPES.has(metadata.type)

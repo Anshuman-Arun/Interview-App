@@ -533,7 +533,11 @@ export function projectReplayTimeline(
   if (normalized.events.length > bounds.maxTimelineEntries) {
     issues.push({ code: "TIMELINE_LIMIT_REACHED" });
   }
-  if (normalized.eventTruncation.truncated || normalized.hasUnknownEvents) {
+  if (
+    normalized.sessionId === null
+    || normalized.eventTruncation.truncated
+    || normalized.hasUnknownEvents
+  ) {
     issues.push({ code: "CURRENT_STATE_UNAVAILABLE" });
   }
 
@@ -587,7 +591,8 @@ export function projectReplayTimeline(
     eventTruncation: normalized.eventTruncation,
     timelineTruncation,
     complete:
-      !normalized.eventTruncation.truncated
+      normalized.sessionId !== null
+      && !normalized.eventTruncation.truncated
       && !timelineTruncation.truncated
       && !normalized.hasUnknownEvents,
     issues,

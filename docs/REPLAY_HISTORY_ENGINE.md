@@ -42,11 +42,17 @@ logical schema/type where known, source, elapsed/wall time, causation ID, and
 correlation ID. Related utterance, input episode, Turn, Generation, Delivery, and
 request IDs are attached when the event contract supplies them.
 
-Generated proposal text is intentionally not copied into replay output. A persisted
-provider proposal is represented by bounded metadata such as realized action,
-claimed disclosure level, whether speech text was present, and board-action count.
-Candidate-visible content is shown only through validated `DeliveryAtom` content.
-This prevents rejected/generated material from becoming a replay disclosure path.
+Generated/provider/verifier interpretation text is intentionally not copied into
+candidate-visible replay output. Persisted provider proposals are represented by
+non-content metadata such as realized action, claimed disclosure level, claimed-ID
+count, whether speech text was present, and board-action count. Internal policy
+targets, formal-interpretation text, verifier reasons, vision interpretations, and
+model-claimed disclosure IDs are withheld.
+
+Candidate-visible AI content is projected only from a `DeliveryAtom` whose
+authoritative status is `EXPOSED`, `COMPLETED`, or `POSSIBLY_EXPOSED`. This
+prevents generated, rejected, queued, delivering, or cancelled material from
+becoming a replay disclosure path.
 
 Problem prompts and private problem partitions are not copied into replay entries.
 The projection never reads canonical solutions.
@@ -67,11 +73,13 @@ POSSIBLY_EXPOSED        -> possibly presented
 but never delivered content is not rendered as candidate-visible dialogue, and
 duplicate acknowledgements do not create duplicate delivery identities.
 
-TEXT and AUDIO may include a bounded text preview when that text was authoritatively
-stored in the delivery atom. AUDIO records only that an audio reference was stored;
-it does not assert that PCM/media is still available. WHITEBOARD replay preserves
-generic board-action operation, annotation purpose, target/revision metadata, and
-bounded authored content without depending on tldraw.
+For `EXPOSED`, `COMPLETED`, and `POSSIBLY_EXPOSED` atoms, TEXT and AUDIO may
+include a bounded text preview when that text was authoritatively stored in the
+delivery atom. AUDIO records only that an audio reference was stored; it does not
+assert that PCM/media is still available. WHITEBOARD replay preserves visible
+action operation/content and target/revision metadata without exposing the internal
+`annotationPurpose`. For QUEUED, DELIVERING, and CANCELLED atoms, only safe delivery
+metadata is projected; the atom content itself is withheld.
 
 ## Evidence and verification history
 
@@ -86,9 +94,10 @@ CONTRADICTED, and UNRESOLVED are retained exactly. Discarded callbacks remain
 discarded and are never promoted into authoritative verification outcomes.
 
 Generation history retains GenerationId, GenerationBasis, provider, safe context
-manifest hashes, proposal metadata, supersession provenance, and downstream
-DeliveryIds. A lifecycle event appearing after supersession is flagged as a
-projection integrity issue rather than made to look current.
+manifest hashes, non-content proposal metadata, supersession provenance, and
+downstream DeliveryIds. Current-schema histories that attempt to authorize or start
+delivery from a superseded/rejected/incompatible generation fail replay validation
+rather than being made to look current.
 
 ## Lifecycle and recovery
 
@@ -109,16 +118,22 @@ Known legacy/current events go through the repository's existing
 `EventUpcasterRegistry`. The projection never mutates persisted historical events.
 
 Future/unknown events retain only safe bounded metadata and appear as
-`UNKNOWN_EVENT`; their payload is intentionally withheld. The timeline is marked
-incomplete. Malformed known events, unsupported legacy versions, mixed session IDs,
-and duplicate/gapped sequences fail with a fixed `ReplayProjectionError` that
-does not echo user content.
+`UNKNOWN_EVENT`; their payload is intentionally withheld. The first unknown event
+is a semantic boundary: later known event payloads are also withheld because their
+meaning may depend on state transitions this version cannot understand. The
+timeline is marked incomplete. Malformed known events, unsupported legacy versions,
+mixed session IDs, and duplicate/gapped projected-prefix sequences fail with a
+fixed `ReplayProjectionError` that does not echo user content. Upcasters may change
+schema representation but may not rewrite immutable event identity/chronology
+metadata.
 
 ## Evaluation
 
-`projectSessionHistory` may consume an already completed `SessionEvaluation`.
-It validates session/problem identity and publishes only score/count summaries.
-It does not call or duplicate `session-evaluator.ts`, and it does not fabricate an
+`projectSessionHistory` may consume an already completed `SessionEvaluation`
+only when the underlying event history is fully replayable and contains an
+authoritative session completion. It validates session/problem/turn identity and
+evaluation count consistency, then publishes only score/count summaries. It does
+not call or duplicate `session-evaluator.ts`, recompute scores, or fabricate an
 `EVALUATION_AVAILABLE` authoritative timeline event when no such event exists.
 
 ## Longitudinal comparability
@@ -126,28 +141,33 @@ It does not call or duplicate `session-evaluator.ts`, and it does not fabricate 
 Cross-session aggregation is conservative:
 
 - repeated attempts and evaluation deltas require exact problem ID **and version**;
-- evidence patterns require an exact serialized evidence key;
+- evidence patterns require exact structured evidence-key identity;
 - unrelated problem milestones are not compared as if they were common skills;
 - no skill taxonomy is fabricated. The output explicitly reports
   `skillTaxonomyAvailable: false` as the extension seam.
 
 ## Resource limits
 
-Default projection bounds are deterministic and caller-overridable:
+Projection limits are deterministic hard caps. Callers may lower them for smaller
+views, but may not raise them above the package defaults:
 
 | Resource | Default |
 | --- | ---: |
-| events read into one projection | 20,000 |
+| events materialized/upcast into one projection | 20,000 |
 | timeline entries | 5,000 |
 | sessions in one longitudinal query | 500 |
 | text preview | 512 Unicode code points |
 | disclosure IDs per entry | 64 |
+| provenance/event IDs per entry | 128 |
 | evidence-history entries | 2,000 |
 | verification entries | 1,000 |
 | generation entries | 1,000 |
 
 Every bounded collection reports `truncated`, `limit`, and
-`remainingCount`. History is never silently dropped.
+`remainingCount`. Summary counts are computed over the full validated event prefix
+rather than the bounded display rows. History is never silently dropped. The
+normalizer may still scan supplied event metadata to recover authoritative sequence
+order; the event cap bounds semantic upcasting/materialization and output state.
 
 ## Future UI integration
 

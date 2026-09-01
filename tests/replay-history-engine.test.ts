@@ -674,7 +674,76 @@ describe("replay/history projections", () => {
       .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
+  it("computes verification summaries over the full validated prefix, not the bounded row list", () => {
+    const sessionId = "session-verification-bounds" as SessionId;
+    const start = event(sessionId, 1, "SESSION_STARTED", {
+      startedAt: "2026-08-31T19:00:01.000Z"
+    });
+    const problem = event(sessionId, 2, "PROBLEM_PRESENTED", {
+      problemId: sixPeopleProblem.id,
+      problemVersion: sixPeopleProblem.version,
+      prompt: "Public prompt"
+    });
+    const episodeStarted = event(sessionId, 3, "INPUT_EPISODE_STARTED", {
+      inputEpisodeId: "episode-verification"
+    }, "USER");
+    const episodeUpdated = event(sessionId, 4, "INPUT_EPISODE_UPDATED", {
+      inputEpisodeId: "episode-verification",
+      modality: "TYPING",
+      semanticContent: "A claim to verify"
+    }, "USER");
+    const episodeCommitted = event(sessionId, 5, "INPUT_EPISODE_COMMITTED", {
+      inputEpisodeId: "episode-verification"
+    });
+    const turn = event(sessionId, 6, "TURN_COMMITTED", {
+      turnId: "turn-verification",
+      inputEpisodeId: "episode-verification",
+      studentText: "A claim to verify"
+    });
+
+    const events: SessionEvent[] = [
+      start,
+      problem,
+      episodeStarted,
+      episodeUpdated,
+      episodeCommitted,
+      turn
+    ];
+    const key: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "bounded-verification-claim" },
+      dimension: "CORRECTNESS"
+    };
+    let sequence = 7;
+    for (let index = 0; index < 1_001; index += 1) {
+      events.push(event(sessionId, sequence, "VERIFICATION_REQUESTED", {
+        verificationRequestId: `verification-bounded-${String(index)}`,
+        verifier: "deterministic-verifier",
+        basis: basis(),
+        candidateFormalInterpretation: `claim ${String(index)}`,
+        interpretationConfidence: 0.8,
+        evidenceKey: key,
+        evidenceEventIds: [turn.eventId]
+      }));
+      sequence += 1;
+    }
+
+    const history = projectSessionHistory(events);
+    expect(history.verificationHistory).toHaveLength(1_000);
+    expect(history.verificationTruncation).toEqual({
+      truncated: true,
+      limit: 1_000,
+      remainingCount: 1
+    });
+    expect(history.verificationSummary.pending).toBe(1_001);
+    expect(history.verificationHistoryComplete).toBe(false);
+  });
+
   it("handles lifecycle states, mixed v1/v2 upcasts, future events, and explicit bounds safely", () => {
+    const emptyTimeline = projectReplayTimeline([]);
+    expect(emptyTimeline.complete).toBe(false);
+    expect(emptyTimeline.issues).toContainEqual({ code: "CURRENT_STATE_UNAVAILABLE" });
+
     const empty = projectSessionHistory([]);
     expect(empty.currentStateAvailable).toBe(false);
     expect(empty.lifecycle.status).toBe("UNKNOWN");
@@ -1321,7 +1390,13 @@ describe("replay/history projections", () => {
 
   it("fails sanitized on corrupt caller histories and validates linked evaluations", () => {
     const sessionId = "session-invalid" as SessionId;
-    const valid = base(sessionId, "evaluation", "1.0.0");
+    const active = base(sessionId, "evaluation", "1.0.0");
+    const valid = [
+      ...active,
+      event(sessionId, 3, "SESSION_COMPLETED", {
+        completedAt: "2026-08-31T19:10:00.000Z"
+      })
+    ];
     const invalidInputs = [
       [{ ...valid[0] }, { ...valid[1], sequence: 1 }],
       [{ ...valid[0] }, { ...valid[1], sequence: 3 }],
@@ -1363,6 +1438,8 @@ describe("replay/history projections", () => {
       summaryAssessment: "Summary"
     });
     expect(projectSessionHistory(valid, { evaluation }).evaluation?.scores.compositeScore).toBe(82);
+    expect(() => projectSessionHistory(active, { evaluation }))
+      .toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
     expect(() => projectSessionHistory(valid, {
       evaluation: { ...evaluation, problemVersion: "2.0.0" }
     })).toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));

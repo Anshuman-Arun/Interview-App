@@ -34,6 +34,7 @@ import type {
   ReplayGenerationHistoryEntry,
   ReplaySessionLifecycle,
   ReplayVerificationHistoryEntry,
+  ReplayVerificationSummary,
   SessionHistoryProjection
 } from "./types.js";
 
@@ -435,17 +436,94 @@ function validateEvaluation(
   if (input === undefined) return undefined;
   const parsed = SessionEvaluationSchema.safeParse(input);
   if (!parsed.success) throw new ReplayProjectionError("EVALUATION_MISMATCH");
+
   if (
     sessionId === null
+    || state === undefined
+    || state.completedAt === undefined
+    || (state.status !== "COMPLETED" && state.status !== "ARCHIVED")
     || parsed.data.sessionId !== sessionId
     || problem === undefined
     || parsed.data.problemId !== problem.problemId
     || parsed.data.problemVersion !== problem.problemVersion
-    || (state !== undefined && parsed.data.totalTurns !== Object.keys(state.turns).length)
+    || parsed.data.totalTurns !== Object.keys(state.turns).length
   ) {
     throw new ReplayProjectionError("EVALUATION_MISMATCH");
   }
+
+  const achieved = parsed.data.milestones.filter((milestone) => milestone.achieved);
+  const unassisted = achieved.filter((milestone) => milestone.assistanceLevel === 0).length;
+  const assisted = achieved.length - unassisted;
+  const milestoneIds = new Set<string>();
+  for (const milestone of parsed.data.milestones) {
+    if (milestoneIds.has(milestone.milestoneId)) {
+      throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    }
+    milestoneIds.add(milestone.milestoneId);
+    if (
+      milestone.achievedAtTurnId !== undefined
+      && state.turns[milestone.achievedAtTurnId] === undefined
+    ) {
+      throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    }
+    if (!milestone.achieved && milestone.achievedAtTurnId !== undefined) {
+      throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    }
+  }
+
+  if (
+    parsed.data.unassistedMilestoneCount !== unassisted
+    || parsed.data.assistedMilestoneCount !== assisted
+    || parsed.data.disclosedInterventions.length
+      !== Object.values(state.deliveries).filter((delivery) =>
+        isDisclosedStatus(delivery.status)
+      ).length
+    || parsed.data.disclosedInterventions.some((intervention) =>
+      state.turns[intervention.turnId] === undefined
+    )
+  ) {
+    throw new ReplayProjectionError("EVALUATION_MISMATCH");
+  }
+
   return evaluationSummary(parsed.data);
+}
+
+function verificationSummaryFrom(
+  items: readonly NormalizedReplayEvent[]
+): ReplayVerificationSummary {
+  const byRequest = new Map<string, {
+    status: "PENDING" | "ACCEPTED" | "DISCARDED";
+    resultStatus?: "VERIFIED" | "CONTRADICTED" | "UNRESOLVED";
+  }>();
+
+  for (const item of items) {
+    const event = item.event;
+    if (event?.type === "VERIFICATION_REQUESTED") {
+      byRequest.set(event.payload.verificationRequestId, { status: "PENDING" });
+    } else if (event?.type === "VERIFICATION_RESULT_ACCEPTED") {
+      const request = byRequest.get(event.payload.verificationRequestId);
+      if (request === undefined) {
+        throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
+      }
+      request.status = "ACCEPTED";
+      request.resultStatus = event.payload.result.status;
+    } else if (event?.type === "VERIFICATION_RESULT_DISCARDED") {
+      const request = byRequest.get(event.payload.verificationRequestId);
+      if (request === undefined) {
+        throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
+      }
+      request.status = "DISCARDED";
+    }
+  }
+
+  const values = [...byRequest.values()];
+  return {
+    pending: values.filter((entry) => entry.status === "PENDING").length,
+    verified: values.filter((entry) => entry.resultStatus === "VERIFIED").length,
+    contradicted: values.filter((entry) => entry.resultStatus === "CONTRADICTED").length,
+    unresolved: values.filter((entry) => entry.resultStatus === "UNRESOLVED").length,
+    discarded: values.filter((entry) => entry.status === "DISCARDED").length
+  };
 }
 
 function directDeliveryCounts(events: readonly SessionEvent[]): {
@@ -551,13 +629,7 @@ export function projectSessionHistory(
           stale: evidenceStateRecords.filter((record) => record.status === "STALE").length
         })
   };
-  const verificationSummary = {
-    pending: verification.values.filter((entry) => entry.status === "PENDING").length,
-    verified: verification.values.filter((entry) => entry.result?.status === "VERIFIED").length,
-    contradicted: verification.values.filter((entry) => entry.result?.status === "CONTRADICTED").length,
-    unresolved: verification.values.filter((entry) => entry.result?.status === "UNRESOLVED").length,
-    discarded: verification.values.filter((entry) => entry.status === "DISCARDED").length
-  };
+  const verificationSummary = verificationSummaryFrom(semanticItems);
   const highestDisclosureUsed = state === undefined ? undefined : disclosedHighest(state);
   const evaluation = validateEvaluation(options.evaluation, normalized.sessionId, problem, state);
 

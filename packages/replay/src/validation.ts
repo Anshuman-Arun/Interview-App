@@ -765,7 +765,7 @@ export function validateKnownReplayPrefix(
           formalProposals.set(event.payload.proposalRequestId, {
             generationId: event.payload.generationId,
             proposal: event.payload.proposal
-          };
+          });
           generationProposalKinds.set(event.payload.generationId, "FORMAL");
           generationPhases.set(event.payload.generationId, "PROPOSAL_RECEIVED");
           pendingNext = {

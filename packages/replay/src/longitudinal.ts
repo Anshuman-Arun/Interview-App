@@ -95,12 +95,15 @@ const LongitudinalSessionInputSchema = z.object({
   }).strict().optional(),
   lifecycle: z.object({
     startedAt: z.iso.datetime().optional(),
-    completed: z.boolean().nullable()
+    completed: z.boolean().nullable(),
+    historyComplete: z.boolean()
   }),
   counts: z.object({
+    turns: SafeNonnegativeIntegerSchema,
     exposedInterventions: SafeNonnegativeIntegerSchema,
     possiblyExposedInterventions: SafeNonnegativeIntegerSchema
   }),
+  countsComplete: z.boolean(),
   currentStateAvailable: z.boolean(),
   currentEvidenceTruncation: TruncationSchema,
   currentEvidence: z.array(z.object({
@@ -114,6 +117,15 @@ const LongitudinalSessionInputSchema = z.object({
 
 type LongitudinalSessionInput = z.infer<typeof LongitudinalSessionInputSchema>;
 
+function truncationMatchesLength(
+  truncation: z.infer<typeof TruncationSchema>,
+  length: number
+): boolean {
+  return truncation.truncated
+    ? length === truncation.limit
+    : length <= truncation.limit;
+}
+
 function parseSessionSummaries(
   values: readonly unknown[]
 ): readonly LongitudinalSessionInput[] {
@@ -126,25 +138,56 @@ function parseSessionSummaries(
 
     const session = result.data;
     if (
-      session.evaluation !== undefined
-      && (
-        session.problem === undefined
-        || session.evaluation.sessionId !== session.sessionId
-        || session.evaluation.problemId !== session.problem.problemId
-        || session.evaluation.problemVersion !== session.problem.problemVersion
+      session.currentStateAvailable !== session.lifecycle.historyComplete
+      || session.currentStateAvailable !== session.countsComplete
+      || (session.lifecycle.historyComplete && session.lifecycle.completed === null)
+      || (session.currentStateAvailable && session.problem === undefined)
+      || (!session.currentStateAvailable && session.currentEvidence.length !== 0)
+      || !truncationMatchesLength(
+        session.currentEvidenceTruncation,
+        session.currentEvidence.length
       )
     ) {
       throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
     }
 
+    if (session.evaluation !== undefined) {
+      if (
+        !session.currentStateAvailable
+        || session.lifecycle.completed !== true
+        || session.problem === undefined
+        || session.evaluation.sessionId !== session.sessionId
+        || session.evaluation.problemId !== session.problem.problemId
+        || session.evaluation.problemVersion !== session.problem.problemVersion
+        || session.evaluation.totalTurns !== session.counts.turns
+        || session.evaluation.achievedMilestoneCount > session.evaluation.milestoneCount
+        || session.evaluation.unassistedMilestoneCount
+          + session.evaluation.assistedMilestoneCount
+          !== session.evaluation.achievedMilestoneCount
+        || session.evaluation.disclosedInterventionCount
+          !== session.counts.exposedInterventions
+            + session.counts.possiblyExposedInterventions
+      ) {
+        throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
+      }
+    }
+
+    const evidenceIdentities = new Set<string>();
     for (const evidence of session.currentEvidence) {
+      const identity = replayEvidenceIdentity(evidence.key);
       if (
         session.problem === undefined
         || evidence.key.problemId !== session.problem.problemId
         || evidence.keyString !== evidenceKeyToString(evidence.key)
+        || evidenceIdentities.has(identity)
+        || !truncationMatchesLength(
+          evidence.value.evidenceEventIdsTruncation,
+          evidence.value.evidenceEventIds.length
+        )
       ) {
         throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
       }
+      evidenceIdentities.add(identity);
     }
 
     parsed.push(session);
