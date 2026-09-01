@@ -570,6 +570,45 @@ describe("deterministic Quant Research interview engine", () => {
     expectCode(() => replayQuantResearch(bayesian, replayProxy.proxy), "INVALID_REPLAY");
   });
 
+  it("checks bounded array lengths before invoking own-key enumeration", () => {
+    let vectorKeysInvoked = false;
+    const oversizedVector = new Proxy(new Array<number>(9), {
+      ownKeys() {
+        vectorKeysInvoked = true;
+        throw new Error("vector ownKeys should not run");
+      }
+    });
+    expectCode(
+      () => new QuantResearchEngine(optimization).applyAction({
+        actionId: "oversized-vector",
+        kind: "SUBMIT_PARAMETERS",
+        values: oversizedVector
+      }),
+      "INVALID_ACTION"
+    );
+    expect(vectorKeysInvoked).toBe(false);
+
+    let replayKeysInvoked = false;
+    const oversizedReplay = new Proxy(new Array<unknown>(65), {
+      ownKeys() {
+        replayKeysInvoked = true;
+        throw new Error("replay ownKeys should not run");
+      }
+    });
+    expectCode(() => replayQuantResearch(bayesian, oversizedReplay), "RESOURCE_LIMIT_EXCEEDED");
+    expect(replayKeysInvoked).toBe(false);
+
+    let registryKeysInvoked = false;
+    const oversizedRegistry = new Proxy(new Array<unknown>(6), {
+      ownKeys() {
+        registryKeysInvoked = true;
+        throw new Error("registry ownKeys should not run");
+      }
+    });
+    expectCode(() => assertUniqueQuantResearchRegistrations(oversizedRegistry), "INVALID_REGISTRY");
+    expect(registryKeysInvoked).toBe(false);
+  });
+
   it("rejects sparse and accessor-backed parameter vectors", () => {
     const sparse = new Array<number>(2);
     sparse[1] = 0;
@@ -764,8 +803,15 @@ describe("deterministic Quant Research interview engine", () => {
     engine.applyAction({ actionId: "negzero-1", kind: "SUBMIT_PARAMETERS", values: [-0, 0] });
     engine.applyAction({ actionId: "negzero-2", kind: "SUBMIT_PARAMETERS", values: [0, -0] });
     const accepted = engine.getAcceptedActions();
-    expect(Object.is((accepted[0] as { values: readonly number[] }).values[0], -0)).toBe(false);
-    expect(Object.is((accepted[1] as { values: readonly number[] }).values[1], -0)).toBe(false);
+    const first = accepted[0];
+    const second = accepted[1];
+    expect(first?.kind).toBe("SUBMIT_PARAMETERS");
+    expect(second?.kind).toBe("SUBMIT_PARAMETERS");
+    if (first?.kind !== "SUBMIT_PARAMETERS" || second?.kind !== "SUBMIT_PARAMETERS") {
+      throw new Error("Expected parameter actions");
+    }
+    expect(Object.is(first.values[0], -0)).toBe(false);
+    expect(Object.is(second.values[1], -0)).toBe(false);
 
     const jsonRoundTrip = JSON.parse(JSON.stringify(accepted)) as unknown;
     const replayed = replayQuantResearch(optimization, jsonRoundTrip);
