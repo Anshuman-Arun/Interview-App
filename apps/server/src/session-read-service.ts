@@ -136,8 +136,23 @@ export class SessionReadService {
     rawSessionId: SessionId
   ): SessionEvaluationReadResponse | null {
     const sessionId = SessionIdSchema.parse(rawSessionId);
+    const known = this.sessionKnown(sessionId);
+    if (known === false) return null;
+    if (known === undefined) {
+      return safeReadFailure(
+        "SESSION_EVALUATION_READ",
+        sessionId,
+        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      ) as SessionEvaluationReadResponse;
+    }
     const summary = this.findSummary(sessionId);
-    if (summary === undefined) return null;
+    if (summary === undefined) {
+      return safeReadFailure(
+        "SESSION_EVALUATION_READ",
+        sessionId,
+        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      ) as SessionEvaluationReadResponse;
+    }
 
     if (summary.status !== "COMPLETED" && summary.status !== "ARCHIVED") {
       return safeReadFailure(
@@ -191,8 +206,23 @@ export class SessionReadService {
 
   public readReplay(rawSessionId: SessionId): SessionReplayReadResponse | null {
     const sessionId = SessionIdSchema.parse(rawSessionId);
+    const known = this.sessionKnown(sessionId);
+    if (known === false) return null;
+    if (known === undefined) {
+      return safeReadFailure(
+        "SESSION_REPLAY_READ",
+        sessionId,
+        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      ) as SessionReplayReadResponse;
+    }
     const summary = this.findSummary(sessionId);
-    if (summary === undefined) return null;
+    if (summary === undefined) {
+      return safeReadFailure(
+        "SESSION_REPLAY_READ",
+        sessionId,
+        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      ) as SessionReplayReadResponse;
+    }
 
     if (summary.eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
       return safeReadFailure(
@@ -391,6 +421,14 @@ export class SessionReadService {
       sessionTruncation: historyTruncation(allSummaries.length, cards.length),
       longitudinal
     });
+  }
+
+  private sessionKnown(sessionId: SessionId): boolean | undefined {
+    try {
+      return this.#source.hasSession(sessionId);
+    } catch {
+      return undefined;
+    }
   }
 
   private findSummary(sessionId: SessionId): StoredSessionSummary | undefined {
