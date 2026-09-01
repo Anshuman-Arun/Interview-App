@@ -818,7 +818,7 @@ describe("adversarial deterministic math verification", () => {
   });
 
   it("fails closed on runtime statement and confidence type violations", async () => {
-    const verifier = new ModularArithmeticVerifier() as unknown as {
+    const verifier = new ModularArithmeticVerifier() as {
       verify(statement: unknown, interpretationConfidence: unknown): Promise<VerificationResult>;
     };
 
