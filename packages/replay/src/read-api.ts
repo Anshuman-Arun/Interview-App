@@ -77,7 +77,7 @@ const BoundedSessionIdSchema = SessionIdSchema.superRefine((value, context) => {
   }
 });
 const BoundedIdentifierSchema = z.string().min(1).max(MAX_REPLAY_IDENTIFIER_CHARS);
-const BoundedTextSchema = z.string().refine(
+const BoundedTextSchema = z.string().min(1).refine(
   (value) => codePointLength(value) <= MAX_READ_TEXT_CHARS,
   { message: "Text exceeds the read-model code-point limit" }
 );
@@ -186,6 +186,12 @@ export const GroundedEvaluationDimensionSchema = z.object({
       message: "Read dimension score and support are inconsistent"
     });
   }
+  if (result.score !== null && result.evidenceRefs.length === 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Scored read dimensions require grounded evidence references"
+    });
+  }
 });
 
 export type GroundedEvaluationDimension = z.infer<
@@ -228,6 +234,12 @@ export const GroundedEvaluationMilestoneSchema = z.object({
     context.addIssue({
       code: "custom",
       message: "Milestone assistance level/count are inconsistent"
+    });
+  }
+  if (milestone.achieved && milestone.evidenceRefs.length === 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Achieved milestone reads require grounded evidence references"
     });
   }
 });
@@ -300,6 +312,21 @@ export const GroundedEvaluationReadModelSchema = z.object({
   areasForImprovement: z.array(BoundedTextSchema).max(20),
   improvementTruncation: ReadTruncationSchema
 }).strict().superRefine((evaluation, context) => {
+  if (
+    (evaluation.lifecycle.sessionStatus === "COMPLETED"
+      && evaluation.lifecycle.completionState !== "COMPLETED")
+    || (
+      evaluation.lifecycle.sessionStatus === "ARCHIVED"
+      && evaluation.lifecycle.completionState !== "ARCHIVED_INCOMPLETE"
+      && evaluation.lifecycle.completionState !== "ARCHIVED_COMPLETED"
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Evaluation read lifecycle metadata is inconsistent"
+    });
+  }
+
   const dimensions = new Map(
     evaluation.dimensions.map((dimension) => [dimension.name, dimension] as const)
   );
@@ -1163,7 +1190,9 @@ export const SessionHistoryCardSchema = z.object({
       || card.createdAt === undefined
       || card.updatedAt === undefined
       || card.eventCount === undefined
+      || card.eventCount <= 0
       || card.replayComplete === undefined
+      || card.status === "CREATED"
     )
   ) {
     context.addIssue({
@@ -1191,7 +1220,9 @@ export const SessionHistoryCardSchema = z.object({
     card.evaluation !== undefined
     && (
       (card.evaluation.compositeScore === null)
-      !== (card.evaluation.compositeStatus === "NOT_SCORED")
+        !== (card.evaluation.compositeStatus === "NOT_SCORED")
+      || (card.evaluation.compositeScore === null)
+        !== (card.evaluation.supportLevel === "INSUFFICIENT")
     )
   ) {
     context.addIssue({
@@ -1310,9 +1341,40 @@ export const LongitudinalReadModelSchema = z.object({
   const repeatedKeys = history.repeatedProblems.map(
     (problem) => JSON.stringify([problem.problemId, problem.problemVersion])
   );
+  const improvementKeys = history.improvement.map((record) =>
+    JSON.stringify([
+      record.problemId,
+      record.problemVersion,
+      record.fromSessionId,
+      record.toSessionId
+    ])
+  );
+  const evaluatedSessionTotal = history.evaluationStatistics.reduce(
+    (sum, statistics) => sum + statistics.sessionCount,
+    0
+  );
+  const repeatedAttemptTotal = history.repeatedProblems.reduce(
+    (sum, problem) => sum + problem.attemptCount,
+    0
+  );
+  const comparedPairTotal =
+    history.improvement.length
+    + history.improvementTruncation.remainingCount
+    + history.improvementComparisonsSkipped;
+  if (
+    evaluatedSessionTotal > history.includedSessionCount
+    || repeatedAttemptTotal > history.includedSessionCount
+    || comparedPairTotal > history.includedSessionCount
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Longitudinal aggregates double-count the included session population"
+    });
+  }
   if (
     new Set(statisticKeys).size !== statisticKeys.length
     || new Set(repeatedKeys).size !== repeatedKeys.length
+    || new Set(improvementKeys).size !== improvementKeys.length
   ) {
     context.addIssue({
       code: "custom",
