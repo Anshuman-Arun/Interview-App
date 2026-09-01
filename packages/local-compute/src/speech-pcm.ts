@@ -47,7 +47,12 @@ export interface PcmOrderState {
 }
 
 export function snapshotPcmFrame(input: unknown, payload: unknown): PcmFrameSnapshot {
-  const parsed = SpeechPcmFrameEnvelopeSchema.safeParse(input);
+  let parsed: ReturnType<typeof SpeechPcmFrameEnvelopeSchema.safeParse>;
+  try {
+    parsed = SpeechPcmFrameEnvelopeSchema.safeParse(input);
+  } catch {
+    throw new PcmAdmissionError("INVALID_FRAME", "PCM frame metadata is invalid");
+  }
   if (!parsed.success) throw new PcmAdmissionError("INVALID_FRAME", "PCM frame metadata is invalid");
   const envelope = Object.freeze({ ...parsed.data });
   if (!ArrayBuffer.isView(payload)) {
@@ -88,7 +93,12 @@ export function advancePcmOrder(
   if (!isRecord(frame)) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM order frame must be an object");
   }
-  const parsedEnvelope = SpeechPcmFrameEnvelopeSchema.safeParse(frame.envelope);
+  let parsedEnvelope: ReturnType<typeof SpeechPcmFrameEnvelopeSchema.safeParse>;
+  try {
+    parsedEnvelope = SpeechPcmFrameEnvelopeSchema.safeParse(frame.envelope);
+  } catch {
+    throw new PcmAdmissionError("INVALID_FRAME", "PCM order frame metadata is invalid");
+  }
   if (!parsedEnvelope.success) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM order frame metadata is invalid");
   }
