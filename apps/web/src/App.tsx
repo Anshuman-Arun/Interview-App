@@ -10,6 +10,11 @@ import {
 } from "./tldraw-whiteboard-adapter.js";
 import { useInterviewSession } from "./hooks/useInterviewSession.js";
 import { MathText } from "./components/MathText.js";
+import {
+  SessionReviewModal,
+  type SessionReviewTab
+} from "./components/SessionReviewModal.js";
+import type { SessionHistoryReadResponse } from "../../../packages/replay/src/index.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
 
@@ -18,6 +23,11 @@ export const App: React.FC = () => {
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [activeTab, setActiveTab] = useState<"whiteboard" | "formulation">("whiteboard");
+  const [reviewTarget, setReviewTarget] = useState<{
+    readonly sessionId: SessionId;
+    readonly tab: SessionReviewTab;
+  } | null>(null);
+  const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -36,6 +46,25 @@ export const App: React.FC = () => {
     } catch {
       // Error handled in session.error
     }
+  };
+
+  const handleCompleteSession = async (): Promise<void> => {
+    const targetSessionId = session.sessionId;
+    if (targetSessionId === null) return;
+    try {
+      await session.completeSession();
+      setReviewTarget({ sessionId: targetSessionId, tab: "evaluation" });
+    } catch {
+      // Error handled in session.error
+    }
+  };
+
+  const openHistoricalReview = (
+    targetSessionId: SessionId,
+    tab: SessionReviewTab = "evaluation"
+  ): void => {
+    setShowSessionsModal(false);
+    setReviewTarget({ sessionId: targetSessionId, tab });
   };
 
   const handleRecoverSession = async (targetSessionId: SessionId): Promise<void> => {
@@ -71,6 +100,9 @@ export const App: React.FC = () => {
 
   const openSessionsModal = () => {
     void session.fetchAvailableSessions();
+    void session.readSessionHistory()
+      .then((value) => setHistoryRead(value))
+      .catch(() => setHistoryRead(null));
     setShowSessionsModal(true);
   };
 
@@ -169,7 +201,7 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => void session.completeSession()}
+                onClick={() => void handleCompleteSession()}
                 className="text-xs font-medium text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded border border-emerald-200 transition-colors"
                 title="Complete interview session"
               >
@@ -280,6 +312,63 @@ export const App: React.FC = () => {
                 </button>
               </div>
 
+              {historyRead !== null ? (
+                <section
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                  data-testid="longitudinal-history-panel"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-xs font-bold text-slate-900">Grounded history</h3>
+                    <span className="text-[10px] text-slate-500">
+                      {historyRead.longitudinal.includedSessionCount} bounded session projection(s)
+                    </span>
+                  </div>
+                  {historyRead.longitudinal.evaluationStatistics.some(
+                    (item) => item.average.compositeScore !== null
+                  ) ? (
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {historyRead.longitudinal.evaluationStatistics
+                        .filter((item) => item.average.compositeScore !== null)
+                        .slice(0, 4)
+                        .map((item) => (
+                          <div
+                            key={`${item.problemId}:${item.problemVersion}`}
+                            className="rounded border border-slate-200 bg-white p-2 text-[11px]"
+                          >
+                            <div className="font-mono text-[10px] text-slate-500 break-all">
+                              {item.problemId} @ {item.problemVersion}
+                            </div>
+                            <div className="mt-1 font-semibold text-slate-800">
+                              Composite average: {item.average.compositeScore}
+                            </div>
+                            <div className="text-slate-500">
+                              {item.scoredSessionCount["compositeScore"] ?? 0} scored / {item.sessionCount} evaluated
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      No supported cross-session score trend is currently grounded.
+                    </p>
+                  )}
+                  {historyRead.longitudinal.improvement.length > 0 ? (
+                    <div className="mt-2 text-[11px] text-slate-600">
+                      {historyRead.longitudinal.improvement.slice(0, 3).map((item) => (
+                        <div key={`${item.fromSessionId}:${item.toSessionId}`}>
+                          Exact-problem composite change:{" "}
+                          {item.compositeScoreDelta > 0 ? "+" : ""}
+                          {item.compositeScoreDelta}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="mt-2 text-[10px] text-slate-400">
+                    Comparisons require exact problem ID and version. Unsupported dimensions remain excluded.
+                  </p>
+                </section>
+              ) : null}
+
               {session.availableSessions.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-xs">
                   No local sessions found. Start a new session to begin.
@@ -298,7 +387,7 @@ export const App: React.FC = () => {
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-500 flex items-center gap-3">
-                        <span>Problem: {s.problemId ?? "Ramsey R(3,3)"}</span>
+                        <span>Problem: {s.problemId ?? "Unbound/unknown"}</span>
                         <span>•</span>
                         <span>Events: {s.eventCount}</span>
                         <span>•</span>
@@ -307,21 +396,33 @@ export const App: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={s.status === "ACTIVE"
-                        ? () => void handleRecoverSession(s.sessionId)
-                        : undefined}
-                      disabled={s.status !== "ACTIVE"}
+                      onClick={
+                        s.status === "ACTIVE"
+                          ? () => void handleRecoverSession(s.sessionId)
+                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                            ? () => openHistoricalReview(s.sessionId)
+                            : undefined
+                      }
+                      disabled={
+                        s.status !== "ACTIVE"
+                        && s.status !== "COMPLETED"
+                        && s.status !== "ARCHIVED"
+                      }
                       className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
                         s.status === "ACTIVE"
                           ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
-                          : "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                            ? "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+                            : "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
                       }`}
                     >
-                      {s.sessionId === session.sessionId
+                      {s.sessionId === session.sessionId && s.status === "ACTIVE"
                         ? "Current"
                         : s.status === "ACTIVE"
                           ? "Resume"
-                          : "Terminal"}
+                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                            ? "Review"
+                            : "Unavailable"}
                     </button>
                   </div>
                 ))
@@ -534,6 +635,15 @@ export const App: React.FC = () => {
           </div>
         </section>
       </main>
+      {reviewTarget !== null ? (
+        <SessionReviewModal
+          sessionId={reviewTarget.sessionId}
+          initialTab={reviewTarget.tab}
+          readEvaluation={session.readSessionEvaluation}
+          readReplay={session.readSessionReplay}
+          onClose={() => setReviewTarget(null)}
+        />
+      ) : null}
     </div>
   );
 };
