@@ -181,6 +181,34 @@ describe("speech worker adversarial callback boundaries", () => {
     expect(worker.getActiveStreamCount()).toBe(0);
   });
 
+  it("rejects shape-valid but impossible VAD transitions from an injected subclass", async () => {
+    class ImpossibleFalseStartVad extends VoiceActivityStateMachine {
+      public override step() {
+        return {
+          state: "SILENCE",
+          speechMs: 0,
+          silenceMs: 0,
+          utteranceMs: 0,
+          speechClassified: false,
+          speechStarted: false,
+          possibleEndpoint: false,
+          falseStart: true
+        } as const;
+      }
+    }
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      vadStateFactory: () => new ImpossibleFalseStartVad()
+    });
+    const fixture = frame(0, false, "impossible-false-start");
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "VAD state machine returned an invalid state"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
+  });
+
   it("rejects forged VAD state-machine output from an injected subclass", async () => {
     class ForgedVadState extends VoiceActivityStateMachine {
       public override step() {
