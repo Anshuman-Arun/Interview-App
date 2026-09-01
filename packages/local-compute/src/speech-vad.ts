@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { MAX_SPEECH_FRAME_DURATION_MS, MAX_SPEECH_UTTERANCE_DURATION_MS } from "./speech-protocol.js";
 import type { PcmFrameSnapshot } from "./speech-pcm.js";
 
@@ -234,6 +235,22 @@ export interface EndpointingInput extends VoiceActivitySnapshot {
   readonly explicitFlush?: boolean;
 }
 
+const EndpointingInputSchema = z.object({
+  state: z.enum(["SILENCE", "POSSIBLE_SPEECH", "SPEECH", "POSSIBLE_END", "FINALIZED", "CANCELLED"]),
+  speechMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  silenceMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  utteranceMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
+  appearsIncomplete: z.boolean().optional(),
+  explicitFlush: z.boolean().optional()
+}).strict().superRefine((value, context) => {
+  if (value.speechMs > value.utteranceMs + 0.001) {
+    context.addIssue({ code: "custom", message: "Speech duration cannot exceed utterance duration", path: ["speechMs"] });
+  }
+  if (value.silenceMs > value.utteranceMs + 0.001) {
+    context.addIssue({ code: "custom", message: "Silence duration cannot exceed utterance duration", path: ["silenceMs"] });
+  }
+});
+
 export type EndpointingDecision =
   | { readonly kind: "CONTINUE" }
   | { readonly kind: "DISCARD"; readonly reason: "TOO_SHORT" }
@@ -271,25 +288,26 @@ export class AdaptiveEndpointingPolicy {
   }
 
   public decide(input: EndpointingInput): EndpointingDecision {
-    if (input.explicitFlush === true) {
-      return input.speechMs < this.config.minimumSpeechMs
+    const boundedInput = EndpointingInputSchema.parse(input);
+    if (boundedInput.explicitFlush === true) {
+      return boundedInput.speechMs < this.config.minimumSpeechMs
         ? { kind: "DISCARD", reason: "TOO_SHORT" }
         : { kind: "FINALIZE", reason: "FLUSH" };
     }
-    if (input.utteranceMs >= this.config.maximumUtteranceMs) {
-      return input.speechMs < this.config.minimumSpeechMs
+    if (boundedInput.utteranceMs >= this.config.maximumUtteranceMs) {
+      return boundedInput.speechMs < this.config.minimumSpeechMs
         ? { kind: "DISCARD", reason: "TOO_SHORT" }
         : { kind: "FINALIZE", reason: "MAX_DURATION" };
     }
-    if (input.state !== "POSSIBLE_END") return { kind: "CONTINUE" };
+    if (boundedInput.state !== "POSSIBLE_END") return { kind: "CONTINUE" };
 
-    const requiredSilence = input.appearsIncomplete === true
+    const requiredSilence = boundedInput.appearsIncomplete === true
       ? this.config.incompleteSilenceMs
       : this.config.minimumSilenceMs;
-    if (input.silenceMs < Math.min(requiredSilence, this.config.maximumPauseMs)) {
+    if (boundedInput.silenceMs < Math.min(requiredSilence, this.config.maximumPauseMs)) {
       return { kind: "CONTINUE" };
     }
-    return input.speechMs < this.config.minimumSpeechMs
+    return boundedInput.speechMs < this.config.minimumSpeechMs
       ? { kind: "DISCARD", reason: "TOO_SHORT" }
       : { kind: "FINALIZE", reason: "SILENCE" };
   }
