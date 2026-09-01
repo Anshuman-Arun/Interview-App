@@ -80,7 +80,8 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
   ) {
     throw new Error(`Problem "${spec.id}" has invalid review status`);
   }
-  if (!Array.isArray(spec.hints) || spec.hints.length !== HINT_LEVELS.length) {
+  const hintsValue: unknown = spec.hints;
+  if (!Array.isArray(hintsValue) || hintsValue.length !== HINT_LEVELS.length) {
     throw new Error(`Problem "${spec.id}" must define exactly five hint stages`);
   }
 
