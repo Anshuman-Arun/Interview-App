@@ -336,7 +336,7 @@ export class SpeechWorkerCore {
     if (this.wouldExceedEndpointMaximum(context, frame.durationMs)) {
       const decision = this.endpointDecision(context, {
         forceMaximumDuration: true,
-        appearsIncomplete: heuristics.appearsIncomplete
+        ...(heuristics.appearsIncomplete === undefined ? {} : { appearsIncomplete: heuristics.appearsIncomplete })
       });
       if (decision.kind === "DISCARD") {
         const events = [this.event(frame.envelope.requestId, frame.envelope.streamId, {
@@ -453,7 +453,7 @@ export class SpeechWorkerCore {
     }
 
     const decision = this.endpointDecision(context, {
-      appearsIncomplete: heuristics.appearsIncomplete
+      ...(heuristics.appearsIncomplete === undefined ? {} : { appearsIncomplete: heuristics.appearsIncomplete })
     });
     if (decision.kind === "DISCARD") {
       events.push(this.event(frame.envelope.requestId, frame.envelope.streamId, {
