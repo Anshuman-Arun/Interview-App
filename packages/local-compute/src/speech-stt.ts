@@ -379,8 +379,9 @@ function preflightWordTimings(value: unknown, label: string): void {
     throw new Error(`${label} exceeds maximum entry count`);
   }
   for (const word of value) {
-    preflightNestedRecord(word, WORD_TIMING_KEYS, "Recognizer word timing");
-    if (isRecord(word) && (typeof word.word !== "string" || word.word.length === 0 || word.word.length > 128)) {
+    if (!isRecord(word)) continue;
+    assertAllowedOwnEnumerableKeys(word, WORD_TIMING_KEYS, "Recognizer word timing");
+    if (typeof word.word !== "string" || word.word.length === 0 || word.word.length > 128) {
       throw new Error(`${label} contains word text outside bounded metadata limits`);
     }
   }
