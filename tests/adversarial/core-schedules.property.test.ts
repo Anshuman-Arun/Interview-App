@@ -94,7 +94,12 @@ async function executeCoreOperation(
       await supersedeInitialGeneration(fixture, model);
       return;
     case "PROVIDER_SWITCH": {
-      if (model.generations.get(fixture.initialGenerationId) === "ACTIVE") {
+      const initialStatus = model.generations.get(fixture.initialGenerationId);
+      if (
+        initialStatus === "ACTIVE"
+        || initialStatus === "PROPOSAL_RECEIVED"
+        || initialStatus === "VALIDATED"
+      ) {
         await fixture.turns.supersedeGeneration(
           fixture.initialGenerationId,
           "adversarial provider switch"
