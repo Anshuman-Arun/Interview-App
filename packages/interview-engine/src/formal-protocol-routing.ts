@@ -136,7 +136,7 @@ function routeKey(protocol: FormalProtocolRef): string {
 }
 
 function authorizationKey(verifier: string, evidenceKey: EvidenceKey): string {
-  return JSON.stringify([verifier, evidenceKeyIdentity(evidenceKey)]);
+  return `[${JSON.stringify(verifier)},${evidenceKeyIdentity(evidenceKey)}]`;
 }
 
 function canonicalJson(value: unknown): string {
