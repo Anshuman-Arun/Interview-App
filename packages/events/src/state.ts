@@ -100,6 +100,8 @@ export interface GenerationState {
   readonly generationId: GenerationId;
   readonly basis: GenerationBasis;
   readonly provider: string;
+  /** Derived during replay from the application-selected action that existed when generation began. */
+  readonly pedagogicalAction?: RealizationRequest;
   readonly status: "ACTIVE" | "PROPOSAL_RECEIVED" | "VALIDATED" | "REJECTED" | "SUPERSEDED";
   readonly contextManifest?: ContextCompilationManifest;
   readonly proposal?: InterviewerProposal;
