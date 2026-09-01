@@ -14,7 +14,7 @@ import {
   isGenerationBasisStillCompatible
 } from "../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
-import { createCoreHarness, providerEnvelope } from "./harness.js";
+import { authorizeSafeProbe, createCoreHarness, providerEnvelope } from "./harness.js";
 
 describe("compatibility and disclosure gates", () => {
   it("returns UNKNOWN when generation provenance cannot be established", () => {
@@ -216,6 +216,49 @@ describe("compatibility and disclosure gates", () => {
       expect(refreshed.requiredAction).toBe("WAIT");
       expect(harness.writer.getState().pedagogicalActions[harness.turnId]?.requiredAction)
         .toBe("WAIT");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("cancels queued output and supersedes its generation when authoritative evidence changes before delivery", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
+
+      const state = harness.writer.getState();
+      const turn = state.turns[harness.turnId];
+      expect(turn).toBeDefined();
+      if (turn === undefined) throw new Error("missing turn");
+      const evidenceEventId = state.eventIds[turn.committedSequence - 1];
+      expect(evidenceEventId).toBeDefined();
+      if (evidenceEventId === undefined) throw new Error("missing evidence provenance");
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "evidence-test",
+          inputEpisodeId: harness.inputEpisodeId,
+          turnId: harness.turnId
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [evidenceEventId]
+        }
+      });
+
+      expect(evidence.committed).toBe(true);
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status)
+        .toBe("CANCELLED");
     } finally {
       harness.store.close();
     }
