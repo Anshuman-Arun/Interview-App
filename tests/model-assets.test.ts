@@ -6,6 +6,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  realpath,
   rename,
   rm,
   symlink,
@@ -655,7 +656,17 @@ describe("local model asset manager", () => {
     if (stagingName === undefined) throw new Error("Expected one staging directory.");
     const staging = path.join(root, "tmp", stagingName);
     const detached = staging + "-detached";
-    await rename(staging, detached);
+    try {
+      await rename(staging, detached);
+    } catch (error) {
+      if (process.platform !== "win32") throw error;
+      expect(error).toMatchObject({
+        code: expect.stringMatching(/^(?:EPERM|EACCES|EBUSY)$/u)
+      });
+      release.resolve();
+      await expect(installation).resolves.toEqual(expect.any(String));
+      return;
+    }
     await mkdir(staging);
 
     release.resolve();
@@ -1820,7 +1831,8 @@ describe("local model asset manager", () => {
     });
 
     const installed = await manager.importLocal(manifest, source);
-    const relative = path.relative(root, installed);
+    const canonicalRoot = await realpath(root);
+    const relative = path.relative(canonicalRoot, installed);
     expect(relative.startsWith("..")).toBe(false);
     expect(path.isAbsolute(relative)).toBe(false);
     expect(path.basename(path.dirname(installed))).toBe(artifactInstallationKey(manifest));
