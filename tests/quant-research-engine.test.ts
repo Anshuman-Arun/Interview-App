@@ -388,7 +388,10 @@ describe("deterministic Quant Research interview engine", () => {
     expect(engine.getAcceptedActions()).toEqual([{ actionId: "alias-action", kind: "REQUEST_OBSERVATION", count: 2 }]);
 
     const accepted = engine.getAcceptedActions() as unknown as Array<{ actionId: string }>;
-    accepted[0]!.actionId = "external-mutation";
+    const acceptedFirst = accepted[0];
+    expect(acceptedFirst).toBeDefined();
+    if (acceptedFirst === undefined) throw new Error("Expected one accepted action");
+    acceptedFirst.actionId = "external-mutation";
     expect(engine.getAcceptedActions()[0]?.actionId).toBe("alias-action");
 
     const state = engine.getState();
@@ -397,7 +400,10 @@ describe("deterministic Quant Research interview engine", () => {
     expect(engine.getState().visibleData.find((item) => item.key === "observations")?.value).not.toContain(999_999);
 
     const registry = getQuantResearchRegistry() as Array<{ family: string; version: string }>;
-    registry[0]!.family = "tampered";
+    const registryFirst = registry[0];
+    expect(registryFirst).toBeDefined();
+    if (registryFirst === undefined) throw new Error("Expected a registry entry");
+    registryFirst.family = "tampered";
     expect(getQuantResearchRegistry()[0]?.family).not.toBe("tampered");
   });
 
