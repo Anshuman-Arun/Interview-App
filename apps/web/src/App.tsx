@@ -405,6 +405,11 @@ export const App: React.FC = () => {
                       ))}
                     </div>
                   ) : null}
+                  {historyRead.longitudinal.sessionTruncation.truncated ? (
+                    <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
+                      {historyRead.longitudinal.sessionTruncation.remainingCount} session(s) are outside the current grounded aggregate coverage.
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-[10px] text-slate-400">
                     Comparisons require exact problem ID and version. Unsupported dimensions remain excluded.
                   </p>
