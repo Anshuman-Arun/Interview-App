@@ -312,32 +312,3 @@ export const SpeechWorkerEventSchema = z.discriminatedUnion("type", [
   SpeechWorkerErrorEventSchema
 ]);
 export type SpeechWorkerEvent = z.infer<typeof SpeechWorkerEventSchema>;
-
-
-function isUnsafeTranscriptCodePoint(character: string): boolean {
-  const code = character.codePointAt(0);
-  if (code === undefined) return true;
-  if (code <= 0x1F || code === 0x7F) return true;
-  return code === 0x061C
-    || code === 0x200B
-    || code === 0x200E
-    || code === 0x200F
-    || code === 0x2060
-    || code === 0xFEFF
-    || (code >= 0x202A && code <= 0x202E)
-    || (code >= 0x2066 && code <= 0x2069);
-}
-
-function containsUnpairedSurrogate(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      const next = value.charCodeAt(index + 1);
-      if (!(next >= 0xDC00 && next <= 0xDFFF)) return true;
-      index += 1;
-    } else if (code >= 0xDC00 && code <= 0xDFFF) {
-      return true;
-    }
-  }
-  return false;
-}
