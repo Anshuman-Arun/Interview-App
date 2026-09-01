@@ -376,7 +376,7 @@ describe("deterministic Quant Research interview engine", () => {
     Object.defineProperty(registryWithIterator, Symbol.iterator, {
       value: function* () {
         iteratorInvoked = true;
-        while (true) yield { family: "MODEL_COMPARISON", version: QUANT_RESEARCH_VERSION };
+        yield { family: "MODEL_COMPARISON", version: QUANT_RESEARCH_VERSION };
       }
     });
     expectCode(() => assertUniqueQuantResearchRegistrations(registryWithIterator), "INVALID_REGISTRY");
@@ -470,7 +470,7 @@ describe("deterministic Quant Research interview engine", () => {
     Object.defineProperty(customIteratorReplay, Symbol.iterator, {
       value: function* () {
         iteratorInvoked = true;
-        while (true) yield null;
+        yield null;
       }
     });
     expectCode(() => replayQuantResearch(bayesian, customIteratorReplay), "INVALID_REPLAY");
