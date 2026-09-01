@@ -210,7 +210,9 @@ export class AdversarialFixture {
       producer: "adversarial-provider-a",
       inputEpisodeId: finalized.inputEpisodeId,
       turnId,
-      generationId: generation.generationId
+      generationId: generation.generationId,
+      contextEpoch: generation.basis.contextEpoch,
+      sourceRevision: generation.basis.committedInputSequence
     });
     const visionEnvelope = createCommandEnvelope({
       sessionId,
@@ -398,7 +400,8 @@ export class AdversarialFixture {
     const request = RealizationRequestSchema.parse({
       requiredAction: "EXPLICIT_HINT",
       target: "the reviewed disclosure fixture",
-      maximumDisclosure: effectiveDisclosureLevel
+      maximumDisclosure: effectiveDisclosureLevel,
+      allowedDisclosureIds: [...disclosureIds]
     });
     await this.writer.execute(
       createCommandEnvelope({
