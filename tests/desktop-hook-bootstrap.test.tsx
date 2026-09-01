@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { useInterviewSession } from "../apps/web/src/hooks/useInterviewSession.js";
@@ -9,8 +9,26 @@ function Probe({ tick }: { readonly tick: number }) {
   return <div>{String(session.isTransportManaged)}:{tick}</div>;
 }
 
+const actEnvironment = globalThis as typeof globalThis & {
+  IS_REACT_ACT_ENVIRONMENT?: boolean;
+};
+const hadActEnvironment = Object.prototype.hasOwnProperty.call(
+  globalThis,
+  "IS_REACT_ACT_ENVIRONMENT"
+);
+const previousActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT;
+
 describe("desktop hook bootstrap lifecycle", () => {
+  beforeEach(() => {
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
   afterEach(() => {
+    if (hadActEnvironment) {
+      actEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
+    } else {
+      delete actEnvironment.IS_REACT_ACT_ENVIRONMENT;
+    }
     vi.unstubAllGlobals();
     delete (globalThis as typeof globalThis & { interviewDesktop?: unknown }).interviewDesktop;
   });
