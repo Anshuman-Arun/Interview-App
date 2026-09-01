@@ -308,12 +308,18 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "MODEL_GENERATION_SUPERSEDED":
       next = updateGeneration(state, event.payload.generationId, { status: "SUPERSEDED" });
       break;
-    case "PROPOSAL_VALIDATED":
+    case "PROPOSAL_VALIDATED": {
+      const generation = state.generations[event.payload.generationId];
+      if (generation === undefined) throw new Error("Unknown generation");
       next = updateGeneration(state, event.payload.generationId, {
         status: "VALIDATED",
-        interviewerProposalValidated: true
+        interviewerProposalValidated: true,
+        ...(generation.proposal === undefined
+          ? {}
+          : { validatedInterviewerProposal: generation.proposal })
       });
       break;
+    }
     case "PROPOSAL_REJECTED":
       next = updateGeneration(state, event.payload.generationId, { status: "REJECTED" });
       break;
