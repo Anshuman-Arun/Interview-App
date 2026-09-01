@@ -4,7 +4,7 @@
 
 `packages/local-compute/src/quant-research/` implements a standalone, application-owned Quant Research interview subsystem. It owns seeded scenario generation, candidate action validation, exact/deterministic mechanics, stage progression, perturbations, replay, and structured numerical evidence. It deliberately does not call providers or own dialogue.
 
-The engine is intentionally separate from Quant Trader/market-making code and from the main session coordinator. A later integration change can map its public state/evidence into the interview engine without giving a model authority over scenario mechanics.
+The deterministic core remains separate from Quant Trader/market-making code and provider dialogue. A narrow `QuantResearchCoordinator` in `packages/interview-engine` bridges the core to the existing `SessionWriter` append-only event path without giving providers authority over scenario mechanics.
 
 ## Definition format
 
@@ -33,15 +33,16 @@ Identical `(family, version, generatorVersion, rngVersion, seed, config)` inputs
 
 ## Hidden, public, and authoritative state
 
-The implementation separates three concerns:
+The implementation separates four concerns:
 
 - **Application-hidden mechanics**: latent means/models/centers, unrevealed observations, deterministic sample ordering, exact optima, and other scoring references.
 - **Candidate-visible state**: `getState()` returns only the current prompt, deliberately revealed data, stage/status, and public resource limits. It never returns numerical scoring evidence while the interview is still in progress.
 - **Authoritative engine state**: accepted structured actions, current stage, revealed observations/summaries, deterministic evidence, and completion status.
+- **Authoritative persistence snapshot**: `getAuthoritativePersistenceSnapshot()` deliberately contains generated hidden parameters, exact grading references, and `QUANT_RESEARCH_VERIFIER_VERSION`. This application-only record is persisted for reproducibility and tamper detection. It must never be projected into candidate/provider context.
 
 `getDiagnostics()` is intentionally narrow and does not return the seed, configuration, latent truth, unrevealed observations, or exact scoring references. While a scenario is in progress, `getResult()` returns only status/identity/action count plus empty metrics/evidence; final deterministic evidence is released only after completion. `getState()`/`getResult()` return detached structured clones so caller mutation cannot alter engine state. `getAcceptedActions()` returns a fresh runtime-frozen canonical action list suitable for persistence rather than a mutable clone of authoritative history.
 
-Application persistence must retain the canonical definition returned by `parseQuantResearchDefinition()`, not a caller-owned mutable input object. The engine does not expose a convenience hidden-definition getter because that would make accidental candidate/provider projection of the seed/config easier. A typical integration should canonicalize and persist the definition before constructing the engine, then project only `getState()` into candidate/provider context.
+The coordinator persists the canonical definition returned by `parseQuantResearchDefinition()`, not a caller-owned mutable input object, together with the application-only authoritative persistence snapshot. The engine does not expose a convenience definition getter. Provider/candidate projection remains limited to `getState()`; the persisted seed, generated parameters, and grading references stay behind the application-owned event boundary.
 
 ## Candidate action protocol
 
@@ -97,14 +98,23 @@ Evidence scores are bounded to `[0, 100]`. For exact allocation/optimization obj
 
 Threshold comparisons use a small machine-precision allowance so mathematically symmetric answers on a scoring boundary are not split solely by binary floating-point representation. Bayesian posterior/update perturbation scores combine absolute numerical tolerance with progress from the stale reference toward the changed target; simply repeating the old prior/posterior therefore receives zero update/adaptation credit.
 
-## Replay
+## Persistence and replay
 
-Replay requires:
+The vertical slice uses the repository's existing authoritative persistence path rather than a parallel store. `QuantResearchCoordinator` is layered above the deterministic core and writes only through `SessionWriter`; `SessionWriter` remains the sole authority allowed to append to the WAL-backed SQLite `session_events` stream.
 
-1. the canonical parsed scenario definition, including family, scenario version, generator version, RNG version, seed, and config; and
-2. the ordered accepted candidate actions.
+A fresh Quant Research session atomically records:
 
-`replayQuantResearch(definition, actions)` canonicalizes and validates the authoritative definition first, validates the generated scenario before inspecting action traps, snapshots each action to a canonical record before later container descriptors can affect it, and only then reapplies the actions through the normal transition path. It returns reconstructed public state, result, and accepted actions. The replay container itself is runtime validated, and replay input is bounded to the same maximum action count.
+1. `SESSION_STARTED`;
+2. `PROBLEM_PRESENTED`, where the family is the v1 template/problem ID and the scenario version is the problem version; and
+3. `QUANT_RESEARCH_SCENARIO_INITIALIZED`, containing the canonical definition plus the generated-parameter/grading snapshot and deterministic verifier version.
+
+Each accepted candidate action records one `QUANT_RESEARCH_ACTION_ACCEPTED` event. The final accepted action atomically records the action, `QUANT_RESEARCH_SCENARIO_COMPLETED` with deterministic rubric evidence/result, and `SESSION_COMPLETED`. Historical events are never rewritten by the coordinator.
+
+The persisted initialization record carries the reproducibility tuple required for parameterized problems: template/family ID, scenario/problem version, generator version, RNG implementation/version, seed, generated parameters, validated grading references, and verifier version.
+
+Pure replay remains available through `replayQuantResearch(definition, actions)`. Durable session replay uses `replayQuantResearchSessionState()` / `QuantResearchCoordinator.replay()`: it regenerates the scenario from the stored canonical definition, compares the regenerated hidden snapshot against the stored one, reapplies every action in sequence through normal validation/transitions, and requires any stored completion result to match the independently recomputed deterministic result. Schema-valid tampering of hidden generated parameters, actions, compatibility metadata, or grading results therefore fails closed rather than silently becoming new authority.
+
+Replay inputs and persisted arrays are bounded to the same scenario/action resource domains.
 
 ## Resource limits
 
@@ -128,10 +138,10 @@ Family transitions enforce tighter semantic limits where appropriate.
 This PR does not implement:
 
 - Quant Trader interview behavior;
-- provider/model dialogue;
-- main `SessionWriter`/`TurnCoordinator` integration;
+- provider/model dialogue for Quant Research;
+- generic `TurnCoordinator` text-answer translation into structured Quant actions;
 - UI mode selection;
-- voice, vision, whiteboard, Electron, or persistence wiring;
+- voice, vision, whiteboard, or Electron wiring;
 - generic language-model post-session evaluation.
 
-A later integration PR should persist the scenario definition and accepted actions in authoritative session events, project only `getState()` into model context, and consume `getResult()` evidence in higher-level evaluation.
+The authoritative SessionWriter/SQLite event-log integration required by this Quant Research vertical slice is implemented here. Future UI/provider work should call the coordinator and project only its public `state`/`result`, never the authoritative persistence snapshot.
