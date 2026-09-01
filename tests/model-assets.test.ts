@@ -784,10 +784,11 @@ describe("local model asset manager", () => {
     const sourceUrl = "https://example.test/" + "é".repeat(700);
     expect(sourceUrl.length).toBeLessThan(2_048);
     expect(new URL(sourceUrl).href.length).toBeGreaterThan(2_048);
-    const manifest = manifestFor(payload, sourceUrl);
+    const valid = manifestFor(payload, "https://example.test/canonical.bin");
+    const manifestValue = { ...valid, sourceUrl };
 
-    expect(AssetManifestSchema.safeParse(manifest).success).toBe(false);
-    await expect(manager.install(manifest)).rejects.toMatchObject({
+    expect(AssetManifestSchema.safeParse(manifestValue).success).toBe(false);
+    await expect(manager.install(manifestValue)).rejects.toMatchObject({
       code: "INVALID_MANIFEST"
     });
   });
@@ -1492,6 +1493,9 @@ describe("local model asset manager", () => {
   it("cleans crash-left manager removal tombstones", async () => {
     const root = await newRoot();
     const manager = managerFor(root);
+    await manager.inspect(
+      manifestFor(Buffer.from("tombstone-seed"), "https://example.test/tombstone-seed.bin")
+    );
     const tombstoneName = ".model-assets-delete-00000000-0000-4000-8000-000000000000";
 
     const artifactTombstone = path.join(root, "artifacts", tombstoneName);
@@ -1869,8 +1873,7 @@ describe("local model asset manager", () => {
     });
 
     expect(fixture.requestCount()).toBe(0);
-    expect(await readdir(path.join(root, "artifacts"))).toEqual([]);
-    expect(await readdir(path.join(root, "tmp"))).toEqual([]);
+    expect(await readdir(root)).toEqual([]);
   });
 
   it("rejects getter-backed fake cancellation signals without invoking them", async () => {
@@ -2340,7 +2343,7 @@ describe("local model asset manager", () => {
 
     expect(await manager.inspect(manifest)).toMatchObject({
       status: "CORRUPT",
-      errorCode: "UNSAFE_PATH"
+      errorCode: "CORRUPT_INSTALLATION"
     });
     await expect(manager.getInstalledPath(manifest)).rejects.toMatchObject({
       code: "NOT_INSTALLED"
