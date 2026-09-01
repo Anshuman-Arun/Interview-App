@@ -163,7 +163,7 @@ export class SessionReadService {
     }
 
     const evaluation = this.evaluateLoaded(loaded);
-    if (evaluation.reason !== undefined) {
+    if (!evaluation.available) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
@@ -333,7 +333,7 @@ export class SessionReadService {
         && (loaded.state.status === "COMPLETED" || loaded.state.status === "ARCHIVED")
       ) {
         const evaluation = this.evaluateLoaded(loaded);
-        if (evaluation.value !== undefined) {
+        if (evaluation.available) {
           try {
             history = projectSessionHistory(loaded.events, {
               bounds: {
@@ -423,16 +423,21 @@ export class SessionReadService {
 
   private evaluateLoaded(
     loaded: LoadedAuthoritativeSession
-  ): {
-    readonly value?: ReturnType<typeof evaluateInterviewSession>;
-    readonly reason?: GroundedReadFailureReason;
-  } {
+  ):
+    | {
+        readonly available: true;
+        readonly value: ReturnType<typeof evaluateInterviewSession>;
+      }
+    | {
+        readonly available: false;
+        readonly reason: GroundedReadFailureReason;
+      } {
     const state = loaded.state;
     if (state.status !== "COMPLETED" && state.status !== "ARCHIVED") {
-      return { reason: "SESSION_NOT_TERMINAL" };
+      return { available: false, reason: "SESSION_NOT_TERMINAL" };
     }
     if (state.problem === undefined) {
-      return { reason: "EXACT_PROBLEM_UNAVAILABLE" };
+      return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };
     }
 
     const problem = this.#problemResolver.resolve(
@@ -440,15 +445,16 @@ export class SessionReadService {
       state.problem.version
     );
     if (problem === undefined) {
-      return { reason: "EXACT_PROBLEM_UNAVAILABLE" };
+      return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };
     }
 
     try {
       return {
+        available: true,
         value: evaluateInterviewSession(state, problem)
       };
     } catch {
-      return { reason: "EVALUATION_UNAVAILABLE" };
+      return { available: false, reason: "EVALUATION_UNAVAILABLE" };
     }
   }
 }
