@@ -1055,7 +1055,9 @@ function collectExposedAssistance(
 
     let historicalProposal = proposalsByGeneration.get(delivery.data.generationId);
     if (historicalProposal === undefined) {
-      const parsedProposal = PolicyInterviewerProposalSchema.safeParse(rawGeneration["proposal"]);
+      const parsedProposal = PolicyInterviewerProposalSchema.safeParse(
+        rawGeneration["validatedInterviewerProposal"]
+      );
       if (!parsedProposal.success) {
         return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
       }
