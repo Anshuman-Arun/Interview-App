@@ -330,9 +330,9 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
   ) return "RESOURCE_LIMIT_EXCEEDED";
 
   let totalPolicyTextCharacters =
-    (publicProblem["prompt"] as string).length
-    + (interviewer["difficulty"] as string).length
-    + (graph["version"] as string).length;
+    publicProblem["prompt"].length
+    + interviewer["difficulty"].length
+    + graph["version"].length;
   for (const item of givenInformation as readonly string[]) totalPolicyTextCharacters += item.length;
   for (const item of topics as readonly string[]) totalPolicyTextCharacters += item.length;
   let totalGraphReferences = edges.length;
@@ -376,7 +376,7 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
       || !(disclosureIds as readonly unknown[]).every((id) => boundedString(id, MAX_POLICY_ID_CHARACTERS))
     ) return "MALFORMED_POLICY_INPUT";
     totalGraphReferences += approachIds.length + prerequisiteIds.length + disclosureIds.length;
-    totalPolicyTextCharacters += (milestone["id"] as string).length + (milestone["description"] as string).length;
+    totalPolicyTextCharacters += milestone["id"].length + milestone["description"].length;
     for (const id of approachIds as readonly string[]) totalPolicyTextCharacters += id.length;
     for (const id of prerequisiteIds as readonly string[]) totalPolicyTextCharacters += id.length;
     for (const id of disclosureIds as readonly string[]) totalPolicyTextCharacters += id.length;
@@ -437,7 +437,7 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
       return "MALFORMED_POLICY_INPUT";
     }
     totalGraphReferences += formulations.length;
-    totalPolicyTextCharacters += (disclosure["id"] as string).length + (disclosure["fact"] as string).length;
+    totalPolicyTextCharacters += disclosure["id"].length + disclosure["fact"].length;
     for (const formulation of formulations as readonly string[]) totalPolicyTextCharacters += formulation.length;
     if (
       totalGraphReferences > MAX_TOTAL_GRAPH_REFERENCES
@@ -990,17 +990,6 @@ function findSignal(
 ): ActiveEvidenceSignal | undefined {
   return signals.find(
     (signal) => signal.key.dimension === dimension && values.has(signal.value.value)
-  );
-}
-
-function verificationStatusesForTarget(
-  signals: readonly VerificationSignal[],
-  target: PolicyTarget
-): ReadonlySet<VerificationSignal["status"]> {
-  return new Set(
-    signals
-      .filter((signal) => sameTarget(signal.target, target))
-      .map((signal) => signal.status)
   );
 }
 
