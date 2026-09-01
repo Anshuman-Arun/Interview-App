@@ -35,7 +35,7 @@ describe("generation context reproducibility", () => {
     if (!compiled.value.compiled) throw new Error("Expected context compilation");
     expect(compiled.value.manifest).toMatchObject({
       schemaVersion: 1,
-      compilerVersion: "phase0-safe-context@1",
+      compilerVersion: "phase0-safe-context@2",
       hashAlgorithm: "SHA-256",
       generationId: harness.generationId,
       problemId: sixPeopleProblem.id,
@@ -55,6 +55,27 @@ describe("generation context reproducibility", () => {
     expect(serializedEvent).not.toContain(sixPeopleProblem.private.canonicalSolution);
     expect(replaySession(harness.sessionId, harness.store.load(harness.sessionId))).toEqual(harness.writer.getState());
     harness.store.close();
+  });
+
+  it("rejects accessor-backed canonical JSON without executing the accessor", () => {
+    let getterCalls = 0;
+    const value: Record<string, unknown> = {};
+    Object.defineProperty(value, "dangerous", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "must-not-run";
+      }
+    });
+
+    expect(() => canonicalJson(value)).toThrow(/own data properties/u);
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects sparse arrays instead of treating missing elements as implicit data", () => {
+    const sparse = new Array<unknown>(2);
+    sparse[1] = "present";
+    expect(() => canonicalJson(sparse)).toThrow(/own data elements/u);
   });
 
   it("produces stable safe-context and graph hashes independent of object key order and private content", async () => {
