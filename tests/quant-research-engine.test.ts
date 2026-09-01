@@ -865,17 +865,35 @@ describe("deterministic Quant Research interview engine", () => {
   });
 
   it("runtime-validates registry entries rather than trusting TypeScript types", () => {
+    const validRegistration = {
+      family: "BAYESIAN_UPDATING",
+      version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION
+    } as const;
     expectCode(
-      () => assertUniqueQuantResearchRegistrations([{ family: "BAYESIAN_UPDATING", version: 1 }]),
+      () => assertUniqueQuantResearchRegistrations([{ ...validRegistration, version: 1 }]),
       "INVALID_REGISTRY"
     );
     expectCode(
-      () => assertUniqueQuantResearchRegistrations([{ family: "BAYESIAN_UPDATING", version: QUANT_RESEARCH_VERSION, extra: true }]),
+      () => assertUniqueQuantResearchRegistrations([{ ...validRegistration, generatorVersion: 1 }]),
+      "INVALID_REGISTRY"
+    );
+    expectCode(
+      () => assertUniqueQuantResearchRegistrations([{ ...validRegistration, rngVersion: 1 }]),
+      "INVALID_REGISTRY"
+    );
+    expectCode(
+      () => assertUniqueQuantResearchRegistrations([{ ...validRegistration, extra: true }]),
       "INVALID_REGISTRY"
     );
 
     let versionGetterInvoked = false;
-    const registration: Record<string, unknown> = { family: "BAYESIAN_UPDATING" };
+    const registration: Record<string, unknown> = {
+      family: "BAYESIAN_UPDATING",
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION
+    };
     Object.defineProperty(registration, "version", {
       enumerable: true,
       get() {
