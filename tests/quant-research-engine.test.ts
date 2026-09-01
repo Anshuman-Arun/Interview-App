@@ -468,6 +468,25 @@ describe("deterministic Quant Research interview engine", () => {
     expect(nestedReplayCode).toBe("INVALID_REPLAY");
   });
 
+  it("returns runtime-frozen canonical actions without retaining parameter aliases", () => {
+    const values = [1, 2];
+    const canonical = parseQuantResearchAction({
+      actionId: "canonical-action",
+      kind: "SUBMIT_PARAMETERS",
+      values
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    if (canonical.kind !== "SUBMIT_PARAMETERS") throw new Error("Expected parameter action");
+    expect(Object.isFrozen(canonical.values)).toBe(true);
+    values[0] = 999;
+    expect(canonical.values).toEqual([1, 2]);
+
+    const mutableCanonical = canonical as unknown as { values: number[] };
+    expect(() => {
+      mutableCanonical.values[0] = 5;
+    }).toThrow();
+  });
+
   it("returns a runtime-frozen canonical definition for authoritative replay persistence", () => {
     const canonical = parseQuantResearchDefinition({
       ...sampling,
