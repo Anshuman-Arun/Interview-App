@@ -268,7 +268,7 @@ const RawProviderConfigurationSchema = z.object({
   credentialRef: ProviderSecretReferenceSchema.optional()
 }).strict();
 
-const ProviderConfigurationEnvelopeSchema = z.unknown().transform((value, context) => {
+const ProviderConfigurationEnvelopeSchema = z.unknown().transform<unknown>((value, context) => {
   try {
     return inspectPlainProviderConfigurationValue(value);
   } catch {
@@ -317,7 +317,7 @@ const ProviderModelDefinitionObjectSchema = z.object({
   metadataVersion: BoundedVersionTextSchema.optional()
 }).strict();
 
-const ProviderModelDefinitionEnvelopeSchema = z.unknown().transform((value, context) => {
+const ProviderModelDefinitionEnvelopeSchema = z.unknown().transform<unknown>((value, context) => {
   try {
     return inspectPlainProviderConfigurationValue(value);
   } catch {
@@ -1074,11 +1074,13 @@ function normalizeFactory(
       "Provider adapter factory is malformed"
     );
   }
+  const createAdapterImpl =
+    createAdapter as ProviderAdapterFactoryDefinition["createAdapter"];
   return new RegisteredProviderAdapterFactory(
     REGISTERED_FACTORY_CONSTRUCTION_TOKEN,
     ownerProviderId,
     id.data,
-    createAdapter
+    createAdapterImpl
   );
 }
 
@@ -1431,6 +1433,10 @@ function defineProviderValue(input: unknown): ProviderDefinition {
       "Provider definition is malformed"
     );
   }
+  const settingsValidator: ProviderSettingsValidator | undefined =
+    validateSettings === undefined
+      ? undefined
+      : validateSettings as ProviderSettingsValidator;
 
   let metadataInput: SafeProviderConfigurationValue;
   try {
@@ -1525,14 +1531,20 @@ function defineProviderValue(input: unknown): ProviderDefinition {
   const models = sortedFrozenModelCopy(metadataResult.data.models);
 
   return freezeNullPrototype({
-    ...metadataResult.data,
+    id: metadataResult.data.id,
+    displayName: metadataResult.data.displayName,
+    kind: metadataResult.data.kind,
+    definitionVersion: metadataResult.data.definitionVersion,
+    capabilityVersion: metadataResult.data.capabilityVersion,
+    ...(adapterVersion === undefined ? {} : { adapterVersion }),
+    credentialRequirement: metadataResult.data.credentialRequirement,
     credentialPurposes: objectFreeze(sortedCodeUnitStringCopy(credentialPurposes)),
     models: objectFreeze(models),
     ...(adapterFactory === undefined ? {} : { adapterFactory }),
-    ...(validateSettings === undefined
+    ...(settingsValidator === undefined
       ? {}
-      : { validateSettings })
-  });
+      : { validateSettings: settingsValidator })
+  }) satisfies ProviderDefinition;
 }
 
 export function defineProvider(input: ProviderDefinitionInput): ProviderDefinition {
@@ -2041,7 +2053,7 @@ function resolveParsedProviderConfiguration(input: {
   readonly registry: unknown;
   readonly configuration: ProviderConfiguration;
   readonly requirements?: CapturedCapabilityRequirements;
-}): ResolvedProviderConfiguration {
+}): ResolvedProviderConfigurationValue {
   const { provider, model } = resolveRegistrySelection(
     input.registry,
     input.configuration.providerId,
@@ -2224,7 +2236,7 @@ export async function evaluateProviderReadiness(input: {
     });
   }
 
-  let resolved: ResolvedProviderConfiguration;
+  let resolved: ResolvedProviderConfigurationValue;
   try {
     resolved = resolveParsedProviderConfiguration({
       registry,
