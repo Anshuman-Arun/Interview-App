@@ -1229,11 +1229,19 @@ function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
   return snapshot;
 }
 
+let replayingQuantResearch = false;
+
 export function replayQuantResearch(definitionInput: unknown, actionsInput: unknown): QuantResearchReplayOutput {
-  const actions = snapshotReplayActions(actionsInput);
-  const engine = new QuantResearchEngine(definitionInput);
-  for (const action of actions) engine.applyAction(action);
-  return { state: engine.getState(), result: engine.getResult(), acceptedActions: engine.getAcceptedActions() };
+  if (replayingQuantResearch) throw new QuantResearchError("INVALID_REPLAY", "Reentrant Quant Research replay is not allowed");
+  replayingQuantResearch = true;
+  try {
+    const actions = snapshotReplayActions(actionsInput);
+    const engine = new QuantResearchEngine(definitionInput);
+    for (const action of actions) engine.applyAction(action);
+    return { state: engine.getState(), result: engine.getResult(), acceptedActions: engine.getAcceptedActions() };
+  } finally {
+    replayingQuantResearch = false;
+  }
 }
 
 export function getQuantResearchRegistry(): readonly Readonly<{
