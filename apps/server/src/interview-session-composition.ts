@@ -14,6 +14,7 @@ import {
 import {
   PROBLEM_METADATA,
   getProblemById,
+  getProblemByIdentity,
   getProblemMetadataById
 } from "../../../packages/problems/src/index.js";
 
@@ -65,7 +66,7 @@ export function resolveInterviewSessionConfiguration(
 
   switch (configuration.mode) {
     case "OXFORD_MATHEMATICS": {
-      const problem = getProblemById(configuration.problem.id);
+      const problem = getProblemByIdentity(configuration.problem.id, configuration.problem.version);
       const metadata = getProblemMetadataById(configuration.problem.id);
       if (
         problem === undefined
@@ -73,10 +74,7 @@ export function resolveInterviewSessionConfiguration(
         || metadata.mode !== "OXFORD_MATHEMATICS"
         || metadata.reviewStatus !== "ready"
       ) {
-        throw new Error("Configured Oxford problem is not available");
-      }
-      if (problem.version !== configuration.problem.version) {
-        throw new Error("Configured Oxford problem version is not available");
+        throw new Error("Configured Oxford problem identity is not available");
       }
       if (
         configuration.difficulty !== undefined
@@ -134,12 +132,12 @@ export function resolveSessionStateComposition(
   }
 
   if (state.problem !== undefined) {
-    const problem = getProblemById(state.problem.id);
+    const problem = getProblemByIdentity(state.problem.id, state.problem.version);
     const metadata = getProblemMetadataById(state.problem.id);
     if (
       problem === undefined
       || metadata?.mode !== "OXFORD_MATHEMATICS"
-      || problem.version !== state.problem.version
+      || metadata.reviewStatus !== "ready"
     ) {
       throw new Error("Legacy session problem identity is no longer available");
     }
