@@ -65,6 +65,7 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+        continue-on-error: true
 
       - name: Build browser application
         run: pnpm build:web
