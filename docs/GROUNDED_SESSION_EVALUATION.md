@@ -46,7 +46,7 @@ The evaluator reads:
 - accepted deterministic verification results;
 - the problem's versioned, approach-aware reasoning graph;
 - exposed, completed, or possibly exposed deliveries;
-- generation basis metadata when available for temporal attribution;
+- generation basis metadata for generation provenance, but not as a substitute for exposure chronology;
 - authoritative session lifecycle state.
 
 It does not copy the private canonical solution, full transcript, or delivered hint text into SessionEvaluation.
@@ -141,9 +141,9 @@ For a grounded achieved milestone, the base independence mapping is:
 
 Multiple distinct relevant disclosure IDs may reduce the milestone score further, bounded by 20 additional points. Re-rendering the same disclosed fact does not create another penalty.
 
-When generation basis establishes that a disclosure was delivered only after the milestone's grounded achievement sequence, that disclosure does not reduce the milestone's independence.
+The current SessionState records generation basis but not the authoritative event sequence at which a delivery became EXPOSED, COMPLETED, or POSSIBLY_EXPOSED. Generation basis is therefore never treated as exposure time.
 
-When timing cannot be established, the evaluator behaves conservatively: the relevant disclosure is attributed and support is degraded instead of inventing precise before/after timing.
+When a protected disclosure is relevant to an achieved milestone, the evaluator conservatively attributes that assistance and degrades independence support to WEAK because before/after ordering cannot be established from SessionState alone. It does not invent a precise chronology.
 
 POSSIBLY_EXPOSED is treated as exposure for evaluation, matching the architecture's crash-uncertainty rule.
 
@@ -151,11 +151,11 @@ Independence is not scored when no milestone has grounded achievement evidence.
 
 ## Hint responsiveness
 
-Hint responsiveness requires a specifically attributable protected disclosure with known generation-basis timing before a related milestone outcome.
+Hint responsiveness is currently not scored.
 
-The score is the fraction of grounded hint opportunities followed by achievement of that related milestone. This is explicitly an association, not a causal claim, and its current support level is WEAK.
+The authoritative SessionState records which protected disclosures were exposed, but it does not retain the exposure event sequence needed to prove that a delivery preceded later progress. Generation basis sequence identifies the state used to generate content; it does not prove when the renderer exposed that content.
 
-With no attributable opportunity, hint responsiveness is not scored.
+Until evaluation receives authoritative exposure ordering, hint responsiveness returns a null score with INSUFFICIENT support rather than manufacturing a temporal or causal association.
 
 ## Error recovery
 
