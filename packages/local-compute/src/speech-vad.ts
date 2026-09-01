@@ -222,7 +222,12 @@ export class VoiceActivityStateMachine {
   private readonly config: VoiceActivityConfig;
 
   public constructor(config: VoiceActivityConfig = DEFAULT_VAD_CONFIG) {
-    const parsed = VoiceActivityConfigSchema.safeParse(config);
+    let parsed: ReturnType<typeof VoiceActivityConfigSchema.safeParse>;
+    try {
+      parsed = VoiceActivityConfigSchema.safeParse(config);
+    } catch {
+      throw new Error("VAD configuration is invalid");
+    }
     if (!parsed.success) throw new Error("VAD configuration is invalid");
     if (parsed.data.continuationThreshold > parsed.data.onsetThreshold) {
       throw new Error("Continuation threshold must not exceed onset threshold");
@@ -417,7 +422,12 @@ export class AdaptiveEndpointingPolicy {
   private readonly config: EndpointingConfig;
 
   public constructor(config: EndpointingConfig = DEFAULT_ENDPOINT_CONFIG) {
-    const parsed = EndpointingConfigSchema.safeParse(config);
+    let parsed: ReturnType<typeof EndpointingConfigSchema.safeParse>;
+    try {
+      parsed = EndpointingConfigSchema.safeParse(config);
+    } catch {
+      throw new Error("Endpointing configuration is invalid");
+    }
     if (!parsed.success) throw new Error("Endpointing configuration is invalid");
     if (parsed.data.minimumSilenceMs > parsed.data.maximumPauseMs) {
       throw new Error("Minimum endpoint silence cannot exceed maximum pause");
@@ -439,7 +449,12 @@ export class AdaptiveEndpointingPolicy {
   }
 
   public decide(input: EndpointingInput): EndpointingDecision {
-    const boundedInput = EndpointingInputSchema.parse(input);
+    let boundedInput: z.infer<typeof EndpointingInputSchema>;
+    try {
+      boundedInput = EndpointingInputSchema.parse(input);
+    } catch {
+      throw new Error("Endpointing input is invalid");
+    }
     if (boundedInput.state === "FINALIZED" || boundedInput.state === "CANCELLED") {
       throw new Error("Endpointing cannot advance a terminal VAD state");
     }
