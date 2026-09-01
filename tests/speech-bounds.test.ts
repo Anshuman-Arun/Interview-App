@@ -186,6 +186,46 @@ describe("speech protocol hard bounds", () => {
     expect(SpeechModelIdentitySchema.safeParse({ name: "model", version: "v\n1" }).success).toBe(false);
   });
 
+  it("snapshots accessor-backed PCM ordering state before validation and use", () => {
+    const pcm = new Float32Array(320);
+    const first = snapshotPcmFrame({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "accessor-order",
+      sequence: 0,
+      sampleRate: 16_000,
+      channels: 1,
+      sampleFormat: "F32LE",
+      frameSamples: 320,
+      payloadByteLength: pcm.byteLength,
+      timestampMs: 0
+    }, pcm);
+    const base = advancePcmOrder(undefined, first);
+    const reads: Record<string, number> = {};
+    const getter = <T>(name: keyof typeof base, value: T) => ({
+      enumerable: true,
+      get() {
+        reads[name] = (reads[name] ?? 0) + 1;
+        if ((reads[name] ?? 0) > 1 && name === "lastSequence") return 999 as T;
+        return value;
+      }
+    });
+    const accessorState = {};
+    for (const key of Object.keys(base) as Array<keyof typeof base>) {
+      Object.defineProperty(accessorState, key, getter(key, base[key]));
+    }
+
+    const second = snapshotPcmFrame({
+      ...first.envelope,
+      requestId: newRequestId(),
+      sequence: 1,
+      timestampMs: 20
+    }, pcm);
+    const next = advancePcmOrder(accessorState as never, second);
+    expect(next.lastSequence).toBe(1);
+    expect(Math.max(...Object.values(reads))).toBe(1);
+  });
+
   it("binds direct PCM order state to one stream and rejects malformed prior state", () => {
     const pcm = new Float32Array(320);
     const first = snapshotPcmFrame({
