@@ -1070,7 +1070,38 @@ function milestoneReady(
   completeMilestones: ReadonlySet<string>
 ): boolean {
   const predecessors = graph.predecessors.get(milestoneId) ?? [];
-  return predecessors.length === 0 || predecessors.some((id) => completeMilestones.has(id));
+  if (predecessors.length === 0) return true;
+
+  const milestone = graph.problem.interviewer.reasoningGraph.milestones.find(
+    (item) => item.id === milestoneId
+  );
+  if (milestone === undefined || milestone.approachIds.length === 0) return false;
+
+  if (milestone.approachIds.length === 1) {
+    return predecessors.every((id) => completeMilestones.has(id));
+  }
+
+  const targetApproaches = new Set(milestone.approachIds);
+  for (const approachId of milestone.approachIds) {
+    const relevantPredecessors = predecessors.filter((predecessorId) => {
+      const predecessor = graph.problem.interviewer.reasoningGraph.milestones.find(
+        (item) => item.id === predecessorId
+      );
+      if (predecessor === undefined) return true;
+      const intersectsTargetApproaches = predecessor.approachIds.some(
+        (candidate) => targetApproaches.has(candidate)
+      );
+      return predecessor.approachIds.includes(approachId) || !intersectsTargetApproaches;
+    });
+
+    if (
+      relevantPredecessors.length > 0
+      && relevantPredecessors.every((id) => completeMilestones.has(id))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function inferActiveApproachId(
