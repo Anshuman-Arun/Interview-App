@@ -1630,8 +1630,9 @@ function replayCategory(entry: ReplayTimelineEntry): ReplayReadCategory {
 }
 
 function safeReplayText(entry: ReplayTimelineEntry): ReplayTimelineEntry["text"] | undefined {
-  const category = replayCategory(entry);
-  if (category === "STUDENT" || category === "WHITEBOARD") return entry.text;
+  if (entry.kind === "TURN_COMMITTED" || entry.kind === "BOARD_PATCH_COMMITTED") {
+    return entry.text;
+  }
   if (entry.kind === "DELIVERY_EXPOSED") return entry.delivery?.text;
   return undefined;
 }
