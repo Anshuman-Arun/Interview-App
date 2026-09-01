@@ -219,10 +219,12 @@ not call or duplicate `session-evaluator.ts`, recompute scores, or fabricate an
 
 Cross-session aggregation is conservative. A supplied summary claiming
 `currentStateAvailable: true` must fit the same complete-projection envelope that
-`projectSessionHistory` can actually produce: its event count cannot exceed the
-replay hard limit, and its turn/exposure counts cannot exceed its authoritative
-event count. This keeps aggregate integer arithmetic inside the range of genuine
-projections. The selector scans every lightweight identity/sort envelope so
+`projectSessionHistory` can actually produce: lifecycle status/completion/archive
+flags must agree, terminal sessions cannot retain in-flight deliveries, delivery
+outcome counts cannot exceed queued deliveries, each current evidence record must
+have a distinct authoritative evidence EventId, and event/count totals must fit the
+replay hard limit. This keeps aggregate arithmetic and lifecycle/evidence patterns
+inside the range of genuine projections rather than merely shape-valid caller data. The selector scans every lightweight identity/sort envelope so
 duplicate SessionIds cannot hide outside the result window, but retains raw/envelope
 references only for the deterministic top `maxSessions` candidates before deep
 validation.

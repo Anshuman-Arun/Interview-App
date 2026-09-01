@@ -7,6 +7,7 @@ import {
   DeliveryAtomSchema,
   EvidenceValueSchema,
   SessionEvaluationSchema,
+  evidenceKeyToString,
   newDeliveryId,
   newRequestId,
   type EvidenceKey,
@@ -2584,6 +2585,49 @@ describe("longitudinal projection", () => {
         ...first.counts,
         exposedInterventions: first.totalEventCount + 1
       }
+    }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
+    expect(() => projectLongitudinalHistory([{
+      ...first,
+      evaluation: undefined,
+      lifecycle: {
+        ...first.lifecycle,
+        status: "ACTIVE",
+        completed: true,
+        archived: false
+      }
+    }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
+    expect(() => projectLongitudinalHistory([{
+      ...first,
+      evaluation: undefined,
+      counts: {
+        ...first.counts,
+        deliveries: 0,
+        exposedInterventions: 1
+      }
+    }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
+    const originalEvidence = first.currentEvidence[0];
+    if (originalEvidence === undefined) {
+      throw new Error("Missing longitudinal evidence fixture");
+    }
+    const duplicateEvidenceKey: EvidenceKey = {
+      problemId: originalEvidence.key.problemId,
+      subject: { kind: "SKILL", skillId: "duplicate-event-id-key" },
+      dimension: originalEvidence.key.dimension
+    };
+    expect(() => projectLongitudinalHistory([{
+      ...first,
+      evaluation: undefined,
+      currentEvidence: [
+        originalEvidence,
+        {
+          ...originalEvidence,
+          key: duplicateEvidenceKey,
+          keyString: evidenceKeyToString(duplicateEvidenceKey)
+        }
+      ]
     }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
 
     const statefulSummary = { ...first, evaluation: undefined };

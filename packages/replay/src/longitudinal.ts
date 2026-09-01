@@ -97,14 +97,19 @@ const LongitudinalSessionInputSchema = z.object({
     problemVersion: z.string().min(1)
   }).strict().optional(),
   lifecycle: z.object({
+    status: z.enum(["ACTIVE", "COMPLETED", "ARCHIVED", "UNKNOWN"]),
     startedAt: z.iso.datetime().optional(),
     completed: z.boolean().nullable(),
+    archived: z.boolean().nullable(),
     historyComplete: z.boolean()
   }),
   counts: z.object({
     turns: SafeNonnegativeIntegerSchema,
+    deliveries: SafeNonnegativeIntegerSchema,
     exposedInterventions: SafeNonnegativeIntegerSchema,
-    possiblyExposedInterventions: SafeNonnegativeIntegerSchema
+    possiblyExposedInterventions: SafeNonnegativeIntegerSchema,
+    cancelledInterventions: SafeNonnegativeIntegerSchema,
+    inFlightDeliveries: SafeNonnegativeIntegerSchema.optional()
   }),
   countsComplete: z.boolean(),
   currentStateAvailable: z.boolean(),
@@ -188,9 +193,31 @@ function parseSelectedSessionSummary(
       ))
     || session.currentStateAvailable !== session.lifecycle.historyComplete
     || session.currentStateAvailable !== session.countsComplete
-    || (session.lifecycle.historyComplete && session.lifecycle.completed === null)
+    || (session.lifecycle.historyComplete
+      && (
+        session.lifecycle.completed === null
+        || session.lifecycle.archived === null
+      ))
     || (session.currentStateAvailable
-      && (session.problem === undefined || session.lifecycle.startedAt === undefined))
+      && (
+        session.problem === undefined
+        || session.lifecycle.startedAt === undefined
+        || session.lifecycle.status === "UNKNOWN"
+        || session.counts.inFlightDeliveries === undefined
+      ))
+    || (!session.currentStateAvailable && session.lifecycle.status !== "UNKNOWN")
+    || (session.lifecycle.status === "ACTIVE"
+      && (
+        session.lifecycle.completed !== false
+        || session.lifecycle.archived !== false
+      ))
+    || (session.lifecycle.status === "COMPLETED"
+      && (
+        session.lifecycle.completed !== true
+        || session.lifecycle.archived !== false
+      ))
+    || (session.lifecycle.status === "ARCHIVED"
+      && session.lifecycle.archived !== true)
     || session.validatedThroughSequence > session.observedThroughSequence
     || session.observedThroughSequence > session.totalEventCount
     || (session.currentStateAvailable
@@ -199,8 +226,17 @@ function parseSelectedSessionSummary(
         || session.observedThroughSequence !== session.totalEventCount
         || session.totalEventCount > DEFAULT_REPLAY_BOUNDS.maxEvents
         || session.counts.turns > session.totalEventCount
-        || session.counts.exposedInterventions > session.totalEventCount
-        || session.counts.possiblyExposedInterventions > session.totalEventCount
+        || session.counts.deliveries > session.totalEventCount
+        || session.counts.exposedInterventions
+          + session.counts.possiblyExposedInterventions
+          + session.counts.cancelledInterventions
+          > session.counts.deliveries
+        || session.counts.inFlightDeliveries === undefined
+        || session.counts.inFlightDeliveries > session.counts.deliveries
+        || ((session.lifecycle.status === "COMPLETED"
+          || session.lifecycle.status === "ARCHIVED")
+          && session.counts.inFlightDeliveries !== 0)
+        || session.currentEvidence.length > session.totalEventCount
       ))
     || session.currentEvidenceTruncation.limit
       > DEFAULT_REPLAY_BOUNDS.maxEvidenceHistoryEntries
@@ -238,6 +274,7 @@ function parseSelectedSessionSummary(
   }
 
   const evidenceIdentities = new Set<string>();
+  const currentEvidenceEventIds = new Set<string>();
   for (const evidence of session.currentEvidence) {
     const identity = replayEvidenceIdentity(evidence.key);
     if (
@@ -253,6 +290,7 @@ function parseSelectedSessionSummary(
       || evidence.key.problemId !== session.problem.problemId
       || evidence.keyString !== evidenceKeyToString(evidence.key)
       || evidenceIdentities.has(identity)
+      || currentEvidenceEventIds.has(evidence.evidenceEventId)
       || !truncationMatchesLength(
         evidence.value.evidenceEventIdsTruncation,
         evidence.value.evidenceEventIds.length
@@ -261,6 +299,7 @@ function parseSelectedSessionSummary(
       throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
     }
     evidenceIdentities.add(identity);
+    currentEvidenceEventIds.add(evidence.evidenceEventId);
   }
 
   return session;
