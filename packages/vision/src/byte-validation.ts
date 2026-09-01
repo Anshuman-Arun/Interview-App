@@ -5,14 +5,16 @@ if (typeof rawTypedArrayPrototype !== "object" || rawTypedArrayPrototype === nul
   throw new Error("TypedArray prototype is unavailable");
 }
 
-const typedArrayByteLengthDescriptor = Object.getOwnPropertyDescriptor(
-  rawTypedArrayPrototype,
-  "byteLength"
-);
-const typedArrayByteLengthGetter = typedArrayByteLengthDescriptor?.get;
-if (typeof typedArrayByteLengthGetter !== "function") {
-  throw new Error("TypedArray byteLength intrinsic is unavailable");
-}
+const typedArrayByteLengthGetter: () => unknown = (() => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    rawTypedArrayPrototype,
+    "byteLength"
+  );
+  if (typeof descriptor?.get !== "function") {
+    throw new Error("TypedArray byteLength intrinsic is unavailable");
+  }
+  return descriptor.get;
+})();
 
 export function actualUint8ArrayByteLength(value: Uint8Array): number {
   let result: unknown;
