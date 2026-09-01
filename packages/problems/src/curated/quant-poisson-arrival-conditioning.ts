@@ -9,13 +9,13 @@ export const quantPoissonArrivalConditioningSpec: CuratedProblemSpec = {
   "difficulty":"quant-stretch",
   "prompt":"Events follow a homogeneous Poisson process of rate λ>0. Conditional on exactly one event occurring in the interval [0,T], what is the distribution of that event's arrival time? Derive the conditional distribution.",
   "givenInformation":["Counts on disjoint intervals are independent.","The number of events in an interval of length t is Poisson(λt)."],
-  "approaches":[{"id":"split-interval","label":"Condition using independent counts before and after t"},{"id":"density-cancellation","label":"Exponential arrival density times no-later-arrivals"}],
+  "approaches":[{"id":"split-interval","label":"Condition using independent counts before and after t"}],
   "milestones":[
-    {"id":"cdf-target","description":"Express P(S≤t | N(T)=1) using counts in [0,t] and (t,T].","approachIds":["split-interval","density-cancellation"],"hintLevels":[1]},
+    {"id":"cdf-target","description":"Express P(S≤t | N(T)=1) using counts in [0,t] and (t,T].","approachIds":["split-interval"],"hintLevels":[1]},
     {"id":"joint-event","description":"Identify {S≤t,N(T)=1} as one event in [0,t] and zero in (t,T].","approachIds":["split-interval"],"prerequisiteIds":["cdf-target"],"hintLevels":[2]},
     {"id":"independent-counts","description":"Use Poisson probabilities and independent increments for the numerator.","approachIds":["split-interval"],"prerequisiteIds":["joint-event"],"hintLevels":[3]},
-    {"id":"divide-condition","description":"Divide by P(N(T)=1) and simplify λ and exponential factors.","approachIds":["split-interval","density-cancellation"],"prerequisiteIds":["independent-counts"],"hintLevels":[4]},
-    {"id":"identify-uniform","description":"Recognize the conditional CDF t/T on 0≤t≤T as Uniform(0,T).","approachIds":["split-interval","density-cancellation"],"prerequisiteIds":["divide-condition"],"hintLevels":[5]}
+    {"id":"divide-condition","description":"Divide by P(N(T)=1) and simplify λ and exponential factors.","approachIds":["split-interval"],"prerequisiteIds":["independent-counts"],"hintLevels":[4]},
+    {"id":"identify-uniform","description":"Recognize the conditional CDF t/T on 0≤t≤T as Uniform(0,T).","approachIds":["split-interval"],"prerequisiteIds":["divide-condition"],"hintLevels":[5]}
   ],
   "edges":[{"from":"cdf-target","to":"joint-event"},{"from":"joint-event","to":"independent-counts"},{"from":"independent-counts","to":"divide-condition"},{"from":"divide-condition","to":"identify-uniform"}],
   "commonErrors":[{"id":"use-exponential-unconditionally","description":"Answers exponential because the first arrival is exponential without conditioning on exactly one event by T."},{"id":"forget-zero-after","description":"Counts an event before t but does not require zero additional events in (t,T]."}],

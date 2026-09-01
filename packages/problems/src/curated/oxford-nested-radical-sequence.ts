@@ -21,10 +21,6 @@ export const oxfordNestedRadicalSequenceSpec: CuratedProblemSpec = {
     {
       "id": "monotone-bounded",
       "label": "Monotone and bounded convergence"
-    },
-    {
-      "id": "error-contraction",
-      "label": "Direct error estimate around the fixed point"
     }
   ],
   "milestones": [
@@ -32,8 +28,7 @@ export const oxfordNestedRadicalSequenceSpec: CuratedProblemSpec = {
       "id": "guess-limit",
       "description": "Use fixed-point reasoning to identify plausible limits while respecting the nonnegative range.",
       "approachIds": [
-        "monotone-bounded",
-        "error-contraction"
+        "monotone-bounded"
       ],
       "hintLevels": [
         1
@@ -43,8 +38,7 @@ export const oxfordNestedRadicalSequenceSpec: CuratedProblemSpec = {
       "id": "establish-bound",
       "description": "Prove an invariant upper bound for all terms.",
       "approachIds": [
-        "monotone-bounded",
-        "error-contraction"
+        "monotone-bounded"
       ],
       "prerequisiteIds": [
         "guess-limit"
@@ -70,8 +64,7 @@ export const oxfordNestedRadicalSequenceSpec: CuratedProblemSpec = {
       "id": "convergence-or-error",
       "description": "Invoke monotone bounded convergence, or derive a shrinking error formula for 2-x_n.",
       "approachIds": [
-        "monotone-bounded",
-        "error-contraction"
+        "monotone-bounded"
       ],
       "prerequisiteIds": [
         "prove-monotone"
@@ -84,8 +77,7 @@ export const oxfordNestedRadicalSequenceSpec: CuratedProblemSpec = {
       "id": "identify-limit",
       "description": "Pass to the limit in L=√(2+L) and choose the admissible root.",
       "approachIds": [
-        "monotone-bounded",
-        "error-contraction"
+        "monotone-bounded"
       ],
       "prerequisiteIds": [
         "convergence-or-error"

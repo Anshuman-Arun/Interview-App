@@ -43,7 +43,7 @@ export const CURATED_DISCLOSURE_LEVELS: Readonly<Record<string, ReviewedLevels>>
       Object.freeze({ ...levels })
     ])
   )
-) as Readonly<Record<string, ReviewedLevels>>;
+);
 
 export function reviewedDisclosureLevelFor(
   problemId: string,
@@ -53,7 +53,7 @@ export function reviewedDisclosureLevelFor(
   if (levels === undefined) {
     throw new Error(`Problem "${problemId}" has no manual semantic disclosure review`);
   }
-  const level = levels[stage];
+  const level = (levels as Partial<ReviewedLevels>)[stage];
   if (level === undefined) {
     throw new Error(`Problem "${problemId}" has no semantic classification for hint stage ${String(stage)}`);
   }

@@ -399,7 +399,8 @@ describe("provider readiness", () => {
     })).resolves.toEqual({
       state: "UNKNOWN",
       providerId: "gemini-api",
-      modelId: "gemini-2.5-flash"
+      modelId: "gemini-2.5-flash",
+      reason: "CREDENTIAL_STATUS_UNKNOWN"
     });
   });
 

@@ -171,10 +171,10 @@ describe("provider secret-classifier intrinsic hardening", () => {
       Symbol.iterator
     );
 
-    let bearerDetected = false;
-    let basicDetected = false;
-    let assignmentDetected = false;
-    let commonTokenDetected = false;
+    let bearerDetected: boolean | undefined;
+    let basicDetected: boolean | undefined;
+    let assignmentDetected: boolean | undefined;
+    let commonTokenDetected: boolean | undefined;
     let keyError: unknown;
 
     try {
@@ -334,9 +334,6 @@ describe("provider configuration safety-error provenance", () => {
       }
     }
 
-    if (result === undefined) {
-      throw new Error("Safety-error provenance test did not produce a schema result");
-    }
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues.some(
@@ -721,6 +718,7 @@ describe("control-plane own-property intrinsic hardening", () => {
       throw new Error("Object.hasOwn intrinsic is unavailable");
     }
 
+    let malformedDefinitionError: unknown;
     try {
       Object.defineProperty(Object, "hasOwn", {
         configurable: true,
@@ -740,13 +738,19 @@ describe("control-plane own-property intrinsic hardening", () => {
       expect(Object.isFrozen(parsed.reasoning)).toBe(true);
       expect(Object.getPrototypeOf(parsed.reasoning)).toBeNull();
 
-      expect(() => defineProvider({
-        ...createSettingsProviderInput(),
-        adapterVersion: "1.0.0"
-      })).toThrow(expect.objectContaining({ code: "MALFORMED_DEFINITION" }));
+      try {
+        defineProvider({
+          ...createSettingsProviderInput(),
+          adapterVersion: "1.0.0"
+        });
+      } catch (error) {
+        malformedDefinitionError = error;
+      }
     } finally {
       Object.defineProperty(Object, "hasOwn", originalHasOwn);
     }
+    expect(malformedDefinitionError)
+      .toMatchObject({ code: "MALFORMED_DEFINITION" });
   });
 });
 
@@ -755,7 +759,7 @@ describe("provider Reflect.apply intrinsic hardening", () => {
     const originalApply = Reflect.apply;
     let secretError: unknown;
     let duplicateError: unknown;
-    let builtInIds: readonly string[] = [];
+    let builtInIds: readonly string[] | undefined;
 
     try {
       Reflect.set(Reflect, "apply", () => {
@@ -796,8 +800,8 @@ describe("provider error intrinsic hardening", () => {
     const originalDefineProperty = Object.defineProperty;
     let controlError: ProviderControlPlaneError | undefined;
     let safetyError: ProviderConfigurationSafetyError | undefined;
-    let controlMutation = true;
-    let safetyMutation = true;
+    let controlMutation: boolean | undefined;
+    let safetyMutation: boolean | undefined;
 
     try {
       Reflect.set(Object, "defineProperty", () => {
@@ -827,8 +831,8 @@ describe("provider error intrinsic hardening", () => {
 
     expect(controlMutation).toBe(false);
     expect(safetyMutation).toBe(false);
-    expect(controlError?.code).toBe("CREDENTIALS_REQUIRED");
-    expect(safetyError?.code).toBe("SECRET_IN_CONFIGURATION");
+    expect(controlError.code).toBe("CREDENTIALS_REQUIRED");
+    expect(safetyError.code).toBe("SECRET_IN_CONFIGURATION");
   });
 });
 
@@ -1288,7 +1292,7 @@ describe("provider definition and capability hostile values", () => {
       adapterFactory: factory
     };
 
-    expect(() => defineProvider(definition))
+    expect(() => defineProvider(definition as unknown as ProviderDefinitionInput))
       .toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
     expect(getterCalls).toBe(0);
   });
@@ -1423,13 +1427,13 @@ describe("provider definition and capability hostile values", () => {
     expect(() => resolveProviderConfiguration({
       registry,
       configuration,
-      requirements: malformedRequirements
+      requirements: malformedRequirements as unknown as readonly ProviderCapabilityKey[]
     })).toThrow(expect.objectContaining({ code: "MALFORMED_CONFIGURATION" }));
 
     await expect(evaluateProviderReadiness({
       registry,
       configuration,
-      requirements: malformedRequirements
+      requirements: malformedRequirements as unknown as readonly ProviderCapabilityKey[]
     })).resolves.toMatchObject({
       state: "MISCONFIGURED",
       reason: "MALFORMED_CONFIGURATION"
@@ -1572,6 +1576,7 @@ describe("provider definition and capability hostile values", () => {
     registry.register(createSettingsProviderInput());
     const storedProvider = registry.getProvider("settings-provider");
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Hostile prototype test captures the original method for Reflect.apply and restoration.
     const originalHas = Map.prototype.has;
     let duplicateError: unknown;
     try {
@@ -1581,7 +1586,7 @@ describe("provider definition and capability hostile values", () => {
         value(this: Map<unknown, unknown>, key: unknown) {
           if (
             key === "settings-provider"
-            && Reflect.apply(originalHas, this, [key]) === true
+            && Reflect.apply(originalHas, this, [key])
           ) {
             return false;
           }
@@ -1601,15 +1606,17 @@ describe("provider definition and capability hostile values", () => {
       });
     }
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Hostile prototype test captures the original method for Reflect.apply and restoration.
     const originalGet = Map.prototype.get;
     let unknownLookupError: unknown;
     try {
       Object.defineProperty(Map.prototype, "get", {
         configurable: true,
         writable: true,
-        value(this: Map<unknown, unknown>, key: unknown) {
+        value(this: Map<unknown, unknown>, key: unknown): unknown {
           if (key === "missing-provider") return storedProvider;
-          return Reflect.apply(originalGet, this, [key]);
+          const result: unknown = Reflect.apply(originalGet, this, [key]);
+          return result;
         }
       });
       try {
@@ -1626,6 +1633,7 @@ describe("provider definition and capability hostile values", () => {
     }
 
     const setRegistry = new ProviderRegistry();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Hostile prototype test captures the original method for Reflect.apply and restoration.
     const originalSet = Map.prototype.set;
     try {
       Object.defineProperty(Map.prototype, "set", {
@@ -1654,6 +1662,7 @@ describe("provider definition and capability hostile values", () => {
   });
 
   it("does not let monkey-patched WeakSet.delete corrupt shared-object validation", () => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Hostile prototype test captures the original method for Reflect.apply and restoration.
     const originalDelete = WeakSet.prototype.delete;
     const shared = { value: 1 };
     let parsed: ReturnType<typeof validateProviderConfiguration> | undefined;
@@ -1679,13 +1688,14 @@ describe("provider definition and capability hostile values", () => {
       });
     }
 
-    expect(parsed?.settings).toEqual({
+    expect(parsed.settings).toEqual({
       left: { value: 1 },
       right: { value: 1 }
     });
   });
 
   it("does not let a targeted Set.has override hide duplicate identities", () => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Hostile prototype test captures the original method for Reflect.apply and restoration.
     const originalHas = Set.prototype.has;
     let duplicateModelError: unknown;
     let duplicateBatchError: unknown;
@@ -1747,6 +1757,7 @@ describe("provider definition and capability hostile values", () => {
   });
 
   it("does not let targeted Set.has overrides bypass configuration admission", () => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Hostile prototype test captures the original method for Reflect.apply and restoration.
     const originalHas = Set.prototype.has;
     let tokenError: unknown;
     let assignmentError: unknown;
@@ -1995,7 +2006,7 @@ describe("provider definition and capability hostile values", () => {
     let secretError: unknown;
     let definition: ReturnType<typeof defineProvider> | undefined;
     let enumerated: readonly ReturnType<typeof defineProvider>[] | undefined;
-    let mapRegistrationCount = -1;
+    let mapRegistrationCount: number | undefined;
 
     try {
       Object.defineProperty(Array.prototype, "map", {
@@ -2015,6 +2026,7 @@ describe("provider definition and capability hostile values", () => {
           if (!Array.isArray(result)) {
             throw new Error("Array.map returned an invalid result");
           }
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Hostile prototype test deliberately forwards the native Array.map result.
           return result;
         }
       });
@@ -2047,6 +2059,7 @@ describe("provider definition and capability hostile values", () => {
           if (!Array.isArray(result)) {
             throw new Error("Array.sort returned an invalid result");
           }
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Hostile prototype test deliberately forwards the native Array.sort result.
           return result;
         }
       });
@@ -2110,9 +2123,9 @@ describe("provider definition and capability hostile values", () => {
     }
 
     expect(secretError).toMatchObject({ code: "SECRET_IN_CONFIGURATION" });
-    expect(definition?.models.map((model) => model.id))
+    expect(definition.models.map((model) => model.id))
       .toEqual(["sort-model-a", "sort-model-b"]);
-    expect(enumerated?.map((provider) => provider.id))
+    expect(enumerated.map((provider) => provider.id))
       .toEqual(["enum-a", "enum-z"]);
     expect(mapRegistrationCount).toBe(1);
   });
@@ -2164,7 +2177,7 @@ describe("provider definition and capability hostile values", () => {
       Object.defineProperty(Map.prototype, "values", originalValues);
     }
 
-    expect(providers?.map((provider) => provider.id))
+    expect(providers.map((provider) => provider.id))
       .toEqual(["settings-provider"]);
   });
 
