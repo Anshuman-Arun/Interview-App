@@ -245,7 +245,11 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
           claimedDisclosureIds: [firstDisclosure.id],
           speechText: "The first prisoner announces the sum of hat colours modulo 2."
         },
-        request: { requiredAction: "PROBE_JUSTIFICATION", maximumDisclosure: 2 },
+        request: {
+          requiredAction: "PROBE_JUSTIFICATION",
+          maximumDisclosure: 2,
+          allowedDisclosureIds: [firstDisclosure.id]
+        },
         protectedDisclosures: prisonerHatsProblem.interviewer.protectedDisclosures
       });
       expect(result.accepted).toBe(true);
