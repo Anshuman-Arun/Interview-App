@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   MAX_SPEECH_TRANSCRIPT_CHARS,
@@ -115,28 +116,41 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       name,
       version: options.modelVersion.trim()
     });
-    this.cancellationCapability = options.runtime.supportsAbort ? "RUNTIME_ABORT" : "NONE";
+    this.cancellationCapability = this.supportsAbort ? "RUNTIME_ABORT" : "NONE";
   }
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
     const requestId = SpeechRequestIdSchema.parse(input.requestId);
     const utteranceId = SpeechUtteranceIdSchema.parse(input.utteranceId);
     const sourceAudioBasis = SourceAudioBasisSchema.parse(input.sourceAudioBasis);
+    if (!(input.pcmBytes instanceof Uint8Array)) {
+      throw new Error("Moonshine PCM input must be a Uint8Array");
+    }
+    if (input.pcmBytes.buffer instanceof SharedArrayBuffer) {
+      throw new Error("Moonshine PCM input must not use shared mutable backing storage");
+    }
     const expectedBytes = sourceAudioBasis.sampleCount * sourceAudioBasis.channels * 4;
     if (input.pcmBytes.byteLength !== expectedBytes) {
       throw new Error("Moonshine PCM length does not match its source audio basis");
+    }
+    const runtimePcmBytes = new Uint8Array(input.pcmBytes);
+    if (sha256(runtimePcmBytes) !== sourceAudioBasis.pcmSha256) {
+      throw new Error("Moonshine PCM bytes do not match the source audio basis");
     }
     const durationMs = sourceAudioBasis.sampleCount / sourceAudioBasis.sampleRate * 1_000;
     if (durationMs > MAX_SPEECH_UTTERANCE_DURATION_MS + 0.001) {
       throw new Error("Moonshine input exceeds maximum utterance duration");
     }
     const runtimeResult = MoonshineRuntimeResultSchema.parse(await this.options.runtime.transcribe({
-      pcmBytes: input.pcmBytes,
+      pcmBytes: runtimePcmBytes,
       sampleRate: sourceAudioBasis.sampleRate,
       modelPath: this.modelPath,
       ...(this.configPath === undefined ? {} : { configPath: this.configPath }),
       ...(this.supportsAbort ? { signal } : {})
     }));
+    if (sha256(runtimePcmBytes) !== sourceAudioBasis.pcmSha256) {
+      throw new Error("Moonshine runtime mutated PCM input");
+    }
     return validateTranscriptCandidate({
       requestId,
       utteranceId,
@@ -175,24 +189,30 @@ export interface TranscriptValidationBasis {
 }
 
 export function validateTranscriptCandidate(raw: unknown, expected: TranscriptValidationBasis): TranscriptCandidate {
+  const expectedRequestId = SpeechRequestIdSchema.parse(expected.requestId);
+  const expectedUtteranceId = SpeechUtteranceIdSchema.parse(expected.utteranceId);
+  const expectedSourceAudioBasis = SourceAudioBasisSchema.parse(expected.sourceAudioBasis);
+  const expectedModelIdentity = expected.modelIdentity === undefined
+    ? undefined
+    : SpeechModelIdentitySchema.parse(expected.modelIdentity);
   if (!isRecord(raw)) throw new Error("Recognizer result must be an object");
   if (Array.isArray(raw.words) && raw.words.length > MAX_SPEECH_WORD_TIMINGS) {
     throw new Error("Recognizer word timing metadata exceeds maximum entry count");
   }
   const normalizedText = normalizeTranscriptText(raw.text);
   const candidate = TranscriptCandidateSchema.parse({ ...raw, text: normalizedText });
-  if (candidate.requestId !== expected.requestId) throw new Error("Recognizer result requestId does not match request");
-  if (candidate.utteranceId !== expected.utteranceId) throw new Error("Recognizer result utteranceId does not match utterance");
-  if (!sameAudioBasis(candidate.sourceAudioBasis, expected.sourceAudioBasis)) {
+  if (candidate.requestId !== expectedRequestId) throw new Error("Recognizer result requestId does not match request");
+  if (candidate.utteranceId !== expectedUtteranceId) throw new Error("Recognizer result utteranceId does not match utterance");
+  if (!sameAudioBasis(candidate.sourceAudioBasis, expectedSourceAudioBasis)) {
     throw new Error("Recognizer result source audio basis does not match request");
   }
-  if (expected.modelIdentity !== undefined
-      && (candidate.model.name !== expected.modelIdentity.name
-        || candidate.model.version !== expected.modelIdentity.version)) {
+  if (expectedModelIdentity !== undefined
+      && (candidate.model.name !== expectedModelIdentity.name
+        || candidate.model.version !== expectedModelIdentity.version)) {
     throw new Error("Recognizer result model identity does not match configured recognizer");
   }
 
-  const utteranceDurationMs = expected.sourceAudioBasis.sampleCount / expected.sourceAudioBasis.sampleRate * 1_000;
+  const utteranceDurationMs = expectedSourceAudioBasis.sampleCount / expectedSourceAudioBasis.sampleRate * 1_000;
   let previousEnd = 0;
   for (const word of candidate.words ?? []) {
     if (word.endMs > utteranceDurationMs + 1) throw new Error("Recognizer word timing exceeds utterance duration");
@@ -230,7 +250,10 @@ function isUnsafeTranscriptCharacter(character: string): boolean {
   const code = character.codePointAt(0);
   if (code === undefined) return true;
   if ((code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) || code === 0x7F) return true;
-  return code === 0x200B
+  return code === 0x061C
+    || code === 0x200B
+    || code === 0x200E
+    || code === 0x200F
     || code === 0x2060
     || code === 0xFEFF
     || (code >= 0x202A && code <= 0x202E)
@@ -276,6 +299,10 @@ function validateBoolean(value: unknown, label: string): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function abortError(): Error {
