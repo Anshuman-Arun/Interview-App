@@ -126,7 +126,6 @@ export function evaluateInterviewSession(
   const milestones = milestoneFacts.map((item) => item.evaluation);
 
   const correctness = evaluateTechnicalCorrectness(
-    problem,
     activeEvidence,
     verificationByEvidenceKey,
     milestoneFacts
@@ -435,6 +434,7 @@ function evaluateMilestones(
   exposuresByDisclosureId: ReadonlyMap<string, DisclosureExposure>
 ): readonly MilestoneFacts[] {
   const graph = problem.interviewer.reasoningGraph;
+  const milestoneById = new Map(graph.milestones.map((milestone) => [milestone.id, milestone] as const));
   const base = new Map<string, {
     achieved: boolean;
     achievedSequence?: number;
@@ -560,7 +560,7 @@ function evaluateMilestones(
     let supportLevel = baseResult.supportLevel;
     if (baseResult.achieved) {
       const predecessorIds = (incoming.get(milestone.id) ?? []).filter((predecessorId) => {
-        const predecessor = graph.milestones.find((item) => item.id === predecessorId);
+        const predecessor = milestoneById.get(predecessorId);
         return predecessor !== undefined &&
           predecessor.approachIds.some((approachId) => milestone.approachIds.includes(approachId));
       });
@@ -639,7 +639,6 @@ function evaluateMilestones(
 }
 
 function evaluateTechnicalCorrectness(
-  problem: InterviewProblem,
   activeEvidence: ReadonlyMap<string, EvidenceRecordState>,
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
   milestoneFacts: readonly MilestoneFacts[]
@@ -675,7 +674,7 @@ function evaluateTechnicalCorrectness(
     }
   }
 
-  for (const [key, requests] of verificationByEvidenceKey) {
+  for (const requests of verificationByEvidenceKey.values()) {
     const latest = requests.at(-1);
     if (latest?.result === undefined) continue;
     const requestRef = evaluationRef("VERIFICATION_REQUEST", latest.verificationRequestId);
@@ -703,7 +702,6 @@ function evaluateTechnicalCorrectness(
       existing.verifierBacked = true;
     }
 
-    void key;
   }
 
   for (const milestone of milestoneFacts) {
@@ -955,8 +953,6 @@ function evaluateErrorRecovery(
     let inErrorEpisode = false;
     let errorRefs: EvaluationEvidenceRef[] = [];
     let errorSequence = 0;
-    let recoveredInKey = 0;
-
     for (const record of records) {
       const recordRefs = [
         evaluationRef("EVIDENCE_EVENT", record.evidenceEventId),
@@ -983,7 +979,6 @@ function evaluateErrorRecovery(
 
       if (inErrorEpisode && positive) {
         recoveryCount += 1;
-        recoveredInKey += 1;
         refs.push(...errorRefs, ...recordRefs);
         inErrorEpisode = false;
         errorRefs = [];
@@ -1019,7 +1014,6 @@ function evaluateErrorRecovery(
       }
     }
 
-    void recoveredInKey;
   }
 
   for (const error of unresolvedApproachErrors) {
@@ -1388,9 +1382,12 @@ function minSupport(
 
 function scoredDimension(
   score: number,
-  supportLevel: Exclude<EvaluationSupportLevel, "INSUFFICIENT">,
+  supportLevel: EvaluationSupportLevel,
   evidenceRefs: readonly EvaluationEvidenceRef[]
 ): EvaluationDimensionResult {
+  if (supportLevel === "INSUFFICIENT") {
+    throw new Error("A scored evaluation dimension cannot have insufficient support");
+  }
   return {
     score,
     supportLevel,
