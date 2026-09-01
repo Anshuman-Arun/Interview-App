@@ -449,6 +449,30 @@ describe("deterministic Quant Research interview engine", () => {
     expect(complete(0.425).metrics.CALIBRATION).toBe(100);
   });
 
+  it("preserves previously visible baselines after perturbations", () => {
+    const samplingEngine = new QuantResearchEngine(sampling);
+    samplingEngine.applyAction({ actionId: "baseline-sample", kind: "REQUEST_OBSERVATION", count: 3 });
+    const baselineObservations = samplingEngine.getState().visibleData.find((item) => item.key === "observations")?.value;
+    samplingEngine.applyAction({ actionId: "baseline-estimate", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 0 });
+    expect(samplingEngine.getState().visibleData.find((item) => item.key === "baselineObservations")?.value)
+      .toEqual(baselineObservations);
+    expect(typeof samplingEngine.getState().visibleData.find((item) => item.key === "contaminatedObservation")?.value)
+      .toBe("number");
+
+    const experimentEngine = new QuantResearchEngine(experimental);
+    experimentEngine.applyAction({ actionId: "baseline-exp-1", kind: "ALLOCATE_SAMPLE", a: 2, b: 4 });
+    experimentEngine.applyAction({ actionId: "baseline-exp-2", kind: "CHOOSE_OPTION", option: "A" });
+    expect(visibleNumber(experimentEngine.getState(), "baselineCostA")).toBe(experimental.config.costA);
+    expect(visibleNumber(experimentEngine.getState(), "baselineCostB")).toBe(experimental.config.costB);
+
+    const optimizationEngine = new QuantResearchEngine(optimization);
+    const baselineObjective = optimizationEngine.getState().visibleData.find((item) => item.key === "objective")?.value;
+    optimizationEngine.applyAction({ actionId: "baseline-opt", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
+    expect(optimizationEngine.getState().visibleData.find((item) => item.key === "baselineObjective")?.value)
+      .toBe(baselineObjective);
+    expect(visibleNumber(optimizationEngine.getState(), "baselineBudget")).toBe(optimization.config.budget);
+  });
+
   it("does not award perfect sampling adaptation for preserving a very bad estimate", () => {
     const engine = new QuantResearchEngine(sampling);
     engine.applyAction({ actionId: "poor-sample", kind: "REQUEST_OBSERVATION", count: 2 });
