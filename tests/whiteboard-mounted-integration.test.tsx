@@ -677,6 +677,13 @@ describe("Real tldraw mounted browser integration", () => {
     expect(after?.meta["layer"]).toBeUndefined();
     expect(adapter.getBoardRevision()).toBe(beforeRevision);
 
+    expect(bridge.getShape(legacyId)?.meta?.["layer"]).toBe("SYSTEM_DECORATION");
+    await act(async () => {
+      await adapter.clearAiOverlay();
+    });
+    expect(nativeEditor.getShape(legacyId)).toBeDefined();
+    expect(adapter.getBoardRevision()).toBe(beforeRevision);
+
     handle.unmount();
     container.remove();
   });
