@@ -167,7 +167,11 @@ export function createValidatedImageSnapshot(
   } catch {
     throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot input could not be read safely");
   }
-  if (ownInput["mimeType"] !== "image/png") {
+  const mimeTypeInput = ownInput["mimeType"];
+  if (typeof mimeTypeInput !== "string") {
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Image snapshot mimeType must be an own string field");
+  }
+  if (mimeTypeInput !== "image/png") {
     throw new VisionPreprocessingError("UNSUPPORTED_IMAGE_TYPE", "Only image/png snapshots are supported");
   }
 
