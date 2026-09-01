@@ -22,6 +22,7 @@ import {
 import type { EventDraft } from "../../events/src/index.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
+import { invalidateUndeliveredPolicyOutput } from "./policy-output-invalidation.js";
 import type { SessionWriter } from "./session-writer.js";
 
 const VerifierIdSchema = z.string().trim().min(1).max(128);
@@ -406,6 +407,10 @@ export class VerificationCoordinator {
           }
         });
       }
+      drafts.push(...invalidateUndeliveredPolicyOutput(
+        state,
+        "Authoritative verification changed before delivery"
+      ));
       return {
         drafts,
         result: {
