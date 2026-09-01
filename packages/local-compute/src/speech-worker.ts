@@ -105,6 +105,7 @@ interface InFlightMessage {
   readonly fingerprint: string;
   readonly token: object;
   readonly promise: Promise<readonly SpeechWorkerEvent[]>;
+  readonly frameStreamId?: SpeechStreamId;
 }
 
 export interface SpeechWorkerCoreOptions {
@@ -286,7 +287,7 @@ export class SpeechWorkerCore {
         }
         return this.processFrame(context, frame, heuristics.data);
       });
-    });
+    }, undefined, frame.envelope.streamId);
   }
 
   public async handleControl(input: unknown): Promise<readonly SpeechWorkerEvent[]> {
@@ -350,7 +351,10 @@ export class SpeechWorkerCore {
     const request = parsed.data;
     const fingerprint = fingerprintParts(JSON.stringify(request));
 
-    const cancellationReserveKey = `cancel:${request.streamId}`;
+    const cancellationReserveKey =
+      this.streams.has(request.streamId) || this.hasInFlightFrameForStream(request.streamId)
+        ? `cancel:${request.streamId}`
+        : undefined;
     return this.runIdempotent(request.requestId, fingerprint, async () => {
       const context = this.streams.get(request.streamId);
       let cancellation: "RUNTIME_ABORT_REQUESTED" | "SUPPRESS_LATE_RESULT_ONLY" | "NOT_RECOGNIZING" = "NOT_RECOGNIZING";
@@ -872,7 +876,8 @@ export class SpeechWorkerCore {
     requestId: RequestId,
     fingerprint: string,
     operation: () => Promise<readonly SpeechWorkerEvent[]>,
-    controlReserveKey?: string
+    controlReserveKey?: string,
+    frameStreamId?: SpeechStreamId
   ): Promise<readonly SpeechWorkerEvent[]> {
     const replay = this.replayMessage(requestId, fingerprint);
     if (replay !== undefined) return Promise.resolve(replay);
@@ -934,9 +939,21 @@ export class SpeechWorkerCore {
           this.controlReserveClaims.delete(controlReserveKey);
         }
       });
-    const tracked: InFlightMessage = { fingerprint, token, promise: canonical };
+    const tracked: InFlightMessage = {
+      fingerprint,
+      token,
+      promise: canonical,
+      ...(frameStreamId === undefined ? {} : { frameStreamId })
+    };
     this.inFlightMessages.set(requestId, tracked);
     return canonical.then((events) => cloneEvents(events));
+  }
+
+  private hasInFlightFrameForStream(streamId: SpeechStreamId): boolean {
+    for (const message of this.inFlightMessages.values()) {
+      if (message.frameStreamId === streamId) return true;
+    }
+    return false;
   }
 
   private replayMessage(requestId: RequestId, fingerprint: string): readonly SpeechWorkerEvent[] | undefined {
