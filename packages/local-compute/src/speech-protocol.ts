@@ -246,7 +246,7 @@ export const TranscriptCandidateSchema = z.object({
   if (value.text.length === 0 && words.length > 0) {
     context.addIssue({
       code: "custom",
-      message: "Empty transcript cannot carry word timing metadata",
+      message: "Empty recognizer transcript cannot carry word timing metadata",
       path: ["words"]
     });
   }
