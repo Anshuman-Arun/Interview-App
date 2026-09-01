@@ -184,7 +184,7 @@ describe("generation context reproducibility", () => {
       generationId: staleHarness.generationId,
       problem: sixPeopleProblem
     });
-    expect(stale.value).toMatchObject({ compiled: false, reason: "COMPATIBILITY_INCOMPATIBLE" });
+    expect(stale.value).toMatchObject({ compiled: false, reason: "GENERATION_NOT_ACTIVE" });
     expect(staleHarness.store.load(staleHarness.sessionId).some((event) => event.type === "GENERATION_CONTEXT_COMPILED"))
       .toBe(false);
     staleHarness.store.close();
@@ -246,7 +246,7 @@ describe("generation context reproducibility", () => {
     await raceHarness.turns.commitBoardPatch("Revision changed while context hashes were computing.");
     releaseHash?.();
     const raced = await pending;
-    expect(raced.value).toMatchObject({ compiled: false, reason: "COMPATIBILITY_INCOMPATIBLE" });
+    expect(raced.value).toMatchObject({ compiled: false, reason: "GENERATION_NOT_ACTIVE" });
     expect(raceHarness.store.load(raceHarness.sessionId).some((event) => event.type === "GENERATION_CONTEXT_COMPILED"))
       .toBe(false);
     raceHarness.store.close();
