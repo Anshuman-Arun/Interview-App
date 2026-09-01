@@ -267,7 +267,6 @@ function withVerification(
   const requestId = RequestIdSchema.parse(nextId("request_verify"));
   const requestedEventId = EventIdSchema.parse(nextId("event_verify_request"));
   const resultEventId = EventIdSchema.parse(nextId("event_verify_result"));
-  const requestedSequence = state.sequence + 1;
   const resultSequence = state.sequence + 2;
   const turn = Object.values(state.turns)[0];
   const provenanceEventId = turn === undefined
