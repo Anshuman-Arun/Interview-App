@@ -134,6 +134,53 @@ describe("speech worker adversarial callback boundaries", () => {
     expect(worker.getActiveStreamCount()).toBe(0);
   });
 
+  it("rejects forged VAD state-machine output from an injected subclass", async () => {
+    class ForgedVadState extends VoiceActivityStateMachine {
+      public override step() {
+        return {
+          state: "SPEECH",
+          speechMs: 0,
+          silenceMs: 0,
+          utteranceMs: 20,
+          speechClassified: true,
+          speechStarted: true,
+          possibleEndpoint: false,
+          falseStart: false
+        } as never;
+      }
+    }
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      vadStateFactory: () => new ForgedVadState()
+    });
+    const fixture = frame(0);
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "VAD state machine returned an invalid state"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
+  });
+
+  it("rejects malformed endpoint decisions from an injected subclass", async () => {
+    class ForgedEndpointingPolicy extends AdaptiveEndpointingPolicy {
+      public override decide() {
+        return { kind: "FINALIZE", reason: "NOT_A_REASON" } as never;
+      }
+    }
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      endpointingFactory: () => new ForgedEndpointingPolicy()
+    });
+    const fixture = frame(0, false, "forged-endpoint");
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "Endpointing policy failed"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
+  });
+
   it("fails closed on malformed VAD probability output", async () => {
     const vadBackend: VadBackend = {
       async classify() {
