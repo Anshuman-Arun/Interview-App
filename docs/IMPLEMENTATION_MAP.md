@@ -148,7 +148,7 @@ The workflow executes:
 - browser build;
 - desktop build;
 - explicit desktop bootstrap tests;
-- one complete Vitest discovery through `test:ci` (the same files as `pnpm test`, with at most two workers);
+- one complete Vitest discovery through `test:ci` (the same files as `pnpm test`, serialized with `maxWorkers=1`);
 - focused replay verification;
 - the full `.property.test.` convention sweep;
 - the typed E2E script;
