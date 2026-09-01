@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   FormalInterpretationRequestSchema,
   InterpretationProviderResultSchema,
+  evidenceKeyIdentity,
+  evidenceKeyToString,
   newRequestId,
   newSessionId,
   type EvidenceKey,
@@ -1011,6 +1013,59 @@ describe("provider cancellation capacity accounting", () => {
         verificationStatus: "VERIFIED"
       });
       expect(provider.callCount).toBe(2);
+    } finally {
+      harness.store.close();
+    }
+  });
+});
+
+
+describe("EvidenceKey authority identity", () => {
+  it("rejects structurally distinct keys that collide under the legacy delimiter encoding", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const authorizedKey: EvidenceKey = {
+        problemId: "oxford-six-people",
+        subject: { kind: "CLAIM", claimId: "x|CLAIM|y" },
+        dimension: "CORRECTNESS"
+      };
+      const collidingKey: EvidenceKey = {
+        problemId: "oxford-six-people|CLAIM|x",
+        subject: { kind: "CLAIM", claimId: "y" },
+        dimension: "CORRECTNESS"
+      };
+      expect(evidenceKeyToString(authorizedKey)).toBe(evidenceKeyToString(collidingKey));
+      expect(evidenceKeyIdentity(authorizedKey)).not.toBe(evidenceKeyIdentity(collidingKey));
+
+      const scopes = DETERMINISTIC_MATH_VERIFIERS.map((entry) => ({
+        verifier: entry.verifier,
+        evidenceKey: authorizedKey
+      }));
+      const router = new FormalProtocolRoutingRegistry(scopes);
+      expect(router.resolve(
+        { protocol: "MODULAR_ARITHMETIC", version: 1 },
+        collidingKey
+      )).toEqual({ ok: false, reason: "VERIFIER_UNAUTHORIZED" });
+
+      const request = createFormalInterpretationRequest(harness.writer, {
+        generationId: harness.generationId,
+        target: authorizedKey,
+        allowedProtocols: [{ protocol: "MODULAR_ARITHMETIC", version: 1 }]
+      });
+      const forgedCandidate: FormalInterpretationCandidate = {
+        ...candidate(request),
+        target: collidingKey
+      };
+      const provider = new DeterministicFormalInterpretationProvider(
+        providerResultFor(request, [forgedCandidate])
+      );
+      const result = await new InterpretationCoordinator(harness.writer, provider, scopes)
+        .interpretAndVerify(request);
+      expect(result).toMatchObject({
+        status: "TARGET_MISMATCH",
+        reason: "CANDIDATE_TARGET_MISMATCH"
+      });
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
     } finally {
       harness.store.close();
     }
