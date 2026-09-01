@@ -396,14 +396,15 @@ export function useInterviewSession(
 
       try {
         const client = getCommandClient();
-        const response = await client.startSession(targetSessionId);
+        await client.startSession(targetSessionId);
+        const context = await client.getInterviewSessionContext(targetSessionId);
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(true);
         setSessionStatus("ACTIVE");
-        setProblem(response.problem ?? null);
+        setProblem(context.problem ?? null);
         setTranscript([]);
 
         void attachRendererStream(targetSessionId);
@@ -427,6 +428,7 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         const response = await client.resumeSession(targetSessionId);
+        const context = await client.getInterviewSessionContext(targetSessionId);
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
         }
@@ -435,7 +437,7 @@ export function useInterviewSession(
         setSessionStatus(response.status);
         setSequence(response.sequence);
         setContextEpoch(response.contextEpoch);
-        setProblem(response.problem ?? null);
+        setProblem(context.problem ?? null);
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
 
