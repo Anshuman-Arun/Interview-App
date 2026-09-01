@@ -35,7 +35,8 @@ import {
   EventIdSchema,
   InputEpisodeIdSchema,
   TurnIdSchema,
-  newSessionId
+  newSessionId,
+  type InterviewProblem
 } from "../packages/domain/src/index.js";
 import { initialSessionState } from "../packages/events/src/index.js";
 
@@ -283,7 +284,7 @@ describe("curated problem bank", () => {
       };
       private: { canonicalSolution: string; verificationNotes: string };
     };
-    const catalog = createProblemCatalog([mutable]);
+    const catalog = createProblemCatalog([mutable as unknown as InterviewProblem]);
 
     mutable.public.prompt = "MUTATED AFTER ADMISSION";
     mutable.interviewer.reasoningGraph.milestones[0]!.description = "MUTATED AFTER ADMISSION";
