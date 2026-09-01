@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { newSessionId } from "../packages/domain/src/index.js";
+import { QuantResearchAuthoritativeSnapshotEventSchema } from "../packages/events/src/index.js";
 import {
   QuantResearchCoordinator,
   SessionWriter,
@@ -11,6 +12,7 @@ import {
   QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERIFIER_VERSION,
   QUANT_RESEARCH_VERSION,
+  QuantResearchEngine,
   type QuantResearchScenarioDefinition
 } from "../packages/local-compute/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
@@ -28,7 +30,51 @@ const modelDefinition: QuantResearchScenarioDefinition = {
   config: { observationCount: 10, noiseRadius: 2, outlierShift: 30 }
 };
 
+const persistenceDefinitions: readonly QuantResearchScenarioDefinition[] = [
+  {
+    family: "BAYESIAN_UPDATING",
+    version: QUANT_RESEARCH_VERSION,
+    generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+    rngVersion: QUANT_RESEARCH_RNG_VERSION,
+    seed: 17,
+    config: { priorAlpha: 2, priorBeta: 3, observationCount: 8, perturbedPriorAlpha: 5, perturbedPriorBeta: 2 }
+  },
+  {
+    family: "SAMPLING_ESTIMATION",
+    version: QUANT_RESEARCH_VERSION,
+    generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+    rngVersion: QUANT_RESEARCH_RNG_VERSION,
+    seed: 91,
+    config: { maxSamples: 10, populationSize: 32, centerMin: -20, centerMax: 20, noiseRadius: 4, outlierShift: 25 }
+  },
+  {
+    family: "EXPERIMENTAL_ALLOCATION",
+    version: QUANT_RESEARCH_VERSION,
+    generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+    rngVersion: QUANT_RESEARCH_RNG_VERSION,
+    seed: 808,
+    config: { totalBudget: 20, costA: 2, costB: 4, perturbedCostA: 5, perturbedCostB: 2, noiseA: 2, noiseB: 5 }
+  },
+  modelDefinition,
+  {
+    family: "CONSTRAINED_OPTIMIZATION",
+    version: QUANT_RESEARCH_VERSION,
+    generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+    rngVersion: QUANT_RESEARCH_RNG_VERSION,
+    seed: 42,
+    config: { budget: 30, perturbedBudget: 24, maxX: 15, maxY: 10, perturbedPenalty: 5 }
+  }
+];
+
 describe("Quant Research authoritative persistence", () => {
+  it("serializes every family authoritative snapshot through the bounded event wire schema", () => {
+    for (const definition of persistenceDefinitions) {
+      const snapshot = new QuantResearchEngine(definition).getAuthoritativePersistenceSnapshot();
+      expect(QuantResearchAuthoritativeSnapshotEventSchema.parse(snapshot)).toEqual(snapshot);
+    }
+  });
+
+
   it("persists the complete vertical slice and reconstructs it exactly after restart", async () => {
     const store = new SqliteEventStore(":memory:");
     const sessionId = newSessionId();
@@ -129,6 +175,44 @@ describe("Quant Research authoritative persistence", () => {
       expect(repeatedAction.appendedEventCount).toBe(0);
       expect(store.eventCount(sessionId)).toBe(4);
       expect(writer.getState().quantResearch?.actions).toHaveLength(1);
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
+  it("fails durable replay when Quant completion is missing the terminal session lifecycle event", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const coordinator = new QuantResearchCoordinator(writer);
+
+    try {
+      await coordinator.initialize(modelDefinition);
+      await coordinator.applyAction({
+        actionId: "lifecycle-model-1",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      });
+      await coordinator.applyAction({
+        actionId: "lifecycle-model-2",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      });
+      await writer.close();
+
+      const db = (store as unknown as StoreWithDatabase).database;
+      db.prepare(
+        "DELETE FROM session_events WHERE session_id = ? AND sequence = 7"
+      ).run(sessionId);
+
+      const reopened = SessionWriter.open(store, sessionId);
+      try {
+        expect(() => new QuantResearchCoordinator(reopened).replay())
+          .toThrow(/terminal session lifecycle event/u);
+      } finally {
+        await reopened.close();
+      }
     } finally {
       await writer.close();
       store.close();
