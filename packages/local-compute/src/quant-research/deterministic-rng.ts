@@ -1,5 +1,5 @@
 export class DeterministicRng {
-  private state: number;
+  #state: number;
 
   public constructor(seed: number, namespace: string) {
     let mixed = seed >>> 0;
@@ -8,16 +8,16 @@ export class DeterministicRng {
       mixed = Math.imul(mixed, 0x45d9f3b) >>> 0;
       mixed ^= mixed >>> 16;
     }
-    this.state = mixed === 0 ? 0x6d2b79f5 : mixed;
+    this.#state = mixed === 0 ? 0x6d2b79f5 : mixed;
   }
 
   public nextUint32(): number {
-    let value = this.state >>> 0;
+    let value = this.#state >>> 0;
     value ^= value << 13;
     value ^= value >>> 17;
     value ^= value << 5;
-    this.state = value >>> 0;
-    return this.state;
+    this.#state = value >>> 0;
+    return this.#state;
   }
 
   public nextInt(min: number, max: number): number {
