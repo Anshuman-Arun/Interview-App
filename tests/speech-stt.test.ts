@@ -283,6 +283,31 @@ describe("Moonshine-compatible adapter seam", () => {
     } as never)).toThrow(/transcribe callback is required/u);
   });
 
+  it("rejects blank or control-bearing explicit model provenance instead of normalizing it away", () => {
+    const runtime = {
+      runtimeVersion: "test-runtime",
+      supportsAbort: false,
+      async transcribe() { return { text: "ok" }; }
+    };
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "models/moonshine/model.bin",
+      modelName: "   ",
+      modelVersion: "1"
+    })).toThrow(/model name must not be blank/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "models/moonshine/model.bin",
+      modelName: "moonshine\n",
+      modelVersion: "1"
+    })).toThrow(/model name contains unsafe/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "models/moonshine/model.bin",
+      modelVersion: "1\n"
+    })).toThrow(/model version contains unsafe/u);
+  });
+
   it("requires explicit safe local model paths and never treats URLs/control characters as model sources", () => {
     const runtime = {
       runtimeVersion: "test-runtime",
@@ -298,7 +323,17 @@ describe("Moonshine-compatible adapter seam", () => {
       runtime,
       modelPath: "models/moonshine/model.bin\nother",
       modelVersion: "test"
-    })).toThrow(/local filesystem path/u);
+    })).toThrow(/local filesystem path|invalid/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "models/moonshine/model.bin\n",
+      modelVersion: "test"
+    })).toThrow(/invalid/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: " models/moonshine/model.bin",
+      modelVersion: "test"
+    })).toThrow(/invalid/u);
     expect(() => new MoonshineSpeechRecognizer({
       runtime,
       modelPath: "file:/tmp/model.bin",
