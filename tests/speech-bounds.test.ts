@@ -212,6 +212,12 @@ describe("speech protocol hard bounds", () => {
       cumulativeDurationMs: Number.MAX_VALUE,
       nextEarliestTimestampMs: Number.MAX_VALUE
     }, next)).toThrow(/PCM ordering state/u);
+    expect(() => advancePcmOrder({
+      ...state,
+      cumulativeDurationMs: 200,
+      nextEarliestTimestampMs: 200
+    }, next)).toThrow(/PCM ordering state/u);
+    expect(() => advancePcmOrder(undefined, null as never)).toThrow(/frame must be an object/u);
   });
 
   it("enforces buffer/cache hard limits even when helpers are used directly", () => {
@@ -245,6 +251,7 @@ describe("speech protocol hard bounds", () => {
       timestampMs: 20
     }, mono48);
     const buffer = new BoundedPcmBuffer();
+    expect(() => buffer.append(null as never, false)).toThrow(/snapshot must be an object/u);
     buffer.append(first, false);
     first.bytes[0] = 255;
     expect(buffer.materialize()[0]).toBe(0);
