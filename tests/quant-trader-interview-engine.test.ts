@@ -289,7 +289,7 @@ describe("standalone Quant Trader interview engine", () => {
     })).toThrow(/already exists/u);
     expect(book.getMarketState()).toMatchObject({ bestAsk: 101, totalVolume: 0 });
 
-    expect(() => book.setQuotes("STUDENT", centeredQuote)).toThrow(/generated order-book id was reused/u);
+    expect(() => book.setQuotes("STUDENT", centeredQuote)).toThrow(/generated order-book id was reused/iu);
     expect(book.getMarketState()).toMatchObject({ bestAsk: 101, totalVolume: 0 });
   });
 
@@ -324,7 +324,7 @@ describe("standalone Quant Trader interview engine", () => {
       bidSize: 1,
       askPrice: 103,
       askSize: 1
-    })).toThrow(/generated order-book id was reused/u);
+    })).toThrow(/generated order-book id was reused/iu);
 
     expect(book.getMarketState()).toMatchObject({
       bestBid: 99,
@@ -720,7 +720,7 @@ describe("standalone Quant Trader interview engine", () => {
       /tickSize must be a finite positive number/
     );
     expect(() => createQuantTraderScenario({ family: "BASIC_MARKET_MAKING", seed: 1, rounds: 0 })).toThrow(
-      /rounds must be a positive integer/
+      /rounds must be a positive safe integer/
     );
     expect(() => createQuantTraderScenario({ family: "BASIC_MARKET_MAKING", seed: 1, maxQuoteSize: -1 })).toThrow(
       /maxQuoteSize must be a positive integer/
