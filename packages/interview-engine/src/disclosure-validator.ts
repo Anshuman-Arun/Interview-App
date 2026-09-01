@@ -39,6 +39,15 @@ const normalize = (text: string): string =>
     .replace(/[^a-z0-9]+/gu, " ")
     .trim();
 
+const normalizeReviewedText = (text: string): string =>
+  text
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\bcolours\b/gu, "colors")
+    .replace(/\bcolour\b/gu, "color")
+    .replace(/\s+/gu, " ")
+    .trim();
+
 function unknownAnalysis(reason: string): DisclosureAnalysis {
   return {
     status: "UNKNOWN",
@@ -92,12 +101,12 @@ function deriveProtectedMatch(
 }
 
 function isExactProtectedRealization(
-  normalizedText: string,
+  normalizedReviewedText: string,
   protectedDisclosures: readonly ProtectedDisclosure[]
 ): boolean {
   return protectedDisclosures.some((disclosure) =>
     [disclosure.fact, ...disclosure.equivalentFormulations]
-      .some((formulation) => normalize(formulation) === normalizedText)
+      .some((formulation) => normalizeReviewedText(formulation) === normalizedReviewedText)
   );
 }
 
@@ -210,11 +219,10 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
       if (totalCharacters > MAX_TOTAL_REVIEWED_SAFE_TEXT_CHARACTERS) {
         throw new Error("Reviewed safe-text set exceeds the bounded aggregate text size");
       }
-      const value = normalize(text);
-      if (value.length === 0) {
+      if (normalize(text).length === 0) {
         throw new Error("Reviewed safe text must contain analyzable alphanumeric content");
       }
-      return value;
+      return normalizeReviewedText(text);
     });
     this.safeTexts = new Set(normalized);
   }
@@ -228,14 +236,15 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
     }
 
     const normalized = normalize(text);
+    const normalizedReviewedText = normalizeReviewedText(text);
     const protectedMatch = deriveProtectedMatch(text, protectedDisclosures);
     if (!protectedMatch.ok) {
       return unknownAnalysis("Protected disclosure metadata normalizes to an empty formulation");
     }
     if (protectedMatch.ids.length > 0) {
       if (
-        !this.safeTexts.has(normalized)
-        && !isExactProtectedRealization(normalized, protectedDisclosures)
+        !this.safeTexts.has(normalizedReviewedText)
+        && !isExactProtectedRealization(normalizedReviewedText, protectedDisclosures)
       ) {
         return unknownAnalysis(
           "Protected formulation was detected, but the complete realization is outside the reviewed set"
@@ -249,7 +258,7 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
         reason: "Complete realization is reviewed and protected content is classified independently"
       };
     }
-    if (normalized.length > 0 && this.safeTexts.has(normalized)) {
+    if (normalized.length > 0 && this.safeTexts.has(normalizedReviewedText)) {
       return {
         status: "SAFE",
         effectiveDisclosureLevel: 0,

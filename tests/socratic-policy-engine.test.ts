@@ -2965,3 +2965,27 @@ describe("reasoning graph structural identity", () => {
     expect(decision.realizationRequest.maximumDisclosure).toBe(0);
   });
 });
+
+describe("reviewed realization semantic punctuation", () => {
+  it("does not treat different mathematical operators as the same reviewed text", () => {
+    const validator = new DisclosureValidator(
+      new ClosedWorldDisclosureAnalyzer(["x + y is the quantity to inspect"])
+    );
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "CLARIFY",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "x - y is the quantity to inspect"
+      },
+      request: {
+        requiredAction: "CLARIFY",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: []
+    });
+
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) expect(result.reason).toMatch(/uncertain|fails closed/iu);
+  });
+});
