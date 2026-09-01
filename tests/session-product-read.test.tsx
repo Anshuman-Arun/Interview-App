@@ -19,6 +19,7 @@ import {
 } from "../packages/interview-engine/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
+  DEFAULT_REPLAY_BOUNDS,
   SessionReplayReadResponseSchema,
   projectGroundedEvaluationReadModel
 } from "../packages/replay/src/index.js";
@@ -466,6 +467,130 @@ describe("grounded evaluation/replay product surface", () => {
     );
     expect(queryInjection.status).toBe(404);
     expect(server.store.eventCount(sessionId)).toBe(archivedCount);
+  });
+
+  it("keeps read CORS/authentication exact and mutation-free", async () => {
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      clientToken: TOKEN,
+      allowedOrigins: [ORIGIN],
+      databasePath: ":memory:"
+    });
+
+    const command = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TOKEN,
+      fetchImpl: authenticatedFetch()
+    });
+    const sessionId = newSessionId();
+    await command.startSession(sessionId);
+    await command.completeSession(sessionId);
+    const before = server.store.eventCount(sessionId);
+    const evaluationPath =
+      `${server.bound.command.url}/v1/read/sessions/${encodeURIComponent(sessionId)}/evaluation`;
+
+    const allowed = await fetch(evaluationPath, {
+      method: "OPTIONS",
+      headers: {
+        Origin: ORIGIN,
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "x-interview-client-token"
+      }
+    });
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(allowed.headers.get("access-control-allow-origin")).not.toBe("*");
+    expect(allowed.headers.get("access-control-allow-methods")).toBe("GET");
+
+    const wrongMethod = await fetch(evaluationPath, {
+      method: "OPTIONS",
+      headers: {
+        Origin: ORIGIN,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "x-interview-client-token"
+      }
+    });
+    expect(wrongMethod.status).toBe(400);
+
+    const missingToken = await fetch(evaluationPath, {
+      method: "GET",
+      headers: { Origin: ORIGIN }
+    });
+    expect(missingToken.status).toBe(401);
+
+    const wrongOrigin = await fetch(evaluationPath, {
+      method: "GET",
+      headers: {
+        Origin: "http://attacker.invalid",
+        "x-interview-client-token": TOKEN
+      }
+    });
+    expect(wrongOrigin.status).toBe(403);
+    expect(wrongOrigin.headers.get("access-control-allow-origin")).toBeNull();
+    expect(server.store.eventCount(sessionId)).toBe(before);
+  });
+
+  it("returns bounded structured failures for corrupted and oversized histories", () => {
+    const corruptedId = SessionIdSchema.parse("session_corrupt_read_fixture");
+    const corruptedSummary = {
+      sessionId: corruptedId,
+      status: "COMPLETED" as const,
+      sequence: 1,
+      eventCount: 1,
+      createdAt: "2026-09-01T17:00:00.000Z",
+      updatedAt: "2026-09-01T17:00:01.000Z"
+    };
+    const corrupted = new SessionReadService({
+      source: {
+        hasSession: () => true,
+        listSessions: () => [corruptedSummary],
+        loadEvents: () => {
+          throw new Error("corrupt persistence fixture");
+        }
+      }
+    });
+
+    expect(corrupted.readEvaluation(corruptedId)).toMatchObject({
+      available: false,
+      reason: "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+    });
+    expect(corrupted.readReplay(corruptedId)).toMatchObject({
+      available: false,
+      reason: "REPLAY_UNAVAILABLE"
+    });
+
+    const oversizedId = SessionIdSchema.parse("session_oversized_read_fixture");
+    const oversizedSummary = {
+      sessionId: oversizedId,
+      status: "COMPLETED" as const,
+      sequence: DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
+      eventCount: DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
+      createdAt: "2026-09-01T17:00:00.000Z",
+      updatedAt: "2026-09-01T17:00:01.000Z"
+    };
+    let loadCalls = 0;
+    const oversized = new SessionReadService({
+      source: {
+        hasSession: () => true,
+        listSessions: () => [oversizedSummary],
+        loadEvents: () => {
+          loadCalls += 1;
+          return [];
+        }
+      }
+    });
+
+    expect(oversized.readEvaluation(oversizedId)).toMatchObject({
+      available: false,
+      reason: "READ_LIMIT_EXCEEDED"
+    });
+    expect(oversized.readReplay(oversizedId)).toMatchObject({
+      available: false,
+      reason: "READ_LIMIT_EXCEEDED"
+    });
+    expect(loadCalls).toBe(0);
   });
 
   it("reopens completed history after restart and remains read-only", async () => {
