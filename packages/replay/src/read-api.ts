@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  CompositeDimensionNameSchema,
   DisclosureLevelSchema,
   EvaluationDimensionNameSchema,
   EvaluationEvidenceRefSchema,
@@ -54,10 +55,24 @@ const PositiveSafeIntegerSchema = z.number().refine(
   (value) => Number.isSafeInteger(value) && value > 0,
   { message: "Expected a positive safe integer" }
 );
-const BoundedSessionIdSchema = SessionIdSchema.refine(
-  (value) => value.length <= MAX_REPLAY_IDENTIFIER_CHARS,
-  { message: "Session identifier exceeds the read-model limit" }
-);
+const BoundedSessionIdSchema = SessionIdSchema.superRefine((value, context) => {
+  if (value.length > MAX_REPLAY_IDENTIFIER_CHARS) {
+    context.addIssue({
+      code: "custom",
+      message: "Session identifier exceeds the read-model limit"
+    });
+  }
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (character === "/" || character === "\\" || code <= 31 || code === 127) {
+      context.addIssue({
+        code: "custom",
+        message: "Session identifier is unsafe for the bounded read path"
+      });
+      break;
+    }
+  }
+});
 const BoundedIdentifierSchema = z.string().min(1).max(MAX_REPLAY_IDENTIFIER_CHARS);
 const BoundedTextSchema = z.string().refine(
   (value) => codePointLength(value) <= MAX_READ_TEXT_CHARS,
@@ -163,7 +178,8 @@ export const GroundedEvaluationInterventionSchema = z.object({
   disclosureLevel: DisclosureLevelSchema,
   deliveryStatus: z.enum(["EXPOSED", "COMPLETED", "POSSIBLY_EXPOSED"]),
   disclosureAssociationCount: NonnegativeSafeIntegerSchema,
-  relatedMilestoneIds: z.array(BoundedIdentifierSchema).max(64),
+  relatedMilestoneIds: z.array(BoundedIdentifierSchema)
+    .max(MAX_EVALUATION_READ_RELATED_MILESTONES),
   relatedMilestoneTruncation: ReadTruncationSchema
 }).strict();
 
@@ -180,8 +196,8 @@ export const GroundedEvaluationReadModelSchema = z.object({
     score: NullableScoreSchema,
     status: z.enum(["FULL", "PARTIAL", "NOT_SCORED"]),
     supportLevel: EvaluationSupportLevelSchema,
-    includedDimensions: z.array(EvaluationDimensionNameSchema).max(5),
-    omittedDimensions: z.array(EvaluationDimensionNameSchema).max(5)
+    includedDimensions: z.array(CompositeDimensionNameSchema).max(5),
+    omittedDimensions: z.array(CompositeDimensionNameSchema).max(5)
   }).strict(),
   dimensions: z.array(GroundedEvaluationDimensionSchema).length(6),
   milestoneSummary: z.object({
@@ -201,7 +217,105 @@ export const GroundedEvaluationReadModelSchema = z.object({
   strengthsTruncation: ReadTruncationSchema,
   areasForImprovement: z.array(BoundedTextSchema).max(20),
   improvementTruncation: ReadTruncationSchema
-}).strict();
+}).strict().superRefine((evaluation, context) => {
+  const dimensions = new Map(
+    evaluation.dimensions.map((dimension) => [dimension.name, dimension] as const)
+  );
+  if (
+    dimensions.size !== DIMENSION_ORDER.length
+    || DIMENSION_ORDER.some((name) => !dimensions.has(name))
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Grounded evaluation dimensions must contain each supported dimension exactly once"
+    });
+  }
+
+  const included = new Set(evaluation.composite.includedDimensions);
+  const omitted = new Set(evaluation.composite.omittedDimensions);
+  if (
+    included.size !== evaluation.composite.includedDimensions.length
+    || omitted.size !== evaluation.composite.omittedDimensions.length
+    || evaluation.composite.includedDimensions.some((name) => omitted.has(name))
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Composite included/omitted dimensions must be unique and disjoint"
+    });
+  }
+  for (const name of included) {
+    if (dimensions.get(name)?.score === null) {
+      context.addIssue({
+        code: "custom",
+        message: "Composite cannot include an unscored dimension"
+      });
+    }
+  }
+  for (const name of omitted) {
+    if (dimensions.get(name)?.score !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "Composite omitted dimensions must be unscored"
+      });
+    }
+  }
+
+  if (evaluation.composite.status === "NOT_SCORED") {
+    if (
+      evaluation.composite.score !== null
+      || evaluation.composite.supportLevel !== "INSUFFICIENT"
+      || evaluation.composite.includedDimensions.length !== 0
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Not-scored composite metadata is inconsistent"
+      });
+    }
+  } else if (
+    evaluation.composite.score === null
+    || evaluation.composite.supportLevel === "INSUFFICIENT"
+    || evaluation.composite.includedDimensions.length === 0
+    || (
+      evaluation.composite.status === "FULL"
+        ? evaluation.composite.omittedDimensions.length !== 0
+        : evaluation.composite.omittedDimensions.length === 0
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Scored composite metadata is inconsistent"
+    });
+  }
+
+  if (
+    evaluation.milestoneSummary.achieved > evaluation.milestoneSummary.total
+    || evaluation.milestoneSummary.unassisted
+      + evaluation.milestoneSummary.assisted
+      !== evaluation.milestoneSummary.achieved
+    || evaluation.milestones.length
+      + evaluation.milestoneTruncation.remainingCount
+      !== evaluation.milestoneSummary.total
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Milestone summary is inconsistent with the bounded milestone projection"
+    });
+  }
+
+  for (const milestone of evaluation.milestones) {
+    if (
+      (milestone.achieved && milestone.achievedAtTurnId === undefined)
+      || (!milestone.achieved && milestone.achievedAtTurnId !== undefined)
+      || (milestone.achieved && milestone.supportLevel === "INSUFFICIENT")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Milestone achievement metadata is inconsistent"
+      });
+      break;
+    }
+  }
+});
 export type GroundedEvaluationReadModel = z.infer<typeof GroundedEvaluationReadModelSchema>;
 
 export const SessionEvaluationReadResponseSchema = z.discriminatedUnion("available", [
