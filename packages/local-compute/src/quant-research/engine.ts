@@ -164,6 +164,14 @@ function distanceScore(error: number, scale: number): number {
   return 0;
 }
 
+function shiftedReferenceScore(submitted: number, target: number, baseline: number, absoluteScale: number): number {
+  const shift = Math.abs(target - baseline);
+  if (shift === 0) throw new Error("Shifted reference score requires a changed target");
+  const error = Math.abs(submitted - target);
+  const progress = Math.max(0, Math.min(1, 1 - error / shift));
+  return Math.min(distanceScore(error, absoluteScale), boundedScore(progress * 100));
+}
+
 function evidence(category: QuantResearchEvidenceCategory, stage: string, score: number, summary: string): QuantResearchEvidence {
   return { category, stage, score: boundedScore(score), summary };
 }
@@ -439,23 +447,27 @@ function transitionBayesian(state: BayesianState, action: QuantResearchAction): 
     const submitted = requireAction(state, action, "SUBMIT_PROBABILITY");
     const priorTarget = rationalToNumber(rational(state.config.priorAlpha, state.config.priorAlpha + state.config.priorBeta));
     const target = rationalToNumber(rational(state.config.priorAlpha + state.successes, state.config.priorAlpha + state.config.priorBeta + state.observations.length));
-    const updateMagnitude = Math.abs(target - priorTarget);
-    if (updateMagnitude === 0) throw new Error("Bayesian posterior update unexpectedly has zero magnitude");
-    const scoringScale = Math.min(0.025, updateMagnitude / 2);
     let next = appendAction(state, action, { stage: "PRIOR_PERTURBATION" });
     next = appendEvidence(next, [evidence(
       "NUMERICAL_CORRECTNESS",
       state.stage,
-      distanceScore(Math.abs(submitted.value - target), scoringScale),
-      "Posterior update was checked with exact count arithmetic and a tolerance bounded by the actual update magnitude."
+      shiftedReferenceScore(submitted.value, target, priorTarget, 0.025),
+      "Posterior update was checked against the exact reference and capped by progress away from the stale prior."
     )]);
     return next;
   }
   if (state.stage === "PRIOR_PERTURBATION") {
     const submitted = requireAction(state, action, "SUBMIT_PROBABILITY");
-    const target = rationalToNumber(rational(state.config.perturbedPriorAlpha + state.successes, state.config.perturbedPriorAlpha + state.config.perturbedPriorBeta + state.observations.length));
+    const baseline = rationalToNumber(rational(
+      state.config.priorAlpha + state.successes,
+      state.config.priorAlpha + state.config.priorBeta + state.observations.length
+    ));
+    const target = rationalToNumber(rational(
+      state.config.perturbedPriorAlpha + state.successes,
+      state.config.perturbedPriorAlpha + state.config.perturbedPriorBeta + state.observations.length
+    ));
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
-    const correctness = distanceScore(Math.abs(submitted.value - target), 0.025);
+    const correctness = shiftedReferenceScore(submitted.value, target, baseline, 0.025);
     next = appendEvidence(next, [
       evidence("ADAPTATION", state.stage, correctness, "The revised prior was incorporated into the candidate's update."),
       evidence("CONSISTENCY", state.stage, correctness, "The final probability remained internally consistent with the revealed evidence and changed assumption.")
