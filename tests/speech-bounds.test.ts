@@ -7,7 +7,9 @@ import {
   MAX_SPEECH_TRANSCRIPT_RESULT_CACHE,
   MAX_SPEECH_WORD_TIMINGS,
   SourceAudioBasisSchema,
+  SpeechModelIdentitySchema,
   SpeechPcmFrameEnvelopeSchema,
+  SpeechWorkerEventSchema,
   TranscriptCandidateSchema,
   type SourceAudioBasis
 } from "../packages/local-compute/src/speech-protocol.js";
@@ -96,6 +98,43 @@ describe("speech protocol hard bounds", () => {
     }).success).toBe(false);
   });
 
+  it("cross-validates event envelopes against nested audio/candidate metadata", () => {
+    const basis = sourceBasis();
+    const requestId = newRequestId();
+    const utteranceId = newUtteranceId();
+    expect(SpeechWorkerEventSchema.safeParse({
+      protocolVersion: 1,
+      requestId,
+      streamId: "other-stream",
+      type: "UTTERANCE_FINALIZED",
+      utteranceId,
+      finalizationReason: "SILENCE",
+      speechFrameCount: 1,
+      durationMs: 200,
+      sourceAudioBasis: basis
+    }).success).toBe(false);
+    expect(SpeechWorkerEventSchema.safeParse({
+      protocolVersion: 1,
+      requestId,
+      streamId: basis.streamId,
+      type: "TRANSCRIPT_CANDIDATE",
+      candidate: {
+        requestId: newRequestId(),
+        utteranceId,
+        text: "mismatch",
+        isFinal: true,
+        model: { name: "model", version: "1" },
+        sourceAudioBasis: basis
+      }
+    }).success).toBe(false);
+  });
+
+  it("allows bounded Unicode model identities but rejects blank/control-only metadata", () => {
+    expect(SpeechModelIdentitySchema.safeParse({ name: "月光-model", version: "版本-1" }).success).toBe(true);
+    expect(SpeechModelIdentitySchema.safeParse({ name: "   ", version: "1" }).success).toBe(false);
+    expect(SpeechModelIdentitySchema.safeParse({ name: "model", version: "v\n1" }).success).toBe(false);
+  });
+
   it("enforces buffer/cache hard limits even when helpers are used directly", () => {
     expect(() => new BoundedPcmBuffer(MAX_SPEECH_BUFFERED_PCM_BYTES + 1)).toThrow(/hard speech bound/u);
     expect(() => new TranscriptResultGate(MAX_SPEECH_TRANSCRIPT_RESULT_CACHE + 1)).toThrow(/hard speech cache limit/u);
@@ -128,6 +167,8 @@ describe("speech protocol hard bounds", () => {
     }, mono48);
     const buffer = new BoundedPcmBuffer();
     buffer.append(first, false);
+    first.bytes[0] = 255;
+    expect(buffer.materialize()[0]).toBe(0);
     expect(() => buffer.append(second, false)).toThrow(/sample rate/u);
 
     const skippedPcm = new Float32Array(320);
