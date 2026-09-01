@@ -1105,6 +1105,61 @@ describe("EvidenceKey authority identity", () => {
 
 
 describe("formal interpretation structural preflight bounds", () => {
+  it("fails closed when request preflight encounters a hostile getter", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const hostileRequest = { ...request } as Record<string, unknown>;
+      Object.defineProperty(hostileRequest, "allowedProtocols", {
+        enumerable: true,
+        get: () => {
+          throw new Error("HOSTILE_REQUEST_GETTER");
+        }
+      });
+      const provider = new DeterministicFormalInterpretationProvider(providerResultFor(request, []));
+      const coordinator = new InterpretationCoordinator(harness.writer, provider, routingScopes);
+
+      await expect(coordinator.interpretAndVerify(hostileRequest)).resolves.toMatchObject({
+        status: "INVALID_REQUEST",
+        reason: "MALFORMED_REQUEST"
+      });
+      expect(provider.callCount).toBe(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("fails closed when provider preflight encounters a hostile getter", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = formalRequest(harness);
+      const provider = {
+        interpret: async () => {
+          const hostileResult: Record<string, unknown> = {
+            protocolVersion: 1,
+            requestId: request.requestId
+          };
+          Object.defineProperty(hostileResult, "candidates", {
+            enumerable: true,
+            get: () => {
+              throw new Error("HOSTILE_PROVIDER_GETTER");
+            }
+          });
+          return hostileResult;
+        }
+      };
+      const coordinator = new InterpretationCoordinator(harness.writer, provider, routingScopes);
+
+      await expect(coordinator.interpretAndVerify(request)).resolves.toMatchObject({
+        status: "INVALID_PROVIDER_OUTPUT",
+        reason: "MALFORMED_PROVIDER_RESULT"
+      });
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("rejects oversized request protocol arrays before schema traversal or provider invocation", async () => {
     const harness = await createCoreHarness();
     try {
