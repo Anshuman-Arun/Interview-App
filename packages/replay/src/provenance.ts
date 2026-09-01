@@ -138,7 +138,7 @@ export function normalizeReplayEvents(
   bounds: ReplayBounds,
   upcasters = new EventUpcasterRegistry()
 ): NormalizedReplayHistory {
-  if (!Array.isArray(rawEvents as unknown)) throw new ReplayProjectionError("INVALID_INPUT");
+  if (!Array.isArray(rawEvents)) throw new ReplayProjectionError("INVALID_INPUT");
 
   const selectedCount = Math.min(rawEvents.length, bounds.maxEvents);
   const selectedBySequence = new Map<number, {
@@ -147,7 +147,8 @@ export function normalizeReplayEvents(
   }>();
   let sessionId: z.infer<typeof SessionIdSchema> | null = null;
 
-  for (const raw of rawEvents) {
+  for (const rawValue of rawEvents) {
+    const raw: unknown = rawValue;
     const parsed = SafeEventMetadataSchema.safeParse(raw);
     if (!parsed.success) throw new ReplayProjectionError("INVALID_EVENT_METADATA");
     const metadata = parsed.data;
