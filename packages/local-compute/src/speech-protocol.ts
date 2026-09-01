@@ -164,20 +164,16 @@ export const SourceAudioBasisSchema = z.object({
 });
 export type SourceAudioBasis = z.infer<typeof SourceAudioBasisSchema>;
 
-const safeRecognizerWordSchema = (maxLength: number) => z.string()
+const safeBoundedMetadataTextSchema = (maxLength: number, label: string) => z.string()
   .min(1)
   .max(maxLength)
-  .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), { message: "Recognizer word metadata contains unsafe control/format characters" });
-const safeModelIdentityTextSchema = (maxLength: number) => z.string()
-  .min(1)
-  .max(maxLength)
-  .refine(
-    (value) => Array.from(value).every((character) => {
-      const code = character.codePointAt(0);
-      return code !== undefined && code >= 0x20 && code <= 0x7E;
-    }),
-    { message: "Model identity must use bounded printable ASCII" }
-  );
+  .refine((value) => value.trim().length > 0, { message: `${label} must not be blank` })
+  .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), { message: `${label} contains unsafe control/format characters` });
+
+const safeRecognizerWordSchema = (maxLength: number) =>
+  safeBoundedMetadataTextSchema(maxLength, "Recognizer word metadata");
+const safeModelIdentityTextSchema = (maxLength: number) =>
+  safeBoundedMetadataTextSchema(maxLength, "Model identity");
 
 export const TranscriptWordTimingSchema = z.object({
   word: safeRecognizerWordSchema(128),
@@ -255,7 +251,19 @@ export const SpeechUtteranceFinalizedEventSchema = WorkerEventBaseSchema.extend(
   speechFrameCount: NonnegativeSafeIntegerSchema,
   durationMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
   sourceAudioBasis: SourceAudioBasisSchema
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.sourceAudioBasis.streamId !== value.streamId) {
+    context.addIssue({ code: "custom", message: "Finalized event stream does not match audio basis", path: ["sourceAudioBasis", "streamId"] });
+  }
+  const audioDurationMs = value.sourceAudioBasis.sampleCount / value.sourceAudioBasis.sampleRate * 1_000;
+  if (Math.abs(value.durationMs - audioDurationMs) > 0.001) {
+    context.addIssue({ code: "custom", message: "Finalized event duration does not match audio basis", path: ["durationMs"] });
+  }
+  const frameCount = value.sourceAudioBasis.lastSequence - value.sourceAudioBasis.firstSequence + 1;
+  if (value.speechFrameCount > frameCount) {
+    context.addIssue({ code: "custom", message: "Speech frame count exceeds finalized audio frame count", path: ["speechFrameCount"] });
+  }
+});
 
 export const SpeechUtteranceDiscardedEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("UTTERANCE_DISCARDED"),
@@ -266,7 +274,14 @@ export const SpeechUtteranceDiscardedEventSchema = WorkerEventBaseSchema.extend(
 export const SpeechTranscriptEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("TRANSCRIPT_CANDIDATE"),
   candidate: TranscriptCandidateSchema
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.candidate.requestId !== value.requestId) {
+    context.addIssue({ code: "custom", message: "Transcript event request does not match candidate", path: ["candidate", "requestId"] });
+  }
+  if (value.candidate.sourceAudioBasis.streamId !== value.streamId) {
+    context.addIssue({ code: "custom", message: "Transcript event stream does not match candidate audio basis", path: ["candidate", "sourceAudioBasis", "streamId"] });
+  }
+});
 
 export const SpeechCancelledEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("SPEECH_CANCELLED"),
@@ -276,7 +291,7 @@ export const SpeechCancelledEventSchema = WorkerEventBaseSchema.extend({
 export const SpeechWorkerErrorEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("SPEECH_WORKER_ERROR"),
   code: SpeechWorkerErrorCodeSchema,
-  message: z.string().min(1).max(160)
+  message: safeBoundedMetadataTextSchema(160, "Speech worker error message")
 }).strict();
 
 export const SpeechWorkerEventSchema = z.discriminatedUnion("type", [
