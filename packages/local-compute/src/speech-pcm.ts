@@ -327,18 +327,24 @@ function snapshotPcmOrderState(value: unknown): PcmOrderState {
   if (!isRecord(value)) {
     throw new PcmAdmissionError("INVALID_FRAME", "Prior PCM ordering state is invalid");
   }
-  const snapshot: PcmOrderState = {
-    streamId: value.streamId as SpeechStreamId,
-    firstSequence: value.firstSequence as number,
-    sampleRate: value.sampleRate as number,
-    channels: value.channels as number,
-    sampleFormat: value.sampleFormat as string,
-    firstTimestampMs: value.firstTimestampMs as number,
-    cumulativeDurationMs: value.cumulativeDurationMs as number,
-    lastSequence: value.lastSequence as number,
-    nextEarliestTimestampMs: value.nextEarliestTimestampMs as number
-  };
-  validatePcmOrderState(snapshot);
+  let snapshot: PcmOrderState;
+  try {
+    snapshot = {
+      streamId: value.streamId as SpeechStreamId,
+      firstSequence: value.firstSequence as number,
+      sampleRate: value.sampleRate as number,
+      channels: value.channels as number,
+      sampleFormat: value.sampleFormat as string,
+      firstTimestampMs: value.firstTimestampMs as number,
+      cumulativeDurationMs: value.cumulativeDurationMs as number,
+      lastSequence: value.lastSequence as number,
+      nextEarliestTimestampMs: value.nextEarliestTimestampMs as number
+    };
+    validatePcmOrderState(snapshot);
+  } catch (error) {
+    if (error instanceof PcmAdmissionError) throw error;
+    throw new PcmAdmissionError("INVALID_FRAME", "Prior PCM ordering state is invalid");
+  }
   return snapshot;
 }
 
