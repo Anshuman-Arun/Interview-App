@@ -667,6 +667,105 @@ describe("production Socratic policy engine", () => {
     }
   });
 
+  it("does not authorize an uncompleted optional predecessor within the same approach", () => {
+    const leftId = DisclosureIdSchema.parse("disclosure_same_approach_left");
+    const rightId = DisclosureIdSchema.parse("disclosure_same_approach_right");
+    const problem: InterviewProblem = {
+      id: "same-approach-optional-policy-test",
+      version: "1.0.0",
+      public: {
+        prompt: "Test optional same-approach prerequisite disclosure isolation.",
+        givenInformation: []
+      },
+      interviewer: {
+        topics: ["test"],
+        difficulty: "test",
+        reasoningGraph: {
+          version: "1.0.0",
+          approaches: [{ id: "single-approach", label: "Single approach" }],
+          milestones: [
+            {
+              id: "root",
+              description: "Establish the shared root.",
+              approachIds: ["single-approach"],
+              optionalPrerequisiteIds: [],
+              protectedDisclosureIds: []
+            },
+            {
+              id: "left",
+              description: "Take the left optional route.",
+              approachIds: ["single-approach"],
+              optionalPrerequisiteIds: ["root"],
+              protectedDisclosureIds: [leftId]
+            },
+            {
+              id: "right",
+              description: "Take the right optional route.",
+              approachIds: ["single-approach"],
+              optionalPrerequisiteIds: ["root"],
+              protectedDisclosureIds: [rightId]
+            },
+            {
+              id: "merge",
+              description: "Continue after either optional route.",
+              approachIds: ["single-approach"],
+              optionalPrerequisiteIds: ["left", "right"],
+              protectedDisclosureIds: []
+            }
+          ],
+          edges: [
+            { from: "root", to: "left" },
+            { from: "root", to: "right" },
+            { from: "left", to: "merge" },
+            { from: "right", to: "merge" }
+          ],
+          commonErrors: [],
+          extensions: []
+        },
+        protectedDisclosures: [
+          {
+            id: leftId,
+            fact: "Use the completed left route.",
+            minimumDisclosureLevel: 1,
+            equivalentFormulations: ["completed left route"]
+          },
+          {
+            id: rightId,
+            fact: "Use the uncompleted right route.",
+            minimumDisclosureLevel: 1,
+            equivalentFormulations: ["uncompleted right route"]
+          }
+        ]
+      },
+      private: {
+        canonicalSolution: "private",
+        verificationNotes: "private"
+      }
+    };
+
+    const { state: base, turnId } = makeState(problem);
+    let state = withEvidence(
+      base,
+      milestoneKey(problem, "root", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(problem, "left", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(problem, "merge", "CORRECTNESS"),
+      "STRUCTURAL_ERROR"
+    );
+
+    const decision = decidePedagogicalPolicy(state, turnId, problem);
+    expect(decision.realizationRequest.requiredAction).toBe("CHANGE_REPRESENTATION");
+    expect(decision.realizationRequest.allowedDisclosureIds ?? []).toContain(leftId);
+    expect(decision.realizationRequest.allowedDisclosureIds ?? []).not.toContain(rightId);
+  });
+
   it("does not authorize a protected disclosure from an unrelated branch", () => {
     const problem = makeBranchScopedProblem();
     const { state: base, turnId } = makeState(problem);
