@@ -253,6 +253,41 @@ describe("speech worker adversarial callback boundaries", () => {
     expect(worker.getActiveStreamCount()).toBe(0);
   });
 
+  it("does not let an injected endpoint policy finalize unconfirmed onset audio", async () => {
+    class PrematureFlushPolicy extends AdaptiveEndpointingPolicy {
+      public override decide(input: Parameters<AdaptiveEndpointingPolicy["decide"]>[0]) {
+        return input.explicitFlush === true
+          ? { kind: "FINALIZE", reason: "FLUSH" } as const
+          : { kind: "CONTINUE" } as const;
+      }
+    }
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      vadStateFactory: () => new VoiceActivityStateMachine({
+        onsetThreshold: 0.5,
+        continuationThreshold: 0.5,
+        onsetHysteresisMs: 40
+      }),
+      endpointingFactory: () => new PrematureFlushPolicy()
+    });
+    const fixture = frame(0, true, "unconfirmed-flush");
+    await worker.submitFrame(fixture.envelope, fixture.pcm);
+
+    const events = await worker.flush({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "unconfirmed-flush",
+      type: "FLUSH_SPEECH"
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "UTTERANCE_DISCARDED",
+      reason: "TOO_SHORT"
+    }));
+    expect(events.some((event) => event.type === "UTTERANCE_FINALIZED")).toBe(false);
+    expect(events.some((event) => event.type === "TRANSCRIPT_CANDIDATE")).toBe(false);
+  });
+
   it("rejects malformed endpoint decisions from an injected subclass", async () => {
     class ForgedEndpointingPolicy extends AdaptiveEndpointingPolicy {
       public override decide() {
