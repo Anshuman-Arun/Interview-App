@@ -12,6 +12,7 @@ import {
 } from "./bounds.js";
 import {
   normalizeReplayEvents,
+  ReplayProjectionError,
   type NormalizedReplayEvent,
   type NormalizedReplayHistory
 } from "./provenance.js";
@@ -30,6 +31,10 @@ import type {
 
 export interface ReplayTimelineOptions {
   readonly bounds?: Partial<ReplayBounds>;
+}
+
+function assertNever(_value: never): never {
+  throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
 }
 
 function summaryFor(type: EventType): string {
@@ -78,6 +83,7 @@ function summaryFor(type: EventType): string {
     case "SESSION_ARCHIVED": return "Session archived";
     case "SESSION_RESUMED": return "Session resumed";
   }
+  return assertNever(type);
 }
 
 function presentationState(status: DeliveryStatus): ReplayDeliveryDetail["presentationState"] {
@@ -95,6 +101,7 @@ function presentationState(status: DeliveryStatus): ReplayDeliveryDetail["presen
     case "CANCELLED":
       return "CANCELLED";
   }
+  return assertNever(status);
 }
 
 function deliveryDetail(
@@ -166,7 +173,7 @@ function entryForKnownEvent(
   bounds: ReplayBounds
 ): ReplayTimelineEntry {
   const event = item.event;
-  if (event === undefined) throw new Error("Known replay event is unavailable");
+  if (event === undefined) throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
 
   let relations: ReplayRelationRefs = {};
   let text: ReturnType<typeof previewText> | undefined;
@@ -479,6 +486,8 @@ function entryForKnownEvent(
       break;
     case "SESSION_RESUMED":
       break;
+    default:
+      assertNever(event);
   }
 
   return {
@@ -519,7 +528,7 @@ export function projectReplayTimelineFromNormalized(
   );
   const validatedEvents = validatedItems.map((item) => {
     if (item.event === undefined) {
-      throw new Error("Validated replay prefix unexpectedly contains an unknown event");
+      throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
     }
     return item.event;
   });

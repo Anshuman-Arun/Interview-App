@@ -35,6 +35,18 @@ only. Raw input order, object insertion order, filesystem order, and map iterati
 are never used as authority. When a stable secondary order is required, replay uses
 explicit UTF-16 code-unit comparison rather than locale-sensitive collation.
 
+## Public API
+
+The package intentionally exposes three projection entrypoints:
+`projectReplayTimeline`, `projectSessionHistory`, and
+`projectLongitudinalHistory`, plus projection types, bounded configuration, and
+the sanitized `ReplayProjectionError`. Raw normalization/upcaster hooks and
+collection/text slicing helpers remain internal implementation details.
+
+The current event-type catalog is compile-time exhaustive: adding a new
+authoritative `EventType` requires an explicit timeline mapping and source-policy
+decision before TypeScript will accept the replay package.
+
 ## Timeline semantics
 
 Each projected timeline entry retains provenance sufficient to identify the

@@ -1,4 +1,11 @@
-export * from "./bounds.js";
+export {
+  DEFAULT_REPLAY_BOUNDS,
+  MAX_REPLAY_IDENTIFIER_CHARS,
+  resolveReplayBounds,
+  type ReplayBounds,
+  type TextPreview,
+  type TruncationInfo
+} from "./bounds.js";
 export * from "./longitudinal.js";
 export {
   ReplayProjectionError,
