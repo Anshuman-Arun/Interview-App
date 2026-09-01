@@ -92,10 +92,9 @@ export class ScriptedVadBackend implements VadBackend {
 
   public constructor(probabilities: readonly number[]) {
     if (!Array.isArray(probabilities)) throw new Error("Scripted VAD probabilities must be an array");
-    for (const probability of probabilities) {
-      validateProbability(probability, "Scripted VAD probability");
-    }
-    this.probabilities = [...probabilities];
+    const parsed = z.array(z.number().min(0).max(1)).safeParse(probabilities);
+    if (!parsed.success) throw new Error("Scripted VAD probability must be within [0, 1]");
+    this.probabilities = [...parsed.data];
   }
 
   public async classify(): Promise<VadObservation> {
