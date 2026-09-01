@@ -1,11 +1,11 @@
-import type {
+import {
   DisclosureAnalysisSchema,
   type DisclosureAnalysis,
   type DisclosureId,
   type DisclosureLevel,
-  InterviewerProposal,
-  ProtectedDisclosure,
-  RealizationRequest
+  type InterviewerProposal,
+  type ProtectedDisclosure,
+  type RealizationRequest
 } from "../../domain/src/index.js";
 
 export interface DisclosureAnalyzer {
