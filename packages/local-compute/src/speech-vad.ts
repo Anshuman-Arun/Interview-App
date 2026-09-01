@@ -46,7 +46,6 @@ export class SileroVadBackend implements VadBackend {
   ) {
     validateLocalModelPath(modelPath, "Silero model path");
     validateRuntimeIdentity(runtime.runtimeVersion, "Silero runtime version");
-    if (typeof runtime.score !== "function") throw new Error("Silero runtime score callback is required");
   }
 
   public async classify(frame: PcmFrameSnapshot, signal?: AbortSignal): Promise<VadObservation> {
@@ -313,7 +312,7 @@ function validateLocalModelPath(value: string, label: string): void {
   }
 }
 
-function validateRuntimeIdentity(value: string, label: string): void {
+function validateRuntimeIdentity(value: unknown, label: string): void {
   if (typeof value !== "string" || value.length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
     throw new Error(`${label} is invalid`);
   }
