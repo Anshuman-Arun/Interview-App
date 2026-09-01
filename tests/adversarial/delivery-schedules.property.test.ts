@@ -174,7 +174,12 @@ async function executeDeliveryOperation(
       } else if (before === "DELIVERING") {
         model.noteDelivery(deliveryId, "POSSIBLY_EXPOSED");
       }
-      if (model.generations.get(fixture.initialGenerationId) === "ACTIVE") {
+      const generationStatus = model.generations.get(fixture.initialGenerationId);
+      if (
+        generationStatus === "ACTIVE"
+        || generationStatus === "PROPOSAL_RECEIVED"
+        || generationStatus === "VALIDATED"
+      ) {
         model.noteGeneration(fixture.initialGenerationId, "SUPERSEDED");
       }
       return;
