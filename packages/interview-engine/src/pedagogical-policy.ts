@@ -44,6 +44,10 @@ const MAX_EQUIVALENT_FORMULATIONS_PER_DISCLOSURE = 256;
 const MAX_COMMON_ERRORS = 2_048;
 const MAX_EXTENSIONS = 2_048;
 const MAX_EVIDENCE_PROVENANCE_IDS = 4_096;
+const MAX_TOTAL_GRAPH_REFERENCES = 65_536;
+const MAX_TOTAL_POLICY_TEXT_CHARACTERS = 5_000_000;
+const MAX_TOTAL_VERIFICATION_PROVENANCE_IDS = 65_536;
+const MAX_TOTAL_DELIVERY_DISCLOSURE_REFS = 65_536;
 const MIN_ACTIONABLE_EVIDENCE_CONFIDENCE = 0.7;
 
 const PolicyDeliverySchema = z.object({
@@ -321,6 +325,14 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
     || extensions.length > MAX_EXTENSIONS
   ) return "RESOURCE_LIMIT_EXCEEDED";
 
+  let totalPolicyTextCharacters =
+    (publicProblem["prompt"] as string).length
+    + (interviewer["difficulty"] as string).length
+    + (graph["version"] as string).length;
+  for (const item of givenInformation as readonly string[]) totalPolicyTextCharacters += item.length;
+  for (const item of topics as readonly string[]) totalPolicyTextCharacters += item.length;
+  let totalGraphReferences = edges.length;
+
   for (const approach of approaches as readonly unknown[]) {
     if (
       !isRecord(approach)
@@ -328,6 +340,8 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
       || !boundedString(approach["id"], MAX_POLICY_ID_CHARACTERS)
       || !boundedString(approach["label"], MAX_POLICY_TEXT_CHARACTERS)
     ) return "MALFORMED_POLICY_INPUT";
+    totalPolicyTextCharacters += approach["id"].length + approach["label"].length;
+    if (totalPolicyTextCharacters > MAX_TOTAL_POLICY_TEXT_CHARACTERS) return "RESOURCE_LIMIT_EXCEEDED";
   }
 
   for (const milestone of milestones as readonly unknown[]) {
@@ -357,6 +371,15 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
       || !(prerequisiteIds as readonly unknown[]).every((id) => boundedString(id, MAX_POLICY_ID_CHARACTERS))
       || !(disclosureIds as readonly unknown[]).every((id) => boundedString(id, MAX_POLICY_ID_CHARACTERS))
     ) return "MALFORMED_POLICY_INPUT";
+    totalGraphReferences += approachIds.length + prerequisiteIds.length + disclosureIds.length;
+    totalPolicyTextCharacters += (milestone["id"] as string).length + (milestone["description"] as string).length;
+    for (const id of approachIds as readonly string[]) totalPolicyTextCharacters += id.length;
+    for (const id of prerequisiteIds as readonly string[]) totalPolicyTextCharacters += id.length;
+    for (const id of disclosureIds as readonly string[]) totalPolicyTextCharacters += id.length;
+    if (
+      totalGraphReferences > MAX_TOTAL_GRAPH_REFERENCES
+      || totalPolicyTextCharacters > MAX_TOTAL_POLICY_TEXT_CHARACTERS
+    ) return "RESOURCE_LIMIT_EXCEEDED";
   }
 
   for (const edge of edges as readonly unknown[]) {
@@ -366,6 +389,8 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
       || !boundedString(edge["from"], MAX_POLICY_ID_CHARACTERS)
       || !boundedString(edge["to"], MAX_POLICY_ID_CHARACTERS)
     ) return "MALFORMED_POLICY_INPUT";
+    totalPolicyTextCharacters += edge["from"].length + edge["to"].length;
+    if (totalPolicyTextCharacters > MAX_TOTAL_POLICY_TEXT_CHARACTERS) return "RESOURCE_LIMIT_EXCEEDED";
   }
 
   for (const commonError of commonErrors as readonly unknown[]) {
@@ -375,6 +400,8 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
       || !boundedString(commonError["id"], MAX_POLICY_ID_CHARACTERS)
       || !boundedString(commonError["description"], MAX_POLICY_TEXT_CHARACTERS)
     ) return "MALFORMED_POLICY_INPUT";
+    totalPolicyTextCharacters += commonError["id"].length + commonError["description"].length;
+    if (totalPolicyTextCharacters > MAX_TOTAL_POLICY_TEXT_CHARACTERS) return "RESOURCE_LIMIT_EXCEEDED";
   }
 
   for (const extension of extensions as readonly unknown[]) {
@@ -384,6 +411,8 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
       || !boundedString(extension["id"], MAX_POLICY_ID_CHARACTERS)
       || !boundedString(extension["prompt"], MAX_POLICY_TEXT_CHARACTERS)
     ) return "MALFORMED_POLICY_INPUT";
+    totalPolicyTextCharacters += extension["id"].length + extension["prompt"].length;
+    if (totalPolicyTextCharacters > MAX_TOTAL_POLICY_TEXT_CHARACTERS) return "RESOURCE_LIMIT_EXCEEDED";
   }
 
   for (const disclosure of disclosures as readonly unknown[]) {
@@ -403,6 +432,13 @@ function preflightPolicyProblem(problem: unknown): PolicyReasonCode | undefined 
     if (!(formulations as readonly unknown[]).every((value) => boundedString(value, MAX_POLICY_TEXT_CHARACTERS))) {
       return "MALFORMED_POLICY_INPUT";
     }
+    totalGraphReferences += formulations.length;
+    totalPolicyTextCharacters += (disclosure["id"] as string).length + (disclosure["fact"] as string).length;
+    for (const formulation of formulations as readonly string[]) totalPolicyTextCharacters += formulation.length;
+    if (
+      totalGraphReferences > MAX_TOTAL_GRAPH_REFERENCES
+      || totalPolicyTextCharacters > MAX_TOTAL_POLICY_TEXT_CHARACTERS
+    ) return "RESOURCE_LIMIT_EXCEEDED";
   }
 
   return undefined;
@@ -750,6 +786,7 @@ function collectVerificationSignals(
   });
 
   const signals: VerificationSignal[] = [];
+  let totalVerificationProvenanceIds = 0;
   for (const [requestKey, rawRequest] of entries) {
     if (!isRecord(rawRequest)) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
@@ -790,6 +827,11 @@ function collectVerificationSignals(
       || evidenceEventIds.length > MAX_EVIDENCE_PROVENANCE_IDS
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
+
+    totalVerificationProvenanceIds += evidenceEventIds.length;
+    if (totalVerificationProvenanceIds > MAX_TOTAL_VERIFICATION_PROVENANCE_IDS) {
+      return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
     }
 
     const requestedSequence = eventSequence.get(requestedEventId);
@@ -851,11 +893,16 @@ function collectExposedAssistance(
 
   const byGeneration = new Map<string, AssistanceRecord>();
   const disclosedIds = new Set<DisclosureId>();
+  let totalDeliveryDisclosureRefs = 0;
   const disclosuresById = disclosureMap(graph);
   for (const [deliveryKey, rawDelivery] of deliveryEntries.sort((left, right) => left[0].localeCompare(right[0]))) {
     const delivery = PolicyDeliverySchema.safeParse(rawDelivery);
     if (!delivery.success || delivery.data.deliveryId !== deliveryKey) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
+    totalDeliveryDisclosureRefs += delivery.data.disclosureIds.length;
+    if (totalDeliveryDisclosureRefs > MAX_TOTAL_DELIVERY_DISCLOSURE_REFS) {
+      return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
     }
     if (!isDisclosedStatus(delivery.data.status)) continue;
 
