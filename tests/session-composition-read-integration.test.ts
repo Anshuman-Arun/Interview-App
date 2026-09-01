@@ -82,9 +82,9 @@ describe("generic session composition + grounded product reads", () => {
       mode: "OXFORD_MATHEMATICS",
       problem: {
         id: problem.id,
-        version: problem.version,
-        difficulty: problem.interviewer.difficulty
+        version: problem.version
       },
+      difficulty: problem.interviewer.difficulty,
       interventionPolicy: "BALANCED"
     });
     const started = await command.startConfiguredSession(sessionId, configuration);
