@@ -133,7 +133,7 @@ export function evaluateInterviewSession(
   const correctness = evaluateTechnicalCorrectness(
     activeEvidence,
     verificationByEvidenceKey,
-    milestoneFacts
+    state.contextEpoch
   );
   const rigor = evaluateRigor(problem, activeEvidence);
   const independence = evaluateIndependence(
@@ -637,7 +637,7 @@ function evaluateMilestones(
     );
 
     const relevantVerificationRequests = records.flatMap((record) =>
-      verificationByEvidenceKey.get(evidenceKeyToString(record.key)) ?? []
+      supportingVerificationRequests(record, verificationByEvidenceKey)
     );
     for (const request of relevantVerificationRequests) {
       evidenceRefs.push(evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId));
@@ -771,82 +771,96 @@ function evaluateMilestones(
 function evaluateTechnicalCorrectness(
   activeEvidence: ReadonlyMap<string, EvidenceRecordState>,
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
-  milestoneFacts: readonly MilestoneFacts[]
+  currentContextEpoch: SessionState["contextEpoch"]
 ): DimensionComputation {
   const sampleBySubject = new Map<string, {
     score: number;
-    sequence: number;
     supportLevel: EvaluationSupportLevel;
     refs: EvaluationEvidenceRef[];
     positive: boolean;
     negative: boolean;
   }>();
+  const activeCorrectnessKeys = new Set<string>();
   const unresolvedRefs: EvaluationEvidenceRef[] = [];
 
   for (const record of activeEvidence.values()) {
     if (record.key.dimension !== "CORRECTNESS") continue;
-    const score = correctnessRatingScore(record.value.value);
-    const subject = subjectKey(record.key);
-    if (score !== null) {
-      sampleBySubject.set(subject, {
-        score,
-        sequence: record.value.lastUpdatedSequence,
-        supportLevel: supportFromCount(1, record.value.inferenceConfidence, false),
-        refs: uniqueRefs([
-          evaluationRef("EVIDENCE_EVENT", record.evidenceEventId),
-          ...record.value.evidenceEventIds.map((id) => evaluationRef("EVIDENCE_EVENT", id))
-        ]),
-        positive: score === 100,
-        negative: score < 100
-      });
-    }
-  }
 
-  for (const requests of verificationByEvidenceKey.values()) {
-    const latest = requests.at(-1);
-    if (latest?.result === undefined) continue;
-    const requestRef = evaluationRef("VERIFICATION_REQUEST", latest.verificationRequestId);
-    if (latest.result.status === "UNRESOLVED") {
-      unresolvedRefs.push(requestRef);
+    const key = evidenceKeyToString(record.key);
+    activeCorrectnessKeys.add(key);
+    const recordRefs = uniqueRefs([
+      evaluationRef("EVIDENCE_EVENT", record.evidenceEventId),
+      ...record.value.evidenceEventIds.map((id) => evaluationRef("EVIDENCE_EVENT", id))
+    ]);
+    const supportingVerifications = supportingVerificationRequests(
+      record,
+      verificationByEvidenceKey
+    ).filter((request) => request.result?.status === "VERIFIED");
+    const verificationRefs = supportingVerifications.map((request) =>
+      evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
+    );
+
+    const score = correctnessRatingScore(record.value.value);
+    if (score === null) {
+      unresolvedRefs.push(...recordRefs, ...verificationRefs);
       continue;
     }
 
-    const score = latest.result.status === "VERIFIED" ? 100 : 0;
-    const subject = subjectKey(latest.evidenceKey);
-    const existing = sampleBySubject.get(subject);
-    const verificationSequence = latest.basis.committedInputSequence;
-    if (existing === undefined || verificationSequence >= existing.sequence) {
-      sampleBySubject.set(subject, {
-        score,
-        sequence: verificationSequence,
-        supportLevel: supportFromCount(1, latest.result.interpretationConfidence, true),
-        refs: [requestRef],
-        positive: score === 100,
-        negative: score === 0
-      });
-    } else {
-      existing.refs.push(requestRef);
-      existing.supportLevel = maxSupport(
-        existing.supportLevel,
-        supportFromCount(1, latest.result.interpretationConfidence, true)
-      );
-    }
-
+    sampleBySubject.set(subjectKey(record.key), {
+      score,
+      supportLevel: supportFromCount(
+        1,
+        record.value.inferenceConfidence,
+        supportingVerifications.length > 0
+      ),
+      refs: uniqueRefs([...recordRefs, ...verificationRefs]),
+      positive: score === 100,
+      negative: score < 100
+    });
   }
 
-  for (const milestone of milestoneFacts) {
-    if (!milestone.evaluation.achieved) continue;
-    const subject = "MILESTONE:" + milestone.evaluation.milestoneId;
-    if (!sampleBySubject.has(subject)) {
-      sampleBySubject.set(subject, {
-        score: 100,
-        sequence: milestone.achievedSequence ?? 0,
-        supportLevel: milestone.evaluation.supportLevel,
-        refs: milestone.evaluation.evidenceRefs,
-        positive: true,
-        negative: false
+  for (const [key, requests] of verificationByEvidenceKey) {
+    if (activeCorrectnessKeys.has(key)) continue;
+
+    const currentRequests = requests.filter(
+      (request) =>
+        request.basis.contextEpoch === currentContextEpoch &&
+        request.result !== undefined
+    );
+    if (currentRequests.length === 0) continue;
+
+    const contradicted = currentRequests.filter(
+      (request) => request.result?.status === "CONTRADICTED"
+    );
+    const unresolved = currentRequests.filter(
+      (request) => request.result?.status === "UNRESOLVED"
+    );
+
+    if (contradicted.length > 0) {
+      const representative = contradicted[0];
+      if (representative === undefined) continue;
+      sampleBySubject.set(subjectKey(representative.evidenceKey), {
+        score: 0,
+        supportLevel: "MODERATE",
+        refs: uniqueRefs([
+          ...contradicted.map((request) =>
+            evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
+          ),
+          ...unresolved.map((request) =>
+            evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
+          )
+        ]),
+        positive: false,
+        negative: true
       });
+      continue;
     }
+
+    unresolvedRefs.push(
+      ...unresolved.map((request) =>
+        evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
+      )
+    );
   }
 
   const samples = [...sampleBySubject.values()];
@@ -854,8 +868,8 @@ function evaluateTechnicalCorrectness(
     return {
       result: unsupportedDimension(
         unresolvedRefs.length > 0
-          ? "Verification remained unresolved and no active correctness evidence established a score."
-          : "No active scoped correctness evidence, verified claim, or achieved milestone supports a correctness score.",
+          ? "Current correctness evidence is unresolved and does not establish a score."
+          : "No active scoped correctness evidence or current deterministic contradiction supports a correctness score.",
         unresolvedRefs
       ),
       positiveCount: 0,
@@ -1382,8 +1396,7 @@ function findTurnForEvidence(
   verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>
 ): MilestoneEvaluation["achievedAtTurnId"] | undefined {
   const candidates = records.flatMap((record) =>
-    (verificationByEvidenceKey.get(evidenceKeyToString(record.key)) ?? [])
-      .filter((request) => request.status === "ACCEPTED")
+    supportingVerificationRequests(record, verificationByEvidenceKey)
   );
   const latest = [...candidates].sort(
     (left, right) =>
@@ -1391,6 +1404,19 @@ function findTurnForEvidence(
       compareStrings(right.verificationRequestId, left.verificationRequestId)
   )[0];
   return latest?.basis.turnId;
+}
+
+function supportingVerificationRequests(
+  record: EvidenceRecordState,
+  verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>
+): VerificationRequestState[] {
+  return (verificationByEvidenceKey.get(evidenceKeyToString(record.key)) ?? [])
+    .filter(
+      (request) =>
+        request.status === "ACCEPTED" &&
+        request.result?.status === "VERIFIED" &&
+        record.value.evidenceEventIds.includes(request.requestedEventId)
+    );
 }
 
 function correctnessRatingScore(value: EvidenceRecordState["value"]["value"]): number | null {
@@ -1446,10 +1472,11 @@ function supportFromCount(
   if (count === 1) {
     return verifierBacked && minimumConfidence >= 0.8 ? "MODERATE" : "WEAK";
   }
-  if (count === 2) {
-    return minimumConfidence >= 0.5 ? "MODERATE" : "WEAK";
+  if (!verifierBacked) {
+    return minimumConfidence >= 0.7 ? "MODERATE" : "WEAK";
   }
-  return minimumConfidence >= 0.8 || verifierBacked ? "STRONG" : "MODERATE";
+  if (count >= 3 && minimumConfidence >= 0.8) return "STRONG";
+  return minimumConfidence >= 0.5 ? "MODERATE" : "WEAK";
 }
 
 function aggregateSampleSupport(
@@ -1463,17 +1490,7 @@ function aggregateSampleSupport(
   );
   if (weakest === "INSUFFICIENT" || weakest === "WEAK") return weakest;
 
-  if (supportLevels.length >= 3 && supportLevels.some((level) => level === "STRONG")) {
-    return "STRONG";
-  }
-  return "MODERATE";
-}
-
-function maxSupport(
-  left: EvaluationSupportLevel,
-  right: EvaluationSupportLevel
-): EvaluationSupportLevel {
-  return SUPPORT_RANK[left] >= SUPPORT_RANK[right] ? left : right;
+  return supportLevels.length >= 3 ? "STRONG" : "MODERATE";
 }
 
 function downgradeSupport(level: EvaluationSupportLevel): EvaluationSupportLevel {
