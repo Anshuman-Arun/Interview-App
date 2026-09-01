@@ -629,7 +629,7 @@ export class SpeechWorkerCore {
       if (error instanceof OperationTimeoutError) {
         events.push(this.errorEvent(requestId, context.streamId, "RECOGNIZER_TIMEOUT", "Recognizer timed out"));
         this.rememberDiagnostic({ code: "RECOGNIZER_TIMEOUT", streamId: context.streamId });
-      } else if (error instanceof SpeechRecognizerProtocolError) {
+      } else if (error instanceof SpeechRecognizerProtocolError || sha256(pcmBytes) !== basis.pcmSha256) {
         events.push(this.errorEvent(
           requestId,
           context.streamId,
