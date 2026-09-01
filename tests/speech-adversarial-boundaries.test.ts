@@ -157,7 +157,7 @@ describe("speech worker adversarial callback boundaries", () => {
       public override step() {
         return {
           state: "SPEECH",
-          speechMs: 0,
+          speechMs: 20,
           silenceMs: 0,
           utteranceMs: 20,
           speechClassified: true,
