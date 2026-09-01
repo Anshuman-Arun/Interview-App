@@ -163,6 +163,21 @@ describe("speech protocol hard bounds", () => {
         sourceAudioBasis: basis
       }
     }).success).toBe(false);
+    expect(SpeechWorkerEventSchema.safeParse({
+      protocolVersion: 1,
+      requestId,
+      streamId: basis.streamId,
+      type: "POSSIBLE_ENDPOINT",
+      utteranceId,
+      silenceMs: 0
+    }).success).toBe(false);
+    expect(SpeechWorkerEventSchema.safeParse({
+      protocolVersion: 1,
+      requestId,
+      streamId: basis.streamId,
+      type: "UTTERANCE_DISCARDED",
+      reason: "FALSE_START"
+    }).success).toBe(false);
   });
 
   it("allows bounded Unicode model identities but rejects blank/control-only metadata", () => {
