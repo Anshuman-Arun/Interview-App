@@ -54,7 +54,7 @@ Supported strict actions are:
 - `CHOOSE_OPTION`
 - `SUBMIT_PARAMETERS`
 
-Every action requires an `actionId` matching a bounded safe identifier format. Actions reject unknown fields and malformed numeric values, including NaN, infinity, unsafe/non-integral counts, numeric estimates/parameters outside the finite `[-1_000_000, 1_000_000]` domain, sparse/accessor-backed vectors, out-of-domain probabilities, oversized vectors, invalid options, and impossible stage/action combinations.
+Every action requires an `actionId` matching a bounded safe identifier format. Validated numeric values are canonicalized so JavaScript negative zero is stored as ordinary zero, preserving identity across JSON-style persistence/replay. Actions reject unknown fields and malformed numeric values, including NaN, infinity, unsafe/non-integral counts, numeric estimates/parameters outside the finite `[-1_000_000, 1_000_000]` domain, sparse/accessor-backed vectors, out-of-domain probabilities, oversized vectors, invalid options, and impossible stage/action combinations.
 
 Accepted action IDs are unique within a scenario. Reuse is rejected. Invalid transitions are computed without mutating authoritative state, so failures are atomic.
 
@@ -66,7 +66,7 @@ A Beta/Bernoulli interview moves through prior predictive calibration, a reveale
 
 ### Sampling and estimation
 
-The candidate chooses how many observations to request from a seeded finite population, commits an estimate of the latent center, then revises after a disclosed contamination/outlier perturbation. Evidence includes numerical correctness, sample efficiency, adaptation, and robustness.
+The candidate chooses how many observations to request from a seeded finite population, commits an estimate of the latent center, then revises after a disclosed contamination/outlier perturbation. Sample-efficiency credit reflects both observation economy and the achieved numerical quality, so stopping early with an unusable estimate is not treated as efficient. Evidence includes numerical correctness, sample efficiency, adaptation, and robustness.
 
 ### Experimental allocation
 
@@ -93,9 +93,9 @@ The engine emits deterministic structured evidence rather than pretending to gra
 - constraint discipline;
 - robustness.
 
-Evidence scores are bounded to `[0, 100]`. Repeated evidence within a category is averaged first, then the final overall score averages the category-level metrics so a category does not gain accidental weight merely by appearing at more stages. Post-perturbation adaptation scores reflect quality under the changed conditions rather than rewarding an unchanged poor answer. The summaries describe what was checked without revealing the hidden reference value.
+Evidence scores are bounded to `[0, 100]`. For exact allocation/optimization objectives, a non-optimal solution is capped below 100 even if a percentage ratio would otherwise round upward; category and overall aggregation likewise return 100 only when every constituent score is 100. Repeated evidence within a category is averaged first, then the final overall score averages the category-level metrics so a category does not gain accidental weight merely by appearing at more stages. Post-perturbation adaptation scores reflect quality under the changed conditions rather than rewarding an unchanged poor answer. The summaries describe what was checked without revealing the hidden reference value.
 
-Threshold comparisons use a small machine-precision allowance so mathematically symmetric answers on a scoring boundary are not split solely by binary floating-point representation.
+Threshold comparisons use a small machine-precision allowance so mathematically symmetric answers on a scoring boundary are not split solely by binary floating-point representation. Bayesian posterior-update tolerance is additionally bounded by half of the actual prior-to-posterior movement, preventing an unchanged prior answer from receiving full update credit when the revealed evidence moved the target.
 
 ## Replay
 
