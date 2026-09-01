@@ -1,98 +1,120 @@
-# Project: Phase 1 Typed Interview MVP
+# Project status
 
-## Architecture & Implementation Status
+## Integration state
 
-The Phase 1 Typed Interview MVP delivers a local-first, typed Socratic interview experience for the Oxford Ramsey $R(3,3)$ problem under the frozen single-writer architecture.
+The repository has moved well beyond the original Phase 1 backend surface, but the user-facing product remains a narrower vertical slice.
+
+The current production composition is a typed Oxford mathematics interview shell backed by local loopback transport, SQLite event sourcing, real tldraw, and mock-provider Socratic text orchestration. A larger set of speech, vision, verification, evaluation, replay, provider-control-plane, and quant systems exists behind that shell and is not yet fully product-wired.
+
+This distinction is deliberate: documentation must describe what the application actually composes today, not what a tested backend package could support later.
+
+## Status legend
+
+- `PRODUCTION_WIRED`: reached by the current app composition path.
+- `BACKEND_IMPLEMENTED`: substantive implementation and tests exist, but no end-to-end product exposure.
+- `RUNTIME_SEAM_ONLY`: protocol/adapter seam exists without the intended live runtime/model integration.
+- `TEST/HARNESS_ONLY`: simulation or validation path, not a production feature.
+- `DEFERRED`: intentionally outside the current runtime.
+
+## Current architecture
 
 ```text
-                                       [ Browser Frontend (apps/web) ]
-                                      /                               \
-                                     /                                 \
-                     (POST /v1/commands)                    (POST /v1/renderer-stream)
-                            |                                            ^
-                            v                                            | (SSE: delivery)
-              +----------------------------+                +----------------------------+
-              |   Loopback Command Server  |                |    Renderer Stream Server  |
-              +--------------+-------------+                +--------------+-------------+
-                             |                                             |
-                             +----------------------+----------------------+
-                                                    |
-                                                    v
-                                    +-------------------------------+
-                                    |         SessionWriter         |
-                                    |    (SQLite Immutable Log)     |
-                                    +---------------+---------------+
-                                                    |
-                                                    v
-                                    +-------------------------------+
-                                    |         TurnCoordinator       |
-                                    +---------------+---------------+
-                                                   / \
-                                                  /   \
-                                                 v     v
-                         +--------------------------+  +--------------------------+
-                         |    ContextCoordinator    |  |    ProviderCoordinator   |
-                         +--------------------------+  +------------+-------------+
-                                                                    |
-                                                                    v
-                                                     [ Guarded Execution Session ]
-                                                                    |
-                                                                    v
-                                                     +------------------------------+
-                                                     |    GeminiApiAdapter (R3)     |
-                                                     |  (No-Metered Billing Proof)  |
-                                                     +------------------------------+
+Electron (optional trusted desktop bootstrap)
+        |
+        v
+React/Vite renderer + real tldraw
+        |
+        | authenticated loopback commands / renderer stream
+        v
+apps/server
+        |
+        +--> SessionRuntimeRegistry / SessionWriter
+        |         |
+        |         +--> append-only SQLite semantic event log
+        |
+        +--> ServerTurnOrchestrator
+                  |
+                  +--> sixPeopleProblem
+                  +--> Socratic policy / disclosure checks
+                  +--> MockModelAdapter
+                  +--> ProviderCoordinator
+                  +--> delivery stream
 ```
 
----
+The server/provider box above is the **current production path**. The existence of `GeminiApiAdapter`, provider control-plane code, formal interpretation providers, speech model seams, or vision backends does not mean those are selected by this composition root.
 
-## Component Classifications
+## Component inventory
 
-1. **Production-Wired Components**:
-   - Single-writer event store (`SqliteEventStore`) with file-backed SQLite persistence.
-   - Loopback command server (`POST /v1/commands`) and SSE stream server (`POST /v1/renderer-stream`).
-   - Server turn orchestrator (`ServerTurnOrchestrator`) coordinating `TurnCoordinator` $\to$ Socratic realization $\to$ `MockModelAdapter` $\to$ `DisclosureValidator` $\to$ `ProviderCoordinator` $\to$ `RendererStreamServer`.
-   - KaTeX math typesetting engine (`MathText.tsx`) bundled locally with installed fonts and CSS (zero CDN dependencies).
-   - In-flight deduplication, crash-recovery of pending turns, and exact state replay.
+| Area | Status | Current reality |
+| --- | --- | --- |
+| Session/event model, SQLite store, recovery | `PRODUCTION_WIRED` | Authoritative state is serialized through the session writer and durable semantic events. |
+| Loopback command + renderer stream transport | `PRODUCTION_WIRED` | Authenticated local transport used by browser/desktop clients. |
+| React typed interview shell + KaTeX | `PRODUCTION_WIRED` | Main user-facing interview path. |
+| Real tldraw whiteboard | `PRODUCTION_WIRED` | The UI mounts `Tldraw`; student/AI ownership metadata is bridged through the real editor. |
+| Electron bootstrap/runtime | `PRODUCTION_WIRED` | Secure renderer bootstrap, backend startup, trusted auth injection, navigation/permission policy. |
+| Browser audio primitives | `RUNTIME_SEAM_ONLY` | Capture/playback infrastructure exists, but session delivery has no physical audio player installed. |
+| VAD/STT worker core | `BACKEND_IMPLEMENTED` | Bounded worker machinery and recognizer/VAD contracts; no live Silero/Moonshine claim. |
+| TTS worker core | `BACKEND_IMPLEMENTED` | Bounded synthesis worker/protocol; no live Kokoro claim. |
+| Local worker/process supervision | `BACKEND_IMPLEMENTED` | Child-process lifecycle, readiness, environment, output and shutdown controls. |
+| Vision preprocessing | `BACKEND_IMPLEMENTED` | Snapshot/image processing and bounded validation exist. |
+| Vision semantic inference | `TEST/HARNESS_ONLY` | The repository currently includes `DeterministicFakeVisionBackend`; no live vision model is production-wired. |
+| Vision freshness/admission | `BACKEND_IMPLEMENTED` | Application-owned revision/freshness/result admission exists. |
+| Formal interpretation + routing | `BACKEND_IMPLEMENTED` | Bounded interpretation request/admission and deterministic verifier routing exist. |
+| Deterministic math verification | `BACKEND_IMPLEMENTED` | Graph, arithmetic, modular, recurrence, probability and combinatorial verifier infrastructure exists. |
+| Grounded session evaluation | `BACKEND_IMPLEMENTED` | Deterministic evaluation with evidence/provenance validation and a bounded fallible qualitative seam. |
+| Replay/history projections | `BACKEND_IMPLEMENTED` | Timeline, session, longitudinal and provenance projections exist; no product UI. |
+| Quant Trading engine | `BACKEND_IMPLEMENTED` | Deterministic market-making/interview infrastructure exists; no main UI mode. |
+| Quant Research engine | `BACKEND_IMPLEMENTED` | Deterministic scenario/evidence/result engine and coordinator/persistence coverage; no main UI mode. |
+| Curated Oxford + quant problem catalogs | `BACKEND_IMPLEMENTED` | Catalogs and integrity tests exist; production interview selection remains fixed to Ramsey. |
+| Provider control plane | `BACKEND_IMPLEMENTED` | Configuration/capability/secret-reference/policy machinery exists. |
+| Gemini adapter | `RUNTIME_SEAM_ONLY` | Gated adapter exists, but `ServerTurnOrchestrator` still creates `MockModelAdapter`. |
+| Synthetic interview | `TEST/HARNESS_ONLY` | Smoke/demo path used by validation. |
 
-2. **In-Memory Harness Components**:
-   - Whiteboard adapter (`TldrawWhiteboardAdapter` / `InMemoryTldrawEditor`): Implements 3-layer shape isolation (`STUDENT`, `AI_ANNOTATION`, `SYSTEM_DECORATION`) and non-destructive AI overlays in memory. Authoritative command/event synchronization across the wire is scheduled for Phase 2.
+## Explicit integration gaps
 
-3. **Gated / Fail-Closed Components**:
-   - `GeminiApiAdapter`: Declares honest capabilities (`CLOSE_CLIENT_STREAM` cancellation) and enforces fail-closed billing safety (`billingClass: "UNKNOWN"` and `spendImpossible: false` by default, admitting execution only with an explicit sandbox verification factory or in metered mode).
+As of the 2026-09-01 audited baseline, the main product path:
 
-4. **Documented Architecture Blockers**:
-   - **Local Browser Authentication**: Pure browser clients cannot securely authenticate loopback transport without a trusted native bootstrap (such as Electron preload IPC or local container bridge). The client refuses fake security (query params / localStorage) and fails closed when an authentication token is not provided by a trusted bootstrap.
+1. binds the web session state and server Socratic orchestration to `sixPeopleProblem`;
+2. uses `MockModelAdapter` for server reasoning orchestration;
+3. does not expose end-to-end voice interaction;
+4. does not expose Quant Trading or Quant Research as selectable interview modes;
+5. does not expose grounded evaluation or replay/history projections in the main UI;
+6. does not run live Silero, Moonshine, Kokoro, or a live semantic vision backend.
 
----
+These are implementation-state facts, not claims that the underlying backend work is absent.
 
-## Feature Inventory
+## Repository baseline
 
-| # | Feature | Classification | Milestone | Source | Status |
-|---|---------|---------------|-----------|--------|--------|
-| 1 | `GeminiApiAdapter` Implementation | Gated Provider | M1 | ORIGINAL_REQUEST §R3 | HARDENED |
-| 2 | No-Metered Billing Proof | Fail-Closed Defense | M1 | ORIGINAL_REQUEST §R3 | HARDENED |
-| 3 | Provider Session Admission & Redaction | Guarded Admission | M1 | ORIGINAL_REQUEST §R3 | HARDENED |
-| 4 | Whiteboard Shape Layer Isolation | In-Memory Harness | M2 | ORIGINAL_REQUEST §R2 | HARDENED |
-| 5 | Non-Destructive AI Overlay Actions | In-Memory Harness | M2 | ORIGINAL_REQUEST §R2 | HARDENED |
-| 6 | Shape Revision & Stale Reference Guard | In-Memory Harness | M2 | ORIGINAL_REQUEST §R2 | HARDENED |
-| 7 | KaTeX Math Rendering Engine | Production-Wired | M3 | ORIGINAL_REQUEST §R1 | HARDENED |
-| 8 | Problem Statement & Formulation Display | Production-Wired | M3 | ORIGINAL_REQUEST §R1 | HARDENED |
-| 9 | Student Typed Input Lifecycle | Production-Wired | M3 | ORIGINAL_REQUEST §R1 | HARDENED |
-| 10 | Socratic Response Streaming & Badges | Production-Wired | M3 | ORIGINAL_REQUEST §R1 | HARDENED |
-| 11 | Session Start & Recovery | Production-Wired | M3 | ORIGINAL_REQUEST §R1 | HARDENED |
-| 12 | Architecture Invariants & Quality Gates | Automated Gate | M4 | ORIGINAL_REQUEST §R4 | PASSED |
-| 13 | End-to-End Ramsey $R(3,3)$ Verification | Full E2E Integration | M4 | ORIGINAL_REQUEST §AC | VERIFIED |
+Audited on 2026-09-01 from authoritative `main`:
 
----
+- apps: `apps/web`, `apps/server`, `apps/desktop`;
+- source package directories: 15 under `packages/`;
+- local worker directory: `workers/python`;
+- Vitest files discovered by the repository test glob: 105.
 
-## Test & Verification Summary
+Avoid copying fixed total assertion counts into status documents. The suite changes rapidly; `pnpm test` and GitHub Actions are the source of truth.
 
-- **Total Test Files**: 50 test suites
-- **Total Tests**: 628 tests executed and passing (100% pass rate)
-- **Quality Gates**:
-  - `check-architecture-boundaries.mjs`: PASSED (84 source files scanned)
-  - `tsc -p tsconfig.json --noEmit`: PASSED (0 errors)
-  - `eslint .`: PASSED (0 warnings, 0 errors)
-  - `vite build apps/web`: PASSED (production client bundled without CDN dependencies)
-  - `git diff --check`: PASSED (0 whitespace or formatting issues)
+## Validation and release branch policy
+
+Authoritative CI runs on pull requests and pushes to `main`, on Ubuntu and Windows. A newer PR-head run may cancel an older superseded PR run, but main-push validation is allowed to finish so every landed main commit gets its own completed result.
+
+The local aggregate is:
+
+```bash
+corepack pnpm check
+```
+
+It covers:
+
+- public-release/security hygiene;
+- frozen architecture-boundary checks;
+- TypeScript;
+- ESLint;
+- browser build;
+- Electron desktop build;
+- the complete Vitest suite (including desktop, replay, property, and typed E2E tests);
+- the synthetic interview smoke path.
+
+## Near-term integration milestone
+
+The next product milestone is vertical integration rather than another broad backend expansion: make problem/mode selection authoritative, select a production provider through the control plane, connect bounded voice runtimes, and surface evaluation/replay without weakening the existing event, disclosure, delivery, or security invariants.

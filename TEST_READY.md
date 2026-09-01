@@ -1,79 +1,95 @@
-# TEST_READY — Phase 1 Typed Interview MVP E2E Test Suite
+# TEST_READY — authoritative validation baseline
 
-**Published**: 2026-08-29
-**Test Suite Path**: `tests/e2e-typed-interview.test.ts`
-**Test Framework**: Vitest (v4.1.11)
-**Status**: COMPLETE (100% Pass Rate)
+This document describes the repository-wide readiness contract. It no longer freezes an old Phase 1 assertion count.
 
----
+## What “ready” means
 
-## 1. Test Suite Summary
+A change is ready for merge only when the repository's authoritative CI matrix passes on both Ubuntu and Windows and no required gate is skipped, downgraded to a warning, or made conditional merely to obtain green status.
 
-The End-to-End (E2E) test suite implements comprehensive integration verification for all 13 features of the Phase 1 Typed Interview MVP across coordinator, transport, and client interfaces, structured strictly across Tiers 1 through 4 as specified in `TEST_INFRA.md`.
+GitHub Actions runs for:
 
-| Test Tier | Scope & Focus | Target Test Count | Executed & Passed | Pass Rate |
-| :--- | :--- | :--- | :--- | :--- |
-| **Tier 1: Feature Coverage (Isolation)** | Happy path behavior for all 13 features tested across public interfaces | 65 (>=5 per feature) | **65** | 100% |
-| **Tier 2: Boundary & Corner Cases** | Edge cases, empty inputs, extreme sizes (20k chars), clock skew, invalid tokens, metered billing rejection, stale revisions | 65 (>=5 per feature) | **65** | 100% |
-| **Tier 3: Cross-Feature Combinations** | Pairwise subsystem interactions (student input + SSE streaming + whiteboard AI overlay + crash recovery) | 13 | **13** | 100% |
-| **Tier 4: Real-World Scenarios** | Oxford Ramsey R(3,3) proof progression (K_6, deg(v)=5, PHP partition, monochromatic K_3) | 5 | **5** | 100% |
-| **TOTAL E2E SUITE** | `tests/e2e-typed-interview.test.ts` | **148** | **148** | **100%** |
-| **FULL REPOSITORY SUITE** | All 50 test files in repository | **628** | **628** | **100%** |
+- every pull request;
+- every push to `main`.
 
----
+Superseded PR-head runs may be cancelled. Main-push runs are intentionally not cancelled by later pushes, so each commit that lands on the integration branch receives a completed validation result.
 
-## 2. Feature Coverage Matrix (All 13 Features)
+## Authoritative gates
 
-| Feature ID | Feature Description | Tier 1 Tests | Tier 2 Tests | Tier 3 Pairings | Tier 4 Scenarios |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **F1** | Gemini API Preflight Verification & Admission | 5 | 5 | Pair 5 | Scenario 4 |
-| **F2** | Free-Tier Hard Gating & Zero-Metered Usage Enforcement | 5 | 5 | Pair 6 | Scenario 4 |
-| **F3** | Provider Admission Redaction & Error Scrubbing | 5 | 5 | Pair 12 | Scenario 4 |
-| **F4** | Layer-Isolated In-Memory Whiteboard Canvas | 5 | 5 | Pair 2 | Scenario 2 |
-| **F5** | Whiteboard Overlay Actions (Circle, Highlight, Equation) | 5 | 5 | Pair 2, Pair 11 | Scenario 2 |
-| **F6** | Whiteboard Action Cancellation & Stale Revision Dropping | 5 | 5 | Pair 7 | Scenario 2 |
-| **F7** | KaTeX Mathematical Rendering ($inline$ & $$block$$) | 5 | 5 | Pair 4 | Scenario 5 |
-| **F8** | Problem Formulation & DAG Reasoning Graph Display | 5 | 5 | Pair 4, Pair 10 | Scenario 1, Scenario 5 |
-| **F9** | Student Typed Input Lifecycle (Episode -> Commit -> Turn) | 5 | 5 | Pair 1, Pair 8 | Scenario 1, Scenario 5 |
-| **F10** | Socratic Response Streaming & Delivery State Machine | 5 | 5 | Pair 1, Pair 3, Pair 9, Pair 11 | Scenario 1, Scenario 3 |
-| **F11** | Local Loopback Transport Runtime & Crash Recovery | 5 | 5 | Pair 3, Pair 9, Pair 13 | Scenario 1, Scenario 3 |
-| **F12** | Event Sourcing, Single-Writer SQLite Invariants & Replay | 5 | 5 | Pair 8, Pair 13 | Scenario 1, Scenario 3 |
-| **F13** | Oxford Ramsey R(3,3) Formulation & Pedagogy Verification | 5 | 5 | Pair 10 | Scenario 1, Scenario 5 |
+The workflow currently enforces:
 
----
+1. frozen architecture-boundary checks;
+2. public-release/security hygiene;
+3. TypeScript typechecking;
+4. ESLint;
+5. production browser build;
+6. Electron desktop runtime build;
+7. the complete Vitest suite;
+8. the synthetic interview smoke/demo path.
 
-## 3. How to Execute the Tests
+The complete Vitest suite is one gate, not a collection of duplicated CI invocations. `vitest.config.ts` includes:
 
-### Run E2E Test Suite
-```bash
-corepack pnpm test:e2e
+```text
+tests/**/*.test.ts
+tests/**/*.test.tsx
 ```
 
-### Run Full Repository Test Suite (All 50 Suites)
+Therefore desktop tests, replay tests, property tests, adversarial tests, browser tests, quant tests, verification tests, speech/TTS tests, and `tests/e2e-typed-interview.test.ts` all run in the single full-suite invocation.
+
+Targeted scripts such as `pnpm test:desktop`, `pnpm test:replay`, `pnpm test:property`, and `pnpm test:e2e` are developer convenience subsets. They do not replace `pnpm test`.
+
+## Local aggregate
+
+Run:
+
 ```bash
-corepack pnpm test
+corepack pnpm check
 ```
 
-### Run Architecture Boundary Checker
-```bash
-node scripts/check-architecture-boundaries.mjs
+The aggregate mirrors the CI categories:
+
+```text
+security:public
+architecture boundaries
+typecheck
+lint
+build:web
+build:desktop
+test
+demo
 ```
 
-### Run Linter
-```bash
-corepack pnpm lint
-```
+## Audited repository inventory
 
----
+At the 2026-09-01 authoritative-main audit:
 
-## 4. Verification Evidence & Quality Status
+- 105 Vitest test files matched the repository test naming convention;
+- 3 app roots existed: web, server, desktop;
+- 15 source-package directories existed under `packages/`;
+- `workers/python` provided the isolated Python worker boundary.
 
-- **Vitest Execution Output**:
-  - `tests/e2e-typed-interview.test.ts`: 148 passed / 148 total
-  - Full repo: 50 test files passed, 628 passed / 628 total (100% pass rate)
-- **Architecture Boundary Invariants**:
-  - `check-architecture-boundaries.mjs`: 84 source files scanned, 0 boundary violations.
-- **ESLint Compliance**:
-  - `eslint .`: 0 errors, 0 warnings.
-- **Type Checking**:
-  - `tsc -p tsconfig.json --noEmit`: 0 type errors.
+These values are baseline observations, not permanent release thresholds. Avoid treating them as expected constants in documentation or CI.
+
+## Coverage represented by the suite
+
+The current test tree includes coverage for, among other areas:
+
+- event sourcing, durable session lifecycle, idempotency, crash/restart and replay;
+- delivery lifecycle, renderer transport and reconnect safety;
+- public-release hygiene, redaction, loopback CORS/auth and repository boundaries;
+- React/browser shell, real tldraw mounting and whiteboard revision synchronization;
+- Electron bootstrap/runtime and renderer security boundaries;
+- provider policy, execution safety and control-plane behavior;
+- deterministic mathematical verification and formal interpretation routing;
+- vision preprocessing, freshness and observation admission;
+- VAD/STT and TTS bounded worker cores plus browser audio infrastructure;
+- local worker/process supervision and local compute admission;
+- grounded session evaluation and replay/history projections;
+- Quant Trading and Quant Research engines/persistence;
+- curated Oxford and quant problem-catalog integrity;
+- typed end-to-end interview behavior and the synthetic smoke path.
+
+Passing those tests does **not** imply every backend subsystem is production-wired. Product exposure is tracked separately in `PROJECT.md` and `docs/IMPLEMENTATION_MAP.md`.
+
+## Evidence policy
+
+Use current GitHub Actions results as authoritative execution evidence. Do not copy old “N tests passed” or “N source files scanned” values forward after the repository changes. When a fixed number is useful for an audit, label it with the audited date/baseline rather than presenting it as an invariant.

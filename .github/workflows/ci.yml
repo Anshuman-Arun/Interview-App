@@ -10,8 +10,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # PR runs share a ref-scoped group so a newer head can supersede an older
+  # head. Main pushes use the commit SHA so landed commits never replace each
+  # other while running or pending.
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.run_attempt == 1 }}
 
 jobs:
   validate:
@@ -71,20 +74,10 @@ jobs:
       - name: Build Electron desktop runtime
         run: pnpm build:desktop
 
-      - name: Run Electron desktop bootstrap tests
-        run: pnpm test:desktop
-
       - name: Run complete Vitest suite
+        # vitest.config.ts includes every tests/**/*.test.ts and tests/**/*.test.tsx
+        # file, so desktop, replay, property, and typed E2E tests run here once.
         run: pnpm test
-
-      - name: Run replay verification
-        run: pnpm test:replay
-
-      - name: Run property test suite
-        run: pnpm test:property
-
-      - name: Run end-to-end typed interview suite
-        run: pnpm test:e2e
 
       - name: Run synthetic interview demo
         run: pnpm demo
