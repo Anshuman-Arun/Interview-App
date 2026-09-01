@@ -90,18 +90,44 @@ function assertSessionActive(state: Readonly<SessionState>, operation: string): 
 const MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS = 100_000;
 const MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS = 256;
 const MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS = 256;
+const MAX_RUNTIME_ID_CHARACTERS = 512;
+const MAX_EVIDENCE_PROPOSAL_EVENT_IDS = 4_096;
 
 function isRuntimeRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function hasOnlyRuntimeKeys(
+  record: Readonly<Record<string, unknown>>,
+  allowed: ReadonlySet<string>
+): boolean {
+  return Object.keys(record).every((key) => allowed.has(key));
+}
+
+function boundedRuntimeString(value: unknown, maximum = MAX_RUNTIME_ID_CHARACTERS): boolean {
+  return typeof value !== "string" || value.length <= maximum;
+}
+
 function proposalWithinAdmissionBounds(value: unknown): boolean {
   if (!isRuntimeRecord(value)) return true;
+  if (!hasOnlyRuntimeKeys(
+    value,
+    new Set([
+      "realizedAction",
+      "claimedDisclosureLevel",
+      "claimedDisclosureIds",
+      "speechText",
+      "boardActions"
+    ])
+  )) return false;
 
   const claimedDisclosureIds = value["claimedDisclosureIds"];
   if (
     Array.isArray(claimedDisclosureIds)
-    && claimedDisclosureIds.length > MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS
+    && (
+      claimedDisclosureIds.length > MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS
+      || claimedDisclosureIds.some((id) => !boundedRuntimeString(id))
+    )
   ) return false;
 
   const speechText = value["speechText"];
@@ -115,14 +141,56 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
   if (boardActions.length > MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS) return false;
   return boardActions.every((rawAction) => {
     if (!isRuntimeRecord(rawAction)) return true;
+    if (!hasOnlyRuntimeKeys(
+      rawAction,
+      new Set([
+        "operation",
+        "layer",
+        "content",
+        "targetShapeId",
+        "expectedShapeRevision",
+        "annotationPurpose"
+      ])
+    )) return false;
     const content = rawAction["content"];
     const annotationPurpose = rawAction["annotationPurpose"];
     return (typeof content !== "string" || content.length <= MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS)
       && (
         typeof annotationPurpose !== "string"
         || annotationPurpose.length <= MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
-      );
+      )
+      && boundedRuntimeString(rawAction["targetShapeId"]);
   });
+}
+
+function evidenceProposalWithinAdmissionBounds(value: unknown): boolean {
+  if (!isRuntimeRecord(value)) return true;
+  if (!hasOnlyRuntimeKeys(
+    value,
+    new Set(["key", "proposedValue", "inferenceConfidence", "evidenceEventIds"])
+  )) return false;
+
+  const evidenceEventIds = value["evidenceEventIds"];
+  if (
+    Array.isArray(evidenceEventIds)
+    && (
+      evidenceEventIds.length > MAX_EVIDENCE_PROPOSAL_EVENT_IDS
+      || evidenceEventIds.some((eventId) => !boundedRuntimeString(eventId))
+    )
+  ) return false;
+
+  const key = value["key"];
+  if (!isRuntimeRecord(key)) return true;
+  if (!hasOnlyRuntimeKeys(key, new Set(["problemId", "subject", "dimension"]))) return false;
+  if (!boundedRuntimeString(key["problemId"])) return false;
+
+  const subject = key["subject"];
+  if (!isRuntimeRecord(subject)) return true;
+  if (Object.keys(subject).length > 2) return false;
+  for (const [subjectKey, subjectValue] of Object.entries(subject)) {
+    if (subjectKey !== "kind" && !boundedRuntimeString(subjectValue)) return false;
+  }
+  return true;
 }
 
 function terminalInvalidationDrafts(
@@ -454,6 +522,9 @@ export class TurnCoordinator {
 
   public async processEvidenceProposal(input: { readonly envelope: CommandEnvelope; readonly proposal: EvidenceProposal }): Promise<z.infer<typeof EvidenceProcessedResultSchema>> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    if (!evidenceProposalWithinAdmissionBounds(input.proposal)) {
+      throw new Error("Evidence proposal exceeds the bounded admission input size");
+    }
     const proposal = EvidenceProposalSchema.parse(input.proposal);
     const key = evidenceKeyToString(proposal.key);
     const result = await this.writer.execute(envelope, {
