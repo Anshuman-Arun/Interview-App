@@ -1280,11 +1280,12 @@ function evaluateRigor(
     const conflictRequests = [...contradictions, ...unresolved];
 
     let score = baseScore;
+    const verifierConflict = contradictions.length > 0 && unresolved.length > 0;
     let ambiguous = unresolved.length > 0;
     if (correctness?.value.value === "STRUCTURAL_ERROR") score = 0;
     if (correctness?.value.value === "LOCAL_ERROR") score = Math.min(score, 50);
 
-    if (contradictions.length > 0) {
+    if (contradictions.length > 0 && !verifierConflict) {
       if (correctness?.value.value === "CORRECT") {
         ambiguous = true;
       } else {
