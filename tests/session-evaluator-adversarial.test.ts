@@ -103,6 +103,44 @@ describe("grounded session evaluator adversarial cases", () => {
     expect(evaluation.scores.independence).toBe(100);
   });
 
+  it("does not lose residual positive assistance behind a level-zero mapped disclosure", () => {
+    const targetMilestone = sixPeopleProblem.interviewer.reasoningGraph.milestones.find(
+      (milestone) => milestone.protectedDisclosureIds.length > 0
+    );
+    if (targetMilestone === undefined) throw new Error("Expected protected milestone");
+    const disclosureId = targetMilestone.protectedDisclosureIds[0];
+    if (disclosureId === undefined) throw new Error("Expected protected disclosure");
+    const zeroProblem: InterviewProblem = {
+      ...sixPeopleProblem,
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures.map(
+          (disclosure) => disclosure.id === disclosureId
+            ? { ...disclosure, minimumDisclosureLevel: 0 as const }
+            : disclosure
+        )
+      }
+    };
+    let state = complete(boundStateFor(zeroProblem), targetMilestone.id, 10);
+    state = addDelivery(
+      state,
+      disclosureId,
+      3,
+      "EXPOSED",
+      5,
+      "residual-positive-assistance"
+    );
+
+    const evaluation = evaluateInterviewSession(state, zeroProblem);
+    expect(findMilestone(evaluation, targetMilestone.id).assistanceLevel).toBe(0);
+    expect(evaluation.scores.independence).toBeNull();
+    expect(evaluation.dimensionResults.independence.evidenceRefs)
+      .toContainEqual({
+        kind: "DELIVERY",
+        id: "delivery_adv_residual-positive-assistance"
+      });
+  });
+
   it("keeps milestone achievement support separate from assistance-timing uncertainty", () => {
     let state = complete(boundState(), "model-relations", 10);
     state = complete(state, "choose-vertex", 20);

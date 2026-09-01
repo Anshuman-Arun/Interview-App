@@ -832,9 +832,21 @@ function collectDisclosureData(
       String(delivery.disclosureIds.length) +
       " disclosure reference(s).";
 
+    let attributedDeliveryLevel: DisclosureLevel = 0;
+    for (const disclosureId of delivery.disclosureIds) {
+      const disclosureLevel = disclosureLevelById.get(disclosureId);
+      if (
+        disclosureLevel !== undefined &&
+        disclosureLevel > attributedDeliveryLevel
+      ) {
+        attributedDeliveryLevel = disclosureLevel;
+      }
+    }
+    const hasResidualUnattributedAssistance =
+      delivery.effectiveDisclosureLevel > attributedDeliveryLevel;
     if (
       delivery.effectiveDisclosureLevel > 0 &&
-      relatedMilestoneIds.length === 0
+      (relatedMilestoneIds.length === 0 || hasResidualUnattributedAssistance)
     ) {
       unattributedAssistanceRefs.push(evaluationRef("DELIVERY", delivery.deliveryId));
     }
