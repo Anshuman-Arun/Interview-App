@@ -384,7 +384,7 @@ function parseReadRoute(rawUrl: string | undefined): ReadRoute | undefined {
   if (
     decoded.length === 0
     || decoded.length > 512
-    || /[\\/\u0000-\u001F\u007F]/u.test(decoded)
+    || containsUnsafeReadPathCharacter(decoded)
   ) {
     return undefined;
   }
@@ -394,6 +394,16 @@ function parseReadRoute(rawUrl: string | undefined): ReadRoute | undefined {
   return match[2] === "evaluation"
     ? { kind: "EVALUATION", sessionId: parsed.data }
     : { kind: "REPLAY", sessionId: parsed.data };
+}
+
+function containsUnsafeReadPathCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (character === "/" || character === "\\" || code <= 31 || code === 127) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | undefined {
