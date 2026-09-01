@@ -785,10 +785,12 @@ describe("Real tldraw mounted browser integration", () => {
 
     const revisionBeforeProtectedPartial = adapter.getBoardRevision();
     const aiBeforePartial = bridge.getShape(aiId);
-    bridge.updateShapes([{
-      id: aiId,
-      x: (aiBeforePartial?.x ?? 0) + 5
-    }]);
+    await act(async () => {
+      bridge.updateShapes([{
+        id: aiId,
+        x: (aiBeforePartial?.x ?? 0) + 5
+      }]);
+    });
     expect(bridge.getShape(aiId)?.meta?.["layer"]).toBe("AI_ANNOTATION");
     expect(bridge.getShape(aiId)?.meta?.["origin"]).toBe("AI");
     expect(bridge.getShape(aiId)?.meta?.["shapeRevision"]).toBe(1);
@@ -840,19 +842,21 @@ describe("Real tldraw mounted browser integration", () => {
     expect(bridge.getShape("shape:mismatched-origin")).toBeUndefined();
 
     const implicitSystemId = createShapeId("system-decoration-implicit-origin");
-    bridge.createShapes([{
-      id: implicitSystemId,
-      type: "geo",
-      x: 5,
-      y: 5,
-      isLocked: true,
-      props: { geo: "rectangle", w: 10, h: 10 },
-      meta: {
-        layer: "SYSTEM_DECORATION",
-        shapeRevision: 1,
-        createdAt: "2026-08-30T00:00:00.000Z"
-      }
-    }]);
+    await act(async () => {
+      bridge.createShapes([{
+        id: implicitSystemId,
+        type: "geo",
+        x: 5,
+        y: 5,
+        isLocked: true,
+        props: { geo: "rectangle", w: 10, h: 10 },
+        meta: {
+          layer: "SYSTEM_DECORATION",
+          shapeRevision: 1,
+          createdAt: "2026-08-30T00:00:00.000Z"
+        }
+      }]);
+    });
     expect(bridge.getShape(implicitSystemId)?.meta?.["layer"]).toBe("SYSTEM_DECORATION");
     expect(bridge.getShape(implicitSystemId)?.meta?.["origin"]).toBe("SYSTEM");
 
@@ -875,10 +879,12 @@ describe("Real tldraw mounted browser integration", () => {
     });
 
     const systemBeforePartial = bridge.getShape(systemId);
-    bridge.updateShapes([{
-      id: systemId,
-      x: (systemBeforePartial?.x ?? 0) + 5
-    }]);
+    await act(async () => {
+      bridge.updateShapes([{
+        id: systemId,
+        x: (systemBeforePartial?.x ?? 0) + 5
+      }]);
+    });
     expect(bridge.getShape(systemId)?.meta?.["layer"]).toBe("SYSTEM_DECORATION");
     expect(bridge.getShape(systemId)?.meta?.["origin"]).toBe("SYSTEM");
     expect(bridge.getShape(systemId)?.meta?.["shapeRevision"]).toBe(1);
