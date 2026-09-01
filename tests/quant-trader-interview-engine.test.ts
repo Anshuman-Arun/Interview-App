@@ -289,7 +289,7 @@ describe("standalone Quant Trader interview engine", () => {
     })).toThrow(/already exists/u);
     expect(book.getMarketState()).toMatchObject({ bestAsk: 101, totalVolume: 0 });
 
-    expect(() => book.setQuotes("STUDENT", centeredQuote)).toThrow(/ids must be distinct/u);
+    expect(() => book.setQuotes("STUDENT", centeredQuote)).toThrow(/generated order-book id was reused/u);
     expect(book.getMarketState()).toMatchObject({ bestAsk: 101, totalVolume: 0 });
   });
 
@@ -324,7 +324,7 @@ describe("standalone Quant Trader interview engine", () => {
       bidSize: 1,
       askPrice: 103,
       askSize: 1
-    })).toThrow(/already exists/u);
+    })).toThrow(/generated order-book id was reused/u);
 
     expect(book.getMarketState()).toMatchObject({
       bestBid: 99,
