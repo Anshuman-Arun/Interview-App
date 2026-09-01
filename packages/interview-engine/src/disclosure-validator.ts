@@ -11,9 +11,12 @@ export interface DisclosureAnalyzer {
   readonly analyze: (text: string, protectedDisclosures: readonly ProtectedDisclosure[]) => DisclosureAnalysis;
 }
 
+const MAX_DISCLOSURE_ANALYSIS_CHARACTERS = 100_000;
+
 const normalize = (text: string): string =>
   text
-    .toLocaleLowerCase()
+    .normalize("NFKC")
+    .toLowerCase()
     .replace(/\bcolours\b/gu, "colors")
     .replace(/\bcolour\b/gu, "color")
     .replace(/[^a-z0-9]+/gu, " ")
@@ -27,11 +30,30 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
   }
 
   public analyze(text: string, protectedDisclosures: readonly ProtectedDisclosure[]): DisclosureAnalysis {
+    if (text.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS) {
+      return {
+        status: "UNKNOWN",
+        effectiveDisclosureLevel: 5,
+        effectiveDisclosureIds: [],
+        confidence: 0,
+        reason: "Text exceeds the bounded disclosure-analysis input size"
+      };
+    }
+
     const normalized = normalize(text);
     let level: DisclosureLevel = 0;
     const ids: DisclosureId[] = [];
     for (const item of protectedDisclosures) {
       const formulations = [item.fact, ...item.equivalentFormulations].map(normalize);
+      if (formulations.some((phrase) => phrase.length === 0)) {
+        return {
+          status: "UNKNOWN",
+          effectiveDisclosureLevel: 5,
+          effectiveDisclosureIds: [],
+          confidence: 0,
+          reason: "Protected disclosure metadata normalizes to an empty formulation"
+        };
+      }
       if (formulations.some((phrase) => normalized.includes(phrase))) {
         ids.push(item.id);
         if (item.minimumDisclosureLevel > level) level = item.minimumDisclosureLevel;
@@ -129,15 +151,21 @@ export class DisclosureValidator {
       };
     }
 
-    if (input.request.allowedDisclosureIds !== undefined) {
-      const allowed = new Set<DisclosureId>(input.request.allowedDisclosureIds);
-      if (combined.effectiveDisclosureIds.some((disclosureId) => !allowed.has(disclosureId))) {
-        return {
-          accepted: false,
-          reason: "Proposal contains a protected disclosure outside the application-selected target authorization",
-          analysis: combined
-        };
-      }
+    const protectedDisclosureIds = new Set(input.protectedDisclosures.map((item) => item.id));
+    const allowed = new Set<DisclosureId>(input.request.allowedDisclosureIds ?? []);
+    if ([...allowed].some((disclosureId) => !protectedDisclosureIds.has(disclosureId))) {
+      return {
+        accepted: false,
+        reason: "Application-selected target authorization references an unknown protected disclosure",
+        analysis: combined
+      };
+    }
+    if (combined.effectiveDisclosureIds.some((disclosureId) => !allowed.has(disclosureId))) {
+      return {
+        accepted: false,
+        reason: "Proposal contains a protected disclosure outside the application-selected target authorization",
+        analysis: combined
+      };
     }
 
     return { accepted: true, analysis: combined };
