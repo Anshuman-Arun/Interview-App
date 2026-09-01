@@ -51,7 +51,8 @@ import {
   VoiceActivityStateMachine,
   VoiceActivityStepSchema,
   type EndpointingDecision,
-  type VadBackend
+  type VadBackend,
+  type VoiceActivityState
 } from "./speech-vad.js";
 import {
   RecognizerCancellationCapabilitySchema,
@@ -538,8 +539,9 @@ export class SpeechWorkerCore {
       if (step.state !== postStepSnapshot.state
           || step.speechMs !== postStepSnapshot.speechMs
           || step.silenceMs !== postStepSnapshot.silenceMs
-          || step.utteranceMs !== postStepSnapshot.utteranceMs) {
-        throw new Error("VAD step disagrees with post-step state");
+          || step.utteranceMs !== postStepSnapshot.utteranceMs
+          || !isValidVadTransition(stateBefore, step.state, step.speechStarted, step.falseStart)) {
+        throw new Error("VAD step disagrees with the deterministic state transition");
       }
     } catch {
       this.abandonStream(context);
@@ -1352,4 +1354,30 @@ function assertAllowedOptionKeys(value: Record<string, unknown>): void {
       throw new Error("Speech worker options contain an unexpected field");
     }
   }
+}
+
+
+function isValidVadTransition(
+  before: VoiceActivityState,
+  after: VoiceActivityState,
+  speechStarted: boolean,
+  falseStart: boolean
+): boolean {
+  const allowed = before === "SILENCE"
+    ? after === "SILENCE" || after === "POSSIBLE_SPEECH" || after === "SPEECH"
+    : before === "POSSIBLE_SPEECH"
+      ? after === "POSSIBLE_SPEECH" || after === "SPEECH" || after === "SILENCE"
+      : before === "SPEECH"
+        ? after === "SPEECH" || after === "POSSIBLE_END"
+        : before === "POSSIBLE_END"
+          ? after === "POSSIBLE_END" || after === "SPEECH"
+          : false;
+  if (!allowed) return false;
+
+  const shouldStartSpeech =
+    after === "SPEECH" && (before === "SILENCE" || before === "POSSIBLE_SPEECH");
+  if (speechStarted !== shouldStartSpeech) return false;
+
+  const shouldBeFalseStart = before === "POSSIBLE_SPEECH" && after === "SILENCE";
+  return falseStart === shouldBeFalseStart;
 }
