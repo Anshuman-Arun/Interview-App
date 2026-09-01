@@ -160,9 +160,18 @@ export class SpeechWorkerCore {
   private shutdownPromise: Promise<void> | undefined;
 
   public constructor(options: SpeechWorkerCoreOptions) {
-    this.classifyVad = options.vadBackend.classify.bind(options.vadBackend);
-    this.recognizeSpeech = options.recognizer.recognize.bind(options.recognizer);
-    this.cancelRecognition = options.recognizer.cancel?.bind(options.recognizer);
+    this.classifyVad = bindWorkerVadClassifier(
+      (options.vadBackend as unknown as { classify?: unknown }).classify,
+      options.vadBackend
+    );
+    this.recognizeSpeech = bindWorkerRecognizer(
+      (options.recognizer as unknown as { recognize?: unknown }).recognize,
+      options.recognizer
+    );
+    this.cancelRecognition = bindWorkerRecognizerCancel(
+      (options.recognizer as unknown as { cancel?: unknown }).cancel,
+      options.recognizer
+    );
     this.utteranceIdFactory = options.utteranceIdFactory;
     this.endpointingFactory = options.endpointingFactory;
     this.vadStateFactory = options.vadStateFactory;
@@ -1047,4 +1056,24 @@ function boundedPositiveSafeInteger(value: number, maximum: number, label: strin
     throw new Error(`${label} must be a positive safe integer no greater than ${String(maximum)}`);
   }
   return value;
+}
+
+
+function bindWorkerVadClassifier(value: unknown, owner: unknown): VadBackend["classify"] {
+  if (typeof value !== "function") throw new Error("Speech VAD classify callback is required");
+  return value.bind(owner) as VadBackend["classify"];
+}
+
+function bindWorkerRecognizer(value: unknown, owner: unknown): SpeechRecognizer["recognize"] {
+  if (typeof value !== "function") throw new Error("Speech recognizer callback is required");
+  return value.bind(owner) as SpeechRecognizer["recognize"];
+}
+
+function bindWorkerRecognizerCancel(
+  value: unknown,
+  owner: unknown
+): NonNullable<SpeechRecognizer["cancel"]> | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "function") throw new Error("Speech recognizer cancel callback must be a function when provided");
+  return value.bind(owner) as NonNullable<SpeechRecognizer["cancel"]>;
 }
