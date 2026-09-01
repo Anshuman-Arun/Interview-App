@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import {
   MAX_SPEECH_BUFFERED_PCM_BYTES,
+  MAX_SPEECH_TIMESTAMP_DRIFT_MS,
+  MAX_SPEECH_UTTERANCE_DURATION_MS,
   SpeechPcmFrameEnvelopeSchema,
   type SourceAudioBasis,
   type SpeechPcmFrameEnvelope
@@ -32,14 +34,19 @@ export interface PcmOrderState {
   readonly sampleRate: number;
   readonly channels: number;
   readonly sampleFormat: string;
+  readonly firstTimestampMs: number;
+  readonly cumulativeDurationMs: number;
   readonly lastSequence: number;
   readonly nextEarliestTimestampMs: number;
 }
 
-export function snapshotPcmFrame(input: unknown, payload: ArrayBufferView): PcmFrameSnapshot {
+export function snapshotPcmFrame(input: unknown, payload: unknown): PcmFrameSnapshot {
   const parsed = SpeechPcmFrameEnvelopeSchema.safeParse(input);
   if (!parsed.success) throw new PcmAdmissionError("INVALID_FRAME", "PCM frame metadata is invalid");
   const envelope = parsed.data;
+  if (!ArrayBuffer.isView(payload)) {
+    throw new PcmAdmissionError("INVALID_FRAME", "PCM payload must be a binary ArrayBuffer view");
+  }
   if (payload.byteLength !== envelope.payloadByteLength) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM payload length does not match declared length");
   }
@@ -78,6 +85,8 @@ export function advancePcmOrder(
       sampleRate: envelope.sampleRate,
       channels: envelope.channels,
       sampleFormat: envelope.sampleFormat,
+      firstTimestampMs: envelope.timestampMs,
+      cumulativeDurationMs: durationMs,
       lastSequence: envelope.sequence,
       nextEarliestTimestampMs: envelope.timestampMs + durationMs
     };
@@ -94,9 +103,14 @@ export function advancePcmOrder(
   if (envelope.timestampMs + 0.001 < prior.nextEarliestTimestampMs) {
     throw new PcmAdmissionError("OUT_OF_ORDER_FRAME", "PCM timestamps overlap or reverse");
   }
+  const expectedTimestampMs = prior.firstTimestampMs + prior.cumulativeDurationMs;
+  if (envelope.timestampMs - expectedTimestampMs > MAX_SPEECH_TIMESTAMP_DRIFT_MS + 0.001) {
+    throw new PcmAdmissionError("OUT_OF_ORDER_FRAME", "PCM timestamp drift exceeds the allowed bound");
+  }
 
   return {
     ...prior,
+    cumulativeDurationMs: prior.cumulativeDurationMs + durationMs,
     lastSequence: envelope.sequence,
     nextEarliestTimestampMs: envelope.timestampMs + durationMs
   };
@@ -123,9 +137,14 @@ export class BoundedPcmBuffer {
     if (this.byteLength + snapshot.bytes.byteLength > this.maxBytes) {
       throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM buffer limit exceeded");
     }
+    const nextSampleCount = this.sampleCount + snapshot.envelope.frameSamples;
+    const nextDurationMs = nextSampleCount / snapshot.envelope.sampleRate * 1_000;
+    if (nextDurationMs > MAX_SPEECH_UTTERANCE_DURATION_MS + 0.001) {
+      throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM utterance duration limit exceeded");
+    }
     this.frames.push({ snapshot, speech });
     this.byteLength += snapshot.bytes.byteLength;
-    this.sampleCount += snapshot.envelope.frameSamples;
+    this.sampleCount = nextSampleCount;
     if (speech) this.speechFrameCount += 1;
   }
 
@@ -148,6 +167,11 @@ export class BoundedPcmBuffer {
     return this.speechFrameCount;
   }
 
+  public getDurationMs(): number {
+    const first = this.frames[0]?.snapshot;
+    return first === undefined ? 0 : this.sampleCount / first.envelope.sampleRate * 1_000;
+  }
+
   public materialize(): Uint8Array {
     const output = new Uint8Array(this.byteLength);
     let offset = 0;
@@ -164,7 +188,8 @@ export class BoundedPcmBuffer {
     if (first === undefined || last === undefined || this.sampleCount <= 0) {
       throw new PcmAdmissionError("INVALID_FRAME", "Cannot derive an audio basis from an empty buffer");
     }
-    const bytes = this.materialize();
+    const hash = createHash("sha256");
+    for (const frame of this.frames) hash.update(frame.snapshot.bytes);
     return {
       streamId,
       firstSequence: first.envelope.sequence,
@@ -174,7 +199,7 @@ export class BoundedPcmBuffer {
       sampleRate: first.envelope.sampleRate,
       channels: first.envelope.channels,
       sampleCount: this.sampleCount,
-      pcmSha256: createHash("sha256").update(bytes).digest("hex")
+      pcmSha256: hash.digest("hex")
     };
   }
 }
