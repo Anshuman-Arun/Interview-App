@@ -56,7 +56,7 @@ Supported strict actions are:
 
 Every action requires an `actionId` matching a bounded safe identifier format. Validated numeric values are canonicalized so JavaScript negative zero is stored as ordinary zero, preserving identity across JSON-style persistence/replay. Actions reject unknown fields and malformed numeric values, including NaN, infinity, unsafe/non-integral counts, numeric estimates/parameters outside the finite `[-1_000_000, 1_000_000]` domain, sparse/accessor-backed vectors, out-of-domain probabilities, oversized vectors, invalid options, and impossible stage/action combinations.
 
-Accepted action IDs are unique within a scenario. Reuse is rejected. Invalid transitions are computed without mutating authoritative state, so failures are atomic.
+Accepted action IDs are unique within a scenario. Reuse is rejected. Definition/action/registry/replay validation rejects synchronous reentrancy triggered by hostile Proxy traps. Candidate transitions compute and clone their public transition projection before committing authoritative state, so validation/projection failures do not leave a partially committed action.
 
 ## Scenario families
 
@@ -112,6 +112,7 @@ Current hard bounds include:
 
 - 32-bit unsigned safe seed domain;
 - maximum 64 accepted actions;
+- maximum 64 compatibility-registry entries;
 - maximum 32 observations requested by any one action/config path;
 - bounded populations and observation vectors;
 - maximum eight numeric parameters per generic parameter action;
