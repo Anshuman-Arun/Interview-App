@@ -15,7 +15,7 @@ This is a readiness contract, not a GitHub-enforced merge rule: the repository c
 The workflow currently enforces:
 
 1. frozen architecture-boundary checks;
-2. public-release/security hygiene;
+2. tracked-working-tree public-release/security hygiene;
 3. TypeScript typechecking;
 4. ESLint;
 5. production browser build;
