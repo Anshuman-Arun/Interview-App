@@ -1079,11 +1079,14 @@ function findCompletedApproaches(
     .map((approach) => approach.id)
     .filter((approachId) => {
       if (directlyCompletedApproaches.has(approachId)) return true;
-      const requiredMilestones = graph.problem.interviewer.reasoningGraph.milestones
-        .filter((milestone) => milestone.approachIds.includes(approachId))
-        .map((milestone) => milestone.id);
-      return requiredMilestones.length > 0
-        && requiredMilestones.every((id) => completedMilestones.has(id));
+      const approachMilestones = graph.problem.interviewer.reasoningGraph.milestones
+        .filter((milestone) => milestone.approachIds.includes(approachId));
+      const hasApproachExclusiveMilestone = approachMilestones.some(
+        (milestone) => milestone.approachIds.length === 1
+      );
+      return hasApproachExclusiveMilestone
+        && approachMilestones.length > 0
+        && approachMilestones.every((milestone) => completedMilestones.has(milestone.id));
     });
 }
 
