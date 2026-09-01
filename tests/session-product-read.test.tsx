@@ -546,6 +546,33 @@ describe("grounded evaluation/replay product surface", () => {
     expect(server.store.eventCount(sessionId)).toBe(before);
   });
 
+  it("tolerates a session created between bounded inventory reads", () => {
+    const first = SessionIdSchema.parse("session_inventory_race_first");
+    const second = SessionIdSchema.parse("session_inventory_race_second");
+    let idsRead = false;
+    const reads = new SessionReadService({
+      source: {
+        hasSession: () => true,
+        listRecentSessionIds: () => {
+          idsRead = true;
+          return [first, second];
+        },
+        sessionCount: () => idsRead ? 3 : 1,
+        eventCount: () => 0,
+        loadEvents: () => []
+      }
+    });
+
+    const history = reads.readHistory();
+    expect(history.sessions.map((item) => item.sessionId)).toEqual([first, second]);
+    expect(history.sessions.every((item) => item.readStatus === "UNAVAILABLE")).toBe(true);
+    expect(history.sessionTruncation).toEqual({
+      truncated: true,
+      limit: 100,
+      remainingCount: 1
+    });
+  });
+
   it("isolates corrupt and oversized histories behind bounded structured reads", () => {
     const sessionId = SessionIdSchema.parse("session_bounded_failure_fixture");
     let loadCalls = 0;
