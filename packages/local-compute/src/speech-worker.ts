@@ -125,8 +125,6 @@ export class SpeechWorkerCore {
   private shutdownPromise: Promise<void> | undefined;
 
   public constructor(private readonly options: SpeechWorkerCoreOptions) {
-    if (typeof options.vadBackend?.classify !== "function") throw new Error("Speech VAD backend is required");
-    if (typeof options.recognizer?.recognize !== "function") throw new Error("Speech recognizer is required");
     SpeechModelIdentitySchema.parse(options.recognizer.modelIdentity);
 
     this.maxConcurrentStreams = boundedPositiveSafeInteger(
