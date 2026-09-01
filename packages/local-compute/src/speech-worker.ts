@@ -830,10 +830,21 @@ export class SpeechWorkerCore {
 
     let claimedControlReserve = false;
     if (this.inFlightMessages.size >= this.maxInFlightRequests) {
-      const maxControlReserveSlots = this.maxConcurrentStreams + 1;
+      const totalControlCapacity = this.maxConcurrentStreams + 1;
+      const cancellationClaims = [...this.controlReserveClaims]
+        .filter((key) => key.startsWith("cancel:"))
+        .length;
+      const isShutdownReserve = controlReserveKey === "shutdown";
+      const isCancellationReserve = controlReserveKey?.startsWith("cancel:") === true;
+      const withinTotalControlCapacity =
+        this.inFlightMessages.size < this.maxInFlightRequests + totalControlCapacity;
       const canUseReserve = controlReserveKey !== undefined
         && !this.controlReserveClaims.has(controlReserveKey)
-        && this.inFlightMessages.size < this.maxInFlightRequests + maxControlReserveSlots;
+        && withinTotalControlCapacity
+        && (
+          (isShutdownReserve && !this.controlReserveClaims.has("shutdown"))
+          || (isCancellationReserve && cancellationClaims < this.maxConcurrentStreams)
+        );
       if (!canUseReserve) {
         return Promise.reject(new SpeechWorkerCoreError(
           "RESOURCE_LIMIT",
