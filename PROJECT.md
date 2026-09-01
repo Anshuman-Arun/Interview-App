@@ -114,7 +114,7 @@ It covers:
 - browser build;
 - Electron desktop build;
 - explicit desktop bootstrap tests;
-- the complete Vitest suite through the two-worker CI variant;
+- the complete Vitest suite through the serialized CI variant (`maxWorkers=1`);
 - focused replay verification;
 - the full `.property.test.` convention sweep;
 - the typed E2E script;
