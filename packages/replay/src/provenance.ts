@@ -150,6 +150,19 @@ function provenanceFor(metadata: SafeEventMetadata, event?: SessionEvent): Repla
   };
 }
 
+function stableKnownEventInput(
+  raw: unknown,
+  metadata: SafeEventMetadata
+): Readonly<Record<string, unknown>> {
+  try {
+    const record = raw as Readonly<Record<string, unknown>>;
+    const payload = record.payload;
+    return { ...metadata, payload };
+  } catch {
+    throw new ReplayProjectionError("INVALID_EVENT_SCHEMA");
+  }
+}
+
 export function normalizeReplayEvents(
   rawEvents: readonly unknown[],
   bounds: ReplayBounds,
@@ -163,6 +176,9 @@ export function normalizeReplayEvents(
   } catch {
     throw new ReplayProjectionError("INVALID_INPUT");
   }
+  if (!Number.isSafeInteger(totalEventCount) || totalEventCount < 0) {
+    throw new ReplayProjectionError("INVALID_INPUT");
+  }
 
   const selectedCount = Math.min(totalEventCount, bounds.maxEvents);
   const selectedBySequence = new Map<number, {
@@ -172,8 +188,13 @@ export function normalizeReplayEvents(
   const selectedEventIds = new Set<string>();
   let sessionId: z.infer<typeof SessionIdSchema> | null = null;
 
+  let iteratedEventCount = 0;
   try {
     for (const rawValue of rawEvents) {
+      iteratedEventCount += 1;
+      if (iteratedEventCount > totalEventCount) {
+        throw new ReplayProjectionError("INVALID_INPUT");
+      }
       const raw: unknown = rawValue;
       let parsed: ReturnType<typeof SafeEventMetadataSchema.safeParse>;
       try {
@@ -201,6 +222,9 @@ export function normalizeReplayEvents(
     }
   } catch (error) {
     if (error instanceof ReplayProjectionError) throw error;
+    throw new ReplayProjectionError("INVALID_INPUT");
+  }
+  if (iteratedEventCount !== totalEventCount) {
     throw new ReplayProjectionError("INVALID_INPUT");
   }
 
@@ -237,7 +261,9 @@ export function normalizeReplayEvents(
     }
 
     try {
-      const event = upcasters.toCurrent(item.raw);
+      const event = upcasters.toCurrent(
+        stableKnownEventInput(item.raw, metadata)
+      );
       if (
         event.eventId !== metadata.eventId
         || event.sessionId !== metadata.sessionId

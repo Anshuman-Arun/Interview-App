@@ -752,6 +752,7 @@ describe("replay/history projections", () => {
 
     const history = projectSessionHistory(events);
     expect(history.verificationSummary).toEqual({
+      statusIsCurrent: true,
       pending: 0,
       verified: 1,
       contradicted: 1,
@@ -849,6 +850,7 @@ describe("replay/history projections", () => {
     expect(truncatedPrefix.currentStateAvailable).toBe(false);
     expect(truncatedPrefix.verificationHistory[0]?.status).toBe("PENDING");
     expect(truncatedPrefix.verificationHistory[0]?.statusIsCurrent).toBe(false);
+    expect(truncatedPrefix.verificationSummary.statusIsCurrent).toBe(false);
   });
 
   it("handles lifecycle states, mixed v1/v2 upcasts, future events, and explicit bounds safely", () => {
@@ -1945,6 +1947,31 @@ describe("replay/history projections", () => {
       expect(String(error)).not.toContain("PRIVATE_GETTER_EVENT_MARKER");
     }
 
+    const statefulSessionId = "session-stateful-event" as SessionId;
+    const statefulStart = {
+      ...event(statefulSessionId, 1, "SESSION_STARTED", {
+        startedAt: "2026-08-31T19:00:01.000Z"
+      })
+    };
+    let eventTypeReads = 0;
+    Object.defineProperty(statefulStart, "type", {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        eventTypeReads += 1;
+        return eventTypeReads === 1 ? "PROBLEM_PRESENTED" : "SESSION_STARTED";
+      }
+    });
+    expect(() => projectSessionHistory([
+      statefulStart,
+      event(statefulSessionId, 2, "PROBLEM_PRESENTED", {
+        problemId: "stateful-event",
+        problemVersion: "1",
+        prompt: "Public prompt"
+      })
+    ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SCHEMA" }));
+    expect(eventTypeReads).toBe(1);
+
     const throwingEventArray = new Proxy<unknown[]>([], {
       get: (_target, property): unknown => {
         if (property === "length") {
@@ -1961,6 +1988,23 @@ describe("replay/history projections", () => {
       expect(error).toMatchObject({ code: "INVALID_INPUT" });
       expect(String(error)).not.toContain("PRIVATE_EVENT_ARRAY_MARKER");
     }
+
+    const hiddenEventSessionId = "session-hidden-by-length" as SessionId;
+    const inconsistentEventArray = new Proxy<unknown[]>([], {
+      get: (_target, property): unknown => {
+        if (property === "length") return 0;
+        if (property === Symbol.iterator) {
+          return function* () {
+            yield event(hiddenEventSessionId, 1, "SESSION_STARTED", {
+              startedAt: "2026-08-31T19:00:01.000Z"
+            });
+          };
+        }
+        return undefined;
+      }
+    });
+    expect(() => projectReplayTimeline(inconsistentEventArray))
+      .toThrow(expect.objectContaining({ code: "INVALID_INPUT" }));
 
     const throwingSummaryArray = new Proxy<unknown[]>([], {
       get: (target, property): unknown => {
@@ -1981,6 +2025,23 @@ describe("replay/history projections", () => {
       expect(error).toMatchObject({ code: "INVALID_SESSION_SUMMARY" });
       expect(String(error)).not.toContain("PRIVATE_SUMMARY_ARRAY_MARKER");
     }
+
+    const hiddenSummary = projectSessionHistory(
+      base("session-hidden-summary" as SessionId, "hidden-summary")
+    );
+    const inconsistentSummaryArray = new Proxy<unknown[]>([], {
+      get: (_target, property): unknown => {
+        if (property === "length") return 0;
+        if (property === Symbol.iterator) {
+          return function* () {
+            yield hiddenSummary;
+          };
+        }
+        return undefined;
+      }
+    });
+    expect(() => projectLongitudinalHistory(inconsistentSummaryArray))
+      .toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
 
     const throwingSummary = {};
     Object.defineProperty(throwingSummary, "sessionId", {
@@ -2074,6 +2135,27 @@ describe("replay/history projections", () => {
       summaryAssessment: "Summary"
     });
     expect(projectSessionHistory(valid, { evaluation }).evaluation?.scores.compositeScore).toBe(82);
+
+    const statefulEvaluation = { ...evaluation };
+    let keyStrengthReads = 0;
+    Object.defineProperty(statefulEvaluation, "keyStrengths", {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        keyStrengthReads += 1;
+        return keyStrengthReads === 1
+          ? ["Grounded"]
+          : Array.from(
+              { length: MAX_REPLAY_EVALUATION_COLLECTION_ITEMS + 1 },
+              () => "should never be re-read"
+            );
+      }
+    });
+    expect(projectSessionHistory(valid, {
+      evaluation: statefulEvaluation
+    }).evaluation?.scores.compositeScore).toBe(82);
+    expect(keyStrengthReads).toBe(1);
+
     expect(() => projectSessionHistory(active, { evaluation }))
       .toThrow(expect.objectContaining({ code: "EVALUATION_MISMATCH" }));
     expect(() => projectSessionHistory(valid, {
@@ -2503,6 +2585,22 @@ describe("longitudinal projection", () => {
         exposedInterventions: first.totalEventCount + 1
       }
     }])).toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+
+    const statefulSummary = { ...first, evaluation: undefined };
+    let sessionIdReads = 0;
+    Object.defineProperty(statefulSummary, "sessionId", {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        sessionIdReads += 1;
+        return sessionIdReads === 1
+          ? first.sessionId
+          : "session-mutated-after-selection";
+      }
+    });
+    expect(() => projectLongitudinalHistory([statefulSummary]))
+      .toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));
+    expect(sessionIdReads).toBeGreaterThanOrEqual(2);
 
     expect(() => projectLongitudinalHistory([projectSessionHistory([])]))
       .toThrow(expect.objectContaining({ code: "INVALID_SESSION_SUMMARY" }));

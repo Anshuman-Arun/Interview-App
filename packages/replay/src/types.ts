@@ -329,6 +329,7 @@ export interface ReplayEvidenceSummary {
 }
 
 export interface ReplayVerificationSummary {
+  readonly statusIsCurrent: boolean;
   readonly pending: number;
   readonly verified: number;
   readonly contradicted: number;

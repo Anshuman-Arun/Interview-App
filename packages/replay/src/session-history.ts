@@ -461,44 +461,68 @@ function interventionIdentity(input: {
   ]);
 }
 
-function evaluationCollectionsWithinReplayBudget(input: unknown): boolean {
+function snapshotEvaluationInputWithinReplayBudget(input: unknown): unknown {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    return true;
+    return input;
   }
 
   const record = input as Readonly<Record<string, unknown>>;
   let itemCount = 0;
-  const addArrayLength = (value: unknown): boolean => {
-    if (!Array.isArray(value)) return true;
-    itemCount += value.length;
-    return itemCount <= MAX_REPLAY_EVALUATION_COLLECTION_ITEMS;
+
+  const snapshotArray = (value: unknown): unknown => {
+    if (!Array.isArray(value)) return value;
+    const length = value.length;
+    if (!Number.isSafeInteger(length) || length < 0) {
+      throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    }
+    itemCount += length;
+    if (itemCount > MAX_REPLAY_EVALUATION_COLLECTION_ITEMS) {
+      throw new ReplayProjectionError("EVALUATION_MISMATCH");
+    }
+    const snapshot: unknown[] = [];
+    for (let index = 0; index < length; index += 1) {
+      snapshot.push(value[index]);
+    }
+    return snapshot;
   };
 
-  if (
-    !addArrayLength(record.milestones)
-    || !addArrayLength(record.disclosedInterventions)
-    || !addArrayLength(record.keyStrengths)
-    || !addArrayLength(record.areasForImprovement)
-  ) {
-    return false;
-  }
+  const milestones = snapshotArray(record.milestones);
+  const rawInterventions = snapshotArray(record.disclosedInterventions);
+  const disclosedInterventions = Array.isArray(rawInterventions)
+    ? rawInterventions.map((intervention): unknown => {
+        if (
+          typeof intervention !== "object"
+          || intervention === null
+          || Array.isArray(intervention)
+        ) {
+          return intervention;
+        }
+        const interventionRecord = intervention as Readonly<Record<string, unknown>>;
+        return {
+          turnId: interventionRecord.turnId,
+          disclosureLevel: interventionRecord.disclosureLevel,
+          disclosureIds: snapshotArray(interventionRecord.disclosureIds),
+          deliveryStatus: interventionRecord.deliveryStatus,
+          summary: interventionRecord.summary
+        };
+      })
+    : rawInterventions;
 
-  if (Array.isArray(record.disclosedInterventions)) {
-    for (const intervention of record.disclosedInterventions) {
-      if (
-        typeof intervention !== "object"
-        || intervention === null
-        || Array.isArray(intervention)
-      ) {
-        continue;
-      }
-      const disclosureIds = (intervention as Readonly<Record<string, unknown>>)
-        .disclosureIds;
-      if (!addArrayLength(disclosureIds)) return false;
-    }
-  }
-
-  return true;
+  return {
+    sessionId: record.sessionId,
+    problemId: record.problemId,
+    problemVersion: record.problemVersion,
+    evaluatedAt: record.evaluatedAt,
+    scores: record.scores,
+    milestones,
+    disclosedInterventions,
+    unassistedMilestoneCount: record.unassistedMilestoneCount,
+    assistedMilestoneCount: record.assistedMilestoneCount,
+    totalTurns: record.totalTurns,
+    keyStrengths: snapshotArray(record.keyStrengths),
+    areasForImprovement: snapshotArray(record.areasForImprovement),
+    summaryAssessment: record.summaryAssessment
+  };
 }
 
 function validateEvaluation(
@@ -511,10 +535,9 @@ function validateEvaluation(
 
   let parsed: ReturnType<typeof SessionEvaluationSchema.safeParse>;
   try {
-    if (!evaluationCollectionsWithinReplayBudget(input)) {
-      throw new ReplayProjectionError("EVALUATION_MISMATCH");
-    }
-    parsed = SessionEvaluationSchema.safeParse(input);
+    parsed = SessionEvaluationSchema.safeParse(
+      snapshotEvaluationInputWithinReplayBudget(input)
+    );
   } catch (error) {
     if (error instanceof ReplayProjectionError) throw error;
     throw new ReplayProjectionError("EVALUATION_MISMATCH");
@@ -605,7 +628,8 @@ function validateEvaluation(
 }
 
 function verificationSummaryFrom(
-  items: readonly NormalizedReplayEvent[]
+  items: readonly NormalizedReplayEvent[],
+  statusIsCurrent: boolean
 ): ReplayVerificationSummary {
   const byRequest = new Map<string, {
     status: "PENDING" | "ACCEPTED" | "DISCARDED";
@@ -634,6 +658,7 @@ function verificationSummaryFrom(
 
   const values = [...byRequest.values()];
   return {
+    statusIsCurrent,
     pending: values.filter((entry) => entry.status === "PENDING").length,
     verified: values.filter((entry) => entry.resultStatus === "VERIFIED").length,
     contradicted: values.filter((entry) => entry.resultStatus === "CONTRADICTED").length,
@@ -758,7 +783,10 @@ export function projectSessionHistory(
           stale: evidenceStateRecords.filter((record) => record.status === "STALE").length
         })
   };
-  const verificationSummary = verificationSummaryFrom(semanticItems);
+  const verificationSummary = verificationSummaryFrom(
+    semanticItems,
+    state !== undefined
+  );
   const highestDisclosureUsed = state === undefined ? undefined : disclosedHighest(state);
   let evaluationInput: unknown;
   try {

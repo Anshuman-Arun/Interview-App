@@ -130,10 +130,10 @@ Verification projection links each request to its verifier, GenerationBasis,
 evidence scope, interpretation provenance, and accepted/discarded callback. Every
 verification request must include provenance for the committed Turn named by its
 basis; additional supporting event IDs may be present, so this check does not
-overfit the current one-ID producer shape. Per-request `statusIsCurrent` is true
-only when the complete authoritative session state was replayed. A request observed
-as PENDING in a truncated or unknown prefix remains visible for chronology but is
-not claimed to be the current request state. VERIFIED,
+overfit the current one-ID producer shape. Per-request `statusIsCurrent` and the verification summary's
+`statusIsCurrent` are true only when the complete authoritative session state was
+replayed. A request observed as PENDING in a truncated or unknown prefix remains
+visible for chronology but is not claimed to be the current request state. VERIFIED,
 CONTRADICTED, and UNRESOLVED are retained exactly. Discarded callbacks remain
 discarded and are never promoted into authoritative verification outcomes.
 
@@ -180,6 +180,18 @@ validated state.
 
 Known legacy/current events go through the repository's existing
 `EventUpcasterRegistry`. The projection never mutates persisted historical events.
+
+For known events, replay snapshots the already-validated top-level metadata plus the
+payload reference before upcasting, so accessor/proxy values cannot change event
+identity between metadata admission and schema parsing. Longitudinal selection
+similarly requires the deeply parsed SessionId/start time to match the lightweight
+envelope used to choose the bounded result window. Optional evaluation collections
+are snapshotted once under their aggregate import budget before full schema
+validation. These rules make adversarial stateful getters fail closed instead of
+creating time-of-check/time-of-use ambiguity. Replay and longitudinal array
+containers must also report a non-negative safe-integer length that matches the
+number of values actually iterated; Proxy containers cannot claim one cardinality
+while supplying another.
 
 Future/unknown events retain only safe bounded metadata and appear as
 `UNKNOWN_EVENT`; their payload is intentionally withheld. Normalized replay
