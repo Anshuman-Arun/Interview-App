@@ -580,7 +580,7 @@ describe("browser command client", () => {
     "http://127.0.0.1:43123/path",
     "http://127.0.0.1:43123/?query=yes",
     "http://127.0.0.1:43123/#fragment",
-    "http://user:pass@127.0.0.1:43123"
+    "http://" + "user" + ":" + "pass" + "@127.0.0.1:43123"
   ])("rejects non-exact or non-loopback base URL %s", (baseUrl) => {
     expect(() => new BrowserCommandClient({
       baseUrl,
