@@ -131,18 +131,31 @@ export type ProviderKind = z.infer<typeof ProviderKindSchema>;
 export const CapabilitySupportSchema = z.enum(["SUPPORTED", "UNSUPPORTED", "UNKNOWN"]);
 export type CapabilitySupport = z.infer<typeof CapabilitySupportSchema>;
 
-const CONTROL_CHARACTER_PATTERN = new RegExp(
-  "[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]",
-  "u"
-);
 /* eslint-disable @typescript-eslint/unbound-method -- Captured intrinsics are invoked only via Reflect.apply. */
-const REGEXP_TEST_INTRINSIC = RegExp.prototype.test;
 const STRING_TRIM_INTRINSIC = String.prototype.trim;
+const STRING_CHAR_CODE_AT_INTRINSIC = String.prototype.charCodeAt;
 /* eslint-enable @typescript-eslint/unbound-method */
 
-function controlPlaneRegExpTest(pattern: RegExp, value: string): boolean {
-  const result: unknown = REFLECT_APPLY_INTRINSIC(REGEXP_TEST_INTRINSIC, pattern, [value]);
-  return result === true;
+function containsControlPlaneControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code: unknown = REFLECT_APPLY_INTRINSIC(
+      STRING_CHAR_CODE_AT_INTRINSIC,
+      value,
+      [index]
+    );
+    if (
+      typeof code !== "number"
+      || (
+        code <= 0x1f
+        || (code >= 0x7f && code <= 0x9f)
+        || code === 0x2028
+        || code === 0x2029
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function trimControlPlaneText(value: string): string {
@@ -158,7 +171,7 @@ function trimControlPlaneText(value: string): string {
 
 function nonSecretTextSchema(maxLength: number) {
   return z.string()
-    .refine((value) => !controlPlaneRegExpTest(CONTROL_CHARACTER_PATTERN, value), {
+    .refine((value) => !containsControlPlaneControlCharacter(value), {
       message: "CONTROL_CHARACTERS_NOT_ALLOWED"
     })
     .transform((value) => trimControlPlaneText(value))
