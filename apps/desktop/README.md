@@ -4,7 +4,7 @@
 
 This desktop slice wraps the existing Interview App architecture. It does not change interview state, provider execution, problems, Quant logic, whiteboard behavior, audio, or session-resume semantics.
 
-It starts from `origin/main` at `27090745ccc34367b0edc1622de9d11ca04b808f` and does not depend on PR #27 or any later unmerged work.
+This document originated with the isolated desktop-bootstrap slice based on `27090745ccc34367b0edc1622de9d11ca04b808f`. The implementation is now integrated into the current repository; the old base SHA is historical provenance, not a statement about the present branch.
 
 ## Architecture
 
