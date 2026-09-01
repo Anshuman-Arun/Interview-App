@@ -354,6 +354,22 @@ describe("speech worker adversarial callback boundaries", () => {
     expect(JSON.stringify(worker.getDiagnostics())).not.toContain("stream-factory-secret");
   });
 
+  it("rejects a pre-advanced VAD instance from the per-stream factory", async () => {
+    const preAdvanced = new VoiceActivityStateMachine();
+    preAdvanced.step(1, 20);
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      vadStateFactory: () => preAdvanced
+    });
+    const fixture = frame(0, false, "pre-advanced-vad");
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "Speech stream configuration could not be initialized"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
+  });
+
   it("rejects a state factory that reuses one mutable VAD instance across streams", async () => {
     const sharedVad = new VoiceActivityStateMachine();
     const worker = new SpeechWorkerCore({
