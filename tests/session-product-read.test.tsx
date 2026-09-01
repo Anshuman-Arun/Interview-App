@@ -718,18 +718,12 @@ describe("grounded evaluation/replay product surface", () => {
 
   it("returns bounded structured failures for corrupted and oversized histories", () => {
     const corruptedId = SessionIdSchema.parse("session_corrupt_read_fixture");
-    const corruptedSummary = {
-      sessionId: corruptedId,
-      status: "COMPLETED" as const,
-      sequence: 1,
-      eventCount: 1,
-      createdAt: "2026-09-01T17:00:00.000Z",
-      updatedAt: "2026-09-01T17:00:01.000Z"
-    };
     const corrupted = new SessionReadService({
       source: {
         hasSession: () => true,
-        listSessions: () => [corruptedSummary],
+        sessionCount: () => 1,
+        listRecentSessionIds: () => [corruptedId],
+        eventCount: () => 1,
         loadEvents: () => {
           throw new Error("corrupt persistence fixture");
         }
@@ -746,19 +740,13 @@ describe("grounded evaluation/replay product surface", () => {
     });
 
     const oversizedId = SessionIdSchema.parse("session_oversized_read_fixture");
-    const oversizedSummary = {
-      sessionId: oversizedId,
-      status: "COMPLETED" as const,
-      sequence: DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
-      eventCount: DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
-      createdAt: "2026-09-01T17:00:00.000Z",
-      updatedAt: "2026-09-01T17:00:01.000Z"
-    };
     let loadCalls = 0;
     const oversized = new SessionReadService({
       source: {
         hasSession: () => true,
-        listSessions: () => [oversizedSummary],
+        sessionCount: () => 1,
+        listRecentSessionIds: () => [oversizedId],
+        eventCount: () => DEFAULT_REPLAY_BOUNDS.maxEvents + 1,
         loadEvents: () => {
           loadCalls += 1;
           return [];
