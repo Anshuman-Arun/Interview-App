@@ -9,6 +9,7 @@ import {
   type SessionId
 } from "../packages/domain/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
+import { BrowserSessionReadClient } from "../apps/web/src/session-read-client.js";
 import {
   RendererClient,
   type TextPresenter
@@ -209,10 +210,48 @@ describe("Real Built UI & Loopback Server E2E Verification", () => {
     streamAbortController.abort();
     await streamPromise.catch(() => undefined);
 
-    // 8. Prove zero calls were made to external provider endpoints
+    // 8. Complete, inspect grounded evaluation/replay/history, and prove reads do not mutate.
+    await commandClient.completeSession(sessionId);
+    const eventCountBeforeReview = serverInstance.store.eventCount(sessionId);
+    const readClient = new BrowserSessionReadClient({
+      baseUrl: commandUrl,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: monitoredFetch
+    });
+
+    const evaluation = await readClient.getEvaluation(sessionId);
+    expect(evaluation.available).toBe(true);
+    if (evaluation.available) {
+      const communication = evaluation.evaluation.dimensions.find(
+        (dimension) => dimension.name === "communication"
+      );
+      expect(communication).toMatchObject({
+        score: null,
+        supportLevel: "INSUFFICIENT"
+      });
+      expect(communication?.notScoredReason).toBeDefined();
+    }
+
+    const replay = await readClient.getReplay(sessionId);
+    expect(replay.available).toBe(true);
+    if (replay.available) {
+      expect(replay.replay.lifecycle.status).toBe("COMPLETED");
+      expect(replay.replay.entries.some((entry) => entry.category === "STUDENT"))
+        .toBe(true);
+      expect(replay.replay.entries.some(
+        (entry) => entry.category === "INTERVIEWER_DELIVERY"
+      )).toBe(true);
+    }
+
+    const history = await readClient.getHistory();
+    expect(history.sessions.find((item) => item.sessionId === sessionId)?.status)
+      .toBe("COMPLETED");
+    expect(serverInstance.store.eventCount(sessionId)).toBe(eventCountBeforeReview);
+
+    // 9. Prove zero calls were made to external provider endpoints
     expect(externalCalls).toEqual([]);
 
-    // 9. Server process restart & recovery
+    // 10. Server process restart & recovery
     await serverInstance.stop();
     serverInstance = undefined;
 
@@ -233,8 +272,20 @@ describe("Real Built UI & Loopback Server E2E Verification", () => {
 
     const recoveredSummary = await restartedClient.getSessionSummary(sessionId);
     expect(recoveredSummary.started).toBe(true);
-    expect(recoveredSummary.sequence).toBe(summary.sequence);
+    expect(recoveredSummary.status).toBe("COMPLETED");
     expect(recoveredSummary.deliveryStatuses[delivered.deliveryId]).toBe("COMPLETED");
+
+    const restartedReadClient = new BrowserSessionReadClient({
+      baseUrl: restartedServer.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: monitoredFetch
+    });
+    const restartedCountBeforeRead = restartedServer.store.eventCount(sessionId);
+    const reopenedReplay = await restartedReadClient.getReplay(sessionId);
+    const reopenedEvaluation = await restartedReadClient.getEvaluation(sessionId);
+    expect(reopenedReplay.available).toBe(true);
+    expect(reopenedEvaluation.available).toBe(true);
+    expect(restartedServer.store.eventCount(sessionId)).toBe(restartedCountBeforeRead);
 
     await restartedServer.stop();
   });
