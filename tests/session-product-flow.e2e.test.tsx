@@ -139,6 +139,16 @@ describe("post-session product flow E2E", () => {
 
     await commands.completeSession(sessionId);
     const authoritativeEventCount = server.store.eventCount(sessionId);
+    let evaluationReadCount = 0;
+    let replayReadCount = 0;
+    const readEvaluation = (id: SessionId, signal?: AbortSignal) => {
+      evaluationReadCount += 1;
+      return reads.getEvaluation(id, signal);
+    };
+    const readReplay = (id: SessionId, signal?: AbortSignal) => {
+      replayReadCount += 1;
+      return reads.getReplay(id, signal);
+    };
 
     const host = document.createElement("div");
     document.body.append(host);
@@ -149,10 +159,8 @@ describe("post-session product flow E2E", () => {
         React.createElement(SessionReviewModal, {
           sessionId,
           initialTab: "evaluation",
-          readEvaluation: (id: SessionId, signal?: AbortSignal) =>
-            reads.getEvaluation(id, signal),
-          readReplay: (id: SessionId, signal?: AbortSignal) =>
-            reads.getReplay(id, signal),
+          readEvaluation,
+          readReplay,
           onClose: () => undefined
         })
       );
@@ -173,6 +181,8 @@ describe("post-session product flow E2E", () => {
     expect(communication.textContent).toContain(
       "Current application-owned evidence does not contain a validated communication-quality signal."
     );
+    expect(evaluationReadCount).toBe(1);
+    expect(replayReadCount).toBe(0);
     expect(server.store.eventCount(sessionId)).toBe(authoritativeEventCount);
 
     await act(async () => {
@@ -183,6 +193,8 @@ describe("post-session product flow E2E", () => {
     await waitForSelector("[data-testid='session-replay-panel']");
     expect(document.body.textContent).toContain("authoritative events");
     expect(document.body.textContent).toContain("Turn committed");
+    expect(evaluationReadCount).toBe(1);
+    expect(replayReadCount).toBe(1);
     expect(server.store.eventCount(sessionId)).toBe(authoritativeEventCount);
 
     await act(async () => root?.unmount());
@@ -197,10 +209,8 @@ describe("post-session product flow E2E", () => {
         React.createElement(SessionReviewModal, {
           sessionId,
           initialTab: "replay",
-          readEvaluation: (id: SessionId, signal?: AbortSignal) =>
-            reads.getEvaluation(id, signal),
-          readReplay: (id: SessionId, signal?: AbortSignal) =>
-            reads.getReplay(id, signal),
+          readEvaluation,
+          readReplay,
           onClose: () => undefined
         })
       );
@@ -208,6 +218,8 @@ describe("post-session product flow E2E", () => {
 
     await waitForSelector("[data-testid='session-replay-panel']");
     expect(document.body.textContent).toContain("Turn committed");
+    expect(evaluationReadCount).toBe(1);
+    expect(replayReadCount).toBe(2);
     expect(server.store.eventCount(sessionId)).toBe(authoritativeEventCount);
 
     const history = await reads.getHistory();
