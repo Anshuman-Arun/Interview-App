@@ -3,14 +3,13 @@ import {
   RequestIdSchema,
   SessionIdSchema,
   type DeliveryId,
-  type InterviewProblem,
+  type InterviewProblemPublicView,
   type RequestId,
   type SessionHistoryEntry,
   type SessionId,
   type SessionStatus,
   type StoredSessionSummary
 } from "../../../../packages/domain/src/index.js";
-import { sixPeopleProblem } from "../../../../packages/problems/src/index.js";
 import {
   BrowserCommandClient,
   BrowserCommandProtocolError
@@ -46,7 +45,7 @@ export interface UseInterviewSessionResult {
   readonly sessionStatus: SessionStatus;
   readonly availableSessions: readonly StoredSessionSummary[];
   readonly transcript: readonly TranscriptItem[];
-  readonly problem: InterviewProblem | null;
+  readonly problem: InterviewProblemPublicView | null;
   readonly sequence: number;
   readonly contextEpoch: number;
   readonly error: string | null;
@@ -261,7 +260,7 @@ export function useInterviewSession(
   const [availableSessions, setAvailableSessions] = useState<readonly StoredSessionSummary[]>([]);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<readonly TranscriptItem[]>([]);
-  const [problem] = useState<InterviewProblem | null>(sixPeopleProblem);
+  const [problem, setProblem] = useState<InterviewProblemPublicView | null>(null);
   const [sequence, setSequence] = useState<number>(0);
   const [contextEpoch, setContextEpoch] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
@@ -398,12 +397,22 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.startSession(targetSessionId);
+        let problemView: InterviewProblemPublicView | null = null;
+        try {
+          const context = await client.getInterviewSessionContext(targetSessionId);
+          problemView = context.problem ?? null;
+        } catch {
+          // The authoritative start already succeeded. A read-model/context
+          // failure must not make the caller retry session creation.
+          setError("Session started, but session context could not be loaded");
+        }
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(true);
         setSessionStatus("ACTIVE");
+        setProblem(problemView);
         setTranscript([]);
 
         void attachRendererStream(targetSessionId);
@@ -426,6 +435,7 @@ export function useInterviewSession(
       setError(null);
       try {
         const client = getCommandClient();
+        const context = await client.getInterviewSessionContext(targetSessionId);
         const response = await client.resumeSession(targetSessionId);
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
@@ -435,6 +445,7 @@ export function useInterviewSession(
         setSessionStatus(response.status);
         setSequence(response.sequence);
         setContextEpoch(response.contextEpoch);
+        setProblem(context.problem ?? null);
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
 

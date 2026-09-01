@@ -73,7 +73,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
 async function main() {
   const instance = await createAndStartServer();
   console.log("--------------------------------------------------");
-  console.log("  Oxford Technical Interview App - Loopback Server");
+  console.log("  Technical Interview Runtime - Loopback Server");
   console.log("--------------------------------------------------");
   console.log(`  Host:                  ${instance.bound.command.host}`);
   console.log(`  Command Endpoint:      ${instance.bound.command.url}/v1/commands`);

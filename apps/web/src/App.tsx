@@ -9,7 +9,6 @@ import {
   type TldrawEditor
 } from "./tldraw-whiteboard-adapter.js";
 import { useInterviewSession } from "./hooks/useInterviewSession.js";
-import { MathText } from "./components/MathText.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
 
@@ -110,17 +109,17 @@ export const App: React.FC = () => {
       <header className="app-header bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-xs z-10 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold shadow-xs text-sm">
-            OX
+            IV
           </div>
           <div>
             <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span>Oxford Technical Interview</span>
+              <span>Technical Interview Runtime</span>
               <span className="text-xs font-normal text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                 Durable Runtime
               </span>
             </h1>
             <p className="text-xs text-slate-500">
-              Ramsey Theorem <MathText text="$R(3,3) = 6$" /> Socratic Dialogue & Whiteboard
+              {session.problem?.title ?? "Application-owned interview session composition"}
             </p>
           </div>
         </div>
@@ -298,7 +297,7 @@ export const App: React.FC = () => {
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-500 flex items-center gap-3">
-                        <span>Problem: {s.problemId ?? "Ramsey R(3,3)"}</span>
+                        <span>Problem: {s.problemId ?? "Configured session"}</span>
                         <span>•</span>
                         <span>Events: {s.eventCount}</span>
                         <span>•</span>
@@ -447,7 +446,7 @@ export const App: React.FC = () => {
                 }`}
                 data-testid="tab-formulation"
               >
-                📊 Formulation Inspector
+                📊 Session Context
               </button>
             </div>
 
@@ -463,7 +462,7 @@ export const App: React.FC = () => {
               <div className="whiteboard-wrapper flex-1 bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden flex flex-col">
                 <div className="whiteboard-toolbar px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
                   <span className="font-semibold flex items-center gap-1.5">
-                    <span>Oxford Ramsey $R(3,3)$ Canvas</span>
+                    <span>Interview Whiteboard</span>
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -487,48 +486,57 @@ export const App: React.FC = () => {
               <div className="formulation-inspector flex-1 bg-white border border-slate-200 rounded-lg p-5 overflow-y-auto space-y-4 shadow-xs">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 mb-1">
-                    Oxford Ramsey $R(3,3) = 6$ Formulation Graph
+                    Session Context
                   </h3>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Formal reasoning graph structure and pedagogical milestone decomposition.
+                    Safe public identity for the problem bound to this session.
                   </p>
                 </div>
 
-                <div className="border border-slate-200 rounded-md p-4 bg-slate-50">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">
-                    Pedagogical Milestones
-                  </h4>
-                  <div className="space-y-2">
-                    {session.problem?.interviewer.reasoningGraph.milestones.map((m) => (
-                      <div
-                        key={m.id}
-                        className="p-2.5 bg-white border border-slate-200 rounded text-xs flex flex-col gap-1"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold font-mono text-indigo-700">{m.id}</span>
-                          <span className="text-[10px] text-slate-400">
-                            Prereqs: {m.optionalPrerequisiteIds.length > 0 ? m.optionalPrerequisiteIds.join(", ") : "none"}
-                          </span>
+                {session.problem === null ? (
+                  <div className="border border-slate-200 rounded-md p-4 bg-slate-50 text-sm text-slate-500">
+                    This session does not expose an Oxford Mathematics problem view.
+                  </div>
+                ) : (
+                  <>
+                    <div className="border border-slate-200 rounded-md p-4 bg-slate-50">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Problem ID</div>
+                          <div className="font-mono text-slate-800 mt-1">{session.problem.id}</div>
                         </div>
-                        <p className="text-slate-700">{m.description}</p>
+                        <div>
+                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Version</div>
+                          <div className="font-mono text-slate-800 mt-1">{session.problem.version}</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Difficulty</div>
+                          <div className="text-slate-800 mt-1">{session.problem.difficulty}</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Category</div>
+                          <div className="text-slate-800 mt-1">{session.problem.category}</div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
 
-                <div className="border border-slate-200 rounded-md p-4 bg-indigo-50/50">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-indigo-900 mb-2">
-                    Canonical Mathematical Approaches
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {session.problem?.interviewer.reasoningGraph.approaches.map((app) => (
-                      <div key={app.id} className="p-2 bg-white rounded border border-indigo-100 text-xs">
-                        <div className="font-semibold text-slate-800">{app.label}</div>
-                        <div className="font-mono text-[10px] text-slate-400 mt-0.5">{app.id}</div>
+                    <div className="border border-slate-200 rounded-md p-4 bg-indigo-50/50">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-indigo-900 mb-2">
+                        Topics
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {session.problem.topics.map((topic) => (
+                          <span
+                            key={topic}
+                            className="text-xs bg-white border border-indigo-100 rounded px-2 py-1 text-slate-700"
+                          >
+                            {topic}
+                          </span>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

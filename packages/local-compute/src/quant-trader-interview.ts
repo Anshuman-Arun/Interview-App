@@ -12,6 +12,8 @@ import { LimitOrderBook } from "./order-book.js";
 import { type PortfolioSnapshot, PortfolioTracker } from "./portfolio-tracker.js";
 import { SeededRandom } from "./seeded-random.js";
 
+export const QUANT_TRADER_SCENARIO_VERSION = "1.0.0" as const;
+
 export const QuantTraderScenarioFamilySchema = z.enum([
   "BASIC_MARKET_MAKING",
   "FAIR_VALUE_UPDATES",

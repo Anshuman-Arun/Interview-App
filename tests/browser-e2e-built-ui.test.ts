@@ -101,7 +101,7 @@ describe("Real Built UI & Loopback Server E2E Verification", () => {
     const htmlResponse = await fetch(`${webOrigin}/index.html`);
     expect(htmlResponse.status).toBe(200);
     const servedHtml = await htmlResponse.text();
-    expect(servedHtml).toContain("Oxford Technical Interview");
+    expect(servedHtml).toContain("Technical Interview Runtime");
 
     // 3. Start file-backed loopback server
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "interview-e2e-sqlite-"));

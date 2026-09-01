@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DeliveryCommandSchema, DeliveryStatusSchema } from "./delivery.js";
+import { InterviewCatalogEntrySchema, InterviewProblemPublicViewSchema, InterviewSessionConfigurationSchema } from "./session-configuration.js";
 import {
   DeliveryIdSchema,
   InputEpisodeIdSchema,
@@ -67,6 +68,17 @@ export const StartSessionCommandSchema = ProtocolCommandBaseSchema.extend({
   problemId: z.string().min(1).optional()
 }).strict();
 
+export const StartConfiguredSessionCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("START_CONFIGURED_SESSION"),
+  configuration: InterviewSessionConfigurationSchema
+}).strict();
+
+export const ListInterviewCatalogCommandSchema = z.object({
+  protocolVersion: ProtocolVersionSchema,
+  requestId: RequestIdSchema,
+  type: z.literal("LIST_INTERVIEW_CATALOG")
+}).strict();
+
 export const ListSessionsCommandSchema = z.object({
   protocolVersion: ProtocolVersionSchema,
   requestId: RequestIdSchema,
@@ -96,6 +108,10 @@ export const GetSessionSummaryCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("GET_SESSION_SUMMARY")
 }).strict();
 
+export const GetInterviewSessionContextCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("GET_INTERVIEW_SESSION_CONTEXT")
+}).strict();
+
 export const ReconnectDeliveryCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("RECONNECT_DELIVERY"),
   deliveryId: DeliveryIdSchema
@@ -113,12 +129,15 @@ export const AcknowledgeDeliveryCompletedCommandSchema = ProtocolCommandBaseSche
 
 export const ClientCommandSchema = z.discriminatedUnion("type", [
   StartSessionCommandSchema,
+  StartConfiguredSessionCommandSchema,
+  ListInterviewCatalogCommandSchema,
   ListSessionsCommandSchema,
   ResumeSessionCommandSchema,
   CompleteSessionCommandSchema,
   ArchiveSessionCommandSchema,
   CommitTypedInputCommandSchema,
   GetSessionSummaryCommandSchema,
+  GetInterviewSessionContextCommandSchema,
   ReconnectDeliveryCommandSchema,
   AcknowledgeDeliveryExposedCommandSchema,
   AcknowledgeDeliveryCompletedCommandSchema
@@ -134,6 +153,28 @@ export const SessionStartedResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("SESSION_STARTED"),
   sessionId: SessionIdSchema
+}).strict();
+
+export const ConfiguredSessionStartedResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("CONFIGURED_SESSION_STARTED"),
+  sessionId: SessionIdSchema,
+  configuration: InterviewSessionConfigurationSchema,
+  problem: InterviewProblemPublicViewSchema.optional()
+}).strict();
+
+export const InterviewSessionContextResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("INTERVIEW_SESSION_CONTEXT"),
+  sessionId: SessionIdSchema,
+  configuration: InterviewSessionConfigurationSchema,
+  problem: InterviewProblemPublicViewSchema.optional()
+}).strict();
+
+export const InterviewCatalogResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("INTERVIEW_CATALOG"),
+  entries: z.array(InterviewCatalogEntrySchema).max(256)
 }).strict();
 
 export const SessionsListResponseSchema = ResponseBaseSchema.extend({
@@ -205,6 +246,9 @@ export const DeliveryAcknowledgedResponseSchema = ResponseBaseSchema.extend({
 
 export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [
   SessionStartedResponseSchema,
+  ConfiguredSessionStartedResponseSchema,
+  InterviewSessionContextResponseSchema,
+  InterviewCatalogResponseSchema,
   SessionsListResponseSchema,
   SessionResumedResponseSchema,
   SessionCompletedResponseSchema,

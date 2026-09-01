@@ -61,6 +61,28 @@ describe("event replay and upcasting", () => {
     expect(() => registry.toCurrent({ schemaVersion: 0 })).toThrow(/No event upcaster/);
   });
 
+  it("replays a pre-v3 SESSION_STARTED event without inventing configuration", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const current = harness.store.load(harness.sessionId)[0];
+      if (current === undefined || current.type !== "SESSION_STARTED") {
+        throw new Error("Expected SESSION_STARTED as the first event");
+      }
+      const legacy = {
+        ...current,
+        schemaVersion: 2,
+        payload: { startedAt: current.payload.startedAt }
+      };
+      const upcast = new EventUpcasterRegistry().toCurrent(legacy);
+      expect(upcast.type).toBe("SESSION_STARTED");
+      if (upcast.type !== "SESSION_STARTED") return;
+      expect(upcast.payload.configuration).toBeUndefined();
+      expect(upcast.schemaVersion).toBe(CURRENT_EVENT_SCHEMA_VERSION);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("upcasts schema-v1 events through the built-in path", async () => {
     const harness = await createCoreHarness();
     try {

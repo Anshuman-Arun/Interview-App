@@ -163,6 +163,15 @@ export function getProblemById(id: string): InterviewProblem | undefined {
   return problemCatalog.find((problem) => problem.id === id);
 }
 
+export function getProblemByIdentity(
+  id: string,
+  version: string
+): InterviewProblem | undefined {
+  return problemCatalog.find(
+    (problem) => problem.id === id && problem.version === version
+  );
+}
+
 export function getExpertReviewProblemById(id: string): InterviewProblem | undefined {
   return EXPERT_REVIEW_PROBLEMS.find((problem) => problem.id === id);
 }

@@ -15,10 +15,16 @@ import {
   TurnCoordinator,
   createCommandEnvelope
 } from "../../../packages/interview-engine/src/index.js";
-import { sixPeopleProblem } from "../../../packages/problems/src/index.js";
 import { RequestIdConflictError } from "../../../packages/persistence/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
+import {
+  listInterviewCatalogEntries,
+  resolveInterviewSessionConfiguration,
+  resolveSessionStateComposition,
+  toInterviewProblemPublicView
+} from "./interview-session-composition.js";
+import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
@@ -155,6 +161,16 @@ export class LoopbackCommandServer {
   }
 
   private async dispatch(command: ClientCommand): Promise<ProtocolSuccessResponse> {
+    if (command.type === "LIST_INTERVIEW_CATALOG") {
+      return {
+        protocolVersion: 1,
+        ok: true,
+        type: "INTERVIEW_CATALOG",
+        requestId: command.requestId,
+        entries: [...listInterviewCatalogEntries()]
+      };
+    }
+
     if (command.type === "LIST_SESSIONS") {
       const sessions = this.options.sessions.listSessions();
       return {
@@ -166,21 +182,34 @@ export class LoopbackCommandServer {
       };
     }
 
-    if (
-      command.type === "START_SESSION"
-      && command.problemId !== undefined
-      && command.problemId !== sixPeopleProblem.id
-    ) {
-      throw new ProtocolHttpError(404, "NOT_FOUND", "Problem not found");
+    let startComposition: ReturnType<typeof resolveInterviewSessionConfiguration> | undefined;
+    if (command.type === "START_SESSION" || command.type === "START_CONFIGURED_SESSION") {
+      try {
+        startComposition = resolveInterviewSessionConfiguration(
+          command.type === "START_SESSION"
+            ? createLegacyDefaultSessionConfiguration(command.problemId)
+            : command.configuration
+        );
+      } catch {
+        throw new ProtocolHttpError(
+          404,
+          "NOT_FOUND",
+          "Configured interview target is not available"
+        );
+      }
     }
 
-    if (command.type !== "START_SESSION" && !this.options.sessions.hasSession(command.sessionId)) {
+    const isStartCommand =
+      command.type === "START_SESSION" || command.type === "START_CONFIGURED_SESSION";
+    if (!isStartCommand && !this.options.sessions.hasSession(command.sessionId)) {
       throw new ProtocolHttpError(404, "NOT_FOUND", "Session not found");
     }
 
     const writer = await this.options.sessions.getWriterAsync(command.sessionId);
-    if (command.type !== "START_SESSION") {
+    let recoveredComposition: ReturnType<typeof resolveSessionStateComposition> | undefined;
+    if (!isStartCommand) {
       await this.options.sessions.ensureRecovered(command.sessionId);
+      recoveredComposition = resolveSessionStateComposition(writer.getState());
     }
     const envelope = createCommandEnvelope({
       sessionId: command.sessionId,
@@ -189,9 +218,20 @@ export class LoopbackCommandServer {
     });
     switch (command.type) {
       case "START_SESSION": {
-        await new TurnCoordinator(writer).startSession(sixPeopleProblem, envelope);
-        // Establish the process-lifetime recovery boundary immediately after
-        // authoritative creation, before a live delivery can become in-flight.
+        const composition = startComposition;
+        if (composition === undefined || composition.mode !== "OXFORD_MATHEMATICS") {
+          throw new Error("Validated legacy START_SESSION composition is missing or incompatible");
+        }
+
+        try {
+          await new TurnCoordinator(writer).startSession(composition.problem, envelope);
+        } catch (error) {
+          if (error instanceof RequestIdConflictError) throw error;
+          if (error instanceof Error && error.message === "Session already started") {
+            throw new ProtocolHttpError(409, "CONFLICT", "Session is already started");
+          }
+          throw error;
+        }
         await this.options.sessions.ensureRecovered(command.sessionId);
         return {
           protocolVersion: 1,
@@ -199,6 +239,38 @@ export class LoopbackCommandServer {
           type: "SESSION_STARTED",
           requestId: command.requestId,
           sessionId: command.sessionId
+        };
+      }
+      case "START_CONFIGURED_SESSION": {
+        const composition = startComposition;
+        if (composition === undefined) {
+          throw new Error("Validated configured session composition is missing");
+        }
+
+        try {
+          await new TurnCoordinator(writer).startConfiguredSession({
+            configuration: composition.configuration,
+            ...(composition.mode === "OXFORD_MATHEMATICS"
+              ? { problem: composition.problem }
+              : {})
+          }, envelope);
+        } catch (error) {
+          if (error instanceof RequestIdConflictError) throw error;
+          if (error instanceof Error && error.message === "Session already started") {
+            throw new ProtocolHttpError(409, "CONFLICT", "Session is already started");
+          }
+          throw error;
+        }
+        await this.options.sessions.ensureRecovered(command.sessionId);
+        const problem = toInterviewProblemPublicView(composition);
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "CONFIGURED_SESSION_STARTED",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          configuration: composition.configuration,
+          ...(problem === undefined ? {} : { problem })
         };
       }
       case "RESUME_SESSION": {
@@ -280,6 +352,22 @@ export class LoopbackCommandServer {
             Object.values(state.deliveries).map((atom) => [atom.deliveryId, atom.status])
           ),
           history: [...this.options.sessions.getHistory(command.sessionId)]
+        };
+      }
+      case "GET_INTERVIEW_SESSION_CONTEXT": {
+        const composition = recoveredComposition;
+        if (composition === undefined) {
+          throw new Error("Recovered session composition is missing");
+        }
+        const problem = toInterviewProblemPublicView(composition);
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "INTERVIEW_SESSION_CONTEXT",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          configuration: composition.configuration,
+          ...(problem === undefined ? {} : { problem })
         };
       }
       case "RECONNECT_DELIVERY": {

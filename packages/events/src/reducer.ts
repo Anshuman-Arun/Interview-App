@@ -10,6 +10,16 @@ function assertSequence(state: SessionState, event: SessionEvent): void {
   }
 }
 
+function deepFreeze<T>(value: T): T {
+  if (typeof value !== "object" || value === null || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const nested of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(nested);
+  }
+  return Object.freeze(value);
+}
+
 function withDeliveryStatus(state: SessionState, deliveryId: string, status: DeliveryAtom["status"]): SessionState {
   const current = state.deliveries[deliveryId];
   if (current === undefined) throw new Error(`Unknown delivery ${deliveryId}`);
@@ -43,9 +53,34 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
   let next: SessionState;
   switch (event.type) {
     case "SESSION_STARTED":
-      next = { ...state, started: true, status: "ACTIVE" };
+      if (state.started) throw new Error("Session is already started");
+      next = {
+        ...state,
+        started: true,
+        status: "ACTIVE",
+        ...(event.payload.configuration === undefined
+          ? {}
+          : { configuration: deepFreeze(structuredClone(event.payload.configuration)) })
+      };
       break;
-    case "PROBLEM_PRESENTED":
+    case "PROBLEM_PRESENTED": {
+      if (state.problem !== undefined) {
+        throw new Error("Authoritative problem identity is already bound");
+      }
+      if (state.configuration !== undefined) {
+        if (state.configuration.mode === "QUANT_TRADING") {
+          throw new Error("Quant Trading sessions cannot bind PROBLEM_PRESENTED state");
+        }
+        const configuredTarget = state.configuration.mode === "OXFORD_MATHEMATICS"
+          ? state.configuration.problem
+          : state.configuration.scenario;
+        if (
+          configuredTarget.id !== event.payload.problemId
+          || configuredTarget.version !== event.payload.problemVersion
+        ) {
+          throw new Error("Presented problem identity does not match session configuration");
+        }
+      }
       next = {
         ...state,
         problem: {
@@ -58,6 +93,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         }
       };
       break;
+    }
     case "QUANT_RESEARCH_SCENARIO_INITIALIZED": {
       if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
       if (

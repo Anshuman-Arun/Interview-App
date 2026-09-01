@@ -1,9 +1,13 @@
 import type { z } from "zod";
 import {
   ClientCommandSchema,
+  ConfiguredSessionStartedResponseSchema,
   DeliveryAcknowledgedResponseSchema,
   DeliveryReconnectResponseSchema,
   InputCommittedResponseSchema,
+  InterviewCatalogResponseSchema,
+  InterviewSessionConfigurationSchema,
+  InterviewSessionContextResponseSchema,
   ProtocolErrorResponseSchema,
   RequestIdSchema,
   SessionArchivedResponseSchema,
@@ -14,6 +18,8 @@ import {
   SessionsListResponseSchema,
   type ClientCommand,
   type DeliveryId,
+  type InterviewCatalogEntry,
+  type InterviewSessionConfiguration,
   type ProtocolErrorResponse,
   type ProtocolSuccessResponse,
   type RequestId,
@@ -22,6 +28,9 @@ import {
 } from "../../../packages/domain/src/index.js";
 
 type SessionStartedResponse = z.infer<typeof SessionStartedResponseSchema>;
+type ConfiguredSessionStartedResponse = z.infer<typeof ConfiguredSessionStartedResponseSchema>;
+type InterviewSessionContextResponse = z.infer<typeof InterviewSessionContextResponseSchema>;
+type InterviewCatalogResponse = z.infer<typeof InterviewCatalogResponseSchema>;
 type SessionResumedResponse = z.infer<typeof SessionResumedResponseSchema>;
 type SessionCompletedResponse = z.infer<typeof SessionCompletedResponseSchema>;
 type SessionArchivedResponse = z.infer<typeof SessionArchivedResponseSchema>;
@@ -148,6 +157,78 @@ export class BrowserCommandClient {
       );
     }
     return result;
+  }
+
+  public async startConfiguredSession(
+    sessionId: SessionId,
+    configurationInput: InterviewSessionConfiguration,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<ConfiguredSessionStartedResponse> {
+    const requestId = this.resolveRequestId(options);
+    const configuration = InterviewSessionConfigurationSchema.parse(configurationInput);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "START_CONFIGURED_SESSION",
+      requestId,
+      sessionId,
+      configuration
+    });
+    const result = await this.send(
+      command,
+      (value) => ConfiguredSessionStartedResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async getInterviewSessionContext(
+    sessionId: SessionId,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<InterviewSessionContextResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "GET_INTERVIEW_SESSION_CONTEXT",
+      requestId,
+      sessionId
+    });
+    const result = await this.send(
+      command,
+      (value) => InterviewSessionContextResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async listInterviewCatalog(
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<readonly InterviewCatalogEntry[]> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "LIST_INTERVIEW_CATALOG",
+      requestId
+    });
+    const result: InterviewCatalogResponse = await this.send(
+      command,
+      (value) => InterviewCatalogResponseSchema.parse(value),
+      options.signal
+    );
+    return result.entries;
   }
 
   public async listSessions(

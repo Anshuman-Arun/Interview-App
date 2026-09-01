@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   CommandEnvelopeSchema,
+  InterviewSessionConfigurationSchema,
   type CommandEnvelope
 } from "../../domain/src/index.js";
 import {
@@ -87,6 +88,16 @@ function reconstructEngine(state: Readonly<SessionState>): QuantResearchEngine {
   const persisted = state.quantResearch;
   if (persisted === undefined) throw new Error("Quant Research scenario is not initialized");
   if (
+    state.configuration !== undefined
+    && (
+      state.configuration.mode !== "QUANT_RESEARCH"
+      || state.configuration.scenario.id !== persisted.definition.family
+      || state.configuration.scenario.version !== persisted.definition.version
+    )
+  ) {
+    throw new Error("Persisted Quant Research scenario does not match the authoritative session configuration");
+  }
+  if (
     state.problem?.id !== persisted.definition.family ||
     state.problem.version !== persisted.definition.version
   ) {
@@ -96,6 +107,9 @@ function reconstructEngine(state: Readonly<SessionState>): QuantResearchEngine {
   const eventDefinition = QuantResearchScenarioDefinitionEventSchema.parse(persisted.definition);
   const definition = parseQuantResearchDefinition(eventDefinition);
   const engine = new QuantResearchEngine(definition);
+  if (state.problem.prompt !== engine.getState().prompt) {
+    throw new Error("Persisted Quant Research public prompt does not match deterministic regeneration");
+  }
 
   const expectedSnapshot = canonicalEventSnapshot(engine);
   const storedSnapshot = QuantResearchAuthoritativeSnapshotEventSchema.parse(persisted.authoritativeSnapshot);
@@ -142,6 +156,12 @@ export class QuantResearchCoordinator {
 
   public initialize(definitionInput: unknown, commandEnvelope?: CommandEnvelope) {
     const definition = parseQuantResearchDefinition(definitionInput);
+    const sessionConfiguration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_RESEARCH",
+      scenario: { id: definition.family, version: definition.version },
+      interventionPolicy: "BALANCED"
+    });
     const engine = new QuantResearchEngine(definition);
     const publicState = engine.getState();
     const result = canonicalEventResult(engine);
@@ -162,29 +182,50 @@ export class QuantResearchCoordinator {
       QuantResearchCoordinatorOutcomeSchema,
       (state) => {
         assertSessionAvailable(state);
-        if (state.started) throw new Error("Session is already started");
         if (state.problem !== undefined) throw new Error("Session already has a presented problem");
         if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
-        const drafts: EventDraft[] = [{
-          source: "APPLICATION",
-          type: "SESSION_STARTED",
-          payload: { startedAt: new Date().toISOString() }
-        }, {
-          source: "APPLICATION",
-          type: "PROBLEM_PRESENTED",
-          payload: {
-            problemId: definition.family,
-            problemVersion: definition.version,
-            prompt: publicState.prompt
+
+        const startDrafts: EventDraft[] = [];
+        if (!state.started) {
+          startDrafts.push({
+            source: "APPLICATION",
+            type: "SESSION_STARTED",
+            payload: {
+              startedAt: new Date().toISOString(),
+              configuration: sessionConfiguration
+            }
+          });
+        } else {
+          if (
+            state.configuration === undefined
+            || state.configuration.mode !== "QUANT_RESEARCH"
+            || state.configuration.scenario.id !== definition.family
+            || state.configuration.scenario.version !== definition.version
+          ) {
+            throw new Error("Started session configuration does not match the Quant Research definition");
           }
-        }, {
-          source: "APPLICATION",
-          type: "QUANT_RESEARCH_SCENARIO_INITIALIZED",
-          payload: {
-            definition: eventDefinition,
-            authoritativeSnapshot
+        }
+
+        const drafts: EventDraft[] = [
+          ...startDrafts,
+          {
+            source: "APPLICATION",
+            type: "PROBLEM_PRESENTED",
+            payload: {
+              problemId: definition.family,
+              problemVersion: definition.version,
+              prompt: publicState.prompt
+            }
+          },
+          {
+            source: "APPLICATION",
+            type: "QUANT_RESEARCH_SCENARIO_INITIALIZED",
+            payload: {
+              definition: eventDefinition,
+              authoritativeSnapshot
+            }
           }
-        }];
+        ];
         return { drafts, result: outcome };
       }
     );
