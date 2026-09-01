@@ -254,7 +254,8 @@ export const TranscriptCandidateSchema = z.object({
   const audioDurationMs = value.sourceAudioBasis.sampleCount / value.sourceAudioBasis.sampleRate * 1_000;
   let previousEndMs = 0;
   for (let index = 0; index < words.length; index += 1) {
-    const word = words[index]!;
+    const word = words[index];
+    if (word === undefined) continue;
     if (word.endMs > audioDurationMs + 1) {
       context.addIssue({
         code: "custom",
