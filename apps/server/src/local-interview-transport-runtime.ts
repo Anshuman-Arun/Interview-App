@@ -157,7 +157,8 @@ export class LocalInterviewTransportRuntime {
       } catch (rollbackError) {
         throw new AggregateError(
           [error, rollbackError],
-          "Local interview transport startup failed and command-server rollback also failed"
+          "Local interview transport startup failed and command-server rollback also failed",
+          { cause: rollbackError }
         );
       }
       throw error;

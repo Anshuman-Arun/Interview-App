@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DisclosureIdSchema } from "./ids.js";
 
 export const SocraticActionSchema = z.enum([
   "WAIT",
@@ -27,8 +28,14 @@ export type DisclosureLevel = z.infer<typeof DisclosureLevelSchema>;
 
 export const RealizationRequestSchema = z.object({
   requiredAction: SocraticActionSchema,
-  target: z.string().min(1).optional(),
-  maximumDisclosure: DisclosureLevelSchema
+  target: z.string()
+    .min(1)
+    .max(1_024)
+    .refine((value) => value.trim().length > 0, "Target must contain non-whitespace content")
+    .optional(),
+  maximumDisclosure: DisclosureLevelSchema,
+  allowedDisclosureIds: z.array(DisclosureIdSchema).max(256)
+    .refine((ids) => new Set(ids).size === ids.length, "Allowed disclosure IDs must be unique")
+    .optional()
 }).strict();
 export type RealizationRequest = z.infer<typeof RealizationRequestSchema>;
-

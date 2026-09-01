@@ -154,7 +154,7 @@ describe("authenticated loopback command protocol", () => {
 
     const writer = registry.get(sessionId);
     const turns = new TurnCoordinator(writer);
-    await turns.selectAction(inputResponse.turnId);
+    await turns.selectAction(inputResponse.turnId, sixPeopleProblem);
     const generation = await turns.startGeneration(inputResponse.inputEpisodeId, inputResponse.turnId, "mock-model");
     const safeProbe = "Why must that step be true?";
     const proposal = await turns.processProposal({
@@ -163,7 +163,9 @@ describe("authenticated loopback command protocol", () => {
         producer: "mock-model",
         inputEpisodeId: inputResponse.inputEpisodeId,
         turnId: inputResponse.turnId,
-        generationId: generation.generationId
+        generationId: generation.generationId,
+        contextEpoch: generation.basis.contextEpoch,
+        sourceRevision: generation.basis.committedInputSequence
       }),
       problem: sixPeopleProblem,
       proposal: {
@@ -246,7 +248,7 @@ describe("authenticated loopback command protocol", () => {
     const originalTurns = new TurnCoordinator(originalWriter);
     await originalTurns.startSession(sixPeopleProblem);
     const input = await originalTurns.commitInput("I have not justified the claim.");
-    await originalTurns.selectAction(input.turnId);
+    await originalTurns.selectAction(input.turnId, sixPeopleProblem);
     const generation = await originalTurns.startGeneration(input.inputEpisodeId, input.turnId, "mock-model");
     const safeProbe = "Why must that step be true?";
     const proposal = await originalTurns.processProposal({
@@ -255,7 +257,9 @@ describe("authenticated loopback command protocol", () => {
         producer: "mock-model",
         inputEpisodeId: input.inputEpisodeId,
         turnId: input.turnId,
-        generationId: generation.generationId
+        generationId: generation.generationId,
+        contextEpoch: generation.basis.contextEpoch,
+        sourceRevision: generation.basis.committedInputSequence
       }),
       problem: sixPeopleProblem,
       proposal: {

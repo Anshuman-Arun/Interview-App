@@ -5,8 +5,8 @@ import { createRoot } from "react-dom/client";
 import { useInterviewSession } from "../apps/web/src/hooks/useInterviewSession.js";
 
 function Probe({ tick }: { readonly tick: number }) {
-  useInterviewSession();
-  return <div>{tick}</div>;
+  const session = useInterviewSession();
+  return <div>{String(session.isTransportManaged)}:{tick}</div>;
 }
 
 describe("desktop hook bootstrap lifecycle", () => {
@@ -43,11 +43,13 @@ describe("desktop hook bootstrap lifecycle", () => {
       root.render(<Probe tick={0} />);
     });
     expect(getBootstrap).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toBe("true:0");
 
     await act(async () => {
       root.render(<Probe tick={1} />);
     });
     expect(getBootstrap).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toBe("true:1");
 
     await act(async () => {
       root.unmount();

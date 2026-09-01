@@ -70,6 +70,40 @@ describe("delivery crash boundaries", () => {
     }
   });
 
+  it("accepts a late exposure acknowledgement after conservative uncertainty without replaying output", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const delivery = new DeliveryCoordinator(harness.writer);
+      await delivery.markStarted(atom.deliveryId);
+      await delivery.markPossiblyExposed(
+        atom.deliveryId,
+        "renderer acknowledgement was temporarily unavailable"
+      );
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status)
+        .toBe("POSSIBLY_EXPOSED");
+
+      const reconnected = await delivery.reconnect(
+        atom.deliveryId,
+        createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "late-ack-regression"
+        })
+      );
+      expect(reconnected.status).toBe("POSSIBLY_EXPOSED");
+      expect(reconnected.command).toBeUndefined();
+
+      await delivery.acknowledgeExposed(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status)
+        .toBe("EXPOSED");
+      await delivery.acknowledgeCompleted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status)
+        .toBe("COMPLETED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("preserves persisted exposure around restart and permits completion", async () => {
     const harness = await createCoreHarness();
     try {

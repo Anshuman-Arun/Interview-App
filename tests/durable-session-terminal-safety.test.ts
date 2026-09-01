@@ -3,6 +3,7 @@ import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
 import { SessionRuntimeRegistry } from "../packages/interview-engine/src/index.js";
 import { SessionRecoveryCoordinator } from "../apps/server/src/session-recovery-coordinator.js";
 import { ServerTurnOrchestrator } from "../apps/server/src/turn-orchestrator.js";
+import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   authorizeSafeProbe,
   createCoreHarness
@@ -19,7 +20,7 @@ describe("durable terminal session safety", () => {
     expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
     await expect(harness.turns.beginUtterance()).rejects.toThrow(/Cannot begin utterance/u);
     await expect(harness.turns.requestVision("terminal", [])).rejects.toThrow(/Cannot request vision/u);
-    await expect(harness.turns.selectAction(harness.turnId)).rejects.toThrow(/Cannot select pedagogical action/u);
+    await expect(harness.turns.selectAction(harness.turnId, sixPeopleProblem)).rejects.toThrow(/Cannot select pedagogical action/u);
     await expect(
       harness.turns.startGeneration(harness.inputEpisodeId, harness.turnId, "late-provider")
     ).rejects.toThrow(/Cannot start generation/u);

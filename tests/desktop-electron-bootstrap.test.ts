@@ -82,7 +82,7 @@ describe("desktop secure bootstrap", () => {
 
     expect(() => createSecureWebPreferences("relative/preload.cjs"))
       .toThrow(/absolute filesystem path/u);
-    expect(() => createSecureWebPreferences("" as never))
+    expect(() => createSecureWebPreferences(""))
       .toThrow(/absolute filesystem path/u);
     expect(() => createSecureWebPreferences(123 as never))
       .toThrow(/absolute filesystem path/u);
@@ -196,8 +196,9 @@ describe("desktop secure bootstrap", () => {
   });
 
   it("rejects unsupported backend configuration keys before factory invocation", () => {
-    const factory = vi.fn(async () => ({ stop: vi.fn(async () => undefined) }))
-      as unknown as InterviewServerFactory;
+    const factory = vi.fn(async () => ({
+      stop: vi.fn(async () => undefined)
+    })) as unknown as InterviewServerFactory;
     const controller = new DesktopBackendController(factory);
 
     expect(() => controller.start({

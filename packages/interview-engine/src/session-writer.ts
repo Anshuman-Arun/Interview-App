@@ -115,7 +115,11 @@ export class SessionWriter {
       return Promise.reject(error instanceof Error ? error : new Error("Command identity validation failed"));
     }
     const run = (): CommandResult<TResult> => {
-      const prior = this.store.getProcessedResult(this.sessionId, envelope.requestId);
+      const prior = this.store.getProcessedResultForWriter(
+        this.sessionId,
+        envelope.requestId,
+        this.state.sequence
+      );
       if (prior.found) {
         if (prior.commandFingerprint !== commandFingerprint) throw new RequestIdConflictError();
         return { duplicate: true, value: resultSchema.parse(prior.result), appendedEventCount: 0 };
@@ -283,7 +287,7 @@ export class SessionRuntimeRegistry {
           );
           const failures = results
             .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-            .map((result) => result.reason);
+            .map((result): unknown => result.reason as unknown);
           if (failures.length > 0) {
             throw new AggregateError(failures, "One or more session writers failed to close");
           }

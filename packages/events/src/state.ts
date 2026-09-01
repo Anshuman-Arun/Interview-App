@@ -25,6 +25,12 @@ import type {
   VerificationResult,
   EvidenceKey
 } from "../../domain/src/index.js";
+import type {
+  QuantResearchActionEvent,
+  QuantResearchAuthoritativeSnapshotEvent,
+  QuantResearchResultEvent,
+  QuantResearchScenarioDefinitionEvent
+} from "./schemas.js";
 import {
   zeroBoardRevision,
   zeroContextEpoch,
@@ -84,6 +90,8 @@ export interface VerificationRequestState {
   readonly requestedEventId: EventId;
   readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
   readonly result?: VerificationResult;
+  readonly resultEventId?: EventId;
+  readonly resultSequence?: number;
   readonly discardReason?: string;
 }
 export interface EvidenceRecordState {
@@ -94,10 +102,23 @@ export interface EvidenceRecordState {
   readonly supersededByEventId?: EventId;
   readonly invalidationReason?: string;
 }
+export interface QuantResearchSessionState {
+  readonly definition: QuantResearchScenarioDefinitionEvent;
+  readonly authoritativeSnapshot: QuantResearchAuthoritativeSnapshotEvent;
+  readonly actions: readonly QuantResearchActionEvent[];
+  readonly result?: QuantResearchResultEvent | undefined;
+}
+
 export interface GenerationState {
   readonly generationId: GenerationId;
   readonly basis: GenerationBasis;
   readonly provider: string;
+  /** Derived during replay from the application-selected action that existed when generation began. */
+  readonly pedagogicalAction?: RealizationRequest;
+  /** Derived from PROPOSAL_VALIDATED and preserved through later supersession. */
+  readonly interviewerProposalValidated?: true;
+  /** Exact interviewer proposal that was present when application validation succeeded. */
+  readonly validatedInterviewerProposal?: InterviewerProposal;
   readonly status: "ACTIVE" | "PROPOSAL_RECEIVED" | "VALIDATED" | "REJECTED" | "SUPERSEDED";
   readonly contextManifest?: ContextCompilationManifest;
   readonly proposal?: InterviewerProposal;
@@ -124,6 +145,7 @@ export interface SessionState {
   readonly problemStateRevision: ProblemStateRevision;
   readonly policyRevision: PolicyRevision;
   readonly lastCommittedInputSequence?: number;
+  readonly quantResearch?: QuantResearchSessionState | undefined;
   readonly eventIds: readonly EventId[];
   readonly utterances: Readonly<Record<string, UtteranceState>>;
   readonly inputEpisodes: Readonly<Record<string, InputEpisodeState>>;

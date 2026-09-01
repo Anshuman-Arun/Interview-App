@@ -61,6 +61,10 @@ export const App: React.FC = () => {
 
   const handleSaveSettings = (e: React.SyntheticEvent): void => {
     e.preventDefault();
+    if (session.isTransportManaged) {
+      setShowSettings(false);
+      return;
+    }
     session.setBaseUrl(inputUrl.trim());
     setShowSettings(false);
   };
@@ -191,19 +195,21 @@ export const App: React.FC = () => {
             📋 Sessions
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowSettings((prev) => !prev)}
-            className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md border border-slate-200 transition-colors"
-            data-testid="settings-btn"
-          >
-            ⚙️ Config
-          </button>
+          {!session.isTransportManaged && (
+            <button
+              type="button"
+              onClick={() => setShowSettings((prev) => !prev)}
+              className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md border border-slate-200 transition-colors"
+              data-testid="settings-btn"
+            >
+              ⚙️ Config
+            </button>
+          )}
         </div>
       </header>
 
       {/* Settings Modal / Drawer */}
-      {showSettings && (
+      {showSettings && !session.isTransportManaged && (
         <div className="settings-drawer bg-slate-800 text-white px-6 py-4 border-b border-slate-700 flex items-center justify-between gap-6 shrink-0 shadow-md">
           <form onSubmit={handleSaveSettings} className="flex flex-wrap items-center gap-4 flex-1">
             <div className="flex flex-col gap-1">

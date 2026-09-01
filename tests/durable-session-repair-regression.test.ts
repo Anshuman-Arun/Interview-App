@@ -363,7 +363,11 @@ describe("durable session repair regressions", () => {
     const restarted = await runtime.start();
     const probe = await fetch(`${restarted.command.url}/v1/commands`, {
       method: "OPTIONS",
-      headers: { origin }
+      headers: {
+        origin,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type, x-interview-client-token"
+      }
     });
     expect(probe.status).toBe(204);
 

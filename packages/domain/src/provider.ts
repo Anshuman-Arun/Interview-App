@@ -4,6 +4,13 @@ import { GenerationIdSchema } from "./ids.js";
 import type { BoardObservation } from "./whiteboard.js";
 import type { InterviewerProposal } from "./proposal.js";
 
+export const ProviderRuntimeNameSchema = z.string()
+  .trim()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u);
+export type ProviderRuntimeName = z.infer<typeof ProviderRuntimeNameSchema>;
+
 export const CancellationCapabilitySchema = z.enum([
   "NONE", "DROP_OUTPUT", "CLOSE_CLIENT_STREAM", "CANCEL_PROVIDER_COMPUTE", "INTERRUPT_LOCAL_PROCESS"
 ]);
