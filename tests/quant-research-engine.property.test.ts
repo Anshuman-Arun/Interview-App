@@ -123,4 +123,28 @@ describe("Quant Research property invariants", () => {
     ), { numRuns: 100 });
   });
 
+
+  it("generated model families are identifiable from the disclosed noise/slope assumptions", () => {
+    fc.assert(fc.property(fc.integer({ min: 0, max: 0xffff_ffff }), (seed) => {
+      const definition = modelDefinition(seed);
+      const probe = new QuantResearchEngine(definition);
+      const state = probe.getState();
+      const y = state.visibleData.find((item) => item.key === "y")?.value as readonly number[];
+      const noiseRadius = state.visibleData.find((item) => item.key === "noiseRadius")?.value as number;
+      const first = y[0];
+      const last = y[y.length - 1];
+      expect(first).toBeDefined();
+      expect(last).toBeDefined();
+      if (first === undefined || last === undefined) return;
+      const inferred = Math.abs(last - first) > 2 * noiseRadius ? "LINEAR" : "CONSTANT";
+
+      probe.applyAction({ actionId: "model-1", kind: "CHOOSE_OPTION", option: inferred });
+      const perturbed = probe.getState();
+      expect(perturbed.visibleData.find((item) => item.key === "baselineY")?.value).toEqual(y);
+      probe.applyAction({ actionId: "model-2", kind: "CHOOSE_OPTION", option: inferred });
+      expect(probe.getResult().metrics.NUMERICAL_CORRECTNESS).toBe(100);
+      expect(probe.getResult().metrics.ROBUSTNESS).toBe(100);
+    }), { numRuns: 100 });
+  });
+
 });
