@@ -183,18 +183,12 @@ export class LoopbackCommandServer {
     }
 
     let startComposition: ReturnType<typeof resolveInterviewSessionConfiguration> | undefined;
-    if (command.type === "START_SESSION") {
-      if (command.configuration !== undefined && command.problemId !== undefined) {
-        throw new ProtocolHttpError(
-          400,
-          "INVALID_COMMAND",
-          "START_SESSION may not combine configuration with legacy problemId"
-        );
-      }
+    if (command.type === "START_SESSION" || command.type === "START_CONFIGURED_SESSION") {
       try {
         startComposition = resolveInterviewSessionConfiguration(
-          command.configuration
-            ?? createLegacyDefaultSessionConfiguration(command.problemId)
+          command.type === "START_SESSION"
+            ? createLegacyDefaultSessionConfiguration(command.problemId)
+            : command.configuration
         );
       } catch {
         throw new ProtocolHttpError(
@@ -205,13 +199,15 @@ export class LoopbackCommandServer {
       }
     }
 
-    if (command.type !== "START_SESSION" && !this.options.sessions.hasSession(command.sessionId)) {
+    const isStartCommand =
+      command.type === "START_SESSION" || command.type === "START_CONFIGURED_SESSION";
+    if (!isStartCommand && !this.options.sessions.hasSession(command.sessionId)) {
       throw new ProtocolHttpError(404, "NOT_FOUND", "Session not found");
     }
 
     const writer = await this.options.sessions.getWriterAsync(command.sessionId);
     let recoveredComposition: ReturnType<typeof resolveSessionStateComposition> | undefined;
-    if (command.type !== "START_SESSION") {
+    if (!isStartCommand) {
       await this.options.sessions.ensureRecovered(command.sessionId);
       recoveredComposition = resolveSessionStateComposition(writer.getState());
     }
@@ -223,25 +219,12 @@ export class LoopbackCommandServer {
     switch (command.type) {
       case "START_SESSION": {
         const composition = startComposition;
-        if (composition === undefined) {
-          throw new Error("Validated START_SESSION composition is missing");
+        if (composition === undefined || composition.mode !== "OXFORD_MATHEMATICS") {
+          throw new Error("Validated legacy START_SESSION composition is missing or incompatible");
         }
 
         try {
-          const turns = new TurnCoordinator(writer);
-          if (command.configuration === undefined) {
-            if (composition.mode !== "OXFORD_MATHEMATICS") {
-              throw new Error("Legacy START_SESSION resolved to an incompatible mode");
-            }
-            await turns.startSession(composition.problem, envelope);
-          } else {
-            await turns.startConfiguredSession({
-              configuration: composition.configuration,
-              ...(composition.mode === "OXFORD_MATHEMATICS"
-                ? { problem: composition.problem }
-                : {})
-            }, envelope);
-          }
+          await new TurnCoordinator(writer).startSession(composition.problem, envelope);
         } catch (error) {
           if (error instanceof RequestIdConflictError) throw error;
           if (error instanceof Error && error.message === "Session already started") {
@@ -249,14 +232,41 @@ export class LoopbackCommandServer {
           }
           throw error;
         }
-        // Establish the process-lifetime recovery boundary immediately after
-        // authoritative creation, before a live delivery can become in-flight.
+        await this.options.sessions.ensureRecovered(command.sessionId);
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "SESSION_STARTED",
+          requestId: command.requestId,
+          sessionId: command.sessionId
+        };
+      }
+      case "START_CONFIGURED_SESSION": {
+        const composition = startComposition;
+        if (composition === undefined) {
+          throw new Error("Validated configured session composition is missing");
+        }
+
+        try {
+          await new TurnCoordinator(writer).startConfiguredSession({
+            configuration: composition.configuration,
+            ...(composition.mode === "OXFORD_MATHEMATICS"
+              ? { problem: composition.problem }
+              : {})
+          }, envelope);
+        } catch (error) {
+          if (error instanceof RequestIdConflictError) throw error;
+          if (error instanceof Error && error.message === "Session already started") {
+            throw new ProtocolHttpError(409, "CONFLICT", "Session is already started");
+          }
+          throw error;
+        }
         await this.options.sessions.ensureRecovered(command.sessionId);
         const problem = toInterviewProblemPublicView(composition);
         return {
           protocolVersion: 1,
           ok: true,
-          type: "SESSION_STARTED",
+          type: "CONFIGURED_SESSION_STARTED",
           requestId: command.requestId,
           sessionId: command.sessionId,
           configuration: composition.configuration,
@@ -264,13 +274,8 @@ export class LoopbackCommandServer {
         };
       }
       case "RESUME_SESSION": {
-        const composition = recoveredComposition;
-        if (composition === undefined) {
-          throw new Error("Recovered session composition is missing");
-        }
         await new TurnCoordinator(writer).resumeSession(envelope);
         const state = writer.getState();
-        const problem = toInterviewProblemPublicView(composition);
         return {
           protocolVersion: 1,
           ok: true,
@@ -280,10 +285,7 @@ export class LoopbackCommandServer {
           sequence: state.sequence,
           started: state.started,
           status: state.status,
-          ...(state.configuration === undefined ? {} : { configuration: state.configuration }),
-          ...(problem === undefined ? {} : { problem }),
           ...(state.problem?.id !== undefined ? { problemId: state.problem.id } : {}),
-          ...(state.problem?.version !== undefined ? { problemVersion: state.problem.version } : {}),
           contextEpoch: state.contextEpoch,
           deliveryStatuses: Object.fromEntries(
             Object.values(state.deliveries).map((atom) => [atom.deliveryId, atom.status])
@@ -335,12 +337,7 @@ export class LoopbackCommandServer {
         };
       }
       case "GET_SESSION_SUMMARY": {
-        const composition = recoveredComposition;
-        if (composition === undefined) {
-          throw new Error("Recovered session composition is missing");
-        }
         const state = writer.getState();
-        const problem = toInterviewProblemPublicView(composition);
         return {
           protocolVersion: 1,
           ok: true,
@@ -350,15 +347,27 @@ export class LoopbackCommandServer {
           sequence: state.sequence,
           started: state.started,
           status: state.status,
-          ...(state.configuration === undefined ? {} : { configuration: state.configuration }),
-          ...(problem === undefined ? {} : { problem }),
-          ...(state.problem?.id !== undefined ? { problemId: state.problem.id } : {}),
-          ...(state.problem?.version !== undefined ? { problemVersion: state.problem.version } : {}),
           contextEpoch: state.contextEpoch,
           deliveryStatuses: Object.fromEntries(
             Object.values(state.deliveries).map((atom) => [atom.deliveryId, atom.status])
           ),
           history: [...this.options.sessions.getHistory(command.sessionId)]
+        };
+      }
+      case "GET_INTERVIEW_SESSION_CONTEXT": {
+        const composition = recoveredComposition;
+        if (composition === undefined) {
+          throw new Error("Recovered session composition is missing");
+        }
+        const problem = toInterviewProblemPublicView(composition);
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "INTERVIEW_SESSION_CONTEXT",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          configuration: composition.configuration,
+          ...(problem === undefined ? {} : { problem })
         };
       }
       case "RECONNECT_DELIVERY": {
