@@ -107,14 +107,18 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   private readonly modelPath: string;
   private readonly configPath: string | undefined;
   private readonly supportsAbort: boolean;
+  private readonly transcribeRuntime: MoonshineRuntime["transcribe"];
+  private readonly cancelRuntime: MoonshineRuntime["cancel"];
 
-  public constructor(private readonly options: MoonshineRecognizerOptions) {
+  public constructor(options: MoonshineRecognizerOptions) {
     this.modelPath = validateLocalPath(options.modelPath, "Moonshine model path");
     this.configPath = options.configPath === undefined
       ? undefined
       : validateLocalPath(options.configPath, "Moonshine config path");
     validateRuntimeIdentity(options.runtime.runtimeVersion, "Moonshine runtime version");
     this.supportsAbort = validateBoolean(options.runtime.supportsAbort, "Moonshine runtime abort capability");
+    this.transcribeRuntime = options.runtime.transcribe.bind(options.runtime);
+    this.cancelRuntime = options.runtime.cancel?.bind(options.runtime);
     const name = options.modelName?.trim() || "moonshine";
     this.modelIdentity = SpeechModelIdentitySchema.parse({
       name,
@@ -145,7 +149,7 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
     if (durationMs > MAX_SPEECH_UTTERANCE_DURATION_MS + 0.001) {
       throw new Error("Moonshine input exceeds maximum utterance duration");
     }
-    const rawRuntimeResult = await this.options.runtime.transcribe({
+    const rawRuntimeResult = await this.transcribeRuntime({
       requestId,
       utteranceId,
       pcmBytes: runtimePcmBytes,
@@ -186,9 +190,9 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
-    if (!this.supportsAbort || this.options.runtime.cancel === undefined) return false;
+    if (!this.supportsAbort || this.cancelRuntime === undefined) return false;
     const boundedRequestId = SpeechRequestIdSchema.parse(requestId);
-    return (await this.options.runtime.cancel(boundedRequestId)) === true;
+    return (await this.cancelRuntime(boundedRequestId)) === true;
   }
 }
 
