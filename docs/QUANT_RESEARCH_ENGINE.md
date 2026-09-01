@@ -95,7 +95,7 @@ The engine emits deterministic structured evidence rather than pretending to gra
 
 Evidence scores are bounded to `[0, 100]`. For exact allocation/optimization objectives, a non-optimal solution is capped below 100 even if a percentage ratio would otherwise round upward; category and overall aggregation likewise return 100 only when every constituent score is 100. Repeated evidence within a category is averaged first, then the final overall score averages the category-level metrics so a category does not gain accidental weight merely by appearing at more stages. Post-perturbation adaptation scores reflect quality under the changed conditions rather than rewarding an unchanged poor answer. The summaries describe what was checked without revealing the hidden reference value.
 
-Threshold comparisons use a small machine-precision allowance so mathematically symmetric answers on a scoring boundary are not split solely by binary floating-point representation. Bayesian posterior-update tolerance is additionally bounded by half of the actual prior-to-posterior movement, preventing an unchanged prior answer from receiving full update credit when the revealed evidence moved the target.
+Threshold comparisons use a small machine-precision allowance so mathematically symmetric answers on a scoring boundary are not split solely by binary floating-point representation. Bayesian posterior/update perturbation scores combine absolute numerical tolerance with progress from the stale reference toward the changed target; simply repeating the old prior/posterior therefore receives zero update/adaptation credit.
 
 ## Replay
 
