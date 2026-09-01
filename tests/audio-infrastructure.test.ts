@@ -4305,7 +4305,7 @@ describe("queued browser audio playback", () => {
       outputDeviceId: "speaker-2"
     });
     await waitForTestCondition(
-      () => setup.elements[0]?.sinkIds.length === 1 && setup.elements[0]?.src === "/a.wav",
+      () => setup.elements[0]?.sinkIds.length === 1 && setup.elements[0].src === "/a.wav",
       "selected output sink setup"
     );
     expect(setup.elements[0]?.sinkIds).toEqual(["speaker-2"]);
