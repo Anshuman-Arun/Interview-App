@@ -695,6 +695,19 @@ describe("deterministic Quant Research interview engine", () => {
     const replayed = replayQuantResearch(mutableDefinition, maliciousActions);
     expect(mutableDefinition.seed).toBe(sampling.seed + 1);
     expect(replayed.state).toEqual(expected);
+
+    let invalidActionContainerInspected = false;
+    const untouchedActions = new Proxy([] as unknown[], {
+      getOwnPropertyDescriptor(target, property) {
+        invalidActionContainerInspected = true;
+        return Reflect.getOwnPropertyDescriptor(target, property);
+      }
+    });
+    expectCode(
+      () => replayQuantResearch({ ...bayesian, seed: -1 }, untouchedActions),
+      "INVALID_DEFINITION"
+    );
+    expect(invalidActionContainerInspected).toBe(false);
   });
 
   it("replays Bayesian updates with identical versioned evidence", () => {
