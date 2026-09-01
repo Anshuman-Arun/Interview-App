@@ -34,10 +34,15 @@ export const SpeechUtteranceIdSchema = UtteranceIdSchema.refine(
   (value) => value.length <= 128 && SpeechIdentityPattern.test(value),
   { message: "Speech utterance ID is invalid or exceeds maximum length" }
 );
-export const SpeechStreamIdSchema = z.string()
-  .min(1)
-  .max(128)
-  .regex(/^[A-Za-z0-9._:-]+$/u);
+export const SpeechStreamIdSchema = z.string().superRefine((value, context) => {
+  if (value.length === 0 || value.length > 128) {
+    context.addIssue({ code: "custom", message: "Speech stream ID is invalid or exceeds maximum length" });
+    return;
+  }
+  if (!SpeechIdentityPattern.test(value)) {
+    context.addIssue({ code: "custom", message: "Speech stream ID contains invalid characters" });
+  }
+});
 export type SpeechStreamId = z.infer<typeof SpeechStreamIdSchema>;
 
 export const SpeechSampleRateSchema = z.union([z.literal(16_000), z.literal(48_000)]);
@@ -138,7 +143,15 @@ export const SourceAudioBasisSchema = z.object({
   sampleRate: SpeechSampleRateSchema,
   channels: SpeechChannelCountSchema,
   sampleCount: PositiveSafeIntegerSchema,
-  pcmSha256: z.string().regex(/^[0-9a-f]{64}$/u)
+  pcmSha256: z.string().superRefine((value, context) => {
+    if (value.length !== 64) {
+      context.addIssue({ code: "custom", message: "Audio basis PCM hash must contain exactly 64 characters" });
+      return;
+    }
+    if (!/^[0-9a-f]+$/u.test(value)) {
+      context.addIssue({ code: "custom", message: "Audio basis PCM hash must be lowercase hexadecimal" });
+    }
+  })
 }).strict().superRefine((value, context) => {
   if (value.lastSequence < value.firstSequence) {
     context.addIssue({ code: "custom", message: "Audio basis sequence range is reversed", path: ["lastSequence"] });
@@ -167,16 +180,29 @@ export const SourceAudioBasisSchema = z.object({
 export type SourceAudioBasis = z.infer<typeof SourceAudioBasisSchema>;
 
 const safeBoundedMetadataTextSchema = (maxLength: number, label: string) => z.string()
-  .min(1)
-  .max(maxLength)
-  .refine((value) => value.trim().length > 0, { message: `${label} must not be blank` })
-  .refine((value) => !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value), { message: `${label} contains unsafe control/format/surrogate characters` });
-
-const SafeTranscriptTextSchema = z.string()
-  .max(MAX_SPEECH_TRANSCRIPT_CHARS)
-  .refine((value) => !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value), {
-    message: "Transcript text contains unsafe control/format/surrogate characters"
+  .superRefine((value, context) => {
+    if (value.length === 0 || value.length > maxLength) {
+      context.addIssue({ code: "custom", message: `${label} is empty or exceeds maximum length` });
+      return;
+    }
+    if (value.trim().length === 0) {
+      context.addIssue({ code: "custom", message: `${label} must not be blank` });
+      return;
+    }
+    if (/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value)) {
+      context.addIssue({ code: "custom", message: `${label} contains unsafe control/format/surrogate characters` });
+    }
   });
+
+const SafeTranscriptTextSchema = z.string().superRefine((value, context) => {
+  if (value.length > MAX_SPEECH_TRANSCRIPT_CHARS) {
+    context.addIssue({ code: "custom", message: "Transcript text exceeds maximum length" });
+    return;
+  }
+  if (/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value)) {
+    context.addIssue({ code: "custom", message: "Transcript text contains unsafe control/format/surrogate characters" });
+  }
+});
 
 const safeRecognizerWordSchema = (maxLength: number) =>
   safeBoundedMetadataTextSchema(maxLength, "Recognizer word metadata");
