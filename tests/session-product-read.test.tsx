@@ -736,7 +736,7 @@ describe("grounded evaluation/replay product surface", () => {
     });
     expect(corrupted.readReplay(corruptedId)).toMatchObject({
       available: false,
-      reason: "REPLAY_UNAVAILABLE"
+      reason: "AUTHORITATIVE_HISTORY_UNAVAILABLE"
     });
 
     const oversizedId = SessionIdSchema.parse("session_oversized_read_fixture");
