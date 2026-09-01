@@ -125,6 +125,7 @@ describe("deterministic Quant Research interview engine", () => {
   });
 
   it.each([
+    { ...bayesian, version: "0.9.0" },
     { ...bayesian, generatorVersion: "wrong-generator-version" },
     { ...bayesian, rngVersion: "wrong-rng-version" },
     { ...bayesian, seed: Number.MAX_SAFE_INTEGER + 1 },
