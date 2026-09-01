@@ -127,6 +127,7 @@ export class SpeechWorkerCore {
   private readonly closedStreams = new Set<SpeechStreamId>();
   private readonly messages = new Map<RequestId, RememberedMessage>();
   private readonly inFlightMessages = new Map<RequestId, InFlightMessage>();
+  private readonly cancellationReserveClaims = new Set<SpeechStreamId>();
   private readonly diagnostics: SpeechWorkerDiagnostic[] = [];
   private readonly transcriptGate = new TranscriptResultGate();
   private readonly recognizerModelIdentity: SpeechModelIdentity;
@@ -284,7 +285,7 @@ export class SpeechWorkerCore {
     const request = parsed.data;
     const fingerprint = fingerprintParts(JSON.stringify(request));
 
-    const useCancellationReserve = this.streams.has(request.streamId);
+    const cancellationReserveStreamId = this.streams.has(request.streamId) ? request.streamId : undefined;
     return this.runIdempotent(request.requestId, fingerprint, async () => {
       const context = this.streams.get(request.streamId);
       let cancellation: "RUNTIME_ABORT_REQUESTED" | "SUPPRESS_LATE_RESULT_ONLY" | "NOT_RECOGNIZING" = "NOT_RECOGNIZING";
@@ -316,7 +317,7 @@ export class SpeechWorkerCore {
         type: "SPEECH_CANCELLED",
         cancellation
       })];
-    }, useCancellationReserve);
+    }, cancellationReserveStreamId);
   }
 
   public shutdown(): Promise<void> {
@@ -732,7 +733,7 @@ export class SpeechWorkerCore {
     requestId: RequestId,
     fingerprint: string,
     operation: () => Promise<readonly SpeechWorkerEvent[]>,
-    useControlReserve = false
+    cancellationReserveStreamId?: SpeechStreamId
   ): Promise<readonly SpeechWorkerEvent[]> {
     const replay = this.replayMessage(requestId, fingerprint);
     if (replay !== undefined) return Promise.resolve(replay);
@@ -748,12 +749,19 @@ export class SpeechWorkerCore {
       return active.promise.then((events) => cloneEvents(events));
     }
 
-    const capacity = this.maxInFlightRequests + (useControlReserve ? this.maxConcurrentStreams : 0);
-    if (this.inFlightMessages.size >= capacity) {
-      return Promise.reject(new SpeechWorkerCoreError(
-        "RESOURCE_LIMIT",
-        "Maximum in-flight speech request count reached"
-      ));
+    let claimedCancellationReserve = false;
+    if (this.inFlightMessages.size >= this.maxInFlightRequests) {
+      const canUseReserve = cancellationReserveStreamId !== undefined
+        && !this.cancellationReserveClaims.has(cancellationReserveStreamId)
+        && this.inFlightMessages.size < this.maxInFlightRequests + this.maxConcurrentStreams;
+      if (!canUseReserve) {
+        return Promise.reject(new SpeechWorkerCoreError(
+          "RESOURCE_LIMIT",
+          "Maximum in-flight speech request count reached"
+        ));
+      }
+      this.cancellationReserveClaims.add(cancellationReserveStreamId);
+      claimedCancellationReserve = true;
     }
 
     const token = {};
@@ -771,6 +779,9 @@ export class SpeechWorkerCore {
       })
       .finally(() => {
         if (this.inFlightMessages.get(requestId)?.token === token) this.inFlightMessages.delete(requestId);
+        if (claimedCancellationReserve && cancellationReserveStreamId !== undefined) {
+          this.cancellationReserveClaims.delete(cancellationReserveStreamId);
+        }
       });
     const tracked: InFlightMessage = { fingerprint, token, promise: canonical };
     this.inFlightMessages.set(requestId, tracked);
