@@ -1853,11 +1853,11 @@ describe("replay/history projections", () => {
     }
 
     const throwingEventArray = new Proxy<unknown[]>([], {
-      get: (target, property, receiver) => {
+      get: (_target, property): unknown => {
         if (property === "length") {
           throw new Error("PRIVATE_EVENT_ARRAY_MARKER");
         }
-        return Reflect.get(target, property, receiver);
+        return undefined;
       }
     });
     try {
@@ -1870,13 +1870,14 @@ describe("replay/history projections", () => {
     }
 
     const throwingSummaryArray = new Proxy<unknown[]>([], {
-      get: (target, property, receiver) => {
+      get: (target, property): unknown => {
         if (property === Symbol.iterator) {
           return () => {
             throw new Error("PRIVATE_SUMMARY_ARRAY_MARKER");
           };
         }
-        return Reflect.get(target, property, receiver);
+        if (property === "length") return target.length;
+        return undefined;
       }
     });
     try {
