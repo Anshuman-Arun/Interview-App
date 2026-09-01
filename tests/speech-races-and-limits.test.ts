@@ -559,6 +559,34 @@ describe("speech worker adversarial races and hard limits", () => {
     expect(await finalizing).toEqual([]);
   });
 
+  it("rejects frames queued behind natural finalization instead of silently dropping their audio", async () => {
+    const deferred = deferredRecognizerWithHangingCancel();
+    const subject = worker({
+      recognizer: deferred.recognizer,
+      endpointingFactory: shortEndpointing,
+      recognizerTimeoutMs: 200
+    });
+
+    for (let sequence = 0; sequence < 3; sequence += 1) {
+      const fixture = frame(sequence, true, "late-after-finalize");
+      await subject.submitFrame(fixture.envelope, fixture.pcm);
+    }
+    const endpoint = frame(3, false, "late-after-finalize");
+    const finalizing = subject.submitFrame(endpoint.envelope, endpoint.pcm);
+    const recognitionInput = await deferred.started;
+
+    const late = frame(4, true, "late-after-finalize");
+    const queuedLateFrame = subject.submitFrame(late.envelope, late.pcm);
+    deferred.resolve(validRaw(recognitionInput, "hanging-cancel"));
+
+    await expect(finalizing).resolves.toContainEqual(expect.objectContaining({
+      type: "TRANSCRIPT_CANDIDATE"
+    }));
+    await expect(queuedLateFrame).rejects.toMatchObject({
+      code: "STREAM_FINALIZED"
+    });
+  });
+
   it("bounds a hanging runtime cancellation callback and still suppresses the late recognition", async () => {
     const deferred = deferredRecognizerWithHangingCancel();
     const subject = worker({
