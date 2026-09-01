@@ -5,6 +5,7 @@ export * from "./delivery.js";
 export * from "./disclosure.js";
 export * from "./evidence.js";
 export * from "./generation.js";
+export * from "./formal-interpretation.js";
 export * from "./ids.js";
 export * from "./pedagogy.js";
 export * from "./problem.js";

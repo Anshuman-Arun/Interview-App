@@ -3,11 +3,9 @@ import type { VerificationResult } from "../../domain/src/index.js";
 import { normalizeInterpretationConfidence } from "./confidence.js";
 import { BoundedMathError } from "./math-utils.js";
 import {
-  MAX_MATH_STATEMENT_CHARACTERS,
-  MAX_STRUCTURED_ARRAY_ITEMS,
-  MAX_STRUCTURED_INPUT_DEPTH,
-  MAX_STRUCTURED_INPUT_NODES
-} from "./limits.js";
+  validateStructuredStatement,
+  type StructuredStatementValidationCode
+} from "./structured-statement-validation.js";
 
 export type VerificationReasonCode =
   | "INVALID_INTERPRETATION_CONFIDENCE"
@@ -35,36 +33,58 @@ export function result(
   };
 }
 
-interface JsonBudgetItem {
-  readonly value: unknown;
-  readonly depth: number;
-}
-
-function structuredInputWithinBounds(value: unknown): boolean {
-  const pending: JsonBudgetItem[] = [{ value, depth: 1 }];
-  let visitedNodes = 0;
-  while (pending.length > 0) {
-    const item = pending.pop();
-    if (item === undefined) break;
-    visitedNodes += 1;
-    if (item.depth > MAX_STRUCTURED_INPUT_DEPTH || visitedNodes > MAX_STRUCTURED_INPUT_NODES) return false;
-    if (Array.isArray(item.value)) {
-      if (item.value.length > MAX_STRUCTURED_ARRAY_ITEMS) return false;
-      for (const child of item.value) pending.push({ value: child, depth: item.depth + 1 });
-      continue;
-    }
-    if (item.value !== null && typeof item.value === "object") {
-      for (const child of Object.values(item.value as Record<string, unknown>)) {
-        pending.push({ value: child, depth: item.depth + 1 });
-      }
-    }
-  }
-  return true;
-}
-
 export type PreparedStatement<T> =
   | { readonly ok: true; readonly data: T; readonly interpretationConfidence: number }
   | { readonly ok: false; readonly result: VerificationResult };
+
+function statementValidationFailure(
+  code: StructuredStatementValidationCode,
+  interpretationConfidence: number,
+  verifier: string
+): VerificationResult {
+  switch (code) {
+    case "STATEMENT_TOO_LARGE":
+      return result(
+        "UNRESOLVED",
+        interpretationConfidence,
+        verifier,
+        "STATEMENT_TOO_LARGE",
+        "Formal interpretation exceeds the deterministic math statement limit"
+      );
+    case "INVALID_JSON":
+      return result(
+        "UNRESOLVED",
+        interpretationConfidence,
+        verifier,
+        "INVALID_JSON",
+        "Formal interpretation is not valid JSON"
+      );
+    case "RESOURCE_LIMIT":
+      return result(
+        "UNRESOLVED",
+        interpretationConfidence,
+        verifier,
+        "RESOURCE_LIMIT",
+        "Formal interpretation exceeds a structured input or schema resource limit"
+      );
+    case "STATEMENT_NOT_STRING":
+      return result(
+        "UNRESOLVED",
+        interpretationConfidence,
+        verifier,
+        "MALFORMED_INTERPRETATION",
+        "Formal interpretation must be supplied as a string"
+      );
+    case "MALFORMED_INTERPRETATION":
+      return result(
+        "UNRESOLVED",
+        interpretationConfidence,
+        verifier,
+        "MALFORMED_INTERPRETATION",
+        "Formal interpretation is malformed, unsupported, or incomplete"
+      );
+  }
+}
 
 export function prepareStructuredStatement<T>(
   statement: unknown,
@@ -97,88 +117,12 @@ export function prepareStructuredStatement<T>(
       )
     };
   }
-  if (typeof statement !== "string") {
-    return {
-      ok: false,
-      result: result(
-        "UNRESOLVED",
-        normalized.value,
-        verifier,
-        "MALFORMED_INTERPRETATION",
-        "Formal interpretation must be supplied as a string"
-      )
-    };
-  }
-  if (statement.length > MAX_MATH_STATEMENT_CHARACTERS) {
-    return {
-      ok: false,
-      result: result(
-        "UNRESOLVED",
-        normalized.value,
-        verifier,
-        "STATEMENT_TOO_LARGE",
-        "Formal interpretation exceeds the deterministic math statement limit"
-      )
-    };
-  }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(statement) as unknown;
-  } catch {
+  const validated = validateStructuredStatement(statement, schema);
+  if (!validated.ok) {
     return {
       ok: false,
-      result: result(
-        "UNRESOLVED",
-        normalized.value,
-        verifier,
-        "INVALID_JSON",
-        "Formal interpretation is not valid JSON"
-      )
-    };
-  }
-
-  if (!structuredInputWithinBounds(parsed)) {
-    return {
-      ok: false,
-      result: result(
-        "UNRESOLVED",
-        normalized.value,
-        verifier,
-        "RESOURCE_LIMIT",
-        "Formal interpretation exceeds the structured input depth, node, or container limits"
-      )
-    };
-  }
-
-  let validated: ReturnType<typeof schema.safeParse>;
-  try {
-    validated = schema.safeParse(parsed);
-  } catch {
-    return {
-      ok: false,
-      result: result(
-        "UNRESOLVED",
-        normalized.value,
-        verifier,
-        "MALFORMED_INTERPRETATION",
-        "Formal interpretation could not be validated safely"
-      )
-    };
-  }
-  if (!validated.success) {
-    const resourceLimitExceeded = validated.error.issues.some((issue) => issue.code === "too_big");
-    return {
-      ok: false,
-      result: result(
-        "UNRESOLVED",
-        normalized.value,
-        verifier,
-        resourceLimitExceeded ? "RESOURCE_LIMIT" : "MALFORMED_INTERPRETATION",
-        resourceLimitExceeded
-          ? "Formal interpretation exceeds a schema resource limit"
-          : "Formal interpretation is malformed, unsupported, or incomplete"
-      )
+      result: statementValidationFailure(validated.code, normalized.value, verifier)
     };
   }
   return { ok: true, data: validated.data, interpretationConfidence: normalized.value };
