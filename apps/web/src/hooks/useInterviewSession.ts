@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   RequestIdSchema,
   SessionIdSchema,
@@ -286,7 +286,10 @@ export function useInterviewSession(
   const pendingSubmissionsRef = useRef<Map<string, PendingSubmissionRecord>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const fetchImpl = useMemo(
+    () => options.fetchImpl ?? globalThis.fetch.bind(globalThis),
+    [options.fetchImpl]
+  );
   const authenticatedFetch = useCallback<typeof fetch>(async (input, init = {}) => {
     const headers = new Headers(init.headers);
     headers.set("x-interview-client-token", authenticationHeaderValue);
