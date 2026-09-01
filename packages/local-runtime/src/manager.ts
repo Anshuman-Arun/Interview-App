@@ -879,11 +879,12 @@ export class LocalRuntimeManager {
         () => undefined
       );
       try {
-        candidate = await awaitWithAbort(
+        const boxedCandidate = await awaitBoxedWithAbort(
           fetchPromise,
           signal,
           record.definition.id
         );
+        candidate = boxedCandidate.value;
         fetchClaimed = true;
       } catch {
         if (signal.aborted) {
@@ -2464,6 +2465,47 @@ function abortableDelay(ms: number, signal: AbortSignal, componentId: string): P
       reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
     };
     signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+interface BoxedAsyncValue<T> {
+  readonly value: T;
+}
+
+function awaitBoxedWithAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+  componentId: string
+): Promise<BoxedAsyncValue<T>> {
+  if (signal.aborted) {
+    return Promise.reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
+  }
+  return new Promise<BoxedAsyncValue<T>>((resolve, reject) => {
+    let settled = false;
+    const cleanup = (): void => signal.removeEventListener("abort", onAbort);
+    const onAbort = (): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new LocalRuntimeError("START_CANCELLED", `Start cancelled for ${componentId}`));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    void promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        // Resolve with a plain wrapper so the Promise resolution algorithm never
+        // performs thenable assimilation on the untrusted value itself.
+        resolve(Object.freeze({ value }));
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(normalizePromiseRejection(error));
+      }
+    );
   });
 }
 
