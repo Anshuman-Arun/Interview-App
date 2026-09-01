@@ -434,9 +434,18 @@ function transitionBayesian(state: BayesianState, action: QuantResearchAction): 
   }
   if (state.stage === "POSTERIOR_UPDATE") {
     const submitted = requireAction(state, action, "SUBMIT_PROBABILITY");
+    const priorTarget = rationalToNumber(rational(state.config.priorAlpha, state.config.priorAlpha + state.config.priorBeta));
     const target = rationalToNumber(rational(state.config.priorAlpha + state.successes, state.config.priorAlpha + state.config.priorBeta + state.observations.length));
+    const updateMagnitude = Math.abs(target - priorTarget);
+    if (updateMagnitude === 0) throw new Error("Bayesian posterior update unexpectedly has zero magnitude");
+    const scoringScale = Math.min(0.025, updateMagnitude / 2);
     let next = appendAction(state, action, { stage: "PRIOR_PERTURBATION" });
-    next = appendEvidence(next, [evidence("NUMERICAL_CORRECTNESS", state.stage, distanceScore(Math.abs(submitted.value - target), 0.025), "Posterior update was checked with exact count arithmetic.")]);
+    next = appendEvidence(next, [evidence(
+      "NUMERICAL_CORRECTNESS",
+      state.stage,
+      distanceScore(Math.abs(submitted.value - target), scoringScale),
+      "Posterior update was checked with exact count arithmetic and a tolerance bounded by the actual update magnitude."
+    )]);
     return next;
   }
   if (state.stage === "PRIOR_PERTURBATION") {
@@ -1006,8 +1015,8 @@ export class QuantResearchEngine {
   public constructor(definitionInput: unknown) {
     const definition = parseQuantResearchDefinition(definitionInput);
     this.state = initialize(definition);
-    validateGeneratedScenario(this.state);
     assertStateInvariants(this.state);
+    validateGeneratedScenario(this.state);
   }
 
   public applyAction(actionInput: unknown): QuantResearchTransition {
