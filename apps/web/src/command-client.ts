@@ -32,7 +32,12 @@ type DeliveryAcknowledgedResponse = z.infer<typeof DeliveryAcknowledgedResponseS
 
 export interface BrowserCommandClientOptions {
   readonly baseUrl: string;
-  readonly clientToken: string;
+  readonly clientToken?: string;
+  /**
+   * Non-secret marker used only when the trusted Electron boundary replaces it
+   * with the per-launch credential before the request leaves the renderer.
+   */
+  readonly externalAuthenticationHeaderValue?: string;
   readonly fetchImpl?: typeof fetch;
   readonly requestIdFactory?: () => RequestId;
 }
@@ -88,16 +93,33 @@ export class BrowserCommandProtocolError extends Error {
 
 export class BrowserCommandClient {
   readonly #commandUrl: string;
-  readonly #clientToken: string;
+  readonly #authenticationHeaderValue: string;
   readonly #fetchImpl: typeof fetch;
   readonly #requestIdFactory: () => RequestId;
 
   public constructor(options: BrowserCommandClientOptions) {
     this.#commandUrl = `${normalizeLoopbackBaseUrl(options.baseUrl)}/v1/commands`;
-    if (options.clientToken.length < 32) {
-      throw new Error("Client token must contain at least 32 characters");
+    if (
+      options.clientToken !== undefined
+      && options.externalAuthenticationHeaderValue !== undefined
+    ) {
+      throw new Error("Command client authentication configuration is ambiguous");
     }
-    this.#clientToken = options.clientToken;
+    if (options.externalAuthenticationHeaderValue !== undefined) {
+      if (options.externalAuthenticationHeaderValue !== "desktop-managed-v1") {
+        throw new Error("External authentication marker is invalid");
+      }
+      this.#authenticationHeaderValue = options.externalAuthenticationHeaderValue;
+    } else {
+      if (
+        typeof options.clientToken !== "string"
+        || options.clientToken.length < 32
+        || /[\r\n]/u.test(options.clientToken)
+      ) {
+        throw new Error("Client token must contain at least 32 characters");
+      }
+      this.#authenticationHeaderValue = options.clientToken;
+    }
     this.#fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.#requestIdFactory = options.requestIdFactory ?? defaultRequestIdFactory;
   }
@@ -366,7 +388,7 @@ export class BrowserCommandClient {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-interview-client-token": this.#clientToken
+        "x-interview-client-token": this.#authenticationHeaderValue
       },
       body: JSON.stringify(command),
       cache: "no-store",
