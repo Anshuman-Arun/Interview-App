@@ -1156,7 +1156,7 @@ describe("formal interpretation structural preflight bounds", () => {
     }
   });
 
-  it("rejects oversized protocol lists in the authoritative request builder before mapping them", () => {
+  it("rejects oversized protocol lists in the authoritative request builder before mapping them", async () => {
     const harness = await createCoreHarness();
     try {
       const oversized = new Array<FormalProtocolRef>(MAX_FORMAL_INTERPRETATION_PROTOCOLS + 1);
