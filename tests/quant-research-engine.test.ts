@@ -78,10 +78,17 @@ describe("deterministic Quant Research interview engine", () => {
     { ...bayesian, seed: Number.MAX_SAFE_INTEGER + 1 },
     { ...bayesian, seed: -1 },
     { ...bayesian, config: { ...bayesian.config, observationCount: 0 } },
+    { ...bayesian, config: { ...bayesian.config, perturbedPriorAlpha: bayesian.config.priorAlpha, perturbedPriorBeta: bayesian.config.priorBeta } },
     { ...sampling, config: { ...sampling.config, maxSamples: 33 } },
+    { ...sampling, config: { ...sampling.config, outlierShift: sampling.config.noiseRadius } },
+    { ...sampling, config: { ...sampling.config, centerMin: 5, centerMax: 5, noiseRadius: 0 } },
+    { ...experimental, config: { ...experimental.config, totalBudget: 20, costA: 11, costB: 10 } },
+    { ...experimental, config: { ...experimental.config, totalBudget: 10, costA: 4, costB: 4, perturbedCostA: 11, perturbedCostB: 12 } },
+    { ...experimental, config: { ...experimental.config, perturbedCostA: experimental.config.costA, perturbedCostB: experimental.config.costB } },
+    { ...model, config: { ...model.config, outlierShift: 2 * model.config.noiseRadius } },
     { ...model, config: { ...model.config, extra: true } },
     { ...optimization, extra: true }
-  ] as const)("rejects malformed definition %#", (definition) => {
+  ] as const)("rejects malformed or degenerate definition %#", (definition) => {
     expectCode(() => new QuantResearchEngine(definition), "INVALID_DEFINITION");
   });
 
@@ -92,6 +99,8 @@ describe("deterministic Quant Research interview engine", () => {
     { actionId: "a", kind: "REQUEST_OBSERVATION", count: -1 },
     { actionId: "a", kind: "ALLOCATE_SAMPLE", a: 1.5, b: 2 },
     { actionId: "a", kind: "SUBMIT_PARAMETERS", values: Array.from({ length: 9 }, () => 1) },
+    { actionId: "a", kind: "SUBMIT_PARAMETERS", values: [Number.MAX_VALUE, 0] },
+    { actionId: "a", kind: "SUBMIT_NUMERIC_ESTIMATE", value: Number.MAX_VALUE },
     { actionId: "a", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 1, extra: "reject me" }
   ])("strictly rejects malformed actions %#", (action) => {
     expectCode(() => new QuantResearchEngine(bayesian).applyAction(action), "INVALID_ACTION");
