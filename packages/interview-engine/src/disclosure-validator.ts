@@ -295,12 +295,6 @@ export class DisclosureValidator {
     if (input.proposal.realizedAction !== input.request.requiredAction) {
       return { accepted: false, reason: "Model realized an action that application policy did not select" };
     }
-    if (input.proposal.claimedDisclosureLevel > input.request.maximumDisclosure) {
-      return {
-        accepted: false,
-        reason: "Model claimed a disclosure level above the application-authorized boundary"
-      };
-    }
     if (input.proposal.speechText === undefined && (input.proposal.boardActions?.length ?? 0) === 0) {
       return { accepted: false, reason: "Proposal contains no deliverable realization" };
     }
@@ -543,6 +537,13 @@ export class DisclosureValidator {
       return {
         accepted: false,
         reason: "Effective disclosure exceeds the application-authorized boundary",
+        analysis: combined
+      };
+    }
+    if (input.proposal.claimedDisclosureLevel > input.request.maximumDisclosure) {
+      return {
+        accepted: false,
+        reason: "Model claimed a disclosure level above the application-authorized boundary",
         analysis: combined
       };
     }
