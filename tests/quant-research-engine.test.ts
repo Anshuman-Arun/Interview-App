@@ -75,13 +75,13 @@ describe("deterministic Quant Research interview engine", () => {
   });
 
   it.each([
-    [{ ...bayesian, seed: Number.MAX_SAFE_INTEGER + 1 }, "unsafe seed"],
-    [{ ...bayesian, seed: -1 }, "negative seed"],
-    [{ ...bayesian, config: { ...bayesian.config, observationCount: 0 } }, "invalid bound"],
-    [{ ...sampling, config: { ...sampling.config, maxSamples: 33 } }, "oversized sample budget"],
-    [{ ...model, config: { ...model.config, extra: true } }, "unknown config field"],
-    [{ ...optimization, extra: true }, "unknown definition field"]
-  ] as const)("rejects malformed definitions: %s (%s)", (definition, _description) => {
+    { ...bayesian, seed: Number.MAX_SAFE_INTEGER + 1 },
+    { ...bayesian, seed: -1 },
+    { ...bayesian, config: { ...bayesian.config, observationCount: 0 } },
+    { ...sampling, config: { ...sampling.config, maxSamples: 33 } },
+    { ...model, config: { ...model.config, extra: true } },
+    { ...optimization, extra: true }
+  ] as const)("rejects malformed definition %#", (definition) => {
     expectCode(() => new QuantResearchEngine(definition), "INVALID_DEFINITION");
   });
 
