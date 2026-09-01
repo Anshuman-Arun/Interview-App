@@ -1152,7 +1152,7 @@ function evaluateTechnicalCorrectness(
   }>();
   const activeCorrectnessKeys = new Set<string>();
   const unresolvedRefs: EvaluationEvidenceRef[] = [];
-  let unresolvedCount = 0;
+  const unresolvedUnitKeys = new Set<string>();
 
   for (const record of activeEvidence.values()) {
     if (record.key.dimension !== "CORRECTNESS") continue;
@@ -1171,6 +1171,10 @@ function evaluateTechnicalCorrectness(
       record,
       verificationByEvidenceKey
     ).filter((request) => request.result?.status === "VERIFIED");
+    const aggregationKey = correctnessAggregationKey(
+      record,
+      supportingVerifications.length > 0
+    );
     const contradictions = currentRequests.filter(
       (request) => request.result?.status === "CONTRADICTED"
     );
@@ -1192,7 +1196,7 @@ function evaluateTechnicalCorrectness(
       contradictions.length > 0 &&
       unresolved.length > 0;
     if (positiveConflict || unresolvedVerifierConflict) {
-      unresolvedCount += 1;
+      unresolvedUnitKeys.add(aggregationKey);
       unresolvedRefs.push(...recordRefs, ...verificationRefs);
       continue;
     }
@@ -1221,7 +1225,7 @@ function evaluateTechnicalCorrectness(
     }
 
     if (unresolved.length > 0) {
-      unresolvedCount += 1;
+      unresolvedUnitKeys.add(aggregationKey);
       unresolvedRefs.push(...unresolved.map((request) =>
         evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
       ));
@@ -1229,14 +1233,14 @@ function evaluateTechnicalCorrectness(
     }
 
     if (score === null) {
-      unresolvedCount += unresolved.length === 0 ? 1 : 0;
+      unresolvedUnitKeys.add(aggregationKey);
       unresolvedRefs.push(...recordRefs, ...verificationRefs);
       continue;
     }
 
     mergeCorrectnessSample(
       sampleByUnit,
-      correctnessAggregationKey(record, supportingVerifications.length > 0),
+      aggregationKey,
       {
         score,
         supportLevel,
@@ -1291,12 +1295,13 @@ function evaluateTechnicalCorrectness(
     }
 
     if (unresolved.length > 0 || contradictions.length > 0) {
-      unresolvedCount += 1;
+      unresolvedUnitKeys.add("VERIFICATION:" + key);
       unresolvedRefs.push(...refs);
     }
   }
 
   const samples = [...sampleByUnit.values()];
+  const unresolvedCount = unresolvedUnitKeys.size;
   if (samples.length === 0) {
     return {
       result: unsupportedDimension(

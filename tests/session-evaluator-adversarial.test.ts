@@ -644,6 +644,36 @@ describe("grounded session evaluator adversarial cases", () => {
       .toBe(baselineEvaluation.scores.technicalCorrectness);
     expect(splitEvaluation.dimensionResults.technicalCorrectness.supportLevel)
       .toBe(baselineEvaluation.dimensionResults.technicalCorrectness.supportLevel);
+
+    const unknownSupport = EventIdSchema.parse("shared_unknown_split_support");
+    let oneUnknown = setHistory(
+      baseline,
+      claimKey("single-unknown", "CORRECTNESS"),
+      [{
+        value: "UNKNOWN",
+        sequence: 60,
+        status: "ACTIVE",
+        evidenceEventIds: [unknownSupport]
+      }]
+    );
+    const oneUnknownEvaluation = evaluateInterviewSession(oneUnknown, sixPeopleProblem);
+    for (let index = 0; index < 20; index += 1) {
+      oneUnknown = setHistory(
+        oneUnknown,
+        claimKey("split-unknown-" + String(index), "CORRECTNESS"),
+        [{
+          value: "UNKNOWN",
+          sequence: 70 + index,
+          status: "ACTIVE",
+          evidenceEventIds: [unknownSupport]
+        }]
+      );
+    }
+    const manyUnknownEvaluation = evaluateInterviewSession(oneUnknown, sixPeopleProblem);
+    expect(manyUnknownEvaluation.dimensionResults.technicalCorrectness.supportLevel)
+      .toBe(oneUnknownEvaluation.dimensionResults.technicalCorrectness.supportLevel);
+    expect(manyUnknownEvaluation.summaryAssessment)
+      .toContain("1 current correctness subject");
   });
 
   it("does not let claim-ID splitting manufacture extra rigor weight", () => {
