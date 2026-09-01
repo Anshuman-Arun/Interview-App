@@ -664,8 +664,113 @@ function assertStateInvariants(state: InternalState): void {
   if (ids.size !== state.acceptedActions.length) throw new Error("Accepted action IDs are not unique");
   for (const item of state.evidence) {
     if (!Number.isFinite(item.score) || item.score < 0 || item.score > 100) throw new Error("Evidence score invariant violated");
+    if (item.stage.length === 0 || item.summary.length === 0) throw new Error("Evidence metadata invariant violated");
   }
-  if (state.family === "SAMPLING_ESTIMATION" && state.revealed.length > state.config.maxSamples) throw new Error("Sample budget invariant violated");
+
+  switch (state.family) {
+    case "BAYESIAN_UPDATING": {
+      if (!["PRIOR_ESTIMATE", "POSTERIOR_UPDATE", "PRIOR_PERTURBATION", "COMPLETE"].includes(state.stage)) {
+        throw new Error("Bayesian stage invariant violated");
+      }
+      if (state.observations.length !== state.config.observationCount) throw new Error("Bayesian observation-count invariant violated");
+      const successes = state.observations.filter(Boolean).length;
+      if (state.successes !== successes) throw new Error("Bayesian success-count invariant violated");
+      break;
+    }
+    case "SAMPLING_ESTIMATION": {
+      if (!["SAMPLING", "OUTLIER_PERTURBATION", "COMPLETE"].includes(state.stage)) throw new Error("Sampling stage invariant violated");
+      if (state.hiddenPopulation.length !== state.config.populationSize || state.sampleOrder.length !== state.config.populationSize) {
+        throw new Error("Sampling population-size invariant violated");
+      }
+      if (state.revealed.length > state.config.maxSamples) throw new Error("Sample budget invariant violated");
+      const seenIndices = new Set(state.sampleOrder);
+      if (
+        seenIndices.size !== state.config.populationSize ||
+        state.sampleOrder.some((index) => !Number.isSafeInteger(index) || index < 0 || index >= state.config.populationSize)
+      ) {
+        throw new Error("Sampling permutation invariant violated");
+      }
+      if (state.hiddenPopulation.some((value) => Math.abs(value - state.hiddenCenter) > state.config.noiseRadius)) {
+        throw new Error("Sampling noise-bound invariant violated");
+      }
+      const expectsOutlier = state.stage === "OUTLIER_PERTURBATION" || state.stage === "COMPLETE";
+      if (
+        expectsOutlier
+          ? state.outlier === undefined || Math.abs(state.outlier - state.hiddenCenter) !== state.config.outlierShift
+          : state.outlier !== undefined
+      ) {
+        throw new Error("Sampling perturbation invariant violated");
+      }
+      break;
+    }
+    case "EXPERIMENTAL_ALLOCATION": {
+      if (!["INITIAL_ALLOCATION", "EXPERIMENT_DECISION", "PERTURBED_ALLOCATION", "COMPLETE"].includes(state.stage)) {
+        throw new Error("Experimental stage invariant violated");
+      }
+      if (state.hiddenMeanA === state.hiddenMeanB) throw new Error("Experimental hidden-mean invariant violated");
+      if (state.sequenceA.length !== state.config.totalBudget || state.sequenceB.length !== state.config.totalBudget) {
+        throw new Error("Experimental sequence-length invariant violated");
+      }
+      if (state.sequenceA.some((value) => Math.abs(value - state.hiddenMeanA) > state.config.noiseA)) {
+        throw new Error("Experiment A noise-bound invariant violated");
+      }
+      if (state.sequenceB.some((value) => Math.abs(value - state.hiddenMeanB) > state.config.noiseB)) {
+        throw new Error("Experiment B noise-bound invariant violated");
+      }
+      const expectsSummary = state.stage !== "INITIAL_ALLOCATION";
+      if (
+        expectsSummary
+          ? state.initialAllocation === undefined || state.summaryA === undefined || state.summaryB === undefined
+          : state.initialAllocation !== undefined || state.summaryA !== undefined || state.summaryB !== undefined
+      ) {
+        throw new Error("Experimental summary invariant violated");
+      }
+      if (
+        state.initialAllocation !== undefined &&
+        (state.initialAllocation.a <= 0 ||
+          state.initialAllocation.b <= 0 ||
+          state.initialAllocation.a * state.config.costA + state.initialAllocation.b * state.config.costB > state.config.totalBudget)
+      ) {
+        throw new Error("Experimental initial-allocation invariant violated");
+      }
+      break;
+    }
+    case "MODEL_COMPARISON": {
+      if (!["INITIAL_MODEL_CHOICE", "OUTLIER_MODEL_CHOICE", "COMPLETE"].includes(state.stage)) throw new Error("Model stage invariant violated");
+      if (state.points.length !== state.config.observationCount || state.perturbedPoints.length !== state.config.observationCount) {
+        throw new Error("Model observation-count invariant violated");
+      }
+      let changedPoints = 0;
+      for (let index = 0; index < state.points.length; index += 1) {
+        const original = state.points[index];
+        const perturbed = state.perturbedPoints[index];
+        if (original === undefined || perturbed === undefined || original.x !== index || perturbed.x !== index) {
+          throw new Error("Model observation-index invariant violated");
+        }
+        if (!Number.isFinite(original.y) || !Number.isFinite(perturbed.y)) throw new Error("Model numeric invariant violated");
+        if (original.y !== perturbed.y) {
+          changedPoints += 1;
+          if (index !== state.points.length - 1 || Math.abs(original.y - perturbed.y) !== state.config.outlierShift) {
+            throw new Error("Model perturbation invariant violated");
+          }
+        }
+      }
+      if (changedPoints !== 1) throw new Error("Model outlier-count invariant violated");
+      const expectsChoice = state.stage !== "INITIAL_MODEL_CHOICE";
+      if (expectsChoice ? state.firstChoice === undefined : state.firstChoice !== undefined) {
+        throw new Error("Model first-choice invariant violated");
+      }
+      break;
+    }
+    case "CONSTRAINED_OPTIMIZATION": {
+      if (!["BASE_OPTIMIZATION", "PERTURBED_OPTIMIZATION", "COMPLETE"].includes(state.stage)) throw new Error("Optimization stage invariant violated");
+      if (state.basePenalty === state.config.perturbedPenalty) throw new Error("Optimization perturbation invariant violated");
+      if (!Number.isFinite(state.baseBestObjective) || !Number.isFinite(state.perturbedBestObjective) || state.baseBestObjective <= 0 || state.perturbedBestObjective <= 0) {
+        throw new Error("Optimization optimum invariant violated");
+      }
+      break;
+    }
+  }
 }
 
 export class QuantResearchEngine {
