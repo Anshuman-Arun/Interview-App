@@ -453,11 +453,21 @@ function validateGraphContext(problem: unknown): CollectionResult<GraphContext> 
   const predecessors = new Map<string, string[]>();
   const adjacency = new Map<string, string[]>();
   const indegree = new Map<string, number>();
+  const dependencyKeys = new Set<string>();
   for (const milestoneId of milestoneIds) {
     predecessors.set(milestoneId, []);
     adjacency.set(milestoneId, []);
     indegree.set(milestoneId, 0);
   }
+
+  const addDependency = (from: string, to: string): void => {
+    const dependencyKey = from + "->" + to;
+    if (dependencyKeys.has(dependencyKey)) return;
+    dependencyKeys.add(dependencyKey);
+    adjacency.get(from)?.push(to);
+    indegree.set(to, (indegree.get(to) ?? 0) + 1);
+    predecessors.get(to)?.push(from);
+  };
 
   for (const milestone of graph.milestones) {
     const seenApproaches = new Set<string>();
@@ -478,7 +488,7 @@ function validateGraphContext(problem: unknown): CollectionResult<GraphContext> 
         return { ok: false, reasonCode: "INVALID_REASONING_TARGET" };
       }
       seenPrerequisites.add(prerequisiteId);
-      predecessors.get(milestone.id)?.push(prerequisiteId);
+      addDependency(prerequisiteId, milestone.id);
     }
 
     const seenDisclosures = new Set<DisclosureId>();
@@ -504,10 +514,7 @@ function validateGraphContext(problem: unknown): CollectionResult<GraphContext> 
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     edgeKeys.add(edgeKey);
-    adjacency.get(edge.from)?.push(edge.to);
-    indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1);
-    const existing = predecessors.get(edge.to);
-    if (existing !== undefined && !existing.includes(edge.from)) existing.push(edge.from);
+    addDependency(edge.from, edge.to);
   }
 
   const queue = [...milestoneIds].filter((id) => indegree.get(id) === 0).sort();
@@ -568,13 +575,24 @@ function collectActiveEvidence(
     return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
   }
 
-  if (!Array.isArray(state.eventIds) || state.eventIds.length > MAX_EVENT_IDS) {
+  if (!Array.isArray(state.eventIds)) {
+    return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+  }
+  if (state.eventIds.length > MAX_EVENT_IDS) {
     return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
   }
-  if (!state.eventIds.every((eventId) => boundedString(eventId, MAX_POLICY_ID_CHARACTERS))) {
+  if (
+    !Number.isSafeInteger(state.sequence)
+    || state.sequence < 0
+    || state.sequence !== state.eventIds.length
+    || !state.eventIds.every((eventId) => boundedString(eventId, MAX_POLICY_ID_CHARACTERS))
+  ) {
     return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
   }
   const knownEventIds = new Set<string>(state.eventIds);
+  if (knownEventIds.size !== state.eventIds.length) {
+    return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+  }
   const eventSequence = new Map<string, number>();
   state.eventIds.forEach((eventId, index) => {
     eventSequence.set(eventId, index + 1);
@@ -584,7 +602,7 @@ function collectActiveEvidence(
   const signals: ActiveEvidenceSignal[] = [];
 
   for (const [storedKey, rawHistory] of entries) {
-    if (!Array.isArray(rawHistory)) {
+    if (!boundedString(storedKey, MAX_POLICY_TEXT_CHARACTERS) || !Array.isArray(rawHistory)) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     recordCount += rawHistory.length;
@@ -618,12 +636,10 @@ function collectActiveEvidence(
 
     const rawValue = rawActive["value"];
     const rawEvidenceEventIds = isRecord(rawValue) ? rawValue["evidenceEventIds"] : undefined;
-    if (
-      !isRecord(rawValue)
-      || !Array.isArray(rawEvidenceEventIds)
-      || rawEvidenceEventIds.length === 0
-      || rawEvidenceEventIds.length > MAX_EVIDENCE_PROVENANCE_IDS
-    ) {
+    if (!isRecord(rawValue) || !Array.isArray(rawEvidenceEventIds) || rawEvidenceEventIds.length === 0) {
+      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
+    if (rawEvidenceEventIds.length > MAX_EVIDENCE_PROVENANCE_IDS) {
       return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
     }
 
@@ -792,7 +808,9 @@ function collectVerificationSignals(
 
     signals.push({
       target: targetFromSubject(key.data.subject),
-      status: result.data.status,
+      status: result.data.interpretationConfidence < 1
+        ? "UNRESOLVED"
+        : result.data.status,
       sequence
     });
   }
@@ -806,7 +824,17 @@ function collectExposedAssistance(
   graph: GraphContext
 ): CollectionResult<AssistanceSnapshot> {
   const rawDeliveries: unknown = state.deliveries;
-  if (!isRecord(rawDeliveries)) {
+  const rawGenerations: unknown = state.generations;
+  const rawActions: unknown = state.pedagogicalActions;
+  const rawTurns: unknown = state.turns;
+  const rawEpisodes: unknown = state.inputEpisodes;
+  if (
+    !isRecord(rawDeliveries)
+    || !isRecord(rawGenerations)
+    || !isRecord(rawActions)
+    || !isRecord(rawTurns)
+    || !isRecord(rawEpisodes)
+  ) {
     return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
   }
   const deliveryEntries = Object.entries(rawDeliveries);
@@ -819,35 +847,38 @@ function collectExposedAssistance(
   const disclosuresById = disclosureMap(graph);
   for (const [deliveryKey, rawDelivery] of deliveryEntries.sort((left, right) => left[0].localeCompare(right[0]))) {
     const delivery = PolicyDeliverySchema.safeParse(rawDelivery);
-    if (!delivery.success) {
-      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
-    }
-    if (delivery.data.deliveryId !== deliveryKey) {
+    if (!delivery.success || delivery.data.deliveryId !== deliveryKey) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     if (!isDisclosedStatus(delivery.data.status)) continue;
 
-    const generation = state.generations[delivery.data.generationId];
-    if (generation === undefined) {
+    const rawGeneration = rawGenerations[delivery.data.generationId];
+    if (!isRecord(rawGeneration) || rawGeneration["generationId"] !== delivery.data.generationId) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
-    const basis = GenerationBasisSchema.safeParse(generation.basis);
-    if (!basis.success) {
+    const basis = GenerationBasisSchema.safeParse(rawGeneration["basis"]);
+    if (!basis.success || basis.data.inputEpisodeId === undefined) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
-    const request = state.pedagogicalActions[basis.data.turnId];
-    if (request === undefined) {
-      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
-    }
-    const parsedRequest = RealizationRequestSchema.safeParse(request);
-    const turn = state.turns[basis.data.turnId];
+
+    const rawRequest = rawActions[basis.data.turnId];
+    const parsedRequest = RealizationRequestSchema.safeParse(rawRequest);
+    const rawTurn = rawTurns[basis.data.turnId];
+    const rawEpisode = rawEpisodes[basis.data.inputEpisodeId];
     if (
       !parsedRequest.success
       || parsedRequest.data.target === undefined
-      || turn === undefined
-      || !Number.isSafeInteger(turn.committedSequence)
-      || turn.committedSequence <= 0
+      || !isRecord(rawTurn)
+      || rawTurn["turnId"] !== basis.data.turnId
+      || rawTurn["inputEpisodeId"] !== basis.data.inputEpisodeId
+      || !Number.isSafeInteger(rawTurn["committedSequence"])
+      || (rawTurn["committedSequence"] as number) <= 0
+      || basis.data.committedInputSequence !== rawTurn["committedSequence"]
+      || !isRecord(rawEpisode)
+      || rawEpisode["inputEpisodeId"] !== basis.data.inputEpisodeId
+      || rawEpisode["status"] !== "COMMITTED"
       || delivery.data.effectiveDisclosureLevel > parsedRequest.data.maximumDisclosure
+      || new Set(delivery.data.disclosureIds).size !== delivery.data.disclosureIds.length
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
@@ -865,6 +896,7 @@ function collectExposedAssistance(
       disclosedIds.add(disclosureId);
     }
 
+    const turnSequence = rawTurn["committedSequence"] as number;
     const current = byGeneration.get(delivery.data.generationId);
     const record: AssistanceRecord = {
       generationId: delivery.data.generationId,
@@ -872,7 +904,7 @@ function collectExposedAssistance(
       target: parsedRequest.data.target,
       maximumDisclosure: parsedRequest.data.maximumDisclosure,
       effectiveDisclosureLevel: delivery.data.effectiveDisclosureLevel,
-      turnSequence: turn.committedSequence
+      turnSequence
     };
     if (
       current === undefined
@@ -1317,7 +1349,11 @@ function validateDisclosureLedger(
   const delivered = new Set<DisclosureId>();
   for (const rawDisclosureId of ledgerItems) {
     const parsed = DisclosureIdSchema.safeParse(rawDisclosureId);
-    if (!parsed.success || !graph.disclosureIds.has(parsed.data)) {
+    if (
+      !parsed.success
+      || !graph.disclosureIds.has(parsed.data)
+      || delivered.has(parsed.data)
+    ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     delivered.add(parsed.data);
@@ -1688,7 +1724,10 @@ export function decidePedagogicalPolicy(
     };
   }
 
-  const completeMilestones = completedMilestoneIds(evidenceResult.value);
+  const actionableEvidence = evidenceResult.value.filter(
+    (signal) => signal.value.inferenceConfidence >= MIN_ACTIONABLE_EVIDENCE_CONFIDENCE
+  );
+  const completeMilestones = completedMilestoneIds(actionableEvidence);
   const hintLevel = explicitHintLevel(
     classification.target,
     graph,
@@ -1696,9 +1735,6 @@ export function decidePedagogicalPolicy(
     ledgerResult.value
   );
   const plan = chooseActionPlan(classification, targetAssistance, hintLevel);
-  const actionableEvidence = evidenceResult.value.filter(
-    (signal) => signal.value.inferenceConfidence >= MIN_ACTIONABLE_EVIDENCE_CONFIDENCE
-  );
   const activeApproachId = inferActiveApproachId(actionableEvidence, graph);
   const authorization = targetDisclosureAuthorization(
     classification.target,
