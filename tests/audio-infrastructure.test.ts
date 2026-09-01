@@ -403,7 +403,7 @@ describe("browser audio devices", () => {
       }
     });
     const manager = new BrowserAudioDeviceManager({
-      enumerateDevices: () => Promise.reject(hostileError)
+      enumerateDevices: () => Promise.reject(hostileError as Error)
     });
 
     expect(await manager.enumerate()).toEqual({
@@ -754,7 +754,7 @@ class FakeCaptureContext implements CaptureAudioContextLike {
   public async resume(): Promise<void> {
     this.resumeCount += 1;
     await this.resumeGate;
-    if (this.resumeError !== undefined) await Promise.reject(this.resumeError);
+    if (this.resumeError !== undefined) await Promise.reject(this.resumeError as Error);
     this.state = "running";
   }
 
@@ -1198,7 +1198,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError)
+      getUserMedia: () => Promise.reject(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1224,7 +1224,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError)
+      getUserMedia: () => Promise.reject(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1247,7 +1247,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: () => Promise.reject(hostileError)
+      getUserMedia: () => Promise.reject(hostileError as Error)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -4094,7 +4094,7 @@ describe("queued browser audio playback", () => {
     const setup = playbackFixture();
     const hostileElement = setup.elements[0];
     if (hostileElement === undefined) throw new Error("Expected playback element");
-    hostileElement.play = () => Promise.reject(hostileError);
+    hostileElement.play = () => Promise.reject(hostileError as Error);
     const first = setup.playback.enqueue({ id: "hostile", source: "/hostile.wav" });
     const second = setup.playback.enqueue({ id: "next", source: "/next.wav" });
 
