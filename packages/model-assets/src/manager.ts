@@ -1339,7 +1339,6 @@ export class ModelAssetManager {
 
       const existing = await this.reconcileDestinationForInstall(paths, manifest, signal);
       if (existing !== undefined) {
-        await this.removeManagedEntry(paths, stagingDirectory);
         if (isSignalAborted(signal)) {
           throw new ModelAssetError(
             "CANCELLED",
@@ -1382,7 +1381,6 @@ export class ModelAssetManager {
         }
         const raced = await this.checkInstallation(manifest, signal);
         if (raced.status === "INSTALLED" && raced.path !== undefined) {
-          await this.removeManagedEntry(paths, stagingDirectory);
           if (isSignalAborted(signal)) {
             throw new ModelAssetError(
               "CANCELLED",
@@ -1395,11 +1393,15 @@ export class ModelAssetManager {
       }
       return installedPayloadPath(installationDirectory, manifest);
     } finally {
-      if (!published) {
-        await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
-      }
       if (reservationHeld) {
-        await this.releaseCapacity(paths, stagingDirectory, reservationBytes);
+        await this.releaseCapacity(
+          paths,
+          stagingDirectory,
+          reservationBytes,
+          !published
+        );
+      } else if (!published) {
+        await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
       }
     }
     } finally {
@@ -1650,6 +1652,17 @@ export class ModelAssetManager {
 
         await atomicRenameDirectory(stagingDirectory, installationDirectory);
 
+        if (shared.stagingReservations.get(stagingDirectory) !== reservationBytes
+            || reservationBytes > shared.reservedBytes) {
+          throw new ModelAssetError(
+            "IO_ERROR",
+            "Cache reservation accounting lost staging identity after atomic publication."
+          );
+        }
+        shared.stagingReservations.delete(stagingDirectory);
+        shared.activeStagingDirectories.delete(stagingDirectory);
+        shared.reservedBytes -= reservationBytes;
+
         await this.assertArtifactDirectoryShape(
           installationDirectory,
           manifest,
@@ -1667,9 +1680,6 @@ export class ModelAssetManager {
         );
         await validateCachePaths(paths);
 
-        shared.stagingReservations.delete(stagingDirectory);
-        shared.activeStagingDirectories.delete(stagingDirectory);
-        shared.reservedBytes -= reservationBytes;
       });
     });
   }
@@ -1779,11 +1789,24 @@ export class ModelAssetManager {
   private async releaseCapacity(
     paths: CachePaths,
     stagingDirectory: string,
-    bytes: number
+    bytes: number,
+    removeStaging: boolean
   ): Promise<void> {
     await this.withCapacityGate(paths, async (shared) => {
-      if (shared.stagingReservations.get(stagingDirectory) !== bytes
-          || bytes > shared.reservedBytes) {
+      const reserved = shared.stagingReservations.get(stagingDirectory);
+      if (reserved === undefined) {
+        if (shared.activeStagingDirectories.has(stagingDirectory)) {
+          throw new ModelAssetError(
+            "IO_ERROR",
+            "Cache reservation state lost staging identity during release."
+          );
+        }
+        if (removeStaging) {
+          await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
+        }
+        return;
+      }
+      if (reserved !== bytes || bytes > shared.reservedBytes) {
         throw new ModelAssetError(
           "IO_ERROR",
           "Cache reservation accounting underflowed or lost staging identity during release."
@@ -1792,6 +1815,9 @@ export class ModelAssetManager {
       shared.stagingReservations.delete(stagingDirectory);
       shared.activeStagingDirectories.delete(stagingDirectory);
       shared.reservedBytes -= bytes;
+      if (removeStaging) {
+        await this.removeManagedEntry(paths, stagingDirectory).catch(() => undefined);
+      }
     });
   }
 
