@@ -24,10 +24,10 @@ export const DirtyRegionInputSchema = z.preprocess(
     DIRTY_REGION_FIELDS
   ),
   z.object({
-    x: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-    y: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-    width: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    height: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER)
+    x: z.number().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    y: z.number().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    width: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    height: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER)
   }).strict()
 ).superRefine((region, context) => {
   const right = region.x + region.width;
@@ -59,7 +59,7 @@ const DirtyRegionConfigSchema = z.object({
   maxInputRegions: z.number().int().positive().max(2048),
   maxRegionCount: z.number().int().positive().max(256),
   maxTotalAnalyzedArea: z.number().int().positive().max(128 * 1024 * 1024),
-  fullFrameFallbackAreaRatio: z.number().finite().positive().max(1)
+  fullFrameFallbackAreaRatio: z.number().positive().max(1)
 }).strict();
 
 const DirtyRegionConfigOverrideSchema = z.object({
@@ -67,7 +67,7 @@ const DirtyRegionConfigOverrideSchema = z.object({
   maxInputRegions: z.number().int().positive().max(2048).optional(),
   maxRegionCount: z.number().int().positive().max(256).optional(),
   maxTotalAnalyzedArea: z.number().int().positive().max(128 * 1024 * 1024).optional(),
-  fullFrameFallbackAreaRatio: z.number().finite().positive().max(1).optional()
+  fullFrameFallbackAreaRatio: z.number().positive().max(1).optional()
 }).strict();
 
 export interface DirtyRegionPlannerConfig {
