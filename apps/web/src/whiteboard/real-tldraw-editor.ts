@@ -678,7 +678,7 @@ function effectiveNativeLayer(shape: TLShape): typeof STUDENT_LAYER | typeof AI_
     // Unknown persisted ownership metadata is fail-closed as protected.
     return SYSTEM_LAYER;
   }
-  return shape.isLocked ? AI_LAYER : STUDENT_LAYER;
+  return shape.isLocked ? SYSTEM_LAYER : STUDENT_LAYER;
 }
 
 function effectivePartialLayer(
@@ -690,7 +690,7 @@ function effectivePartialLayer(
     return rawLayer;
   }
   if (currentLayer !== undefined) return currentLayer;
-  return shape.isLocked ? AI_LAYER : STUDENT_LAYER;
+  return shape.isLocked ? SYSTEM_LAYER : STUDENT_LAYER;
 }
 
 function isProtectedLayer(value: unknown): boolean {
