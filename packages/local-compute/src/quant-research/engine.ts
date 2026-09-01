@@ -228,7 +228,9 @@ function initialize(definition: QuantResearchScenarioDefinition): InternalState 
     case "MODEL_COMPARISON": {
       const hiddenModel = rng.nextInt(0, 1) === 0 ? "CONSTANT" : "LINEAR";
       const intercept = rng.nextInt(-10, 10);
-      const slope = hiddenModel === "LINEAR" ? rng.nextInt(2, 5) * (rng.nextInt(0, 1) === 0 ? -1 : 1) : 0;
+      const slope = hiddenModel === "LINEAR"
+        ? rng.nextInt(definition.config.noiseRadius + 2, definition.config.noiseRadius + 5) * (rng.nextInt(0, 1) === 0 ? -1 : 1)
+        : 0;
       const points = Array.from({ length: definition.config.observationCount }, (_value, index) => ({
         x: index,
         y: intercept + slope * index + rng.nextInt(-definition.config.noiseRadius, definition.config.noiseRadius)
@@ -555,8 +557,8 @@ function publicPrompt(state: InternalState): string {
       if (state.stage === "PERTURBED_ALLOCATION") return "Experiment costs changed. Reallocate samples under the same total budget.";
       return "Scenario complete.";
     case "MODEL_COMPARISON":
-      if (state.stage === "INITIAL_MODEL_CHOICE") return "Choose which generating family is more plausible for these observations: a constant mean or a linear trend.";
-      if (state.stage === "OUTLIER_MODEL_CHOICE") return "An outlier has been introduced. Reassess which generating family is more plausible.";
+      if (state.stage === "INITIAL_MODEL_CHOICE") return "Choose which generating family is more plausible: a constant mean or a linear trend whose slope magnitude is at least the stated minimum.";
+      if (state.stage === "OUTLIER_MODEL_CHOICE") return "One disclosed point has been perturbed as an outlier. Reassess the generating family using the baseline and perturbed observations.";
       return "Scenario complete.";
     case "CONSTRAINED_OPTIMIZATION":
       if (state.stage === "BASE_OPTIMIZATION") return "Choose nonnegative integer x and y to maximize the stated objective under the public constraints.";
@@ -616,13 +618,16 @@ function publicData(state: InternalState): readonly QuantResearchPublicDatum[] {
       return data;
     }
     case "MODEL_COMPARISON": {
-      const points = state.stage === "OUTLIER_MODEL_CHOICE" || state.status === "COMPLETE" ? state.perturbedPoints : state.points;
-      return [
-        datum("x", "x observations", points.map((point) => point.x)),
-        datum("y", "y observations", points.map((point) => point.y)),
+      const perturbed = state.stage === "OUTLIER_MODEL_CHOICE" || state.status === "COMPLETE";
+      const data: QuantResearchPublicDatum[] = [
+        datum("x", "x observations", state.points.map((point) => point.x)),
+        datum("y", perturbed ? "Perturbed y observations" : "y observations", (perturbed ? state.perturbedPoints : state.points).map((point) => point.y)),
         datum("noiseRadius", "Ordinary additive-noise radius", state.config.noiseRadius),
-        datum("outlierIntroduced", "Outlier introduced", state.stage === "OUTLIER_MODEL_CHOICE" || state.status === "COMPLETE")
+        datum("minimumLinearSlopeMagnitude", "Minimum linear-trend slope magnitude", state.config.noiseRadius + 2),
+        datum("outlierIntroduced", "Outlier introduced", perturbed)
       ];
+      if (perturbed) data.push(datum("baselineY", "Baseline y observations", state.points.map((point) => point.y)));
+      return data;
     }
     case "CONSTRAINED_OPTIMIZATION": {
       const perturbed = state.stage === "PERTURBED_OPTIMIZATION" || state.status === "COMPLETE";
@@ -767,6 +772,13 @@ function assertStateInvariants(state: InternalState): void {
         }
       }
       if (changedPoints !== 1) throw new Error("Model outlier-count invariant violated");
+      const firstPoint = state.points[0];
+      const lastPoint = state.points[state.points.length - 1];
+      if (firstPoint === undefined || lastPoint === undefined) throw new Error("Model endpoint invariant violated");
+      const endpointDifference = Math.abs(lastPoint.y - firstPoint.y);
+      if (state.hiddenModel === "CONSTANT" ? endpointDifference > 2 * state.config.noiseRadius : endpointDifference <= 2 * state.config.noiseRadius) {
+        throw new Error("Model identifiability invariant violated");
+      }
       const expectsChoice = state.stage !== "INITIAL_MODEL_CHOICE";
       if (expectsChoice ? state.firstChoice === undefined : state.firstChoice !== undefined) {
         throw new Error("Model first-choice invariant violated");
