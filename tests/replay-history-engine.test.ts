@@ -85,7 +85,7 @@ function groundedEvaluation(input: {
   readonly problemVersion: string;
   readonly score: number | null;
   readonly totalTurns: number;
-  readonly evidenceEventId?: string;
+  readonly evidenceEventId?: string | undefined;
   readonly lifecycle?: {
     readonly sessionStatus: "COMPLETED" | "ARCHIVED";
     readonly completionState:
