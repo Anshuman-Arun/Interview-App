@@ -109,7 +109,7 @@ export const App: React.FC = () => {
       <header className="app-header bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-xs z-10 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold shadow-xs text-sm">
-            OX
+            IV
           </div>
           <div>
             <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
