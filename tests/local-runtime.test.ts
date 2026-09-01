@@ -313,7 +313,10 @@ describe("local worker lifecycle manager", () => {
 
   it("times out readiness and ignores malformed stdout as trusted protocol", async () => {
     const runtime = manager();
-    runtime.register(definition("malformed", "malformed-ready", { startupTimeoutMs: 100 }));
+    runtime.register(definition("malformed", "malformed-ready", {
+      startupTimeoutMs: 100,
+      terminationTimeoutMs: process.platform === "win32" ? 500 : 150
+    }));
 
     await expect(runtime.start("malformed")).rejects.toMatchObject({ code: "READINESS_TIMEOUT" });
     expect(runtime.getStatus("malformed").state).toBe("FAILED");
