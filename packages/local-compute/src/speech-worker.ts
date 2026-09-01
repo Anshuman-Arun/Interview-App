@@ -263,7 +263,6 @@ export class SpeechWorkerCore {
     payload: unknown,
     heuristicsInput: unknown = {}
   ): Promise<readonly SpeechWorkerEvent[]> {
-    if (this.shuttingDown) throw new SpeechWorkerCoreError("SHUTTING_DOWN", "Speech worker is shutting down");
     const heuristics = SpeechFrameHeuristicsSchema.safeParse(heuristicsInput);
     if (!heuristics.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech frame heuristics are invalid");
 
@@ -310,7 +309,6 @@ export class SpeechWorkerCore {
   }
 
   public async flush(input: unknown): Promise<readonly SpeechWorkerEvent[]> {
-    if (this.shuttingDown) throw new SpeechWorkerCoreError("SHUTTING_DOWN", "Speech worker is shutting down");
     const parsed = SpeechFlushRequestSchema.safeParse(input);
     if (!parsed.success) throw new SpeechWorkerCoreError("INVALID_REQUEST", "Speech flush request is invalid");
     const request = parsed.data;
