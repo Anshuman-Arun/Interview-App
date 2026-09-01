@@ -3,9 +3,11 @@ import {
   MAX_SPEECH_BUFFERED_PCM_BYTES,
   MAX_SPEECH_TIMESTAMP_DRIFT_MS,
   MAX_SPEECH_UTTERANCE_DURATION_MS,
+  SourceAudioBasisSchema,
   SpeechPcmFrameEnvelopeSchema,
   type SourceAudioBasis,
-  type SpeechPcmFrameEnvelope
+  type SpeechPcmFrameEnvelope,
+  type SpeechStreamId
 } from "./speech-protocol.js";
 
 export type PcmAdmissionErrorCode =
@@ -128,12 +130,19 @@ export class BoundedPcmBuffer {
   private speechFrameCount = 0;
 
   public constructor(private readonly maxBytes = MAX_SPEECH_BUFFERED_PCM_BYTES) {
-    if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
-      throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM buffer limit must be a positive safe integer");
+    if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > MAX_SPEECH_BUFFERED_PCM_BYTES) {
+      throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM buffer limit must remain within the hard speech bound");
     }
   }
 
   public append(snapshot: PcmFrameSnapshot, speech: boolean): void {
+    const first = this.frames[0]?.snapshot;
+    if (first !== undefined
+        && (snapshot.envelope.sampleRate !== first.envelope.sampleRate
+          || snapshot.envelope.channels !== first.envelope.channels
+          || snapshot.envelope.sampleFormat !== first.envelope.sampleFormat)) {
+      throw new PcmAdmissionError("STREAM_CONFLICT", "PCM buffer format changed within one utterance");
+    }
     if (this.byteLength + snapshot.bytes.byteLength > this.maxBytes) {
       throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM buffer limit exceeded");
     }
@@ -182,7 +191,7 @@ export class BoundedPcmBuffer {
     return output;
   }
 
-  public sourceBasis(streamId: string): SourceAudioBasis {
+  public sourceBasis(streamId: SpeechStreamId): SourceAudioBasis {
     const first = this.frames[0]?.snapshot;
     const last = this.frames.at(-1)?.snapshot;
     if (first === undefined || last === undefined || this.sampleCount <= 0) {
@@ -190,7 +199,7 @@ export class BoundedPcmBuffer {
     }
     const hash = createHash("sha256");
     for (const frame of this.frames) hash.update(frame.snapshot.bytes);
-    return {
+    return SourceAudioBasisSchema.parse({
       streamId,
       firstSequence: first.envelope.sequence,
       lastSequence: last.envelope.sequence,
@@ -200,6 +209,6 @@ export class BoundedPcmBuffer {
       channels: first.envelope.channels,
       sampleCount: this.sampleCount,
       pcmSha256: hash.digest("hex")
-    };
+    });
   }
 }
