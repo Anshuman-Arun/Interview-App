@@ -563,6 +563,24 @@ describe("grounded evaluation/replay product surface", () => {
     }).success).toBe(false);
   });
 
+  it("rejects malformed UTF-8 instead of decoding replacement characters", async () => {
+    const client = new BrowserSessionReadClient({
+      baseUrl: "http://127.0.0.1:43123",
+      clientToken: TOKEN,
+      fetchImpl: async () => new Response(
+        new Uint8Array([0x7b, 0x22, 0x78, 0x22, 0x3a, 0xff, 0x7d]),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      )
+    });
+
+    await expect(client.getHistory()).rejects.toMatchObject({
+      reason: "MALFORMED_JSON"
+    });
+  });
+
   it("rejects an oversized response before JSON parsing", async () => {
     const client = new BrowserSessionReadClient({
       baseUrl: "http://127.0.0.1:43123",
