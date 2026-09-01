@@ -19,10 +19,11 @@ import {
   initialSessionState,
   type SessionState
 } from "../packages/events/src/index.js";
-import { sixPeopleProblem } from "../packages/problems/src/index.js";
+import { biasedCoinProblem, sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
+  canonicalJson,
   compileContext,
   createProviderContextSpecFingerprintSync,
   decidePedagogicalPolicy
@@ -944,6 +945,31 @@ describe("production Socratic policy engine", () => {
     expect(decidePedagogicalPolicy(reordered, turnId, sixPeopleProblem)).toEqual(
       decidePedagogicalPolicy(state, turnId, sixPeopleProblem)
     );
+  });
+
+  it("does not infer approach completion from shared setup milestones alone", () => {
+    const { state: base, turnId } = makeState(biasedCoinProblem);
+    let state = withEvidence(
+      base,
+      milestoneKey(biasedCoinProblem, "toss-in-pairs-concept", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(biasedCoinProblem, "expected-value-derivation", "PROGRESS"),
+      "COMPLETE"
+    );
+
+    const decision = decidePedagogicalPolicy(state, turnId, biasedCoinProblem);
+    expect(decision.classification).not.toBe("COMPLETED_PRIMARY_APPROACH");
+    expect(decision.realizationRequest.requiredAction).not.toBe("ASK_ALTERNATE_SOLUTION");
+    expect(decision.realizationRequest.requiredAction).not.toBe("GENERALIZE");
+  });
+
+  it("bounds canonical JSON nesting before recursive input can exhaust the stack", () => {
+    let value: unknown = "leaf";
+    for (let index = 0; index < 70; index += 1) value = { nested: value };
+    expect(() => canonicalJson(value)).toThrow(/nesting depth/u);
   });
 
   it("recognizes authoritative approach-level completion without inventing missing milestone facts", () => {
