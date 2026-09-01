@@ -2903,3 +2903,65 @@ describe("mainline evidence-identity integration", () => {
     expect(decision.realizationRequest.maximumDisclosure).toBe(0);
   });
 });
+
+describe("reasoning graph structural identity", () => {
+  it("does not let delimiter-colliding dependency IDs hide a cycle", () => {
+    const collisionProblem: InterviewProblem = {
+      ...sixPeopleProblem,
+      id: "delimiter-collision-graph",
+      version: "1.0.0",
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        reasoningGraph: {
+          version: "1.0.0",
+          approaches: [{ id: "path", label: "Path" }],
+          milestones: [
+            {
+              id: "a",
+              description: "root",
+              approachIds: ["path"],
+              optionalPrerequisiteIds: [],
+              protectedDisclosureIds: []
+            },
+            {
+              id: "b->c",
+              description: "collision target",
+              approachIds: ["path"],
+              optionalPrerequisiteIds: ["a"],
+              protectedDisclosureIds: []
+            },
+            {
+              id: "a->b",
+              description: "cycle left",
+              approachIds: ["path"],
+              optionalPrerequisiteIds: [],
+              protectedDisclosureIds: []
+            },
+            {
+              id: "c",
+              description: "cycle right",
+              approachIds: ["path"],
+              optionalPrerequisiteIds: [],
+              protectedDisclosureIds: []
+            }
+          ],
+          edges: [
+            { from: "a->b", to: "c" },
+            { from: "c", to: "a->b" }
+          ],
+          commonErrors: [],
+          extensions: []
+        },
+        protectedDisclosures: []
+      },
+      private: {
+        canonicalSolution: "not used by policy",
+        verificationNotes: "not used by policy"
+      }
+    };
+    const { state, turnId } = makeState(collisionProblem);
+    const decision = decidePedagogicalPolicy(state, turnId, collisionProblem);
+    expect(decision.reasonCode).toBe("INVALID_REASONING_TARGET");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+});

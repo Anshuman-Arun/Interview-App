@@ -586,7 +586,7 @@ function validateGraphContext(problem: unknown): CollectionResult<GraphContext> 
   }
 
   const addDependency = (from: string, to: string): void => {
-    const dependencyKey = from + "->" + to;
+    const dependencyKey = JSON.stringify([from, to]);
     if (dependencyKeys.has(dependencyKey)) return;
     dependencyKeys.add(dependencyKey);
     adjacency.get(from)?.push(to);
@@ -634,7 +634,7 @@ function validateGraphContext(problem: unknown): CollectionResult<GraphContext> 
     ) {
       return { ok: false, reasonCode: "INVALID_REASONING_TARGET" };
     }
-    const edgeKey = edge.from + "->" + edge.to;
+    const edgeKey = JSON.stringify([edge.from, edge.to]);
     if (edgeKeys.has(edgeKey)) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
