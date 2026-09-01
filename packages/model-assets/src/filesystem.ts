@@ -109,7 +109,8 @@ function isAbortSignal(value: unknown): value is AbortSignal {
       "aborted"
     )?.get;
     if (abortedGetter === undefined) return false;
-    return typeof abortedGetter.call(value) === "boolean";
+    const readAborted = abortedGetter.bind(value);
+    return typeof readAborted() === "boolean";
   } catch {
     return false;
   }
@@ -905,12 +906,12 @@ export async function copyLocalArtifactBounded(
       "Manifest artifact size exceeds the configured local-import limit."
     );
   }
-  if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.");
+  if (isSignalAborted(signal)) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.");
   const openedSource = await openStableRegularFile(
     sourcePath,
     "Unable to inspect local import source."
   );
-  if (signal.aborted) {
+  if (isSignalAborted(signal)) {
     await openedSource.handle.close().catch(() => undefined);
     throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.");
   }
@@ -972,7 +973,7 @@ export async function copyLocalArtifactBounded(
       throw new ModelAssetError("SIZE_MISMATCH", "Local import size changed during copy.");
     }
   } catch (error) {
-    if (signal.aborted) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.", { cause: error });
+    if (isSignalAborted(signal)) throw new ModelAssetError("CANCELLED", "Artifact import was cancelled.", { cause: error });
     if (error instanceof ModelAssetError) throw error;
     if (isDiskSpaceError(error)) {
       throw new ModelAssetError(
@@ -1048,7 +1049,7 @@ export async function readStoredManifestWithIdentity(
   }
   const manifestSize = Number(manifestStat.size);
 
-  const chunks: Buffer[] = [];
+  const chunks: Uint8Array[] = [];
   let bytes = 0;
   let stream: ReturnType<FileHandle["createReadStream"]>;
   try {
@@ -1077,7 +1078,7 @@ export async function readStoredManifestWithIdentity(
         );
       }
       bytes = nextBytes;
-      chunks.push(buffer);
+      chunks.push(Uint8Array.from(buffer));
     }
   } catch (error) {
     if (error instanceof ModelAssetError) throw error;
