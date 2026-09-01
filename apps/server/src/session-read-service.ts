@@ -491,12 +491,14 @@ export class SessionReadService {
     readonly totalSessionCount: number;
     readonly sessionIds: readonly SessionId[];
   } {
+    // Sessions are append-only. Read the bounded ID window first, then the total
+    // count so a concurrently created session can only increase truncation
+    // rather than making the earlier count spuriously smaller than the ID list.
+    const sessionIds = this.#source.listRecentSessionIds(MAX_HISTORY_READ_SESSIONS);
     const totalSessionCount = this.#source.sessionCount();
     if (!nonnegativeSafeInteger(totalSessionCount)) {
       throw new Error("Authoritative session inventory count is invalid");
     }
-
-    const sessionIds = this.#source.listRecentSessionIds(MAX_HISTORY_READ_SESSIONS);
     if (
       sessionIds.length > MAX_HISTORY_READ_SESSIONS
       || sessionIds.length > totalSessionCount
