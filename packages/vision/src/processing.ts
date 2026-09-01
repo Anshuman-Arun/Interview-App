@@ -31,12 +31,12 @@ const HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 128 * 1024 * 1024;
 export const HARD_MAX_TOTAL_TILE_PIXELS = 128 * 1024 * 1024;
 const COOPERATIVE_YIELD_ROWS = 16;
 const MIN_STATIC_PNG_ENCODED_BYTES = 58;
-const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
+const abortSignalAbortedDescriptor = Object.getOwnPropertyDescriptor(
   AbortSignal.prototype,
   "aborted"
-)?.get;
-
-if (abortSignalAbortedGetter === undefined) {
+);
+const abortSignalAbortedGetter = abortSignalAbortedDescriptor?.get;
+if (typeof abortSignalAbortedGetter !== "function") {
   throw new Error("AbortSignal aborted intrinsic is unavailable");
 }
 
