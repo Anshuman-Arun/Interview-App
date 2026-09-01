@@ -136,6 +136,8 @@ export class SpeechWorkerCore {
   private readonly inFlightMessages = new Map<RequestId, InFlightMessage>();
   private readonly controlReserveClaims = new Set<string>();
   private readonly diagnostics: SpeechWorkerDiagnostic[] = [];
+  private readonly vadOperations = new Set<Promise<unknown>>();
+  private readonly recognizerOperations = new Set<Promise<unknown>>();
   private readonly transcriptGate = new TranscriptResultGate();
   private readonly allocatedVadStates = new WeakSet<VoiceActivityStateMachine>();
   private readonly allocatedEndpointingPolicies = new WeakSet<AdaptiveEndpointingPolicy>();
@@ -458,9 +460,17 @@ export class SpeechWorkerCore {
     context.vadAbort = vadAbort;
     let observation;
     try {
+      if (this.vadOperations.size >= this.maxConcurrentStreams) {
+        this.abandonStream(context);
+        this.rememberDiagnostic({ code: "VAD_RESOURCE_LIMIT", streamId: context.streamId });
+        throw new SpeechWorkerCoreError("RESOURCE_LIMIT", "Maximum underlying VAD operation count reached");
+      }
       const isolatedVadFrame = snapshotPcmFrame(frame.envelope, frame.bytes);
+      const vadOperation = Promise.resolve()
+        .then(async () => this.classifyVad(isolatedVadFrame, vadAbort.signal));
+      this.trackUnderlyingOperation(this.vadOperations, vadOperation);
       const rawObservation = await withTimeout(
-        Promise.resolve().then(async () => this.classifyVad(isolatedVadFrame, vadAbort.signal)),
+        vadOperation,
         this.vadTimeoutMs,
         () => vadAbort.abort()
       );
@@ -477,6 +487,7 @@ export class SpeechWorkerCore {
         throw new SpeechWorkerCoreError("VAD_TIMEOUT", "VAD backend timed out");
       }
       if (vadAbort.signal.aborted) return [];
+      if (error instanceof SpeechWorkerCoreError) throw error;
       this.abandonStream(context);
       if (error instanceof VadBackendProtocolError) {
         this.rememberDiagnostic({ code: "VAD_PROTOCOL_ERROR", streamId: context.streamId });
@@ -625,19 +636,35 @@ export class SpeechWorkerCore {
       sourceAudioBasis: basis
     })];
 
+    if (this.recognizerOperations.size >= this.maxConcurrentStreams) {
+      events.push(this.errorEvent(
+        requestId,
+        context.streamId,
+        "RESOURCE_LIMIT",
+        "Maximum underlying recognizer operation count reached"
+      ));
+      this.rememberDiagnostic({ code: "RECOGNIZER_RESOURCE_LIMIT", streamId: context.streamId });
+      context.terminal = true;
+      this.streams.delete(context.streamId);
+      this.rememberClosedStream(context.streamId);
+      return events;
+    }
+
     context.recognizing = true;
     context.recognitionRequestId = requestId;
     const abortController = new AbortController();
     context.recognitionAbort = abortController;
     try {
       const recognizerBasis = SourceAudioBasisSchema.parse(basis);
+      const recognitionOperation = Promise.resolve().then(async () => this.recognizeSpeech({
+        requestId,
+        utteranceId,
+        pcmBytes,
+        sourceAudioBasis: recognizerBasis
+      }, abortController.signal));
+      this.trackUnderlyingOperation(this.recognizerOperations, recognitionOperation);
       const raw = await withTimeout(
-        Promise.resolve().then(async () => this.recognizeSpeech({
-          requestId,
-          utteranceId,
-          pcmBytes,
-          sourceAudioBasis: recognizerBasis
-        }, abortController.signal)),
+        recognitionOperation,
         this.recognizerTimeoutMs,
         () => abortController.abort()
       );
@@ -980,6 +1007,17 @@ export class SpeechWorkerCore {
       });
       return false;
     }
+  }
+
+  private trackUnderlyingOperation(
+    set: Set<Promise<unknown>>,
+    operation: Promise<unknown>
+  ): void {
+    set.add(operation);
+    void operation.then(
+      () => { set.delete(operation); },
+      () => { set.delete(operation); }
+    );
   }
 
   private shouldSuppressLateResult(context: StreamContext): boolean {
