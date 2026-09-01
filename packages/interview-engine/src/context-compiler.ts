@@ -25,6 +25,10 @@ export type CompiledContext = z.infer<typeof CompiledContextSchema>;
 
 export const CONTEXT_COMPILER_VERSION = "phase0-safe-context@1" as const;
 
+const MAX_LIVE_CONTEXT_STUDENT_TEXT_CHARACTERS = 1_000_000;
+const MAX_LIVE_CONTEXT_PROBLEM_PROMPT_CHARACTERS = 100_000;
+const MAX_LIVE_CONTEXT_TARGET_CHARACTERS = 1_024;
+
 const MAX_CANONICAL_JSON_DEPTH = 64;
 const MAX_CANONICAL_JSON_NODES = 100_000;
 const MAX_CANONICAL_JSON_STRING_CHARACTERS = 1_000_000;
@@ -165,6 +169,32 @@ export function compileContext(input: {
   if (turn === undefined || turn.turnId !== input.turnId) {
     throw new Error(`Unknown or malformed turn ${input.turnId}`);
   }
+  const episode = input.state.inputEpisodes[turn.inputEpisodeId];
+  if (
+    episode === undefined
+    || episode.inputEpisodeId !== turn.inputEpisodeId
+    || episode.status !== "COMMITTED"
+  ) {
+    throw new Error("Context compilation requires the turn's committed InputEpisode");
+  }
+  if (
+    input.state.lastCommittedInputSequence === undefined
+    || turn.committedSequence !== input.state.lastCommittedInputSequence
+  ) {
+    throw new Error("Context compilation requires the latest committed Turn");
+  }
+  if (
+    turn.studentText.length === 0
+    || turn.studentText.length > MAX_LIVE_CONTEXT_STUDENT_TEXT_CHARACTERS
+  ) {
+    throw new Error("Turn student work is outside the bounded live context size");
+  }
+  if (
+    input.problem.public.prompt.length === 0
+    || input.problem.public.prompt.length > MAX_LIVE_CONTEXT_PROBLEM_PROMPT_CHARACTERS
+  ) {
+    throw new Error("Problem prompt is outside the bounded live context size");
+  }
   if (
     input.state.problem === undefined
     || input.state.problem.id !== input.problem.id
@@ -182,6 +212,12 @@ export function compileContext(input: {
   }
 
   const request = RealizationRequestSchema.parse(input.realizationRequest);
+  if (
+    request.target !== undefined
+    && request.target.length > MAX_LIVE_CONTEXT_TARGET_CHARACTERS
+  ) {
+    throw new Error("Pedagogical target is outside the bounded live context size");
+  }
   const authoritativeRequest = RealizationRequestSchema.safeParse(
     input.state.pedagogicalActions[input.turnId]
   );
