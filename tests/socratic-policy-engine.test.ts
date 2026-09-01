@@ -240,6 +240,12 @@ function withAssistance(
         },
         provider: "policy-test",
         pedagogicalAction: request,
+        proposal: {
+          realizedAction: input.action,
+          claimedDisclosureLevel: input.effectiveDisclosureLevel ?? input.maximumDisclosure,
+          claimedDisclosureIds: disclosureIds,
+          speechText: "reviewed assistance"
+        },
         status: "VALIDATED"
       }
     },
@@ -516,6 +522,86 @@ describe("production Socratic policy engine", () => {
       maximumDisclosure: 1,
       allowedDisclosureIds: [unknownDisclosureId]
     });
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest).toMatchObject({
+      requiredAction: "CLARIFY",
+      maximumDisclosure: 0
+    });
+  });
+
+  it("fails closed when exposed assistance has VALIDATED status but no recorded proposal", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    state = withAssistance(state, {
+      target: target("milestone", "choose-vertex"),
+      action: "CHECK_LOCAL_STEP",
+      maximumDisclosure: 0
+    });
+
+    const historicalGeneration = Object.values(state.generations).find(
+      (generation) => generation.provider === "policy-test"
+    );
+    expect(historicalGeneration).toBeDefined();
+    if (historicalGeneration === undefined) throw new Error("missing historical generation");
+    const { proposal: _proposal, ...withoutProposal } = historicalGeneration;
+
+    state = {
+      ...state,
+      generations: {
+        ...state.generations,
+        [historicalGeneration.generationId]: withoutProposal
+      }
+    };
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest).toMatchObject({
+      requiredAction: "CLARIFY",
+      maximumDisclosure: 0
+    });
+  });
+
+  it("fails closed when exposed delivery content was never part of its recorded proposal", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    state = withAssistance(state, {
+      target: target("milestone", "choose-vertex"),
+      action: "CHECK_LOCAL_STEP",
+      maximumDisclosure: 0
+    });
+
+    const historicalGeneration = Object.values(state.generations).find(
+      (generation) => generation.provider === "policy-test"
+    );
+    expect(historicalGeneration).toBeDefined();
+    if (historicalGeneration === undefined) throw new Error("missing historical generation");
+    const deliveryEntry = Object.entries(state.deliveries).find(
+      ([, delivery]) => delivery.generationId === historicalGeneration.generationId
+    );
+    expect(deliveryEntry).toBeDefined();
+    if (deliveryEntry === undefined) throw new Error("missing historical delivery");
+    const [deliveryId, delivery] = deliveryEntry;
+
+    state = {
+      ...state,
+      deliveries: {
+        ...state.deliveries,
+        [deliveryId]: {
+          ...delivery,
+          content: { medium: "TEXT", text: "forged text never validated for this generation" }
+        }
+      }
+    };
 
     const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
     expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
