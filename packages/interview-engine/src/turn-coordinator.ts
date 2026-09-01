@@ -451,16 +451,22 @@ export class TurnCoordinator {
     return result.value;
   }
 
-  public async selectAction(turnId: TurnId, problem?: InterviewProblem): Promise<RealizationRequest> {
+  public async selectAction(turnId: TurnId, problem: InterviewProblem): Promise<RealizationRequest> {
     const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "pedagogical-policy", turnId });
     const result = await this.writer.execute(envelope, {
       operation: "SELECT_PEDAGOGICAL_ACTION",
       payload: {
         turnId,
-        ...(problem === undefined ? {} : { problemId: problem.id, problemVersion: problem.version })
+        problemId: problem.id,
+        problemVersion: problem.version
       }
     }, RealizationRequestSchema, (state) => {
       assertSessionActive(state, "select pedagogical action");
+      if (
+        state.problem === undefined
+        || state.problem.id !== problem.id
+        || state.problem.version !== problem.version
+      ) throw new Error("Problem does not match the session's presented problem");
       const existing = state.pedagogicalActions[turnId];
       if (existing !== undefined) return { drafts: [], result: existing };
       const request = selectPedagogicalAction(state, turnId, problem);
