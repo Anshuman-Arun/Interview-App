@@ -18,6 +18,7 @@ import {
   type ReasoningProvider,
   type ReasoningSession,
   type ReasoningTurnInput,
+  type SessionId,
   type WhiteboardAdapter
 } from "../packages/domain/src/index.js";
 
@@ -44,7 +45,8 @@ import {
   ProviderCoordinator,
   SessionRuntimeRegistry,
   TurnCoordinator,
-  createCommandEnvelope
+  createCommandEnvelope,
+  type SessionWriter
 } from "../packages/interview-engine/src/index.js";
 import {
   BrowserCommandClient,
@@ -93,6 +95,27 @@ export function parseMathSegments(input: string): MathSegment[] {
   }
 
   return segments;
+}
+
+function generationEnvelope(
+  writer: SessionWriter,
+  sessionId: SessionId,
+  generationId: GenerationId,
+  producer: string
+) {
+  const generation = writer.getState().generations[generationId];
+  if (generation === undefined) throw new Error("Missing generation basis");
+  return createCommandEnvelope({
+    sessionId,
+    producer,
+    generationId,
+    ...(generation.basis.inputEpisodeId === undefined
+      ? {}
+      : { inputEpisodeId: generation.basis.inputEpisodeId }),
+    turnId: generation.basis.turnId,
+    contextEpoch: generation.basis.contextEpoch,
+    sourceRevision: generation.basis.committedInputSequence
+  });
 }
 
 export interface CanvasShape {
@@ -838,7 +861,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
 
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["Socratic prompt"]));
       const processed = await turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId, producer: "mock-model", inputEpisodeId, turnId, generationId }),
+        envelope: generationEnvelope(writer, sessionId, generationId, "mock-model"),
         problem: sixPeopleProblem,
         proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "Socratic prompt" },
         validator
@@ -932,7 +955,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["prompt"]));
       const processed = await turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+        envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
         problem: sixPeopleProblem,
         proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "prompt" },
         validator
@@ -977,7 +1000,7 @@ describe("Tier 1: Feature Coverage (Isolation)", () => {
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["safe"]));
       const processed = await turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+        envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
         problem: sixPeopleProblem,
         proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "safe" },
         validator
@@ -1783,7 +1806,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["text"]));
       const processed = await turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+        envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
         problem: sixPeopleProblem,
         proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "text" },
         validator
@@ -1809,7 +1832,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["text"]));
       const processed = await turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+        envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
         problem: sixPeopleProblem,
         proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "text" },
         validator
@@ -1836,7 +1859,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["text"]));
       const processed = await turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+        envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
         problem: sixPeopleProblem,
         proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "text" },
         validator
@@ -1899,7 +1922,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
         await turns.selectAction(turnId, sixPeopleProblem);
         const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
         const processed = await turns.processProposal({
-          envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+          envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
           problem: sixPeopleProblem,
           proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "prompt" },
           validator
@@ -2045,7 +2068,7 @@ describe("Tier 2: Boundary & Corner Cases", () => {
       const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([disclosureFact]));
 
       const result = await turns.processProposal({
-        envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+        envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
         problem: sixPeopleProblem,
         proposal: {
           realizedAction: "PROBE_JUSTIFICATION",
@@ -2095,7 +2118,7 @@ describe("Tier 3: Cross-Feature Combinations", () => {
     const { generationId } = await turns.startGeneration(committed.inputEpisodeId, committed.turnId, "mock");
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["Socratic prompt"]));
     const processed = await turns.processProposal({
-      envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId: committed.inputEpisodeId, turnId: committed.turnId, generationId }),
+      envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
       problem: sixPeopleProblem,
       proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "Socratic prompt" },
       validator
@@ -2140,7 +2163,7 @@ describe("Tier 3: Cross-Feature Combinations", () => {
     const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["prompt"]));
     const processed = await turns.processProposal({
-      envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+      envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
       problem: sixPeopleProblem,
       proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "prompt" },
       validator
@@ -2253,7 +2276,7 @@ describe("Tier 3: Cross-Feature Combinations", () => {
     const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["prompt"]));
     const processed = await turns.processProposal({
-      envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+      envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
       problem: sixPeopleProblem,
       proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "prompt" },
       validator
@@ -2455,7 +2478,7 @@ describe("Tier 4: Real-World Application Scenarios", () => {
     const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock");
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["Socratic question"]));
     const processed = await turns.processProposal({
-      envelope: createCommandEnvelope({ sessionId, producer: "mock", inputEpisodeId, turnId, generationId }),
+      envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
       problem: sixPeopleProblem,
       proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "Socratic question" },
       validator
