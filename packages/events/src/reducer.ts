@@ -265,9 +265,23 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "PEDAGOGICAL_ACTION_SELECTED":
       next = { ...state, pedagogicalActions: { ...state.pedagogicalActions, [event.payload.turnId]: event.payload.request } };
       break;
-    case "MODEL_GENERATION_STARTED":
-      next = { ...state, generations: { ...state.generations, [event.payload.generationId]: { generationId: event.payload.generationId, basis: event.payload.basis, provider: event.payload.provider, status: "ACTIVE" } } };
+    case "MODEL_GENERATION_STARTED": {
+      const pedagogicalAction = state.pedagogicalActions[event.payload.basis.turnId];
+      next = {
+        ...state,
+        generations: {
+          ...state.generations,
+          [event.payload.generationId]: {
+            generationId: event.payload.generationId,
+            basis: event.payload.basis,
+            provider: event.payload.provider,
+            ...(pedagogicalAction === undefined ? {} : { pedagogicalAction }),
+            status: "ACTIVE"
+          }
+        }
+      };
       break;
+    }
     case "GENERATION_CONTEXT_COMPILED": {
       const generation = state.generations[event.payload.generationId];
       if (generation === undefined || generation.status !== "ACTIVE") throw new Error("Context compilation requires an active generation");
