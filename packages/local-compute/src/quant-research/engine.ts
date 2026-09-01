@@ -954,14 +954,18 @@ function assertExactEvidenceHistory(
   }
 }
 
-function assertStateInvariants(state: InternalState): void {
+function assertCompatibilityIdentity(version: string, generatorVersion: string, rngVersion: string): void {
   if (
-    state.version !== QUANT_RESEARCH_VERSION ||
-    state.generatorVersion !== QUANT_RESEARCH_GENERATOR_VERSION ||
-    state.rngVersion !== QUANT_RESEARCH_RNG_VERSION
+    version !== QUANT_RESEARCH_VERSION ||
+    generatorVersion !== QUANT_RESEARCH_GENERATOR_VERSION ||
+    rngVersion !== QUANT_RESEARCH_RNG_VERSION
   ) {
     throw new Error("Scenario compatibility invariant violated");
   }
+}
+
+function assertStateInvariants(state: InternalState): void {
+  assertCompatibilityIdentity(state.version, state.generatorVersion, state.rngVersion);
   if ((state.status === "COMPLETE") !== (state.stage === "COMPLETE")) throw new Error("Scenario completion invariant violated");
   if (state.acceptedActions.length > MAX_ACTIONS) throw new Error("Action limit invariant violated");
   const ids = new Set(state.acceptedActions.map((action) => action.actionId));
