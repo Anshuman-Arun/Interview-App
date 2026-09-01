@@ -23,7 +23,7 @@ tests/**/*.test.tsx
 
 At the 2026-09-01 audit this matched 105 files.
 
-CI uses `pnpm test:ci` for the same full discovery with at most two workers, which reduces GitHub-hosted Windows contention without changing which files are discovered. The normal local `pnpm test` command keeps Vitest's default worker selection.
+CI uses `pnpm test:ci` for the same full discovery with one worker. This deliberately serializes the authoritative suite so subprocess-heavy repository/security tests cannot starve real local-worker integration tests on GitHub-hosted Windows; it does not change which files or assertions are discovered. The normal local `pnpm test` command keeps Vitest's default worker selection.
 
 ## Validation layers
 
@@ -39,7 +39,7 @@ CI uses `pnpm test:ci` for the same full discovery with at most two workers, whi
 ### Full behavior gate
 
 - `pnpm test` — every discovered Vitest file for normal local use.
-- `pnpm test:ci` — the same discovery with at most two workers for the authoritative CI/check profile.
+- `pnpm test:ci` — the same discovery with one worker for the authoritative CI/check profile.
 
 The tree contains unit, integration, adversarial, property, replay, browser, desktop, worker, quant, verification, persistence, transport, and typed E2E tests.
 
