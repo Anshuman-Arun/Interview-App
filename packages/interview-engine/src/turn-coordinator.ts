@@ -639,6 +639,10 @@ export class TurnCoordinator {
       ) {
         throw new Error("Generation requires the latest committed Turn and matching InputEpisode");
       }
+      const pedagogicalAction = RealizationRequestSchema.safeParse(state.pedagogicalActions[turnId]);
+      if (!pedagogicalAction.success) {
+        throw new Error("Generation requires a valid application-selected pedagogical action");
+      }
       const basis: GenerationBasis = {
         contextEpoch: state.contextEpoch,
         committedInputSequence: state.lastCommittedInputSequence,
@@ -707,8 +711,12 @@ export class TurnCoordinator {
       const parsedRequest = RealizationRequestSchema.safeParse(
         state.pedagogicalActions[generation.basis.turnId]
       );
-      if (!parsedRequest.success) {
-        return rejectAndSupersedeDrafts(generationId, proposal, "No valid application-selected pedagogical action");
+      const generationRequest = RealizationRequestSchema.safeParse(generation.pedagogicalAction);
+      if (!parsedRequest.success || !generationRequest.success) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "No valid generation-bound pedagogical action");
+      }
+      if (canonicalJson(parsedRequest.data) !== canonicalJson(generationRequest.data)) {
+        return rejectAndSupersedeDrafts(generationId, proposal, "Pedagogical action changed after generation began");
       }
       const currentRequest = selectPedagogicalAction(
         state,
