@@ -1174,7 +1174,7 @@ export interface QuantResearchReplayOutput {
   readonly acceptedActions: readonly QuantResearchAction[];
 }
 
-function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
+function snapshotReplayActions(actionsInput: unknown): readonly QuantResearchAction[] {
   let isArray: boolean;
   try {
     isArray = Array.isArray(actionsInput);
@@ -1213,7 +1213,7 @@ function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
       throw new QuantResearchError("INVALID_REPLAY", "Replay actions contains unsupported properties");
     }
   }
-  const snapshot: unknown[] = [];
+  const snapshot: QuantResearchAction[] = [];
   for (let index = 0; index < length; index += 1) {
     let descriptor: PropertyDescriptor | undefined;
     try {
@@ -1225,7 +1225,7 @@ function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
     if (descriptor.get !== undefined || descriptor.set !== undefined) {
       throw new QuantResearchError("INVALID_REPLAY", "Replay actions must contain only data properties");
     }
-    snapshot.push(descriptor.value);
+    snapshot.push(parseQuantResearchAction(descriptor.value));
   }
   return snapshot;
 }
@@ -1238,7 +1238,7 @@ export function replayQuantResearch(definitionInput: unknown, actionsInput: unkn
   try {
     const definition = parseQuantResearchDefinition(definitionInput);
     const engine = new QuantResearchEngine(definition);
-    const actions = snapshotReplayActions(actionsInput).map((action) => parseQuantResearchAction(action));
+    const actions = snapshotReplayActions(actionsInput);
     for (const action of actions) engine.applyAction(action);
     return { state: engine.getState(), result: engine.getResult(), acceptedActions: engine.getAcceptedActions() };
   } finally {
