@@ -205,7 +205,7 @@ export const TranscriptCandidateSchema = z.object({
   requestId: SpeechRequestIdSchema,
   utteranceId: SpeechUtteranceIdSchema,
   text: SafeTranscriptTextSchema,
-  isFinal: z.boolean(),
+  isFinal: z.literal(true),
   confidence: z.number().min(0).max(1).optional(),
   words: z.array(TranscriptWordTimingSchema).max(MAX_SPEECH_WORD_TIMINGS).optional(),
   model: SpeechModelIdentitySchema,
@@ -256,7 +256,7 @@ export const SpeechUtteranceFinalizedEventSchema = WorkerEventBaseSchema.extend(
   type: z.literal("UTTERANCE_FINALIZED"),
   utteranceId: SpeechUtteranceIdSchema,
   finalizationReason: SpeechFinalizationReasonSchema,
-  speechFrameCount: NonnegativeSafeIntegerSchema,
+  speechFrameCount: PositiveSafeIntegerSchema,
   durationMs: z.number().nonnegative().max(MAX_SPEECH_UTTERANCE_DURATION_MS),
   sourceAudioBasis: SourceAudioBasisSchema
 }).strict().superRefine((value, context) => {
