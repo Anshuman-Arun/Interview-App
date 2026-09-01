@@ -778,20 +778,44 @@ export class TurnCoordinator {
       if (!validation.accepted) return rejectDrafts(generationId, proposal, validation.reason);
       const atoms: DeliveryAtom[] = [];
       if (proposal.speechText !== undefined) {
+        const speechAnalysis = validation.realizations.speech;
+        if (speechAnalysis === null) {
+          return rejectDrafts(
+            generationId,
+            proposal,
+            "Disclosure validation did not attribute the speech realization"
+          );
+        }
         atoms.push(DeliveryAtomSchema.parse({
           deliveryId: newDeliveryId(), generationId,
           content: { medium: "TEXT", text: proposal.speechText },
-          disclosureIds: validation.analysis.effectiveDisclosureIds,
-          effectiveDisclosureLevel: validation.analysis.effectiveDisclosureLevel,
+          disclosureIds: speechAnalysis.effectiveDisclosureIds,
+          effectiveDisclosureLevel: speechAnalysis.effectiveDisclosureLevel,
           status: "VALIDATED"
         }));
       }
-      for (const action of proposal.boardActions ?? []) {
+      const boardActions = proposal.boardActions ?? [];
+      if (validation.realizations.boardActions.length !== boardActions.length) {
+        return rejectDrafts(
+          generationId,
+          proposal,
+          "Disclosure validation did not attribute every board realization"
+        );
+      }
+      for (const [index, action] of boardActions.entries()) {
+        const actionAnalysis = validation.realizations.boardActions[index];
+        if (actionAnalysis === undefined) {
+          return rejectDrafts(
+            generationId,
+            proposal,
+            "Disclosure validation did not attribute every board realization"
+          );
+        }
         atoms.push(DeliveryAtomSchema.parse({
           deliveryId: newDeliveryId(), generationId,
           content: { medium: "WHITEBOARD", action },
-          disclosureIds: validation.analysis.effectiveDisclosureIds,
-          effectiveDisclosureLevel: validation.analysis.effectiveDisclosureLevel,
+          disclosureIds: actionAnalysis.effectiveDisclosureIds,
+          effectiveDisclosureLevel: actionAnalysis.effectiveDisclosureLevel,
           status: "VALIDATED"
         }));
       }
