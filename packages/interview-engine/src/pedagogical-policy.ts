@@ -1040,6 +1040,7 @@ function collectExposedAssistance(
     if (
       !isRecord(rawGeneration)
       || rawGeneration["generationId"] !== delivery.data.generationId
+      || rawGeneration["interviewerProposalValidated"] !== true
       || (
         rawGeneration["status"] !== "VALIDATED"
         && rawGeneration["status"] !== "SUPERSEDED"
