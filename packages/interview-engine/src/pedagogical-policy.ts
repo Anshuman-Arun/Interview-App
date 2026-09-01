@@ -972,8 +972,9 @@ function inferActiveApproachId(
     }
     if (signal.key.subject.kind !== "MILESTONE") continue;
 
+    const milestoneId = signal.key.subject.milestoneId;
     const milestone = graph.problem.interviewer.reasoningGraph.milestones.find(
-      (item) => item.id === signal.key.subject.milestoneId
+      (item) => item.id === milestoneId
     );
     if (milestone === undefined) continue;
     if (milestone.approachIds.length === 1) return milestone.approachIds[0];
@@ -993,8 +994,9 @@ function evidenceForActiveApproach(
       return signal.key.subject.approachId === activeApproachId;
     }
     if (signal.key.subject.kind !== "MILESTONE") return true;
+    const milestoneId = signal.key.subject.milestoneId;
     const milestone = graph.problem.interviewer.reasoningGraph.milestones.find(
-      (item) => item.id === signal.key.subject.milestoneId
+      (item) => item.id === milestoneId
     );
     return milestone?.approachIds.includes(activeApproachId) ?? false;
   });
@@ -1599,10 +1601,6 @@ function chooseActionPlan(
         stage: "FOCUS",
         escalationJustified: false
       };
-    case "PRODUCTIVE_PROGRESS":
-    case "UNEXPECTED_VALID_APPROACH":
-    case "COMPLETED_PRIMARY_APPROACH":
-      throw new Error("Progress classifications must be handled before intervention escalation");
   }
 }
 
