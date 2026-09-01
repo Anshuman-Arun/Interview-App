@@ -217,31 +217,40 @@ function boundedFiniteNumber(value: unknown, min: number, max: number, context: 
 }
 
 function finiteNumberVector(value: unknown): readonly number[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_ACTION_VECTOR) {
-    failAction("values must contain between 1 and 8 entries");
-  }
-  const allowedKeys = new Set(["length", ...Array.from({ length: value.length }, (_item, index) => String(index))]);
+  if (!Array.isArray(value)) failAction("values must be an array");
   let keys: readonly PropertyKey[];
+  let lengthDescriptor: PropertyDescriptor | undefined;
   try {
     keys = Reflect.ownKeys(value);
+    lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
   } catch {
     failAction("values could not be safely inspected");
   }
+  if (
+    lengthDescriptor === undefined ||
+    lengthDescriptor.get !== undefined ||
+    lengthDescriptor.set !== undefined ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 1 ||
+    lengthDescriptor.value > MAX_ACTION_VECTOR
+  ) {
+    failAction("values must contain between 1 and 8 entries");
+  }
+  const length = lengthDescriptor.value as number;
+  const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
   for (const key of keys) {
     if (typeof key !== "string" || !allowedKeys.has(key)) failAction("values contains unsupported properties");
   }
   const result: number[] = [];
-  for (let index = 0; index < value.length; index += 1) {
-    if (!Object.prototype.hasOwnProperty.call(value, index)) failAction("values must be a dense array");
+  for (let index = 0; index < length; index += 1) {
     let descriptor: PropertyDescriptor | undefined;
     try {
       descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     } catch {
       failAction("values could not be safely inspected");
     }
-    if (descriptor === undefined || descriptor.get !== undefined || descriptor.set !== undefined) {
-      failAction("values must contain only data properties");
-    }
+    if (descriptor === undefined) failAction("values must be a dense array");
+    if (descriptor.get !== undefined || descriptor.set !== undefined) failAction("values must contain only data properties");
     result.push(boundedFiniteNumber(descriptor.value, -MAX_ABS_NUMERIC_INPUT, MAX_ABS_NUMERIC_INPUT, `values[${String(index)}]`, failAction));
   }
   return result;
