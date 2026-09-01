@@ -31,7 +31,7 @@ const HARD_MAX_TOTAL_OUTPUT_ENCODED_BYTES = 128 * 1024 * 1024;
 export const HARD_MAX_TOTAL_TILE_PIXELS = 128 * 1024 * 1024;
 const COOPERATIVE_YIELD_ROWS = 16;
 const MIN_STATIC_PNG_ENCODED_BYTES = 58;
-const abortSignalAbortedGetter: () => unknown = (() => {
+function readAbortSignalAborted(signal: AbortSignal): unknown {
   const descriptor = Object.getOwnPropertyDescriptor(
     AbortSignal.prototype,
     "aborted"
@@ -39,8 +39,8 @@ const abortSignalAbortedGetter: () => unknown = (() => {
   if (typeof descriptor?.get !== "function") {
     throw new Error("AbortSignal aborted intrinsic is unavailable");
   }
-  return descriptor.get;
-})();
+  return descriptor.get.call(signal);
+}
 
 const DownscaleEnvelopeSchema = z.object({
   maxWidth: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -120,7 +120,7 @@ function isAbortSignal(value: unknown): value is AbortSignal {
   if (typeof value !== "object" || value === null || isProxy(value)) return false;
   try {
     return value instanceof AbortSignal
-      && typeof Reflect.apply(abortSignalAbortedGetter, value, []) === "boolean";
+      && typeof readAbortSignalAborted(value) === "boolean";
   } catch {
     return false;
   }
@@ -205,11 +205,6 @@ interface SourceDescriptor {
   readonly transform: CoordinateTransform;
 }
 
-function positiveSafeInteger(value: number, name: string): number {
-  if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive safe integer`);
-  return value;
-}
-
 function nonnegativeSafeInteger(value: number, name: string): number {
   if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${name} must be a nonnegative safe integer`);
   return value;
@@ -279,7 +274,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal === undefined) return;
   let aborted: unknown;
   try {
-    aborted = Reflect.apply(abortSignalAbortedGetter, signal, []);
+    aborted = readAbortSignalAborted(signal);
   } catch {
     throw new TypeError("AbortSignal could not be read safely");
   }
