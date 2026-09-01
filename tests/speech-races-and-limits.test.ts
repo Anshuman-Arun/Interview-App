@@ -3,6 +3,7 @@ import { newRequestId } from "../packages/domain/src/index.js";
 import {
   MAX_SPEECH_BUFFERED_PCM_BYTES,
   MAX_SPEECH_CONCURRENT_STREAMS,
+  MAX_SPEECH_IN_FLIGHT_REQUESTS,
   MAX_SPEECH_PRE_SPEECH_DURATION_MS,
   MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
   MAX_SPEECH_REMEMBERED_MESSAGES,
@@ -98,6 +99,55 @@ describe("speech worker adversarial races and hard limits", () => {
     });
     release?.();
     await expect(first).resolves.toEqual([]);
+  });
+
+  it("hard-bounds queued frame requests while preserving cancellation reserve", async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const vadBackend: VadBackend = {
+      async classify() {
+        await gate;
+        return { speechProbability: 0 };
+      }
+    };
+    const subject = worker({ vadBackend, maxInFlightRequests: 2 });
+    const firstFixture = frame(0, false, "queue-cap");
+    const secondFixture = frame(1, false, "queue-cap");
+    const thirdFixture = frame(2, false, "queue-cap");
+
+    const first = subject.submitFrame(firstFixture.envelope, firstFixture.pcm);
+    const second = subject.submitFrame(secondFixture.envelope, secondFixture.pcm);
+    await expect(subject.submitFrame(thirdFixture.envelope, thirdFixture.pcm)).rejects.toMatchObject({
+      code: "RESOURCE_LIMIT"
+    });
+
+    await expect(subject.cancel({
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId: "queue-cap",
+      type: "CANCEL_SPEECH"
+    })).resolves.toContainEqual(expect.objectContaining({ type: "SPEECH_CANCELLED" }));
+
+    release?.();
+    await expect(first).resolves.toEqual([]);
+    await expect(second).resolves.toEqual([]);
+  });
+
+  it("remembers stable failures so a failed RequestId cannot later be reused with different content", async () => {
+    const subject = worker();
+    const requestId = newRequestId();
+    const invalidFirst = frame(1, false, "failed-id", requestId);
+    await expect(subject.submitFrame(invalidFirst.envelope, invalidFirst.pcm)).rejects.toMatchObject({
+      code: "OUT_OF_ORDER_FRAME"
+    });
+    await expect(subject.submitFrame(invalidFirst.envelope, invalidFirst.pcm)).rejects.toMatchObject({
+      code: "OUT_OF_ORDER_FRAME"
+    });
+
+    const conflictingRetry = frame(0, false, "failed-id", requestId);
+    await expect(subject.submitFrame(conflictingRetry.envelope, conflictingRetry.pcm)).rejects.toMatchObject({
+      code: "REQUEST_ID_CONFLICT"
+    });
   });
 
   it("coalesces identical concurrent RequestIds instead of running VAD twice", async () => {
@@ -356,6 +406,7 @@ describe("speech worker adversarial races and hard limits", () => {
     expect(() => worker({ maxConcurrentStreams: MAX_SPEECH_CONCURRENT_STREAMS + 1 })).toThrow();
     expect(() => worker({ maxBufferedPcmBytes: MAX_SPEECH_BUFFERED_PCM_BYTES + 1 })).toThrow();
     expect(() => worker({ maxRememberedMessages: MAX_SPEECH_REMEMBERED_MESSAGES + 1 })).toThrow();
+    expect(() => worker({ maxInFlightRequests: MAX_SPEECH_IN_FLIGHT_REQUESTS + 1 })).toThrow();
     expect(() => worker({ maxPreSpeechDurationMs: MAX_SPEECH_PRE_SPEECH_DURATION_MS + 1 })).toThrow();
     expect(() => worker({ vadTimeoutMs: MAX_SPEECH_VAD_TIMEOUT_MS + 1 })).toThrow();
     expect(() => worker({ recognizerTimeoutMs: MAX_SPEECH_RECOGNIZER_TIMEOUT_MS + 1 })).toThrow();
