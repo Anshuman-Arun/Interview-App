@@ -65,12 +65,12 @@ const ProtocolCommandBaseSchema = z.object({
 
 export const StartSessionCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("START_SESSION"),
-  /**
-   * New callers should provide configuration. problemId is a legacy Ramsey-only
-   * compatibility field and may not be combined with configuration.
-   */
-  configuration: InterviewSessionConfigurationSchema.optional(),
-  problemId: z.string().min(1).max(128).optional()
+  problemId: z.string().min(1).optional()
+}).strict();
+
+export const StartConfiguredSessionCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("START_CONFIGURED_SESSION"),
+  configuration: InterviewSessionConfigurationSchema
 }).strict();
 
 export const ListInterviewCatalogCommandSchema = z.object({
@@ -108,6 +108,10 @@ export const GetSessionSummaryCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("GET_SESSION_SUMMARY")
 }).strict();
 
+export const GetInterviewSessionContextCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("GET_INTERVIEW_SESSION_CONTEXT")
+}).strict();
+
 export const ReconnectDeliveryCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("RECONNECT_DELIVERY"),
   deliveryId: DeliveryIdSchema
@@ -125,6 +129,7 @@ export const AcknowledgeDeliveryCompletedCommandSchema = ProtocolCommandBaseSche
 
 export const ClientCommandSchema = z.discriminatedUnion("type", [
   StartSessionCommandSchema,
+  StartConfiguredSessionCommandSchema,
   ListInterviewCatalogCommandSchema,
   ListSessionsCommandSchema,
   ResumeSessionCommandSchema,
@@ -132,6 +137,7 @@ export const ClientCommandSchema = z.discriminatedUnion("type", [
   ArchiveSessionCommandSchema,
   CommitTypedInputCommandSchema,
   GetSessionSummaryCommandSchema,
+  GetInterviewSessionContextCommandSchema,
   ReconnectDeliveryCommandSchema,
   AcknowledgeDeliveryExposedCommandSchema,
   AcknowledgeDeliveryCompletedCommandSchema
@@ -146,8 +152,22 @@ const ResponseBaseSchema = z.object({
 export const SessionStartedResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("SESSION_STARTED"),
+  sessionId: SessionIdSchema
+}).strict();
+
+export const ConfiguredSessionStartedResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("CONFIGURED_SESSION_STARTED"),
   sessionId: SessionIdSchema,
-  configuration: InterviewSessionConfigurationSchema.optional(),
+  configuration: InterviewSessionConfigurationSchema,
+  problem: InterviewProblemPublicViewSchema.optional()
+}).strict();
+
+export const InterviewSessionContextResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("INTERVIEW_SESSION_CONTEXT"),
+  sessionId: SessionIdSchema,
+  configuration: InterviewSessionConfigurationSchema,
   problem: InterviewProblemPublicViewSchema.optional()
 }).strict();
 
@@ -170,10 +190,7 @@ export const SessionResumedResponseSchema = ResponseBaseSchema.extend({
   sequence: NonnegativeSafeIntegerSchema,
   started: z.boolean(),
   status: SessionStatusSchema,
-  configuration: InterviewSessionConfigurationSchema.optional(),
-  problem: InterviewProblemPublicViewSchema.optional(),
   problemId: z.string().min(1).optional(),
-  problemVersion: z.string().min(1).optional(),
   contextEpoch: z.number().int().nonnegative(),
   deliveryStatuses: z.record(DeliveryIdSchema, DeliveryStatusSchema),
   history: z.array(SessionHistoryEntrySchema).default([])
@@ -207,10 +224,6 @@ export const SessionSummaryResponseSchema = ResponseBaseSchema.extend({
   sequence: NonnegativeSafeIntegerSchema,
   started: z.boolean(),
   status: SessionStatusSchema.optional(),
-  configuration: InterviewSessionConfigurationSchema.optional(),
-  problem: InterviewProblemPublicViewSchema.optional(),
-  problemId: z.string().min(1).optional(),
-  problemVersion: z.string().min(1).optional(),
   contextEpoch: z.number().int().nonnegative(),
   deliveryStatuses: z.record(DeliveryIdSchema, DeliveryStatusSchema),
   history: z.array(SessionHistoryEntrySchema).default([])
@@ -233,6 +246,8 @@ export const DeliveryAcknowledgedResponseSchema = ResponseBaseSchema.extend({
 
 export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [
   SessionStartedResponseSchema,
+  ConfiguredSessionStartedResponseSchema,
+  InterviewSessionContextResponseSchema,
   InterviewCatalogResponseSchema,
   SessionsListResponseSchema,
   SessionResumedResponseSchema,
