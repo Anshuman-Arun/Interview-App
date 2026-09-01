@@ -299,9 +299,22 @@ export class AdversarialFixture {
   }
 
   public async startReplacementGeneration(provider = "adversarial-provider-b"): Promise<GenerationId> {
+    const state = this.writer.getState();
+    const lastCommittedInputSequence = state.lastCommittedInputSequence;
+    if (lastCommittedInputSequence === undefined) {
+      throw new Error("Replacement generation requires a committed turn");
+    }
+    const latestTurn = Object.values(state.turns).find(
+      (turn) => turn.committedSequence === lastCommittedInputSequence
+    );
+    if (latestTurn === undefined) {
+      throw new Error("Replacement generation cannot resolve the latest committed turn");
+    }
+
+    await this.turns.selectAction(latestTurn.turnId, sixPeopleProblem);
     const generation = await this.turns.startGeneration(
-      this.inputEpisodeId,
-      this.turnId,
+      latestTurn.inputEpisodeId,
+      latestTurn.turnId,
       provider
     );
     return generation.generationId;
