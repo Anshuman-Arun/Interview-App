@@ -2,6 +2,9 @@ import { z } from "zod";
 import {
   FormalInterpretationRequestSchema,
   InterpretationProviderResultSchema,
+  MAX_FORMAL_INTERPRETATION_CANDIDATES,
+  MAX_FORMAL_INTERPRETATION_PROTOCOLS,
+  MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS,
   RequestIdSchema,
   VerificationResultSchema,
   evidenceKeyIdentity,
@@ -236,6 +239,37 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function exceedsArrayBound(value: unknown, maximum: number): boolean {
+  return Array.isArray(value) && value.length > maximum;
+}
+
+function requestExceedsStructuralBounds(input: unknown): boolean {
+  const request = objectRecord(input);
+  if (request === undefined) return false;
+  if (exceedsArrayBound(request.allowedProtocols, MAX_FORMAL_INTERPRETATION_PROTOCOLS)) return true;
+  const source = objectRecord(request.source);
+  return source !== undefined
+    && exceedsArrayBound(source.eventIds, MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS);
+}
+
+function providerResultExceedsStructuralBounds(input: unknown): boolean {
+  const result = objectRecord(input);
+  if (result === undefined || !Array.isArray(result.candidates)) return false;
+  if (result.candidates.length > MAX_FORMAL_INTERPRETATION_CANDIDATES) return true;
+  return result.candidates.some((candidate) => {
+    const candidateRecord = objectRecord(candidate);
+    const source = candidateRecord === undefined ? undefined : objectRecord(candidateRecord.source);
+    return source !== undefined
+      && exceedsArrayBound(source.eventIds, MAX_FORMAL_INTERPRETATION_SOURCE_EVENTS);
+  });
+}
+
 function mapRouteFailure(
   reason: "UNSUPPORTED_PROTOCOL" | "VERIFIER_UNAVAILABLE" | "VERIFIER_UNAUTHORIZED",
   requestId: RequestId,
@@ -319,6 +353,9 @@ export class InterpretationCoordinator {
   }
 
   public interpretAndVerify(input: unknown): Promise<InterpretationExecutionOutcome> {
+    if (requestExceedsStructuralBounds(input)) {
+      return Promise.resolve(failed("RESOURCE_LIMIT", "RESOURCE_LIMIT", 0));
+    }
     const parsed = FormalInterpretationRequestSchema.safeParse(input);
     if (!parsed.success) {
       return Promise.resolve(failed("INVALID_REQUEST", "MALFORMED_REQUEST", 0));
@@ -421,6 +458,14 @@ export class InterpretationCoordinator {
     }
     const rawResult: unknown = providerRace.value;
 
+    if (providerResultExceedsStructuralBounds(rawResult)) {
+      return this.finishFailure(failed(
+        "RESOURCE_LIMIT",
+        "RESOURCE_LIMIT",
+        MAX_FORMAL_INTERPRETATION_CANDIDATES,
+        request.requestId
+      ));
+    }
     const providerResult = InterpretationProviderResultSchema.safeParse(rawResult);
     if (!providerResult.success) {
       return this.finishFailure(failed(
