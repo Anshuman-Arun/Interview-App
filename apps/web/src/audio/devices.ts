@@ -38,9 +38,9 @@ export class BrowserAudioDeviceManager {
     if (mediaDevices === undefined) {
       return { status: "UNSUPPORTED", devices: [] };
     }
-    let enumerateDevices: AudioMediaDevicesLike["enumerateDevices"];
+    let enumerateDevices: unknown;
     try {
-      enumerateDevices = mediaDevices.enumerateDevices;
+      enumerateDevices = Reflect.get(mediaDevices, "enumerateDevices") as unknown;
     } catch (error) {
       if (isPermissionDenied(error)) {
         return { status: "PERMISSION_DENIED", devices: [] };
@@ -56,15 +56,12 @@ export class BrowserAudioDeviceManager {
     }
 
     try {
-      const devices = await enumerateDevices.call(mediaDevices);
-      if (!Array.isArray(devices)) {
+      const devices: unknown = await Reflect.apply(enumerateDevices, mediaDevices, []);
+      if (!isUnknownArray(devices)) {
         throw new TypeError("Audio device enumeration must return an array");
       }
       const audioDevices: AudioDeviceDescriptor[] = [];
       for (const device of devices) {
-        if (typeof device !== "object" || device === null) {
-          throw new TypeError("Audio device enumeration contained an invalid device record");
-        }
         const descriptor = toDescriptor(device);
         if (descriptor !== undefined) audioDevices.push(descriptor);
       }
@@ -96,11 +93,11 @@ export class BrowserAudioDeviceManager {
       );
     }
 
-    let addEventListener: AudioMediaDevicesLike["addEventListener"];
-    let removeEventListener: AudioMediaDevicesLike["removeEventListener"];
+    let addEventListener: unknown;
+    let removeEventListener: unknown;
     try {
-      addEventListener = mediaDevices.addEventListener;
-      removeEventListener = mediaDevices.removeEventListener;
+      addEventListener = Reflect.get(mediaDevices, "addEventListener") as unknown;
+      removeEventListener = Reflect.get(mediaDevices, "removeEventListener") as unknown;
     } catch (error) {
       throw new AudioInfrastructureError(
         isPermissionDenied(error) ? "PERMISSION_DENIED" : "UNSUPPORTED",
@@ -130,7 +127,7 @@ export class BrowserAudioDeviceManager {
     };
 
     try {
-      addEventListener.call(mediaDevices, "devicechange", observedListener);
+      Reflect.apply(addEventListener, mediaDevices, ["devicechange", observedListener]);
       active = true;
     } catch (error) {
       // subscribe() is failing and no unsubscribe handle will be returned.
@@ -138,7 +135,7 @@ export class BrowserAudioDeviceManager {
       // when best-effort rollback itself is unavailable.
       active = false;
       try {
-        removeEventListener.call(mediaDevices, "devicechange", observedListener);
+        Reflect.apply(removeEventListener, mediaDevices, ["devicechange", observedListener]);
       } catch {
         // Failed subscription rollback is best-effort; the wrapper is inert.
       }
@@ -149,7 +146,7 @@ export class BrowserAudioDeviceManager {
       if (!active || removing) return;
       removing = true;
       try {
-        removeEventListener.call(mediaDevices, "devicechange", observedListener);
+        Reflect.apply(removeEventListener, mediaDevices, ["devicechange", observedListener]);
         active = false;
       } finally {
         removing = false;
@@ -174,6 +171,10 @@ export function browserMediaDevices(): AudioMediaDevicesLike | undefined {
 
 function isAudioMediaDevicesLike(value: unknown): value is AudioMediaDevicesLike {
   return typeof value === "object" && value !== null;
+}
+
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
 }
 
 export function isPermissionDenied(error: unknown): boolean {
@@ -211,12 +212,16 @@ function safeErrorMessage(error: unknown): string {
   }
 }
 
-function toDescriptor(device: AudioMediaDeviceInfoLike): AudioDeviceDescriptor | undefined {
-  const mediaKind = device.kind;
+function toDescriptor(device: unknown): AudioDeviceDescriptor | undefined {
+  if (typeof device !== "object" || device === null) {
+    throw new TypeError("Audio device enumeration contained an invalid device record");
+  }
+
+  const mediaKind: unknown = Reflect.get(device, "kind");
   if (mediaKind !== "audioinput" && mediaKind !== "audiooutput") return undefined;
 
-  const deviceId = device.deviceId;
-  const rawLabel = device.label;
+  const deviceId: unknown = Reflect.get(device, "deviceId");
+  const rawLabel: unknown = Reflect.get(device, "label");
   if (typeof deviceId !== "string" || typeof rawLabel !== "string") {
     throw new TypeError("Enumerated audio device metadata must use string ids and labels");
   }

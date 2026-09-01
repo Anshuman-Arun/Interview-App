@@ -36,11 +36,11 @@ export class BoundedAudioFrameBuffer {
     const mutationEpoch = this.mutationEpoch;
     const snapshot = snapshotAudioFrame(frame);
     const ownedSnapshot = ownAudioFrameSnapshot(snapshot);
-    if (this.cancelled || this.mutationEpoch !== mutationEpoch) {
+    if (this.wasMutationSuperseded(mutationEpoch)) {
       return { accepted: false, droppedOldest: undefined };
     }
     validateAudioFrame(ownedSnapshot);
-    if (this.cancelled || this.mutationEpoch !== mutationEpoch) {
+    if (this.wasMutationSuperseded(mutationEpoch)) {
       return { accepted: false, droppedOldest: undefined };
     }
     const ownedFrame: AudioFrame = ownedSnapshot;
@@ -78,6 +78,10 @@ export class BoundedAudioFrameBuffer {
   public snapshot(): readonly AudioFrame[] {
     return this.frames.map(cloneValidatedAudioFrame);
   }
+
+  private wasMutationSuperseded(epoch: number): boolean {
+    return this.cancelled || this.mutationEpoch !== epoch;
+  }
 }
 
 interface AudioFrameSnapshot {
@@ -89,18 +93,18 @@ interface AudioFrameSnapshot {
   readonly samples: unknown;
 }
 
-function snapshotAudioFrame(frame: AudioFrame): AudioFrameSnapshot {
+function snapshotAudioFrame(frame: unknown): AudioFrameSnapshot {
   if (typeof frame !== "object" || frame === null) {
     throw new RangeError("Audio frame must be an object");
   }
 
   return {
-    sequence: frame.sequence,
-    sampleRate: frame.sampleRate,
-    channelCount: frame.channelCount,
-    capturedAtMs: frame.capturedAtMs,
-    offsetMs: frame.offsetMs,
-    samples: frame.samples
+    sequence: Reflect.get(frame, "sequence") as unknown,
+    sampleRate: Reflect.get(frame, "sampleRate") as unknown,
+    channelCount: Reflect.get(frame, "channelCount") as unknown,
+    capturedAtMs: Reflect.get(frame, "capturedAtMs") as unknown,
+    offsetMs: Reflect.get(frame, "offsetMs") as unknown,
+    samples: Reflect.get(frame, "samples") as unknown
   };
 }
 
