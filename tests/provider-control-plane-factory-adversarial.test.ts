@@ -2441,18 +2441,16 @@ describe("adapter factory adversarial boundary", () => {
     expect(String(adapter)).not.toContain(secret);
   });
 
-  it("snapshots resolver methods before provider factory execution", async () => {
+  it("rejects resolver methods replaced by accessors before provider factory execution", async () => {
     const registry = registerBuiltInProviders();
     const resolved = resolveProviderConfiguration({
       registry,
       configuration: GEMINI_CONFIGURATION
     });
     const factory = resolveAdapterFactory(resolved);
-    let originalCalls = 0;
-    let replacementCalls = 0;
+    let getterCalls = 0;
     const resolver: ProviderSecretResolver = {
       async resolveSecret() {
-        originalCalls += 1;
         return "runtime-only-key";
       }
     };
@@ -2460,27 +2458,18 @@ describe("adapter factory adversarial boundary", () => {
       resolved,
       secretResolver: resolver
     };
-    const original = resolver.resolveSecret;
     Object.defineProperty(resolver, "resolveSecret", {
       configurable: true,
       enumerable: true,
       get() {
-        Object.defineProperty(resolver, "resolveSecret", {
-          configurable: true,
-          enumerable: true,
-          value: async () => {
-            replacementCalls += 1;
-            return "replacement-key";
-          }
-        });
-        return original;
+        getterCalls += 1;
+        return async () => "replacement-key";
       }
     });
 
-    const adapter = await factory.createAdapter(input);
-    expect(adapter.name).toBe("gemini-api");
-    expect(originalCalls).toBe(1);
-    expect(replacementCalls).toBe(0);
+    await expect(factory.createAdapter(input))
+      .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(getterCalls).toBe(0);
   });
 
   it("keeps built-in declarations synchronized with the execution metadata they expose", () => {
