@@ -481,7 +481,8 @@ function transitionSampling(state: SamplingState, action: QuantResearchAction): 
     if (action.kind === "SUBMIT_NUMERIC_ESTIMATE") {
       if (state.revealed.length < 2) throw new QuantResearchError("ACTION_NOT_ALLOWED", "At least two observations must be revealed before an estimate");
       const score = distanceScore(Math.abs(action.value - state.hiddenCenter), Math.max(1, state.config.noiseRadius / 2));
-      const efficiency = 100 - ((state.revealed.length - 2) / Math.max(1, state.config.maxSamples - 2)) * 40;
+      const observationEconomy = 100 - ((state.revealed.length - 2) / Math.max(1, state.config.maxSamples - 2)) * 40;
+      const efficiency = Math.min(score, boundedScore(observationEconomy));
       const outlierDirection = state.hiddenCenter % 2 === 0 ? 1 : -1;
       let next = appendAction(state, action, {
         stage: "OUTLIER_PERTURBATION",
@@ -569,7 +570,7 @@ function transitionModel(state: ModelState, action: QuantResearchAction): ModelS
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
       evidence("ROBUSTNESS", state.stage, correct ? 100 : 0, "Model selection was re-evaluated after a disclosed outlier perturbation."),
-      evidence("CONSISTENCY", state.stage, correct ? (choice.option === state.firstChoice ? 100 : 80) : 0, "Consistency reflects whether the final model conclusion remains correct after the perturbation.")
+      evidence("CONSISTENCY", state.stage, correct && state.firstChoice === state.hiddenModel ? 100 : 0, "Consistency requires the same latent-family conclusion to be correct before and after the perturbation.")
     ]);
     return next;
   }
