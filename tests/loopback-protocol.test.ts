@@ -163,7 +163,9 @@ describe("authenticated loopback command protocol", () => {
         producer: "mock-model",
         inputEpisodeId: inputResponse.inputEpisodeId,
         turnId: inputResponse.turnId,
-        generationId: generation.generationId
+        generationId: generation.generationId,
+        contextEpoch: generation.basis.contextEpoch,
+        sourceRevision: generation.basis.committedInputSequence
       }),
       problem: sixPeopleProblem,
       proposal: {
@@ -255,7 +257,9 @@ describe("authenticated loopback command protocol", () => {
         producer: "mock-model",
         inputEpisodeId: input.inputEpisodeId,
         turnId: input.turnId,
-        generationId: generation.generationId
+        generationId: generation.generationId,
+        contextEpoch: generation.basis.contextEpoch,
+        sourceRevision: generation.basis.committedInputSequence
       }),
       problem: sixPeopleProblem,
       proposal: {
