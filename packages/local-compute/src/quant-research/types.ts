@@ -165,8 +165,16 @@ function failAction(message: string): never {
   throw new QuantResearchError("INVALID_ACTION", message);
 }
 
+function safeIsArray(value: unknown, context: string, fail: (message: string) => never): boolean {
+  try {
+    return Array.isArray(value);
+  } catch {
+    fail(context + " could not be safely inspected");
+  }
+}
+
 function asRecord(value: unknown, context: string, fail: (message: string) => never): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) fail(context + " must be an object");
+  if (typeof value !== "object" || value === null || safeIsArray(value, context, fail)) fail(context + " must be an object");
   let prototype: object | null;
   let keys: readonly PropertyKey[];
   try {
@@ -218,7 +226,7 @@ function boundedFiniteNumber(value: unknown, min: number, max: number, context: 
 }
 
 function finiteNumberVector(value: unknown): readonly number[] {
-  if (!Array.isArray(value)) failAction("values must be an array");
+  if (!safeIsArray(value, "values", failAction)) failAction("values must be an array");
   let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
@@ -427,7 +435,11 @@ export interface QuantResearchFamilyRegistration {
 }
 
 export function assertUniqueQuantResearchRegistrations(registrationsInput: unknown): void {
-  if (!Array.isArray(registrationsInput)) throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry must be an array");
+  if (!safeIsArray(registrationsInput, "Scenario registry", (message) => {
+    throw new QuantResearchError("INVALID_REGISTRY", message);
+  })) {
+    throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry must be an array");
+  }
   let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
