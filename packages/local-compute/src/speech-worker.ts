@@ -287,9 +287,9 @@ export class SpeechWorkerCore {
 
       const context = this.getOrCreateStream(frame.envelope.streamId);
       return this.serialize(context, async () => {
-        if (context.terminal || this.closedStreams.has(context.streamId) || this.shuttingDown) return [];
-        if (context.finalizationStarted) {
-          throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream finalization has already started");
+        if (context.cancelled || this.shuttingDown) return [];
+        if (context.finalizationStarted || context.terminal || this.closedStreams.has(context.streamId)) {
+          throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream has already finalized");
         }
         return this.processFrame(context, frame, heuristics.data);
       });
@@ -327,9 +327,9 @@ export class SpeechWorkerCore {
       }
 
       return this.serialize(context, async () => {
-        if (context.terminal || this.closedStreams.has(context.streamId) || this.shuttingDown) return [];
-        if (context.finalizationStarted) {
-          throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream finalization has already started");
+        if (context.cancelled || this.shuttingDown) return [];
+        if (context.finalizationStarted || context.terminal || this.closedStreams.has(context.streamId)) {
+          throw new SpeechWorkerCoreError("STREAM_FINALIZED", "Speech stream has already finalized");
         }
 
         const decision = this.endpointDecision(context, { explicitFlush: true });
