@@ -420,7 +420,9 @@ export function parseQuantResearchDefinition(input: unknown): QuantResearchScena
   if (parsingDefinition) failDefinition("Reentrant scenario definition validation is not allowed");
   parsingDefinition = true;
   try {
-    return parseQuantResearchDefinitionUnchecked(input);
+    const definition = parseQuantResearchDefinitionUnchecked(input);
+    Object.freeze(definition.config);
+    return Object.freeze(definition);
   } finally {
     parsingDefinition = false;
   }
