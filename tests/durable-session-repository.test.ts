@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { DatabaseSync } from "node:sqlite";
 import {
+  InterviewSessionConfigurationSchema,
   newRequestId,
   newSessionId
 } from "../packages/domain/src/index.js";
@@ -74,6 +75,16 @@ describe("Durable Session Repository & Rebuildable Projection", () => {
       operation: "TEST_SESSION_START",
       payload: {}
     } as const;
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "OXFORD_MATHEMATICS",
+      problem: {
+        id: sixPeopleProblem.id,
+        version: sixPeopleProblem.version
+      },
+      difficulty: sixPeopleProblem.interviewer.difficulty,
+      interventionPolicy: "BALANCED"
+    });
     const execute = (writer: SessionWriter) => writer.execute(
       envelope,
       identity,
@@ -82,7 +93,10 @@ describe("Durable Session Repository & Rebuildable Projection", () => {
         drafts: [{
           source: "APPLICATION" as const,
           type: "SESSION_STARTED" as const,
-          payload: { startedAt: new Date().toISOString() }
+          payload: {
+            startedAt: new Date().toISOString(),
+            configuration
+          }
         }],
         result: true as const
       })
