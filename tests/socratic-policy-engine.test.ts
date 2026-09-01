@@ -265,8 +265,10 @@ function withVerification(
   } = {}
 ): SessionState {
   const requestId = RequestIdSchema.parse(nextId("request_verify"));
-  const eventId = EventIdSchema.parse(nextId("event_verify"));
-  const sequence = state.sequence + 1;
+  const requestedEventId = EventIdSchema.parse(nextId("event_verify_request"));
+  const resultEventId = EventIdSchema.parse(nextId("event_verify_result"));
+  const requestedSequence = state.sequence + 1;
+  const resultSequence = state.sequence + 2;
   const turn = Object.values(state.turns)[0];
   const provenanceEventId = turn === undefined
     ? undefined
@@ -274,8 +276,8 @@ function withVerification(
   if (provenanceEventId === undefined) throw new Error("missing verification provenance");
   return {
     ...state,
-    sequence,
-    eventIds: [...state.eventIds, eventId],
+    sequence: resultSequence,
+    eventIds: [...state.eventIds, requestedEventId, resultEventId],
     verificationRequests: {
       ...state.verificationRequests,
       [requestId]: {
@@ -297,14 +299,16 @@ function withVerification(
         interpretationConfidence: options.confidence ?? 1,
         evidenceKey: key,
         evidenceEventIds: [provenanceEventId],
-        requestedEventId: eventId,
+        requestedEventId,
         status: "ACCEPTED",
         result: {
           status,
           interpretationConfidence: options.confidence ?? 1,
           verifier: "deterministic-policy-test",
           reason: "deterministic test result"
-        }
+        },
+        resultEventId,
+        resultSequence
       }
     }
   };
@@ -761,6 +765,74 @@ describe("production Socratic policy engine", () => {
     const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
     expect(decision.classification).toBe("LOCAL_ERROR");
     expect(decision.realizationRequest.requiredAction).toBe("CHECK_LOCAL_STEP");
+  });
+
+  it("orders accepted verification by result arrival rather than request creation", () => {
+    const { state: base, turnId } = makeState();
+    const verified = withVerification(
+      base,
+      claimKey(sixPeopleProblem, "delayed-verified-claim", "CORRECTNESS"),
+      "VERIFIED"
+    );
+    const withLowConfidence = withEvidence(
+      verified,
+      claimKey(sixPeopleProblem, "newer-ambiguous-claim", "CORRECTNESS"),
+      "LOCAL_ERROR",
+      { confidence: 0.69 }
+    );
+
+    const verificationEntry = Object.values(withLowConfidence.verificationRequests)[0];
+    const evidenceEntry = Object.entries(withLowConfidence.evidenceHistory)
+      .find(([key]) => key.includes("newer-ambiguous-claim"));
+    expect(verificationEntry?.resultEventId).toBeDefined();
+    expect(evidenceEntry?.[1][0]).toBeDefined();
+    if (
+      verificationEntry?.resultEventId === undefined
+      || verificationEntry.resultSequence === undefined
+      || evidenceEntry?.[1][0] === undefined
+    ) throw new Error("missing delayed verification fixture");
+
+    const requestId = verificationEntry.requestedEventId;
+    const resultId = verificationEntry.resultEventId;
+    const evidenceId = evidenceEntry[1][0].evidenceEventId;
+    const reorderedEventIds = [
+      ...base.eventIds,
+      requestId,
+      evidenceId,
+      resultId
+    ];
+    const evidenceValue = {
+      ...evidenceEntry[1][0].value,
+      lastUpdatedSequence: base.sequence + 2
+    };
+    const canonicalEvidenceKey = evidenceEntry[0];
+    const state: SessionState = {
+      ...withLowConfidence,
+      sequence: reorderedEventIds.length,
+      eventIds: reorderedEventIds,
+      studentEvidence: {
+        ...withLowConfidence.studentEvidence,
+        [canonicalEvidenceKey]: evidenceValue
+      },
+      evidenceHistory: {
+        ...withLowConfidence.evidenceHistory,
+        [canonicalEvidenceKey]: [{
+          ...evidenceEntry[1][0],
+          value: evidenceValue
+        }]
+      },
+      verificationRequests: {
+        ...withLowConfidence.verificationRequests,
+        [verificationEntry.verificationRequestId]: {
+          ...verificationEntry,
+          resultSequence: base.sequence + 3
+        }
+      }
+    };
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("PRODUCTIVE_PROGRESS");
+    expect(decision.realizationRequest.requiredAction).toBe("WAIT");
   });
 
   it("ignores verification whose GenerationBasis is no longer compatible", () => {
