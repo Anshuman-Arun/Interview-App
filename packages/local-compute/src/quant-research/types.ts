@@ -167,18 +167,28 @@ function failAction(message: string): never {
 function asRecord(value: unknown, context: string, fail: (message: string) => never): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) fail(context + " must be an object");
   let prototype: object | null;
-  let descriptors: PropertyDescriptorMap;
+  let keys: readonly PropertyKey[];
   try {
     prototype = Object.getPrototypeOf(value) as object | null;
-    descriptors = Object.getOwnPropertyDescriptors(value);
+    keys = Reflect.ownKeys(value);
   } catch {
     fail(context + " could not be safely inspected");
   }
   if (prototype !== Object.prototype && prototype !== null) fail(context + " must be a plain object");
-  for (const descriptor of Object.values(descriptors)) {
+  const snapshot = Object.create(null) as Record<string, unknown>;
+  for (const key of keys) {
+    if (typeof key !== "string") fail(context + " contains an unsupported property key");
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(value, key);
+    } catch {
+      fail(context + " could not be safely inspected");
+    }
+    if (descriptor === undefined) fail(context + " changed during validation");
     if (descriptor.get !== undefined || descriptor.set !== undefined) fail(context + " must not contain accessor properties");
+    snapshot[key] = descriptor.value;
   }
-  return value as Record<string, unknown>;
+  return snapshot;
 }
 
 function assertExactKeys(record: Record<string, unknown>, expected: readonly string[], context: string, fail: (message: string) => never): void {
