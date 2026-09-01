@@ -22,7 +22,6 @@ import {
 import {
   QuantResearchCoordinator,
   SessionRuntimeRegistry,
-  replayQuantResearchSessionState,
   TurnCoordinator,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
@@ -156,7 +155,7 @@ describe("generic interview session configuration", () => {
     const persistedProblem = initializedState.problem;
     expect(persistedProblem).toBeDefined();
     if (persistedProblem === undefined) return;
-    expect(() => replayQuantResearchSessionState({
+    expect(() => resolveSessionStateComposition({
       ...initializedState,
       problem: {
         ...persistedProblem,
