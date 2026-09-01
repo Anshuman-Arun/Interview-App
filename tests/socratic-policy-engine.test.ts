@@ -1596,7 +1596,7 @@ describe("production Socratic policy engine", () => {
     const newerTurnId = TurnIdSchema.parse(nextId("turn_newer_context"));
     const request: RealizationRequest = {
       requiredAction: "PROBE_JUSTIFICATION",
-      target: target("turn", turnId),
+      target: `turn:${turnId}`,
       maximumDisclosure: 0
     };
     const state: SessionState = {
@@ -1722,7 +1722,7 @@ describe("production Socratic policy engine", () => {
     const { state: base, turnId } = makeState(duplicateProblem);
     const realizationRequest: RealizationRequest = {
       requiredAction: "PROBE_JUSTIFICATION",
-      target: target("turn", turnId),
+      target: `turn:${turnId}`,
       maximumDisclosure: 0
     };
     const state: SessionState = {
