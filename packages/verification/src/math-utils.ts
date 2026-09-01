@@ -517,11 +517,13 @@ function tryWideRationalProduct(values: readonly ExactRational[]): ExactRational
 }
 
 function fullyCancelledRationalProduct(values: readonly ExactRational[]): ExactRational {
-  let negative = false;
-  const numerators = values.map((value) => {
-    if (value.numerator < 0n) negative = !negative;
-    return value.numerator < 0n ? -value.numerator : value.numerator;
-  });
+  const negative = values.reduce(
+    (isNegative, value) => value.numerator < 0n ? !isNegative : isNegative,
+    false
+  );
+  const numerators = values.map((value) =>
+    value.numerator < 0n ? -value.numerator : value.numerator
+  );
   const denominators = values.map((value) => value.denominator);
 
   for (let numeratorIndex = 0; numeratorIndex < numerators.length; numeratorIndex += 1) {
