@@ -427,23 +427,51 @@ export interface QuantResearchFamilyRegistration {
 }
 
 export function assertUniqueQuantResearchRegistrations(registrationsInput: unknown): void {
-  if (!Array.isArray(registrationsInput) || registrationsInput.length === 0 || registrationsInput.length > QUANT_RESEARCH_FAMILIES.length) {
+  if (!Array.isArray(registrationsInput)) throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry must be an array");
+  let keys: readonly PropertyKey[];
+  let lengthDescriptor: PropertyDescriptor | undefined;
+  try {
+    keys = Reflect.ownKeys(registrationsInput);
+    lengthDescriptor = Object.getOwnPropertyDescriptor(registrationsInput, "length");
+  } catch {
+    throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry could not be safely inspected");
+  }
+  if (
+    lengthDescriptor === undefined ||
+    lengthDescriptor.get !== undefined ||
+    lengthDescriptor.set !== undefined ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 1 ||
+    lengthDescriptor.value > QUANT_RESEARCH_FAMILIES.length
+  ) {
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry size is invalid");
   }
-  const seen = new Set<string>();
-  for (const entry of registrationsInput) {
-    let registration: Record<string, unknown>;
-    try {
-      registration = asRecord(entry, "Scenario registry entry", (message) => {
-        throw new QuantResearchError("INVALID_REGISTRY", message);
-      });
-      assertExactKeys(registration, ["family", "version"], "Scenario registry entry", (message) => {
-        throw new QuantResearchError("INVALID_REGISTRY", message);
-      });
-    } catch (error) {
-      if (error instanceof QuantResearchError) throw error;
-      throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry entry is invalid");
+  const length = lengthDescriptor.value as number;
+  const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
+  for (const key of keys) {
+    if (typeof key !== "string" || !allowedKeys.has(key)) {
+      throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry contains unsupported properties");
     }
+  }
+
+  const seen = new Set<string>();
+  for (let index = 0; index < length; index += 1) {
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(registrationsInput, String(index));
+    } catch {
+      throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry could not be safely inspected");
+    }
+    if (descriptor === undefined) throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry must be dense");
+    if (descriptor.get !== undefined || descriptor.set !== undefined) {
+      throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry must contain only data properties");
+    }
+    const registration = asRecord(descriptor.value, "Scenario registry entry", (message) => {
+      throw new QuantResearchError("INVALID_REGISTRY", message);
+    });
+    assertExactKeys(registration, ["family", "version"], "Scenario registry entry", (message) => {
+      throw new QuantResearchError("INVALID_REGISTRY", message);
+    });
     if (
       typeof registration.family !== "string" ||
       !QUANT_RESEARCH_FAMILIES.includes(registration.family as QuantResearchFamily) ||
