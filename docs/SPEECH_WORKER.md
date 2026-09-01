@@ -55,7 +55,7 @@ SILENCE
   -> POSSIBLE_END
 ```
 
-with terminal `FINALIZED` and `CANCELLED` states.
+with terminal `FINALIZED` and `CANCELLED` states. A custom per-stream VAD factory must return a fresh machine in the initial `SILENCE` state; pre-advanced or reused mutable state is rejected before the stream is admitted.
 
 It supports:
 
@@ -82,6 +82,8 @@ Endpointing is separate from raw VAD. `AdaptiveEndpointingPolicy` receives VAD d
 - maximum utterance duration;
 - explicit flush;
 - too-short discard.
+
+A shape-valid endpoint decision is still bounded by worker-owned admission rules: onset-candidate audio is not eligible for finalization/STT until VAD has actually confirmed speech. An injected endpointing policy therefore cannot promote unconfirmed `POSSIBLE_SPEECH` audio into a finalized utterance.
 
 The linguistic hint is deliberately just an input seam. Later partial-STT or application activity signals can compute it without moving authority into the VAD state machine. Endpoint inputs and configuration are runtime validated even when called directly from JavaScript/TypeScript.
 
