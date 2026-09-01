@@ -154,6 +154,19 @@ describe("transcript validation", () => {
     });
   });
 
+  it("rejects word timings attached to an empty final transcript", () => {
+    const input = recognizerInput();
+    expect(() => validateTranscriptCandidate({
+      requestId: input.requestId,
+      utteranceId: input.utteranceId,
+      text: "",
+      isFinal: true,
+      words: [{ word: "ghost", startMs: 0, endMs: 10 }],
+      model: { name: "deterministic-fake", version: "1" },
+      sourceAudioBasis: input.sourceAudioBasis
+    }, input)).toThrow(/Empty recognizer transcript cannot carry word timing metadata/u);
+  });
+
   it("normalizes bounded control/format abuse and whitespace", () => {
     expect(normalizeTranscriptText("  hello\u0000   world\nnext  ")).toBe("hello world next");
     expect(normalizeTranscriptText("left\u202Eevil\u2069 right")).toBe("left evil right");
