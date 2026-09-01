@@ -103,6 +103,9 @@ type RequiredFollowUp =
 const ALLOWED_SOURCES = {
   SESSION_STARTED: ["APPLICATION"],
   PROBLEM_PRESENTED: ["APPLICATION"],
+  QUANT_RESEARCH_SCENARIO_INITIALIZED: ["APPLICATION"],
+  QUANT_RESEARCH_ACTION_ACCEPTED: ["USER"],
+  QUANT_RESEARCH_SCENARIO_COMPLETED: ["APPLICATION"],
   UTTERANCE_STARTED: ["USER"],
   UTTERANCE_DISCARDED: ["USER"],
   INPUT_EPISODE_STARTED: ["USER", "APPLICATION"],
@@ -147,6 +150,9 @@ const ALLOWED_SOURCES = {
 } as const satisfies Readonly<Record<EventType, readonly EventSource[]>>;
 
 const ACTIVE_SESSION_REQUIRED_EVENT_TYPE_VALUES = [
+  "QUANT_RESEARCH_SCENARIO_INITIALIZED",
+  "QUANT_RESEARCH_ACTION_ACCEPTED",
+  "QUANT_RESEARCH_SCENARIO_COMPLETED",
   "UTTERANCE_STARTED",
   "INPUT_EPISODE_STARTED",
   "INPUT_EPISODE_UPDATED",
@@ -156,6 +162,10 @@ const ACTIVE_SESSION_REQUIRED_EVENT_TYPE_VALUES = [
   "TRANSCRIPT_CORRECTED",
   "BOARD_PATCH_COMMITTED",
   "VISION_REQUESTED",
+  "VERIFICATION_REQUESTED",
+  "VERIFICATION_RESULT_ACCEPTED",
+  "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED",
+  "FORMAL_INTERPRETATION_PROPOSAL_REJECTED",
   "STUDENT_EVIDENCE_INVALIDATED",
   "PEDAGOGICAL_ACTION_SELECTED",
   "MODEL_GENERATION_STARTED",
@@ -176,15 +186,11 @@ const POST_TERMINAL_ALLOWED_EVENT_TYPE_VALUES = [
   "LOCAL_COMPUTE_REQUESTED",
   "LOCAL_COMPUTE_RESULT_ACCEPTED",
   "LOCAL_COMPUTE_RESULT_DISCARDED",
-  "VERIFICATION_REQUESTED",
-  "VERIFICATION_RESULT_ACCEPTED",
   "VERIFICATION_RESULT_DISCARDED",
   "EVIDENCE_PROPOSED",
   "STUDENT_EVIDENCE_UPDATED",
   "GENERATION_CONTEXT_COMPILED",
   "MODEL_PROPOSAL_RECEIVED",
-  "FORMAL_INTERPRETATION_PROPOSAL_RECEIVED",
-  "FORMAL_INTERPRETATION_PROPOSAL_REJECTED",
   "MODEL_GENERATION_SUPERSEDED",
   "PROPOSAL_VALIDATED",
   "PROPOSAL_REJECTED",
@@ -215,6 +221,16 @@ void terminalEventPolicyIsExhaustive;
 const ACTIVE_SESSION_REQUIRED_EVENT_TYPES = new Set<EventType>(
   ACTIVE_SESSION_REQUIRED_EVENT_TYPE_VALUES
 );
+
+const SPECIALIZED_REPLAY_EVENT_TYPES = new Set<EventType>([
+  "QUANT_RESEARCH_SCENARIO_INITIALIZED",
+  "QUANT_RESEARCH_ACTION_ACCEPTED",
+  "QUANT_RESEARCH_SCENARIO_COMPLETED"
+]);
+
+export function requiresSpecializedReplayValidation(type: EventType): boolean {
+  return SPECIALIZED_REPLAY_EVENT_TYPES.has(type);
+}
 
 function fail(): never {
   throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
@@ -614,6 +630,25 @@ export function validateKnownReplayPrefix(
           assertBoundedIdentifier(event.payload.problemVersion);
           if (problemPresented) fail();
           problemPresented = true;
+          break;
+
+        case "QUANT_RESEARCH_SCENARIO_INITIALIZED":
+          if (
+            state.sequence !== 2
+            || previousEvent?.type !== "PROBLEM_PRESENTED"
+            || !sameCommandIdentity(previousEvent, event)
+          ) fail();
+          break;
+
+        case "QUANT_RESEARCH_ACTION_ACCEPTED":
+          assertBoundedIdentifier(event.payload.action.actionId);
+          break;
+
+        case "QUANT_RESEARCH_SCENARIO_COMPLETED":
+          if (
+            previousEvent?.type !== "QUANT_RESEARCH_ACTION_ACCEPTED"
+            || !sameCommandIdentity(previousEvent, event)
+          ) fail();
           break;
 
         case "UTTERANCE_STARTED": {
@@ -1157,6 +1192,13 @@ export function validateKnownReplayPrefix(
 
         case "SESSION_COMPLETED":
           if (state.status !== "ACTIVE" || !terminalStateIsSettled(state)) fail();
+          if (
+            state.quantResearch?.result !== undefined
+            && (
+              previousEvent?.type !== "QUANT_RESEARCH_SCENARIO_COMPLETED"
+              || !sameCommandIdentity(previousEvent, event)
+            )
+          ) fail();
           break;
 
         case "SESSION_ARCHIVED":
@@ -1203,6 +1245,11 @@ export function validateKnownReplayPrefix(
     if (
       (state.status === "COMPLETED" || state.status === "ARCHIVED")
       && !terminalStateIsSettled(state)
+    ) fail();
+    if (
+      state.quantResearch?.result !== undefined
+      && state.status !== "COMPLETED"
+      && state.status !== "ARCHIVED"
     ) fail();
   }
 

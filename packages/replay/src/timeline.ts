@@ -16,7 +16,10 @@ import {
   type NormalizedReplayEvent,
   type NormalizedReplayHistory
 } from "./provenance.js";
-import { validateKnownReplayPrefix } from "./validation.js";
+import {
+  requiresSpecializedReplayValidation,
+  validateKnownReplayPrefix
+} from "./validation.js";
 import type {
   ReplayDeliveryDetail,
   ReplayEvidenceDetail,
@@ -42,6 +45,9 @@ function summaryFor(type: EventType): string {
   switch (type) {
     case "SESSION_STARTED": return "Session started";
     case "PROBLEM_PRESENTED": return "Problem presented";
+    case "QUANT_RESEARCH_SCENARIO_INITIALIZED": return "Quant Research scenario initialized";
+    case "QUANT_RESEARCH_ACTION_ACCEPTED": return "Quant Research action accepted";
+    case "QUANT_RESEARCH_SCENARIO_COMPLETED": return "Quant Research scenario completed";
     case "UTTERANCE_STARTED": return "Speech utterance started";
     case "UTTERANCE_DISCARDED": return "Speech utterance discarded";
     case "INPUT_EPISODE_STARTED": return "Input episode started";
@@ -172,7 +178,8 @@ function deliveryDetail(
 function entryForKnownEvent(
   item: NormalizedReplayEvent,
   queuedAtoms: Map<string, DeliveryAtom>,
-  bounds: ReplayBounds
+  bounds: ReplayBounds,
+  stateValidation: ReplayTimelineEntry["stateValidation"] = "VALIDATED"
 ): ReplayTimelineEntry {
   const event = item.event;
   if (event === undefined) throw new ReplayProjectionError("INVALID_EVENT_SEMANTICS");
@@ -185,11 +192,43 @@ function entryForKnownEvent(
   let verification: ReplayVerificationDetail | undefined;
   let policy: ReplayTimelineEntry["policy"];
   let revisions: ReplayRevisionDetail | undefined;
+  let quantResearch: ReplayTimelineEntry["quantResearch"];
 
   switch (event.type) {
     case "SESSION_STARTED":
       break;
     case "PROBLEM_PRESENTED":
+      break;
+    case "QUANT_RESEARCH_SCENARIO_INITIALIZED":
+      quantResearch = {
+        phase: "INITIALIZED",
+        family: event.payload.definition.family,
+        version: event.payload.definition.version,
+        generatorVersion: event.payload.definition.generatorVersion,
+        rngVersion: event.payload.definition.rngVersion,
+        authoritativeSnapshotPersisted: true,
+        specializedValidationRequired: true
+      };
+      break;
+    case "QUANT_RESEARCH_ACTION_ACCEPTED":
+      quantResearch = {
+        phase: "ACTION_ACCEPTED",
+        actionId: event.payload.action.actionId,
+        actionKind: event.payload.action.kind,
+        specializedValidationRequired: true
+      };
+      break;
+    case "QUANT_RESEARCH_SCENARIO_COMPLETED":
+      quantResearch = {
+        phase: "COMPLETED",
+        family: event.payload.result.family,
+        version: event.payload.result.version,
+        generatorVersion: event.payload.result.generatorVersion,
+        rngVersion: event.payload.result.rngVersion,
+        acceptedActionCount: event.payload.result.acceptedActionCount,
+        resultStatus: "COMPLETE",
+        specializedValidationRequired: true
+      };
       break;
     case "UTTERANCE_STARTED":
       relations = { utteranceId: event.payload.utteranceId };
@@ -495,7 +534,7 @@ function entryForKnownEvent(
   return {
     kind: event.type,
     summary: summaryFor(event.type),
-    stateValidation: "VALIDATED",
+    stateValidation,
     provenance: item.provenance,
     relations,
     ...(text === undefined ? {} : { text }),
@@ -504,7 +543,8 @@ function entryForKnownEvent(
     ...(evidence === undefined ? {} : { evidence }),
     ...(verification === undefined ? {} : { verification }),
     ...(policy === undefined ? {} : { policy }),
-    ...(revisions === undefined ? {} : { revisions })
+    ...(revisions === undefined ? {} : { revisions }),
+    ...(quantResearch === undefined ? {} : { quantResearch })
   };
 }
 
@@ -527,6 +567,15 @@ export function projectReplayTimelineFromNormalized(
   bounds: ReplayBounds,
   knownPrefixAlreadyValidated = false
 ): ReplayTimelineProjection {
+  const firstSpecialized = normalized.events.find((item) =>
+    item.event !== undefined
+    && requiresSpecializedReplayValidation(item.event.type)
+    && (
+      normalized.firstUnknownSequence === undefined
+      || item.metadata.sequence < normalized.firstUnknownSequence
+    )
+  );
+  const specializedBoundarySequence = firstSpecialized?.metadata.sequence;
   const semanticBoundarySequence = normalized.firstUnknownSequence;
   const validatedItems = normalized.events.filter((item) =>
     semanticBoundarySequence === undefined
@@ -567,6 +616,7 @@ export function projectReplayTimelineFromNormalized(
     normalized.sessionId === null
     || normalized.eventTruncation.truncated
     || normalized.hasUnknownEvents
+    || specializedBoundarySequence !== undefined
   ) {
     issues.push({ code: "CURRENT_STATE_UNAVAILABLE" });
   }
@@ -577,6 +627,14 @@ export function projectReplayTimelineFromNormalized(
       code: "UNKNOWN_EVENT_SEMANTICS",
       sequence: firstUnknown.metadata.sequence,
       eventType: firstUnknown.metadata.type
+    });
+  }
+
+  if (firstSpecialized?.event !== undefined) {
+    issues.push({
+      code: "SPECIALIZED_DOMAIN_VALIDATION_REQUIRED",
+      sequence: firstSpecialized.metadata.sequence,
+      eventType: firstSpecialized.event.type
     });
   }
 
@@ -610,7 +668,12 @@ export function projectReplayTimelineFromNormalized(
       continue;
     }
 
-    entries.push(entryForKnownEvent(item, queuedAtoms, bounds));
+    const stateValidation =
+      specializedBoundarySequence !== undefined
+      && item.metadata.sequence >= specializedBoundarySequence
+        ? "SPECIALIZED_DOMAIN_UNVERIFIED"
+        : "VALIDATED";
+    entries.push(entryForKnownEvent(item, queuedAtoms, bounds, stateValidation));
   }
 
   const timelineTruncation = truncationInfo(normalized.events.length, bounds.maxTimelineEntries);
@@ -624,7 +687,8 @@ export function projectReplayTimelineFromNormalized(
       normalized.sessionId !== null
       && !normalized.eventTruncation.truncated
       && !timelineTruncation.truncated
-      && !normalized.hasUnknownEvents,
+      && !normalized.hasUnknownEvents
+      && specializedBoundarySequence === undefined,
     issues,
     bounds
   };

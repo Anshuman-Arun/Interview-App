@@ -68,19 +68,50 @@ const ReplayEvidenceValueInputSchema = z.object({
 }).strict();
 
 const ScoreSchema = z.number().min(0).max(100);
+const NullableScoreSchema = ScoreSchema.nullable();
+const SupportLevelSchema = z.enum(["STRONG", "MODERATE", "WEAK", "INSUFFICIENT"]);
+const CompositeDimensionSchema = z.enum([
+  "technicalCorrectness",
+  "rigor",
+  "independence",
+  "communication",
+  "errorRecovery"
+]);
 const EvaluationInputSchema = z.object({
   sessionId: SessionIdSchema,
   problemId: z.string().min(1),
   problemVersion: z.string().min(1),
   evaluatedAt: z.iso.datetime(),
+  lifecycle: z.object({
+    sessionStatus: z.enum(["COMPLETED", "ARCHIVED"]),
+    completionState: z.enum([
+      "COMPLETED",
+      "ARCHIVED_INCOMPLETE",
+      "ARCHIVED_COMPLETED"
+    ])
+  }).strict(),
   scores: z.object({
-    technicalCorrectness: ScoreSchema,
-    rigor: ScoreSchema,
-    independence: ScoreSchema,
-    communication: ScoreSchema,
-    hintResponsiveness: ScoreSchema,
-    errorRecovery: ScoreSchema,
-    compositeScore: ScoreSchema
+    technicalCorrectness: NullableScoreSchema,
+    rigor: NullableScoreSchema,
+    independence: NullableScoreSchema,
+    communication: NullableScoreSchema,
+    hintResponsiveness: NullableScoreSchema,
+    errorRecovery: NullableScoreSchema,
+    compositeScore: NullableScoreSchema
+  }).strict(),
+  support: z.object({
+    technicalCorrectness: SupportLevelSchema,
+    rigor: SupportLevelSchema,
+    independence: SupportLevelSchema,
+    communication: SupportLevelSchema,
+    hintResponsiveness: SupportLevelSchema,
+    errorRecovery: SupportLevelSchema
+  }).strict(),
+  composite: z.object({
+    status: z.enum(["FULL", "PARTIAL", "NOT_SCORED"]),
+    supportLevel: SupportLevelSchema,
+    includedDimensions: z.array(CompositeDimensionSchema).max(5),
+    omittedDimensions: z.array(CompositeDimensionSchema).max(5)
   }).strict(),
   milestoneCount: SafeNonnegativeIntegerSchema,
   achievedMilestoneCount: SafeNonnegativeIntegerSchema,
@@ -250,24 +281,59 @@ function parseSelectedSessionSummary(
   }
 
   if (session.evaluation !== undefined) {
+    const evaluation = session.evaluation;
+    const expectedEvaluationLifecycle =
+      session.lifecycle.status === "COMPLETED"
+        ? {
+            sessionStatus: "COMPLETED" as const,
+            completionState: "COMPLETED" as const
+          }
+        : session.lifecycle.status === "ARCHIVED"
+          ? {
+              sessionStatus: "ARCHIVED" as const,
+              completionState: session.lifecycle.completed === true
+                ? "ARCHIVED_COMPLETED" as const
+                : "ARCHIVED_INCOMPLETE" as const
+            }
+          : undefined;
+    const scoreSupportPairs = [
+      [evaluation.scores.technicalCorrectness, evaluation.support.technicalCorrectness],
+      [evaluation.scores.rigor, evaluation.support.rigor],
+      [evaluation.scores.independence, evaluation.support.independence],
+      [evaluation.scores.communication, evaluation.support.communication],
+      [evaluation.scores.hintResponsiveness, evaluation.support.hintResponsiveness],
+      [evaluation.scores.errorRecovery, evaluation.support.errorRecovery]
+    ] as const;
+    const included = new Set(evaluation.composite.includedDimensions);
+    const omitted = new Set(evaluation.composite.omittedDimensions);
     if (
       !session.currentStateAvailable
-      || session.lifecycle.completed !== true
+      || expectedEvaluationLifecycle === undefined
       || session.problem === undefined
-      || !identifierWithinReplayLimit(session.evaluation.sessionId)
-      || !identifierWithinReplayLimit(session.evaluation.problemId)
-      || !identifierWithinReplayLimit(session.evaluation.problemVersion)
-      || session.evaluation.sessionId !== session.sessionId
-      || session.evaluation.problemId !== session.problem.problemId
-      || session.evaluation.problemVersion !== session.problem.problemVersion
-      || session.evaluation.totalTurns !== session.counts.turns
-      || session.evaluation.achievedMilestoneCount > session.evaluation.milestoneCount
-      || session.evaluation.unassistedMilestoneCount
-        + session.evaluation.assistedMilestoneCount
-        !== session.evaluation.achievedMilestoneCount
-      || session.evaluation.disclosedInterventionCount
+      || !identifierWithinReplayLimit(evaluation.sessionId)
+      || !identifierWithinReplayLimit(evaluation.problemId)
+      || !identifierWithinReplayLimit(evaluation.problemVersion)
+      || evaluation.sessionId !== session.sessionId
+      || evaluation.problemId !== session.problem.problemId
+      || evaluation.problemVersion !== session.problem.problemVersion
+      || evaluation.lifecycle.sessionStatus !== expectedEvaluationLifecycle.sessionStatus
+      || evaluation.lifecycle.completionState !== expectedEvaluationLifecycle.completionState
+      || evaluation.totalTurns !== session.counts.turns
+      || evaluation.achievedMilestoneCount > evaluation.milestoneCount
+      || evaluation.unassistedMilestoneCount
+        + evaluation.assistedMilestoneCount
+        !== evaluation.achievedMilestoneCount
+      || evaluation.disclosedInterventionCount
         !== session.counts.exposedInterventions
           + session.counts.possiblyExposedInterventions
+      || scoreSupportPairs.some(([score, support]) =>
+        (score === null) !== (support === "INSUFFICIENT")
+      )
+      || included.size !== evaluation.composite.includedDimensions.length
+      || omitted.size !== evaluation.composite.omittedDimensions.length
+      || [...included].some((dimension) => omitted.has(dimension))
+      || (evaluation.composite.status === "NOT_SCORED")
+        !== (evaluation.scores.compositeScore === null)
     ) {
       throw new ReplayProjectionError("INVALID_SESSION_SUMMARY");
     }
@@ -428,55 +494,78 @@ function exactProblemKey(session: LongitudinalSessionInput): string | undefined 
   return replayProblemIdentity(session.problem.problemId, session.problem.problemVersion);
 }
 
-function average(values: readonly number[]): number {
+function average(values: readonly number[]): number | null {
   return values.length === 0
-    ? 0
+    ? null
     : values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function median(values: readonly number[]): number {
-  if (values.length === 0) return 0;
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
   const ordered = [...values].sort((left, right) => left - right);
   const midpoint = Math.floor(ordered.length / 2);
-  if (ordered.length % 2 === 1) return ordered[midpoint] ?? 0;
-  const left = ordered[midpoint - 1] ?? 0;
-  const right = ordered[midpoint] ?? 0;
-  return (left + right) / 2;
+  if (ordered.length % 2 === 1) return ordered[midpoint] ?? null;
+  const left = ordered[midpoint - 1];
+  const right = ordered[midpoint];
+  return left === undefined || right === undefined ? null : (left + right) / 2;
+}
+
+type EvaluationScoreKey = keyof ReplayEvaluationSummary["scores"];
+
+const EVALUATION_SCORE_KEYS = [
+  "technicalCorrectness",
+  "rigor",
+  "independence",
+  "communication",
+  "hintResponsiveness",
+  "errorRecovery",
+  "compositeScore"
+] as const satisfies readonly EvaluationScoreKey[];
+
+function scoredValues(
+  evaluations: readonly ReplayEvaluationSummary[],
+  key: EvaluationScoreKey
+): number[] {
+  return evaluations.flatMap((entry) => {
+    const value = entry.scores[key];
+    return value === null ? [] : [value];
+  });
 }
 
 function aggregateScores(
   evaluations: readonly ReplayEvaluationSummary[]
 ): {
+  readonly scoredSessionCount: LongitudinalEvaluationStatistics["scoredSessionCount"];
   readonly average: ReplayEvaluationSummary["scores"];
   readonly median: ReplayEvaluationSummary["scores"];
 } {
-  const dimensions = {
-    technicalCorrectness: evaluations.map((entry) => entry.scores.technicalCorrectness),
-    rigor: evaluations.map((entry) => entry.scores.rigor),
-    independence: evaluations.map((entry) => entry.scores.independence),
-    communication: evaluations.map((entry) => entry.scores.communication),
-    hintResponsiveness: evaluations.map((entry) => entry.scores.hintResponsiveness),
-    errorRecovery: evaluations.map((entry) => entry.scores.errorRecovery),
-    compositeScore: evaluations.map((entry) => entry.scores.compositeScore)
-  };
+  const values = Object.fromEntries(
+    EVALUATION_SCORE_KEYS.map((key) => [key, scoredValues(evaluations, key)])
+  ) as Record<EvaluationScoreKey, number[]>;
+
+  const scoredSessionCount = Object.fromEntries(
+    EVALUATION_SCORE_KEYS.map((key) => [key, values[key].length])
+  ) as LongitudinalEvaluationStatistics["scoredSessionCount"];
+
   return {
+    scoredSessionCount,
     average: {
-      technicalCorrectness: average(dimensions.technicalCorrectness),
-      rigor: average(dimensions.rigor),
-      independence: average(dimensions.independence),
-      communication: average(dimensions.communication),
-      hintResponsiveness: average(dimensions.hintResponsiveness),
-      errorRecovery: average(dimensions.errorRecovery),
-      compositeScore: average(dimensions.compositeScore)
+      technicalCorrectness: average(values.technicalCorrectness),
+      rigor: average(values.rigor),
+      independence: average(values.independence),
+      communication: average(values.communication),
+      hintResponsiveness: average(values.hintResponsiveness),
+      errorRecovery: average(values.errorRecovery),
+      compositeScore: average(values.compositeScore)
     },
     median: {
-      technicalCorrectness: median(dimensions.technicalCorrectness),
-      rigor: median(dimensions.rigor),
-      independence: median(dimensions.independence),
-      communication: median(dimensions.communication),
-      hintResponsiveness: median(dimensions.hintResponsiveness),
-      errorRecovery: median(dimensions.errorRecovery),
-      compositeScore: median(dimensions.compositeScore)
+      technicalCorrectness: median(values.technicalCorrectness),
+      rigor: median(values.rigor),
+      independence: median(values.independence),
+      communication: median(values.communication),
+      hintResponsiveness: median(values.hintResponsiveness),
+      errorRecovery: median(values.errorRecovery),
+      compositeScore: median(values.compositeScore)
     }
   };
 }
@@ -581,6 +670,7 @@ export function projectLongitudinalHistory(
         problemId: first.problem.problemId,
         problemVersion: first.problem.problemVersion,
         sessionCount: evaluations.length,
+        scoredSessionCount: scores.scoredSessionCount,
         average: scores.average,
         median: scores.median
       });
@@ -599,14 +689,18 @@ export function projectLongitudinalHistory(
           improvementComparisonsSkipped += 1;
           continue;
         }
+        const previousComposite = previous.evaluation.scores.compositeScore;
+        const currentComposite = current.evaluation.scores.compositeScore;
+        if (previousComposite === null || currentComposite === null) {
+          improvementComparisonsSkipped += 1;
+          continue;
+        }
         improvement.push({
           problemId: first.problem.problemId,
           problemVersion: first.problem.problemVersion,
           fromSessionId: previous.sessionId,
           toSessionId: current.sessionId,
-          compositeScoreDelta:
-            current.evaluation.scores.compositeScore
-            - previous.evaluation.scores.compositeScore
+          compositeScoreDelta: currentComposite - previousComposite
         });
       }
     }

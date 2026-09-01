@@ -18,6 +18,7 @@ export type ReplayProjectionIssueCode =
   | "UNKNOWN_EVENT_SEMANTICS"
   | "EVENT_LIMIT_REACHED"
   | "TIMELINE_LIMIT_REACHED"
+  | "SPECIALIZED_DOMAIN_VALIDATION_REQUIRED"
   | "CURRENT_STATE_UNAVAILABLE";
 
 export interface ReplayProjectionIssue {
@@ -154,8 +155,23 @@ export interface ReplayRevisionDetail {
   readonly contextEpoch?: number;
 }
 
+export interface ReplayQuantResearchDetail {
+  readonly phase: "INITIALIZED" | "ACTION_ACCEPTED" | "COMPLETED";
+  readonly family?: string;
+  readonly version?: string;
+  readonly generatorVersion?: string;
+  readonly rngVersion?: string;
+  readonly authoritativeSnapshotPersisted?: boolean;
+  readonly actionId?: string;
+  readonly actionKind?: string;
+  readonly acceptedActionCount?: number;
+  readonly resultStatus?: "COMPLETE";
+  readonly specializedValidationRequired: true;
+}
+
 export type ReplayStateValidation =
   | "VALIDATED"
+  | "SPECIALIZED_DOMAIN_UNVERIFIED"
   | "UNKNOWN_EVENT"
   | "UNAVAILABLE_AFTER_UNKNOWN";
 
@@ -172,6 +188,7 @@ export interface ReplayTimelineEntry {
   readonly verification?: ReplayVerificationDetail;
   readonly policy?: ReplayPolicyDetail;
   readonly revisions?: ReplayRevisionDetail;
+  readonly quantResearch?: ReplayQuantResearchDetail;
   readonly unknown?: {
     readonly eventType: string;
     readonly schemaVersion: number;
@@ -277,14 +294,35 @@ export interface ReplayEvaluationSummary {
   readonly problemId: string;
   readonly problemVersion: string;
   readonly evaluatedAt: string;
+  readonly lifecycle: {
+    readonly sessionStatus: "COMPLETED" | "ARCHIVED";
+    readonly completionState:
+      | "COMPLETED"
+      | "ARCHIVED_INCOMPLETE"
+      | "ARCHIVED_COMPLETED";
+  };
   readonly scores: {
-    readonly technicalCorrectness: number;
-    readonly rigor: number;
-    readonly independence: number;
-    readonly communication: number;
-    readonly hintResponsiveness: number;
-    readonly errorRecovery: number;
-    readonly compositeScore: number;
+    readonly technicalCorrectness: number | null;
+    readonly rigor: number | null;
+    readonly independence: number | null;
+    readonly communication: number | null;
+    readonly hintResponsiveness: number | null;
+    readonly errorRecovery: number | null;
+    readonly compositeScore: number | null;
+  };
+  readonly support: {
+    readonly technicalCorrectness: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
+    readonly rigor: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
+    readonly independence: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
+    readonly communication: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
+    readonly hintResponsiveness: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
+    readonly errorRecovery: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
+  };
+  readonly composite: {
+    readonly status: "FULL" | "PARTIAL" | "NOT_SCORED";
+    readonly supportLevel: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
+    readonly includedDimensions: readonly string[];
+    readonly omittedDimensions: readonly string[];
   };
   readonly milestoneCount: number;
   readonly achievedMilestoneCount: number;
@@ -372,6 +410,10 @@ export interface LongitudinalEvaluationStatistics {
   readonly problemId: string;
   readonly problemVersion: string;
   readonly sessionCount: number;
+  readonly scoredSessionCount: Readonly<Record<
+    keyof ReplayEvaluationSummary["scores"],
+    number
+  >>;
   readonly average: ReplayEvaluationSummary["scores"];
   readonly median: ReplayEvaluationSummary["scores"];
 }

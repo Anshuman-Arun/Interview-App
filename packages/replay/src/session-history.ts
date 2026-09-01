@@ -15,6 +15,7 @@ import type {
 } from "../../events/src/index.js";
 import {
   MAX_REPLAY_EVALUATION_COLLECTION_ITEMS,
+  MAX_REPLAY_IDENTIFIER_CHARS,
   previewText,
   resolveReplayBounds,
   takeBounded,
@@ -27,7 +28,10 @@ import {
   type NormalizedReplayEvent
 } from "./provenance.js";
 import { projectReplayTimelineFromNormalized } from "./timeline.js";
-import { validateKnownReplayPrefix } from "./validation.js";
+import {
+  requiresSpecializedReplayValidation,
+  validateKnownReplayPrefix
+} from "./validation.js";
 import type {
   ReplayCurrentEvidence,
   ReplayEvaluationSummary,
@@ -432,12 +436,44 @@ function generationHistoryFrom(
 }
 
 function evaluationSummary(evaluation: SessionEvaluation): ReplayEvaluationSummary {
+  const lifecycle = evaluation.lifecycle.sessionStatus === "COMPLETED"
+    ? {
+        sessionStatus: "COMPLETED" as const,
+        completionState: "COMPLETED" as const
+      }
+    : evaluation.lifecycle.sessionStatus === "ARCHIVED"
+      ? {
+          sessionStatus: "ARCHIVED" as const,
+          completionState: evaluation.lifecycle.completionState === "ARCHIVED_COMPLETED"
+            ? "ARCHIVED_COMPLETED" as const
+            : "ARCHIVED_INCOMPLETE" as const
+        }
+      : undefined;
+  if (lifecycle === undefined) {
+    throw new ReplayProjectionError("EVALUATION_MISMATCH");
+  }
+
   return {
     sessionId: evaluation.sessionId,
     problemId: evaluation.problemId,
     problemVersion: evaluation.problemVersion,
     evaluatedAt: evaluation.evaluatedAt,
+    lifecycle,
     scores: { ...evaluation.scores },
+    support: {
+      technicalCorrectness: evaluation.dimensionResults.technicalCorrectness.supportLevel,
+      rigor: evaluation.dimensionResults.rigor.supportLevel,
+      independence: evaluation.dimensionResults.independence.supportLevel,
+      communication: evaluation.dimensionResults.communication.supportLevel,
+      hintResponsiveness: evaluation.dimensionResults.hintResponsiveness.supportLevel,
+      errorRecovery: evaluation.dimensionResults.errorRecovery.supportLevel
+    },
+    composite: {
+      status: evaluation.composite.status,
+      supportLevel: evaluation.composite.supportLevel,
+      includedDimensions: [...evaluation.composite.includedDimensions],
+      omittedDimensions: [...evaluation.composite.omittedDimensions]
+    },
     milestoneCount: evaluation.milestones.length,
     achievedMilestoneCount: evaluation.milestones.filter((milestone) => milestone.achieved).length,
     unassistedMilestoneCount: evaluation.unassistedMilestoneCount,
@@ -448,13 +484,17 @@ function evaluationSummary(evaluation: SessionEvaluation): ReplayEvaluationSumma
 }
 
 function interventionIdentity(input: {
-  readonly turnId: string;
+  readonly deliveryId: string;
+  readonly generationId: string;
+  readonly turnId?: string;
   readonly disclosureLevel: number;
   readonly disclosureIds: readonly string[];
-  readonly deliveryStatus: "EXPOSED" | "POSSIBLY_EXPOSED";
+  readonly deliveryStatus: "EXPOSED" | "COMPLETED" | "POSSIBLY_EXPOSED";
 }): string {
   return JSON.stringify([
-    input.turnId,
+    input.deliveryId,
+    input.generationId,
+    input.turnId ?? null,
     input.disclosureLevel,
     [...input.disclosureIds].sort(compareReplayStrings),
     input.deliveryStatus
@@ -469,7 +509,7 @@ function snapshotEvaluationInputWithinReplayBudget(input: unknown): unknown {
   const record = input as Readonly<Record<string, unknown>>;
   let itemCount = 0;
 
-  const snapshotArray = (value: unknown): unknown => {
+  const snapshotArray = (value: unknown): unknown[] | unknown => {
     if (!Array.isArray(value)) return value;
     const length = value.length;
     if (!Number.isSafeInteger(length) || length < 0) {
@@ -486,7 +526,75 @@ function snapshotEvaluationInputWithinReplayBudget(input: unknown): unknown {
     return snapshot;
   };
 
-  const milestones = snapshotArray(record.milestones);
+  const snapshotEvidenceRefs = (value: unknown): unknown => snapshotArray(value);
+
+  const snapshotDimension = (value: unknown): unknown => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+    const dimension = value as Readonly<Record<string, unknown>>;
+    return {
+      score: dimension.score,
+      supportLevel: dimension.supportLevel,
+      evidenceRefs: snapshotEvidenceRefs(dimension.evidenceRefs),
+      notScoredReason: dimension.notScoredReason
+    };
+  };
+
+  const rawDimensionResults = record.dimensionResults;
+  const dimensionResults =
+    typeof rawDimensionResults === "object"
+    && rawDimensionResults !== null
+    && !Array.isArray(rawDimensionResults)
+      ? (() => {
+          const dimensions = rawDimensionResults as Readonly<Record<string, unknown>>;
+          return {
+            technicalCorrectness: snapshotDimension(dimensions.technicalCorrectness),
+            rigor: snapshotDimension(dimensions.rigor),
+            independence: snapshotDimension(dimensions.independence),
+            communication: snapshotDimension(dimensions.communication),
+            hintResponsiveness: snapshotDimension(dimensions.hintResponsiveness),
+            errorRecovery: snapshotDimension(dimensions.errorRecovery)
+          };
+        })()
+      : rawDimensionResults;
+
+  const rawComposite = record.composite;
+  const composite =
+    typeof rawComposite === "object"
+    && rawComposite !== null
+    && !Array.isArray(rawComposite)
+      ? (() => {
+          const value = rawComposite as Readonly<Record<string, unknown>>;
+          return {
+            status: value.status,
+            supportLevel: value.supportLevel,
+            includedDimensions: snapshotArray(value.includedDimensions),
+            omittedDimensions: snapshotArray(value.omittedDimensions)
+          };
+        })()
+      : rawComposite;
+
+  const rawMilestones = snapshotArray(record.milestones);
+  const milestones = Array.isArray(rawMilestones)
+    ? rawMilestones.map((milestone): unknown => {
+        if (typeof milestone !== "object" || milestone === null || Array.isArray(milestone)) {
+          return milestone;
+        }
+        const value = milestone as Readonly<Record<string, unknown>>;
+        return {
+          milestoneId: value.milestoneId,
+          description: value.description,
+          achieved: value.achieved,
+          achievedAtTurnId: value.achievedAtTurnId,
+          assistanceLevel: value.assistanceLevel,
+          supportLevel: value.supportLevel,
+          evidenceRefs: snapshotEvidenceRefs(value.evidenceRefs),
+          assistanceDisclosureIds: snapshotArray(value.assistanceDisclosureIds),
+          approachIds: snapshotArray(value.approachIds),
+          notAchievedReason: value.notAchievedReason
+        };
+      })
+    : rawMilestones;
+
   const rawInterventions = snapshotArray(record.disclosedInterventions);
   const disclosedInterventions = Array.isArray(rawInterventions)
     ? rawInterventions.map((intervention): unknown => {
@@ -497,23 +605,81 @@ function snapshotEvaluationInputWithinReplayBudget(input: unknown): unknown {
         ) {
           return intervention;
         }
-        const interventionRecord = intervention as Readonly<Record<string, unknown>>;
+        const value = intervention as Readonly<Record<string, unknown>>;
         return {
-          turnId: interventionRecord.turnId,
-          disclosureLevel: interventionRecord.disclosureLevel,
-          disclosureIds: snapshotArray(interventionRecord.disclosureIds),
-          deliveryStatus: interventionRecord.deliveryStatus,
-          summary: interventionRecord.summary
+          deliveryId: value.deliveryId,
+          generationId: value.generationId,
+          turnId: value.turnId,
+          disclosureLevel: value.disclosureLevel,
+          disclosureIds: snapshotArray(value.disclosureIds),
+          relatedMilestoneIds: snapshotArray(value.relatedMilestoneIds),
+          deliveryStatus: value.deliveryStatus,
+          summary: value.summary
         };
       })
     : rawInterventions;
+
+  const rawRubric = record.rubric;
+  const rubric =
+    typeof rawRubric === "object"
+    && rawRubric !== null
+    && !Array.isArray(rawRubric)
+      ? (() => {
+          const value = rawRubric as Readonly<Record<string, unknown>>;
+          return {
+            correctnessWeight: value.correctnessWeight,
+            rigorWeight: value.rigorWeight,
+            independenceWeight: value.independenceWeight,
+            communicationWeight: value.communicationWeight,
+            errorRecoveryWeight: value.errorRecoveryWeight
+          };
+        })()
+      : rawRubric;
+
+  const rawLifecycle = record.lifecycle;
+  const lifecycle =
+    typeof rawLifecycle === "object"
+    && rawLifecycle !== null
+    && !Array.isArray(rawLifecycle)
+      ? (() => {
+          const value = rawLifecycle as Readonly<Record<string, unknown>>;
+          return {
+            sessionStatus: value.sessionStatus,
+            completionState: value.completionState,
+            totalTurns: value.totalTurns
+          };
+        })()
+      : rawLifecycle;
+
+  const rawScores = record.scores;
+  const scores =
+    typeof rawScores === "object"
+    && rawScores !== null
+    && !Array.isArray(rawScores)
+      ? (() => {
+          const value = rawScores as Readonly<Record<string, unknown>>;
+          return {
+            technicalCorrectness: value.technicalCorrectness,
+            rigor: value.rigor,
+            independence: value.independence,
+            communication: value.communication,
+            hintResponsiveness: value.hintResponsiveness,
+            errorRecovery: value.errorRecovery,
+            compositeScore: value.compositeScore
+          };
+        })()
+      : rawScores;
 
   return {
     sessionId: record.sessionId,
     problemId: record.problemId,
     problemVersion: record.problemVersion,
     evaluatedAt: record.evaluatedAt,
-    scores: record.scores,
+    rubric,
+    lifecycle,
+    scores,
+    dimensionResults,
+    composite,
     milestones,
     disclosedInterventions,
     unassistedMilestoneCount: record.unassistedMilestoneCount,
@@ -544,38 +710,98 @@ function validateEvaluation(
   }
   if (!parsed.success) throw new ReplayProjectionError("EVALUATION_MISMATCH");
 
-  const evaluatedAt = z.iso.datetime().safeParse(parsed.data.evaluatedAt);
+  const expectedCompletionState =
+    state?.status === "COMPLETED"
+      ? "COMPLETED"
+      : state?.status === "ARCHIVED"
+        ? state.completedAt === undefined
+          ? "ARCHIVED_INCOMPLETE"
+          : "ARCHIVED_COMPLETED"
+        : undefined;
+
   if (
-    !evaluatedAt.success
-    || sessionId === null
+    sessionId === null
     || state === undefined
-    || state.completedAt === undefined
-    || (state.status !== "COMPLETED" && state.status !== "ARCHIVED")
+    || expectedCompletionState === undefined
     || parsed.data.sessionId !== sessionId
     || problem === undefined
     || parsed.data.problemId !== problem.problemId
     || parsed.data.problemVersion !== problem.problemVersion
+    || parsed.data.lifecycle.sessionStatus !== state.status
+    || parsed.data.lifecycle.completionState !== expectedCompletionState
+    || parsed.data.lifecycle.totalTurns !== Object.keys(state.turns).length
     || parsed.data.totalTurns !== Object.keys(state.turns).length
   ) {
     throw new ReplayProjectionError("EVALUATION_MISMATCH");
   }
 
-  const achieved = parsed.data.milestones.filter((milestone) => milestone.achieved);
-  const unassisted = achieved.filter((milestone) => milestone.assistanceLevel === 0).length;
-  const assisted = achieved.length - unassisted;
-  const milestoneIds = new Set<string>();
-  for (const milestone of parsed.data.milestones) {
-    if (milestoneIds.has(milestone.milestoneId)) {
+  const milestoneIds = new Set(
+    parsed.data.milestones.map((milestone) => milestone.milestoneId)
+  );
+  const disclosedIds = new Set(
+    parsed.data.disclosedInterventions.flatMap((intervention) =>
+      intervention.disclosureIds
+    )
+  );
+  const evaluationRefExists = (ref: {
+    readonly kind: "EVIDENCE_EVENT" | "VERIFICATION_REQUEST" | "DELIVERY" | "TURN" | "MILESTONE";
+    readonly id: string;
+  }): boolean => {
+    if (ref.id.length > MAX_REPLAY_IDENTIFIER_CHARS) return false;
+    switch (ref.kind) {
+      case "EVIDENCE_EVENT":
+        return state.eventIds.includes(ref.id as EventId);
+      case "VERIFICATION_REQUEST":
+        return state.verificationRequests[ref.id] !== undefined;
+      case "DELIVERY":
+        return state.deliveries[ref.id] !== undefined;
+      case "TURN":
+        return state.turns[ref.id] !== undefined;
+      case "MILESTONE":
+        return milestoneIds.has(ref.id);
+    }
+  };
+
+  for (const result of Object.values(parsed.data.dimensionResults)) {
+    if (!result.evidenceRefs.every(evaluationRefExists)) {
       throw new ReplayProjectionError("EVALUATION_MISMATCH");
     }
-    milestoneIds.add(milestone.milestoneId);
+  }
+  for (const milestone of parsed.data.milestones) {
     if (
-      milestone.achievedAtTurnId !== undefined
-      && state.turns[milestone.achievedAtTurnId] === undefined
+      milestone.milestoneId.length > MAX_REPLAY_IDENTIFIER_CHARS
+      || milestone.assistanceDisclosureIds.some((id) =>
+        id.length > MAX_REPLAY_IDENTIFIER_CHARS
+      )
+      || milestone.approachIds.some((id) =>
+        id.length > MAX_REPLAY_IDENTIFIER_CHARS
+      )
+      || (milestone.achievedAtTurnId !== undefined
+        && state.turns[milestone.achievedAtTurnId] === undefined)
+      || !milestone.evidenceRefs.every(evaluationRefExists)
+      || !milestone.assistanceDisclosureIds.every((id) => disclosedIds.has(id))
     ) {
       throw new ReplayProjectionError("EVALUATION_MISMATCH");
     }
-    if (!milestone.achieved && milestone.achievedAtTurnId !== undefined) {
+  }
+  for (const intervention of parsed.data.disclosedInterventions) {
+    if (
+      intervention.deliveryId.length > MAX_REPLAY_IDENTIFIER_CHARS
+      || intervention.generationId.length > MAX_REPLAY_IDENTIFIER_CHARS
+      || (intervention.turnId !== undefined
+        && intervention.turnId.length > MAX_REPLAY_IDENTIFIER_CHARS)
+      || intervention.disclosureIds.some((id) =>
+        id.length > MAX_REPLAY_IDENTIFIER_CHARS
+      )
+      || intervention.relatedMilestoneIds.some((id) =>
+        id.length > MAX_REPLAY_IDENTIFIER_CHARS
+        || !milestoneIds.has(id)
+      )
+      || (
+        intervention.turnId !== undefined
+        && state.turns[intervention.turnId] === undefined
+      )
+    ) {
       throw new ReplayProjectionError("EVALUATION_MISMATCH");
     }
   }
@@ -587,14 +813,19 @@ function validateEvaluation(
     if (generation === undefined) {
       throw new ReplayProjectionError("EVALUATION_MISMATCH");
     }
+    const deliveryStatus =
+      delivery.status === "POSSIBLY_EXPOSED"
+        ? "POSSIBLY_EXPOSED" as const
+        : delivery.status === "COMPLETED"
+          ? "COMPLETED" as const
+          : "EXPOSED" as const;
     const identity = interventionIdentity({
+      deliveryId: delivery.deliveryId,
+      generationId: delivery.generationId,
       turnId: generation.basis.turnId,
       disclosureLevel: delivery.effectiveDisclosureLevel,
       disclosureIds: delivery.disclosureIds,
-      deliveryStatus:
-        delivery.status === "POSSIBLY_EXPOSED"
-          ? "POSSIBLY_EXPOSED"
-          : "EXPOSED"
+      deliveryStatus
     });
     authoritativeInterventions.set(
       identity,
@@ -603,9 +834,6 @@ function validateEvaluation(
   }
 
   for (const intervention of parsed.data.disclosedInterventions) {
-    if (state.turns[intervention.turnId] === undefined) {
-      throw new ReplayProjectionError("EVALUATION_MISMATCH");
-    }
     const identity = interventionIdentity(intervention);
     const remaining = authoritativeInterventions.get(identity) ?? 0;
     if (remaining <= 0) throw new ReplayProjectionError("EVALUATION_MISMATCH");
@@ -616,11 +844,7 @@ function validateEvaluation(
     }
   }
 
-  if (
-    parsed.data.unassistedMilestoneCount !== unassisted
-    || parsed.data.assistedMilestoneCount !== assisted
-    || authoritativeInterventions.size !== 0
-  ) {
+  if (authoritativeInterventions.size !== 0) {
     throw new ReplayProjectionError("EVALUATION_MISMATCH");
   }
 
@@ -704,15 +928,24 @@ export function projectSessionHistory(
     throw new RangeError("Invalid replay bounds");
   }
   const normalized = normalizeReplayEvents(rawEvents, bounds);
-  const semanticItems = normalized.events.filter((item) =>
+  const knownItems = normalized.events.filter((item) =>
     normalized.firstUnknownSequence === undefined
       ? item.event !== undefined
       : item.metadata.sequence < normalized.firstUnknownSequence && item.event !== undefined
   );
+  const specializedBoundarySequence = knownItems.find((item) =>
+    item.event !== undefined
+    && requiresSpecializedReplayValidation(item.event.type)
+  )?.metadata.sequence;
+  const semanticItems = knownItems.filter((item) =>
+    specializedBoundarySequence === undefined
+    || item.metadata.sequence < specializedBoundarySequence
+  );
+  const validationEvents = knownEvents(knownItems);
   const events = knownEvents(semanticItems);
-  const validated = normalized.sessionId === null || events.length === 0
+  const validated = normalized.sessionId === null || validationEvents.length === 0
     ? undefined
-    : validateKnownReplayPrefix(normalized.sessionId, events, {
+    : validateKnownReplayPrefix(normalized.sessionId, validationEvents, {
         completeHistory:
           !normalized.eventTruncation.truncated
           && !normalized.hasUnknownEvents
@@ -720,7 +953,8 @@ export function projectSessionHistory(
   const historyComplete =
     normalized.sessionId !== null
     && !normalized.hasUnknownEvents
-    && !normalized.eventTruncation.truncated;
+    && !normalized.eventTruncation.truncated
+    && specializedBoundarySequence === undefined;
   const state = historyComplete ? validated?.state : undefined;
 
   const problemEvent = [...semanticItems].reverse()
@@ -809,7 +1043,7 @@ export function projectSessionHistory(
     },
     ...(highestDisclosureUsed === undefined ? {} : { highestDisclosureUsed }),
     currentStateAvailable: state !== undefined,
-    validatedThroughSequence: validated?.validatedThroughSequence ?? 0,
+    validatedThroughSequence: semanticItems.at(-1)?.metadata.sequence ?? 0,
     observedThroughSequence: lastObservedSequence(normalized.events),
     countsComplete: historyComplete,
     totalEventCount: normalized.totalEventCount,

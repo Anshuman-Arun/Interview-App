@@ -43,9 +43,37 @@ The package intentionally exposes three projection entrypoints:
 the sanitized `ReplayProjectionError`. Raw normalization/upcaster hooks and
 collection/text slicing helpers remain internal implementation details.
 
-The current event-type catalog is compile-time exhaustive: adding a new
-authoritative `EventType` requires an explicit timeline mapping and source-policy
-decision before TypeScript will accept the replay package.
+The current event-type catalog is compile-time exhaustive: all 46 current
+authoritative `EventType` values require an explicit timeline mapping and
+source-policy decision before TypeScript will accept the replay package. Specialized
+domains may additionally require an explicit validation-boundary decision rather
+than being silently treated as generically validated.
+
+## Quant Research compatibility boundary
+
+Current main adds three authoritative Quant Research events:
+`QUANT_RESEARCH_SCENARIO_INITIALIZED`, `QUANT_RESEARCH_ACTION_ACCEPTED`, and
+`QUANT_RESEARCH_SCENARIO_COMPLETED`. Generic replay recognizes all three, validates
+their event schemas/reducer/source/lifecycle relationships, and preserves safe
+chronology, but it does not duplicate the dedicated deterministic Quant replay
+engine from `local-compute`.
+
+The first Quant event is therefore an explicit specialized semantic boundary.
+Generic timeline entries at and after that boundary use
+`stateValidation: "SPECIALIZED_DOMAIN_UNVERIFIED"`, the projection reports
+`SPECIALIZED_DOMAIN_VALIDATION_REQUIRED`, `complete` is false, and
+`projectSessionHistory` does not expose current authoritative state beyond the
+pre-Quant prefix. The dedicated Quant replay path remains responsible for
+deterministically regenerating and verifying generated parameters, grading data,
+action legality, and result scoring.
+
+Generic replay exposes only bounded, non-private Quant metadata: family/version
+compatibility identity, whether an authoritative snapshot was persisted, action ID
+and action kind, and completion/action-count metadata. It intentionally withholds
+seed/config, candidate action values, generated parameters, grading data, scores,
+metrics, and evidence summaries. This prevents a schema-valid but deterministically
+tampered Quant history from becoming trusted performance state through the generic
+read model.
 
 ## Timeline semantics
 
@@ -208,12 +236,31 @@ metadata.
 
 ## Evaluation
 
-`projectSessionHistory` may consume an already completed `SessionEvaluation`
-only when the underlying event history is fully replayable and contains an
-authoritative session completion. It validates session/problem/turn identity and
-evaluation count consistency, then publishes only score/count summaries. It does
-not call or duplicate `session-evaluator.ts`, recompute scores, or fabricate an
-`EVALUATION_AVAILABLE` authoritative timeline event when no such event exists.
+`projectSessionHistory` may consume an application-owned grounded
+`SessionEvaluation` only when the underlying generic event history is fully
+replayable and the session is terminal (COMPLETED or ARCHIVED). Archived-incomplete
+evaluations are representable without inventing completion.
+
+Replay validates exact session/problem/lifecycle/turn identity, disclosed
+interventions against authoritative DeliveryId + GenerationId + final exposure
+status, and every resolvable grounded evidence reference (EVIDENCE_EVENT,
+VERIFICATION_REQUEST, DELIVERY, TURN, and MILESTONE). Milestone assistance
+disclosure IDs and intervention-related milestone IDs must also be grounded in the
+attached evaluation/intervention set.
+
+Grounded evaluator scores remain nullable. Replay preserves categorical support and
+composite coverage metadata, but intentionally omits qualitative strengths,
+improvement text, milestone descriptions/reasons, intervention summaries, and other
+reasoning text. It does not call or duplicate `session-evaluator.ts`, recompute
+scores, or fabricate an `EVALUATION_AVAILABLE` authoritative timeline event when
+no such event exists.
+
+Longitudinal averages and medians use only non-null supported scores and report a
+per-dimension `scoredSessionCount` denominator. If no included session is scored
+for a dimension the aggregate is `null`, not zero. Improvement deltas require
+both adjacent exact-problem attempts to have non-null composite scores; unsupported
+pairs are counted in `improvementComparisonsSkipped` instead of receiving an
+invented delta.
 
 ## Longitudinal comparability
 

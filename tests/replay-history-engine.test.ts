@@ -10,6 +10,7 @@ import {
   evidenceKeyToString,
   newDeliveryId,
   newRequestId,
+  newSessionId,
   type EvidenceKey,
   type SessionId
 } from "../packages/domain/src/index.js";
@@ -20,10 +21,18 @@ import {
   type SessionEvent
 } from "../packages/events/src/index.js";
 import {
+  QuantResearchCoordinator,
   SessionRuntimeRegistry,
+  SessionWriter,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
+import {
+  QUANT_RESEARCH_GENERATOR_VERSION,
+  QUANT_RESEARCH_RNG_VERSION,
+  QUANT_RESEARCH_VERSION,
+  type QuantResearchScenarioDefinition
+} from "../packages/local-compute/src/index.js";
 import {
   DEFAULT_REPLAY_BOUNDS,
   ReplayProjectionError,
@@ -68,6 +77,110 @@ function base(sessionId: SessionId, problemId = "problem-a", version = "1.0.0"):
     event(sessionId, 1, "SESSION_STARTED", { startedAt: "2026-08-31T19:00:01.000Z" }),
     event(sessionId, 2, "PROBLEM_PRESENTED", { problemId, problemVersion: version, prompt: "Public prompt" })
   ];
+}
+
+function groundedEvaluation(input: {
+  readonly sessionId: SessionId;
+  readonly problemId: string;
+  readonly problemVersion: string;
+  readonly score: number | null;
+  readonly totalTurns: number;
+  readonly evidenceEventId?: string;
+  readonly lifecycle?: {
+    readonly sessionStatus: "COMPLETED" | "ARCHIVED";
+    readonly completionState:
+      | "COMPLETED"
+      | "ARCHIVED_INCOMPLETE"
+      | "ARCHIVED_COMPLETED";
+  };
+  readonly disclosedInterventions?: readonly unknown[];
+}) {
+  const supportLevel = input.score === null ? "INSUFFICIENT" as const : "STRONG" as const;
+  const dimension = (name: string) => input.score === null
+    ? {
+        score: null,
+        supportLevel: "INSUFFICIENT" as const,
+        evidenceRefs: [],
+        notScoredReason: `${name} is intentionally unsupported in this replay fixture.`
+      }
+    : {
+        score: input.score,
+        supportLevel: "STRONG" as const,
+        evidenceRefs: [{
+          kind: "EVIDENCE_EVENT" as const,
+          id: input.evidenceEventId ?? (() => {
+            throw new Error("Scored grounded fixture requires authoritative evidence");
+          })()
+        }]
+      };
+  const includedDimensions = input.score === null
+    ? []
+    : [
+        "technicalCorrectness",
+        "rigor",
+        "independence",
+        "communication",
+        "errorRecovery"
+      ] as const;
+  const omittedDimensions = input.score === null
+    ? [
+        "technicalCorrectness",
+        "rigor",
+        "independence",
+        "communication",
+        "errorRecovery"
+      ] as const
+    : [];
+
+  return SessionEvaluationSchema.parse({
+    sessionId: input.sessionId,
+    problemId: input.problemId,
+    problemVersion: input.problemVersion,
+    evaluatedAt: "2026-08-31T20:00:00.000Z",
+    rubric: {
+      correctnessWeight: 0.35,
+      rigorWeight: 0.20,
+      independenceWeight: 0.20,
+      communicationWeight: 0.15,
+      errorRecoveryWeight: 0.10
+    },
+    lifecycle: {
+      sessionStatus: input.lifecycle?.sessionStatus ?? "COMPLETED",
+      completionState: input.lifecycle?.completionState ?? "COMPLETED",
+      totalTurns: input.totalTurns
+    },
+    scores: {
+      technicalCorrectness: input.score,
+      rigor: input.score,
+      independence: input.score,
+      communication: input.score,
+      hintResponsiveness: input.score,
+      errorRecovery: input.score,
+      compositeScore: input.score
+    },
+    dimensionResults: {
+      technicalCorrectness: dimension("technicalCorrectness"),
+      rigor: dimension("rigor"),
+      independence: dimension("independence"),
+      communication: dimension("communication"),
+      hintResponsiveness: dimension("hintResponsiveness"),
+      errorRecovery: dimension("errorRecovery")
+    },
+    composite: {
+      status: input.score === null ? "NOT_SCORED" : "FULL",
+      supportLevel,
+      includedDimensions,
+      omittedDimensions
+    },
+    milestones: [],
+    disclosedInterventions: input.disclosedInterventions ?? [],
+    unassistedMilestoneCount: 0,
+    assistedMilestoneCount: 0,
+    totalTurns: input.totalTurns,
+    keyStrengths: ["Grounded fixture"],
+    areasForImprovement: ["Grounded fixture"],
+    summaryAssessment: "Grounded replay evaluation fixture."
+  });
 }
 
 function basis() {
@@ -128,6 +241,81 @@ async function queueAudio(harness: CoreHarness) {
 }
 
 describe("replay/history projections", () => {
+  it("defers Quant Research deterministic semantics without exposing private snapshot state", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const coordinator = new QuantResearchCoordinator(writer);
+    const definition: QuantResearchScenarioDefinition = {
+      family: "MODEL_COMPARISON",
+      version: QUANT_RESEARCH_VERSION,
+      generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION,
+      seed: 1234,
+      config: { observationCount: 10, noiseRadius: 2, outlierShift: 30 }
+    };
+
+    try {
+      await coordinator.initialize(definition);
+      await coordinator.applyAction({
+        actionId: "replay-quant-model-1",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      });
+      await coordinator.applyAction({
+        actionId: "replay-quant-model-2",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      });
+
+      const events = store.load(sessionId);
+      const timeline = projectReplayTimeline(events);
+      expect(timeline.complete).toBe(false);
+      expect(timeline.issues).toContainEqual({
+        code: "SPECIALIZED_DOMAIN_VALIDATION_REQUIRED",
+        sequence: 3,
+        eventType: "QUANT_RESEARCH_SCENARIO_INITIALIZED"
+      });
+      expect(timeline.entries[2]).toMatchObject({
+        kind: "QUANT_RESEARCH_SCENARIO_INITIALIZED",
+        stateValidation: "SPECIALIZED_DOMAIN_UNVERIFIED",
+        quantResearch: {
+          phase: "INITIALIZED",
+          family: "MODEL_COMPARISON",
+          authoritativeSnapshotPersisted: true,
+          specializedValidationRequired: true
+        }
+      });
+      expect(timeline.entries[3]).toMatchObject({
+        kind: "QUANT_RESEARCH_ACTION_ACCEPTED",
+        stateValidation: "SPECIALIZED_DOMAIN_UNVERIFIED",
+        quantResearch: {
+          phase: "ACTION_ACCEPTED",
+          actionId: "replay-quant-model-1",
+          actionKind: "CHOOSE_OPTION"
+        }
+      });
+      const serialized = JSON.stringify(timeline);
+      expect(serialized).not.toContain("hiddenModel");
+      expect(serialized).not.toContain("gradingData");
+      expect(serialized).not.toContain("generatedParameters");
+      expect(serialized).not.toContain('"seed"');
+      expect(serialized).not.toContain('"config"');
+      expect(serialized).not.toContain('"overallScore"');
+      expect(serialized).not.toContain('"metrics"');
+
+      const history = projectSessionHistory(events);
+      expect(history.currentStateAvailable).toBe(false);
+      expect(history.validatedThroughSequence).toBe(2);
+      expect(history.countsComplete).toBe(false);
+      expect(history.lifecycle.status).toBe("UNKNOWN");
+      expect(coordinator.replay().result.status).toBe("COMPLETE");
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
   it("uses authoritative sequence for exact one/multi-turn chronology", async () => {
     const harness = await createCoreHarness();
     try {
@@ -2122,28 +2310,13 @@ describe("replay/history projections", () => {
       }
     }
 
-    const evaluation = SessionEvaluationSchema.parse({
+    const evaluation = groundedEvaluation({
       sessionId,
       problemId: "evaluation",
       problemVersion: "1.0.0",
-      evaluatedAt: "2026-08-31T20:00:00.000Z",
-      scores: {
-        technicalCorrectness: 80,
-        rigor: 75,
-        independence: 90,
-        communication: 85,
-        hintResponsiveness: 88,
-        errorRecovery: 70,
-        compositeScore: 82
-      },
-      milestones: [],
-      disclosedInterventions: [],
-      unassistedMilestoneCount: 0,
-      assistedMilestoneCount: 0,
+      score: 82,
       totalTurns: 0,
-      keyStrengths: ["Grounded"],
-      areasForImprovement: ["Practice"],
-      summaryAssessment: "Summary"
+      evidenceEventId: valid[1]?.eventId
     });
     expect(projectSessionHistory(valid, { evaluation }).evaluation?.scores.compositeScore).toBe(82);
 
@@ -2185,6 +2358,47 @@ describe("replay/history projections", () => {
   });
 });
 
+  it("accepts grounded archived-incomplete evaluations without inventing completion or zero scores", () => {
+    const sessionId = "session-archived-evaluation" as SessionId;
+    const events = [
+      ...base(sessionId, "archived-evaluation", "1"),
+      event(sessionId, 3, "SESSION_ARCHIVED", {
+        archivedAt: "2026-08-31T19:05:00.000Z"
+      })
+    ];
+    const evaluation = groundedEvaluation({
+      sessionId,
+      problemId: "archived-evaluation",
+      problemVersion: "1",
+      score: null,
+      totalTurns: 0,
+      lifecycle: {
+        sessionStatus: "ARCHIVED",
+        completionState: "ARCHIVED_INCOMPLETE"
+      }
+    });
+
+    const history = projectSessionHistory(events, { evaluation });
+    expect(history.lifecycle).toMatchObject({
+      status: "ARCHIVED",
+      completed: false,
+      archived: true
+    });
+    expect(history.evaluation).toMatchObject({
+      lifecycle: {
+        sessionStatus: "ARCHIVED",
+        completionState: "ARCHIVED_INCOMPLETE"
+      },
+      scores: {
+        compositeScore: null
+      },
+      composite: {
+        status: "NOT_SCORED",
+        supportLevel: "INSUFFICIENT"
+      }
+    });
+  });
+
   it("rejects attached evaluations whose disclosure provenance disagrees with authoritative delivery", async () => {
     const harness = await createCoreHarness();
     try {
@@ -2194,34 +2408,23 @@ describe("replay/history projections", () => {
       await coordinator.acknowledgeExposed(atom.deliveryId);
       await harness.turns.completeSession();
 
-      const evaluation = SessionEvaluationSchema.parse({
+      const evaluation = groundedEvaluation({
         sessionId: harness.sessionId,
         problemId: sixPeopleProblem.id,
         problemVersion: sixPeopleProblem.version,
-        evaluatedAt: "2099-01-01T00:00:00.000Z",
-        scores: {
-          technicalCorrectness: 50,
-          rigor: 50,
-          independence: 50,
-          communication: 50,
-          hintResponsiveness: 50,
-          errorRecovery: 50,
-          compositeScore: 50
-        },
-        milestones: [],
+        score: 50,
+        totalTurns: 1,
+        evidenceEventId: harness.writer.getState().eventIds.at(-1),
         disclosedInterventions: [{
+          deliveryId: atom.deliveryId,
+          generationId: atom.generationId,
           turnId: harness.turnId,
           disclosureLevel: atom.effectiveDisclosureLevel,
           disclosureIds: [...atom.disclosureIds],
+          relatedMilestoneIds: [],
           deliveryStatus: "EXPOSED",
           summary: "bounded evaluation fixture"
-        }],
-        unassistedMilestoneCount: 0,
-        assistedMilestoneCount: 0,
-        totalTurns: 1,
-        keyStrengths: ["fixture"],
-        areasForImprovement: ["fixture"],
-        summaryAssessment: "fixture"
+        }]
       });
 
       const events = harness.store.load(harness.sessionId);
@@ -2297,28 +2500,13 @@ describe("longitudinal projection", () => {
         completedAt: "2026-08-31T19:05:00.000Z"
       })
     ];
-    const evaluation = SessionEvaluationSchema.parse({
+    const evaluation = groundedEvaluation({
       sessionId,
       problemId,
       problemVersion: version,
-      evaluatedAt: "2026-08-31T20:00:00.000Z",
-      scores: {
-        technicalCorrectness: score,
-        rigor: score,
-        independence: score,
-        communication: score,
-        hintResponsiveness: score,
-        errorRecovery: score,
-        compositeScore: score
-      },
-      milestones: [],
-      disclosedInterventions: [],
-      unassistedMilestoneCount: 0,
-      assistedMilestoneCount: 0,
+      score,
       totalTurns: 0,
-      keyStrengths: ["x"],
-      areasForImprovement: ["y"],
-      summaryAssessment: "z"
+      evidenceEventId: problem.eventId
     });
     return projectSessionHistory(historyEvents, { evaluation });
   }
@@ -2482,6 +2670,44 @@ describe("longitudinal projection", () => {
       toSessionId: "session-time-second",
       compositeScoreDelta: 30
     }]);
+  });
+
+  it("excludes unsupported grounded scores instead of treating them as zero", () => {
+    const scored = evaluated(
+      "session-grounded-scored" as SessionId,
+      "grounded-null",
+      "1",
+      80,
+      "PROGRESSING",
+      "2026-08-31T20:20:01.000Z"
+    );
+    const unscoredBase = evaluated(
+      "session-grounded-unscored" as SessionId,
+      "grounded-null",
+      "1",
+      80,
+      "PROGRESSING",
+      "2026-08-31T20:21:01.000Z"
+    );
+    const unscored = {
+      ...unscoredBase,
+      evaluation: groundedEvaluation({
+        sessionId: "session-grounded-unscored" as SessionId,
+        problemId: "grounded-null",
+        problemVersion: "1",
+        score: null,
+        totalTurns: 0
+      })
+    };
+
+    const result = projectLongitudinalHistory([scored, unscored]);
+    const stats = result.evaluationStatistics[0];
+    expect(stats?.sessionCount).toBe(2);
+    expect(stats?.scoredSessionCount.compositeScore).toBe(1);
+    expect(stats?.average.compositeScore).toBe(80);
+    expect(stats?.median.compositeScore).toBe(80);
+    expect(result.improvement).toEqual([]);
+    expect(result.improvementComparisonsSkipped).toBe(1);
   });
 
   it("uses collision-safe structured identities for problems and evidence", () => {
