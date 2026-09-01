@@ -244,7 +244,7 @@ views, but may not raise them above the package defaults:
 | --- | ---: |
 | events materialized/upcast into one projection | 20,000 |
 | timeline entries | 5,000 |
-| sessions in one longitudinal query | 500 |
+| sessions retained/deep-validated in one longitudinal query | 500 |
 | text preview | 512 Unicode code points |
 | identifier / label accepted at replay boundary | 512 code units |
 | disclosure IDs per entry | 64 |

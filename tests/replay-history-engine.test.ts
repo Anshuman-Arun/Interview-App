@@ -2530,6 +2530,26 @@ describe("longitudinal projection", () => {
     )).toBe(true);
   });
 
+  it("accepts direct archival without inventing completion", () => {
+    const sessionId = "session-direct-archive-longitudinal" as SessionId;
+    const summary = projectSessionHistory([
+      ...base(sessionId, "direct-archive", "1"),
+      event(sessionId, 3, "SESSION_ARCHIVED", {
+        archivedAt: "2026-08-31T21:00:00.000Z"
+      })
+    ]);
+    expect(summary.lifecycle).toMatchObject({
+      status: "ARCHIVED",
+      completed: false,
+      archived: true
+    });
+
+    const result = projectLongitudinalHistory([summary]);
+    expect(result.includedSessionCount).toBe(1);
+    expect(result.completedSessions).toBe(0);
+    expect(result.sessionsWithUnknownCompletion).toBe(0);
+  });
+
   it("rejects malformed longitudinal summaries and does not invent chronological improvement on ties", () => {
     const first = evaluated(
       "session-malformed-a" as SessionId,
