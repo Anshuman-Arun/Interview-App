@@ -49,6 +49,7 @@ import { canonicalJson, createProviderContextSpecFingerprintSync } from "./conte
 import { isGenerationBasisStillCompatible } from "./compatibility.js";
 import { assessVisionFreshness } from "./vision-freshness.js";
 import { selectPedagogicalAction } from "./pedagogical-policy.js";
+import { invalidateUndeliveredPolicyOutput } from "./policy-output-invalidation.js";
 import type { DisclosureValidator } from "./disclosure-validator.js";
 import type { SessionWriter } from "./session-writer.js";
 
@@ -474,15 +475,22 @@ export class TurnCoordinator {
       });
       const activeEvidence = state.evidenceHistory[key]?.find((record) => record.status === "ACTIVE");
       return {
-        drafts: [proposedDraft, {
-          source: "APPLICATION",
-          type: "STUDENT_EVIDENCE_UPDATED",
-          payload: {
-            key: EvidenceKeySchema.parse(proposal.key),
-            value,
-            ...(activeEvidence === undefined ? {} : { supersedesEventId: activeEvidence.evidenceEventId })
-          }
-        }],
+        drafts: [
+          proposedDraft,
+          {
+            source: "APPLICATION",
+            type: "STUDENT_EVIDENCE_UPDATED",
+            payload: {
+              key: EvidenceKeySchema.parse(proposal.key),
+              value,
+              ...(activeEvidence === undefined ? {} : { supersedesEventId: activeEvidence.evidenceEventId })
+            }
+          },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative student evidence changed before delivery"
+          )
+        ],
         result: { committed: true, key }
       };
     });
