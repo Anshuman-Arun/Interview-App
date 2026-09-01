@@ -143,6 +143,22 @@ describe("deterministic Quant Research interview engine", () => {
       seed: 0,
       config: { budget: 5, perturbedBudget: 6, maxX: 1, maxY: 1, perturbedPenalty: 1 }
     }), "INVALID_DEFINITION");
+
+    expectCode(() => new QuantResearchEngine({
+      family: "EXPERIMENTAL_ALLOCATION",
+      version: QUANT_RESEARCH_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION,
+      seed: 22,
+      config: { totalBudget: 34, costA: 5, costB: 2, perturbedCostA: 3, perturbedCostB: 3, noiseA: 2, noiseB: 3 }
+    }), "INVALID_DEFINITION");
+
+    expectCode(() => new QuantResearchEngine({
+      family: "CONSTRAINED_OPTIMIZATION",
+      version: QUANT_RESEARCH_VERSION,
+      rngVersion: QUANT_RESEARCH_RNG_VERSION,
+      seed: 28,
+      config: { budget: 52, perturbedBudget: 49, maxX: 24, maxY: 55, perturbedPenalty: 0 }
+    }), "INVALID_DEFINITION");
   });
 
   it.each([
