@@ -253,6 +253,7 @@ export class SpeechWorkerCore {
     try {
       observation = await this.options.vadBackend.classify(frame);
     } catch {
+      this.abandonStream(context);
       throw new SpeechWorkerCoreError("VAD_FAILURE", "VAD backend failed");
     }
     if (context.cancelled || this.shuttingDown) return [];
@@ -261,6 +262,7 @@ export class SpeechWorkerCore {
     try {
       step = context.vad.step(observation.speechProbability, frame.durationMs);
     } catch {
+      this.abandonStream(context);
       throw new SpeechWorkerCoreError("VAD_PROTOCOL_ERROR", "VAD backend returned an invalid observation");
     }
 
@@ -273,7 +275,9 @@ export class SpeechWorkerCore {
       try {
         context.buffer.append(frame, step.speechClassified);
       } catch (error) {
-        throw translatePcmError(error);
+        const translated = translatePcmError(error);
+        if (translated.code === "RESOURCE_LIMIT") this.abandonStream(context);
+        throw translated;
       }
     }
 
@@ -429,6 +433,11 @@ export class SpeechWorkerCore {
     };
     this.streams.set(streamId, context);
     return context;
+  }
+
+  private abandonStream(context: StreamContext): void {
+    context.buffer.clear();
+    this.closeStream(context.streamId);
   }
 
   private closeStream(streamId: SpeechStreamId): void {
