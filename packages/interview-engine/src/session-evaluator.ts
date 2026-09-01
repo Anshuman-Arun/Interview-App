@@ -1017,10 +1017,6 @@ function evaluateMilestones(
       assistanceExposureRefs.push(...exposure.deliveryRefs);
     }
 
-    if (attributionUncertain && assistanceLevel > 0) {
-      supportLevel = minSupport(supportLevel, "WEAK");
-    }
-
     const evaluation: MilestoneEvaluation = {
       milestoneId: milestone.id,
       description: milestone.description,
