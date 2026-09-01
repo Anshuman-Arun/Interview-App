@@ -80,12 +80,47 @@ describe("Quant Research property invariants", () => {
         engine.applyAction({ actionId: "q2", kind: "SUBMIT_NUMERIC_ESTIMATE", value: estimate });
         engine.applyAction({ actionId: "q3", kind: "SUBMIT_NUMERIC_ESTIMATE", value: estimate });
         const state = engine.getState();
+        const result = engine.getResult();
         expect(state.acceptedActionCount).toBe(3);
-        expect(state.evidence.every((item) => item.score >= 0 && item.score <= 100)).toBe(true);
+        expect(result.evidence.every((item) => item.score >= 0 && item.score <= 100)).toBe(true);
         const observations = state.visibleData.find((item) => item.key === "observations")?.value as readonly number[];
         expect(observations.length).toBeGreaterThanOrEqual(count);
         expect(observations.length).toBeLessThanOrEqual(13);
       }
     ), { numRuns: 100 });
   });
+
+  it("never exposes intermediate scoring through public state or result", () => {
+    fc.assert(fc.property(
+      fc.integer({ min: 0, max: 0xffff_ffff }),
+      fc.constantFrom("CONSTANT" as const, "LINEAR" as const),
+      (seed, choice) => {
+        const engine = new QuantResearchEngine(modelDefinition(seed));
+        engine.applyAction({ actionId: "live", kind: "CHOOSE_OPTION", option: choice });
+        expect("evidence" in engine.getState()).toBe(false);
+        expect(engine.getResult().evidence).toEqual([]);
+        expect(engine.getResult().metrics).toEqual({});
+        expect(engine.getResult().overallScore).toBe(0);
+      }
+    ), { numRuns: 100 });
+  });
+
+  it("sampling replay remains exact across arbitrary bounded requests and estimates", () => {
+    fc.assert(fc.property(
+      fc.integer({ min: 0, max: 0xffff_ffff }),
+      fc.integer({ min: 2, max: 12 }),
+      fc.double({ min: -1_000, max: 1_000, noNaN: true, noDefaultInfinity: true }),
+      (seed, count, estimate) => {
+        const definition = samplingDefinition(seed);
+        const engine = new QuantResearchEngine(definition);
+        engine.applyAction({ actionId: "sample", kind: "REQUEST_OBSERVATION", count });
+        engine.applyAction({ actionId: "estimate", kind: "SUBMIT_NUMERIC_ESTIMATE", value: estimate });
+        engine.applyAction({ actionId: "revised", kind: "SUBMIT_NUMERIC_ESTIMATE", value: estimate });
+        const replayed = replayQuantResearch(definition, engine.getAcceptedActions());
+        expect(replayed.state).toEqual(engine.getState());
+        expect(replayed.result).toEqual(engine.getResult());
+      }
+    ), { numRuns: 100 });
+  });
+
 });
