@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - validation/zeta-final-branch-only
 
 permissions:
   contents: read
