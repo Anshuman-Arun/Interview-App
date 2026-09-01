@@ -264,9 +264,6 @@ export class AdaptiveEndpointingPolicy {
     if (config.minimumSpeechMs > config.maximumUtteranceMs) {
       throw new Error("Minimum speech duration cannot exceed maximum utterance duration");
     }
-    if (config.maximumPauseMs > config.maximumUtteranceMs) {
-      throw new Error("Maximum pause cannot exceed maximum utterance duration");
-    }
   }
 
   public getMaximumUtteranceMs(): number {
