@@ -13,10 +13,16 @@ export interface DisclosureAnalyzer {
 }
 
 const MAX_DISCLOSURE_ANALYSIS_CHARACTERS = 100_000;
+const MAX_TOTAL_PROPOSAL_TEXT_CHARACTERS = 1_000_000;
 const MAX_PROTECTED_DISCLOSURES = 1_024;
 const MAX_EQUIVALENT_FORMULATIONS = 256;
+const MAX_TOTAL_EQUIVALENT_FORMULATIONS = 4_096;
+const MAX_TOTAL_PROTECTED_DISCLOSURE_CHARACTERS = 1_000_000;
+const MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS = 10_000_000;
 const MAX_ANALYZER_DISCLOSURE_IDS = 256;
 const MAX_BOARD_ACTIONS = 256;
+const MAX_REVIEWED_SAFE_TEXTS = 1_024;
+const MAX_TOTAL_REVIEWED_SAFE_TEXT_CHARACTERS = 1_000_000;
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -87,29 +93,59 @@ function protectedMetadataWithinBounds(
   protectedDisclosures: readonly ProtectedDisclosure[]
 ): boolean {
   if (protectedDisclosures.length > MAX_PROTECTED_DISCLOSURES) return false;
+  let totalFormulations = 0;
+  let totalCharacters = 0;
   for (const disclosure of protectedDisclosures) {
     if (
       disclosure.fact.length === 0
       || disclosure.fact.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS
       || disclosure.equivalentFormulations.length === 0
       || disclosure.equivalentFormulations.length > MAX_EQUIVALENT_FORMULATIONS
-      || disclosure.equivalentFormulations.some(
-        (formulation) =>
-          formulation.length === 0
-          || formulation.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS
-      )
     ) return false;
+    totalCharacters += disclosure.fact.length;
+    totalFormulations += disclosure.equivalentFormulations.length;
+    if (
+      totalCharacters > MAX_TOTAL_PROTECTED_DISCLOSURE_CHARACTERS
+      || totalFormulations > MAX_TOTAL_EQUIVALENT_FORMULATIONS
+    ) return false;
+    for (const formulation of disclosure.equivalentFormulations) {
+      if (
+        formulation.length === 0
+        || formulation.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS
+      ) return false;
+      totalCharacters += formulation.length;
+      if (totalCharacters > MAX_TOTAL_PROTECTED_DISCLOSURE_CHARACTERS) return false;
+    }
   }
   return true;
+}
+
+function protectedMetadataCharacterCount(
+  protectedDisclosures: readonly ProtectedDisclosure[]
+): number {
+  let total = 0;
+  for (const disclosure of protectedDisclosures) {
+    total += disclosure.fact.length;
+    for (const formulation of disclosure.equivalentFormulations) total += formulation.length;
+  }
+  return total;
 }
 
 export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
   private readonly safeTexts: ReadonlySet<string>;
 
   public constructor(safeTexts: readonly string[]) {
+    if (safeTexts.length > MAX_REVIEWED_SAFE_TEXTS) {
+      throw new Error("Reviewed safe-text set exceeds the bounded disclosure-analysis size");
+    }
+    let totalCharacters = 0;
     const normalized = safeTexts.map((text) => {
       if (text.length === 0 || text.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS) {
         throw new Error("Reviewed safe text is outside the bounded disclosure-analysis input size");
+      }
+      totalCharacters += text.length;
+      if (totalCharacters > MAX_TOTAL_REVIEWED_SAFE_TEXT_CHARACTERS) {
+        throw new Error("Reviewed safe-text set exceeds the bounded aggregate text size");
       }
       const value = normalize(text);
       if (value.length === 0) {
@@ -204,6 +240,14 @@ export class DisclosureValidator {
     }
     if (texts.length === 0) {
       return { accepted: false, reason: "Proposal contains no analyzable deliverable realization" };
+    }
+    const totalProposalTextCharacters = texts.reduce((total, text) => total + text.length, 0);
+    if (totalProposalTextCharacters > MAX_TOTAL_PROPOSAL_TEXT_CHARACTERS) {
+      return { accepted: false, reason: "Proposal exceeds the bounded aggregate disclosure-validation input size" };
+    }
+    const metadataCharacters = protectedMetadataCharacterCount(input.protectedDisclosures);
+    if (texts.length * metadataCharacters > MAX_DISCLOSURE_ANALYSIS_WORK_CHARACTERS) {
+      return { accepted: false, reason: "Proposal exceeds the bounded disclosure-analysis work budget" };
     }
 
     const analyses: DisclosureAnalysis[] = [];
