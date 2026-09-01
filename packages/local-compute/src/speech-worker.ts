@@ -43,12 +43,14 @@ import {
 } from "./speech-pcm.js";
 import {
   AdaptiveEndpointingPolicy,
+  VadBackendProtocolError,
   VoiceActivityStateMachine,
   type EndpointingDecision,
   type VadBackend
 } from "./speech-vad.js";
 import {
   RecognizerCancellationCapabilitySchema,
+  SpeechRecognizerProtocolError,
   TranscriptResultGate,
   type RecognizerCancellationCapability,
   type SpeechRecognizer
@@ -429,6 +431,10 @@ export class SpeechWorkerCore {
       }
       if (vadAbort.signal.aborted) return [];
       this.abandonStream(context);
+      if (error instanceof VadBackendProtocolError) {
+        this.rememberDiagnostic({ code: "VAD_PROTOCOL_ERROR", streamId: context.streamId });
+        throw new SpeechWorkerCoreError("VAD_PROTOCOL_ERROR", "VAD backend returned an invalid observation");
+      }
       this.rememberDiagnostic({ code: "VAD_FAILURE", streamId: context.streamId });
       throw new SpeechWorkerCoreError("VAD_FAILURE", "VAD backend failed");
     } finally {
@@ -623,6 +629,14 @@ export class SpeechWorkerCore {
       if (error instanceof OperationTimeoutError) {
         events.push(this.errorEvent(requestId, context.streamId, "RECOGNIZER_TIMEOUT", "Recognizer timed out"));
         this.rememberDiagnostic({ code: "RECOGNIZER_TIMEOUT", streamId: context.streamId });
+      } else if (error instanceof SpeechRecognizerProtocolError) {
+        events.push(this.errorEvent(
+          requestId,
+          context.streamId,
+          "RECOGNIZER_PROTOCOL_ERROR",
+          "Recognizer returned an invalid bounded result"
+        ));
+        this.rememberDiagnostic({ code: "RECOGNIZER_PROTOCOL_ERROR", streamId: context.streamId });
       } else {
         events.push(this.errorEvent(
           requestId,
