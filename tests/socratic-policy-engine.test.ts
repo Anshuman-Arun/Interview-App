@@ -55,6 +55,13 @@ function makeState(problem: InterviewProblem = sixPeopleProblem): {
       },
       lastCommittedInputSequence: 4,
       eventIds: [seedEventId],
+      inputEpisodes: {
+        [inputEpisodeId]: {
+          inputEpisodeId,
+          status: "COMMITTED",
+          inputs: [{ modality: "TYPING", semanticContent: "student work" }]
+        }
+      },
       turns: {
         [turnId]: {
           turnId,
