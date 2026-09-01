@@ -26,7 +26,12 @@ export interface TurnOrchestrationInput {
 }
 
 function permitsCurrentMockExecution(
-  configuration: { readonly providerSelection?: { readonly providerId: string; readonly modelId: string } }
+  configuration: {
+    readonly providerSelection?: {
+      readonly providerId: string;
+      readonly modelId: string;
+    } | undefined;
+  }
 ): boolean {
   const selection = configuration.providerSelection;
   return selection === undefined
