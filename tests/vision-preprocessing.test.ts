@@ -330,7 +330,7 @@ describe("vision snapshot validation and hashing", () => {
     expect(() => new VisionImageArtifact(INTERNAL_VISION_ARTIFACT_CONSTRUCTION, source, {
       ...crop.metadata,
       sourceRevision: BoardRevisionSchema.parse(crop.metadata.sourceRevision + 1)
-    }, crop.readBytes())).toThrowError(RangeError);
+    }, crop.readBytes())).toThrow(RangeError);
   });
 
   it("rejects impossible artifact kind/source-bound combinations", async () => {
@@ -364,7 +364,7 @@ describe("vision snapshot validation and hashing", () => {
       secondSource,
       crop.metadata,
       crop.readBytes()
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("rejects artifact construction without the package's internal capability", async () => {
@@ -377,7 +377,7 @@ describe("vision snapshot validation and hashing", () => {
       source,
       crop.metadata,
       crop.readBytes()
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("rejects direct snapshot construction without the package admission capability", () => {
@@ -388,7 +388,7 @@ describe("vision snapshot validation and hashing", () => {
       invalidToken,
       admitted.metadata,
       admitted.readBytes()
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("rejects forged metadata when public image containers are constructed directly", () => {
@@ -396,11 +396,11 @@ describe("vision snapshot validation and hashing", () => {
     expect(() => new ImageSnapshot(INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION, {
       ...value.metadata,
       contentDigest: "0".repeat(64)
-    }, value.readBytes())).toThrowError(RangeError);
+    }, value.readBytes())).toThrow(RangeError);
     expect(() => new ImageSnapshot(INTERNAL_IMAGE_SNAPSHOT_CONSTRUCTION, {
       ...value.metadata,
       width: value.metadata.width + 1
-    }, value.readBytes())).toThrowError(RangeError);
+    }, value.readBytes())).toThrow(RangeError);
   });
 
   it("does not allow direct construction to bypass full PNG decoding", () => {
@@ -410,7 +410,7 @@ describe("vision snapshot validation and hashing", () => {
       ...value.metadata,
       byteSize: truncated.byteLength,
       contentDigest: sha256ImageBytes(truncated)
-    }, truncated)).toThrowError(RangeError);
+    }, truncated)).toThrow(RangeError);
   });
 
   it("rejects CRC-corrupted PNG input after its cheap header checks pass", () => {
@@ -420,7 +420,7 @@ describe("vision snapshot validation and hashing", () => {
     if (value === undefined) throw new Error("Generated PNG unexpectedly empty");
     corrupted[last] = value ^ 0xff;
 
-    expect(() => snapshot(corrupted)).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(corrupted)).toThrow(VisionPreprocessingError);
     try {
       snapshot(corrupted);
     } catch (error) {
@@ -462,7 +462,7 @@ describe("vision snapshot validation and hashing", () => {
       capturedAtMs: 0,
       mimeType: "image/png" as const,
       encodedBytes: "not-bytes" as unknown as Uint8Array
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
   });
 
   it("rejects proxied or revoked encoded byte payloads as invalid images", () => {
@@ -501,7 +501,7 @@ describe("vision snapshot validation and hashing", () => {
   });
 
   it("rejects malformed bytes and detectable MIME mismatch", () => {
-    expect(() => snapshot(Buffer.from("not-a-png"))).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(Buffer.from("not-a-png"))).toThrow(VisionPreprocessingError);
     try {
       snapshot(Buffer.from("not-a-png"));
     } catch (error) {
@@ -554,7 +554,7 @@ describe("vision snapshot validation and hashing", () => {
       capturedAtMs: 1,
       mimeType: "image/png" as const,
       encodedBytes: makePng(1, 1)
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
   });
 
   it("bounds static PNG chunk walking against checksum-valid tiny-chunk CPU amplification", () => {
@@ -563,13 +563,13 @@ describe("vision snapshot validation and hashing", () => {
     const manyChunks = Array.from({ length: 4096 }, () => emptyChunk);
     const adversarial = insertAfterIhdr(base, ...manyChunks);
 
-    expect(() => snapshot(adversarial)).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(adversarial)).toThrow(VisionPreprocessingError);
   });
 
   it("rejects interlaced PNGs before entering the decoder's unbounded sync inflate path", () => {
     const interlaced = Buffer.from(makePng(2, 2));
     interlaced[28] = 1;
-    expect(() => snapshot(interlaced)).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(interlaced)).toThrow(VisionPreprocessingError);
     try {
       snapshot(interlaced);
     } catch (error) {
@@ -579,13 +579,13 @@ describe("vision snapshot validation and hashing", () => {
 
   it("rejects trailing bytes after IEND and checksum-valid APNG control chunks", () => {
     const trailing = Buffer.concat([makePng(2, 2), Buffer.from([0xde, 0xad])]);
-    expect(() => snapshot(trailing)).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(trailing)).toThrow(VisionPreprocessingError);
 
     const animated = insertAfterIhdr(
       makePng(2, 2),
       makePngChunk("acTL", Buffer.alloc(8))
     );
-    expect(() => snapshot(animated)).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(animated)).toThrow(VisionPreprocessingError);
   });
 
   it("rejects oversized, repeated, or forbidden palette chunks before pngjs allocation", () => {
@@ -593,14 +593,14 @@ describe("vision snapshot validation and hashing", () => {
     expect(() => snapshot(insertAfterIhdr(
       rgba,
       makePngChunk("PLTE", Buffer.alloc(771))
-    ))).toThrowError(VisionPreprocessingError);
+    ))).toThrow(VisionPreprocessingError);
 
     const palette = makePngChunk("PLTE", Buffer.from([0, 0, 0]));
     expect(() => snapshot(insertAfterIhdr(
       rgba,
       palette,
       palette
-    ))).toThrowError(VisionPreprocessingError);
+    ))).toThrow(VisionPreprocessingError);
 
     const grayscale = Buffer.from(makePng(1, 1));
     grayscale[25] = 0;
@@ -609,7 +609,7 @@ describe("vision snapshot validation and hashing", () => {
     expect(() => snapshot(insertAfterIhdr(
       grayscale,
       palette
-    ))).toThrowError(VisionPreprocessingError);
+    ))).toThrow(VisionPreprocessingError);
   });
 
   it("rejects rendering/orientation metadata the codec cannot preserve, but accepts innocuous metadata", () => {
@@ -618,7 +618,7 @@ describe("vision snapshot validation and hashing", () => {
       expect(() => snapshot(insertAfterIhdr(
         base,
         makePngChunk(chunkType, Buffer.alloc(chunkType === "sRGB" ? 1 : 4))
-      ))).toThrowError(VisionPreprocessingError);
+      ))).toThrow(VisionPreprocessingError);
     }
 
     const physical = Buffer.alloc(9);
@@ -648,35 +648,35 @@ describe("vision snapshot validation and hashing", () => {
     expect(() => snapshot(insertAfterIhdr(
       rgba,
       makePngChunk("tRNS", Buffer.alloc(1))
-    ))).toThrowError(VisionPreprocessingError);
+    ))).toThrow(VisionPreprocessingError);
 
     expect(() => snapshot(insertAfterIhdr(
       rgba,
       makePngChunk("gAMA", Buffer.alloc(3))
-    ))).toThrowError(VisionPreprocessingError);
+    ))).toThrow(VisionPreprocessingError);
 
     expect(() => snapshot(insertAfterIhdr(
       rgba,
       makePngChunk("gAMA", Buffer.alloc(4)),
       makePngChunk("gAMA", Buffer.alloc(4))
-    ))).toThrowError(VisionPreprocessingError);
+    ))).toThrow(VisionPreprocessingError);
   });
 
   it("rejects transparency samples outside the declared bit depth and zero gamma", () => {
     const grayscaleTrns = makeMinimalPng(0, [0], {
       transparency: [0x01, 0x00]
     });
-    expect(() => snapshot(grayscaleTrns)).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(grayscaleTrns)).toThrow(VisionPreprocessingError);
 
     const rgbTrns = makeMinimalPng(2, [0, 0, 0], {
       transparency: [0, 0, 0, 0, 1, 0]
     });
-    expect(() => snapshot(rgbTrns)).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(rgbTrns)).toThrow(VisionPreprocessingError);
 
     expect(() => snapshot(insertAfterIhdr(
       makePng(1, 1),
       makePngChunk("gAMA", Buffer.alloc(4))
-    ))).toThrowError(VisionPreprocessingError);
+    ))).toThrow(VisionPreprocessingError);
   });
 
   it("rejects nonconsecutive IDAT and unsupported critical chunks with valid CRCs", () => {
@@ -691,12 +691,12 @@ describe("vision snapshot validation and hashing", () => {
       makePngChunk("IDAT"),
       base.subarray(idatEnd)
     ]);
-    expect(() => snapshot(split)).toThrowError(VisionPreprocessingError);
+    expect(() => snapshot(split)).toThrow(VisionPreprocessingError);
 
     expect(() => snapshot(insertAfterIhdr(
       base,
       makePngChunk("ABCD")
-    ))).toThrowError(VisionPreprocessingError);
+    ))).toThrow(VisionPreprocessingError);
   });
 
   it("rejects ancillary CRC corruption before decoder-specific handling", () => {
@@ -706,13 +706,13 @@ describe("vision snapshot validation and hashing", () => {
     if (last === undefined) throw new Error("Ancillary chunk unexpectedly empty");
     ancillary[crcOffset] = last ^ 0xff;
     expect(() => snapshot(insertAfterIhdr(makePng(1, 1), ancillary)))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
   });
 
   it("rejects caller dimension mismatches", () => {
     const bytes = makePng(3, 2);
     expect(() => snapshot(bytes, { declaredWidth: 4 }))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
     try {
       snapshot(bytes, { declaredWidth: 4 });
     } catch (error) {
@@ -732,13 +732,13 @@ describe("vision snapshot validation and hashing", () => {
     };
 
     expect(() => createValidatedImageSnapshot(base, { maxEncodedBytes: bytes.length - 1 }))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
     expect(() => createValidatedImageSnapshot(base, { maxWidth: 7 }))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
     expect(() => createValidatedImageSnapshot(base, { maxHeight: 5 }))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
     expect(() => createValidatedImageSnapshot(base, { maxPixels: 47 }))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
 
     try {
       createValidatedImageSnapshot(base, { maxEncodedBytes: bytes.length - 1 });
@@ -781,7 +781,7 @@ describe("vision snapshot validation and hashing", () => {
     expect(() => createValidatedImageSnapshot(
       validInput,
       revoked.proxy as unknown as Parameters<typeof createValidatedImageSnapshot>[1]
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("fails closed on hostile snapshot input and validation-limit getters", () => {
@@ -813,7 +813,7 @@ describe("vision snapshot validation and hashing", () => {
     expect(() => createValidatedImageSnapshot(
       validInput,
       hostileLimits as unknown as Parameters<typeof createValidatedImageSnapshot>[1]
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("rejects unknown snapshot fields before invoking their getters", () => {
@@ -836,7 +836,7 @@ describe("vision snapshot validation and hashing", () => {
 
     expect(() => createValidatedImageSnapshot(
       input as Parameters<typeof createValidatedImageSnapshot>[0]
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
     expect(getterCalls).toBe(0);
   });
 
@@ -848,7 +848,7 @@ describe("vision snapshot validation and hashing", () => {
       capturedAtMs: 1,
       mimeType: "image/png" as const,
       encodedBytes: makePng(1, 1)
-    }, null as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrowError(RangeError);
+    }, null as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrow(RangeError);
   });
 
   it("rejects unknown snapshot fields and misspelled validation limit keys", () => {
@@ -861,7 +861,7 @@ describe("vision snapshot validation and hashing", () => {
       mimeType: "image/png" as const,
       encodedBytes: bytes,
       unexpectedField: true
-    } as unknown as Parameters<typeof createValidatedImageSnapshot>[0])).toThrowError(VisionPreprocessingError);
+    } as unknown as Parameters<typeof createValidatedImageSnapshot>[0])).toThrow(VisionPreprocessingError);
 
     expect(() => createValidatedImageSnapshot({
       snapshotId: "strict-limit",
@@ -876,7 +876,7 @@ describe("vision snapshot validation and hashing", () => {
       maxHeight: 10,
       maxPixels: 100,
       maxPixles: 1
-    } as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrowError(RangeError);
+    } as unknown as Parameters<typeof createValidatedImageSnapshot>[1])).toThrow(RangeError);
   });
 
   it("uses intrinsic typed-array length instead of spoofable subclass byteLength accessors", () => {
@@ -903,7 +903,7 @@ describe("vision snapshot validation and hashing", () => {
       encodedBytes: underreported
     }, {
       maxEncodedBytes: 50
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
     try {
       createValidatedImageSnapshot({
         snapshotId: "underreported-bytes",
@@ -989,13 +989,13 @@ describe("vision snapshot validation and hashing", () => {
       }
     });
     Object.defineProperty(images, "length", { value: 1 });
-    expect(() => deduplicateExactImagePayloads(images)).toThrowError(TypeError);
+    expect(() => deduplicateExactImagePayloads(images)).toThrow(TypeError);
   });
 
   it("bounds public exact-dedup candidate collections", () => {
     const source = snapshot(makePng(1, 1));
     expect(() => deduplicateExactImagePayloads(Array.from({ length: 2049 }, () => source)))
-      .toThrowError(RangeError);
+      .toThrow(RangeError);
   });
 
 describe("vision geometry", () => {
@@ -1037,13 +1037,13 @@ describe("vision geometry", () => {
   });
 
   it("rejects zero/negative dimensions and explicit out-of-bounds crops", () => {
-    expect(() => validateImageRect({ x: 0, y: 0, width: 0, height: 2 })).toThrowError(VisionPreprocessingError);
-    expect(() => validateImageRect({ x: 0, y: 0, width: -1, height: 2 })).toThrowError(VisionPreprocessingError);
-    expect(() => normalizeRect({ x1: 1, y1: 2, x2: 1, y2: 8 })).toThrowError(VisionPreprocessingError);
+    expect(() => validateImageRect({ x: 0, y: 0, width: 0, height: 2 })).toThrow(VisionPreprocessingError);
+    expect(() => validateImageRect({ x: 0, y: 0, width: -1, height: 2 })).toThrow(VisionPreprocessingError);
+    expect(() => normalizeRect({ x1: 1, y1: 2, x2: 1, y2: 8 })).toThrow(VisionPreprocessingError);
     expect(() => assertRectWithinImage(
       { x: 8, y: 0, width: 3, height: 2 },
       { width: 10, height: 10 }
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
     expect(imageBounds({ width: 10, height: 5 })).toEqual({ x: 0, y: 0, width: 10, height: 5 });
   });
 
@@ -1055,14 +1055,14 @@ describe("vision geometry", () => {
       enumerable: true
     });
     Object.setPrototypeOf(inherited, prototype);
-    expect(() => unionRects(inherited)).toThrowError(VisionPreprocessingError);
+    expect(() => unionRects(inherited)).toThrow(VisionPreprocessingError);
   });
 
   it("rejects inherited geometry fields instead of trusting the prototype chain", () => {
     const inheritedDimensions = Object.create({ width: 1, height: 1 });
     expect(() => imageBounds(
       inheritedDimensions as unknown as Parameters<typeof imageBounds>[0]
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
   });
 
   it("fails closed on hostile rectangle, corner, and dimension objects", () => {
@@ -1074,19 +1074,19 @@ describe("vision geometry", () => {
 
     expect(() => validateImageRect(
       hostile as unknown as Parameters<typeof validateImageRect>[0]
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
     expect(() => normalizeRect(
       hostile as unknown as Parameters<typeof normalizeRect>[0]
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
     expect(() => imageBounds(
       hostile as unknown as Parameters<typeof imageBounds>[0]
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
   });
 
   it("fails closed on revoked or hostile geometry collections", () => {
     const revoked = Proxy.revocable([] as Array<{ x: number; y: number; width: number; height: number }>, {});
     revoked.revoke();
-    expect(() => unionRects(revoked.proxy)).toThrowError(TypeError);
+    expect(() => unionRects(revoked.proxy)).toThrow(TypeError);
 
     const hostile: Array<{ x: number; y: number; width: number; height: number }> = [];
     Object.defineProperty(hostile, "0", {
@@ -1096,12 +1096,12 @@ describe("vision geometry", () => {
       }
     });
     Object.defineProperty(hostile, "length", { value: 1 });
-    expect(() => unionRects(hostile)).toThrowError(TypeError);
+    expect(() => unionRects(hostile)).toThrow(TypeError);
   });
 
   it("bounds public rectangle collection operations", () => {
     const tooMany = Array.from({ length: 2049 }, () => ({ x: 0, y: 0, width: 1, height: 1 }));
-    expect(() => unionRects(tooMany)).toThrowError(RangeError);
+    expect(() => unionRects(tooMany)).toThrow(RangeError);
   });
 
   it("rejects rectangles whose derived right or bottom edge leaves the safe integer range", () => {
@@ -1110,13 +1110,13 @@ describe("vision geometry", () => {
       y: 0,
       width: 1,
       height: 1
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
     expect(() => validateImageRect({
       x: 0,
       y: Number.MAX_SAFE_INTEGER,
       width: 1,
       height: 1
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
   });
 });
 
@@ -1168,7 +1168,7 @@ describe("dirty-region planning", () => {
       ]);
     }
     expect(() => validateImageRect({ x: 1, y: 2, width: 0, height: 1 }))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
   });
 
   it("falls back to full frame when fragmentation exceeds the region count", () => {
@@ -1215,7 +1215,7 @@ describe("dirty-region planning", () => {
       maxRegionCount: 8,
       maxTotalAnalyzedArea: 1000,
       fullFrameFallbackAreaRatio: 0.05
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
   });
 
   it("falls back for excessive analyzed area and fails if that full frame would violate the area budget", () => {
@@ -1237,7 +1237,7 @@ describe("dirty-region planning", () => {
       maxRegionCount: 1,
       maxTotalAnalyzedArea: 5000,
       fullFrameFallbackAreaRatio: 1
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
   });
 
   it("ignores dirty rectangles wholly outside the frame and preserves deterministic repeatability", () => {
@@ -1309,7 +1309,7 @@ describe("dirty-region planning", () => {
       [{ x: 0, y: 0, width: 1, height: 1 }],
       { width: 10, height: 10 },
       revokedConfig.proxy as unknown as Parameters<typeof planDirtyRegions>[2]
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("rejects null planner configuration rather than silently using defaults", () => {
@@ -1317,7 +1317,7 @@ describe("dirty-region planning", () => {
       [{ x: 0, y: 0, width: 1, height: 1 }],
       { width: 10, height: 10 },
       null as unknown as Parameters<typeof planDirtyRegions>[2]
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("validates dirty rectangles before configured over-count fallback", () => {
@@ -1327,7 +1327,7 @@ describe("dirty-region planning", () => {
     ], { width: 20, height: 20 }, {
       maxInputRegions: 1,
       maxRegionCount: 1
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
   });
 
   it("returns NONE for purely out-of-frame hints even when standalone frame area is numerically huge", () => {
@@ -1345,7 +1345,7 @@ describe("dirty-region planning", () => {
     expect(() => planDirtyRegions(
       [{ x: 0, y: 0, width: 1, height: 1 }],
       { width: Number.MAX_SAFE_INTEGER, height: 2 }
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
     try {
       planDirtyRegions(
         [{ x: 0, y: 0, width: 1, height: 1 }],
@@ -1359,7 +1359,7 @@ describe("dirty-region planning", () => {
   it("rejects dirty-region lists above the package hard count instead of triggering work", () => {
     const tooMany = Array.from({ length: 2049 }, () => ({ x: 0, y: 0, width: 1, height: 1 }));
     expect(() => planDirtyRegions(tooMany, { width: 20, height: 20 }))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
   });
 });
 
@@ -1455,7 +1455,7 @@ describe("crop, resize, tiling, and cancellation", () => {
       source,
       { x: 0, y: 0, width: 1, height: 1 },
       revoked.proxy as unknown as Parameters<typeof cropImage>[2]
-    )).rejects.toThrowError(TypeError);
+    )).rejects.toThrow(TypeError);
   });
 
   it("fails closed on hostile processing option enumeration and getters", async () => {
@@ -1469,7 +1469,7 @@ describe("crop, resize, tiling, and cancellation", () => {
       source,
       { x: 0, y: 0, width: 1, height: 1 },
       hostileEnumeration as unknown as Parameters<typeof cropImage>[2]
-    )).rejects.toThrowError(TypeError);
+    )).rejects.toThrow(TypeError);
 
     const hostileGetter = Object.defineProperty({}, "maxOutputEncodedBytes", {
       enumerable: true,
@@ -1481,7 +1481,7 @@ describe("crop, resize, tiling, and cancellation", () => {
       source,
       { x: 0, y: 0, width: 1, height: 1 },
       hostileGetter as unknown as Parameters<typeof cropImage>[2]
-    )).rejects.toThrowError(TypeError);
+    )).rejects.toThrow(TypeError);
   });
 
   it("snapshots processing option getters once to prevent validation/use races", async () => {
@@ -1509,7 +1509,7 @@ describe("crop, resize, tiling, and cancellation", () => {
       source,
       { x: 0, y: 0, width: 1, height: 1 },
       { signal: revoked.proxy as unknown as AbortSignal }
-    )).rejects.toThrowError(TypeError);
+    )).rejects.toThrow(TypeError);
   });
 
   it("rejects unknown or malformed processing options before image work", async () => {
@@ -1518,12 +1518,12 @@ describe("crop, resize, tiling, and cancellation", () => {
       source,
       { x: 0, y: 0, width: 2, height: 2 },
       { maxOutputEncodedByte: 1 } as unknown as Parameters<typeof cropImage>[2]
-    )).rejects.toThrowError(RangeError);
+    )).rejects.toThrow(RangeError);
     await expect(downscaleImage(
       source,
       { maxWidth: 2, maxHeight: 2, maxPixels: 4 },
       { signal: {} } as unknown as Parameters<typeof downscaleImage>[2]
-    )).rejects.toThrowError(TypeError);
+    )).rejects.toThrow(TypeError);
   });
 
   it("plans and executes aspect-ratio-preserving downscaling and never upscales", async () => {
@@ -1575,11 +1575,11 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(() => planDownscale(
       hostile as unknown as Parameters<typeof planDownscale>[0],
       { maxWidth: 1, maxHeight: 1, maxPixels: 1 }
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
     expect(() => planDownscale(
       { width: 2, height: 2 },
       hostile as unknown as Parameters<typeof planDownscale>[1]
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("uses the nearest valid raster dimensions instead of avoidably distorting aspect ratio", () => {
@@ -1632,30 +1632,30 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(() => planImageTiles(
       hostile as unknown as Parameters<typeof planImageTiles>[0],
       { tileWidth: 1, tileHeight: 1, overlap: 0, maxTileCount: 1 }
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
     expect(() => planImageTiles(
       { width: 2, height: 2 },
       hostile as unknown as Parameters<typeof planImageTiles>[1]
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("rejects overlap that is not smaller than each tile dimension even for a one-tile source", () => {
     expect(() => planImageTiles(
       { width: 2, height: 2 },
       { tileWidth: 4, tileHeight: 4, overlap: 4, maxTileCount: 1 }
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
 
     expect(() => planImageTiles(
       { width: 2, height: 2 },
       { tileWidth: 4, tileHeight: 3, overlap: 3, maxTileCount: 1 }
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("allows maxTileCount zero as an explicit prohibition and fails before tile allocation", () => {
     expect(() => planImageTiles(
       { width: 4, height: 4 },
       { tileWidth: 4, tileHeight: 4, overlap: 0, maxTileCount: 0 }
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
   });
 
   it("keeps configured overlap exact at a partial final tile instead of shifting it backward", () => {
@@ -1775,7 +1775,7 @@ describe("crop, resize, tiling, and cancellation", () => {
       tileHeight: 4,
       overlap: 1,
       maxTileCount: 5
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
   });
 
   it("produces byte-identical deterministic tile outputs for identical inputs", async () => {
@@ -1798,7 +1798,7 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(() => planImageTiles(
       { width: Number.MAX_SAFE_INTEGER, height: 1 },
       { tileWidth: 1, tileHeight: 1, overlap: 0, maxTileCount: 1 }
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
   });
 
   it("reports unsafe standalone tile area arithmetic as a tile-limit failure", () => {
@@ -1822,7 +1822,7 @@ describe("crop, resize, tiling, and cancellation", () => {
     expect(() => planImageTiles(
       { width: 8192, height: 8192 },
       { tileWidth: 4096, tileHeight: 8192, overlap: 4000, maxTileCount: 50 }
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
   });
 
   it("keeps immediate source bounds distinct from original coordinates across resize then crop", async () => {
@@ -1878,7 +1878,7 @@ describe("crop, resize, tiling, and cancellation", () => {
     const times = [10, 5];
     await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
       now: () => times.shift() ?? 5
-    })).rejects.toThrowError(RangeError);
+    })).rejects.toThrow(RangeError);
   });
 
   it("fails closed on throwing, nonnumeric, or proxied processing clocks", async () => {
@@ -1888,26 +1888,26 @@ describe("crop, resize, tiling, and cancellation", () => {
       now: () => {
         throw new Error("hostile clock");
       }
-    })).rejects.toThrowError(TypeError);
+    })).rejects.toThrow(TypeError);
 
     await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
       now: (() => "not-a-number") as unknown as () => number
-    })).rejects.toThrowError(RangeError);
+    })).rejects.toThrow(RangeError);
 
     const proxiedClock = new Proxy(() => 1, {});
     await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
       now: proxiedClock
-    })).rejects.toThrowError(TypeError);
+    })).rejects.toThrow(TypeError);
   });
 
   it("rejects unsafe processing clock values before pixel work begins", async () => {
     const source = snapshot(makePng(4, 4));
     await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
       now: () => -1
-    })).rejects.toThrowError(RangeError);
+    })).rejects.toThrow(RangeError);
     await expect(cropImage(source, { x: 0, y: 0, width: 1, height: 1 }, {
       now: () => Number.MAX_SAFE_INTEGER + 1
-    })).rejects.toThrowError(RangeError);
+    })).rejects.toThrow(RangeError);
   });
 
   it("observes queued cancellation even when resize would otherwise be a no-op", async () => {
@@ -1940,7 +1940,7 @@ describe("crop, resize, tiling, and cancellation", () => {
       source,
       { x: 0, y: 0, width: 1, height: 1 },
       { signal: proxiedSignal }
-    )).rejects.toThrowError(TypeError);
+    )).rejects.toThrow(TypeError);
 
     const mutatedController = new AbortController();
     const mutatedSignal = mutatedController.signal;
@@ -2484,7 +2484,7 @@ describe("provider-neutral request preparation and budgeting", () => {
       goodBytes
     );
     expect(() => prepareVisionImageRequest(evil, "analysis"))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
     expect(Object.isFrozen(ImageSnapshot.prototype)).toBe(true);
     expect(Object.isFrozen(ImageSnapshot)).toBe(true);
   });
@@ -2509,7 +2509,7 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(() => prepareVisionImageRequest(
       revocable.proxy as unknown as ImageSnapshot,
       "analysis"
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
     expect(isCropOrTileArtifact(revocable.proxy)).toBe(false);
   });
 
@@ -2520,7 +2520,7 @@ describe("provider-neutral request preparation and budgeting", () => {
     Object.defineProperty(forged, "readBytes", { value: () => real.readBytes() });
 
     expect(() => prepareVisionImageRequest(forged as unknown as ImageSnapshot, "analysis"))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
   });
 
   it("rejects structurally similar but non-validated raster objects at runtime", async () => {
@@ -2531,7 +2531,7 @@ describe("provider-neutral request preparation and budgeting", () => {
     } as unknown as ImageSnapshot;
 
     expect(() => prepareVisionImageRequest(fake, "analysis"))
-      .toThrowError(VisionPreprocessingError);
+      .toThrow(VisionPreprocessingError);
     await expect(cropImage(fake, { x: 0, y: 0, width: 1, height: 1 }))
       .rejects.toMatchObject({ code: "INVALID_IMAGE" });
   });
@@ -2582,7 +2582,7 @@ describe("provider-neutral request preparation and budgeting", () => {
       maxTotalBytes: 0,
       maxTotalPixels: 0,
       maxCropsOrTiles: 0
-    }, "FAIL")).toThrowError(VisionPreprocessingError);
+    }, "FAIL")).toThrow(VisionPreprocessingError);
   });
 
   it("validates batch purpose even when the candidate list is empty", () => {
@@ -2600,28 +2600,28 @@ describe("provider-neutral request preparation and budgeting", () => {
       maxTotalBytes: 1_000_000,
       maxTotalPixels: 1_000_000,
       maxCropsOrTiles: 10
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
 
     expect(() => prepareVisionBatch([cropA], "analysis", {
       maxImages: 10,
       maxTotalBytes: cropA.metadata.byteSize - 1,
       maxTotalPixels: 1_000_000,
       maxCropsOrTiles: 10
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
 
     expect(() => prepareVisionBatch([cropA], "analysis", {
       maxImages: 10,
       maxTotalBytes: 1_000_000,
       maxTotalPixels: 15,
       maxCropsOrTiles: 10
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
 
     expect(() => prepareVisionBatch([cropA], "analysis", {
       maxImages: 10,
       maxTotalBytes: 1_000_000,
       maxTotalPixels: 1_000_000,
       maxCropsOrTiles: 0
-    })).toThrowError(VisionPreprocessingError);
+    })).toThrow(VisionPreprocessingError);
   });
 
   it("rejects inherited request candidates instead of trusting the prototype chain", () => {
@@ -2648,7 +2648,7 @@ describe("provider-neutral request preparation and budgeting", () => {
       }
     });
     Object.defineProperty(candidates, "length", { value: 1 });
-    expect(() => prepareVisionBatch(candidates, "analysis")).toThrowError(TypeError);
+    expect(() => prepareVisionBatch(candidates, "analysis")).toThrow(TypeError);
   });
 
   it("maps hostile candidate length access to a clean invalid-image failure", () => {
@@ -2672,7 +2672,7 @@ describe("provider-neutral request preparation and budgeting", () => {
     expect(() => prepareVisionBatch(
       Array.from({ length: 1025 }, () => source),
       "analysis"
-    )).toThrowError(VisionPreprocessingError);
+    )).toThrow(VisionPreprocessingError);
   });
 
   it("rejects inherited request-budget fields instead of trusting the prototype chain", () => {
@@ -2686,7 +2686,7 @@ describe("provider-neutral request preparation and budgeting", () => {
       [],
       "analysis",
       inheritedBudget as Parameters<typeof prepareVisionBatch>[2]
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("fails closed on hostile request budget objects", () => {
@@ -2699,7 +2699,7 @@ describe("provider-neutral request preparation and budgeting", () => {
       [],
       "analysis",
       hostileBudget as unknown as Parameters<typeof prepareVisionBatch>[2]
-    )).toThrowError(RangeError);
+    )).toThrow(RangeError);
   });
 
   it("rejects hard image/crop budget overconfiguration and unknown budget keys", () => {
