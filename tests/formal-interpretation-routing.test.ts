@@ -203,7 +203,11 @@ describe("formal interpretation request and provider validation", () => {
     try {
       const request = formalRequest(harness);
       const base = candidate(request);
-      expect(InterpretationProviderResultSchema.safeParse(providerResultFor(request, [{ ...base, confidence: Number.NaN } as FormalInterpretationCandidate])).success).toBe(false);
+      expect(InterpretationProviderResultSchema.safeParse({
+        protocolVersion: 1,
+        requestId: request.requestId,
+        candidates: [{ ...base, confidence: Number.NaN }]
+      }).success).toBe(false);
       expect(InterpretationProviderResultSchema.safeParse({
         protocolVersion: 1,
         requestId: request.requestId,
