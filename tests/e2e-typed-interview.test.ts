@@ -2112,24 +2112,18 @@ describe("Tier 3: Cross-Feature Combinations", () => {
     const committed = await client.commitTypedInput(sessionId, "Student reasoning step");
     expect(committed.turnId).toBeDefined();
 
+    await runtime.orchestrator.waitForAll();
     const writer = runtime.sessions.getWriter(sessionId);
-    const turns = new TurnCoordinator(writer);
-    await turns.selectAction(committed.turnId, sixPeopleProblem);
-    const { generationId } = await turns.startGeneration(committed.inputEpisodeId, committed.turnId, "mock");
-    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["Socratic prompt"]));
-    const processed = await turns.processProposal({
-      envelope: generationEnvelope(writer, sessionId, generationId, "mock"),
-      problem: sixPeopleProblem,
-      proposal: { realizedAction: "PROBE_JUSTIFICATION", claimedDisclosureLevel: 0, claimedDisclosureIds: [], speechText: "Socratic prompt" },
-      validator
-    });
-
-    const deliveryId = processed.deliveryAtoms[0]?.deliveryId;
-    expect(deliveryId).toBeDefined();
-    if (deliveryId) {
-      await new DeliveryCoordinator(writer).markStarted(deliveryId);
-      await client.acknowledgeDeliveryExposed(sessionId, deliveryId);
-      const ack = await client.acknowledgeDeliveryCompleted(sessionId, deliveryId);
+    const state = writer.getState();
+    const delivery = Object.values(state.deliveries).find((atom) =>
+      state.generations[atom.generationId]?.basis.turnId === committed.turnId
+    );
+    expect(delivery).toBeDefined();
+    if (delivery !== undefined) {
+      expect(delivery.status).toBe("QUEUED");
+      await new DeliveryCoordinator(writer).markStarted(delivery.deliveryId);
+      await client.acknowledgeDeliveryExposed(sessionId, delivery.deliveryId);
+      const ack = await client.acknowledgeDeliveryCompleted(sessionId, delivery.deliveryId);
       expect(ack.acknowledgement).toBe("COMPLETED");
     }
   });
