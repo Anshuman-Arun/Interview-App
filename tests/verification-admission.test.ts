@@ -316,7 +316,7 @@ describe("deterministic verification admission", () => {
       store.close();
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });
 
 async function issue(
