@@ -274,6 +274,9 @@ const EndpointingInputSchema = z.object({
   if (value.silenceMs > value.utteranceMs + 0.001) {
     context.addIssue({ code: "custom", message: "Silence duration cannot exceed utterance duration", path: ["silenceMs"] });
   }
+  if (value.speechMs + value.silenceMs > value.utteranceMs + 0.001) {
+    context.addIssue({ code: "custom", message: "Speech plus trailing silence cannot exceed utterance duration", path: ["utteranceMs"] });
+  }
 });
 
 export type EndpointingDecision =
@@ -362,14 +365,14 @@ function validateLocalModelPath(value: string, label: string): string {
   const windowsDrivePath = /^[A-Za-z]:[\\/]/u.test(path);
   const uriLikePath = /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(path);
   const uncLikePath = /^(?:\\\\|\/\/)/u.test(path);
-  if ((uriLikePath && !windowsDrivePath) || uncLikePath || /[\p{Cc}\p{Cf}]/u.test(path)) {
+  if ((uriLikePath && !windowsDrivePath) || uncLikePath || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(path)) {
     throw new Error(`${label} must be an explicitly supplied safe local filesystem path`);
   }
   return path;
 }
 
 function validateRuntimeIdentity(value: unknown, label: string): void {
-  if (typeof value !== "string" || value.trim().length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}\p{Cs}]/u.test(value)) {
     throw new Error(`${label} is invalid`);
   }
 }
