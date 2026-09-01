@@ -102,6 +102,7 @@ function cloneOutcome(outcome: VisionAdmissionResult): VisionAdmissionResult {
 export class VisionRequestManager {
   private readonly active = new Map<RequestId, ActiveRequest>();
   private readonly executionReservations = new Map<RequestId, ActiveRequest>();
+  private readonly registrationReservations = new Set<RequestId>();
   private readonly tombstones = new Map<RequestId, Tombstone>();
   private readonly diagnosticRecords: VisionDiagnostic[] = [];
   private readonly limits: z.infer<typeof ManagerOptionsSchema>;
@@ -164,7 +165,7 @@ export class VisionRequestManager {
       return { accepted: false, duplicate: true, outcome: cloneOutcome(terminal.outcome) };
     }
 
-    if (this.executionReservations.has(request.requestId)) {
+    if (this.executionReservations.has(request.requestId) || this.registrationReservations.has(request.requestId)) {
       return {
         accepted: false,
         duplicate: true,
@@ -175,37 +176,45 @@ export class VisionRequestManager {
     if (this.closed) {
       return { accepted: false, duplicate: false, outcome: rejected(request.requestId, "MANAGER_SHUTDOWN") };
     }
-    if (this.executionReservations.size >= this.limits.maxInFlight) {
+    if (this.executionReservations.size + this.registrationReservations.size >= this.limits.maxInFlight) {
       return { accepted: false, duplicate: false, outcome: rejected(request.requestId, "RESOURCE_LIMIT") };
     }
 
-    const authority = this.readAuthority(request);
-    if (!authority.ok) {
-      const outcome = rejected(request.requestId, "FRESHNESS_UNKNOWN");
-      this.rememberTombstone(request, fingerprint, expectedBackendFingerprint, outcome);
-      this.recordDiagnostic(request, backend, outcome);
-      return { accepted: false, duplicate: false, outcome };
-    }
-    const freshness = assessVisionRequestFreshness(request, authority.value);
-    if (!freshness.fresh) {
-      const outcome = rejected(request.requestId, freshness.reason);
-      this.rememberTombstone(request, fingerprint, expectedBackendFingerprint, outcome);
-      this.recordDiagnostic(request, backend, outcome);
-      return { accepted: false, duplicate: false, outcome };
-    }
+    this.registrationReservations.add(request.requestId);
+    try {
+      const authority = this.readAuthority(request);
+      if (this.closed) {
+        return { accepted: false, duplicate: false, outcome: rejected(request.requestId, "MANAGER_SHUTDOWN") };
+      }
+      if (!authority.ok) {
+        const outcome = rejected(request.requestId, "FRESHNESS_UNKNOWN");
+        this.rememberTombstone(request, fingerprint, expectedBackendFingerprint, outcome);
+        this.recordDiagnostic(request, backend, outcome);
+        return { accepted: false, duplicate: false, outcome };
+      }
+      const freshness = assessVisionRequestFreshness(request, authority.value);
+      if (!freshness.fresh) {
+        const outcome = rejected(request.requestId, freshness.reason);
+        this.rememberTombstone(request, fingerprint, expectedBackendFingerprint, outcome);
+        this.recordDiagnostic(request, backend, outcome);
+        return { accepted: false, duplicate: false, outcome };
+      }
 
-    const entry: ActiveRequest = {
-      request,
-      fingerprint,
-      backend,
-      backendFingerprint: expectedBackendFingerprint,
-      controller: new AbortController(),
-      backendStarted: false,
-      backendSettled: false
-    };
-    this.active.set(request.requestId, entry);
-    this.executionReservations.set(request.requestId, entry);
-    return { accepted: true, duplicate: false, request: cloneRequest(request) };
+      const entry: ActiveRequest = {
+        request,
+        fingerprint,
+        backend,
+        backendFingerprint: expectedBackendFingerprint,
+        controller: new AbortController(),
+        backendStarted: false,
+        backendSettled: false
+      };
+      this.active.set(request.requestId, entry);
+      this.executionReservations.set(request.requestId, entry);
+      return { accepted: true, duplicate: false, request: cloneRequest(request) };
+    } finally {
+      this.registrationReservations.delete(request.requestId);
+    }
   }
 
   public submit(requestInput: unknown, backend: VisionInferenceBackend): Promise<VisionAdmissionResult> {
