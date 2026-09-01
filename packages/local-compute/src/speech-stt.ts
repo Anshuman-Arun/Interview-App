@@ -400,6 +400,10 @@ export function validateTranscriptCandidate(raw: unknown, expected: TranscriptVa
     throw new Error("Recognizer result model identity does not match configured recognizer");
   }
 
+  if (candidate.text.length === 0 && (candidate.words?.length ?? 0) > 0) {
+    throw new Error("Empty recognizer transcript cannot carry word timing metadata");
+  }
+
   const utteranceDurationMs = expectedSourceAudioBasis.sampleCount / expectedSourceAudioBasis.sampleRate * 1_000;
   let previousEnd = 0;
   for (const word of candidate.words ?? []) {
