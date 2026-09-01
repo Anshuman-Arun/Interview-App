@@ -725,7 +725,7 @@ describe("grounded evaluation/replay product surface", () => {
     ])).toThrow("duplicate id/version");
   });
 
-  it("does not expose session identities that cannot be addressed safely by the read route", () => {
+  it("does not expose session identities that cannot be addressed safely by the read route", async () => {
     const unsafeIds = [
       SessionIdSchema.parse("session/unsafe"),
       SessionIdSchema.parse("."),
