@@ -3,6 +3,7 @@ import {
   SessionEvaluationSchema,
   evidenceKeyToString,
   isDisclosedStatus,
+  isEvidenceValueAllowed,
   type CompositeDimensionName,
   type DisclosureId,
   type DisclosureLevel,
@@ -22,6 +23,7 @@ import type {
   SessionState,
   VerificationRequestState
 } from "../../events/src/index.js";
+import { createProviderContextSpecFingerprintSync } from "./context-compiler.js";
 
 const DEFAULT_RUBRIC: EvaluationRubric = {
   correctnessWeight: 0.35,
@@ -39,7 +41,10 @@ const LIMITS = {
   deliveries: 20_000,
   verificationRequests: 20_000,
   milestones: 5_000,
-  disclosureRefs: 50_000
+  disclosureRefs: 50_000,
+  reasoningEdges: 50_000,
+  approaches: 10_000,
+  protectedDisclosures: 20_000
 } as const;
 
 const SUPPORT_RANK: Readonly<Record<EvaluationSupportLevel, number>> = {
@@ -100,6 +105,7 @@ export function evaluateInterviewSession(
 ): SessionEvaluation {
   assertEvaluationInputBounds(state, problem);
   assertProblemIdentity(state, problem);
+  assertEvaluationStateConsistency(state, problem);
 
   const rubric = EvaluationRubricSchema.parse({
     ...DEFAULT_RUBRIC,
@@ -109,7 +115,7 @@ export function evaluateInterviewSession(
   const turnsList = Object.values(state.turns).sort(
     (left, right) =>
       left.committedSequence - right.committedSequence ||
-      left.turnId.localeCompare(right.turnId)
+      compareStrings(left.turnId, right.turnId)
   );
 
   const activeEvidence = collectActiveEvidence(state, problem.id);
@@ -221,12 +227,143 @@ function assertProblemIdentity(
   state: Readonly<SessionState>,
   problem: InterviewProblem
 ): void {
-  if (
-    state.problem !== undefined &&
-    (state.problem.id !== problem.id || state.problem.version !== problem.version)
-  ) {
+  if (state.problem === undefined) {
+    const hasAuthoritativeActivity =
+      state.started ||
+      state.status !== "CREATED" ||
+      Object.keys(state.turns).length > 0 ||
+      Object.keys(state.evidenceHistory).length > 0 ||
+      Object.keys(state.deliveries).length > 0 ||
+      Object.keys(state.verificationRequests).length > 0;
+    if (hasAuthoritativeActivity) {
+      throw new Error("Evaluation cannot score authoritative session activity without a session-bound problem");
+    }
+    return;
+  }
+
+  if (state.problem.id !== problem.id || state.problem.version !== problem.version) {
     throw new Error("Evaluation problem identity does not match the authoritative session state");
   }
+  if (state.problem.providerContextSpecSha256 === undefined) {
+    throw new Error("Evaluation problem definition provenance is unavailable");
+  }
+  if (createProviderContextSpecFingerprintSync(problem) !== state.problem.providerContextSpecSha256) {
+    throw new Error("Evaluation problem definition does not match the session-bound problem fingerprint");
+  }
+}
+
+function assertEvaluationStateConsistency(
+  state: Readonly<SessionState>,
+  problem: InterviewProblem
+): void {
+  const milestoneIds = new Set(
+    problem.interviewer.reasoningGraph.milestones.map((milestone) => milestone.id)
+  );
+  const approachIds = new Set(
+    problem.interviewer.reasoningGraph.approaches.map((approach) => approach.id)
+  );
+  const activeByKey = new Map<string, EvidenceRecordState>();
+
+  for (const [storedKey, history] of Object.entries(state.evidenceHistory)) {
+    if (history.length === 0) {
+      throw new Error("Evaluation evidence history cannot contain an empty history");
+    }
+
+    let previousSequence = 0;
+    for (const record of history) {
+      const canonicalKey = evidenceKeyToString(record.key);
+      if (canonicalKey !== storedKey) {
+        throw new Error("Evaluation evidence history key does not match its scoped evidence record");
+      }
+      if (!isEvidenceValueAllowed(record.key, record.value.value)) {
+        throw new Error("Evaluation evidence record contains a value invalid for its dimension");
+      }
+      if (record.value.lastUpdatedSequence > state.sequence) {
+        throw new Error("Evaluation evidence record sequence exceeds authoritative session sequence");
+      }
+      if (record.value.lastUpdatedSequence <= previousSequence) {
+        throw new Error("Evaluation evidence history is not strictly chronological");
+      }
+      previousSequence = record.value.lastUpdatedSequence;
+
+      if (record.key.problemId === problem.id) {
+        if (
+          record.key.subject.kind === "MILESTONE" &&
+          !milestoneIds.has(record.key.subject.milestoneId)
+        ) {
+          throw new Error("Evaluation evidence references an unknown reasoning-graph milestone");
+        }
+        if (
+          record.key.subject.kind === "APPROACH" &&
+          !approachIds.has(record.key.subject.approachId)
+        ) {
+          throw new Error("Evaluation evidence references an unknown reasoning-graph approach");
+        }
+      }
+
+      if (record.status === "ACTIVE") {
+        if (activeByKey.has(storedKey)) {
+          throw new Error("Evaluation encountered multiple active records for one evidence key");
+        }
+        activeByKey.set(storedKey, record);
+      }
+    }
+  }
+
+  for (const [key, active] of activeByKey) {
+    const projected = state.studentEvidence[key];
+    if (projected === undefined || !evidenceValuesEqual(projected, active.value)) {
+      throw new Error("Evaluation active evidence does not match the authoritative student-evidence projection");
+    }
+  }
+  for (const key of Object.keys(state.studentEvidence)) {
+    if (!activeByKey.has(key)) {
+      throw new Error("Evaluation student-evidence projection has no matching active history record");
+    }
+  }
+
+  for (const [requestId, request] of Object.entries(state.verificationRequests)) {
+    if (request.verificationRequestId !== requestId) {
+      throw new Error("Evaluation verification-request identity does not match its state key");
+    }
+    if (request.status === "ACCEPTED") {
+      if (request.result === undefined) {
+        throw new Error("Evaluation accepted verification request is missing its result");
+      }
+      if (
+        request.result.verifier !== request.verifier ||
+        request.result.interpretationConfidence !== request.interpretationConfidence
+      ) {
+        throw new Error("Evaluation accepted verification result does not match its request");
+      }
+    } else if (request.result !== undefined) {
+      throw new Error("Evaluation non-accepted verification request cannot contain an accepted result");
+    }
+    if (
+      request.evidenceKey.problemId === problem.id &&
+      request.evidenceKey.dimension !== "CORRECTNESS"
+    ) {
+      throw new Error("Evaluation verification evidence must be scoped to correctness");
+    }
+  }
+
+  if (state.status === "COMPLETED" && state.completedAt === undefined) {
+    throw new Error("Evaluation completed session is missing its completion timestamp");
+  }
+  if (state.status === "ARCHIVED" && state.archivedAt === undefined) {
+    throw new Error("Evaluation archived session is missing its archival timestamp");
+  }
+}
+
+function evidenceValuesEqual(
+  left: EvidenceRecordState["value"],
+  right: EvidenceRecordState["value"]
+): boolean {
+  return left.value === right.value &&
+    left.inferenceConfidence === right.inferenceConfidence &&
+    left.lastUpdatedSequence === right.lastUpdatedSequence &&
+    left.evidenceEventIds.length === right.evidenceEventIds.length &&
+    left.evidenceEventIds.every((eventId, index) => eventId === right.evidenceEventIds[index]);
 }
 
 function assertEvaluationInputBounds(
@@ -259,6 +396,15 @@ function assertEvaluationInputBounds(
   if (problem.interviewer.reasoningGraph.milestones.length > LIMITS.milestones) {
     throw new Error("Evaluation input exceeds the supported milestone bound");
   }
+  if (problem.interviewer.reasoningGraph.edges.length > LIMITS.reasoningEdges) {
+    throw new Error("Evaluation input exceeds the supported reasoning-edge bound");
+  }
+  if (problem.interviewer.reasoningGraph.approaches.length > LIMITS.approaches) {
+    throw new Error("Evaluation input exceeds the supported approach bound");
+  }
+  if (problem.interviewer.protectedDisclosures.length > LIMITS.protectedDisclosures) {
+    throw new Error("Evaluation input exceeds the supported protected-disclosure bound");
+  }
 
   let disclosureRefCount = 0;
   for (const delivery of Object.values(state.deliveries)) {
@@ -275,7 +421,7 @@ function collectActiveEvidence(
 ): ReadonlyMap<string, EvidenceRecordState> {
   const active = new Map<string, EvidenceRecordState>();
   const histories = Object.entries(state.evidenceHistory).sort(([left], [right]) =>
-    left.localeCompare(right)
+    compareStrings(left, right)
   );
 
   for (const [key, history] of histories) {
@@ -306,7 +452,7 @@ function collectAcceptedVerifications(
     .sort(
       (left, right) =>
         left.basis.committedInputSequence - right.basis.committedInputSequence ||
-        left.verificationRequestId.localeCompare(right.verificationRequestId)
+        compareStrings(left.verificationRequestId, right.verificationRequestId)
     );
 
   for (const request of accepted) {
@@ -345,7 +491,7 @@ function collectDisclosureData(
   const unattributedAssistanceRefs: EvaluationEvidenceRef[] = [];
   const deliveries = Object.values(state.deliveries)
     .filter((delivery) => isDisclosedStatus(delivery.status))
-    .sort((left, right) => left.deliveryId.localeCompare(right.deliveryId));
+    .sort((left, right) => compareStrings(left.deliveryId, right.deliveryId));
 
   for (const delivery of deliveries) {
     const generation = state.generations[delivery.generationId];
@@ -1242,7 +1388,7 @@ function findTurnForEvidence(
   const latest = [...candidates].sort(
     (left, right) =>
       right.basis.committedInputSequence - left.basis.committedInputSequence ||
-      right.verificationRequestId.localeCompare(left.verificationRequestId)
+      compareStrings(right.verificationRequestId, left.verificationRequestId)
   )[0];
   return latest?.basis.turnId;
 }
@@ -1386,8 +1532,8 @@ function uniqueRefs(
   }
   return [...byKey.values()].sort(
     (left, right) =>
-      left.kind.localeCompare(right.kind) ||
-      left.id.localeCompare(right.id)
+      compareStrings(left.kind, right.kind) ||
+      compareStrings(left.id, right.id)
   );
 }
 
@@ -1401,6 +1547,12 @@ function subjectKey(key: EvidenceKey): string {
 
 function roundScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function compareStrings(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
 }
 
 export function generateEvaluationMarkdown(evaluation: SessionEvaluation): string {
