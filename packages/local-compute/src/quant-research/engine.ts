@@ -591,14 +591,20 @@ function publicData(state: InternalState): readonly QuantResearchPublicDatum[] {
     case "SAMPLING_ESTIMATION": {
       const values = [...state.revealed];
       if ((state.stage === "OUTLIER_PERTURBATION" || state.status === "COMPLETE") && state.outlier !== undefined) values.push(state.outlier);
-      return [
+      const perturbed = state.stage === "OUTLIER_PERTURBATION" || state.status === "COMPLETE";
+      const data: QuantResearchPublicDatum[] = [
         datum("maxSamples", "Maximum observation budget", state.config.maxSamples),
         datum("populationSize", "Finite population size", state.config.populationSize),
         datum("noiseRadius", "Ordinary symmetric integer-noise radius", state.config.noiseRadius),
         datum("samplingWithoutReplacement", "Sampling without replacement", true),
         datum("observations", "Revealed observations", values),
-        datum("contaminationIntroduced", "Contamination introduced", state.stage === "OUTLIER_PERTURBATION" || state.status === "COMPLETE")
+        datum("contaminationIntroduced", "Contamination introduced", perturbed)
       ];
+      if (perturbed && state.outlier !== undefined) {
+        data.push(datum("baselineObservations", "Baseline observations before contamination", state.revealed));
+        data.push(datum("contaminatedObservation", "Newly introduced contaminated observation", state.outlier));
+      }
+      return data;
     }
     case "EXPERIMENTAL_ALLOCATION": {
       const perturbed = state.stage === "PERTURBED_ALLOCATION" || state.status === "COMPLETE";
@@ -609,6 +615,10 @@ function publicData(state: InternalState): readonly QuantResearchPublicDatum[] {
         datum("noiseA", "A noise bound", state.config.noiseA),
         datum("noiseB", "B noise bound", state.config.noiseB)
       ];
+      if (perturbed) {
+        data.push(datum("baselineCostA", "Baseline cost per A sample", state.config.costA));
+        data.push(datum("baselineCostB", "Baseline cost per B sample", state.config.costB));
+      }
       if (state.summaryA !== undefined && state.summaryB !== undefined && state.initialAllocation !== undefined) {
         data.push(datum("sampleCountA", "Observed A sample count", state.initialAllocation.a));
         data.push(datum("sampleCountB", "Observed B sample count", state.initialAllocation.b));
@@ -631,12 +641,21 @@ function publicData(state: InternalState): readonly QuantResearchPublicDatum[] {
     }
     case "CONSTRAINED_OPTIMIZATION": {
       const perturbed = state.stage === "PERTURBED_OPTIMIZATION" || state.status === "COMPLETE";
-      return [
-        datum("objective", "Objective", `${String(state.coefficientX)}*x + ${String(state.coefficientY)}*y - ${String(perturbed ? state.config.perturbedPenalty : state.basePenalty)}*x*y`),
+      const baseObjective = `${String(state.coefficientX)}*x + ${String(state.coefficientY)}*y - ${String(state.basePenalty)}*x*y`;
+      const currentObjective = perturbed
+        ? `${String(state.coefficientX)}*x + ${String(state.coefficientY)}*y - ${String(state.config.perturbedPenalty)}*x*y`
+        : baseObjective;
+      const data: QuantResearchPublicDatum[] = [
+        datum("objective", "Current objective", currentObjective),
         datum("budget", "Current budget in 2*x + 3*y <= budget", perturbed ? state.config.perturbedBudget : state.config.budget),
         datum("maxX", "Maximum x", state.config.maxX),
         datum("maxY", "Maximum y", state.config.maxY)
       ];
+      if (perturbed) {
+        data.push(datum("baselineObjective", "Baseline objective", baseObjective));
+        data.push(datum("baselineBudget", "Baseline budget", state.config.budget));
+      }
+      return data;
     }
   }
 }
