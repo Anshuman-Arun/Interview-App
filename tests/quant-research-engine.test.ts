@@ -370,6 +370,17 @@ describe("deterministic Quant Research interview engine", () => {
     });
     expectCode(() => assertUniqueQuantResearchRegistrations([registration]), "INVALID_REGISTRY");
     expect(versionGetterInvoked).toBe(false);
+
+    let iteratorInvoked = false;
+    const registryWithIterator: unknown[] = [{ family: "BAYESIAN_UPDATING", version: QUANT_RESEARCH_VERSION }];
+    Object.defineProperty(registryWithIterator, Symbol.iterator, {
+      value: function* () {
+        iteratorInvoked = true;
+        while (true) yield { family: "MODEL_COMPARISON", version: QUANT_RESEARCH_VERSION };
+      }
+    });
+    expectCode(() => assertUniqueQuantResearchRegistrations(registryWithIterator), "INVALID_REGISTRY");
+    expect(iteratorInvoked).toBe(false);
   });
 
   it("treats symmetric floating-point tolerance boundaries identically", () => {
