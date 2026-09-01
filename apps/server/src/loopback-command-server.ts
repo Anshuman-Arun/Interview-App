@@ -19,10 +19,10 @@ import { RequestIdConflictError } from "../../../packages/persistence/src/index.
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import {
-  createLegacyDefaultSessionConfiguration,
   listInterviewCatalogEntries,
   resolveInterviewSessionConfiguration
 } from "./interview-session-composition.js";
+import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
