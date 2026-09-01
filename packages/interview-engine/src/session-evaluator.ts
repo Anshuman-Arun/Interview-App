@@ -73,7 +73,6 @@ interface DisclosureExposure {
   readonly disclosureId: DisclosureId;
   readonly level: DisclosureLevel;
   readonly possiblyExposed: boolean;
-  readonly earliestBasisSequence?: number;
   readonly deliveryRefs: readonly EvaluationEvidenceRef[];
 }
 
@@ -138,11 +137,7 @@ export function evaluateInterviewSession(
   const communication = unsupportedDimension(
     "Current application-owned evidence does not contain a validated communication-quality signal."
   );
-  const hintResponsiveness = evaluateHintResponsiveness(
-    problem,
-    milestoneFacts,
-    disclosureData.exposuresByDisclosureId
-  );
+  const hintResponsiveness = evaluateHintResponsiveness();
   const errorRecovery = evaluateErrorRecovery(state, problem.id);
 
   const dimensionResults: EvaluationDimensionResults = {
@@ -343,7 +338,6 @@ function collectDisclosureData(
   const exposuresMutable = new Map<DisclosureId, {
     level: DisclosureLevel;
     possiblyExposed: boolean;
-    earliestBasisSequence?: number;
     deliveryRefs: EvaluationEvidenceRef[];
   }>();
 
@@ -396,24 +390,16 @@ function collectDisclosureData(
 
     for (const disclosureId of delivery.disclosureIds) {
       const current = exposuresMutable.get(disclosureId);
-      const basisSequence = generation?.basis.committedInputSequence;
       const deliveryRef = evaluationRef("DELIVERY", delivery.deliveryId);
       if (current === undefined) {
         exposuresMutable.set(disclosureId, {
           level: delivery.effectiveDisclosureLevel,
           possiblyExposed: delivery.status === "POSSIBLY_EXPOSED",
-          ...(basisSequence === undefined ? {} : { earliestBasisSequence: basisSequence }),
           deliveryRefs: [deliveryRef]
         });
       } else {
         current.level = Math.max(current.level, delivery.effectiveDisclosureLevel) as DisclosureLevel;
         current.possiblyExposed ||= delivery.status === "POSSIBLY_EXPOSED";
-        if (
-          basisSequence !== undefined &&
-          (current.earliestBasisSequence === undefined || basisSequence < current.earliestBasisSequence)
-        ) {
-          current.earliestBasisSequence = basisSequence;
-        }
         current.deliveryRefs.push(deliveryRef);
       }
     }
@@ -425,9 +411,6 @@ function collectDisclosureData(
       disclosureId,
       level: exposure.level,
       possiblyExposed: exposure.possiblyExposed,
-      ...(exposure.earliestBasisSequence === undefined
-        ? {}
-        : { earliestBasisSequence: exposure.earliestBasisSequence }),
       deliveryRefs: uniqueRefs(exposure.deliveryRefs)
     });
   }
@@ -596,18 +579,7 @@ function evaluateMilestones(
       const exposure = exposuresByDisclosureId.get(disclosureId);
       if (exposure === undefined) continue;
 
-      const definitelyPrior =
-        baseResult.achievedSequence !== undefined &&
-        exposure.earliestBasisSequence !== undefined &&
-        exposure.earliestBasisSequence < baseResult.achievedSequence;
-      const definitelyAfter =
-        baseResult.achievedSequence !== undefined &&
-        exposure.earliestBasisSequence !== undefined &&
-        exposure.earliestBasisSequence >= baseResult.achievedSequence;
-
-      if (definitelyAfter) continue;
-
-      if (!definitelyPrior) attributionUncertain = true;
+      attributionUncertain = true;
       assistanceLevel = Math.max(assistanceLevel, exposure.level) as DisclosureLevel;
       assistanceDisclosureIds.push(disclosureId);
       priorAssistanceRefs.push(...exposure.deliveryRefs);
@@ -869,65 +841,11 @@ function evaluateIndependence(
   };
 }
 
-function evaluateHintResponsiveness(
-  problem: InterviewProblem,
-  milestoneFacts: readonly MilestoneFacts[],
-  exposuresByDisclosureId: ReadonlyMap<DisclosureId, DisclosureExposure>
-): DimensionComputation {
-  const factsByMilestone = new Map(
-    milestoneFacts.map((item) => [item.evaluation.milestoneId, item] as const)
-  );
-  let opportunities = 0;
-  let associatedProgress = 0;
-  const refs: EvaluationEvidenceRef[] = [];
-
-  for (const milestone of problem.interviewer.reasoningGraph.milestones) {
-    const fact = factsByMilestone.get(milestone.id);
-    if (fact === undefined) continue;
-
-    const relevant = milestone.protectedDisclosureIds
-      .map((id) => exposuresByDisclosureId.get(id))
-      .filter((item): item is DisclosureExposure => item !== undefined);
-
-    if (relevant.length === 0) continue;
-
-    const earliestKnownPrior = relevant.some(
-      (exposure) =>
-        exposure.earliestBasisSequence !== undefined &&
-        (
-          fact.achievedSequence === undefined ||
-          exposure.earliestBasisSequence < fact.achievedSequence
-        )
-    );
-    if (!earliestKnownPrior) continue;
-
-    opportunities += 1;
-    refs.push(
-      evaluationRef("MILESTONE", milestone.id),
-      ...relevant.flatMap((exposure) => exposure.deliveryRefs)
-    );
-    if (fact.evaluation.achieved) {
-      associatedProgress += 1;
-      refs.push(...fact.evaluation.evidenceRefs);
-    }
-  }
-
-  if (opportunities === 0) {
-    return {
-      result: unsupportedDimension(
-        "No specifically attributable delivered assistance preceded a related milestone outcome."
-      )
-    };
-  }
-
+function evaluateHintResponsiveness(): DimensionComputation {
   return {
-    result: scoredDimension(
-      roundScore((associatedProgress / opportunities) * 100),
-      "WEAK",
-      uniqueRefs(refs)
-    ),
-    positiveCount: associatedProgress,
-    negativeCount: opportunities - associatedProgress
+    result: unsupportedDimension(
+      "The current authoritative SessionState does not retain delivery exposure ordering, so assistance cannot be shown to precede related progress."
+    )
   };
 }
 
