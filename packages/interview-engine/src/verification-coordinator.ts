@@ -380,6 +380,15 @@ export class VerificationCoordinator {
       if (recomputed === undefined) return discard("REQUEST_NOT_PENDING");
       if (!recomputed.ok) return discard(recomputed.reason);
       if (recomputed.result.verifier !== request.verifier) return discard("VERIFIER_IDENTITY_MISMATCH");
+      if (recomputed.result.interpretationConfidence !== request.interpretationConfidence) {
+        return discard("VERIFIER_OUTPUT_INVALID");
+      }
+      if (
+        recomputed.result.interpretationConfidence < 1
+        && recomputed.result.status !== "UNRESOLVED"
+      ) {
+        return discard("VERIFIER_OUTPUT_INVALID");
+      }
       if (!resultsEqual(supplied, recomputed.result)) return discard("RECOMPUTATION_MISMATCH");
 
       const drafts: EventDraft[] = [{
