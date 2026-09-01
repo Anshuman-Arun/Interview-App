@@ -5,6 +5,7 @@ import {
   MAX_SPEECH_UTTERANCE_DURATION_MS,
   SourceAudioBasisSchema,
   SpeechPcmFrameEnvelopeSchema,
+  SpeechStreamIdSchema,
   type SourceAudioBasis,
   type SpeechPcmFrameEnvelope,
   type SpeechStreamId
@@ -45,7 +46,7 @@ export interface PcmOrderState {
 export function snapshotPcmFrame(input: unknown, payload: unknown): PcmFrameSnapshot {
   const parsed = SpeechPcmFrameEnvelopeSchema.safeParse(input);
   if (!parsed.success) throw new PcmAdmissionError("INVALID_FRAME", "PCM frame metadata is invalid");
-  const envelope = parsed.data;
+  const envelope = Object.freeze({ ...parsed.data });
   if (!ArrayBuffer.isView(payload)) {
     throw new PcmAdmissionError("INVALID_FRAME", "PCM payload must be a binary ArrayBuffer view");
   }
@@ -69,12 +70,12 @@ export function snapshotPcmFrame(input: unknown, payload: unknown): PcmFrameSnap
   }
 
   const durationMs = envelope.frameSamples / envelope.sampleRate * 1_000;
-  return {
+  return Object.freeze({
     envelope,
     bytes,
     durationMs,
     fingerprint: createHash("sha256").update(bytes).digest("hex")
-  };
+  });
 }
 
 export function advancePcmOrder(
@@ -131,6 +132,7 @@ export class BoundedPcmBuffer {
   private byteLength = 0;
   private sampleCount = 0;
   private speechFrameCount = 0;
+  private bufferOrder: PcmOrderState | undefined;
 
   public constructor(private readonly maxBytes = MAX_SPEECH_BUFFERED_PCM_BYTES) {
     if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > MAX_SPEECH_BUFFERED_PCM_BYTES) {
@@ -139,20 +141,35 @@ export class BoundedPcmBuffer {
   }
 
   public append(snapshot: PcmFrameSnapshot, speech: boolean): void {
-    const first = this.frames[0]?.snapshot;
-    if (first !== undefined && snapshot.envelope.sampleRate !== first.envelope.sampleRate) {
-      throw new PcmAdmissionError("STREAM_CONFLICT", "PCM sample rate changed within one utterance");
+    if (typeof speech !== "boolean") {
+      throw new PcmAdmissionError("INVALID_FRAME", "PCM speech classification must be boolean");
     }
-    if (this.byteLength + snapshot.bytes.byteLength > this.maxBytes) {
+
+    const ownedSnapshot = snapshotPcmFrame(snapshot.envelope, snapshot.bytes);
+    const first = this.frames[0]?.snapshot;
+    if (first !== undefined && ownedSnapshot.envelope.streamId !== first.envelope.streamId) {
+      throw new PcmAdmissionError("STREAM_CONFLICT", "PCM stream identity changed within one utterance");
+    }
+
+    let nextOrder: PcmOrderState;
+    if (this.bufferOrder === undefined) {
+      nextOrder = initialBufferedOrder(ownedSnapshot);
+    } else {
+      nextOrder = advancePcmOrder(this.bufferOrder, ownedSnapshot);
+    }
+
+    if (this.byteLength + ownedSnapshot.bytes.byteLength > this.maxBytes) {
       throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM buffer limit exceeded");
     }
-    const nextSampleCount = this.sampleCount + snapshot.envelope.frameSamples;
-    const nextDurationMs = nextSampleCount / snapshot.envelope.sampleRate * 1_000;
+    const nextSampleCount = this.sampleCount + ownedSnapshot.envelope.frameSamples;
+    const nextDurationMs = nextSampleCount / ownedSnapshot.envelope.sampleRate * 1_000;
     if (nextDurationMs > MAX_SPEECH_UTTERANCE_DURATION_MS + 0.001) {
       throw new PcmAdmissionError("RESOURCE_LIMIT", "PCM utterance duration limit exceeded");
     }
-    this.frames.push({ snapshot, speech });
-    this.byteLength += snapshot.bytes.byteLength;
+
+    this.frames.push({ snapshot: ownedSnapshot, speech });
+    this.bufferOrder = nextOrder;
+    this.byteLength += ownedSnapshot.bytes.byteLength;
     this.sampleCount = nextSampleCount;
     if (speech) this.speechFrameCount += 1;
   }
@@ -162,6 +179,7 @@ export class BoundedPcmBuffer {
     this.byteLength = 0;
     this.sampleCount = 0;
     this.speechFrameCount = 0;
+    this.bufferOrder = undefined;
   }
 
   public getByteLength(): number {
@@ -192,15 +210,22 @@ export class BoundedPcmBuffer {
   }
 
   public sourceBasis(streamId: SpeechStreamId): SourceAudioBasis {
+    const boundedStreamId = SpeechStreamIdSchema.safeParse(streamId);
+    if (!boundedStreamId.success) {
+      throw new PcmAdmissionError("INVALID_FRAME", "PCM source basis stream identity is invalid");
+    }
     const first = this.frames[0]?.snapshot;
     const last = this.frames.at(-1)?.snapshot;
     if (first === undefined || last === undefined || this.sampleCount <= 0) {
       throw new PcmAdmissionError("INVALID_FRAME", "Cannot derive an audio basis from an empty buffer");
     }
+    if (boundedStreamId.data !== first.envelope.streamId) {
+      throw new PcmAdmissionError("STREAM_CONFLICT", "PCM source basis stream identity does not match buffered audio");
+    }
     const hash = createHash("sha256");
     for (const frame of this.frames) hash.update(frame.snapshot.bytes);
     return SourceAudioBasisSchema.parse({
-      streamId,
+      streamId: boundedStreamId.data,
       firstSequence: first.envelope.sequence,
       lastSequence: last.envelope.sequence,
       startTimestampMs: first.envelope.timestampMs,
@@ -211,4 +236,17 @@ export class BoundedPcmBuffer {
       pcmSha256: hash.digest("hex")
     });
   }
+}
+
+
+function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
+  return {
+    sampleRate: frame.envelope.sampleRate,
+    channels: frame.envelope.channels,
+    sampleFormat: frame.envelope.sampleFormat,
+    firstTimestampMs: frame.envelope.timestampMs,
+    cumulativeDurationMs: frame.durationMs,
+    lastSequence: frame.envelope.sequence,
+    nextEarliestTimestampMs: frame.envelope.timestampMs + frame.durationMs
+  };
 }
