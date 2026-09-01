@@ -201,5 +201,65 @@ export const SessionEvaluationSchema = z.object({
   keyStrengths: z.array(z.string().min(1)),
   areasForImprovement: z.array(z.string().min(1)),
   summaryAssessment: z.string().min(1)
-}).strict();
+}).strict().superRefine((evaluation, ctx) => {
+  const dimensionNames = [
+    "technicalCorrectness",
+    "rigor",
+    "independence",
+    "communication",
+    "hintResponsiveness",
+    "errorRecovery"
+  ] as const;
+  if (dimensionNames.some(
+    (name) => evaluation.scores[name] !== evaluation.dimensionResults[name].score
+  )) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Evaluation score breakdown must match dimensionResults"
+    });
+  }
+
+  if (evaluation.totalTurns !== evaluation.lifecycle.totalTurns) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Evaluation totalTurns must match lifecycle totalTurns"
+    });
+  }
+
+  const expectedUnassisted = evaluation.milestones.filter(
+    (milestone) => milestone.achieved && milestone.assistanceLevel === 0
+  ).length;
+  const expectedAssisted = evaluation.milestones.filter(
+    (milestone) => milestone.achieved && milestone.assistanceLevel > 0
+  ).length;
+  if (
+    evaluation.unassistedMilestoneCount !== expectedUnassisted ||
+    evaluation.assistedMilestoneCount !== expectedAssisted
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Evaluation milestone counts must match milestone results"
+    });
+  }
+
+  if (
+    evaluation.composite.status === "NOT_SCORED" &&
+    (evaluation.scores.compositeScore !== null ||
+      evaluation.composite.supportLevel !== "INSUFFICIENT")
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Unscored composite metadata is internally inconsistent"
+    });
+  }
+  if (
+    evaluation.composite.status !== "NOT_SCORED" &&
+    evaluation.scores.compositeScore === null
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Scored composite metadata requires a composite score"
+    });
+  }
+});
 export type SessionEvaluation = z.infer<typeof SessionEvaluationSchema>;
