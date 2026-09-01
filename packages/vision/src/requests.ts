@@ -1,0 +1,297 @@
+import { createHash } from "node:crypto";
+import { boundedArrayLength, readArrayEntry } from "./array-validation.js";
+import { z } from "zod";
+import { imageIdentity } from "./deduplication.js";
+import { snapshotOwnEnumerableRecord } from "./object-validation.js";
+import {
+  CoordinateTransformSchema,
+  ImagePayloadReference,
+  assertVisionRasterSource,
+  ImageSnapshot,
+  VisionImageArtifact,
+  VisionPreprocessingError,
+  type CoordinateTransform,
+  type Sha256Digest,
+  type VisionRasterIdentity,
+  type VisionRasterSource
+} from "./types.js";
+import type { BoardRevision } from "../../domain/src/index.js";
+
+export const VisionPurposeSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/u);
+export type VisionPurpose = z.infer<typeof VisionPurposeSchema>;
+
+const REQUEST_BUDGET_FIELDS = new Set([
+  "maxImages",
+  "maxTotalBytes",
+  "maxTotalPixels",
+  "maxCropsOrTiles"
+]);
+
+const RequestBudgetSchema = z.object({
+  maxImages: z.number().int().nonnegative().max(256),
+  maxTotalBytes: z.number().int().nonnegative().max(128 * 1024 * 1024),
+  maxTotalPixels: z.number().int().nonnegative().max(128 * 1024 * 1024),
+  maxCropsOrTiles: z.number().int().nonnegative().max(256)
+}).strict();
+
+export interface VisionRequestBudget {
+  readonly maxImages: number;
+  readonly maxTotalBytes: number;
+  readonly maxTotalPixels: number;
+  readonly maxCropsOrTiles: number;
+}
+
+export const DEFAULT_VISION_REQUEST_BUDGET: Readonly<VisionRequestBudget> = Object.freeze({
+  maxImages: 16,
+  maxTotalBytes: 32 * 1024 * 1024,
+  maxTotalPixels: 32 * 1024 * 1024,
+  maxCropsOrTiles: 16
+});
+
+export const VisionBudgetStrategySchema = z.enum(["FAIL", "BOUNDED_PREFIX"]);
+export type VisionBudgetStrategy = z.infer<typeof VisionBudgetStrategySchema>;
+
+export const MAX_VISION_REQUEST_CANDIDATES = 1024;
+
+export interface PreparedVisionImageRequest {
+  readonly requestId: string;
+  readonly purpose: VisionPurpose;
+  readonly sourceRevision: BoardRevision;
+  readonly sourceSnapshotId: string;
+  readonly imageIdentity: VisionRasterIdentity;
+  readonly imageKind: "SNAPSHOT" | "CROP" | "RESIZED" | "TILE";
+  readonly width: number;
+  readonly height: number;
+  readonly byteSize: number;
+  readonly contentDigest: Sha256Digest;
+  readonly coordinateTransform: CoordinateTransform;
+  readonly payload: ImagePayloadReference;
+}
+
+export interface VisionRequestBudgetTotals {
+  readonly images: number;
+  readonly totalBytes: number;
+  readonly totalPixels: number;
+  readonly cropsOrTiles: number;
+}
+
+export interface PreparedVisionBatch {
+  readonly requests: readonly PreparedVisionImageRequest[];
+  readonly deferredImageIdentities: readonly VisionRasterIdentity[];
+  readonly truncated: boolean;
+  readonly totals: VisionRequestBudgetTotals;
+}
+
+function sourceTransform(source: VisionRasterSource): CoordinateTransform {
+  if (ImageSnapshot.isValidatedInstance(source)) {
+    return Object.freeze({ offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 });
+  }
+  return source.metadata.coordinateTransform;
+}
+
+function sourceSnapshotId(source: VisionRasterSource): string {
+  return ImageSnapshot.isValidatedInstance(source) ? source.metadata.snapshotId : source.metadata.sourceSnapshotId;
+}
+
+function sourceKind(source: VisionRasterSource): PreparedVisionImageRequest["imageKind"] {
+  return ImageSnapshot.isValidatedInstance(source) ? "SNAPSHOT" : source.metadata.kind;
+}
+
+function deterministicRequestId(
+  purpose: VisionPurpose,
+  source: VisionRasterSource,
+  transform: CoordinateTransform
+): string {
+  const canonical = JSON.stringify([
+    "vision-request-v1",
+    purpose,
+    source.metadata.sourceRevision,
+    imageIdentity(source),
+    source.metadata.width,
+    source.metadata.height,
+    transform.offsetX,
+    transform.offsetY,
+    transform.scaleX,
+    transform.scaleY
+  ]);
+  return `vision_${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
+}
+
+export function prepareVisionImageRequest(
+  source: VisionRasterSource,
+  purposeInput: string
+): PreparedVisionImageRequest {
+  assertVisionRasterSource(source);
+  const purpose = VisionPurposeSchema.parse(purposeInput);
+  const transform = Object.freeze({ ...CoordinateTransformSchema.parse(sourceTransform(source)) });
+  const identity = imageIdentity(source);
+  const payload = new ImagePayloadReference(source);
+
+  return Object.freeze({
+    requestId: deterministicRequestId(purpose, source, transform),
+    purpose,
+    sourceRevision: source.metadata.sourceRevision,
+    sourceSnapshotId: sourceSnapshotId(source),
+    imageIdentity: identity,
+    imageKind: sourceKind(source),
+    width: source.metadata.width,
+    height: source.metadata.height,
+    byteSize: source.metadata.byteSize,
+    contentDigest: source.metadata.contentDigest,
+    coordinateTransform: transform,
+    payload
+  });
+}
+
+function checkedPixels(request: PreparedVisionImageRequest): number {
+  const pixels = request.width * request.height;
+  if (!Number.isSafeInteger(pixels)) {
+    throw new VisionPreprocessingError("REQUEST_BUDGET_EXCEEDED", "Request pixel count exceeds safe integer range");
+  }
+  return pixels;
+}
+
+function checkedAdd(left: number, right: number, label: string): number {
+  const result = left + right;
+  if (!Number.isSafeInteger(result)) {
+    throw new VisionPreprocessingError("REQUEST_BUDGET_EXCEEDED", `${label} exceeds safe integer range`);
+  }
+  return result;
+}
+
+function wouldExceed(
+  totals: VisionRequestBudgetTotals,
+  source: VisionRasterSource,
+  budget: VisionRequestBudget
+): boolean {
+  assertVisionRasterSource(source);
+  const nextImages = totals.images + 1;
+  const nextBytes = checkedAdd(totals.totalBytes, source.metadata.byteSize, "Request byte total");
+  const sourcePixels = source.metadata.width * source.metadata.height;
+  if (!Number.isSafeInteger(sourcePixels)) {
+    throw new VisionPreprocessingError("REQUEST_BUDGET_EXCEEDED", "Request pixel count exceeds safe integer range");
+  }
+  const nextPixels = checkedAdd(totals.totalPixels, sourcePixels, "Request pixel total");
+  const kind = sourceKind(source);
+  const nextCropsOrTiles = totals.cropsOrTiles + (kind === "CROP" || kind === "TILE" ? 1 : 0);
+  return nextImages > budget.maxImages
+    || nextBytes > budget.maxTotalBytes
+    || nextPixels > budget.maxTotalPixels
+    || nextCropsOrTiles > budget.maxCropsOrTiles;
+}
+
+function addTotals(
+  totals: VisionRequestBudgetTotals,
+  request: PreparedVisionImageRequest
+): VisionRequestBudgetTotals {
+  return Object.freeze({
+    images: totals.images + 1,
+    totalBytes: checkedAdd(totals.totalBytes, request.byteSize, "Request byte total"),
+    totalPixels: checkedAdd(totals.totalPixels, checkedPixels(request), "Request pixel total"),
+    cropsOrTiles: totals.cropsOrTiles + (request.imageKind === "CROP" || request.imageKind === "TILE" ? 1 : 0)
+  });
+}
+
+export function prepareVisionBatch(
+  sources: readonly VisionRasterSource[],
+  purpose: string,
+  budgetInput: VisionRequestBudget = DEFAULT_VISION_REQUEST_BUDGET,
+  strategyInput: VisionBudgetStrategy = "FAIL"
+): PreparedVisionBatch {
+  let sourceCount: number;
+  try {
+    sourceCount = boundedArrayLength(
+      sources,
+      MAX_VISION_REQUEST_CANDIDATES,
+      "Vision batch candidates"
+    );
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw new VisionPreprocessingError(
+        "REQUEST_BUDGET_EXCEEDED",
+        `Vision batch accepts at most ${String(MAX_VISION_REQUEST_CANDIDATES)} candidate images`
+      );
+    }
+    throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must be a bounded array");
+  }
+
+  let ownBudget: Readonly<Record<string, unknown>>;
+  try {
+    ownBudget = snapshotOwnEnumerableRecord(budgetInput, "Vision request budget", REQUEST_BUDGET_FIELDS);
+  } catch {
+    throw new RangeError("Vision request budget could not be read safely");
+  }
+  const parsedBudget = RequestBudgetSchema.safeParse(ownBudget);
+  if (!parsedBudget.success) {
+    throw new RangeError("Vision request budget is invalid or contains unknown keys");
+  }
+  const budget = parsedBudget.data;
+  const strategy = VisionBudgetStrategySchema.parse(strategyInput);
+  const validatedPurpose = VisionPurposeSchema.parse(purpose);
+
+  const candidates: VisionRasterSource[] = [];
+  for (let index = 0; index < sourceCount; index += 1) {
+    const source = readArrayEntry(sources, index, "Vision batch candidates");
+    if (source === undefined) {
+      throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
+    }
+    assertVisionRasterSource(source);
+    candidates.push(source);
+  }
+  Object.freeze(candidates);
+
+  const accepted: PreparedVisionImageRequest[] = [];
+  const deferred: VisionRasterIdentity[] = [];
+  let totals: VisionRequestBudgetTotals = Object.freeze({ images: 0, totalBytes: 0, totalPixels: 0, cropsOrTiles: 0 });
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const source = readArrayEntry(candidates, index, "Internal vision candidate snapshot");
+    if (source === undefined) {
+      throw new VisionPreprocessingError("INVALID_IMAGE", "Internal vision candidate snapshot is sparse");
+    }
+    if (wouldExceed(totals, source, budget)) {
+      if (strategy === "FAIL") {
+        throw new VisionPreprocessingError(
+          "REQUEST_BUDGET_EXCEEDED",
+          `Vision request at index ${String(index)} exceeds the configured batch budget`
+        );
+      }
+      for (let deferredIndex = index; deferredIndex < candidates.length; deferredIndex += 1) {
+        const deferredSource = readArrayEntry(candidates, deferredIndex, "Internal vision candidate snapshot");
+        if (deferredSource === undefined) {
+          throw new VisionPreprocessingError("INVALID_IMAGE", "Vision batch candidates must not contain missing entries");
+        }
+        deferred.push(imageIdentity(deferredSource));
+      }
+      break;
+    }
+    const request = prepareVisionImageRequest(source, validatedPurpose);
+    accepted.push(request);
+    totals = addTotals(totals, request);
+  }
+
+  return Object.freeze({
+    requests: Object.freeze(accepted),
+    deferredImageIdentities: Object.freeze(deferred),
+    truncated: deferred.length > 0,
+    totals
+  });
+}
+
+export function requestPayloadIsSafeReference(
+  request: unknown
+): request is { readonly payload: ImagePayloadReference } {
+  if (typeof request !== "object" || request === null) return false;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(request, "payload");
+    if (descriptor === undefined || !("value" in descriptor)) return false;
+    return ImagePayloadReference.isValidatedInstance(descriptor.value);
+  } catch {
+    return false;
+  }
+}
+
+export function isCropOrTileArtifact(source: unknown): source is VisionImageArtifact {
+  return VisionImageArtifact.isValidatedInstance(source)
+    && (source.metadata.kind === "CROP" || source.metadata.kind === "TILE");
+}
