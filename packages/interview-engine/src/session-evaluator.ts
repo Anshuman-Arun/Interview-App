@@ -50,7 +50,8 @@ const LIMITS = {
   evidenceProvenanceRefs: 150_000,
   verificationProvenanceRefs: 100_000,
   reasoningRefs: 100_000,
-  problemFingerprintCharacters: 2_000_000
+  problemFingerprintCharacters: 2_000_000,
+  problemAuxiliaryItems: 100_000
 } as const;
 
 const SUPPORT_RANK: Readonly<Record<EvaluationSupportLevel, number>> = {
@@ -135,7 +136,12 @@ export function evaluateInterviewSession(
     verificationByEvidenceKey,
     state.contextEpoch
   );
-  const rigor = evaluateRigor(problem, activeEvidence);
+  const rigor = evaluateRigor(
+    problem,
+    activeEvidence,
+    verificationByEvidenceKey,
+    state.contextEpoch
+  );
   const independence = evaluateIndependence(
     milestoneFacts,
     disclosureData.unattributedAssistanceRefs
@@ -292,7 +298,7 @@ function assertProblemDefinitionUniqueness(problem: InterviewProblem): void {
     }
   }
 
-  const edgeKeys = graph.edges.map((edge) => edge.from + "\u0000" + edge.to);
+  const edgeKeys = graph.edges.map((edge) => JSON.stringify([edge.from, edge.to]));
   assertUniqueStrings(edgeKeys, "reasoning-graph edge");
 }
 
@@ -628,6 +634,21 @@ function assertEvaluationInputBounds(
       milestone.protectedDisclosureIds.length;
     if (reasoningRefCount > LIMITS.reasoningRefs) {
       throw new Error("Evaluation input exceeds the supported reasoning-reference bound");
+    }
+  }
+
+  let auxiliaryItemCount =
+    problem.public.givenInformation.length +
+    problem.interviewer.topics.length +
+    problem.interviewer.reasoningGraph.commonErrors.length +
+    problem.interviewer.reasoningGraph.extensions.length;
+  if (auxiliaryItemCount > LIMITS.problemAuxiliaryItems) {
+    throw new Error("Evaluation problem exceeds the supported auxiliary-item bound");
+  }
+  for (const disclosure of problem.interviewer.protectedDisclosures) {
+    auxiliaryItemCount += disclosure.equivalentFormulations.length;
+    if (auxiliaryItemCount > LIMITS.problemAuxiliaryItems) {
+      throw new Error("Evaluation problem exceeds the supported auxiliary-item bound");
     }
   }
 
@@ -1050,28 +1071,72 @@ function evaluateTechnicalCorrectness(
       evaluationRef("EVIDENCE_EVENT", record.evidenceEventId),
       ...record.value.evidenceEventIds.map((id) => evaluationRef("EVIDENCE_EVENT", id))
     ]);
+    const currentRequests = currentVerificationRequests(
+      verificationByEvidenceKey.get(key) ?? [],
+      currentContextEpoch
+    );
     const supportingVerifications = supportingVerificationRequests(
       record,
       verificationByEvidenceKey
     ).filter((request) => request.result?.status === "VERIFIED");
-    const verificationRefs = supportingVerifications.map((request) =>
+    const contradictions = currentRequests.filter(
+      (request) => request.result?.status === "CONTRADICTED"
+    );
+    const unresolved = currentRequests.filter(
+      (request) => request.result?.status === "UNRESOLVED"
+    );
+    const verificationRefs = currentRequests.map((request) =>
       evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
     );
 
-    const score = correctnessRatingScore(record.value.value);
-    if (score === null) {
+    const baseScore = correctnessRatingScore(record.value.value);
+    const positiveConflict = baseScore === 100 && contradictions.length > 0;
+    if (positiveConflict) {
       unresolvedCount += 1;
+      unresolvedRefs.push(...recordRefs, ...verificationRefs);
+      continue;
+    }
+
+    let score = baseScore;
+    let supportLevel = supportFromCount(
+      1,
+      record.value.inferenceConfidence,
+      supportingVerifications.length > 0
+    );
+
+    if (contradictions.length > 0 && score !== null) {
+      score = 0;
+      supportLevel = maxSupport(
+        supportLevel,
+        supportFromCount(
+          1,
+          minimumNumber(
+            contradictions.map(
+              (request) => request.result?.interpretationConfidence ?? 0
+            )
+          ),
+          true
+        )
+      );
+    }
+
+    if (unresolved.length > 0) {
+      unresolvedCount += 1;
+      unresolvedRefs.push(...unresolved.map((request) =>
+        evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
+      ));
+      supportLevel = minSupport(supportLevel, "WEAK");
+    }
+
+    if (score === null) {
+      unresolvedCount += unresolved.length === 0 ? 1 : 0;
       unresolvedRefs.push(...recordRefs, ...verificationRefs);
       continue;
     }
 
     sampleBySubject.set(subjectKey(record.key), {
       score,
-      supportLevel: supportFromCount(
-        1,
-        record.value.inferenceConfidence,
-        supportingVerifications.length > 0
-      ),
+      supportLevel,
       refs: uniqueRefs([...recordRefs, ...verificationRefs]),
       positive: score === 100,
       negative: score < 100
@@ -1081,38 +1146,46 @@ function evaluateTechnicalCorrectness(
   for (const [key, requests] of verificationByEvidenceKey) {
     if (activeCorrectnessKeys.has(key)) continue;
 
-    const currentRequests = requests.filter(
-      (request) =>
-        request.basis.contextEpoch === currentContextEpoch &&
-        request.result !== undefined
+    const currentRequests = currentVerificationRequests(
+      requests,
+      currentContextEpoch
     );
     if (currentRequests.length === 0) continue;
 
-    const latest = currentRequests.at(-1);
-    if (latest?.result === undefined) continue;
-    const latestRef = evaluationRef(
-      "VERIFICATION_REQUEST",
-      latest.verificationRequestId
+    const contradictions = currentRequests.filter(
+      (request) => request.result?.status === "CONTRADICTED"
     );
+    const unresolved = currentRequests.filter(
+      (request) => request.result?.status === "UNRESOLVED"
+    );
+    const refs = uniqueRefs(currentRequests.map((request) =>
+      evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
+    ));
 
-    if (latest.result.status === "CONTRADICTED") {
-      sampleBySubject.set(subjectKey(latest.evidenceKey), {
+    if (contradictions.length > 0 && unresolved.length === 0) {
+      const representative = contradictions[0];
+      if (representative === undefined) continue;
+      sampleBySubject.set(subjectKey(representative.evidenceKey), {
         score: 0,
         supportLevel: supportFromCount(
           1,
-          latest.result.interpretationConfidence,
+          minimumNumber(
+            contradictions.map(
+              (request) => request.result?.interpretationConfidence ?? 0
+            )
+          ),
           true
         ),
-        refs: [latestRef],
+        refs,
         positive: false,
         negative: true
       });
       continue;
     }
 
-    if (latest.result.status === "UNRESOLVED") {
+    if (unresolved.length > 0 || contradictions.length > 0) {
       unresolvedCount += 1;
-      unresolvedRefs.push(latestRef);
+      unresolvedRefs.push(...refs);
     }
   }
 
@@ -1121,8 +1194,8 @@ function evaluateTechnicalCorrectness(
     return {
       result: unsupportedDimension(
         unresolvedRefs.length > 0
-          ? "Current correctness evidence is unresolved and does not establish a score."
-          : "No active scoped correctness evidence or current deterministic contradiction supports a correctness score.",
+          ? "Current correctness evidence is conflicting or unresolved and does not establish a score."
+          : "No active scoped correctness evidence or unambiguous current deterministic contradiction supports a correctness score.",
         unresolvedRefs
       ),
       positiveCount: 0,
@@ -1156,11 +1229,14 @@ function evaluateTechnicalCorrectness(
 
 function evaluateRigor(
   problem: InterviewProblem,
-  activeEvidence: ReadonlyMap<string, EvidenceRecordState>
+  activeEvidence: ReadonlyMap<string, EvidenceRecordState>,
+  verificationByEvidenceKey: ReadonlyMap<string, readonly VerificationRequestState[]>,
+  currentContextEpoch: SessionState["contextEpoch"]
 ): DimensionComputation {
   const samples: Array<{
     score: number;
     confidence: number;
+    ambiguous: boolean;
     refs: EvaluationEvidenceRef[];
   }> = [];
 
@@ -1169,28 +1245,60 @@ function evaluateRigor(
     const baseScore = rigorRatingScore(record.value.value);
     if (baseScore === null) continue;
 
+    const correctnessKey: EvidenceKey = {
+      problemId: problem.id,
+      subject: record.key.subject,
+      dimension: "CORRECTNESS"
+    };
     const correctness = getActiveEvidence(
       activeEvidence,
       problem.id,
       record.key.subject,
       "CORRECTNESS"
     );
+    const requests = currentVerificationRequests(
+      verificationByEvidenceKey.get(evidenceKeyToString(correctnessKey)) ?? [],
+      currentContextEpoch
+    );
+    const contradictions = requests.filter(
+      (request) => request.result?.status === "CONTRADICTED"
+    );
+    const unresolved = requests.filter(
+      (request) => request.result?.status === "UNRESOLVED"
+    );
+
     let score = baseScore;
+    let ambiguous = unresolved.length > 0;
     if (correctness?.value.value === "STRUCTURAL_ERROR") score = 0;
     if (correctness?.value.value === "LOCAL_ERROR") score = Math.min(score, 50);
+
+    if (contradictions.length > 0) {
+      if (correctness?.value.value === "CORRECT") {
+        ambiguous = true;
+      } else {
+        score = 0;
+      }
+    }
 
     samples.push({
       score,
       confidence: Math.min(
         record.value.inferenceConfidence,
-        correctness?.value.inferenceConfidence ?? 1
+        correctness?.value.inferenceConfidence ?? 1,
+        ...requests.map(
+          (request) => request.result?.interpretationConfidence ?? 1
+        )
       ),
+      ambiguous,
       refs: uniqueRefs([
         evaluationRef("EVIDENCE_EVENT", record.evidenceEventId),
         ...record.value.evidenceEventIds.map((id) => evaluationRef("EVIDENCE_EVENT", id)),
         ...(correctness === undefined
           ? []
-          : [evaluationRef("EVIDENCE_EVENT", correctness.evidenceEventId)])
+          : [evaluationRef("EVIDENCE_EVENT", correctness.evidenceEventId)]),
+        ...requests.map((request) =>
+          evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
+        )
       ])
     });
   }
@@ -1207,10 +1315,14 @@ function evaluateRigor(
     samples.reduce((sum, sample) => sum + sample.score, 0) / samples.length
   );
   const minConfidence = minimumNumber(samples.map((sample) => sample.confidence));
+  let supportLevel = supportFromCount(samples.length, minConfidence, false);
+  if (samples.some((sample) => sample.ambiguous)) {
+    supportLevel = minSupport(supportLevel, "WEAK");
+  }
   return {
     result: scoredDimension(
       score,
-      supportFromCount(samples.length, minConfidence, false),
+      supportLevel,
       uniqueRefs(samples.flatMap((sample) => sample.refs))
     ),
     positiveCount: samples.filter((sample) => sample.score === 100).length,
@@ -1733,6 +1845,18 @@ function getActiveEvidence(
       subject,
       dimension
     })
+  );
+}
+
+function currentVerificationRequests(
+  requests: readonly VerificationRequestState[],
+  currentContextEpoch: SessionState["contextEpoch"]
+): VerificationRequestState[] {
+  return requests.filter(
+    (request) =>
+      request.status === "ACCEPTED" &&
+      request.result !== undefined &&
+      request.basis.contextEpoch === currentContextEpoch
   );
 }
 
