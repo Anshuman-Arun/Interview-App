@@ -309,7 +309,10 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       next = updateGeneration(state, event.payload.generationId, { status: "SUPERSEDED" });
       break;
     case "PROPOSAL_VALIDATED":
-      next = updateGeneration(state, event.payload.generationId, { status: "VALIDATED" });
+      next = updateGeneration(state, event.payload.generationId, {
+        status: "VALIDATED",
+        interviewerProposalValidated: true
+      });
       break;
     case "PROPOSAL_REJECTED":
       next = updateGeneration(state, event.payload.generationId, { status: "REJECTED" });
