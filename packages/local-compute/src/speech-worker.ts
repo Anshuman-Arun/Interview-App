@@ -172,55 +172,69 @@ export class SpeechWorkerCore {
     this.recognizeSpeech = bindWorkerRecognizer(rawRecognizer.recognize, rawRecognizer);
     this.cancelRecognition = bindWorkerRecognizerCancel(rawRecognizer.cancel, rawRecognizer);
 
-    validateOptionalFunction(rawOptions.utteranceIdFactory, "Speech utterance ID factory");
-    validateOptionalFunction(rawOptions.endpointingFactory, "Speech endpointing factory");
-    validateOptionalFunction(rawOptions.vadStateFactory, "Speech VAD state factory");
-    this.utteranceIdFactory = rawOptions.utteranceIdFactory as SpeechWorkerCoreOptions["utteranceIdFactory"];
-    this.endpointingFactory = rawOptions.endpointingFactory as SpeechWorkerCoreOptions["endpointingFactory"];
-    this.vadStateFactory = rawOptions.vadStateFactory as SpeechWorkerCoreOptions["vadStateFactory"];
+    const utteranceIdFactory = rawOptions.utteranceIdFactory;
+    const endpointingFactory = rawOptions.endpointingFactory;
+    const vadStateFactory = rawOptions.vadStateFactory;
+    validateOptionalFunction(utteranceIdFactory, "Speech utterance ID factory");
+    validateOptionalFunction(endpointingFactory, "Speech endpointing factory");
+    validateOptionalFunction(vadStateFactory, "Speech VAD state factory");
+    this.utteranceIdFactory = utteranceIdFactory as SpeechWorkerCoreOptions["utteranceIdFactory"];
+    this.endpointingFactory = endpointingFactory as SpeechWorkerCoreOptions["endpointingFactory"];
+    this.vadStateFactory = vadStateFactory as SpeechWorkerCoreOptions["vadStateFactory"];
 
-    this.recognizerModelIdentity = SpeechModelIdentitySchema.parse(rawRecognizer.modelIdentity);
+    const recognizerModelIdentity = rawRecognizer.modelIdentity;
+    const recognizerCancellationCapability = rawRecognizer.cancellationCapability;
+    this.recognizerModelIdentity = SpeechModelIdentitySchema.parse(recognizerModelIdentity);
     this.recognizerCancellationCapability = RecognizerCancellationCapabilitySchema.parse(
-      rawRecognizer.cancellationCapability
+      recognizerCancellationCapability
     );
 
+    const maxConcurrentStreams = rawOptions.maxConcurrentStreams;
+    const maxBufferedPcmBytes = rawOptions.maxBufferedPcmBytes;
+    const maxRememberedMessages = rawOptions.maxRememberedMessages;
+    const maxInFlightRequests = rawOptions.maxInFlightRequests;
+    const maxPreSpeechDurationMs = rawOptions.maxPreSpeechDurationMs;
+    const vadTimeoutMs = rawOptions.vadTimeoutMs;
+    const recognizerTimeoutMs = rawOptions.recognizerTimeoutMs;
+    const cancellationTimeoutMs = rawOptions.cancellationTimeoutMs;
+
     this.maxConcurrentStreams = boundedPositiveSafeInteger(
-      rawOptions.maxConcurrentStreams === undefined ? MAX_SPEECH_CONCURRENT_STREAMS : rawOptions.maxConcurrentStreams,
+      maxConcurrentStreams === undefined ? MAX_SPEECH_CONCURRENT_STREAMS : maxConcurrentStreams,
       MAX_SPEECH_CONCURRENT_STREAMS,
       "maxConcurrentStreams"
     );
     this.maxBufferedPcmBytes = boundedPositiveSafeInteger(
-      rawOptions.maxBufferedPcmBytes === undefined ? MAX_SPEECH_BUFFERED_PCM_BYTES : rawOptions.maxBufferedPcmBytes,
+      maxBufferedPcmBytes === undefined ? MAX_SPEECH_BUFFERED_PCM_BYTES : maxBufferedPcmBytes,
       MAX_SPEECH_BUFFERED_PCM_BYTES,
       "maxBufferedPcmBytes"
     );
     this.maxRememberedMessages = boundedPositiveSafeInteger(
-      rawOptions.maxRememberedMessages === undefined ? MAX_SPEECH_REMEMBERED_MESSAGES : rawOptions.maxRememberedMessages,
+      maxRememberedMessages === undefined ? MAX_SPEECH_REMEMBERED_MESSAGES : maxRememberedMessages,
       MAX_SPEECH_REMEMBERED_MESSAGES,
       "maxRememberedMessages"
     );
     this.maxInFlightRequests = boundedPositiveSafeInteger(
-      rawOptions.maxInFlightRequests === undefined ? MAX_SPEECH_IN_FLIGHT_REQUESTS : rawOptions.maxInFlightRequests,
+      maxInFlightRequests === undefined ? MAX_SPEECH_IN_FLIGHT_REQUESTS : maxInFlightRequests,
       MAX_SPEECH_IN_FLIGHT_REQUESTS,
       "maxInFlightRequests"
     );
     this.maxPreSpeechDurationMs = boundedPositiveSafeInteger(
-      rawOptions.maxPreSpeechDurationMs === undefined ? MAX_SPEECH_PRE_SPEECH_DURATION_MS : rawOptions.maxPreSpeechDurationMs,
+      maxPreSpeechDurationMs === undefined ? MAX_SPEECH_PRE_SPEECH_DURATION_MS : maxPreSpeechDurationMs,
       MAX_SPEECH_PRE_SPEECH_DURATION_MS,
       "maxPreSpeechDurationMs"
     );
     this.vadTimeoutMs = boundedPositiveSafeInteger(
-      rawOptions.vadTimeoutMs === undefined ? DEFAULT_SPEECH_VAD_TIMEOUT_MS : rawOptions.vadTimeoutMs,
+      vadTimeoutMs === undefined ? DEFAULT_SPEECH_VAD_TIMEOUT_MS : vadTimeoutMs,
       MAX_SPEECH_VAD_TIMEOUT_MS,
       "vadTimeoutMs"
     );
     this.recognizerTimeoutMs = boundedPositiveSafeInteger(
-      rawOptions.recognizerTimeoutMs === undefined ? DEFAULT_SPEECH_RECOGNIZER_TIMEOUT_MS : rawOptions.recognizerTimeoutMs,
+      recognizerTimeoutMs === undefined ? DEFAULT_SPEECH_RECOGNIZER_TIMEOUT_MS : recognizerTimeoutMs,
       MAX_SPEECH_RECOGNIZER_TIMEOUT_MS,
       "recognizerTimeoutMs"
     );
     this.cancellationTimeoutMs = boundedPositiveSafeInteger(
-      rawOptions.cancellationTimeoutMs === undefined ? DEFAULT_SPEECH_CANCELLATION_TIMEOUT_MS : rawOptions.cancellationTimeoutMs,
+      cancellationTimeoutMs === undefined ? DEFAULT_SPEECH_CANCELLATION_TIMEOUT_MS : cancellationTimeoutMs,
       MAX_SPEECH_CANCELLATION_TIMEOUT_MS,
       "cancellationTimeoutMs"
     );
