@@ -41,7 +41,12 @@ describe("Real Built UI & Loopback Server E2E Verification", () => {
       webServer = undefined;
     }
     if (tempDir !== "" && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      fs.rmSync(tempDir, {
+        recursive: true,
+        force: true,
+        maxRetries: process.platform === "win32" ? 5 : 0,
+        retryDelay: 100
+      });
       tempDir = "";
     }
   });
@@ -255,7 +260,7 @@ describe("Real Built UI & Loopback Server E2E Verification", () => {
     await serverInstance.stop();
     serverInstance = undefined;
 
-    const restartedServer = await createAndStartServer({
+    const restartedServer = serverInstance = await createAndStartServer({
       host: "127.0.0.1",
       commandPort: 0,
       rendererStreamPort: 0,
@@ -288,5 +293,6 @@ describe("Real Built UI & Loopback Server E2E Verification", () => {
     expect(restartedServer.store.eventCount(sessionId)).toBe(restartedCountBeforeRead);
 
     await restartedServer.stop();
-  });
+    serverInstance = undefined;
+  }, process.platform === "win32" ? 20_000 : 10_000);
 });
