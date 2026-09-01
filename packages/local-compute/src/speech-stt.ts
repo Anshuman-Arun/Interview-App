@@ -117,15 +117,13 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       : validateLocalPath(options.configPath, "Moonshine config path");
     validateRuntimeIdentity(options.runtime.runtimeVersion, "Moonshine runtime version");
     this.supportsAbort = validateBoolean(options.runtime.supportsAbort, "Moonshine runtime abort capability");
-    this.transcribeRuntime = bindRequiredRuntimeFunction<MoonshineRuntime["transcribe"]>(
+    this.transcribeRuntime = bindMoonshineTranscribe(
       (options.runtime as unknown as { transcribe?: unknown }).transcribe,
-      options.runtime,
-      "Moonshine runtime transcribe callback"
+      options.runtime
     );
-    this.cancelRuntime = bindOptionalRuntimeFunction<NonNullable<MoonshineRuntime["cancel"]>>(
+    this.cancelRuntime = bindMoonshineCancel(
       (options.runtime as unknown as { cancel?: unknown }).cancel,
-      options.runtime,
-      "Moonshine runtime cancel callback"
+      options.runtime
     );
     const name = options.modelName?.trim() || "moonshine";
     this.modelIdentity = Object.freeze(SpeechModelIdentitySchema.parse({
@@ -455,23 +453,18 @@ export class TranscriptResultGate {
 }
 
 
-function bindRequiredRuntimeFunction<T extends (...args: never[]) => unknown>(
-  value: unknown,
-  owner: unknown,
-  label: string
-): T {
-  if (typeof value !== "function") throw new Error(`${label} is required`);
-  return value.bind(owner) as T;
+function bindMoonshineTranscribe(value: unknown, owner: unknown): MoonshineRuntime["transcribe"] {
+  if (typeof value !== "function") throw new Error("Moonshine runtime transcribe callback is required");
+  return value.bind(owner) as MoonshineRuntime["transcribe"];
 }
 
-function bindOptionalRuntimeFunction<T extends (...args: never[]) => unknown>(
+function bindMoonshineCancel(
   value: unknown,
-  owner: unknown,
-  label: string
-): T | undefined {
+  owner: unknown
+): NonNullable<MoonshineRuntime["cancel"]> | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== "function") throw new Error(`${label} must be a function when provided`);
-  return value.bind(owner) as T;
+  if (typeof value !== "function") throw new Error("Moonshine runtime cancel callback must be a function when provided");
+  return value.bind(owner) as NonNullable<MoonshineRuntime["cancel"]>;
 }
 
 
