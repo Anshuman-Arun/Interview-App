@@ -1,8 +1,10 @@
 import {
   InterviewCatalogEntrySchema,
+  InterviewProblemPublicViewSchema,
   InterviewSessionConfigurationSchema,
   type InterviewCatalogEntry,
   type InterviewProblem,
+  type InterviewProblemPublicView,
   type InterviewSessionConfiguration
 } from "../../../packages/domain/src/index.js";
 import type { SessionState } from "../../../packages/events/src/index.js";
@@ -12,6 +14,7 @@ import {
   QuantTraderScenarioFamilySchema,
   getQuantResearchRegistry
 } from "../../../packages/local-compute/src/index.js";
+import { registerBuiltInProviders } from "../../../packages/providers/src/index.js";
 import {
   PROBLEM_METADATA,
   getProblemById,
@@ -34,11 +37,26 @@ export type InterviewSessionComposition =
       configuration: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_RESEARCH" }>;
     }>;
 
+const BUILT_IN_PROVIDER_REGISTRY = registerBuiltInProviders();
+
+function assertProviderSelectionAvailable(
+  configuration: InterviewSessionConfiguration
+): void {
+  const selection = configuration.providerSelection;
+  if (selection === undefined) return;
+  try {
+    BUILT_IN_PROVIDER_REGISTRY.getModel(selection.providerId, selection.modelId);
+  } catch {
+    throw new Error("Configured provider selection identity is not available");
+  }
+}
+
 
 export function resolveInterviewSessionConfiguration(
   input: unknown
 ): InterviewSessionComposition {
   const configuration = InterviewSessionConfigurationSchema.parse(input);
+  assertProviderSelectionAvailable(configuration);
 
   switch (configuration.mode) {
     case "OXFORD_MATHEMATICS": {
@@ -186,7 +204,35 @@ function assertPersistedCompositionMatchesState(
   if (state.quantResearch !== undefined) {
     throw new Error("Quant Research state cannot be attached to a Quant Trading session");
   }
+  if (state.problem !== undefined) {
+    throw new Error("Oxford problem state cannot be attached to a Quant Trading session");
+  }
 }
+
+export function toInterviewProblemPublicView(
+  composition: InterviewSessionComposition
+): InterviewProblemPublicView | undefined {
+  if (composition.mode !== "OXFORD_MATHEMATICS") return undefined;
+  const metadata = getProblemMetadataById(composition.problem.id);
+  if (
+    metadata === undefined
+    || metadata.mode !== "OXFORD_MATHEMATICS"
+    || metadata.reviewStatus !== "ready"
+  ) {
+    throw new Error("Oxford problem metadata is not available");
+  }
+  return InterviewProblemPublicViewSchema.parse({
+    id: composition.problem.id,
+    version: composition.problem.version,
+    title: metadata.title,
+    category: metadata.category,
+    difficulty: composition.problem.interviewer.difficulty,
+    prompt: composition.problem.public.prompt,
+    givenInformation: [...composition.problem.public.givenInformation],
+    topics: [...composition.problem.interviewer.topics]
+  });
+}
+
 
 export function listInterviewCatalogEntries(): readonly InterviewCatalogEntry[] {
   const entries: InterviewCatalogEntry[] = [];
