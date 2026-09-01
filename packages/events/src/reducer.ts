@@ -81,6 +81,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       const quantResearch = state.quantResearch;
       if (quantResearch === undefined) throw new Error("Quant Research scenario is not initialized");
       if (quantResearch.result !== undefined) throw new Error("Quant Research scenario is already complete");
+      if (quantResearch.actions.length >= 64) throw new Error("Quant Research action history exceeds the maximum size");
       if (quantResearch.actions.some((action) => action.actionId === event.payload.action.actionId)) {
         throw new Error("Quant Research action ID is already present in authoritative history");
       }
