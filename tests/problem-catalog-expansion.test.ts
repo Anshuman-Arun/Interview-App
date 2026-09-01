@@ -219,7 +219,11 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
           claimedDisclosureIds: [firstDisclosure.id],
           speechText: "We can move the occupant of room n to room n+1 to free room 1."
         },
-        request: { requiredAction: "PROBE_JUSTIFICATION", maximumDisclosure: 2 },
+        request: {
+          requiredAction: "PROBE_JUSTIFICATION",
+          maximumDisclosure: 2,
+          allowedDisclosureIds: [firstDisclosure.id]
+        },
         protectedDisclosures: hilbertHotelProblem.interviewer.protectedDisclosures
       });
       expect(acceptedResult.accepted).toBe(true);
@@ -263,7 +267,11 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
           claimedDisclosureIds: [secondDisclosure.id],
           speechText: "The characteristic roots 1 and q/p give the general solution."
         },
-        request: { requiredAction: "EXPLICIT_HINT", maximumDisclosure: 4 },
+        request: {
+          requiredAction: "EXPLICIT_HINT",
+          maximumDisclosure: 4,
+          allowedDisclosureIds: [secondDisclosure.id]
+        },
         protectedDisclosures: gamblersRuinProblem.interviewer.protectedDisclosures
       });
       expect(result.accepted).toBe(true);
@@ -285,7 +293,11 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
           claimedDisclosureIds: [secondDisclosure.id],
           speechText: "Since each pair has success probability 2p(1-p), expected tosses equal 1 / (p(1-p))."
         },
-        request: { requiredAction: "EXPLICIT_HINT", maximumDisclosure: 4 },
+        request: {
+          requiredAction: "EXPLICIT_HINT",
+          maximumDisclosure: 4,
+          allowedDisclosureIds: [secondDisclosure.id]
+        },
         protectedDisclosures: biasedCoinProblem.interviewer.protectedDisclosures
       });
       expect(result.accepted).toBe(true);
