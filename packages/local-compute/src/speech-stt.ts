@@ -18,6 +18,8 @@ import {
 } from "./speech-protocol.js";
 import type { RequestId, UtteranceId } from "../../domain/src/index.js";
 
+export class SpeechRecognizerProtocolError extends Error {}
+
 export interface RecognizerAudioInput {
   readonly requestId: RequestId;
   readonly utteranceId: UtteranceId;
@@ -152,11 +154,17 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       ...(this.configPath === undefined ? {} : { configPath: this.configPath }),
       ...(this.supportsAbort ? { signal } : {})
     });
-    const runtimeResult = parseMoonshineRuntimeResult(rawRuntimeResult);
-    if (sha256(runtimePcmBytes) !== sourceAudioBasis.pcmSha256) {
-      throw new Error("Moonshine runtime mutated PCM input");
+    let runtimeResult: z.infer<typeof MoonshineRuntimeResultSchema>;
+    try {
+      runtimeResult = parseMoonshineRuntimeResult(rawRuntimeResult);
+    } catch {
+      throw new SpeechRecognizerProtocolError("Moonshine runtime returned invalid bounded output");
     }
-    return validateTranscriptCandidate({
+    if (sha256(runtimePcmBytes) !== sourceAudioBasis.pcmSha256) {
+      throw new SpeechRecognizerProtocolError("Moonshine runtime mutated PCM input");
+    }
+    try {
+      return validateTranscriptCandidate({
       requestId,
       utteranceId,
       text: runtimeResult.text,
@@ -165,12 +173,16 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
       ...(runtimeResult.words === undefined ? {} : { words: runtimeResult.words }),
       model: this.modelIdentity,
       sourceAudioBasis
-    }, {
-      requestId,
-      utteranceId,
-      sourceAudioBasis,
-      modelIdentity: this.modelIdentity
-    });
+      }, {
+        requestId,
+        utteranceId,
+        sourceAudioBasis,
+        modelIdentity: this.modelIdentity
+      });
+    } catch (error) {
+      if (error instanceof SpeechRecognizerProtocolError) throw error;
+      throw new SpeechRecognizerProtocolError("Moonshine runtime candidate failed bounded validation");
+    }
   }
 
   public async cancel(requestId: RequestId): Promise<boolean> {
