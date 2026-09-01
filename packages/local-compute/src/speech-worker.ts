@@ -341,7 +341,11 @@ export class SpeechWorkerCore {
         context.vadAbort?.abort();
         context.recognitionAbort?.abort();
         recognitionRequestId = context.recognitionRequestId;
-        if (context.recognizing) cancellation = "SUPPRESS_LATE_RESULT_ONLY";
+        if (context.recognizing) {
+          cancellation = this.recognizerCancellationCapability === "RUNTIME_ABORT"
+            ? "RUNTIME_ABORT_REQUESTED"
+            : "SUPPRESS_LATE_RESULT_ONLY";
+        }
         if (!context.recognizing) safeCancelVad(context.vad);
         context.buffer.clear();
         this.streams.delete(request.streamId);
@@ -352,9 +356,7 @@ export class SpeechWorkerCore {
           && recognitionRequestId !== undefined
           && this.recognizerCancellationCapability === "RUNTIME_ABORT"
           && this.cancelRecognition !== undefined) {
-        if (await this.attemptRecognizerCancel(recognitionRequestId, request.streamId)) {
-          cancellation = "RUNTIME_ABORT_REQUESTED";
-        }
+        await this.attemptRecognizerCancel(recognitionRequestId, request.streamId);
       }
 
       return [this.event(request.requestId, request.streamId, {
