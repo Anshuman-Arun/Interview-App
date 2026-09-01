@@ -2513,7 +2513,7 @@ describe("local worker lifecycle manager", () => {
     const runtime = manager();
     runtime.register(definition("proxy-hook-error", "ignore-shutdown", {
       shutdownTimeoutMs: 30,
-      terminationTimeoutMs: 150,
+      terminationTimeoutMs: process.platform === "win32" ? 500 : 150,
       gracefulShutdown: () => {
         throw proxiedError;
       }
@@ -2541,7 +2541,7 @@ describe("local worker lifecycle manager", () => {
 
     runtime.register(definition("hostile-hook-error", "ignore-shutdown", {
       shutdownTimeoutMs: 30,
-      terminationTimeoutMs: 150,
+      terminationTimeoutMs: process.platform === "win32" ? 500 : 150,
       gracefulShutdown: () => {
         throw hostileError;
       }
