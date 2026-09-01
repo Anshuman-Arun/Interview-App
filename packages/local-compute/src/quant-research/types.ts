@@ -100,6 +100,8 @@ export interface QuantResearchPublicDatum {
 export interface QuantResearchPublicState {
   readonly family: QuantResearchFamily;
   readonly version: typeof QUANT_RESEARCH_VERSION;
+  readonly generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION;
+  readonly rngVersion: typeof QUANT_RESEARCH_RNG_VERSION;
   readonly status: "IN_PROGRESS" | "COMPLETE";
   readonly stage: string;
   readonly prompt: string;
@@ -112,6 +114,8 @@ export interface QuantResearchResult {
   readonly status: "IN_PROGRESS" | "COMPLETE";
   readonly family: QuantResearchFamily;
   readonly version: typeof QUANT_RESEARCH_VERSION;
+  readonly generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION;
+  readonly rngVersion: typeof QUANT_RESEARCH_RNG_VERSION;
   readonly acceptedActionCount: number;
   readonly overallScore: number;
   readonly metrics: Readonly<Partial<Record<QuantResearchEvidenceCategory, number>>>;
@@ -121,6 +125,8 @@ export interface QuantResearchResult {
 export interface QuantResearchDiagnostics {
   readonly family: QuantResearchFamily;
   readonly version: typeof QUANT_RESEARCH_VERSION;
+  readonly generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION;
+  readonly rngVersion: typeof QUANT_RESEARCH_RNG_VERSION;
   readonly status: "IN_PROGRESS" | "COMPLETE";
   readonly stage: string;
   readonly acceptedActionCount: number;
@@ -156,6 +162,7 @@ export class QuantResearchError extends Error {
 const MAX_SEED = 0xffff_ffff;
 const MAX_ACTION_VECTOR = 8;
 const MAX_RECORD_KEYS = 16;
+const MAX_REGISTRY_ENTRIES = 64;
 const MAX_ABS_NUMERIC_INPUT = 1_000_000;
 const ACTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
 const REGISTRY_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,32}$/u;
@@ -458,6 +465,8 @@ export function parseQuantResearchAction(input: unknown): QuantResearchAction {
 export interface QuantResearchFamilyRegistration {
   readonly family: QuantResearchFamily;
   readonly version: string;
+  readonly generatorVersion: string;
+  readonly rngVersion: string;
 }
 
 export function assertUniqueQuantResearchRegistrations(registrationsInput: unknown): void {
@@ -479,7 +488,7 @@ export function assertUniqueQuantResearchRegistrations(registrationsInput: unkno
     lengthDescriptor.set !== undefined ||
     !Number.isSafeInteger(lengthDescriptor.value) ||
     lengthDescriptor.value < 1 ||
-    lengthDescriptor.value > QUANT_RESEARCH_FAMILIES.length
+    lengthDescriptor.value > MAX_REGISTRY_ENTRIES
   ) {
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry size is invalid");
   }
@@ -515,19 +524,23 @@ export function assertUniqueQuantResearchRegistrations(registrationsInput: unkno
     const registration = asRecord(descriptor.value, "Scenario registry entry", (message) => {
       throw new QuantResearchError("INVALID_REGISTRY", message);
     });
-    assertExactKeys(registration, ["family", "version"], "Scenario registry entry", (message) => {
+    assertExactKeys(registration, ["family", "version", "generatorVersion", "rngVersion"], "Scenario registry entry", (message) => {
       throw new QuantResearchError("INVALID_REGISTRY", message);
     });
     if (
       typeof registration.family !== "string" ||
       !QUANT_RESEARCH_FAMILIES.includes(registration.family as QuantResearchFamily) ||
       typeof registration.version !== "string" ||
-      !REGISTRY_VERSION_PATTERN.test(registration.version)
+      !REGISTRY_VERSION_PATTERN.test(registration.version) ||
+      typeof registration.generatorVersion !== "string" ||
+      !REGISTRY_VERSION_PATTERN.test(registration.generatorVersion) ||
+      typeof registration.rngVersion !== "string" ||
+      !REGISTRY_VERSION_PATTERN.test(registration.rngVersion)
     ) {
       throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry entry is invalid");
     }
-    const key = registration.family + "@" + registration.version;
-    if (seen.has(key)) throw new QuantResearchError("INVALID_REGISTRY", "Duplicate scenario family/version registration");
+    const key = registration.family + "@" + registration.version + "@" + registration.generatorVersion + "@" + registration.rngVersion;
+    if (seen.has(key)) throw new QuantResearchError("INVALID_REGISTRY", "Duplicate scenario compatibility registration");
     seen.add(key);
   }
 }
