@@ -358,6 +358,38 @@ describe("compatibility and disclosure gates", () => {
     }
   });
 
+  it("new committed typed input supersedes queued output from the prior turn", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
+
+      await harness.turns.commitInput("I want to continue with a different argument.");
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("CANCELLED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("new committed typed input marks in-progress prior output POSSIBLY_EXPOSED", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const atom = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(atom.deliveryId);
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+      await harness.turns.commitInput("I am interrupting with new typed reasoning.");
+
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(harness.writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("runtime validation prevents AI mutation of the student layer", () => {
     expect(() => BoardActionSchema.parse({
       operation: "highlight",
