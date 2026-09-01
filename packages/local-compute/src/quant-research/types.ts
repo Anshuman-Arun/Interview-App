@@ -252,7 +252,7 @@ function finiteNumberVector(value: unknown): readonly number[] {
     failAction("values must contain between 1 and 8 entries");
   }
   const length = lengthDescriptor.value as number;
-  if (keys.length > length + 1) throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry contains too many properties");
+  if (keys.length > length + 1) failAction("values contains too many properties");
   const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
   for (const key of keys) {
     if (typeof key !== "string" || !allowedKeys.has(key)) failAction("values contains unsupported properties");
@@ -484,6 +484,7 @@ export function assertUniqueQuantResearchRegistrations(registrationsInput: unkno
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry size is invalid");
   }
   const length = lengthDescriptor.value as number;
+  if (keys.length > length + 1) throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry contains too many properties");
   const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
   for (const key of keys) {
     if (typeof key !== "string" || !allowedKeys.has(key)) {
