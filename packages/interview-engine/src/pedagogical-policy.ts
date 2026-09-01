@@ -961,20 +961,43 @@ function findConflictTarget(
   for (const signal of evidence) targets.set(targetToString(signal.target), signal.target);
   for (const signal of verification) targets.set(targetToString(signal.target), signal.target);
 
-  for (const [, target] of [...targets.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
+  const conflicts: Array<{ readonly target: PolicyTarget; readonly sequence: number }> = [];
+  for (const [targetKey, target] of targets) {
     const subjectSignals = evidence.filter((signal) => sameTarget(signal.target, target));
+    const targetVerification = verification.filter((signal) => sameTarget(signal.target, target));
     const values = new Set(subjectSignals.map((signal) => signal.value.value));
-    const verificationStatuses = verificationStatusesForTarget(verification, target);
+    const verificationStatuses = new Set(targetVerification.map((signal) => signal.status));
 
     const hasError = values.has("LOCAL_ERROR") || values.has("STRUCTURAL_ERROR");
     const complete = values.has("COMPLETE");
     const misunderstood = values.has("MISUNDERSTOOD_PROBLEM");
-    if ((complete && (hasError || misunderstood))) return target;
-    if (values.has("CORRECT") && verificationStatuses.has("CONTRADICTED")) return target;
-    if (hasError && verificationStatuses.has("VERIFIED")) return target;
-    if (verificationStatuses.has("VERIFIED") && verificationStatuses.has("CONTRADICTED")) return target;
+    const conflicting =
+      (complete && (hasError || misunderstood))
+      || (values.has("CORRECT") && verificationStatuses.has("CONTRADICTED"))
+      || (hasError && verificationStatuses.has("VERIFIED"))
+      || (verificationStatuses.has("VERIFIED") && verificationStatuses.has("CONTRADICTED"));
+    if (!conflicting) continue;
+
+    const newestEvidenceSequence = subjectSignals.reduce(
+      (maximum, signal) => Math.max(maximum, signal.value.lastUpdatedSequence),
+      0
+    );
+    const newestVerificationSequence = targetVerification.reduce(
+      (maximum, signal) => Math.max(maximum, signal.sequence),
+      0
+    );
+    conflicts.push({
+      target,
+      sequence: Math.max(newestEvidenceSequence, newestVerificationSequence)
+    });
+    void targetKey;
   }
-  return undefined;
+
+  conflicts.sort((left, right) => {
+    if (left.sequence !== right.sequence) return right.sequence - left.sequence;
+    return targetToString(left.target).localeCompare(targetToString(right.target));
+  });
+  return conflicts[0]?.target;
 }
 
 function completedMilestoneIds(evidence: readonly ActiveEvidenceSignal[]): ReadonlySet<string> {
