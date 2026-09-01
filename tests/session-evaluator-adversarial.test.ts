@@ -733,14 +733,27 @@ function setHistory(
       )
     : { ...state.studentEvidence, [keyString]: active.value };
 
-  const historyEventIds = history.flatMap((record) => [
-    record.evidenceEventId,
-    ...record.value.evidenceEventIds
-  ]);
+  let eventIds = [...state.eventIds];
+  for (const record of history) {
+    for (const provenanceId of record.value.evidenceEventIds) {
+      if (!eventIds.includes(provenanceId)) {
+        eventIds = placeEventBeforeSequence(
+          eventIds,
+          provenanceId,
+          record.value.lastUpdatedSequence
+        );
+      }
+    }
+    eventIds = placeEventAtSequence(
+      eventIds,
+      record.evidenceEventId,
+      record.value.lastUpdatedSequence
+    );
+  }
   return {
     ...state,
     sequence: Math.max(state.sequence, ...specs.map((item) => item.sequence)),
-    eventIds: uniqueEventIds([...state.eventIds, ...historyEventIds]),
+    eventIds,
     studentEvidence,
     evidenceHistory: {
       ...state.evidenceHistory,
@@ -818,6 +831,52 @@ function addTurns(
     };
   }
   return { ...state, turns };
+}
+
+function placeEventAtSequence(
+  input: readonly ReturnType<typeof EventIdSchema.parse>[],
+  eventId: ReturnType<typeof EventIdSchema.parse>,
+  sequence: number
+): ReturnType<typeof EventIdSchema.parse>[] {
+  const eventIds = [...input];
+  const existingIndex = eventIds.indexOf(eventId);
+  if (existingIndex >= 0 && existingIndex !== sequence - 1) {
+    throw new Error("Fixture event is already assigned to a different sequence");
+  }
+  while (eventIds.length < sequence) {
+    eventIds.push(EventIdSchema.parse("adv_padding_event_" + String(eventIds.length + 1)));
+  }
+  const occupied = eventIds[sequence - 1];
+  if (
+    occupied !== undefined &&
+    !occupied.startsWith("adv_padding_event_") &&
+    occupied !== eventId
+  ) {
+    throw new Error("Fixture sequence is already occupied");
+  }
+  eventIds[sequence - 1] = eventId;
+  return eventIds;
+}
+
+function placeEventBeforeSequence(
+  input: readonly ReturnType<typeof EventIdSchema.parse>[],
+  eventId: ReturnType<typeof EventIdSchema.parse>,
+  beforeSequence: number
+): ReturnType<typeof EventIdSchema.parse>[] {
+  const existingIndex = input.indexOf(eventId);
+  if (existingIndex >= 0) {
+    if (existingIndex + 1 >= beforeSequence) {
+      throw new Error("Fixture provenance must predate its evidence update");
+    }
+    return [...input];
+  }
+  for (let sequence = 1; sequence < beforeSequence; sequence += 1) {
+    const current = input[sequence - 1];
+    if (current === undefined || current.startsWith("adv_padding_event_")) {
+      return placeEventAtSequence(input, eventId, sequence);
+    }
+  }
+  throw new Error("Fixture has no sequence available for provenance");
 }
 
 function uniqueEventIds(

@@ -322,6 +322,9 @@ function assertEvaluationStateConsistency(
   const activeByKey = new Map<string, EvidenceRecordState>();
   const seenEvidenceEventIds = new Set<string>();
   const authoritativeEventIds = new Set(state.eventIds);
+  const authoritativeEventOrder = new Map(
+    state.eventIds.map((eventId, index) => [eventId, index + 1] as const)
+  );
   if (authoritativeEventIds.size !== state.eventIds.length) {
     throw new Error("Evaluation authoritative event history contains duplicate event identities");
   }
@@ -358,15 +361,21 @@ function assertEvaluationStateConsistency(
         throw new Error("Evaluation evidence history reuses an evidence-event identity");
       }
       seenEvidenceEventIds.add(record.evidenceEventId);
-      if (!authoritativeEventIds.has(record.evidenceEventId)) {
+      const evidenceUpdateSequence = authoritativeEventOrder.get(record.evidenceEventId);
+      if (evidenceUpdateSequence === undefined) {
         throw new Error("Evaluation evidence record references a non-authoritative evidence event");
       }
-      if (
-        record.value.evidenceEventIds.some(
-          (eventId) => !authoritativeEventIds.has(eventId)
-        )
-      ) {
-        throw new Error("Evaluation evidence provenance references an unknown authoritative event");
+      if (evidenceUpdateSequence !== record.value.lastUpdatedSequence) {
+        throw new Error("Evaluation evidence update sequence does not match its authoritative event position");
+      }
+      for (const eventId of record.value.evidenceEventIds) {
+        const provenanceSequence = authoritativeEventOrder.get(eventId);
+        if (provenanceSequence === undefined) {
+          throw new Error("Evaluation evidence provenance references an unknown authoritative event");
+        }
+        if (provenanceSequence >= record.value.lastUpdatedSequence) {
+          throw new Error("Evaluation evidence provenance must predate its committed evidence update");
+        }
       }
       if (!isEvidenceValueAllowed(record.key, record.value.value)) {
         throw new Error("Evaluation evidence record contains a value invalid for its dimension");
@@ -464,15 +473,21 @@ function assertEvaluationStateConsistency(
     if (request.verificationRequestId !== requestId) {
       throw new Error("Evaluation verification-request identity does not match its state key");
     }
-    if (!authoritativeEventIds.has(request.requestedEventId)) {
+    const requestedSequence = authoritativeEventOrder.get(request.requestedEventId);
+    if (requestedSequence === undefined) {
       throw new Error("Evaluation verification request references a non-authoritative request event");
     }
-    if (
-      request.evidenceEventIds.some(
-        (eventId) => !authoritativeEventIds.has(eventId)
-      )
-    ) {
-      throw new Error("Evaluation verification request provenance references an unknown authoritative event");
+    if (requestedSequence <= request.basis.committedInputSequence) {
+      throw new Error("Evaluation verification request must follow its committed-input basis");
+    }
+    for (const eventId of request.evidenceEventIds) {
+      const provenanceSequence = authoritativeEventOrder.get(eventId);
+      if (provenanceSequence === undefined) {
+        throw new Error("Evaluation verification request provenance references an unknown authoritative event");
+      }
+      if (provenanceSequence > request.basis.committedInputSequence) {
+        throw new Error("Evaluation verification provenance exceeds its committed-input basis");
+      }
     }
     if (request.status === "ACCEPTED") {
       if (request.result === undefined) {

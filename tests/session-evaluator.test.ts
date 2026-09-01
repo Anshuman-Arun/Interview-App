@@ -719,14 +719,27 @@ function setHistory(
         )
       : { ...state.studentEvidence, [keyString]: active.value };
 
-  const historyEventIds = history.flatMap((record) => [
-    record.evidenceEventId,
-    ...record.value.evidenceEventIds
-  ]);
+  let eventIds = [...state.eventIds];
+  for (const record of history) {
+    for (const provenanceId of record.value.evidenceEventIds) {
+      if (!eventIds.includes(provenanceId)) {
+        eventIds = placeEventBeforeSequence(
+          eventIds,
+          provenanceId,
+          record.value.lastUpdatedSequence
+        );
+      }
+    }
+    eventIds = placeEventAtSequence(
+      eventIds,
+      record.evidenceEventId,
+      record.value.lastUpdatedSequence
+    );
+  }
   return {
     ...state,
     sequence: Math.max(state.sequence, ...specs.map((spec) => spec.sequence)),
-    eventIds: uniqueEventIds([...state.eventIds, ...historyEventIds]),
+    eventIds,
     studentEvidence,
     evidenceHistory: { ...state.evidenceHistory, [keyString]: history }
   };
@@ -821,15 +834,27 @@ function withVerification(
     "episode_verification_basis_" + String(basisSequence)
   );
   const confidence = status === "UNRESOLVED" ? 0.7 : 1;
-  const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
   const verificationSupportId = EventIdSchema.parse(
     "turn_committed_verification_basis_" + String(basisSequence)
   );
+  const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
+  const resultEventId = EventIdSchema.parse("verification_result_" + label);
+
+  let eventIds = placeEventAtSequence(
+    [...state.eventIds],
+    verificationSupportId,
+    basisSequence
+  );
+  const requestSequence = Math.max(state.sequence, basisSequence) + 1;
+  eventIds = placeEventAtSequence(eventIds, requestedEventId, requestSequence);
+  const resultSequence = requestSequence + 1;
+  eventIds = placeEventAtSequence(eventIds, resultEventId, resultSequence);
+
   const next: SessionState = {
     ...state,
-    sequence: Math.max(state.sequence, basisSequence),
+    sequence: resultSequence,
     lastCommittedInputSequence: basisSequence,
-    eventIds: uniqueEventIds([...state.eventIds, verificationSupportId, requestedEventId]),
+    eventIds,
     inputEpisodes: {
       ...state.inputEpisodes,
       [inputEpisodeId]: {
@@ -880,7 +905,7 @@ function withVerification(
   if (status !== "VERIFIED") return next;
   return setHistory(next, key, [{
     value: "CORRECT",
-    sequence: basisSequence + 2,
+    sequence: resultSequence + 1,
     status: "ACTIVE",
     confidence,
     evidenceEventIds: [verificationSupportId, requestedEventId]
@@ -902,11 +927,20 @@ function withPendingVerification(
     "turn_committed_verification_basis_" + String(basisSequence)
   );
   const requestedEventId = EventIdSchema.parse("verification_requested_" + label);
+
+  let eventIds = placeEventAtSequence(
+    [...state.eventIds],
+    verificationSupportId,
+    basisSequence
+  );
+  const requestSequence = Math.max(state.sequence, basisSequence) + 1;
+  eventIds = placeEventAtSequence(eventIds, requestedEventId, requestSequence);
+
   return {
     ...state,
-    sequence: Math.max(state.sequence, basisSequence),
+    sequence: requestSequence,
     lastCommittedInputSequence: basisSequence,
-    eventIds: uniqueEventIds([...state.eventIds, verificationSupportId, requestedEventId]),
+    eventIds,
     inputEpisodes: {
       ...state.inputEpisodes,
       [inputEpisodeId]: {
@@ -948,6 +982,55 @@ function withPendingVerification(
       }
     }
   };
+}
+
+function placeEventAtSequence(
+  input: readonly ReturnType<typeof EventIdSchema.parse>[],
+  eventId: ReturnType<typeof EventIdSchema.parse>,
+  sequence: number
+): ReturnType<typeof EventIdSchema.parse>[] {
+  if (!Number.isSafeInteger(sequence) || sequence <= 0) {
+    throw new Error("Fixture sequence must be a positive safe integer");
+  }
+  const eventIds = [...input];
+  const existingIndex = eventIds.indexOf(eventId);
+  if (existingIndex >= 0 && existingIndex !== sequence - 1) {
+    throw new Error("Fixture event is already assigned to a different sequence");
+  }
+  while (eventIds.length < sequence) {
+    eventIds.push(EventIdSchema.parse("fixture_padding_event_" + String(eventIds.length + 1)));
+  }
+  const occupied = eventIds[sequence - 1];
+  if (
+    occupied !== undefined &&
+    !occupied.startsWith("fixture_padding_event_") &&
+    occupied !== eventId
+  ) {
+    throw new Error("Fixture sequence is already occupied by another authoritative event");
+  }
+  eventIds[sequence - 1] = eventId;
+  return eventIds;
+}
+
+function placeEventBeforeSequence(
+  input: readonly ReturnType<typeof EventIdSchema.parse>[],
+  eventId: ReturnType<typeof EventIdSchema.parse>,
+  beforeSequence: number
+): ReturnType<typeof EventIdSchema.parse>[] {
+  const existingIndex = input.indexOf(eventId);
+  if (existingIndex >= 0) {
+    if (existingIndex + 1 >= beforeSequence) {
+      throw new Error("Fixture provenance must predate its evidence update");
+    }
+    return [...input];
+  }
+  for (let sequence = 1; sequence < beforeSequence; sequence += 1) {
+    const current = input[sequence - 1];
+    if (current === undefined || current.startsWith("fixture_padding_event_")) {
+      return placeEventAtSequence(input, eventId, sequence);
+    }
+  }
+  throw new Error("Fixture has no authoritative sequence available for provenance");
 }
 
 function uniqueEventIds(
