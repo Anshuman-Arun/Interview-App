@@ -723,7 +723,7 @@ describe("standalone Quant Trader interview engine", () => {
       /rounds must be a positive safe integer/
     );
     expect(() => createQuantTraderScenario({ family: "BASIC_MARKET_MAKING", seed: 1, maxQuoteSize: -1 })).toThrow(
-      /maxQuoteSize must be a positive integer/
+      /maxQuoteSize must be a positive safe integer/
     );
     expect(() =>
       createQuantTraderScenario({
