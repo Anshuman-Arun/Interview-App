@@ -271,12 +271,14 @@ describe("audio cancellation primitive", () => {
 
 class FakeTrack implements AudioMediaStreamTrackLike {
   public stopCount = 0;
+  public onStop: (() => void) | undefined;
   public readonly endedListeners = new Set<() => void>();
 
   public constructor(public readonly readyState: MediaStreamTrackState = "live") {}
 
   public stop(): void {
     this.stopCount += 1;
+    this.onStop?.();
   }
 
   public addEventListener(_type: "ended", listener: () => void): void {
@@ -2298,6 +2300,10 @@ describe("microphone capture lifecycle", () => {
     if (resolveFirst === undefined) throw new Error("First getUserMedia resolver was not installed");
     resolveFirst(new FakeStream(firstTrack));
     await firstStart;
+    await waitForTestCondition(
+      () => firstTrack.stopCount === 1,
+      "late first microphone stream cleanup"
+    );
     expect(firstTrack.stopCount).toBe(1);
   });
 
@@ -2420,10 +2426,8 @@ describe("microphone capture lifecycle", () => {
       releaseClose = resolve;
     });
 
-    const originalStop = firstTrack.stop.bind(firstTrack);
     let replacementStart: Promise<void> | undefined;
-    firstTrack.stop = () => {
-      originalStop();
+    firstTrack.onStop = () => {
       if (replacementStart === undefined) {
         replacementStart = capture.start({ onFrame: () => undefined });
       }
