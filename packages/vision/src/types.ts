@@ -183,10 +183,10 @@ export const CoordinateTransformSchema = z.preprocess(
     COORDINATE_TRANSFORM_SCHEMA_FIELDS
   ),
   z.object({
-    offsetX: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-    offsetY: z.number().finite().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
-    scaleX: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER),
-    scaleY: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER)
+    offsetX: z.number().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    offsetY: z.number().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    scaleX: z.number().positive().max(Number.MAX_SAFE_INTEGER),
+    scaleY: z.number().positive().max(Number.MAX_SAFE_INTEGER)
   }).strict()
 );
 export type CoordinateTransform = z.infer<typeof CoordinateTransformSchema>;
@@ -201,7 +201,7 @@ export const ImageSnapshotMetadataSchema = z.preprocess(
   snapshotId: z.string().min(1).max(128),
   sourceType: ImageSourceTypeSchema,
   sourceRevision: SafeBoardRevisionSchema,
-  capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  capturedAtMs: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER),
   captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   width: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth),
   height: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxHeight),
@@ -650,7 +650,7 @@ export const ImageSnapshotInputSchema = z.preprocess(
     snapshotId: z.string().min(1).max(128),
     sourceType: ImageSourceTypeSchema,
     sourceRevision: SafeBoardRevisionSchema,
-    capturedAtMs: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    capturedAtMs: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER),
     captureSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     mimeType: ImageMimeTypeSchema,
     declaredWidth: z.number().int().positive().max(HARD_IMAGE_VALIDATION_LIMITS.maxWidth).optional(),
