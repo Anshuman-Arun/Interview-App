@@ -217,12 +217,20 @@ export class LoopbackCommandServer {
           );
         }
 
-        await new TurnCoordinator(writer).startConfiguredSession({
-          configuration: composition.configuration,
-          ...(composition.mode === "OXFORD_MATHEMATICS"
-            ? { problem: composition.problem }
-            : {})
-        }, envelope);
+        try {
+          await new TurnCoordinator(writer).startConfiguredSession({
+            configuration: composition.configuration,
+            ...(composition.mode === "OXFORD_MATHEMATICS"
+              ? { problem: composition.problem }
+              : {})
+          }, envelope);
+        } catch (error) {
+          if (error instanceof RequestIdConflictError) throw error;
+          if (writer.getState().started) {
+            throw new ProtocolHttpError(409, "CONFLICT", "Session is already started");
+          }
+          throw error;
+        }
         // Establish the process-lifetime recovery boundary immediately after
         // authoritative creation, before a live delivery can become in-flight.
         await this.options.sessions.ensureRecovered(command.sessionId);
