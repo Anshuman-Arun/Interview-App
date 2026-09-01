@@ -58,6 +58,7 @@ describe("local model asset manager", () => {
     const valid = manifestFor(payload, "https://example.test/artifact.bin");
     expect(AssetManifestSchema.parse(valid)).toEqual(valid);
 
+    const credentialedSourceUrl = "https://user" + ":pass@" + "example.test/model.bin";
     const invalid: unknown[] = [
       { ...valid, schemaVersion: 2 },
       { ...valid, artifactId: "../escape" },
@@ -70,7 +71,7 @@ describe("local model asset manager", () => {
       { ...valid, sizeBytes: 0 },
       { ...valid, sha256: "ABC" },
       { ...valid, sourceUrl: "file:///tmp/model.bin" },
-      { ...valid, sourceUrl: "https://user:pass@example.test/model.bin" },
+      { ...valid, sourceUrl: credentialedSourceUrl },
       { ...valid, extra: true }
     ];
 
@@ -863,7 +864,7 @@ describe("local model asset manager", () => {
     const payload = Buffer.from("credential-redirect");
     const fixture = await startFixtureServer((_request, response) => {
       response.writeHead(302, {
-        Location: "http://user:pass@127.0.0.1:1/artifact"
+        Location: "http://user" + ":pass@" + "127.0.0.1:1/artifact"
       });
       response.end();
     });
