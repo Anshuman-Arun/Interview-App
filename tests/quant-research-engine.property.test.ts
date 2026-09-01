@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
+  QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
   QuantResearchEngine,
   replayQuantResearch,
@@ -10,6 +11,7 @@ import {
 const modelDefinition = (seed: number): QuantResearchScenarioDefinition => ({
   family: "MODEL_COMPARISON",
   version: QUANT_RESEARCH_VERSION,
+  rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed,
   config: { observationCount: 12, noiseRadius: 3, outlierShift: 20 }
 });
@@ -17,8 +19,25 @@ const modelDefinition = (seed: number): QuantResearchScenarioDefinition => ({
 const samplingDefinition = (seed: number): QuantResearchScenarioDefinition => ({
   family: "SAMPLING_ESTIMATION",
   version: QUANT_RESEARCH_VERSION,
+  rngVersion: QUANT_RESEARCH_RNG_VERSION,
   seed,
   config: { maxSamples: 12, populationSize: 48, centerMin: -50, centerMax: 50, noiseRadius: 6, outlierShift: 30 }
+});
+
+const experimentalDefinition = (seed: number): QuantResearchScenarioDefinition => ({
+  family: "EXPERIMENTAL_ALLOCATION",
+  version: QUANT_RESEARCH_VERSION,
+  rngVersion: QUANT_RESEARCH_RNG_VERSION,
+  seed,
+  config: { totalBudget: 20, costA: 2, costB: 4, perturbedCostA: 5, perturbedCostB: 2, noiseA: 2, noiseB: 5 }
+});
+
+const optimizationDefinition = (seed: number): QuantResearchScenarioDefinition => ({
+  family: "CONSTRAINED_OPTIMIZATION",
+  version: QUANT_RESEARCH_VERSION,
+  rngVersion: QUANT_RESEARCH_RNG_VERSION,
+  seed,
+  config: { budget: 30, perturbedBudget: 24, maxX: 15, maxY: 10, perturbedPenalty: 5 }
 });
 
 describe("Quant Research property invariants", () => {
@@ -123,6 +142,39 @@ describe("Quant Research property invariants", () => {
     ), { numRuns: 100 });
   });
 
+
+  it("experimental summaries cannot contradict the application-owned latent ordering", () => {
+    fc.assert(fc.property(fc.integer({ min: 0, max: 0xffff_ffff }), (seed) => {
+      const engine = new QuantResearchEngine(experimentalDefinition(seed));
+      engine.applyAction({ actionId: "e1", kind: "ALLOCATE_SAMPLE", a: 1, b: 1 });
+      const state = engine.getState();
+      const meanA = state.visibleData.find((item) => item.key === "sampleMeanA")?.value as number;
+      const meanB = state.visibleData.find((item) => item.key === "sampleMeanB")?.value as number;
+      const inferred = meanA > meanB ? "A" : "B";
+      engine.applyAction({ actionId: "e2", kind: "CHOOSE_OPTION", option: inferred });
+      engine.applyAction({ actionId: "e3", kind: "ALLOCATE_SAMPLE", a: 2, b: 5 });
+      expect(engine.getResult().metrics.NUMERICAL_CORRECTNESS).toBe(100);
+    }), { numRuns: 100 });
+  });
+
+  it("optimization replay remains exact for every seed that passes generated-variant validation", () => {
+    fc.assert(fc.property(
+      fc.integer({ min: 0, max: 0xffff_ffff }),
+      (seed) => {
+        let engine: QuantResearchEngine;
+        try {
+          engine = new QuantResearchEngine(optimizationDefinition(seed));
+        } catch {
+          return;
+        }
+        engine.applyAction({ actionId: "o1", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
+        engine.applyAction({ actionId: "o2", kind: "SUBMIT_PARAMETERS", values: [0, 0] });
+        const replayed = replayQuantResearch(optimizationDefinition(seed), engine.getAcceptedActions());
+        expect(replayed.state).toEqual(engine.getState());
+        expect(replayed.result).toEqual(engine.getResult());
+      }
+    ), { numRuns: 100 });
+  });
 
   it("generated model families are identifiable from the disclosed noise/slope assumptions", () => {
     fc.assert(fc.property(fc.integer({ min: 0, max: 0xffff_ffff }), (seed) => {
