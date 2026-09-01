@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/local-model-assets
 
 permissions:
   contents: read
