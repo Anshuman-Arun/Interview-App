@@ -133,7 +133,22 @@ describe("Moonshine-compatible adapter seam", () => {
       runtime,
       modelPath: "models/moonshine/model.bin\nother",
       modelVersion: "test"
-    })).toThrow(/safe local path/u);
+    })).toThrow(/local filesystem path/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "file:/tmp/model.bin",
+      modelVersion: "test"
+    })).toThrow(/local filesystem path/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "\\\\server\\share\\model.bin",
+      modelVersion: "test"
+    })).toThrow(/local filesystem path/u);
+    expect(() => new MoonshineSpeechRecognizer({
+      runtime,
+      modelPath: "C:\\models\\moonshine\\model.bin",
+      modelVersion: "test"
+    })).not.toThrow();
   });
 
   it("rejects malformed runtime output before copying unbounded timing metadata", async () => {
