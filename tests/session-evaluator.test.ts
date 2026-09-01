@@ -462,6 +462,36 @@ describe("grounded session evaluator", () => {
     expect(evaluation.summaryAssessment).toContain("1 current correctness subject");
   });
 
+  it("rejects evidence whose lastUpdatedSequence does not match its authoritative event position", () => {
+    const key = milestoneKey("model-relations", "JUSTIFICATION");
+    const state = setHistory(boundState(), key, [
+      { value: "JUSTIFIED", sequence: 10, status: "ACTIVE" }
+    ]);
+    const keyString = evidenceKeyToString(key);
+    const active = state.evidenceHistory[keyString]?.[0];
+    if (active === undefined) throw new Error("Expected active evidence");
+    const eventIds = [...state.eventIds];
+    const updateIndex = active.value.lastUpdatedSequence - 1;
+    const previousIndex = updateIndex - 1;
+    const previous = eventIds[previousIndex];
+    if (previous === undefined) throw new Error("Expected preceding event");
+    eventIds[previousIndex] = active.evidenceEventId;
+    eventIds[updateIndex] = previous;
+
+    expect(() => evaluateInterviewSession({ ...state, eventIds }, sixPeopleProblem))
+      .toThrow("evidence update sequence does not match its authoritative event position");
+  });
+
+  it("rejects a lastCommittedInputSequence projection that disagrees with committed turns", () => {
+    const state = withTurns(boundState(), 2, "reachable turns");
+    const corrupted: SessionState = {
+      ...state,
+      lastCommittedInputSequence: 1
+    };
+    expect(() => evaluateInterviewSession(corrupted, sixPeopleProblem))
+      .toThrow("last committed input sequence does not match committed turns");
+  });
+
   it("rejects evidence provenance that is not present in authoritative event history", () => {
     const key = milestoneKey("model-relations", "JUSTIFICATION");
     const state = setHistory(boundState(), key, [
@@ -579,6 +609,30 @@ describe("grounded session evaluator", () => {
       communicationWeight: 0,
       errorRecoveryWeight: 0
     })).toThrow("weights must sum to 1");
+  });
+
+  it("rejects inconsistent serialized lifecycle and assistance metadata", () => {
+    let state = completeMilestone(boundState(), "model-relations", 10);
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+
+    expect(() => SessionEvaluationSchema.parse({
+      ...evaluation,
+      lifecycle: {
+        ...evaluation.lifecycle,
+        completionState: "COMPLETED"
+      }
+    })).toThrow("lifecycle completion state does not match session status");
+
+    const firstMilestone = evaluation.milestones[0];
+    if (firstMilestone === undefined) throw new Error("Expected milestone evaluation");
+    expect(() => SessionEvaluationSchema.parse({
+      ...evaluation,
+      milestones: [{
+        ...firstMilestone,
+        assistanceLevel: 1,
+        assistanceDisclosureIds: []
+      }, ...evaluation.milestones.slice(1)]
+    })).toThrow("assistance level and disclosure IDs are internally inconsistent");
   });
 
   it("rejects tampered composite metadata even when individual scores are schema-valid", () => {
