@@ -199,7 +199,7 @@ describe("speech protocol hard bounds", () => {
       requestId: newRequestId(),
       sequence: 1,
       timestampMs: 20
-    }, pcm))).toThrow(/order state/u);
+    }, pcm))).toThrow(/PCM ordering state/u);
   });
 
   it("enforces buffer/cache hard limits even when helpers are used directly", () => {
@@ -308,7 +308,7 @@ describe("speech protocol hard bounds", () => {
       payloadByteLength: pcm.byteLength,
       timestampMs: 0
     }, pcm);
-    await expect(backend.classify(frame)).rejects.toThrow(/within \[0, 1\]/u);
+    await expect(backend.classify(frame)).rejects.toThrow(/bounded range/u);
   });
 });
 
