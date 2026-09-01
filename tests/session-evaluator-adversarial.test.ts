@@ -305,6 +305,117 @@ describe("grounded session evaluator adversarial cases", () => {
     );
   });
 
+  it("rejects a same-id/version problem whose session-bound fingerprint differs", () => {
+    const alteredProblem = {
+      ...sixPeopleProblem,
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        difficulty: "tampered-evaluation-definition"
+      }
+    };
+
+    expect(() => evaluateInterviewSession(boundState(), alteredProblem)).toThrow(
+      "session-bound problem fingerprint"
+    );
+  });
+
+  it("rejects active evidence that disagrees with the student-evidence projection", () => {
+    const state = setHistory(
+      boundState(),
+      milestoneKey("model-relations", "PROGRESS"),
+      [{ value: "COMPLETE", sequence: 10, status: "ACTIVE" }]
+    );
+    const inconsistent: SessionState = {
+      ...state,
+      studentEvidence: {}
+    };
+
+    expect(() => evaluateInterviewSession(inconsistent, sixPeopleProblem)).toThrow(
+      "active evidence does not match"
+    );
+  });
+
+  it("rejects evidence for milestone and approach identities outside the reasoning graph", () => {
+    const unknownMilestone: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "MILESTONE", milestoneId: "invented-milestone" },
+      dimension: "PROGRESS"
+    };
+    const unknownApproach: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "APPROACH", approachId: "invented-approach" },
+      dimension: "PROGRESS"
+    };
+
+    expect(() => evaluateInterviewSession(
+      setHistory(boundState(), unknownMilestone, [
+        { value: "COMPLETE", sequence: 10, status: "ACTIVE" }
+      ]),
+      sixPeopleProblem
+    )).toThrow("unknown reasoning-graph milestone");
+
+    expect(() => evaluateInterviewSession(
+      setHistory(boundState(), unknownApproach, [
+        { value: "PROGRESSING", sequence: 10, status: "ACTIVE" }
+      ]),
+      sixPeopleProblem
+    )).toThrow("unknown reasoning-graph approach");
+  });
+
+  it("does not promote repeated model-inferred rigor evidence to STRONG support", () => {
+    let state = boundState();
+    for (const [index, claimId] of ["claim-a", "claim-b", "claim-c"].entries()) {
+      state = setHistory(state, claimKey(claimId, "JUSTIFICATION"), [
+        { value: "JUSTIFIED", sequence: 10 + index, status: "ACTIVE" }
+      ]);
+    }
+
+    const evaluation = evaluateInterviewSession(state, sixPeopleProblem);
+    expect(evaluation.scores.rigor).toBe(100);
+    expect(evaluation.dimensionResults.rigor.supportLevel).toBe("MODERATE");
+  });
+
+  it("fails closed rather than throwing on malformed fallible qualitative proposals", () => {
+    const allowed = { kind: "EVIDENCE_EVENT" as const, id: "event_allowed" };
+    expect(validateFallibleQualitativeEvaluationProposal(
+      { allowedEvidenceRefs: [allowed] },
+      {
+        dimension: "communication",
+        score: 101,
+        evidenceRefs: [allowed],
+        rationale: "Invalid out-of-range proposal."
+      }
+    )).toEqual({
+      accepted: false,
+      reason: "INVALID_PROPOSAL"
+    });
+  });
+
+  it("requires an approach-switch recovery to occur after the latest same-dimension error", () => {
+    let state = setHistory(
+      boundState(),
+      approachKey("two-colour-graph", "PROGRESS"),
+      [
+        { value: "REGRESSING", sequence: 10, status: "SUPERSEDED" },
+        { value: "REGRESSING", sequence: 30, status: "ACTIVE" }
+      ]
+    );
+    state = setHistory(
+      state,
+      approachKey("graph-complement", "PROGRESS"),
+      [{ value: "PROGRESSING", sequence: 20, status: "ACTIVE" }]
+    );
+
+    expect(evaluateInterviewSession(state, sixPeopleProblem).scores.errorRecovery).toBe(0);
+
+    const recovered = setHistory(
+      state,
+      approachKey("graph-complement", "PROGRESS"),
+      [{ value: "PROGRESSING", sequence: 40, status: "ACTIVE" }]
+    );
+    expect(evaluateInterviewSession(recovered, sixPeopleProblem).scores.errorRecovery).toBe(100);
+  });
+
   it("property: arbitrary meaningless extra turns cannot improve grounded scores", () => {
     fc.assert(fc.property(
       fc.integer({ min: 0, max: 100 }),
@@ -356,6 +467,28 @@ function milestoneKey(
   return {
     problemId: sixPeopleProblem.id,
     subject: { kind: "MILESTONE", milestoneId },
+    dimension
+  };
+}
+
+function claimKey(
+  claimId: string,
+  dimension: EvidenceKey["dimension"]
+): EvidenceKey {
+  return {
+    problemId: sixPeopleProblem.id,
+    subject: { kind: "CLAIM", claimId },
+    dimension
+  };
+}
+
+function approachKey(
+  approachId: string,
+  dimension: EvidenceKey["dimension"]
+): EvidenceKey {
+  return {
+    problemId: sixPeopleProblem.id,
+    subject: { kind: "APPROACH", approachId },
     dimension
   };
 }
