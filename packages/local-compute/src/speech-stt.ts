@@ -60,6 +60,7 @@ export class DeterministicFakeRecognizer implements SpeechRecognizer {
   }
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
+    validateAbortSignal(signal);
     if (signal.aborted || this.cancelled.has(input.requestId)) throw abortError();
     const response = this.responseFactory(input);
     this.cancelled.delete(input.requestId);
@@ -156,6 +157,8 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
   }
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
+    validateAbortSignal(signal);
+    if (signal.aborted) throw abortError();
     const rawInput: unknown = input;
     if (!isRecord(rawInput)) throw new Error("Moonshine recognition input must be an object");
     preflightBoundedString(rawInput.requestId, 128, "Moonshine request ID");
@@ -374,6 +377,15 @@ function validateRuntimeIdentity(value: unknown, label: string): void {
 function validateBoolean(value: unknown, label: string): boolean {
   if (typeof value !== "boolean") throw new Error(`${label} must be boolean`);
   return value;
+}
+
+function validateAbortSignal(value: unknown): asserts value is AbortSignal {
+  if (!isRecord(value)
+      || typeof value.aborted !== "boolean"
+      || typeof value.addEventListener !== "function"
+      || typeof value.removeEventListener !== "function") {
+    throw new Error("Recognizer cancellation signal is invalid");
+  }
 }
 
 const TRANSCRIPT_CANDIDATE_KEYS = new Set([
