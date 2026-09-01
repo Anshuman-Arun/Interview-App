@@ -87,6 +87,54 @@ describe("speech worker adversarial callback boundaries", () => {
     expect(worker.getActiveStreamCount()).toBe(0);
   });
 
+  it("maps stream factory exceptions to a stable worker error without leaking arbitrary text", async () => {
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      vadStateFactory: () => {
+        throw new Error("credential=stream-factory-secret");
+      }
+    });
+    const fixture = frame(0);
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "Speech stream configuration could not be initialized"
+    });
+    expect(JSON.stringify(worker.getDiagnostics())).not.toContain("stream-factory-secret");
+  });
+
+  it("snapshots recognizer identity/cancellation metadata instead of trusting later mutation", async () => {
+    const mutable = {
+      modelIdentity: { name: "stable-model", version: "1" },
+      cancellationCapability: "NONE" as const,
+      async recognize(input: Parameters<SpeechRecognizer["recognize"]>[0]) {
+        return {
+          requestId: input.requestId,
+          utteranceId: input.utteranceId,
+          text: "stable",
+          isFinal: true,
+          model: { name: "stable-model", version: "1" },
+          sourceAudioBasis: input.sourceAudioBasis
+        };
+      }
+    };
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: mutable
+    });
+    mutable.modelIdentity.name = "mutated-model";
+
+    const events: SpeechWorkerEvent[] = [];
+    for (let sequence = 0; sequence < 31; sequence += 1) {
+      const fixture = frame(sequence, sequence < 6, "metadata-snapshot");
+      events.push(...await worker.submitFrame(fixture.envelope, fixture.pcm));
+    }
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "TRANSCRIPT_CANDIDATE",
+      candidate: expect.objectContaining({ model: { name: "stable-model", version: "1" } })
+    }));
+  });
+
   it("rejects recognizer model-identity spoofing before emitting a transcript", async () => {
     const recognizer: SpeechRecognizer = {
       modelIdentity: { name: "configured-model", version: "v1" },
