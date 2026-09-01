@@ -397,14 +397,22 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.startSession(targetSessionId);
-        const context = await client.getInterviewSessionContext(targetSessionId);
+        let problemView: InterviewProblemPublicView | null = null;
+        try {
+          const context = await client.getInterviewSessionContext(targetSessionId);
+          problemView = context.problem ?? null;
+        } catch {
+          // The authoritative start already succeeded. A read-model/context
+          // failure must not make the caller retry session creation.
+          setError("Session started, but session context could not be loaded");
+        }
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(true);
         setSessionStatus("ACTIVE");
-        setProblem(context.problem ?? null);
+        setProblem(problemView);
         setTranscript([]);
 
         void attachRendererStream(targetSessionId);
@@ -427,8 +435,8 @@ export function useInterviewSession(
       setError(null);
       try {
         const client = getCommandClient();
-        const response = await client.resumeSession(targetSessionId);
         const context = await client.getInterviewSessionContext(targetSessionId);
+        const response = await client.resumeSession(targetSessionId);
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
         }
