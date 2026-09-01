@@ -461,7 +461,7 @@ function transitionModel(state: ModelState, action: QuantResearchAction): ModelS
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     next = appendEvidence(next, [
       evidence("ROBUSTNESS", state.stage, correct ? 100 : 0, "Model selection was re-evaluated after a disclosed outlier perturbation."),
-      evidence("CONSISTENCY", state.stage, choice.option === state.firstChoice ? 100 : correct ? 80 : 20, "The second model choice was checked for coherent response to the perturbation.")
+      evidence("CONSISTENCY", state.stage, correct ? (choice.option === state.firstChoice ? 100 : 80) : 0, "Consistency reflects whether the final model conclusion remains correct after the perturbation.")
     ]);
     return next;
   }
@@ -644,7 +644,8 @@ function resultFor(state: InternalState): QuantResearchResult {
   }
   const metrics: Partial<Record<QuantResearchEvidenceCategory, number>> = {};
   for (const [category, aggregate] of sums) metrics[category] = boundedScore(aggregate.total / aggregate.count);
-  const overallScore = state.evidence.length === 0 ? 0 : boundedScore(state.evidence.reduce((sum, item) => sum + item.score, 0) / state.evidence.length);
+  const metricValues = Object.values(metrics);
+  const overallScore = metricValues.length === 0 ? 0 : boundedScore(metricValues.reduce((sum, value) => sum + value, 0) / metricValues.length);
   return {
     status: state.status,
     family: state.family,
