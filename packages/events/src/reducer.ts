@@ -53,7 +53,21 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
           : { configuration: event.payload.configuration })
       };
       break;
-    case "PROBLEM_PRESENTED":
+    case "PROBLEM_PRESENTED": {
+      if (state.problem !== undefined) {
+        throw new Error("Authoritative problem identity is already bound");
+      }
+      if (state.configuration !== undefined) {
+        const configuredTarget = state.configuration.mode === "OXFORD_MATHEMATICS"
+          ? state.configuration.problem
+          : state.configuration.scenario;
+        if (
+          configuredTarget.id !== event.payload.problemId
+          || configuredTarget.version !== event.payload.problemVersion
+        ) {
+          throw new Error("Presented problem identity does not match session configuration");
+        }
+      }
       next = {
         ...state,
         problem: {
@@ -66,6 +80,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         }
       };
       break;
+    }
     case "QUANT_RESEARCH_SCENARIO_INITIALIZED": {
       if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
       if (
