@@ -8,6 +8,7 @@ import {
   ProtectedDisclosureSchema,
   RealizationRequestSchema,
   ReasoningGraphSchema,
+  SocraticActionSchema,
   VerificationResultSchema,
   evidenceKeyToString,
   isDisclosedStatus,
@@ -24,7 +25,10 @@ import {
   isGenerationBasisStillCompatible,
   type SessionState
 } from "../../events/src/index.js";
-import { createProviderContextSpecFingerprintSync } from "./context-compiler.js";
+import {
+  canonicalJson,
+  createProviderContextSpecFingerprintSync
+} from "./context-compiler.js";
 
 const MAX_APPROACHES = 256;
 const MAX_MILESTONES = 2_048;
@@ -50,15 +54,81 @@ const MAX_TOTAL_VERIFICATION_PROVENANCE_IDS = 65_536;
 const MAX_TOTAL_DELIVERY_DISCLOSURE_REFS = 65_536;
 const MIN_ACTIONABLE_EVIDENCE_CONFIDENCE = 0.7;
 
+const PolicyBoardActionSchema = z.object({
+  operation: z.enum([
+    "write_text",
+    "write_equation",
+    "draw_arrow",
+    "circle",
+    "highlight",
+    "point_at",
+    "erase_ai_annotation"
+  ]),
+  layer: z.literal("AI_ANNOTATION"),
+  content: z.string().max(MAX_POLICY_TEXT_CHARACTERS).optional(),
+  targetShapeId: z.string().min(1).max(MAX_POLICY_ID_CHARACTERS).optional(),
+  expectedShapeRevision: z.number().int().nonnegative().optional(),
+  annotationPurpose: z.string().min(1).max(MAX_POLICY_TEXT_CHARACTERS)
+}).strict();
+
+const PolicyInterviewerProposalSchema = z.object({
+  realizedAction: SocraticActionSchema,
+  claimedDisclosureLevel: DisclosureLevelSchema,
+  claimedDisclosureIds: z.array(DisclosureIdSchema).max(MAX_DISCLOSURE_REFS_PER_MILESTONE),
+  speechText: z.string().min(1).max(MAX_POLICY_TEXT_CHARACTERS).optional(),
+  boardActions: z.array(PolicyBoardActionSchema).max(MAX_DISCLOSURE_REFS_PER_MILESTONE).optional()
+}).strict().refine(
+  (value) => value.speechText !== undefined || (value.boardActions?.length ?? 0) > 0,
+  { message: "Historical proposal must contain a deliverable realization" }
+);
+
+const PolicyDeliveryContentSchema = z.discriminatedUnion("medium", [
+  z.object({
+    medium: z.literal("TEXT"),
+    text: z.string().min(1).max(MAX_POLICY_TEXT_CHARACTERS)
+  }).strict(),
+  z.object({
+    medium: z.literal("AUDIO"),
+    text: z.string().min(1).max(MAX_POLICY_TEXT_CHARACTERS),
+    audioRef: z.string().min(1).max(MAX_POLICY_TEXT_CHARACTERS)
+  }).strict(),
+  z.object({
+    medium: z.literal("WHITEBOARD"),
+    action: PolicyBoardActionSchema
+  }).strict()
+]);
+
 const PolicyDeliverySchema = z.object({
   deliveryId: z.string().min(1).max(MAX_POLICY_ID_CHARACTERS),
   generationId: z.string().min(1).max(MAX_POLICY_ID_CHARACTERS),
+  content: PolicyDeliveryContentSchema,
   disclosureIds: z.array(DisclosureIdSchema).max(MAX_DISCLOSURE_REFS_PER_MILESTONE),
   effectiveDisclosureLevel: DisclosureLevelSchema,
   status: z.enum([
     "VALIDATED", "QUEUED", "DELIVERING", "EXPOSED", "COMPLETED", "CANCELLED", "POSSIBLY_EXPOSED"
   ])
-});
+}).strict();
+
+type PolicyInterviewerProposal = z.infer<typeof PolicyInterviewerProposalSchema>;
+type PolicyDeliveryContent = z.infer<typeof PolicyDeliveryContentSchema>;
+
+function deliveryMatchesProposal(
+  content: PolicyDeliveryContent,
+  proposal: PolicyInterviewerProposal
+): boolean {
+  if (content.medium === "TEXT" || content.medium === "AUDIO") {
+    return proposal.speechText === content.text;
+  }
+
+  try {
+    const contentAction = canonicalJson(content.action);
+    return (proposal.boardActions ?? []).some(
+      (action) => canonicalJson(action) === contentAction
+    );
+  } catch {
+    return false;
+  }
+}
 
 const PolicyProblemViewSchema = z.object({
   id: z.string().min(1),
@@ -896,6 +966,7 @@ function collectExposedAssistance(
   }
 
   const byGeneration = new Map<string, AssistanceRecord>();
+  const proposalsByGeneration = new Map<string, PolicyInterviewerProposal>();
   const disclosedIds = new Set<DisclosureId>();
   let totalDeliveryDisclosureRefs = 0;
   const disclosuresById = disclosureMap(graph);
@@ -926,6 +997,16 @@ function collectExposedAssistance(
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
 
+    let historicalProposal = proposalsByGeneration.get(delivery.data.generationId);
+    if (historicalProposal === undefined) {
+      const parsedProposal = PolicyInterviewerProposalSchema.safeParse(rawGeneration["proposal"]);
+      if (!parsedProposal.success) {
+        return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+      }
+      historicalProposal = parsedProposal.data;
+      proposalsByGeneration.set(delivery.data.generationId, historicalProposal);
+    }
+
     const parsedRequest = RealizationRequestSchema.safeParse(rawGeneration["pedagogicalAction"]);
     const rawTurn = rawTurns[basis.data.turnId];
     const rawEpisode = rawEpisodes[basis.data.inputEpisodeId];
@@ -941,6 +1022,11 @@ function collectExposedAssistance(
       || !isRecord(rawEpisode)
       || rawEpisode["inputEpisodeId"] !== basis.data.inputEpisodeId
       || rawEpisode["status"] !== "COMMITTED"
+      || historicalProposal.realizedAction !== parsedRequest.data.requiredAction
+      || historicalProposal.claimedDisclosureLevel > parsedRequest.data.maximumDisclosure
+      || new Set(historicalProposal.claimedDisclosureIds).size
+        !== historicalProposal.claimedDisclosureIds.length
+      || !deliveryMatchesProposal(delivery.data.content, historicalProposal)
       || delivery.data.effectiveDisclosureLevel > parsedRequest.data.maximumDisclosure
       || new Set(delivery.data.disclosureIds).size !== delivery.data.disclosureIds.length
     ) {
@@ -948,6 +1034,11 @@ function collectExposedAssistance(
     }
 
     const allowedIds = new Set(parsedRequest.data.allowedDisclosureIds ?? []);
+    for (const disclosureId of historicalProposal.claimedDisclosureIds) {
+      if (!allowedIds.has(disclosureId) || !disclosuresById.has(disclosureId)) {
+        return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+      }
+    }
     for (const disclosureId of allowedIds) {
       const disclosure = disclosuresById.get(disclosureId);
       if (
