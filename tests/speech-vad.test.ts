@@ -2,7 +2,9 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   AdaptiveEndpointingPolicy,
+  DeterministicEnergyVadBackend,
   ScriptedVadBackend,
+  SileroVadBackend,
   VoiceActivityStateMachine
 } from "../packages/local-compute/src/speech-vad.js";
 
