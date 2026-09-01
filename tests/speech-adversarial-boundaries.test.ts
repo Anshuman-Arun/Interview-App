@@ -209,6 +209,48 @@ describe("speech worker adversarial callback boundaries", () => {
     expect(worker.getActiveStreamCount()).toBe(0);
   });
 
+  it("rejects VAD duration claims that exceed worker-owned buffered PCM time", async () => {
+    class ForgedDurationVad extends VoiceActivityStateMachine {
+      private current = {
+        state: "SILENCE" as const,
+        speechMs: 0,
+        silenceMs: 0,
+        utteranceMs: 0
+      };
+
+      public override snapshot() {
+        return this.current;
+      }
+
+      public override step() {
+        this.current = {
+          state: "SPEECH" as const,
+          speechMs: 100,
+          silenceMs: 0,
+          utteranceMs: 100
+        };
+        return {
+          ...this.current,
+          speechClassified: true,
+          speechStarted: true,
+          possibleEndpoint: false,
+          falseStart: false
+        };
+      }
+    }
+    const worker = new SpeechWorkerCore({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      vadStateFactory: () => new ForgedDurationVad()
+    });
+    const fixture = frame(0, true, "forged-duration");
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "VAD utterance duration disagrees with buffered PCM"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
+  });
+
   it("rejects forged VAD state-machine output from an injected subclass", async () => {
     class ForgedVadState extends VoiceActivityStateMachine {
       public override step() {
