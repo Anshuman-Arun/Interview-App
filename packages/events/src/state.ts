@@ -11,6 +11,7 @@ import type {
   GenerationBasis,
   GenerationId,
   InputEpisodeId,
+  InterviewSessionConfiguration,
   InterviewerProposal,
   PolicyRevision,
   ProviderContextSpecFingerprint,
@@ -129,6 +130,7 @@ export interface SessionState {
   readonly sequence: number;
   readonly started: boolean;
   readonly status: "CREATED" | "ACTIVE" | "COMPLETED" | "ARCHIVED";
+  readonly configuration?: InterviewSessionConfiguration | undefined;
   readonly completedAt?: string | undefined;
   readonly archivedAt?: string | undefined;
   readonly completionSummary?: string | undefined;
