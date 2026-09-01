@@ -246,6 +246,7 @@ function withAssistance(
           claimedDisclosureIds: disclosureIds,
           speechText: "reviewed assistance"
         },
+        interviewerProposalValidated: true,
         status: "VALIDATED"
       }
     },
@@ -522,6 +523,46 @@ describe("production Socratic policy engine", () => {
       maximumDisclosure: 1,
       allowedDisclosureIds: [unknownDisclosureId]
     });
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest).toMatchObject({
+      requiredAction: "CLARIFY",
+      maximumDisclosure: 0
+    });
+  });
+
+  it("fails closed when exposed assistance comes from a rejected-then-superseded proposal", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    state = withAssistance(state, {
+      target: target("milestone", "choose-vertex"),
+      action: "CHECK_LOCAL_STEP",
+      maximumDisclosure: 0
+    });
+
+    const historicalGeneration = Object.values(state.generations).find(
+      (generation) => generation.provider === "policy-test"
+    );
+    expect(historicalGeneration).toBeDefined();
+    if (historicalGeneration === undefined) throw new Error("missing historical generation");
+
+    const { interviewerProposalValidated: _validated, ...withoutValidationProof } =
+      historicalGeneration;
+    state = {
+      ...state,
+      generations: {
+        ...state.generations,
+        [historicalGeneration.generationId]: {
+          ...withoutValidationProof,
+          status: "SUPERSEDED"
+        }
+      }
+    };
 
     const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
     expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
