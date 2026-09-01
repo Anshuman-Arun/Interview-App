@@ -686,6 +686,15 @@ describe("deterministic Quant Research interview engine", () => {
     expect(engine.getResult().metrics.ROBUSTNESS).toBe(0);
   });
 
+  it("does not treat a useless early estimate as sample-efficient", () => {
+    const engine = new QuantResearchEngine(sampling);
+    engine.applyAction({ actionId: "inefficient-s1", kind: "REQUEST_OBSERVATION", count: 2 });
+    engine.applyAction({ actionId: "inefficient-s2", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 1_000_000 });
+    engine.applyAction({ actionId: "inefficient-s3", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 1_000_000 });
+    expect(engine.getResult().metrics.NUMERICAL_CORRECTNESS).toBe(0);
+    expect(engine.getResult().metrics.SAMPLE_EFFICIENCY).toBe(0);
+  });
+
   it("requires both experiments in the initial comparison and scores against the same feasible frontier", () => {
     const rejected = new QuantResearchEngine(experimental);
     const before = rejected.getState();
@@ -709,6 +718,25 @@ describe("deterministic Quant Research interview engine", () => {
     expect(engine.getResult().metrics.ADAPTATION).toBe(100);
   });
 
+  it("does not assign arbitrary partial consistency credit to a corrected model choice", () => {
+    const engine = new QuantResearchEngine(model);
+    const y = engine.getState().visibleData.find((item) => item.key === "y")?.value as readonly number[];
+    const noiseRadius = visibleNumber(engine.getState(), "noiseRadius");
+    const first = y[0];
+    const last = y[y.length - 1];
+    expect(first).toBeDefined();
+    expect(last).toBeDefined();
+    if (first === undefined || last === undefined) throw new Error("Model fixture is missing endpoints");
+    const correct = Math.abs(last - first) > 2 * noiseRadius ? "LINEAR" : "CONSTANT";
+    const wrong = correct === "LINEAR" ? "CONSTANT" : "LINEAR";
+
+    engine.applyAction({ actionId: "recover-m1", kind: "CHOOSE_OPTION", option: wrong });
+    engine.applyAction({ actionId: "recover-m2", kind: "CHOOSE_OPTION", option: correct });
+    expect(engine.getResult().metrics.NUMERICAL_CORRECTNESS).toBe(0);
+    expect(engine.getResult().metrics.ROBUSTNESS).toBe(100);
+    expect(engine.getResult().metrics.CONSISTENCY).toBe(0);
+  });
+
   it("does not reward a consistently wrong model conclusion", () => {
     const engine = new QuantResearchEngine(model);
     engine.applyAction({ actionId: "wrong-model-1", kind: "CHOOSE_OPTION", option: "CONSTANT" });
@@ -728,6 +756,20 @@ describe("deterministic Quant Research interview engine", () => {
       ADAPTATION: 0
     });
     expect(engine.getResult().overallScore).toBe(33);
+  });
+
+  it("canonicalizes negative zero so JSON-style replay cannot change numeric identity", () => {
+    const engine = new QuantResearchEngine(optimization);
+    engine.applyAction({ actionId: "negzero-1", kind: "SUBMIT_PARAMETERS", values: [-0, 0] });
+    engine.applyAction({ actionId: "negzero-2", kind: "SUBMIT_PARAMETERS", values: [0, -0] });
+    const accepted = engine.getAcceptedActions();
+    expect(Object.is((accepted[0] as { values: readonly number[] }).values[0], -0)).toBe(false);
+    expect(Object.is((accepted[1] as { values: readonly number[] }).values[1], -0)).toBe(false);
+
+    const jsonRoundTrip = JSON.parse(JSON.stringify(accepted)) as unknown;
+    const replayed = replayQuantResearch(optimization, jsonRoundTrip);
+    expect(replayed.acceptedActions).toEqual(accepted);
+    expect(replayed.result).toEqual(engine.getResult());
   });
 
   it("distinguishes malformed replay input from an oversized replay", () => {
