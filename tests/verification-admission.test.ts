@@ -17,6 +17,7 @@ import {
   type VerificationWorkItem
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
+import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   AbstainingVerifier,
   TWO_COLOUR_GRAPH_VERIFIER_NAME,
@@ -130,6 +131,52 @@ describe("deterministic verification admission", () => {
     expect(replaySession(harness.sessionId, harness.store.load(harness.sessionId)))
       .toEqual(harness.writer.getState());
     harness.store.close();
+  });
+
+  it("does not let stale verification-derived evidence bypass GenerationBasis freshness", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const coordinator = new VerificationCoordinator(harness.writer);
+      const work = await issue(
+        coordinator,
+        harness,
+        completeGraphStatement(6, () => "ACQUAINTANCE"),
+        1
+      );
+      const verifier = new TwoColourGraphVerifier();
+      const result = await verifier.verify(
+        work.candidateFormalInterpretation,
+        work.interpretationConfidence
+      );
+      const admitted = await coordinator.processResult({
+        envelope: verificationEnvelope(harness, work),
+        result,
+        verifier
+      });
+      expect(admitted.value).toMatchObject({
+        accepted: true,
+        status: "VERIFIED",
+        evidenceCommitted: true
+      });
+
+      const whileFresh = await harness.turns.selectAction(
+        harness.turnId,
+        sixPeopleProblem
+      );
+      expect(whileFresh.requiredAction).toBe("WAIT");
+
+      await harness.turns.commitBoardPatch(
+        "student changed the board after deterministic verification"
+      );
+      const afterBasisChange = await harness.turns.selectAction(
+        harness.turnId,
+        sixPeopleProblem
+      );
+      expect(afterBasisChange.requiredAction).toBe("PROBE_JUSTIFICATION");
+      expect(afterBasisChange.maximumDisclosure).toBe(0);
+    } finally {
+      harness.store.close();
+    }
   });
 
   it("atomically admits a recomputed VERIFIED result and scoped evidence", async () => {
