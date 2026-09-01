@@ -726,12 +726,16 @@ describe("grounded evaluation/replay product surface", () => {
   });
 
   it("does not expose session identities that cannot be addressed safely by the read route", () => {
-    const unsafeId = SessionIdSchema.parse("session/unsafe");
+    const unsafeIds = [
+      SessionIdSchema.parse("session/unsafe"),
+      SessionIdSchema.parse("."),
+      SessionIdSchema.parse("..")
+    ];
     const reads = new SessionReadService({
       source: {
         hasSession: () => true,
-        sessionCount: () => 1,
-        listRecentSessionIds: () => [unsafeId],
+        sessionCount: () => unsafeIds.length,
+        listRecentSessionIds: () => unsafeIds,
         eventCount: () => 0,
         loadEvents: () => []
       }
@@ -742,8 +746,16 @@ describe("grounded evaluation/replay product surface", () => {
     expect(history.sessionTruncation).toEqual({
       truncated: true,
       limit: 100,
-      remainingCount: 1
+      remainingCount: unsafeIds.length
     });
+
+    const client = new BrowserSessionReadClient({
+      baseUrl: "http://127.0.0.1:43123",
+      clientToken: TOKEN,
+      fetchImpl: vi.fn()
+    });
+    expect(() => client.getReplay(SessionIdSchema.parse("..")))
+      .toThrow("cannot be addressed");
   });
 
   it("returns a structured exact-problem failure instead of evaluating against a substitute", async () => {
