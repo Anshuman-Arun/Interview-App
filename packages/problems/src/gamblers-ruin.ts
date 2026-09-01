@@ -23,21 +23,20 @@ export const gamblersRuinProblem: InterviewProblem = {
     reasoningGraph: {
       version: "1.0.0",
       approaches: [
-        { id: "difference-equation", label: "Second-order linear recurrence" },
-        { id: "martingale-stopping", label: "Optional stopping theorem" }
+        { id: "difference-equation", label: "Second-order linear recurrence" }
       ],
       milestones: [
         {
           id: "total-probability-step",
           description: "Condition on the outcome of the first round to establish P_k = p * P_{k+1} + q * P_{k-1} for 1 <= k <= N-1.",
-          approachIds: ["difference-equation", "martingale-stopping"],
+          approachIds: ["difference-equation"],
           optionalPrerequisiteIds: [],
           protectedDisclosureIds: [gamblerRecurrenceDisclosure]
         },
         {
           id: "boundary-conditions",
           description: "State the absorbing boundary conditions P_0 = 1 (certain ruin) and P_N = 0 (victory achieved).",
-          approachIds: ["difference-equation", "martingale-stopping"],
+          approachIds: ["difference-equation"],
           optionalPrerequisiteIds: ["total-probability-step"],
           protectedDisclosureIds: []
         },
