@@ -89,7 +89,13 @@ export class ServerTurnOrchestrator {
         (g) => g.basis.turnId === turnId && g.status === "VALIDATED"
       );
       const hasDeliveries = Object.values(state.deliveries).some(
-        (d) => Object.values(state.generations).some((g) => g.generationId === d.generationId && g.basis.turnId === turnId)
+        (delivery) =>
+          delivery.status !== "CANCELLED"
+          && Object.values(state.generations).some(
+            (generation) =>
+              generation.generationId === delivery.generationId
+              && generation.basis.turnId === turnId
+          )
       );
 
       if (!hasValidatedGeneration && !hasDeliveries) {
