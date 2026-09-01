@@ -305,7 +305,6 @@ describe("local model asset manager", () => {
     });
     const root = await newRoot();
     const manager = managerFor(root);
-    await expect(manager.listInstalledArtifacts()).resolves.toEqual([]);
     const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
 
     const installedPath = await manager.install(manifest);
@@ -1866,6 +1865,7 @@ describe("local model asset manager", () => {
     await writeFile(verifyFile, payload);
 
     const manager = managerFor(root);
+    await expect(manager.listInstalledArtifacts()).resolves.toEqual([]);
     const manifest = manifestFor(payload, fixture.baseUrl + "/artifact");
     const UnsafeInstall = manager.install.bind(manager) as unknown as (
       manifest: unknown,
