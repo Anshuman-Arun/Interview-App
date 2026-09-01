@@ -210,8 +210,10 @@ export class LoopbackCommandServer {
     }
 
     const writer = await this.options.sessions.getWriterAsync(command.sessionId);
+    let recoveredComposition: ReturnType<typeof resolveSessionStateComposition> | undefined;
     if (command.type !== "START_SESSION") {
       await this.options.sessions.ensureRecovered(command.sessionId);
+      recoveredComposition = resolveSessionStateComposition(writer.getState());
     }
     const envelope = createCommandEnvelope({
       sessionId: command.sessionId,
@@ -262,9 +264,12 @@ export class LoopbackCommandServer {
         };
       }
       case "RESUME_SESSION": {
+        const composition = recoveredComposition;
+        if (composition === undefined) {
+          throw new Error("Recovered session composition is missing");
+        }
         await new TurnCoordinator(writer).resumeSession(envelope);
         const state = writer.getState();
-        const composition = resolveSessionStateComposition(state);
         const problem = toInterviewProblemPublicView(composition);
         return {
           protocolVersion: 1,
@@ -330,8 +335,11 @@ export class LoopbackCommandServer {
         };
       }
       case "GET_SESSION_SUMMARY": {
+        const composition = recoveredComposition;
+        if (composition === undefined) {
+          throw new Error("Recovered session composition is missing");
+        }
         const state = writer.getState();
-        const composition = resolveSessionStateComposition(state);
         const problem = toInterviewProblemPublicView(composition);
         return {
           protocolVersion: 1,
