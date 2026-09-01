@@ -306,20 +306,27 @@ async function readBoundedResponseText(
 }
 
 
-function encodeReadSessionId(sessionId: SessionId): string {
+export function isSessionIdAddressableForRead(sessionId: SessionId): boolean {
   if (
     sessionId.length === 0
     || sessionId.length > MAX_REPLAY_IDENTIFIER_CHARS
     || sessionId === "."
     || sessionId === ".."
   ) {
-    throw new Error("Session ID cannot be addressed by the bounded read transport");
+    return false;
   }
   for (const character of sessionId) {
     const code = character.charCodeAt(0);
     if (character === "/" || character === "\\" || code <= 31 || code === 127) {
-      throw new Error("Session ID cannot be addressed by the bounded read transport");
+      return false;
     }
+  }
+  return true;
+}
+
+function encodeReadSessionId(sessionId: SessionId): string {
+  if (!isSessionIdAddressableForRead(sessionId)) {
+    throw new Error("Session ID cannot be addressed by the bounded read transport");
   }
   return encodeURIComponent(sessionId);
 }
