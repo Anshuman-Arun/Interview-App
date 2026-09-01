@@ -68,6 +68,9 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         throw new Error("Authoritative problem identity is already bound");
       }
       if (state.configuration !== undefined) {
+        if (state.configuration.mode === "QUANT_TRADING") {
+          throw new Error("Quant Trading sessions cannot bind PROBLEM_PRESENTED state");
+        }
         const configuredTarget = state.configuration.mode === "OXFORD_MATHEMATICS"
           ? state.configuration.problem
           : state.configuration.scenario;
