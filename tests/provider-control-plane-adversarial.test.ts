@@ -1288,7 +1288,7 @@ describe("provider definition and capability hostile values", () => {
       adapterFactory: factory
     };
 
-    expect(() => defineProvider(definition))
+    expect(() => defineProvider(definition as unknown as ProviderDefinitionInput))
       .toThrow(expect.objectContaining({ code: "INVALID_ADAPTER_FACTORY" }));
     expect(getterCalls).toBe(0);
   });
@@ -1423,13 +1423,13 @@ describe("provider definition and capability hostile values", () => {
     expect(() => resolveProviderConfiguration({
       registry,
       configuration,
-      requirements: malformedRequirements
+      requirements: malformedRequirements as unknown as readonly ProviderCapabilityKey[]
     })).toThrow(expect.objectContaining({ code: "MALFORMED_CONFIGURATION" }));
 
     await expect(evaluateProviderReadiness({
       registry,
       configuration,
-      requirements: malformedRequirements
+      requirements: malformedRequirements as unknown as readonly ProviderCapabilityKey[]
     })).resolves.toMatchObject({
       state: "MISCONFIGURED",
       reason: "MALFORMED_CONFIGURATION"
