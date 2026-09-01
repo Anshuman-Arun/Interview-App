@@ -50,7 +50,7 @@ Adding a future family requires an explicit application route, its deterministic
 
 - request, session, generation, InputEpisode, and turn identities;
 - the exact `GenerationBasis`;
-- source revision and authoritative event provenance;
+- source revision and authoritative event provenance; for the current `TURN_TEXT` source kind this is exactly the committed-turn event, not an arbitrary superset of session events;
 - a bounded UTF-16 source-text span from the committed turn;
 - exact problem ID and version;
 - a claim-correctness `EvidenceKey`;
@@ -104,7 +104,7 @@ The interpretation request fingerprint is also included in the existing `Session
 
 A bounded per-coordinator cache holds settled request tombstones. The number of concurrent provider inferences, cached request records, provider candidates, protocols, source events, source text, formal-statement characters, and diagnostics are all hard bounded. No global mutable coordinator state exists.
 
-Cancellation during provider inference does not require provider cooperation: the callback is ignored and no verification work is opened. Once a verification request has been serialized, it is driven to an admitted or discarded deterministic result instead of leaving hidden partially authoritative state.
+Cancellation during provider inference does not require provider cooperation to settle the logical interpretation request: the callback is ignored and no verification work is opened. A still-running provider invocation remains counted against the provider-work bound until it actually settles, preventing repeated cancellation from creating unbounded detached work. `cancel()` returns `false` once deterministic verification dispatch has begun. Once a verification request has been serialized, it is driven to an admitted or discarded deterministic result instead of leaving hidden partially authoritative state.
 
 ## Diagnostics and privacy
 
