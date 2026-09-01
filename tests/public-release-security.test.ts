@@ -125,6 +125,16 @@ describe("public-release hygiene checker", () => {
       files: { ".npmrc": "_auth" + "Token=" + "A".repeat(24) + "\n" }
     },
     {
+      name: "legacy package-manager auth credential",
+      expectedCode: "PACKAGE_AUTH",
+      files: { ".npmrc": "_auth=" + "A".repeat(24) + "\n" }
+    },
+    {
+      name: "legacy package-manager password credential",
+      expectedCode: "PACKAGE_AUTH",
+      files: { ".npmrc": "_password=" + "A".repeat(24) + "\n" }
+    },
+    {
       name: "binary tracked file",
       expectedCode: "UNSCANNED_FILE",
       files: { "asset.bin": new Uint8Array([0, 1, 2, 3]) }
