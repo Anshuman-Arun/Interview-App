@@ -917,6 +917,7 @@ function assertStateInvariants(state: InternalState): void {
         throw new Error("Bayesian stage invariant violated");
       }
       if (state.observations.length !== state.config.observationCount) throw new Error("Bayesian observation-count invariant violated");
+      if (state.observations.some((value) => typeof value !== "boolean")) throw new Error("Bayesian observation-type invariant violated");
       const successes = state.observations.filter(Boolean).length;
       if (state.successes !== successes) throw new Error("Bayesian success-count invariant violated");
       break;
@@ -926,6 +927,14 @@ function assertStateInvariants(state: InternalState): void {
       if (state.hiddenPopulation.length !== state.config.populationSize || state.sampleOrder.length !== state.config.populationSize) {
         throw new Error("Sampling population-size invariant violated");
       }
+      if (
+        !Number.isSafeInteger(state.hiddenCenter) ||
+        state.hiddenCenter < state.config.centerMin ||
+        state.hiddenCenter > state.config.centerMax
+      ) {
+        throw new Error("Sampling hidden-center invariant violated");
+      }
+      if (state.hiddenPopulation.some((value) => !Number.isSafeInteger(value))) throw new Error("Sampling population numeric invariant violated");
       if (state.revealed.length > state.config.maxSamples) throw new Error("Sample budget invariant violated");
       const seenIndices = new Set(state.sampleOrder);
       if (
@@ -936,6 +945,12 @@ function assertStateInvariants(state: InternalState): void {
       }
       if (state.hiddenPopulation.some((value) => Math.abs(value - state.hiddenCenter) > state.config.noiseRadius)) {
         throw new Error("Sampling noise-bound invariant violated");
+      }
+      for (let index = 0; index < state.revealed.length; index += 1) {
+        const populationIndex = state.sampleOrder[index];
+        if (populationIndex === undefined || state.hiddenPopulation[populationIndex] !== state.revealed[index]) {
+          throw new Error("Sampling revealed-prefix invariant violated");
+        }
       }
       const expectsOutlier = state.stage === "OUTLIER_PERTURBATION" || state.stage === "COMPLETE";
       if (
@@ -951,14 +966,20 @@ function assertStateInvariants(state: InternalState): void {
       if (!["INITIAL_ALLOCATION", "EXPERIMENT_DECISION", "PERTURBED_ALLOCATION", "COMPLETE"].includes(state.stage)) {
         throw new Error("Experimental stage invariant violated");
       }
-      if (state.hiddenMeanA === state.hiddenMeanB) throw new Error("Experimental hidden-mean invariant violated");
+      if (
+        !Number.isSafeInteger(state.hiddenMeanA) ||
+        !Number.isSafeInteger(state.hiddenMeanB) ||
+        state.hiddenMeanA === state.hiddenMeanB
+      ) {
+        throw new Error("Experimental hidden-mean invariant violated");
+      }
       if (state.sequenceA.length !== state.config.totalBudget || state.sequenceB.length !== state.config.totalBudget) {
         throw new Error("Experimental sequence-length invariant violated");
       }
-      if (state.sequenceA.some((value) => Math.abs(value - state.hiddenMeanA) > state.config.noiseA)) {
+      if (state.sequenceA.some((value) => !Number.isSafeInteger(value) || Math.abs(value - state.hiddenMeanA) > state.config.noiseA)) {
         throw new Error("Experiment A noise-bound invariant violated");
       }
-      if (state.sequenceB.some((value) => Math.abs(value - state.hiddenMeanB) > state.config.noiseB)) {
+      if (state.sequenceB.some((value) => !Number.isSafeInteger(value) || Math.abs(value - state.hiddenMeanB) > state.config.noiseB)) {
         throw new Error("Experiment B noise-bound invariant violated");
       }
       const expectsSummary = state.stage !== "INITIAL_ALLOCATION";
@@ -969,13 +990,24 @@ function assertStateInvariants(state: InternalState): void {
       ) {
         throw new Error("Experimental summary invariant violated");
       }
-      if (
-        state.initialAllocation !== undefined &&
-        (state.initialAllocation.a <= 0 ||
+      if (state.initialAllocation !== undefined) {
+        if (
+          !Number.isSafeInteger(state.initialAllocation.a) ||
+          !Number.isSafeInteger(state.initialAllocation.b) ||
+          state.initialAllocation.a <= 0 ||
           state.initialAllocation.b <= 0 ||
-          state.initialAllocation.a * state.config.costA + state.initialAllocation.b * state.config.costB > state.config.totalBudget)
-      ) {
-        throw new Error("Experimental initial-allocation invariant violated");
+          state.initialAllocation.a * state.config.costA + state.initialAllocation.b * state.config.costB > state.config.totalBudget ||
+          state.initialAllocation.a > state.sequenceA.length ||
+          state.initialAllocation.b > state.sequenceB.length
+        ) {
+          throw new Error("Experimental initial-allocation invariant violated");
+        }
+        if (
+          state.summaryA !== mean(state.sequenceA.slice(0, state.initialAllocation.a)) ||
+          state.summaryB !== mean(state.sequenceB.slice(0, state.initialAllocation.b))
+        ) {
+          throw new Error("Experimental summary-value invariant violated");
+        }
       }
       break;
     }
@@ -1015,8 +1047,42 @@ function assertStateInvariants(state: InternalState): void {
     }
     case "CONSTRAINED_OPTIMIZATION": {
       if (!["BASE_OPTIMIZATION", "PERTURBED_OPTIMIZATION", "COMPLETE"].includes(state.stage)) throw new Error("Optimization stage invariant violated");
+      if (
+        !Number.isSafeInteger(state.coefficientX) ||
+        !Number.isSafeInteger(state.coefficientY) ||
+        state.coefficientX < 4 ||
+        state.coefficientX > 12 ||
+        state.coefficientY < 4 ||
+        state.coefficientY > 12 ||
+        !Number.isSafeInteger(state.basePenalty) ||
+        state.basePenalty < 0 ||
+        state.basePenalty > 4
+      ) {
+        throw new Error("Optimization generated-parameter invariant violated");
+      }
       if (state.basePenalty === state.config.perturbedPenalty) throw new Error("Optimization perturbation invariant violated");
-      if (!Number.isFinite(state.baseBestObjective) || !Number.isFinite(state.perturbedBestObjective) || state.baseBestObjective <= 0 || state.perturbedBestObjective <= 0) {
+      const expectedBaseBest = bestObjective(
+        state.config.budget,
+        state.config.maxX,
+        state.config.maxY,
+        state.coefficientX,
+        state.coefficientY,
+        state.basePenalty
+      );
+      const expectedPerturbedBest = bestObjective(
+        state.config.perturbedBudget,
+        state.config.maxX,
+        state.config.maxY,
+        state.coefficientX,
+        state.coefficientY,
+        state.config.perturbedPenalty
+      );
+      if (
+        state.baseBestObjective !== expectedBaseBest ||
+        state.perturbedBestObjective !== expectedPerturbedBest ||
+        state.baseBestObjective <= 0 ||
+        state.perturbedBestObjective <= 0
+      ) {
         throw new Error("Optimization optimum invariant violated");
       }
       break;
