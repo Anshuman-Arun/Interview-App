@@ -84,7 +84,11 @@ describe("adversarial named regression schedules", () => {
           envelope: createCommandEnvelope({
             sessionId: fixture.sessionId,
             producer: provider.name,
-            generationId: fixture.initialGenerationId
+            generationId: fixture.initialGenerationId,
+            inputEpisodeId: fixture.inputEpisodeId,
+            turnId: fixture.turnId,
+            contextEpoch: fixture.providerEnvelope.contextEpoch,
+            sourceRevision: fixture.providerEnvelope.sourceRevision
           }),
           problem: sixPeopleProblem,
           proposal,
