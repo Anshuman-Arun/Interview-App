@@ -249,16 +249,58 @@ export class TurnCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
 
   public async startSession(problem: InterviewProblem, commandEnvelope?: CommandEnvelope): Promise<void> {
-    return this.startConfiguredSession({
-      configuration: {
-        configurationVersion: 1,
-        mode: "OXFORD_MATHEMATICS",
-        problem: { id: problem.id, version: problem.version },
-        difficulty: problem.interviewer.difficulty,
-        interventionPolicy: "BALANCED"
-      },
-      problem
-    }, commandEnvelope);
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "OXFORD_MATHEMATICS",
+      problem: { id: problem.id, version: problem.version },
+      difficulty: problem.interviewer.difficulty,
+      interventionPolicy: "BALANCED"
+    });
+    const providerContextSpecSha256 = createProviderContextSpecFingerprintSync(problem);
+    const envelope = CommandEnvelopeSchema.parse(
+      commandEnvelope ?? createCommandEnvelope({
+        sessionId: this.writer.sessionId,
+        producer: "application"
+      })
+    );
+
+    // Preserve the historical logical command identity so a START_SESSION
+    // request processed before session-configuration v1 remains idempotent if
+    // the same RequestId is retried after upgrade.
+    await this.writer.execute(envelope, {
+      operation: "START_SESSION",
+      payload: {
+        problemId: problem.id,
+        problemVersion: problem.version,
+        prompt: problem.public.prompt,
+        providerContextSpecSha256
+      }
+    }, StartedResultSchema, (state) => {
+      if (state.started) throw new Error("Session already started");
+      return {
+        drafts: [
+          {
+            source: "APPLICATION",
+            type: "SESSION_STARTED",
+            payload: {
+              startedAt: new Date().toISOString(),
+              configuration
+            }
+          },
+          {
+            source: "APPLICATION",
+            type: "PROBLEM_PRESENTED",
+            payload: {
+              problemId: problem.id,
+              problemVersion: problem.version,
+              prompt: problem.public.prompt,
+              providerContextSpecSha256
+            }
+          }
+        ],
+        result: { started: true }
+      };
+    });
   }
 
   public async startConfiguredSession(
