@@ -2317,7 +2317,7 @@ describe("adapter factory adversarial boundary", () => {
 
     await expect(factory.createAdapter({
       resolved,
-      secretResolver: resolver
+      secretResolver: resolver as unknown as ProviderSecretResolver
     })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
     expect(getterCalls).toBe(0);
   });
