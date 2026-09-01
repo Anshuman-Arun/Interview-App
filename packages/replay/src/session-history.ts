@@ -84,7 +84,7 @@ function lifecycleFrom(
   }
 
   return {
-    status: state?.status ?? "UNKNOWN",
+    status: state?.status === "CREATED" ? "UNKNOWN" : state?.status ?? "UNKNOWN",
     historyComplete,
     started: started !== undefined ? true : historyComplete ? false : null,
     completed: completed !== undefined ? true : historyComplete ? false : null,

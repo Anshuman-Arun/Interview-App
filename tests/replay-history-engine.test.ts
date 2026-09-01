@@ -697,7 +697,7 @@ describe("replay/history projections", () => {
       .toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
   });
 
-  it("validates sequence and event identity across the entire raw history beyond projection bounds", () => {
+  it("validates projected-prefix sequence and event identity while explicitly truncating the tail", () => {
     const sessionId = "session-tail-corruption" as SessionId;
     const valid = [
       ...base(sessionId, "tail"),
@@ -709,23 +709,28 @@ describe("replay/history projections", () => {
       })
     ];
 
-    const duplicateTailSequence = [
+    const truncatedTail = [
       valid[0],
       valid[1],
       valid[2],
       { ...valid[3], sequence: 3 }
     ];
-    expect(() => projectReplayTimeline(duplicateTailSequence, {
+    const bounded = projectReplayTimeline(truncatedTail, {
       bounds: { maxEvents: 2 }
-    })).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEQUENCE" }));
+    });
+    expect(bounded.complete).toBe(false);
+    expect(bounded.eventTruncation).toEqual({
+      truncated: true,
+      limit: 2,
+      remainingCount: 2
+    });
 
-    const gappedTail = [
+    const duplicatePrefixSequence = [
       valid[0],
-      valid[1],
-      valid[2],
-      { ...valid[3], sequence: 5 }
+      { ...valid[1], sequence: 1 },
+      valid[2]
     ];
-    expect(() => projectReplayTimeline(gappedTail, {
+    expect(() => projectReplayTimeline(duplicatePrefixSequence, {
       bounds: { maxEvents: 2 }
     })).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEQUENCE" }));
 
@@ -854,7 +859,7 @@ describe("longitudinal projection", () => {
     const evidence = EvidenceValueSchema.parse({
       value,
       inferenceConfidence: 0.9,
-      evidenceEventIds: [turn.eventId],
+      evidenceEventIds: [problem.eventId],
       lastUpdatedSequence: 3
     });
     const historyEvents = [

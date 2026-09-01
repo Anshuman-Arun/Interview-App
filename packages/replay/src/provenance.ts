@@ -148,8 +148,7 @@ export function normalizeReplayEvents(
     readonly raw: unknown;
     readonly metadata: SafeEventMetadata;
   }>();
-  const seenSequences = new Set<number>();
-  const seenEventIds = new Set<string>();
+  const selectedEventIds = new Set<string>();
   let sessionId: z.infer<typeof SessionIdSchema> | null = null;
 
   for (const rawValue of rawEvents) {
@@ -159,18 +158,17 @@ export function normalizeReplayEvents(
     const metadata = parsed.data;
     sessionId ??= metadata.sessionId;
     if (metadata.sessionId !== sessionId) throw new ReplayProjectionError("MIXED_SESSION_IDS");
-    if (seenSequences.has(metadata.sequence)) throw new ReplayProjectionError("INVALID_EVENT_SEQUENCE");
-    if (seenEventIds.has(metadata.eventId)) throw new ReplayProjectionError("INVALID_EVENT_IDENTITY");
-    seenSequences.add(metadata.sequence);
-    seenEventIds.add(metadata.eventId);
 
     if (metadata.sequence <= selectedCount) {
+      if (selectedBySequence.has(metadata.sequence)) {
+        throw new ReplayProjectionError("INVALID_EVENT_SEQUENCE");
+      }
+      if (selectedEventIds.has(metadata.eventId)) {
+        throw new ReplayProjectionError("INVALID_EVENT_IDENTITY");
+      }
+      selectedEventIds.add(metadata.eventId);
       selectedBySequence.set(metadata.sequence, { raw, metadata });
     }
-  }
-
-  for (let sequence = 1; sequence <= rawEvents.length; sequence += 1) {
-    if (!seenSequences.has(sequence)) throw new ReplayProjectionError("INVALID_EVENT_SEQUENCE");
   }
 
   const selected: Array<{
