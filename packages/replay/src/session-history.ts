@@ -673,16 +673,10 @@ export function projectSessionHistory(
   options: SessionHistoryOptions = {}
 ): SessionHistoryProjection {
   let bounds: ReplayBounds;
-  let evaluationInput: unknown;
   try {
     bounds = resolveReplayBounds(options.bounds);
   } catch {
     throw new RangeError("Invalid replay bounds");
-  }
-  try {
-    evaluationInput = options.evaluation;
-  } catch {
-    throw new ReplayProjectionError("EVALUATION_MISMATCH");
   }
   const normalized = normalizeReplayEvents(rawEvents, bounds);
   const semanticItems = normalized.events.filter((item) =>
@@ -766,6 +760,12 @@ export function projectSessionHistory(
   };
   const verificationSummary = verificationSummaryFrom(semanticItems);
   const highestDisclosureUsed = state === undefined ? undefined : disclosedHighest(state);
+  let evaluationInput: unknown;
+  try {
+    evaluationInput = options.evaluation;
+  } catch {
+    throw new ReplayProjectionError("EVALUATION_MISMATCH");
+  }
   const evaluation = validateEvaluation(evaluationInput, normalized.sessionId, problem, state);
 
   return {
