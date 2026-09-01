@@ -105,6 +105,33 @@ describe("deterministic voice activity state machine", () => {
   });
 });
 
+describe("VAD adapter direct-call boundaries", () => {
+  it("rejects malformed direct frames and scripted probabilities", async () => {
+    const energy = new DeterministicEnergyVadBackend();
+    await expect(energy.classify(null as never)).rejects.toThrow(/frame input must be an object/u);
+    expect(() => new ScriptedVadBackend([0, 1.1])).toThrow(/Scripted VAD probability/u);
+    expect(() => new ScriptedVadBackend(null as never)).toThrow(/must be an array/u);
+  });
+
+  it("short-circuits already-aborted Silero calls before runtime invocation", async () => {
+    let scoreCalls = 0;
+    const backend = new SileroVadBackend({
+      runtimeVersion: "test-runtime",
+      async score() {
+        scoreCalls += 1;
+        return 0.5;
+      }
+    }, "models/silero/model.onnx");
+    const controller = new AbortController();
+    controller.abort();
+    await expect(backend.classify(null as never, controller.signal))
+      .rejects.toMatchObject({ name: "AbortError" });
+    expect(scoreCalls).toBe(0);
+    await expect(backend.classify(null as never, null as never))
+      .rejects.toThrow(/cancellation signal is invalid/u);
+  });
+});
+
 describe("adaptive endpointing policy", () => {
   const policy = new AdaptiveEndpointingPolicy({
     minimumSpeechMs: 120,
