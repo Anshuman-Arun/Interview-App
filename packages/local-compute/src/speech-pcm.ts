@@ -94,8 +94,8 @@ export function advancePcmOrder(
   }
   const envelope = parsedEnvelope.data;
   const durationMs = envelope.frameSamples / envelope.sampleRate * 1_000;
-  if (prior !== undefined) validatePcmOrderState(prior);
-  if (prior === undefined) {
+  const boundedPrior = prior === undefined ? undefined : snapshotPcmOrderState(prior);
+  if (boundedPrior === undefined) {
     if (envelope.sequence !== 0) {
       throw new PcmAdmissionError("OUT_OF_ORDER_FRAME", "A new PCM stream must begin at sequence zero");
     }
@@ -112,28 +112,28 @@ export function advancePcmOrder(
     };
   }
 
-  if (envelope.streamId !== prior.streamId) {
+  if (envelope.streamId !== boundedPrior.streamId) {
     throw new PcmAdmissionError("STREAM_CONFLICT", "PCM stream identity changed while advancing order state");
   }
-  if (envelope.sampleRate !== prior.sampleRate
-      || envelope.channels !== prior.channels
-      || envelope.sampleFormat !== prior.sampleFormat) {
+  if (envelope.sampleRate !== boundedPrior.sampleRate
+      || envelope.channels !== boundedPrior.channels
+      || envelope.sampleFormat !== boundedPrior.sampleFormat) {
     throw new PcmAdmissionError("STREAM_CONFLICT", "PCM format changed within a stream");
   }
-  if (envelope.sequence !== prior.lastSequence + 1) {
+  if (envelope.sequence !== boundedPrior.lastSequence + 1) {
     throw new PcmAdmissionError("OUT_OF_ORDER_FRAME", "PCM sequence is duplicated, skipped, or reversed");
   }
-  if (envelope.timestampMs + 0.001 < prior.nextEarliestTimestampMs) {
+  if (envelope.timestampMs + 0.001 < boundedPrior.nextEarliestTimestampMs) {
     throw new PcmAdmissionError("OUT_OF_ORDER_FRAME", "PCM timestamps overlap or reverse");
   }
-  const expectedTimestampMs = prior.firstTimestampMs + prior.cumulativeDurationMs;
+  const expectedTimestampMs = boundedPrior.firstTimestampMs + boundedPrior.cumulativeDurationMs;
   if (envelope.timestampMs - expectedTimestampMs > MAX_SPEECH_TIMESTAMP_DRIFT_MS + 0.001) {
     throw new PcmAdmissionError("OUT_OF_ORDER_FRAME", "PCM timestamp drift exceeds the allowed bound");
   }
 
   return {
-    ...prior,
-    cumulativeDurationMs: prior.cumulativeDurationMs + durationMs,
+    ...boundedPrior,
+    cumulativeDurationMs: boundedPrior.cumulativeDurationMs + durationMs,
     lastSequence: envelope.sequence,
     nextEarliestTimestampMs: envelope.timestampMs + durationMs
   };
@@ -323,6 +323,25 @@ function initialBufferedOrder(frame: PcmFrameSnapshot): PcmOrderState {
 }
 
 
+function snapshotPcmOrderState(value: unknown): PcmOrderState {
+  if (!isRecord(value)) {
+    throw new PcmAdmissionError("INVALID_FRAME", "Prior PCM ordering state is invalid");
+  }
+  const snapshot: PcmOrderState = {
+    streamId: value.streamId as SpeechStreamId,
+    firstSequence: value.firstSequence as number,
+    sampleRate: value.sampleRate as number,
+    channels: value.channels as number,
+    sampleFormat: value.sampleFormat as string,
+    firstTimestampMs: value.firstTimestampMs as number,
+    cumulativeDurationMs: value.cumulativeDurationMs as number,
+    lastSequence: value.lastSequence as number,
+    nextEarliestTimestampMs: value.nextEarliestTimestampMs as number
+  };
+  validatePcmOrderState(snapshot);
+  return snapshot;
+}
+
 function validatePcmOrderState(prior: PcmOrderState): void {
   const streamId = SpeechStreamIdSchema.safeParse(prior.streamId);
   const sampleDerivedEndMs = prior.firstTimestampMs + prior.cumulativeDurationMs;
@@ -354,7 +373,6 @@ function validatePcmOrderState(prior: PcmOrderState): void {
     throw new PcmAdmissionError("INVALID_FRAME", "Prior PCM ordering state is invalid");
   }
 }
-
 
 
 function isSharedBackingBuffer(buffer: ArrayBufferLike): boolean {
