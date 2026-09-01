@@ -143,11 +143,11 @@ function appendAction<T extends InternalState>(state: T, action: QuantResearchAc
     ...state,
     ...(patch ?? {}),
     acceptedActions: [...state.acceptedActions, clone(action)]
-  } as T;
+  };
 }
 
 function appendEvidence<T extends InternalState>(state: T, additions: readonly QuantResearchEvidence[]): T {
-  return { ...state, evidence: [...state.evidence, ...additions] } as T;
+  return { ...state, evidence: [...state.evidence, ...additions] };
 }
 
 function notAllowed(state: InternalState, action: QuantResearchAction): never {
