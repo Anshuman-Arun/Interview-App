@@ -44,7 +44,9 @@ const DIMENSION_ORDER = [
 
 function codePointLength(value: string): number {
   let length = 0;
-  for (const _character of value) length += 1;
+  for (const character of value) {
+    length += Math.min(character.length, 1);
+  }
   return length;
 }
 
@@ -639,9 +641,9 @@ export const ReplayReadEntrySchema = z.object({
     inferenceConfidence: z.number().min(0).max(1).optional()
   }).strict().optional()
 }).strict().superRefine((entry, context) => {
-  const safeSummary = SAFE_REPLAY_SUMMARY_BY_KIND[
-    entry.kind as keyof typeof SAFE_REPLAY_SUMMARY_BY_KIND
-  ];
+  const safeSummary = (
+    SAFE_REPLAY_SUMMARY_BY_KIND as Readonly<Record<string, string | undefined>>
+  )[entry.kind];
   const expectedSummary = entry.stateValidation === "UNAVAILABLE_AFTER_UNKNOWN"
     ? "Known event after unknown semantic boundary; payload intentionally withheld"
     : safeSummary;
