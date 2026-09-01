@@ -88,6 +88,7 @@ function assertSessionActive(state: Readonly<SessionState>, operation: string): 
 }
 
 const MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS = 100_000;
+const MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS = 1_000_000;
 const MAX_INTERVIEWER_PROPOSAL_DISCLOSURE_IDS = 256;
 const MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS = 256;
 const MAX_RUNTIME_ID_CHARACTERS = 512;
@@ -135,12 +136,14 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
     typeof speechText === "string"
     && speechText.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
   ) return false;
+  let totalTextCharacters = typeof speechText === "string" ? speechText.length : 0;
+  if (totalTextCharacters > MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS) return false;
 
   const boardActions = value["boardActions"];
   if (!Array.isArray(boardActions)) return true;
   if (boardActions.length > MAX_INTERVIEWER_PROPOSAL_BOARD_ACTIONS) return false;
-  return boardActions.every((rawAction) => {
-    if (!isRuntimeRecord(rawAction)) return true;
+  for (const rawAction of boardActions) {
+    if (!isRuntimeRecord(rawAction)) continue;
     if (!hasOnlyRuntimeKeys(
       rawAction,
       new Set([
@@ -154,13 +157,19 @@ function proposalWithinAdmissionBounds(value: unknown): boolean {
     )) return false;
     const content = rawAction["content"];
     const annotationPurpose = rawAction["annotationPurpose"];
-    return (typeof content !== "string" || content.length <= MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS)
-      && (
-        typeof annotationPurpose !== "string"
-        || annotationPurpose.length <= MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
+    if (
+      (typeof content === "string" && content.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS)
+      || (
+        typeof annotationPurpose === "string"
+        && annotationPurpose.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
       )
-      && boundedRuntimeString(rawAction["targetShapeId"]);
-  });
+      || !boundedRuntimeString(rawAction["targetShapeId"])
+    ) return false;
+    totalTextCharacters += typeof content === "string" ? content.length : 0;
+    totalTextCharacters += typeof annotationPurpose === "string" ? annotationPurpose.length : 0;
+    if (totalTextCharacters > MAX_INTERVIEWER_PROPOSAL_TOTAL_TEXT_CHARACTERS) return false;
+  }
+  return true;
 }
 
 function evidenceProposalWithinAdmissionBounds(value: unknown): boolean {
