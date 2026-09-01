@@ -1479,11 +1479,18 @@ function targetDisclosureAuthorization(
   if (level === 0 || target.kind !== "MILESTONE") return { ok: true, value: [] };
 
   const milestone = graph.problem.interviewer.reasoningGraph.milestones.find((item) => item.id === target.id);
-  if (milestone === undefined || !milestoneReady(milestone.id, graph, completed)) {
+  if (milestone === undefined) {
     return { ok: true, value: [] };
   }
 
-  const relevantMilestoneIds = new Set<string>([milestone.id]);
+  // The target's own protected facts stay locked until its prerequisites are
+  // satisfied. A low-level reframing may still refer to already-completed
+  // prerequisites on the active approach, even when the student has jumped
+  // ahead to an unready join.
+  const relevantMilestoneIds = new Set<string>();
+  if (milestoneReady(milestone.id, graph, completed)) {
+    relevantMilestoneIds.add(milestone.id);
+  }
   if (activeApproachId !== undefined) {
     const queue = [milestone.id];
     let cursor = 0;
