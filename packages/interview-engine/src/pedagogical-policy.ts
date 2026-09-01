@@ -1335,26 +1335,33 @@ function targetDisclosureAuthorization(
   target: PolicyTarget,
   level: DisclosureLevel,
   graph: GraphContext,
-  completed: ReadonlySet<string>
-): readonly DisclosureId[] {
-  if (level === 0 || target.kind !== "MILESTONE") return [];
+  completed: ReadonlySet<string>,
+  activeApproachId: string | undefined
+): CollectionResult<readonly DisclosureId[]> {
+  if (level === 0 || target.kind !== "MILESTONE") return { ok: true, value: [] };
 
   const milestone = graph.problem.interviewer.reasoningGraph.milestones.find((item) => item.id === target.id);
   if (milestone === undefined || !milestoneReady(milestone.id, graph, completed)) {
-    return [];
+    return { ok: true, value: [] };
   }
 
   const relevantMilestoneIds = new Set<string>([milestone.id]);
-  const queue = [milestone.id];
-  let cursor = 0;
-  while (cursor < queue.length) {
-    const current = queue[cursor];
-    cursor += 1;
-    if (current === undefined) continue;
-    for (const predecessorId of graph.predecessors.get(current) ?? []) {
-      if (relevantMilestoneIds.has(predecessorId)) continue;
-      relevantMilestoneIds.add(predecessorId);
-      queue.push(predecessorId);
+  if (activeApproachId !== undefined) {
+    const queue = [milestone.id];
+    let cursor = 0;
+    while (cursor < queue.length) {
+      const current = queue[cursor];
+      cursor += 1;
+      if (current === undefined) continue;
+      for (const predecessorId of graph.predecessors.get(current) ?? []) {
+        if (relevantMilestoneIds.has(predecessorId)) continue;
+        const predecessor = graph.problem.interviewer.reasoningGraph.milestones.find(
+          (item) => item.id === predecessorId
+        );
+        if (predecessor === undefined || !predecessor.approachIds.includes(activeApproachId)) continue;
+        relevantMilestoneIds.add(predecessorId);
+        queue.push(predecessorId);
+      }
     }
   }
 
@@ -1369,10 +1376,13 @@ function targetDisclosureAuthorization(
       const disclosure = byId.get(disclosureId);
       if (disclosure !== undefined && disclosure.minimumDisclosureLevel <= level) {
         allowed.add(disclosureId);
+        if (allowed.size > MAX_DISCLOSURE_REFS_PER_MILESTONE) {
+          return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
+        }
       }
     }
   }
-  return [...allowed].sort();
+  return { ok: true, value: [...allowed].sort() };
 }
 
 function explicitHintLevel(
@@ -1686,18 +1696,24 @@ export function decidePedagogicalPolicy(
     ledgerResult.value
   );
   const plan = chooseActionPlan(classification, targetAssistance, hintLevel);
-  const allowedDisclosureIds = targetDisclosureAuthorization(
+  const actionableEvidence = evidenceResult.value.filter(
+    (signal) => signal.value.inferenceConfidence >= MIN_ACTIONABLE_EVIDENCE_CONFIDENCE
+  );
+  const activeApproachId = inferActiveApproachId(actionableEvidence, graph);
+  const authorization = targetDisclosureAuthorization(
     classification.target,
     plan.requestedDisclosure,
     graph,
-    completeMilestones
+    completeMilestones,
+    activeApproachId
   );
+  if (!authorization.ok) return failClosedDecision(turnId, authorization.reasonCode);
 
   const request = RealizationRequestSchema.parse({
     requiredAction: plan.action,
     target: targetToString(classification.target),
     maximumDisclosure: plan.requestedDisclosure,
-    ...(plan.requestedDisclosure === 0 ? {} : { allowedDisclosureIds })
+    ...(plan.requestedDisclosure === 0 ? {} : { allowedDisclosureIds: authorization.value })
   });
 
   return {
