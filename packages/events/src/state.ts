@@ -84,6 +84,8 @@ export interface VerificationRequestState {
   readonly requestedEventId: EventId;
   readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
   readonly result?: VerificationResult;
+  readonly resultEventId?: EventId;
+  readonly resultSequence?: number;
   readonly discardReason?: string;
 }
 export interface EvidenceRecordState {
