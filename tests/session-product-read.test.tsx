@@ -344,6 +344,49 @@ describe("grounded evaluation/replay product surface", () => {
     }).success).toBe(false);
   });
 
+  it("keeps known payloads withheld after an unknown replay semantic boundary", () => {
+    expect(ReplayReadEntrySchema.safeParse({
+      sequence: 3,
+      eventId: "event_after_unknown",
+      occurredAt: "2026-09-01T17:00:02.000Z",
+      kind: "TURN_COMMITTED",
+      summary: "Known event after unknown semantic boundary; payload intentionally withheld",
+      category: "STUDENT",
+      stateValidation: "UNAVAILABLE_AFTER_UNKNOWN",
+      source: "APPLICATION",
+      relations: {}
+    }).success).toBe(true);
+
+    expect(ReplayReadEntrySchema.safeParse({
+      sequence: 3,
+      eventId: "event_after_unknown_leak",
+      occurredAt: "2026-09-01T17:00:02.000Z",
+      kind: "TURN_COMMITTED",
+      summary: "Known event after unknown semantic boundary; payload intentionally withheld",
+      category: "STUDENT",
+      stateValidation: "UNAVAILABLE_AFTER_UNKNOWN",
+      source: "APPLICATION",
+      relations: { turnId: "turn_should_be_hidden" },
+      text: {
+        text: "payload must not survive unknown boundary",
+        originalLength: 41,
+        truncated: false
+      }
+    }).success).toBe(false);
+
+    expect(ReplayReadEntrySchema.safeParse({
+      sequence: 2,
+      eventId: "event_unknown",
+      occurredAt: "2026-09-01T17:00:01.000Z",
+      kind: "UNKNOWN_EVENT",
+      summary: "Unknown authoritative event; payload intentionally withheld",
+      category: "SYSTEM",
+      stateValidation: "UNKNOWN_EVENT",
+      source: "APPLICATION",
+      relations: {}
+    }).success).toBe(true);
+  });
+
   it("rejects internally contradictory replay and longitudinal DTOs", () => {
     expect(ReplayReadEntrySchema.safeParse({
       sequence: 1,
