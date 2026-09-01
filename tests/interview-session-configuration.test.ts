@@ -301,6 +301,41 @@ describe("generic interview session configuration", () => {
     );
   });
 
+  it("never substitutes the mock provider for an authoritative non-mock selection", async () => {
+    const sessionId = newSessionId();
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "OXFORD_MATHEMATICS",
+      problem: {
+        id: sixPeopleProblem.id,
+        version: sixPeopleProblem.version
+      },
+      difficulty: sixPeopleProblem.interviewer.difficulty,
+      interventionPolicy: "BALANCED",
+      providerSelection: {
+        providerId: "gemini-api",
+        modelId: "gemini-2.5-flash"
+      }
+    });
+
+    expect((await postStart(sessionId, configuration)).status).toBe(200);
+    const writer = registry.get(sessionId);
+    const committed = await new TurnCoordinator(writer).commitInput(
+      "Choose one person and consider the five relationships from them."
+    );
+    const orchestrator = new ServerTurnOrchestrator(sessions, () => undefined);
+    await orchestrator.orchestrateTurn({
+      sessionId,
+      turnId: committed.turnId,
+      inputEpisodeId: committed.inputEpisodeId,
+      studentText: "Choose one person and consider the five relationships from them."
+    });
+
+    expect(Object.keys(writer.getState().generations)).toHaveLength(0);
+    expect(Object.keys(writer.getState().deliveries)).toHaveLength(0);
+    expect(writer.getState().configuration).toEqual(configuration);
+  });
+
   it("rejects any later attempt to mutate a started session configuration", async () => {
     const sessionId = newSessionId();
     const firstConfiguration = oxfordConfiguration(
