@@ -55,6 +55,30 @@ function frame(
   };
 }
 
+function tinyFrame(
+  sequence: number,
+  speech: boolean,
+  streamId = "tiny-stream"
+): FrameFixture {
+  const pcm = new Float32Array(16);
+  pcm.fill(speech ? 0.1 : 0);
+  return {
+    envelope: {
+      protocolVersion: 1,
+      requestId: newRequestId(),
+      streamId,
+      sequence,
+      sampleRate: 16_000,
+      channels: 1,
+      sampleFormat: "F32LE",
+      frameSamples: 16,
+      payloadByteLength: pcm.byteLength,
+      timestampMs: sequence
+    },
+    pcm
+  };
+}
+
 function worker(overrides: Partial<ConstructorParameters<typeof SpeechWorkerCore>[0]> = {}): SpeechWorkerCore {
   return new SpeechWorkerCore({
     vadBackend: new DeterministicEnergyVadBackend(),
@@ -608,6 +632,52 @@ describe("speech worker adversarial races and hard limits", () => {
     expect(await finalizing).toEqual([]);
   });
 
+  it("hard-bounds lingering recognizer cancel hooks after timeout", async () => {
+    let cancelCalls = 0;
+    const recognizer: SpeechRecognizer = {
+      modelIdentity: { name: "cancel-hook-budget", version: "1" },
+      cancellationCapability: "RUNTIME_ABORT",
+      async recognize(_input, signal) {
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        });
+      },
+      async cancel() {
+        cancelCalls += 1;
+        return new Promise(() => undefined);
+      }
+    };
+    const subject = worker({
+      recognizer,
+      endpointingFactory: shortEndpointing,
+      maxConcurrentStreams: 1,
+      cancellationTimeoutMs: 20,
+      recognizerTimeoutMs: 200
+    });
+
+    for (const streamId of ["cancel-budget-a", "cancel-budget-b"]) {
+      for (let sequence = 0; sequence < 3; sequence += 1) {
+        const fixture = frame(sequence, true, streamId);
+        await subject.submitFrame(fixture.envelope, fixture.pcm);
+      }
+      const endpoint = frame(3, false, streamId);
+      const finalizing = subject.submitFrame(endpoint.envelope, endpoint.pcm);
+      await Promise.resolve();
+      await subject.cancel({
+        protocolVersion: 1,
+        requestId: newRequestId(),
+        streamId,
+        type: "CANCEL_SPEECH"
+      });
+      await expect(finalizing).resolves.toEqual([]);
+    }
+
+    expect(cancelCalls).toBe(1);
+    expect(subject.getDiagnostics()).toContainEqual(expect.objectContaining({
+      code: "CANCELLATION_RESOURCE_LIMIT"
+    }));
+  });
+
   it("shares concurrent shutdown and bounds a hanging recognizer cancel hook", async () => {
     const deferred = deferredRecognizerWithHangingCancel();
     const subject = worker({
@@ -648,6 +718,30 @@ describe("speech worker adversarial races and hard limits", () => {
       reason: "NO_SPEECH_TIMEOUT"
     }));
     expect(subject.getActiveStreamCount()).toBe(0);
+  });
+
+  it("accepts speech after leading silence even when the utterance buffer starts at a nonzero sequence", async () => {
+    const subject = worker({
+      vadStateFactory: () => new VoiceActivityStateMachine({
+        onsetThreshold: 0.5,
+        continuationThreshold: 0.5,
+        onsetHysteresisMs: 2
+      })
+    });
+
+    for (let sequence = 0; sequence < 16; sequence += 1) {
+      const fixture = tinyFrame(sequence, false, "late-onset-buffer");
+      await subject.submitFrame(fixture.envelope, fixture.pcm);
+    }
+    const firstSpeech = tinyFrame(16, true, "late-onset-buffer");
+    const secondSpeech = tinyFrame(17, true, "late-onset-buffer");
+    await subject.submitFrame(firstSpeech.envelope, firstSpeech.pcm);
+    const events = await subject.submitFrame(secondSpeech.envelope, secondSpeech.pcm);
+
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "SPEECH_STARTED",
+      atTimestampMs: 16
+    }));
   });
 
   it("reports acoustic onset time rather than the later hysteresis-confirmation frame", async () => {
