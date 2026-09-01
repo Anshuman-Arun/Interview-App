@@ -292,8 +292,8 @@ export class SessionReadService {
       ) as SessionReplayReadResponse;
     }
 
-    const loaded = this.loadAuthoritative(sessionId, expectedEventCount);
-    if (loaded === undefined) {
+    const events = this.loadEventsConsistently(sessionId, expectedEventCount);
+    if (events === undefined) {
       return safeReadFailure(
         "SESSION_REPLAY_READ",
         sessionId,
@@ -303,7 +303,7 @@ export class SessionReadService {
 
     let history: ReturnType<typeof projectSessionHistory>;
     try {
-      history = projectSessionHistory(loaded.events, {
+      history = projectSessionHistory(events, {
         bounds: {
           maxEvents: DEFAULT_REPLAY_BOUNDS.maxEvents,
           maxTimelineEntries: HISTORY_TIMELINE_ENTRY_LIMIT,
@@ -519,15 +519,27 @@ export class SessionReadService {
     return { totalSessionCount, sessionIds: [...sessionIds] };
   }
 
+  private loadEventsConsistently(
+    sessionId: SessionId,
+    expectedEventCount: number
+  ): readonly SessionEvent[] | undefined {
+    try {
+      const events = this.#source.loadEvents(sessionId);
+      return events.length === expectedEventCount && events.length > 0
+        ? events
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private loadAuthoritative(
     sessionId: SessionId,
     expectedEventCount: number
   ): LoadedAuthoritativeSession | undefined {
+    const events = this.loadEventsConsistently(sessionId, expectedEventCount);
+    if (events === undefined) return undefined;
     try {
-      const events = this.#source.loadEvents(sessionId);
-      if (events.length !== expectedEventCount || events.length === 0) {
-        return undefined;
-      }
       const state = replaySession(sessionId, events);
       const summary = summaryFromAuthoritativeEvents(sessionId, events, state);
       if (summary === undefined) return undefined;
