@@ -12,6 +12,7 @@ import {
   VerificationResultSchema,
   evidenceKeyToString,
   isDisclosedStatus,
+  isEvidenceValueAllowed,
   type DisclosureId,
   type DisclosureLevel,
   type EvidenceKey,
@@ -192,6 +193,14 @@ function compareVerification(left: VerificationSignal, right: VerificationSignal
   return targetToString(left.target).localeCompare(targetToString(right.target));
 }
 
+function evidenceValuesEqual(left: EvidenceValue, right: EvidenceValue): boolean {
+  return left.value === right.value
+    && left.inferenceConfidence === right.inferenceConfidence
+    && left.lastUpdatedSequence === right.lastUpdatedSequence
+    && left.evidenceEventIds.length === right.evidenceEventIds.length
+    && left.evidenceEventIds.every((eventId, index) => eventId === right.evidenceEventIds[index]);
+}
+
 function failClosedDecision(
   turnId: string,
   reasonCode: PolicyReasonCode,
@@ -363,11 +372,21 @@ function collectActiveEvidence(
     return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
   }
 
+  const rawProjection: unknown = state.studentEvidence;
+  if (!isRecord(rawProjection)) {
+    return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+  }
+  const projectionEntries = Object.entries(rawProjection);
+  if (projectionEntries.length > MAX_EVIDENCE_KEYS) {
+    return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
+  }
+
   if (!Array.isArray(state.eventIds) || state.eventIds.length > MAX_EVENT_IDS) {
     return { ok: false, reasonCode: "RESOURCE_LIMIT_EXCEEDED" };
   }
   const knownEventIds = new Set<string>(state.eventIds);
   let recordCount = 0;
+  const activeKeys = new Set<string>();
   const signals: ActiveEvidenceSignal[] = [];
 
   for (const [storedKey, rawHistory] of entries) {
@@ -393,7 +412,15 @@ function collectActiveEvidence(
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     const rawActive = activeRecords[0];
-    if (rawActive === undefined || !isRecord(rawActive)) continue;
+    if (rawActive === undefined) {
+      if (rawProjection[storedKey] !== undefined) {
+        return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+      }
+      continue;
+    }
+    if (!isRecord(rawActive)) {
+      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
 
     const keyResult = EvidenceKeySchema.safeParse(rawActive["key"]);
     const valueResult = EvidenceValueSchema.safeParse(rawActive["value"]);
@@ -409,7 +436,10 @@ function collectActiveEvidence(
 
     const key = keyResult.data;
     const value = valueResult.data;
-    if (evidenceKeyToString(key) !== storedKey) {
+    if (
+      evidenceKeyToString(key) !== storedKey
+      || !isEvidenceValueAllowed(key, value.value)
+    ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
     if (
@@ -419,6 +449,13 @@ function collectActiveEvidence(
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
+
+    const projectedValue = EvidenceValueSchema.safeParse(rawProjection[storedKey]);
+    if (!projectedValue.success || !evidenceValuesEqual(projectedValue.data, value)) {
+      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
+    activeKeys.add(storedKey);
+
     if (key.problemId !== graph.problem.id) continue;
 
     if (
@@ -440,6 +477,15 @@ function collectActiveEvidence(
       target: targetFromSubject(key.subject),
       canonicalKey: storedKey
     });
+  }
+
+  for (const [projectionKey, rawProjectedValue] of projectionEntries) {
+    if (!activeKeys.has(projectionKey)) {
+      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
+    if (!EvidenceValueSchema.safeParse(rawProjectedValue).success) {
+      return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
+    }
   }
 
   signals.sort(compareSignals);
