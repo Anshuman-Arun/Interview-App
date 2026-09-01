@@ -448,7 +448,7 @@ describe("deterministic Quant Research interview engine", () => {
   });
 
   it("distinguishes malformed replay input from an oversized replay", () => {
-    expectCode(() => replayQuantResearch(bayesian, "not-an-array" as unknown as readonly unknown[]), "INVALID_REPLAY");
+    expectCode(() => replayQuantResearch(bayesian, "not-an-array"), "INVALID_REPLAY");
     expectCode(() => replayQuantResearch(bayesian, Array.from({ length: 65 }, () => null)), "RESOURCE_LIMIT_EXCEEDED");
   });
 
@@ -458,7 +458,7 @@ describe("deterministic Quant Research interview engine", () => {
     engine.applyAction({ actionId: "detach-2", kind: "CHOOSE_OPTION", option: "LINEAR" });
     const baseline = engine.getResult();
     const mutated = engine.getResult();
-    (mutated.evidence as QuantResearchError[]).splice(0, mutated.evidence.length);
+    (mutated.evidence as unknown as unknown[]).splice(0, mutated.evidence.length);
     const metrics = mutated.metrics as Record<string, number>;
     metrics.ROBUSTNESS = -999;
     expect(engine.getResult()).toEqual(baseline);
