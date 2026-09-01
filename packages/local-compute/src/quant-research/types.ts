@@ -482,7 +482,9 @@ export function parseQuantResearchAction(input: unknown): QuantResearchAction {
   if (parsingAction) failAction("Reentrant candidate action validation is not allowed");
   parsingAction = true;
   try {
-    return parseQuantResearchActionUnchecked(input);
+    const action = parseQuantResearchActionUnchecked(input);
+    if (action.kind === "SUBMIT_PARAMETERS") Object.freeze(action.values);
+    return Object.freeze(action);
   } finally {
     parsingAction = false;
   }
