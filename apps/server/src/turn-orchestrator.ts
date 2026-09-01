@@ -25,6 +25,14 @@ export interface TurnOrchestrationInput {
   readonly studentText: string;
 }
 
+function permitsCurrentMockExecution(
+  configuration: { readonly providerSelection?: { readonly providerId: string; readonly modelId: string } }
+): boolean {
+  const selection = configuration.providerSelection;
+  return selection === undefined
+    || (selection.providerId === "mock-model" && selection.modelId === "mock-default");
+}
+
 export class ServerTurnOrchestrator {
   private readonly validator: DisclosureValidator;
   private readonly inFlight = new Map<string, Promise<void>>();
@@ -69,6 +77,7 @@ export class ServerTurnOrchestrator {
     if (composition.mode !== "OXFORD_MATHEMATICS") {
       return;
     }
+    const canExecuteCurrentProvider = permitsCurrentMockExecution(composition.configuration);
 
     const turns = new TurnCoordinator(writer);
 
@@ -100,7 +109,7 @@ export class ServerTurnOrchestrator {
           )
       );
 
-      if (!hasValidatedGeneration && !hasDeliveries) {
+      if (canExecuteCurrentProvider && !hasValidatedGeneration && !hasDeliveries) {
         await this.orchestrateTurn({
           sessionId,
           turnId: turnId as TurnId,
@@ -136,6 +145,11 @@ export class ServerTurnOrchestrator {
 
     const composition = resolveSessionStateComposition(currentState);
     if (composition.mode !== "OXFORD_MATHEMATICS") {
+      return;
+    }
+    if (!permitsCurrentMockExecution(composition.configuration)) {
+      // Real provider resolution/execution is intentionally deferred. Never
+      // silently substitute the mock adapter for an authoritative selection.
       return;
     }
     const problem = composition.problem;
