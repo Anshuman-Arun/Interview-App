@@ -23,7 +23,7 @@ tests/**/*.test.tsx
 
 At the 2026-09-01 audit this matched 105 files.
 
-Because the full suite already includes desktop, replay, property, and typed E2E files, CI runs it once rather than executing the same tests repeatedly through targeted subset scripts.
+CI uses `pnpm test:ci` for the same full discovery with at most two workers, which reduces GitHub-hosted Windows contention without changing which files are discovered. The normal local `pnpm test` command keeps Vitest's default worker selection.
 
 ## Validation layers
 
@@ -38,7 +38,8 @@ Because the full suite already includes desktop, replay, property, and typed E2E
 
 ### Full behavior gate
 
-- `pnpm test` — every discovered Vitest file.
+- `pnpm test` — every discovered Vitest file for normal local use.
+- `pnpm test:ci` — the same discovery with at most two workers for the authoritative CI/check profile.
 
 The tree contains unit, integration, adversarial, property, replay, browser, desktop, worker, quant, verification, persistence, transport, and typed E2E tests.
 
@@ -46,16 +47,16 @@ The tree contains unit, integration, adversarial, property, replay, browser, des
 
 - `pnpm demo` — deterministic synthetic interview path through the admitted orchestration stack.
 
-## Targeted developer scripts
+## Focused secondary gates
 
-These are useful for focused local iteration, but are not separate coverage claims:
+CI and `pnpm check` intentionally rerun these focused scripts after the full-suite gate:
 
 - `pnpm test:desktop`
 - `pnpm test:replay`
-- `pnpm test:property`
+- `pnpm test:property` — all files following the `.property.test.` naming convention;
 - `pnpm test:e2e`
 
-A targeted subset passing is never sufficient evidence that the repository is merge-ready.
+They are also useful for local iteration. A focused gate passing is never sufficient evidence that the repository is merge-ready; full-suite discovery remains authoritative for repository-wide coverage. Running them in CI additionally prevents the named package scripts from silently becoming stale or broken.
 
 ## Major tested surfaces
 
@@ -85,9 +86,9 @@ GitHub Actions runs the required validation on:
 - `ubuntu-latest`
 - `windows-latest`
 
-for pull requests and pushes to `main`.
+for pull-request and `main`-push events.
 
-The workflow uses `fail-fast: false` so one operating system failing does not hide the other platform's result. PR-head runs may be cancelled when superseded; main-push runs are not cancelled so every landed commit completes validation.
+The workflow uses `fail-fast: false` so one operating system failing does not hide the other platform's result. Superseded first-attempt PR runs may be cancelled. Main-push runs use SHA-scoped concurrency so workflow concurrency does not replace one scheduled main-push run with a later push. Branch protection is not currently configured, and GitHub-level skip/manual-cancel behavior is outside this workflow guarantee.
 
 ## Quantitative claims
 

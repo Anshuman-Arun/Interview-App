@@ -11,8 +11,8 @@ permissions:
 
 concurrency:
   # PR runs share a ref-scoped group so a newer head can supersede an older
-  # head. Main pushes use the commit SHA so landed commits never replace each
-  # other while running or pending.
+  # head. Main-push runs use the commit SHA so workflow concurrency never
+  # supersedes one main-push validation run with another.
   group: ci-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.run_attempt == 1 }}
 
@@ -74,10 +74,25 @@ jobs:
       - name: Build Electron desktop runtime
         run: pnpm build:desktop
 
+      - name: Run Electron desktop bootstrap tests
+        run: pnpm test:desktop
+
       - name: Run complete Vitest suite
-        # vitest.config.ts includes every tests/**/*.test.ts and tests/**/*.test.tsx
-        # file, so desktop, replay, property, and typed E2E tests run here once.
-        run: pnpm test
+        # The CI variant keeps full discovery while bounding file-level
+        # parallelism for GitHub-hosted Windows runner stability.
+        run: pnpm test:ci
+
+      # These focused gates intentionally rerun high-risk slices. Besides
+      # focused failure signal, they keep the named package-script contracts
+      # themselves from silently drifting while the full-suite glob stays green.
+      - name: Run replay verification
+        run: pnpm test:replay
+
+      - name: Run property test suite
+        run: pnpm test:property
+
+      - name: Run end-to-end typed interview suite
+        run: pnpm test:e2e
 
       - name: Run synthetic interview demo
         run: pnpm demo

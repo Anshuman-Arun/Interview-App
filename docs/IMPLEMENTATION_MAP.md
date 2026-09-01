@@ -15,7 +15,7 @@ This map describes the code that exists on the current repository baseline and, 
 ## Authoritative product composition
 
 ```text
-Electron desktop bootstrap (optional)
+Electron trusted desktop bootstrap (current secure end-to-end host)
         |
         v
 apps/web React/Vite renderer
@@ -51,7 +51,7 @@ That is the current production interview path. The broader backend map below mus
 | Typed React/KaTeX interview shell | `apps/web/src/App.tsx`, components/hooks | `PRODUCTION_WIRED` | Main UI; currently Ramsey-specific. |
 | Real tldraw canvas bridge | `WhiteboardCanvas.tsx`, `real-tldraw-editor.ts`, `tldraw-whiteboard-adapter.ts` | `PRODUCTION_WIRED` | Real `Tldraw` component is mounted; this is no longer merely an in-memory whiteboard harness. |
 | Electron desktop runtime | `apps/desktop/src/*` | `PRODUCTION_WIRED` | Starts backend, serves/loads renderer, injects trusted auth, enforces navigation/permission policy. |
-| Browser audio primitives | `apps/web/src/audio/*` | `RUNTIME_SEAM_ONLY` | Capture/playback/cancellation infrastructure exists; `useInterviewSession` still installs an audio player that throws “not exposed”. |
+| Browser audio primitives | `apps/web/src/audio/*` | `RUNTIME_SEAM_ONLY` | Capture/playback/cancellation infrastructure exists; `useInterviewSession` deliberately installs a fail-closed placeholder instead of a physical audio player. |
 | VAD/STT core | `packages/local-compute/src/speech-*.ts` | `BACKEND_IMPLEMENTED` | Bounded worker, PCM, VAD state machine and recognizer seam. No live Silero/Moonshine inference is claimed. |
 | TTS core | `packages/local-compute/src/tts-*.ts` | `BACKEND_IMPLEMENTED` | Bounded request/worker/synthesis contracts. No live Kokoro inference is claimed. |
 | Local process supervisor | `packages/local-runtime/src/*` | `BACKEND_IMPLEMENTED` | Child-process registration, readiness, restart, shutdown, environment and bounded diagnostics. Not composed into the main interview path. |
@@ -72,8 +72,8 @@ That is the current production interview path. The broader backend map below mus
 | `MockModelAdapter` | `packages/providers/src/mock-model-adapter.ts` | `PRODUCTION_WIRED` | Explicitly instantiated by `ServerTurnOrchestrator`. |
 | `GeminiApiAdapter` | `packages/providers/src/gemini-api-adapter.ts` | `RUNTIME_SEAM_ONLY` | Gated adapter exists and is tested; it is not the current server reasoning provider. |
 | Synthetic interview | `synthetic-interview.ts`, `apps/server/src/run-synthetic.ts` | `TEST/HARNESS_ONLY` | Deterministic smoke/demo path used by validation. |
-| Public-release + architecture checks | `scripts/check-public-release.mjs`, `check-architecture-boundaries.mjs` | `PRODUCTION_WIRED` | Required release/invariant gates. |
-| GitHub Actions CI | `.github/workflows/ci.yml` | `PRODUCTION_WIRED` | PR + main-push matrix on Ubuntu and Windows. |
+| Public-release + architecture checks | `scripts/check-public-release.mjs`, `check-architecture-boundaries.mjs` | `TEST/HARNESS_ONLY` | Required repository validation/invariant gates; they are not part of the product runtime. |
+| GitHub Actions CI | `.github/workflows/ci.yml` | `TEST/HARNESS_ONLY` | Repository validation harness for pull-request and main-push events on Ubuntu and Windows. |
 
 ## Current integration gap
 
@@ -86,28 +86,35 @@ The current main product path still:
 - has no end-to-end voice path exposed in the interview UI;
 - does not expose Quant Trading or Quant Research modes;
 - does not expose grounded evaluation or replay/history views;
-- does not run live Silero, Moonshine, Kokoro, or a live semantic vision backend.
+- does not run live Silero, Moonshine, Kokoro, or a live semantic vision backend;
+- does not provide a standalone browser-token bootstrap for the default `App`; the current secure end-to-end host is Electron.
 
 Accordingly, backend packages should not be described as “production integrated” merely because their tests pass.
 
 ## Package dependency direction
 
-The frozen architecture remains centered on application-owned authority:
+The architecture checker is authoritative for frozen package dependency rules. Its current allowed project-package imports are:
 
 ```text
-apps/web -----------------------------> delivery/domain
-apps/server --------------------------> interview-engine
-apps/desktop -------------------------> apps/server + trusted renderer bootstrap
-
-interview-engine --------------------> problems/providers/delivery/local-compute
-persistence --------------------------> events/domain
-events -------------------------------> domain
-replay -------------------------------> events/domain
-verification -------------------------> domain
-whiteboard ---------------------------> domain
-local-compute ------------------------> domain
-local-runtime ------------------------> diagnostics + OS process boundary
+domain           -> (none)
+diagnostics      -> domain
+events           -> domain
+persistence      -> domain, events
+providers        -> domain
+problems         -> domain
+replay           -> domain, events
+verification     -> domain
+whiteboard       -> domain
+vision           -> domain
+local-compute    -> domain
+local-runtime    -> diagnostics
+model-assets     -> (none)
+delivery         -> domain, events
+interview-engine -> domain, events, persistence, providers, problems,
+                    delivery, local-compute, verification, whiteboard
 ```
+
+Apps remain composition roots; lower-level packages may not import application roots.
 
 Key invariants:
 
@@ -140,7 +147,11 @@ The workflow executes:
 - ESLint;
 - browser build;
 - desktop build;
-- one complete Vitest run covering all discovered test files, including desktop/replay/property/typed-E2E coverage;
+- explicit desktop bootstrap tests;
+- one complete Vitest discovery through `test:ci` (the same files as `pnpm test`, with at most two workers);
+- focused replay verification;
+- the full `.property.test.` convention sweep;
+- the typed E2E script;
 - the synthetic interview demo.
 
-Main-push runs are not cancelled by later main pushes. This ensures every commit that has already landed on the authoritative integration branch receives a completed CI result.
+Superseded first-attempt PR runs may be cancelled. Main-push runs use commit-SHA concurrency groups, so workflow concurrency does not replace one scheduled main-push validation run with another. The repository currently has no branch protection/ruleset requiring successful CI, and GitHub-level skip/manual-cancel behavior remains outside the workflow guarantee.

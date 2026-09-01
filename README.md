@@ -16,6 +16,7 @@ The production-wired interview path currently provides:
 
 Important current limitations:
 
+- the secure end-to-end product path currently relies on the Electron trusted bootstrap; the bare browser app has no built-in way to acquire the server's client token;
 - the main web session hook and server turn orchestrator are still bound to the six-people Ramsey problem;
 - the server orchestration path still constructs `MockModelAdapter`; the Gemini adapter/control-plane infrastructure is not the live production reasoning path;
 - browser audio primitives exist, but the interview UI does not yet install a physical audio player or expose end-to-end voice;
@@ -74,7 +75,8 @@ tests/              unit, adversarial, property, replay, desktop, browser, and t
 | VAD/STT bounded worker core | `BACKEND_IMPLEMENTED` | Model-independent worker core with injected VAD/recognizer seams; no claim of live Silero/Moonshine inference. |
 | TTS bounded worker core | `BACKEND_IMPLEMENTED` | Synthesis protocol/worker core exists; no claim of live Kokoro inference. |
 | Local process supervision | `BACKEND_IMPLEMENTED` | Bounded child-process manager, readiness, restart/shutdown, environment and diagnostic controls. |
-| Vision preprocessing/admission | `BACKEND_IMPLEMENTED` | Snapshot/preprocessing and freshness/admission exist; current inference implementation includes a deterministic fake backend. |
+| Vision preprocessing + freshness/admission | `BACKEND_IMPLEMENTED` | Snapshot/preprocessing plus board/shape freshness and result admission exist. |
+| Vision semantic inference | `TEST/HARNESS_ONLY` | The current concrete semantic backend is deterministic fake inference; no live vision model is selected. |
 | Formal interpretation routing | `BACKEND_IMPLEMENTED` | Bounded proposal admission and deterministic protocol/verifier routing exist. |
 | Deterministic mathematical verification | `BACKEND_IMPLEMENTED` | Multiple verifier domains and coordinator/admission paths exist. |
 | Grounded session evaluation | `BACKEND_IMPLEMENTED` | Deterministic scorer and bounded qualitative-model seam; no main UI. |
@@ -82,7 +84,8 @@ tests/              unit, adversarial, property, replay, desktop, browser, and t
 | Quant Trading infrastructure | `BACKEND_IMPLEMENTED` | Market-making/trader scenario engine exists; no selectable main UI mode. |
 | Quant Research infrastructure | `BACKEND_IMPLEMENTED` | Deterministic research engine/coordinator/persistence coverage exists; no selectable main UI mode. |
 | Oxford and quant problem catalogs | `BACKEND_IMPLEMENTED` | Curated catalogs exist, but production selection remains hard-coded. |
-| Provider control plane / Gemini adapter | `RUNTIME_SEAM_ONLY` | Policy/configuration/admission infrastructure exists; live server orchestration remains mock-backed. |
+| Provider control plane | `BACKEND_IMPLEMENTED` | Bounded configuration/capability/secret-reference/policy machinery exists, but the current server composition does not select it. |
+| Gemini adapter | `RUNTIME_SEAM_ONLY` | Gated adapter exists; live server orchestration remains mock-backed. |
 
 See `docs/IMPLEMENTATION_MAP.md` for the detailed component map.
 
@@ -99,17 +102,30 @@ Install:
 corepack pnpm install --frozen-lockfile
 ```
 
-Browser development:
+Production-like desktop run:
 
 ```bash
-corepack pnpm start:server
+corepack pnpm start:desktop
+```
+
+This builds the browser bundle and desktop runtime, then launches Electron with the trusted bootstrap that injects loopback authentication.
+
+For desktop live-reload development, run these in separate terminals:
+
+```bash
 corepack pnpm dev:web
 ```
 
-Desktop development:
-
 ```bash
 corepack pnpm dev:desktop
+```
+
+`dev:desktop` expects the Vite development server to already be running. A bare `dev:web` renderer is useful for UI work, but the current `App` has no built-in browser-token acquisition flow, so `start:server` + `dev:web` alone is not an authenticated end-to-end interview path.
+
+Server-only development and transport testing can still use:
+
+```bash
+corepack pnpm start:server
 ```
 
 Synthetic smoke path:
@@ -126,8 +142,8 @@ corepack pnpm demo
 corepack pnpm check
 ```
 
-It runs public-release/security hygiene, architecture boundaries, TypeScript, ESLint, browser build, desktop build, the complete Vitest suite, and the synthetic interview demo.
+It runs public-release/security hygiene, architecture boundaries, TypeScript, ESLint, browser build, desktop build, the complete Vitest suite, focused desktop/replay/property/typed-E2E gates, and the synthetic interview demo.
 
-The complete Vitest run is authoritative for test coverage: `vitest.config.ts` includes every `tests/**/*.test.ts` and `tests/**/*.test.tsx` file. Targeted scripts such as `test:desktop`, `test:replay`, `test:property`, and `test:e2e` are convenience subsets, not substitutes for the full suite.
+The complete Vitest discovery is authoritative for repository-wide coverage: `vitest.config.ts` includes every `tests/**/*.test.ts` and `tests/**/*.test.tsx` file. `pnpm test` is the normal local full-suite command; CI and `pnpm check` use `pnpm test:ci`, which runs the same discovery with at most two workers for cross-platform runner stability. Focused scripts are intentionally rerun as secondary gates so their package-script contracts cannot silently rot. `test:property` follows the `.property.test.` filename convention rather than a hand-maintained partial list.
 
-GitHub Actions executes the validation matrix for pull requests and for every push to `main` on both Ubuntu and Windows. Superseded PR-head runs may be cancelled; validation for commits already landed on `main` is not cancelled by a later main push.
+GitHub Actions is configured for pull requests and pushes to `main` on both Ubuntu and Windows. Superseded first-attempt PR runs may be cancelled. Main-push runs use SHA-scoped concurrency, so a later main push does not supersede an already scheduled main-push validation run. Repository branch protection is not currently configured, and GitHub-level skip/manual-cancel behavior is outside this workflow guarantee.

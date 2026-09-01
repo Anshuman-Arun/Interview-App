@@ -4,14 +4,11 @@ This document describes the repository-wide readiness contract. It no longer fre
 
 ## What “ready” means
 
-A change is ready for merge only when the repository's authoritative CI matrix passes on both Ubuntu and Windows and no required gate is skipped, downgraded to a warning, or made conditional merely to obtain green status.
+Repository policy considers a change ready for merge only when the authoritative CI matrix passes on both Ubuntu and Windows and no required gate is skipped, downgraded to a warning, or made conditional merely to obtain green status.
 
-GitHub Actions runs for:
+GitHub Actions is configured for pull-request and `main`-push events. Superseded first-attempt PR runs may be cancelled. Main-push runs use commit-SHA concurrency groups, so workflow concurrency does not supersede one scheduled main-push run with another.
 
-- every pull request;
-- every push to `main`.
-
-Superseded PR-head runs may be cancelled. Main-push runs are intentionally not cancelled by later pushes, so each commit that lands on the integration branch receives a completed validation result.
+This is a readiness contract, not a GitHub-enforced merge rule: the repository currently has no branch protection/ruleset requiring successful CI, and GitHub-level skip instructions or manual cancellation can prevent a configured run from completing.
 
 ## Authoritative gates
 
@@ -23,8 +20,12 @@ The workflow currently enforces:
 4. ESLint;
 5. production browser build;
 6. Electron desktop runtime build;
-7. the complete Vitest suite;
-8. the synthetic interview smoke/demo path.
+7. Electron desktop bootstrap tests;
+8. the complete Vitest suite using the bounded CI worker profile;
+9. focused replay verification;
+10. the full `.property.test.` convention sweep;
+11. the typed E2E interview script;
+12. the synthetic interview smoke/demo path.
 
 The complete Vitest suite is one gate, not a collection of duplicated CI invocations. `vitest.config.ts` includes:
 
@@ -33,9 +34,9 @@ tests/**/*.test.ts
 tests/**/*.test.tsx
 ```
 
-Therefore desktop tests, replay tests, property tests, adversarial tests, browser tests, quant tests, verification tests, speech/TTS tests, and `tests/e2e-typed-interview.test.ts` all run in the single full-suite invocation.
+Therefore desktop tests, replay tests, property tests, adversarial tests, browser tests, quant tests, verification tests, speech/TTS tests, and `tests/e2e-typed-interview.test.ts` are all covered by full-suite discovery.
 
-Targeted scripts such as `pnpm test:desktop`, `pnpm test:replay`, `pnpm test:property`, and `pnpm test:e2e` are developer convenience subsets. They do not replace `pnpm test`.
+CI deliberately reruns the named desktop/replay/property/typed-E2E scripts as focused secondary gates. This both gives focused failure signal and validates those package-script contracts themselves. `pnpm test:property` uses Vitest's path filter on the `.property.test.` naming convention, so it does not rely on a stale hand-maintained list. These focused gates supplement rather than replace the full suite.
 
 ## Local aggregate
 
@@ -48,13 +49,17 @@ corepack pnpm check
 The aggregate mirrors the CI categories:
 
 ```text
-security:public
 architecture boundaries
+security:public
 typecheck
 lint
 build:web
 build:desktop
-test
+test:desktop
+test:ci
+test:replay
+test:property
+test:e2e
 demo
 ```
 

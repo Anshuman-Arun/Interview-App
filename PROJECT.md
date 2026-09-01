@@ -4,7 +4,7 @@
 
 The repository has moved well beyond the original Phase 1 backend surface, but the user-facing product remains a narrower vertical slice.
 
-The current production composition is a typed Oxford mathematics interview shell backed by local loopback transport, SQLite event sourcing, real tldraw, and mock-provider Socratic text orchestration. A larger set of speech, vision, verification, evaluation, replay, provider-control-plane, and quant systems exists behind that shell and is not yet fully product-wired.
+The current production composition is a typed Oxford mathematics interview shell hosted by the Electron trusted bootstrap and backed by local loopback transport, SQLite event sourcing, real tldraw, and mock-provider Socratic text orchestration. A larger set of speech, vision, verification, evaluation, replay, provider-control-plane, and quant systems exists behind that shell and is not yet fully product-wired. The bare browser renderer can be exercised through injected/test seams, but the current `App` has no built-in browser-token acquisition flow.
 
 This distinction is deliberate: documentation must describe what the application actually composes today, not what a tested backend package could support later.
 
@@ -19,7 +19,7 @@ This distinction is deliberate: documentation must describe what the application
 ## Current architecture
 
 ```text
-Electron (optional trusted desktop bootstrap)
+Electron trusted desktop bootstrap (current secure end-to-end host)
         |
         v
 React/Vite renderer + real tldraw
@@ -79,7 +79,8 @@ As of the 2026-09-01 audited baseline, the main product path:
 3. does not expose end-to-end voice interaction;
 4. does not expose Quant Trading or Quant Research as selectable interview modes;
 5. does not expose grounded evaluation or replay/history projections in the main UI;
-6. does not run live Silero, Moonshine, Kokoro, or a live semantic vision backend.
+6. does not run live Silero, Moonshine, Kokoro, or a live semantic vision backend;
+7. does not provide a standalone browser-token bootstrap for the default `App`.
 
 These are implementation-state facts, not claims that the underlying backend work is absent.
 
@@ -96,7 +97,7 @@ Avoid copying fixed total assertion counts into status documents. The suite chan
 
 ## Validation and release branch policy
 
-Authoritative CI runs on pull requests and pushes to `main`, on Ubuntu and Windows. A newer PR-head run may cancel an older superseded PR run, but main-push validation is allowed to finish so every landed main commit gets its own completed result.
+Authoritative CI is configured for pull requests and pushes to `main`, on Ubuntu and Windows. A newer first-attempt PR run may cancel an older superseded PR run. Main-push runs use commit-SHA concurrency groups, so workflow concurrency does not replace one scheduled main-push validation run with another. This is validation policy, not merge enforcement: the repository currently has no branch protection/ruleset requiring CI, and GitHub-level skip/manual-cancel behavior remains outside the workflow.
 
 The local aggregate is:
 
@@ -106,13 +107,17 @@ corepack pnpm check
 
 It covers:
 
-- public-release/security hygiene;
 - frozen architecture-boundary checks;
+- public-release/security hygiene;
 - TypeScript;
 - ESLint;
 - browser build;
 - Electron desktop build;
-- the complete Vitest suite (including desktop, replay, property, and typed E2E tests);
+- explicit desktop bootstrap tests;
+- the complete Vitest suite through the two-worker CI variant;
+- focused replay verification;
+- the full `.property.test.` convention sweep;
+- the typed E2E script;
 - the synthetic interview smoke path.
 
 ## Near-term integration milestone
