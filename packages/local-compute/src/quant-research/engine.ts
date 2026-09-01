@@ -825,7 +825,7 @@ export interface QuantResearchReplayOutput {
   readonly acceptedActions: readonly QuantResearchAction[];
 }
 
-export function replayQuantResearch(definitionInput: unknown, actionsInput: readonly unknown[]): QuantResearchReplayOutput {
+export function replayQuantResearch(definitionInput: unknown, actionsInput: unknown): QuantResearchReplayOutput {
   if (!Array.isArray(actionsInput)) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be an array");
   if (actionsInput.length > MAX_ACTIONS) {
     throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Replay action list exceeds the maximum size");
