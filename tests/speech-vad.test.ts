@@ -64,6 +64,21 @@ describe("adaptive endpointing policy", () => {
     maximumUtteranceMs: 60_000
   });
 
+  it("runtime-rejects malformed or internally inconsistent heuristic input", () => {
+    expect(() => policy.decide({
+      state: "POSSIBLE_END",
+      speechMs: Number.NaN,
+      silenceMs: 100,
+      utteranceMs: 200
+    })).toThrow();
+    expect(() => policy.decide({
+      state: "POSSIBLE_END",
+      speechMs: 300,
+      silenceMs: 0,
+      utteranceMs: 200
+    })).toThrow(/Speech duration/u);
+  });
+
   it("does not finalize on a brief pause", () => {
     expect(policy.decide({ state: "POSSIBLE_END", speechMs: 400, silenceMs: 300, utteranceMs: 700 })).toEqual({ kind: "CONTINUE" });
   });
