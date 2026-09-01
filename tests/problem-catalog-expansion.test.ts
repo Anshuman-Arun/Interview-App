@@ -20,6 +20,7 @@ import {
   selectPedagogicalAction
 } from "../packages/interview-engine/src/index.js";
 import {
+  EventIdSchema,
   InputEpisodeIdSchema,
   newSessionId,
   TurnIdSchema,
@@ -162,8 +163,10 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
         expect(problem.id).toBeDefined();
         const turnId = TurnIdSchema.parse("turn_001");
         const episodeId = InputEpisodeIdSchema.parse("ep_001");
+        const eventId = EventIdSchema.parse("event_turn_001");
         const state = {
           ...initialSessionState(newSessionId()),
+          sequence: 1,
           started: true,
           status: "ACTIVE" as const,
           problem: {
@@ -171,6 +174,18 @@ describe("Problem Catalog Expansion & Pedagogical Graph Engine", () => {
             version: problem.version,
             prompt: problem.public.prompt,
             providerContextSpecSha256: createProviderContextSpecFingerprintSync(problem)
+          },
+          lastCommittedInputSequence: 1,
+          eventIds: [eventId],
+          inputEpisodes: {
+            [episodeId]: {
+              inputEpisodeId: episodeId,
+              status: "COMMITTED" as const,
+              inputs: [{
+                modality: "TYPING" as const,
+                semanticContent: "I will begin by setting up the formal problem definition."
+              }]
+            }
           },
           turns: {
             [turnId]: {
