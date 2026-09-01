@@ -106,17 +106,19 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
-  it("rejects a late proposal when its GenerationBasis becomes stale", async () => {
+  it("rejects a late proposal after a basis-changing mutation proactively supersedes its generation", async () => {
     const harness = await coordinatorHarness();
     try {
       const provider = new DeferredProvider();
       const execution = await harness.coordinator.start(startInput(harness, provider));
       await provider.turnStarted;
       await harness.turns.commitBoardPatch("student replaced the board argument");
+      expect(harness.writer.getState().generations[execution.generationId]?.status).toBe("SUPERSEDED");
+
       provider.release();
       const outcome = await execution.completion;
 
-      expect(outcome).toMatchObject({ status: "REJECTED", reason: "Generation compatibility is INCOMPATIBLE" });
+      expect(outcome).toMatchObject({ status: "REJECTED", reason: "Generation is not active" });
       expect(harness.writer.getState().generations[execution.generationId]?.status).toBe("SUPERSEDED");
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
     } finally {
