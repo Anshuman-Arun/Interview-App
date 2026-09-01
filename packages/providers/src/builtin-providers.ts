@@ -13,8 +13,13 @@ import {
 
 const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 
+/* eslint-disable @typescript-eslint/unbound-method -- Captured prototype method is invoked only via Reflect.apply. */
 const registerProviderDefinitions = ProviderRegistry.prototype.registerMany;
-const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
+/* eslint-enable @typescript-eslint/unbound-method */
+
+function isProviderControlPlaneError(value: unknown): value is ProviderControlPlaneError {
+  return ProviderControlPlaneError.isControlPlaneError(value);
+}
 
 const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
 const PROPOSAL_KEYS = Object.freeze([
@@ -35,9 +40,11 @@ const BOARD_ACTION_KEYS = Object.freeze([
 ] as const);
 const BOARD_ACTION_KEY_SET = new Set<string>(BOARD_ACTION_KEYS);
 
+/* eslint-disable @typescript-eslint/unbound-method -- Captured intrinsics are invoked only via Reflect.apply. */
 const SET_HAS_INTRINSIC = Set.prototype.has;
 const SET_ADD_INTRINSIC = Set.prototype.add;
 const STRING_TRIM_INTRINSIC = String.prototype.trim;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
   const result: unknown = REFLECT_APPLY_INTRINSIC(SET_HAS_INTRINSIC, set, [value]);
@@ -89,7 +96,11 @@ function readMockRuntimeMemberWithoutAccessors(
       return member;
     }
     try {
-      current = Object.getPrototypeOf(current);
+      const nextPrototype: unknown = Object.getPrototypeOf(current);
+      if (nextPrototype !== null && typeof nextPrototype !== "object") {
+        return invalidMockRuntime();
+      }
+      current = nextPrototype;
     } catch {
       return invalidMockRuntime();
     }
