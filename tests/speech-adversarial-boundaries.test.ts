@@ -65,6 +65,33 @@ describe("speech worker adversarial callback boundaries", () => {
       recognizer: new DeterministicFakeRecognizer(),
       maxConcurrentStreams: null
     }))).toThrow(/maxConcurrentStreams/u);
+    expect(() => new SpeechWorkerCore(castOptions({
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      maxConcurrentStream: 1
+    }))).toThrow(/unexpected field/u);
+  });
+
+  it("snapshots accessor-backed configuration exactly once at construction", async () => {
+    let limitReads = 0;
+    const options = {
+      vadBackend: new DeterministicEnergyVadBackend(),
+      recognizer: new DeterministicFakeRecognizer(),
+      get maxConcurrentStreams() {
+        limitReads += 1;
+        return 1;
+      }
+    };
+    const worker = new SpeechWorkerCore(options);
+    expect(limitReads).toBe(1);
+
+    const first = frame(0, "getter-left");
+    await worker.submitFrame(first.envelope, first.pcm);
+    const second = frame(0, "getter-right");
+    await expect(worker.submitFrame(second.envelope, second.pcm)).rejects.toMatchObject({
+      code: "RESOURCE_LIMIT"
+    });
+    expect(limitReads).toBe(1);
   });
   it("maps arbitrary VAD exceptions to a stable code and closes the poisoned stream", async () => {
     const vadBackend: VadBackend = {
