@@ -57,6 +57,24 @@ describe("speech worker adversarial callback boundaries", () => {
     });
   });
 
+  it("rejects extra fields in custom VAD observations as protocol violations", async () => {
+    const vadBackend: VadBackend = {
+      async classify() {
+        return { speechProbability: 0, unexpected: "x" };
+      }
+    };
+    const worker = new SpeechWorkerCore({
+      vadBackend,
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    const fixture = frame(0);
+    await expect(worker.submitFrame(fixture.envelope, fixture.pcm)).rejects.toMatchObject({
+      code: "VAD_PROTOCOL_ERROR",
+      message: "VAD backend returned an invalid observation"
+    });
+    expect(worker.getActiveStreamCount()).toBe(0);
+  });
+
   it("fails closed on malformed VAD probability output", async () => {
     const vadBackend: VadBackend = {
       async classify() {
