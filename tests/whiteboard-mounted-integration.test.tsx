@@ -642,13 +642,17 @@ describe("Real tldraw mounted browser integration", () => {
       Number.MAX_SAFE_INTEGER;
     const nativeId = createShapeId("board-revision-exhausted");
 
-    expect(() => bridge.getNativeEditor().createShapes([{
-      id: nativeId,
-      type: "geo",
-      x: 10,
-      y: 10,
-      props: { geo: "rectangle", w: 20, h: 20 }
-    }])).toThrow(/BoardRevision/u);
+    await expect(
+      act(async () => {
+        bridge.getNativeEditor().createShapes([{
+          id: nativeId,
+          type: "geo",
+          x: 10,
+          y: 10,
+          props: { geo: "rectangle", w: 20, h: 20 }
+        }]);
+      })
+    ).rejects.toThrow(/BoardRevision/u);
 
     expect(bridge.getShape(nativeId)).toBeUndefined();
     expect(adapter.getBoardRevision()).toBe(Number.MAX_SAFE_INTEGER);
