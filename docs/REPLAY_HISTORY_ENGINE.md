@@ -82,7 +82,7 @@ invented board semantics from appearing in committed Turns.
 Delivery states remain distinct:
 
 ```text
-VALIDATED / QUEUED      -> authorized, not known presented
+VALIDATED -> QUEUED     -> authorized, not known presented
 DELIVERING              -> delivery in progress, exposure not established
 EXPOSED / COMPLETED     -> presented
 CANCELLED               -> cancelled before known exposure
@@ -92,6 +92,11 @@ POSSIBLY_EXPOSED        -> possibly presented
 `POSSIBLY_EXPOSED` is never collapsed into cancellation or completion. Generated
 but never delivered content is not rendered as candidate-visible dialogue, and
 duplicate acknowledgements do not create duplicate delivery identities.
+
+A `DELIVERY_QUEUED` entry records both the atom's persisted admission status
+(`persistedAtomStatus: VALIDATED`) and the post-event reducer status
+(`status: QUEUED`), preserving the validation-to-queue transition without
+fabricating a separate event.
 
 Only `DELIVERY_EXPOSED` may include candidate-visible TEXT/AUDIO/WHITEBOARD
 content and bounded disclosure IDs. AUDIO records only that an audio reference was

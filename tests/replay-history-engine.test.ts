@@ -436,6 +436,7 @@ describe("replay/history projections", () => {
       const queued = projectReplayTimeline(cancelledHarness.store.load(cancelledHarness.sessionId))
         .entries.find((entry) => entry.kind === "DELIVERY_QUEUED");
       expect(queued?.delivery?.presentationState).toBe("AUTHORIZED");
+      expect(queued?.delivery?.persistedAtomStatus).toBe("VALIDATED");
       expect(queued?.delivery?.status).toBe("QUEUED");
       await new DeliveryCoordinator(cancelledHarness.writer)
         .cancelBeforeExposure(atom.deliveryId, cancelledHarness.safeProbe);

@@ -76,6 +76,7 @@ export interface ReplayDeliveryDetail {
   readonly deliveryId: string;
   readonly generationId: GenerationId;
   readonly medium: DeliveryMedium;
+  readonly persistedAtomStatus: DeliveryStatus;
   readonly status: DeliveryStatus;
   readonly presentationState: ReplayPresentationState;
   readonly disclosure: ReplayDisclosureSummary;

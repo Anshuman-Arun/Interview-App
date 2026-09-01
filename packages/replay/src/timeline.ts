@@ -118,6 +118,7 @@ function deliveryDetail(
     deliveryId: atom.deliveryId,
     generationId: atom.generationId,
     medium: atom.content.medium,
+    persistedAtomStatus: atom.status,
     status,
     presentationState: presentationState(status),
     disclosure: {
