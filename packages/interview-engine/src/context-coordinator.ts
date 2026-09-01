@@ -80,7 +80,13 @@ function assessContext(
   }
 
   const realizationRequest = state.pedagogicalActions[generation.basis.turnId];
-  if (realizationRequest === undefined) return { ok: false, reason: "ACTION_UNAVAILABLE" };
+  const generationRequest = generation.pedagogicalAction;
+  if (realizationRequest === undefined || generationRequest === undefined) {
+    return { ok: false, reason: "ACTION_UNAVAILABLE" };
+  }
+  if (canonicalJson(realizationRequest) !== canonicalJson(generationRequest)) {
+    return { ok: false, reason: "ACTION_STALE" };
+  }
 
   const currentRequest = selectPedagogicalAction(
     state,
