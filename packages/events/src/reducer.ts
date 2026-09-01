@@ -10,6 +10,16 @@ function assertSequence(state: SessionState, event: SessionEvent): void {
   }
 }
 
+function deepFreeze<T>(value: T): T {
+  if (typeof value !== "object" || value === null || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const nested of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(nested);
+  }
+  return Object.freeze(value);
+}
+
 function withDeliveryStatus(state: SessionState, deliveryId: string, status: DeliveryAtom["status"]): SessionState {
   const current = state.deliveries[deliveryId];
   if (current === undefined) throw new Error(`Unknown delivery ${deliveryId}`);
@@ -50,7 +60,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         status: "ACTIVE",
         ...(event.payload.configuration === undefined
           ? {}
-          : { configuration: event.payload.configuration })
+          : { configuration: deepFreeze(structuredClone(event.payload.configuration)) })
       };
       break;
     case "PROBLEM_PRESENTED": {
