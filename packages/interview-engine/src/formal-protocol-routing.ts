@@ -2,7 +2,7 @@ import { z, type ZodType } from "zod";
 import {
   EvidenceKeySchema,
   FormalProtocolRefSchema,
-  evidenceKeyToString,
+  evidenceKeyIdentity,
   type DeterministicVerifier,
   type EvidenceKey,
   type FormalProtocolRef
@@ -136,7 +136,7 @@ function routeKey(protocol: FormalProtocolRef): string {
 }
 
 function authorizationKey(verifier: string, evidenceKey: EvidenceKey): string {
-  return `${verifier}\u0000${evidenceKeyToString(evidenceKey)}`;
+  return JSON.stringify([verifier, evidenceKeyIdentity(evidenceKey)]);
 }
 
 function canonicalJson(value: unknown): string {
