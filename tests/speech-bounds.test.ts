@@ -19,7 +19,7 @@ import {
   TranscriptResultGate,
   type RecognizerAudioInput
 } from "../packages/local-compute/src/speech-stt.js";
-import { SileroVadBackend } from "../packages/local-compute/src/speech-vad.js";
+import { SileroVadBackend, type SileroVadRuntime } from "../packages/local-compute/src/speech-vad.js";
 
 function sourceBasis(sampleCount = 3_200): SourceAudioBasis {
   const sampleRate = 16_000;
@@ -299,6 +299,35 @@ describe("speech protocol hard bounds", () => {
     };
     await expect(recognizer.recognize(input, new AbortController().signal)).rejects.toThrow(/maximum utterance duration/u);
     expect(invoked).toBe(false);
+  });
+
+  it("passes stream identity to the Silero seam so recurrent runtime state can remain isolated", async () => {
+    const observedStreams: string[] = [];
+    const runtime: SileroVadRuntime = {
+      runtimeVersion: "test",
+      async score(input) {
+        observedStreams.push(input.streamId);
+        return 0;
+      }
+    };
+    const backend = new SileroVadBackend(runtime, "models/silero/model.onnx");
+    const pcm = new Float32Array(320);
+    for (const streamId of ["silero-left", "silero-right"]) {
+      const snapshot = snapshotPcmFrame({
+        protocolVersion: 1,
+        requestId: newRequestId(),
+        streamId,
+        sequence: 0,
+        sampleRate: 16_000,
+        channels: 1,
+        sampleFormat: "F32LE",
+        frameSamples: 320,
+        payloadByteLength: pcm.byteLength,
+        timestampMs: 0
+      }, pcm);
+      await backend.classify(snapshot);
+    }
+    expect(observedStreams).toEqual(["silero-left", "silero-right"]);
   });
 
   it("requires a local Silero path and rejects malformed backend probabilities", async () => {
