@@ -23,14 +23,13 @@ export const biasedCoinProblem: InterviewProblem = {
     reasoningGraph: {
       version: "1.0.0",
       approaches: [
-        { id: "pairwise-symmetry", label: "von Neumann pairwise symmetry" },
-        { id: "entropy-extraction", label: "Algorithmic randomness extraction" }
+        { id: "pairwise-symmetry", label: "von Neumann pairwise symmetry" }
       ],
       milestones: [
         {
           id: "toss-in-pairs-concept",
           description: "Consider tossing the biased coin in independent consecutive pairs: (H,H), (H,T), (T,H), (T,T).",
-          approachIds: ["pairwise-symmetry", "entropy-extraction"],
+          approachIds: ["pairwise-symmetry"],
           optionalPrerequisiteIds: [],
           protectedDisclosureIds: []
         },
@@ -51,7 +50,7 @@ export const biasedCoinProblem: InterviewProblem = {
         {
           id: "expected-value-derivation",
           description: "Model the number of pairs until a discordant outcome as a geometric distribution with success probability 2p(1-p), giving expected tosses E[N] = 1 / (p(1-p)).",
-          approachIds: ["pairwise-symmetry", "entropy-extraction"],
+          approachIds: ["pairwise-symmetry"],
           optionalPrerequisiteIds: ["mapping-rule"],
           protectedDisclosureIds: [expectedFlipsDisclosure]
         }

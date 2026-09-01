@@ -37,7 +37,7 @@ export async function createCoreHarness(store = new SqliteEventStore(":memory:")
   const turns = new TurnCoordinator(writer);
   await turns.startSession(sixPeopleProblem);
   const { inputEpisodeId, turnId } = await turns.commitInput("I have a claim, but I have not justified it yet.");
-  await turns.selectAction(turnId);
+  await turns.selectAction(turnId, sixPeopleProblem);
   const { generationId } = await turns.startGeneration(inputEpisodeId, turnId, "mock-model");
   const safeProbe = "Why must that step be true?";
   const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([safeProbe]));
@@ -45,12 +45,16 @@ export async function createCoreHarness(store = new SqliteEventStore(":memory:")
 }
 
 export function providerEnvelope(harness: CoreHarness): CommandEnvelope {
+  const basis = harness.writer.getState().generations[harness.generationId]?.basis;
+  if (basis === undefined) throw new Error("Missing generation basis");
   return createCommandEnvelope({
     sessionId: harness.sessionId,
     producer: "mock-model",
     inputEpisodeId: harness.inputEpisodeId,
     turnId: harness.turnId,
-    generationId: harness.generationId
+    generationId: harness.generationId,
+    contextEpoch: basis.contextEpoch,
+    sourceRevision: basis.committedInputSequence
   });
 }
 
@@ -77,10 +81,11 @@ export async function ensureCompatibleGeneration(writer: SessionWriter): Promise
     && isGenerationBasisStillCompatible(generation.basis, writer.getState()) === "COMPATIBLE"
   );
   if (existing !== undefined) return existing.generationId;
-  if (writer.getState().started) throw new Error("Test fixture has no compatible generation");
   const turns = new TurnCoordinator(writer);
-  await turns.startSession(sixPeopleProblem);
+  if (!writer.getState().started) {
+    await turns.startSession(sixPeopleProblem);
+  }
   const { inputEpisodeId, turnId } = await turns.commitInput("Renderer transport fixture input");
-  await turns.selectAction(turnId);
+  await turns.selectAction(turnId, sixPeopleProblem);
   return (await turns.startGeneration(inputEpisodeId, turnId, "mock-renderer-fixture")).generationId;
 }

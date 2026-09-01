@@ -51,12 +51,14 @@ async function executeRestartOperation(
       const committed = await fixture.proposeEvidence("PROGRESSING");
       expect(committed).toBe(true);
       model.noteEvidence(MILESTONE_EVIDENCE_KEY, "PROGRESSING");
+      model.notePolicyOutputInvalidation();
       return;
     }
     case "EVIDENCE_COMPLETE": {
       const committed = await fixture.proposeEvidence("COMPLETE");
       expect(committed).toBe(true);
       model.noteEvidence(MILESTONE_EVIDENCE_KEY, "COMPLETE");
+      model.notePolicyOutputInvalidation();
       return;
     }
     case "TRANSCRIPT_CORRECTION":
@@ -64,6 +66,7 @@ async function executeRestartOperation(
         "restart schedule corrected transcript"
       );
       model.noteTranscriptCorrection();
+      model.notePolicyOutputInvalidation();
       return;
     case "RESTART":
       await fixture.restart();
@@ -137,6 +140,7 @@ async function releaseVerifier(
     if (result.value.evidenceCommitted) {
       model.noteEvidence(CLAIM_EVIDENCE_KEY, "CORRECT");
     }
+    model.notePolicyOutputInvalidation();
   } else if (result.value.reason !== "REQUEST_NOT_PENDING") {
     model.noteRequest(
       "verifier",

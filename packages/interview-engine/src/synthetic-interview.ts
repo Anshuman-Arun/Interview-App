@@ -30,7 +30,7 @@ export async function runSyntheticInterview(databasePath = ":memory:"): Promise<
     const { inputEpisodeId, turnId } = await turns.commitInput(
       "I represented people as vertices and relationships as two colours. I think one person must have three links of the same colour."
     );
-    await turns.selectAction(turnId);
+    await turns.selectAction(turnId, sixPeopleProblem);
     const safeProbe = "Why must that step be true?";
     const provider = new MockModelAdapter({
       proposal: {

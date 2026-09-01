@@ -80,6 +80,69 @@ describe("authenticated renderer stream transport", () => {
     store.close();
   });
 
+  it("rejects malformed transport tokens before either HTTP server can start", () => {
+    for (const clientToken of [
+      12345 as never,
+      `${CLIENT_TOKEN}\rmalicious: yes`,
+      `${CLIENT_TOKEN}\nmalicious: yes`
+    ]) {
+      expect(() => new LoopbackCommandServer({
+        security: {
+          host: "127.0.0.1",
+          allowedOrigins: new Set([CLIENT_ORIGIN]),
+          clientToken
+        },
+        sessions
+      })).toThrow(/Client token must contain at least 32 characters/u);
+
+      expect(() => new RendererStreamServer({
+        security: {
+          host: "127.0.0.1",
+          allowedOrigins: new Set([CLIENT_ORIGIN]),
+          clientToken
+        },
+        sessions
+      })).toThrow(/Client token must contain at least 32 characters/u);
+    }
+  });
+
+  it("retains the bound address when renderer shutdown fails before socket close", async () => {
+    const internals = streamServer as unknown as {
+      server: { close: (callback?: (error?: Error) => void) => unknown };
+      boundAddress: BoundRendererStreamAddress | undefined;
+    };
+    const closeSpy = vi.spyOn(internals.server, "close").mockImplementationOnce((callback) => {
+      queueMicrotask(() => callback?.(new Error("simulated renderer close failure")));
+      return internals.server;
+    });
+
+    await expect(streamServer.stop()).rejects.toThrow(/Renderer stream shutdown failed/u);
+    expect(internals.boundAddress).toEqual(streamAddress);
+
+    closeSpy.mockRestore();
+    await streamServer.stop();
+    expect(internals.boundAddress).toBeUndefined();
+  });
+
+  it("rejects unsafe integer renderer resource bounds", () => {
+    const unsafe = Number.MAX_SAFE_INTEGER + 1;
+    for (const options of [
+      { maxConnections: unsafe },
+      { maxConnectionsPerSession: unsafe },
+      { maxMessageBytes: unsafe }
+    ]) {
+      expect(() => new RendererStreamServer({
+        security: {
+          host: "127.0.0.1",
+          allowedOrigins: new Set([CLIENT_ORIGIN]),
+          clientToken: CLIENT_TOKEN
+        },
+        sessions,
+        ...options
+      })).toThrow(/positive integer/u);
+    }
+  });
+
   it("moves TEXT and AUDIO through the same stable-ID stream and acknowledgement lifecycle", async () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
@@ -322,6 +385,67 @@ describe("authenticated renderer stream transport", () => {
     );
   });
 
+  it("enforces per-session capacity after concurrent recovery yields", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+
+    const originalEnsureRecovered = sessions.ensureRecovered.bind(sessions);
+    let enteredCount = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let bothEntered!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      bothEntered = resolve;
+    });
+    const recoverySpy = vi.spyOn(sessions, "ensureRecovered").mockImplementation(async (id) => {
+      enteredCount += 1;
+      if (enteredCount === 2) bothEntered();
+      await gate;
+      return originalEnsureRecovered(id);
+    });
+
+    const controller = new AbortController();
+    const attachBody = JSON.stringify({
+      protocolVersion: 1,
+      type: "ATTACH_RENDERER_STREAM",
+      sessionId
+    });
+    const first = fetch(streamAddress.streamUrl, {
+      method: "POST",
+      headers: authenticatedHeaders(),
+      body: attachBody,
+      signal: controller.signal
+    });
+    const second = fetch(streamAddress.streamUrl, {
+      method: "POST",
+      headers: authenticatedHeaders(),
+      body: attachBody,
+      signal: controller.signal
+    });
+
+    await entered;
+    expect(streamServer.activeConnectionCount()).toBe(0);
+    release();
+
+    const responses = await Promise.all([first, second]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(streamServer.activeConnectionCount()).toBe(1);
+
+    const rejected = responses.find((response) => response.status === 409);
+    if (rejected === undefined) throw new Error("Expected one rejected concurrent attachment");
+    expect(RendererStreamErrorResponseSchema.parse(await rejected.json() as unknown).error.code)
+      .toBe("TOO_MANY_CONNECTIONS");
+
+    recoverySpy.mockRestore();
+    controller.abort();
+    await Promise.all(responses.map(async (response) => {
+      await response.body?.cancel().catch(() => undefined);
+    }));
+    await waitFor(() => streamServer.activeConnectionCount() === 0);
+  });
+
   it("rejects unauthorized, malformed, oversized, and excess stream attachments before attaching", async () => {
     const sessionId = newSessionId();
     const attach = {
@@ -375,6 +499,8 @@ describe("authenticated renderer stream transport", () => {
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get("access-control-allow-origin")).toBe(CLIENT_ORIGIN);
 
+    await primeCommandServer(commandAddress, sessionId);
+
     const controller = new AbortController();
     const first = await fetch(streamAddress.streamUrl, {
       method: "POST",
@@ -396,6 +522,75 @@ describe("authenticated renderer stream transport", () => {
     controller.abort();
     await first.body?.cancel().catch(() => undefined);
     await waitFor(() => streamServer.activeConnectionCount() === 0);
+  });
+
+  it("drains an admitted publication before shutdown classifies renderer uncertainty", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+
+    const controller = new AbortController();
+    const response = await fetch(streamAddress.streamUrl, {
+      method: "POST",
+      headers: authenticatedHeaders(),
+      body: JSON.stringify({
+        protocolVersion: 1,
+        type: "ATTACH_RENDERER_STREAM",
+        sessionId
+      }),
+      signal: controller.signal
+    });
+    expect(response.status).toBe(200);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, {
+      medium: "TEXT",
+      text: "shutdown publication race"
+    });
+
+    let releaseRecovery!: () => void;
+    const recoveryGate = new Promise<void>((resolve) => {
+      releaseRecovery = resolve;
+    });
+    let enteredRecovery!: () => void;
+    const recoveryEntered = new Promise<void>((resolve) => {
+      enteredRecovery = resolve;
+    });
+    const originalEnsureRecovered = sessions.ensureRecovered.bind(sessions);
+    const recoverySpy = vi.spyOn(sessions, "ensureRecovered").mockImplementation(async (id) => {
+      enteredRecovery();
+      await recoveryGate;
+      return originalEnsureRecovered(id);
+    });
+
+    const publishing = streamServer.publishDelivery(sessionId, atom.deliveryId);
+    await recoveryEntered;
+
+    let stopSettled = false;
+    const stopping = streamServer.stop().finally(() => {
+      stopSettled = true;
+    });
+    await Promise.resolve();
+    expect(stopSettled).toBe(false);
+    expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("QUEUED");
+
+    await expect(streamServer.publishDelivery(sessionId, atom.deliveryId))
+      .rejects.toThrow(/shutting down/u);
+
+    releaseRecovery();
+    await expect(publishing).resolves.toMatchObject({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId
+    });
+    await stopping;
+
+    expect(writer.getState().deliveries[atom.deliveryId]?.status)
+      .toBe("POSSIBLY_EXPOSED");
+    expect(streamServer.activeConnectionCount()).toBe(0);
+
+    recoverySpy.mockRestore();
+    controller.abort();
+    await response.body?.cancel().catch(() => undefined);
   });
 
   it("fails closed before starting an oversized outbound delivery", async () => {
@@ -596,7 +791,7 @@ async function queueDelivery(
 async function primeCommandServer(address: BoundLoopbackAddress, sessionId: SessionId): Promise<void> {
   const response = await postAcknowledgement(address, {
     protocolVersion: 1,
-    type: "GET_SESSION_SUMMARY",
+    type: "START_SESSION",
     requestId: newRequestId(),
     sessionId
   });

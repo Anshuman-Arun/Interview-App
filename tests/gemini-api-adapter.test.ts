@@ -857,7 +857,7 @@ describe("GeminiApiAdapter - Integration with ProviderCoordinator", () => {
       const { inputEpisodeId, turnId } = await turns.commitInput(
         "Let's choose vertex A. There are 5 edges coming out of A."
       );
-      await turns.selectAction(turnId);
+      await turns.selectAction(turnId, sixPeopleProblem);
 
       const fetchMock = () =>
         Promise.resolve(

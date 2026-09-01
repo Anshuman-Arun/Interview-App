@@ -43,11 +43,18 @@ export async function createAndStartServer(config: ServerConfig = {}) {
   const runtime = new LocalInterviewTransportRuntime({
     security,
     registry,
+    store,
     commandPort,
     rendererStreamPort
   });
 
-  const bound = await runtime.start();
+  let bound: Awaited<ReturnType<LocalInterviewTransportRuntime["start"]>>;
+  try {
+    bound = await runtime.start();
+  } catch (error) {
+    store.close();
+    throw error;
+  }
 
   return {
     runtime,
