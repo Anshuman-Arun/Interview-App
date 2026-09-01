@@ -32,7 +32,7 @@ export interface SpeechRecognizer {
   readonly modelIdentity: SpeechModelIdentity;
   readonly cancellationCapability: RecognizerCancellationCapability;
   recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown>;
-  cancel?(requestId: RequestId): Promise<boolean>;
+  cancel?(requestId: RequestId): Promise<unknown>;
 }
 
 export class DeterministicFakeRecognizer implements SpeechRecognizer {
