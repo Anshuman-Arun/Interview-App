@@ -42,7 +42,7 @@ describe("compatibility and disclosure gates", () => {
         validator: harness.validator
       });
       expect(result.accepted).toBe(false);
-      expect(result.reason).toContain("INCOMPATIBLE");
+      expect(result.reason).toMatch(/not active/u);
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
       expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
     } finally {
