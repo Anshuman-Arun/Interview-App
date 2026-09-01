@@ -12,6 +12,14 @@ export const MAX_SPEECH_DIAGNOSTICS = 32;
 export const MAX_SPEECH_DIAGNOSTIC_CHARS = 256;
 
 export const SpeechProtocolVersionSchema = z.literal(SPEECH_PROTOCOL_VERSION);
+export const SpeechRequestIdSchema = RequestIdSchema.refine(
+  (value) => value.length <= 128,
+  { message: "Speech request ID exceeds maximum length" }
+);
+export const SpeechUtteranceIdSchema = UtteranceIdSchema.refine(
+  (value) => value.length <= 128,
+  { message: "Speech utterance ID exceeds maximum length" }
+);
 export const SpeechStreamIdSchema = z.string()
   .min(1)
   .max(128)
@@ -30,7 +38,7 @@ const FiniteNonnegativeNumberSchema = z.number().nonnegative();
 
 export const SpeechPcmFrameEnvelopeSchema = z.object({
   protocolVersion: SpeechProtocolVersionSchema,
-  requestId: RequestIdSchema,
+  requestId: SpeechRequestIdSchema,
   streamId: SpeechStreamIdSchema,
   sequence: NonnegativeSafeIntegerSchema,
   sampleRate: SpeechSampleRateSchema,
@@ -61,7 +69,7 @@ export type SpeechPcmFrameEnvelope = z.infer<typeof SpeechPcmFrameEnvelopeSchema
 
 const SpeechControlBaseSchema = z.object({
   protocolVersion: SpeechProtocolVersionSchema,
-  requestId: RequestIdSchema,
+  requestId: SpeechRequestIdSchema,
   streamId: SpeechStreamIdSchema
 });
 
@@ -75,7 +83,7 @@ export const SpeechCancelRequestSchema = SpeechControlBaseSchema.extend({
 
 export const SpeechShutdownRequestSchema = z.object({
   protocolVersion: SpeechProtocolVersionSchema,
-  requestId: RequestIdSchema,
+  requestId: SpeechRequestIdSchema,
   type: z.literal("SHUTDOWN_SPEECH_WORKER")
 }).strict();
 
@@ -120,8 +128,13 @@ export const SourceAudioBasisSchema = z.object({
 });
 export type SourceAudioBasis = z.infer<typeof SourceAudioBasisSchema>;
 
+const SafeRecognizerMetadataTextSchema = z.string()
+  .min(1)
+  .max(128)
+  .refine((value) => !/\p{Cc}/u.test(value), { message: "Recognizer metadata contains control characters" });
+
 export const TranscriptWordTimingSchema = z.object({
-  word: z.string().min(1).max(128),
+  word: SafeRecognizerMetadataTextSchema,
   startMs: FiniteNonnegativeNumberSchema,
   endMs: FiniteNonnegativeNumberSchema,
   confidence: z.number().min(0).max(1).optional()
@@ -133,14 +146,14 @@ export const TranscriptWordTimingSchema = z.object({
 export type TranscriptWordTiming = z.infer<typeof TranscriptWordTimingSchema>;
 
 export const SpeechModelIdentitySchema = z.object({
-  name: z.string().min(1).max(100),
-  version: z.string().min(1).max(100)
+  name: SafeRecognizerMetadataTextSchema.max(100),
+  version: SafeRecognizerMetadataTextSchema.max(100)
 }).strict();
 export type SpeechModelIdentity = z.infer<typeof SpeechModelIdentitySchema>;
 
 export const TranscriptCandidateSchema = z.object({
-  requestId: RequestIdSchema,
-  utteranceId: UtteranceIdSchema,
+  requestId: SpeechRequestIdSchema,
+  utteranceId: SpeechUtteranceIdSchema,
   text: z.string().max(MAX_SPEECH_TRANSCRIPT_CHARS),
   isFinal: z.boolean(),
   confidence: z.number().min(0).max(1).optional(),
@@ -169,25 +182,25 @@ export type SpeechWorkerErrorCode = z.infer<typeof SpeechWorkerErrorCodeSchema>;
 
 const WorkerEventBaseSchema = z.object({
   protocolVersion: SpeechProtocolVersionSchema,
-  requestId: RequestIdSchema,
+  requestId: SpeechRequestIdSchema,
   streamId: SpeechStreamIdSchema
 });
 
 export const SpeechStartedEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("SPEECH_STARTED"),
-  utteranceId: UtteranceIdSchema,
+  utteranceId: SpeechUtteranceIdSchema,
   atTimestampMs: FiniteNonnegativeNumberSchema
 }).strict();
 
 export const SpeechPossibleEndpointEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("POSSIBLE_ENDPOINT"),
-  utteranceId: UtteranceIdSchema,
+  utteranceId: SpeechUtteranceIdSchema,
   silenceMs: FiniteNonnegativeNumberSchema
 }).strict();
 
 export const SpeechUtteranceFinalizedEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("UTTERANCE_FINALIZED"),
-  utteranceId: UtteranceIdSchema,
+  utteranceId: SpeechUtteranceIdSchema,
   finalizationReason: SpeechFinalizationReasonSchema,
   speechFrameCount: NonnegativeSafeIntegerSchema,
   durationMs: FiniteNonnegativeNumberSchema,
@@ -196,7 +209,7 @@ export const SpeechUtteranceFinalizedEventSchema = WorkerEventBaseSchema.extend(
 
 export const SpeechUtteranceDiscardedEventSchema = WorkerEventBaseSchema.extend({
   type: z.literal("UTTERANCE_DISCARDED"),
-  utteranceId: UtteranceIdSchema.optional(),
+  utteranceId: SpeechUtteranceIdSchema.optional(),
   reason: SpeechDiscardReasonSchema
 }).strict();
 
