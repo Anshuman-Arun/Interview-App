@@ -764,6 +764,8 @@ function collectVerificationSignals(
     const key = EvidenceKeySchema.safeParse(rawRequest["evidenceKey"]);
     const basis = GenerationBasisSchema.safeParse(rawRequest["basis"]);
     const requestedEventId = rawRequest["requestedEventId"];
+    const resultEventId = rawRequest["resultEventId"];
+    const resultSequence = rawRequest["resultSequence"];
     const verificationRequestId = rawRequest["verificationRequestId"];
     const verifier = rawRequest["verifier"];
     const interpretationConfidence = rawRequest["interpretationConfidence"];
@@ -773,6 +775,9 @@ function collectVerificationSignals(
       || !key.success
       || !basis.success
       || typeof requestedEventId !== "string"
+      || typeof resultEventId !== "string"
+      || typeof resultSequence !== "number"
+      || !Number.isSafeInteger(resultSequence)
       || verificationRequestId !== requestKey
       || typeof verifier !== "string"
       || verifier.length === 0
@@ -787,13 +792,17 @@ function collectVerificationSignals(
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
     }
 
-    const sequence = eventSequence.get(requestedEventId);
+    const requestedSequence = eventSequence.get(requestedEventId);
+    const authoritativeResultSequence = eventSequence.get(resultEventId);
     if (
-      sequence === undefined
+      requestedSequence === undefined
+      || authoritativeResultSequence === undefined
+      || authoritativeResultSequence !== resultSequence
+      || resultSequence <= requestedSequence
       || !(evidenceEventIds as readonly unknown[]).every((eventId) =>
         typeof eventId === "string"
         && eventSequence.has(eventId)
-        && (eventSequence.get(eventId) ?? Number.POSITIVE_INFINITY) < sequence
+        && (eventSequence.get(eventId) ?? Number.POSITIVE_INFINITY) < requestedSequence
       )
     ) {
       return { ok: false, reasonCode: "MALFORMED_POLICY_INPUT" };
@@ -811,7 +820,7 @@ function collectVerificationSignals(
       status: result.data.interpretationConfidence < 1
         ? "UNRESOLVED"
         : result.data.status,
-      sequence
+      sequence: resultSequence
     });
   }
 
