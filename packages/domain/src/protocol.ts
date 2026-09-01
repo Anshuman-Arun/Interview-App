@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DeliveryCommandSchema, DeliveryStatusSchema } from "./delivery.js";
-import { InterviewCatalogEntrySchema, InterviewSessionConfigurationSchema } from "./session-configuration.js";
+import { InterviewCatalogEntrySchema, InterviewProblemPublicViewSchema, InterviewSessionConfigurationSchema } from "./session-configuration.js";
 import {
   DeliveryIdSchema,
   InputEpisodeIdSchema,
@@ -147,7 +147,8 @@ export const SessionStartedResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("SESSION_STARTED"),
   sessionId: SessionIdSchema,
-  configuration: InterviewSessionConfigurationSchema.optional()
+  configuration: InterviewSessionConfigurationSchema.optional(),
+  problem: InterviewProblemPublicViewSchema.optional()
 }).strict();
 
 export const InterviewCatalogResponseSchema = ResponseBaseSchema.extend({
@@ -170,6 +171,7 @@ export const SessionResumedResponseSchema = ResponseBaseSchema.extend({
   started: z.boolean(),
   status: SessionStatusSchema,
   configuration: InterviewSessionConfigurationSchema.optional(),
+  problem: InterviewProblemPublicViewSchema.optional(),
   problemId: z.string().min(1).optional(),
   problemVersion: z.string().min(1).optional(),
   contextEpoch: z.number().int().nonnegative(),
@@ -206,6 +208,7 @@ export const SessionSummaryResponseSchema = ResponseBaseSchema.extend({
   started: z.boolean(),
   status: SessionStatusSchema.optional(),
   configuration: InterviewSessionConfigurationSchema.optional(),
+  problem: InterviewProblemPublicViewSchema.optional(),
   problemId: z.string().min(1).optional(),
   problemVersion: z.string().min(1).optional(),
   contextEpoch: z.number().int().nonnegative(),
