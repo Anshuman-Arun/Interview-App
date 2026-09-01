@@ -382,6 +382,7 @@ export const LongitudinalReadModelSchema = z.object({
     problemVersion: BoundedIdentifierSchema,
     attemptCount: PositiveSafeIntegerSchema
   }).strict()).max(MAX_HISTORY_READ_STATISTICS),
+  repeatedProblemsTruncation: ReadTruncationSchema,
   evaluationStatistics: z.array(z.object({
     problemId: BoundedIdentifierSchema,
     problemVersion: BoundedIdentifierSchema,
@@ -390,6 +391,7 @@ export const LongitudinalReadModelSchema = z.object({
     average: ScoreBreakdownReadSchema,
     median: ScoreBreakdownReadSchema
   }).strict()).max(MAX_HISTORY_READ_STATISTICS),
+  evaluationStatisticsTruncation: ReadTruncationSchema,
   improvement: z.array(z.object({
     problemId: BoundedIdentifierSchema,
     problemVersion: BoundedIdentifierSchema,
@@ -397,6 +399,7 @@ export const LongitudinalReadModelSchema = z.object({
     toSessionId: BoundedSessionIdSchema,
     compositeScoreDelta: z.number().min(-100).max(100)
   }).strict()).max(MAX_HISTORY_READ_IMPROVEMENTS),
+  improvementTruncation: ReadTruncationSchema,
   improvementComparisonsSkipped: NonnegativeSafeIntegerSchema,
   comparability: z.object({
     problems: z.literal("EXACT_PROBLEM_ID_AND_VERSION"),
@@ -731,13 +734,12 @@ export function projectLongitudinalReadModel(
     completedSessions: history.completedSessions,
     problemsAttempted: history.problemsAttempted,
     repeatedProblems: repeatedProblems.values,
+    repeatedProblemsTruncation: repeatedProblems.truncation,
     evaluationStatistics: evaluationStatistics.values,
+    evaluationStatisticsTruncation: evaluationStatistics.truncation,
     improvement: improvement.values,
-    improvementComparisonsSkipped:
-      history.improvementComparisonsSkipped
-      + repeatedProblems.truncation.remainingCount
-      + evaluationStatistics.truncation.remainingCount
-      + improvement.truncation.remainingCount,
+    improvementTruncation: improvement.truncation,
+    improvementComparisonsSkipped: history.improvementComparisonsSkipped,
     comparability: history.comparability
   });
 }
