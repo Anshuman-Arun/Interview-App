@@ -339,12 +339,6 @@ export interface TranscriptValidationBasis {
 export function validateTranscriptCandidate(raw: unknown, expected: TranscriptValidationBasis): TranscriptCandidate {
   const rawExpected: unknown = expected;
   if (!isRecord(rawExpected)) throw new Error("Expected recognizer validation basis must be an object");
-  assertAllowedOwnEnumerableKeys(
-    rawExpected,
-    TRANSCRIPT_VALIDATION_BASIS_KEYS,
-    "Expected recognizer validation basis"
-  );
-
   const expectedRequestIdRaw = rawExpected.requestId;
   const expectedUtteranceIdRaw = rawExpected.utteranceId;
   const expectedSourceAudioBasisRaw = rawExpected.sourceAudioBasis;
@@ -503,12 +497,6 @@ function validateAbortSignal(value: unknown): asserts value is AbortSignal {
   }
 }
 
-const TRANSCRIPT_VALIDATION_BASIS_KEYS = new Set([
-  "requestId",
-  "utteranceId",
-  "sourceAudioBasis",
-  "modelIdentity"
-]);
 const RECOGNIZER_AUDIO_INPUT_KEYS = new Set([
   "requestId",
   "utteranceId",
