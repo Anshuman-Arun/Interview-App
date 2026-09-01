@@ -45,12 +45,16 @@ export async function createCoreHarness(store = new SqliteEventStore(":memory:")
 }
 
 export function providerEnvelope(harness: CoreHarness): CommandEnvelope {
+  const basis = harness.writer.getState().generations[harness.generationId]?.basis;
+  if (basis === undefined) throw new Error("Missing generation basis");
   return createCommandEnvelope({
     sessionId: harness.sessionId,
     producer: "mock-model",
     inputEpisodeId: harness.inputEpisodeId,
     turnId: harness.turnId,
-    generationId: harness.generationId
+    generationId: harness.generationId,
+    contextEpoch: basis.contextEpoch,
+    sourceRevision: basis.committedInputSequence
   });
 }
 
