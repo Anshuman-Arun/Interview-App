@@ -1302,7 +1302,7 @@ describe("dirty-region planning", () => {
     const plan = planDirtyRegions(
       [{ x: 50, y: 50, width: 1, height: 1 }],
       { width: 100, height: 100 },
-      inheritedConfig as Parameters<typeof planDirtyRegions>[2]
+      inheritedConfig
     );
     expect(plan.mode).toBe("REGIONS");
     if (plan.mode !== "REGIONS") throw new Error("Expected regional dirty plan");
@@ -1461,7 +1461,7 @@ describe("crop, resize, tiling, and cancellation", () => {
     const result = await cropImage(
       source,
       { x: 0, y: 0, width: 1, height: 1 },
-      inheritedOptions as Parameters<typeof cropImage>[2]
+      inheritedOptions
     );
     expect(result.artifact.metadata.width).toBe(1);
   });
