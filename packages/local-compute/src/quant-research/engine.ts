@@ -1,6 +1,8 @@
 import { DeterministicRng } from "./deterministic-rng.js";
 import {
   QUANT_RESEARCH_FAMILIES,
+  QUANT_RESEARCH_GENERATOR_VERSION,
+  QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
   QuantResearchError,
   assertUniqueQuantResearchRegistrations,
@@ -23,7 +25,12 @@ import {
 } from "./types.js";
 
 const MAX_ACTIONS = 64;
-const REGISTRY = QUANT_RESEARCH_FAMILIES.map((family) => ({ family, version: QUANT_RESEARCH_VERSION }));
+const REGISTRY = QUANT_RESEARCH_FAMILIES.map((family) => ({
+  family,
+  version: QUANT_RESEARCH_VERSION,
+  generatorVersion: QUANT_RESEARCH_GENERATOR_VERSION,
+  rngVersion: QUANT_RESEARCH_RNG_VERSION
+}));
 assertUniqueQuantResearchRegistrations(REGISTRY);
 
 type ScenarioStatus = "IN_PROGRESS" | "COMPLETE";
@@ -31,6 +38,8 @@ type ScenarioStatus = "IN_PROGRESS" | "COMPLETE";
 interface CommonState {
   readonly family: QuantResearchScenarioDefinition["family"];
   readonly version: typeof QUANT_RESEARCH_VERSION;
+  readonly generatorVersion: QuantResearchScenarioDefinition["generatorVersion"];
+  readonly rngVersion: QuantResearchScenarioDefinition["rngVersion"];
   readonly status: ScenarioStatus;
   readonly stage: string;
   readonly acceptedActions: readonly QuantResearchAction[];
@@ -210,6 +219,8 @@ function initialize(definition: QuantResearchScenarioDefinition): InternalState 
   const common = {
     family: definition.family,
     version: definition.version,
+    generatorVersion: definition.generatorVersion,
+    rngVersion: definition.rngVersion,
     status: "IN_PROGRESS" as const,
     acceptedActions: [] as readonly QuantResearchAction[],
     evidence: [] as readonly QuantResearchEvidence[]
@@ -648,6 +659,8 @@ function publicState(state: InternalState): QuantResearchPublicState {
   return {
     family: state.family,
     version: state.version,
+    generatorVersion: state.generatorVersion,
+    rngVersion: state.rngVersion,
     status: state.status,
     stage: state.stage,
     prompt: publicPrompt(state),
@@ -785,6 +798,8 @@ function resultFor(state: InternalState): QuantResearchResult {
       status: state.status,
       family: state.family,
       version: state.version,
+      generatorVersion: state.generatorVersion,
+      rngVersion: state.rngVersion,
       acceptedActionCount: state.acceptedActions.length,
       overallScore: 0,
       metrics: {},
@@ -808,6 +823,8 @@ function resultFor(state: InternalState): QuantResearchResult {
     status: state.status,
     family: state.family,
     version: state.version,
+    generatorVersion: state.generatorVersion,
+    rngVersion: state.rngVersion,
     acceptedActionCount: state.acceptedActions.length,
     overallScore,
     metrics,
@@ -1132,6 +1149,8 @@ export class QuantResearchEngine {
     return {
       family: this.#state.family,
       version: this.#state.version,
+      generatorVersion: this.#state.generatorVersion,
+      rngVersion: this.#state.rngVersion,
       status: this.#state.status,
       stage: this.#state.stage,
       acceptedActionCount: this.#state.acceptedActions.length,
@@ -1214,6 +1233,11 @@ export function replayQuantResearch(definitionInput: unknown, actionsInput: unkn
   return { state: engine.getState(), result: engine.getResult(), acceptedActions: engine.getAcceptedActions() };
 }
 
-export function getQuantResearchRegistry(): readonly Readonly<{ family: QuantResearchScenarioDefinition["family"]; version: typeof QUANT_RESEARCH_VERSION }>[] {
+export function getQuantResearchRegistry(): readonly Readonly<{
+  family: QuantResearchScenarioDefinition["family"];
+  version: typeof QUANT_RESEARCH_VERSION;
+  generatorVersion: typeof QUANT_RESEARCH_GENERATOR_VERSION;
+  rngVersion: typeof QUANT_RESEARCH_RNG_VERSION;
+}>[] {
   return clone(REGISTRY);
 }
