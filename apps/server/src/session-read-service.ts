@@ -1,7 +1,8 @@
 import {
   SessionIdSchema,
   type InterviewProblem,
-  type SessionId
+  type SessionId,
+  type StoredSessionSummary
 } from "../../../packages/domain/src/index.js";
 import {
   replaySession,
@@ -73,6 +74,7 @@ export function createCatalogSessionProblemResolver(
 }
 
 interface LoadedAuthoritativeSession {
+  readonly summary: StoredSessionSummary;
   readonly events: readonly SessionEvent[];
   readonly state: SessionState;
 }
@@ -106,14 +108,52 @@ function boundedIdentity(value: string | undefined): string | undefined {
   return value;
 }
 
-function historyTruncation(
-  total: number,
-  retained: number
-): SessionHistoryReadResponse["sessionTruncation"] {
+function nonnegativeSafeInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function historyTruncation(total: number, retained: number): {
+  readonly truncated: boolean;
+  readonly limit: number;
+  readonly remainingCount: number;
+} {
   return {
     truncated: retained < total,
     limit: MAX_HISTORY_READ_SESSIONS,
     remainingCount: Math.max(0, total - retained)
+  };
+}
+
+function summaryFromAuthoritativeEvents(
+  sessionId: SessionId,
+  events: readonly SessionEvent[],
+  state: Readonly<SessionState>
+): StoredSessionSummary | undefined {
+  const first = events[0];
+  const last = events.at(-1);
+  if (
+    first === undefined
+    || last === undefined
+    || events.length !== state.sequence
+    || first.sessionId !== sessionId
+    || last.sessionId !== sessionId
+  ) {
+    return undefined;
+  }
+
+  return {
+    sessionId,
+    ...(state.problem === undefined
+      ? {}
+      : {
+          problemId: state.problem.id,
+          problemVersion: state.problem.version
+        }),
+    status: state.status,
+    sequence: state.sequence,
+    createdAt: first.wallTime,
+    updatedAt: last.wallTime,
+    eventCount: events.length
   };
 }
 
@@ -135,9 +175,9 @@ export class SessionReadService {
     rawSessionId: SessionId
   ): SessionEvaluationReadResponse | null {
     const sessionId = SessionIdSchema.parse(rawSessionId);
-    const existence = this.safeHasSession(sessionId);
-    if (existence === false) return null;
-    if (existence === undefined) {
+    const known = this.sessionKnown(sessionId);
+    if (known === false) return null;
+    if (known === undefined) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
@@ -145,15 +185,15 @@ export class SessionReadService {
       ) as SessionEvaluationReadResponse;
     }
 
-    const eventCount = this.safeEventCount(sessionId);
-    if (eventCount === undefined) {
+    const expectedEventCount = this.readEventCount(sessionId);
+    if (expectedEventCount === undefined) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
         "AUTHORITATIVE_HISTORY_UNAVAILABLE"
       ) as SessionEvaluationReadResponse;
     }
-    if (eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
+    if (expectedEventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
@@ -161,7 +201,7 @@ export class SessionReadService {
       ) as SessionEvaluationReadResponse;
     }
 
-    const loaded = this.loadAuthoritative(sessionId, eventCount);
+    const loaded = this.loadAuthoritative(sessionId, expectedEventCount);
     if (loaded === undefined) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
@@ -169,8 +209,10 @@ export class SessionReadService {
         "AUTHORITATIVE_HISTORY_UNAVAILABLE"
       ) as SessionEvaluationReadResponse;
     }
-
-    if (loaded.state.status !== "COMPLETED" && loaded.state.status !== "ARCHIVED") {
+    if (
+      loaded.state.status !== "COMPLETED"
+      && loaded.state.status !== "ARCHIVED"
+    ) {
       return safeReadFailure(
         "SESSION_EVALUATION_READ",
         sessionId,
@@ -206,9 +248,9 @@ export class SessionReadService {
 
   public readReplay(rawSessionId: SessionId): SessionReplayReadResponse | null {
     const sessionId = SessionIdSchema.parse(rawSessionId);
-    const existence = this.safeHasSession(sessionId);
-    if (existence === false) return null;
-    if (existence === undefined) {
+    const known = this.sessionKnown(sessionId);
+    if (known === false) return null;
+    if (known === undefined) {
       return safeReadFailure(
         "SESSION_REPLAY_READ",
         sessionId,
@@ -216,15 +258,15 @@ export class SessionReadService {
       ) as SessionReplayReadResponse;
     }
 
-    const eventCount = this.safeEventCount(sessionId);
-    if (eventCount === undefined) {
+    const expectedEventCount = this.readEventCount(sessionId);
+    if (expectedEventCount === undefined) {
       return safeReadFailure(
         "SESSION_REPLAY_READ",
         sessionId,
         "AUTHORITATIVE_HISTORY_UNAVAILABLE"
       ) as SessionReplayReadResponse;
     }
-    if (eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
+    if (expectedEventCount > DEFAULT_REPLAY_BOUNDS.maxEvents) {
       return safeReadFailure(
         "SESSION_REPLAY_READ",
         sessionId,
@@ -232,18 +274,13 @@ export class SessionReadService {
       ) as SessionReplayReadResponse;
     }
 
-    const loaded = this.loadAuthoritative(sessionId, eventCount);
-    if (loaded === undefined) {
-      return safeReadFailure(
-        "SESSION_REPLAY_READ",
-        sessionId,
-        "AUTHORITATIVE_HISTORY_UNAVAILABLE"
-      ) as SessionReplayReadResponse;
-    }
-
     let history: ReturnType<typeof projectSessionHistory>;
     try {
-      history = projectSessionHistory(loaded.events, {
+      const events = this.#source.loadEvents(sessionId);
+      if (events.length !== expectedEventCount) {
+        throw new Error("Session event count changed during read");
+      }
+      history = projectSessionHistory(events, {
         bounds: {
           maxEvents: DEFAULT_REPLAY_BOUNDS.maxEvents,
           maxTimelineEntries: HISTORY_TIMELINE_ENTRY_LIMIT,
@@ -283,84 +320,57 @@ export class SessionReadService {
   }
 
   public readHistory(): SessionHistoryReadResponse {
-    const recentSessionIds = this.#source.listRecentSessionIds(
-      MAX_HISTORY_READ_SESSIONS
-    );
-    const totalSessions = this.#source.sessionCount();
-    if (
-      !Number.isSafeInteger(totalSessions)
-      || totalSessions < recentSessionIds.length
-    ) {
-      throw new Error("Persisted session inventory is inconsistent");
-    }
-
-    const cards: SessionHistoryReadResponse["sessions"][number][] = [];
+    const inventory = this.readInventory();
+    const cards: Array<{
+      sessionId: SessionId;
+      problemId?: string;
+      problemVersion?: string;
+      status: StoredSessionSummary["status"];
+      createdAt: string;
+      updatedAt: string;
+      eventCount: number;
+      readStatus: "AVAILABLE" | "UNAVAILABLE" | "BUDGET_EXCLUDED";
+      replayComplete?: boolean;
+      evaluation?: {
+        compositeScore: number | null;
+        compositeStatus: "FULL" | "PARTIAL" | "NOT_SCORED";
+        supportLevel: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
+      };
+    }> = [];
     const longitudinalInputs: ReturnType<typeof projectSessionHistory>[] = [];
     let consumedEvents = 0;
 
-    for (const sessionId of recentSessionIds) {
+    for (const sessionId of inventory.sessionIds) {
       if (boundedIdentity(sessionId) === undefined) continue;
 
-      const eventCount = this.safeEventCount(sessionId);
-      if (eventCount === undefined) {
-        cards.push({
-          sessionId,
-          status: "UNKNOWN",
-          readStatus: "UNAVAILABLE"
-        });
-        continue;
-      }
-
+      const expectedEventCount = this.readEventCount(sessionId);
       if (
-        eventCount > DEFAULT_REPLAY_BOUNDS.maxEvents
-        || consumedEvents + eventCount > HISTORY_TOTAL_EVENT_BUDGET
+        expectedEventCount === undefined
+        || expectedEventCount === 0
+        || expectedEventCount > DEFAULT_REPLAY_BOUNDS.maxEvents
+        || consumedEvents + expectedEventCount > HISTORY_TOTAL_EVENT_BUDGET
       ) {
-        cards.push({
-          sessionId,
-          status: "UNKNOWN",
-          eventCount,
-          readStatus: "BUDGET_EXCLUDED"
-        });
         continue;
       }
-      consumedEvents += eventCount;
+      consumedEvents += expectedEventCount;
 
-      const loaded = this.loadAuthoritative(sessionId, eventCount);
-      if (loaded === undefined) {
-        cards.push({
-          sessionId,
-          status: "UNKNOWN",
-          eventCount,
-          readStatus: "UNAVAILABLE"
-        });
-        continue;
-      }
+      const loaded = this.loadAuthoritative(sessionId, expectedEventCount);
+      if (loaded === undefined) continue;
 
-      const firstEvent = loaded.events[0];
-      const lastEvent = loaded.events.at(-1);
-      if (firstEvent === undefined || lastEvent === undefined) {
-        cards.push({
-          sessionId,
-          status: "UNKNOWN",
-          eventCount,
-          readStatus: "UNAVAILABLE"
-        });
-        continue;
-      }
-
-      const safeProblemId = boundedIdentity(loaded.state.problem?.id);
-      const safeProblemVersion = boundedIdentity(loaded.state.problem?.version);
+      const summary = loaded.summary;
+      const safeProblemId = boundedIdentity(summary.problemId);
+      const safeProblemVersion = boundedIdentity(summary.problemVersion);
       const cardBase = {
-        sessionId,
+        sessionId: summary.sessionId,
         ...(safeProblemId === undefined ? {} : { problemId: safeProblemId }),
         ...(safeProblemVersion === undefined
           ? {}
           : { problemVersion: safeProblemVersion }),
-        status: loaded.state.status,
-        createdAt: firstEvent.wallTime,
-        updatedAt: lastEvent.wallTime,
-        eventCount
-      } as const;
+        status: summary.status,
+        createdAt: summary.createdAt,
+        updatedAt: summary.updatedAt,
+        eventCount: summary.eventCount
+      };
 
       let initialHistory: ReturnType<typeof projectSessionHistory>;
       try {
@@ -380,10 +390,7 @@ export class SessionReadService {
       let history = initialHistory;
       if (
         initialHistory.currentStateAvailable
-        && (
-          loaded.state.status === "COMPLETED"
-          || loaded.state.status === "ARCHIVED"
-        )
+        && (loaded.state.status === "COMPLETED" || loaded.state.status === "ARCHIVED")
       ) {
         const evaluation = this.evaluateLoaded(loaded);
         if (evaluation.available) {
@@ -440,12 +447,12 @@ export class SessionReadService {
       protocolVersion: 1,
       type: "SESSION_HISTORY_READ",
       sessions: cards,
-      sessionTruncation: historyTruncation(totalSessions, cards.length),
+      sessionTruncation: historyTruncation(inventory.totalSessionCount, cards.length),
       longitudinal
     });
   }
 
-  private safeHasSession(sessionId: SessionId): boolean | undefined {
+  private sessionKnown(sessionId: SessionId): boolean | undefined {
     try {
       return this.#source.hasSession(sessionId);
     } catch {
@@ -453,13 +460,33 @@ export class SessionReadService {
     }
   }
 
-  private safeEventCount(sessionId: SessionId): number | undefined {
+  private readEventCount(sessionId: SessionId): number | undefined {
     try {
       const count = this.#source.eventCount(sessionId);
-      return Number.isSafeInteger(count) && count >= 0 ? count : undefined;
+      return nonnegativeSafeInteger(count) ? count : undefined;
     } catch {
       return undefined;
     }
+  }
+
+  private readInventory(): {
+    readonly totalSessionCount: number;
+    readonly sessionIds: readonly SessionId[];
+  } {
+    const totalSessionCount = this.#source.sessionCount();
+    if (!nonnegativeSafeInteger(totalSessionCount)) {
+      throw new Error("Authoritative session inventory count is invalid");
+    }
+
+    const sessionIds = this.#source.listRecentSessionIds(MAX_HISTORY_READ_SESSIONS);
+    if (
+      sessionIds.length > MAX_HISTORY_READ_SESSIONS
+      || sessionIds.length > totalSessionCount
+      || new Set(sessionIds).size !== sessionIds.length
+    ) {
+      throw new Error("Authoritative session inventory is invalid");
+    }
+    return { totalSessionCount, sessionIds: [...sessionIds] };
   }
 
   private loadAuthoritative(
@@ -468,10 +495,13 @@ export class SessionReadService {
   ): LoadedAuthoritativeSession | undefined {
     try {
       const events = this.#source.loadEvents(sessionId);
-      if (events.length !== expectedEventCount) return undefined;
+      if (events.length !== expectedEventCount || events.length === 0) {
+        return undefined;
+      }
       const state = replaySession(sessionId, events);
-      if (state.sequence !== expectedEventCount) return undefined;
-      return { events, state };
+      const summary = summaryFromAuthoritativeEvents(sessionId, events, state);
+      if (summary === undefined) return undefined;
+      return { summary, events, state };
     } catch {
       return undefined;
     }
