@@ -674,6 +674,11 @@ function evaluateMilestones(
       (justification?.value.value === "JUSTIFIED" ||
         justification?.value.value === "NOT_APPLICABLE");
     const achieved = (directComplete || substantiatedComplete) && !contradiction;
+    const incompleteSupport =
+      correctness?.value.value === "UNKNOWN" ||
+      understanding?.value.value === "PARTIAL" ||
+      justification?.value.value === "INCOMPLETE" ||
+      justification?.value.value === "UNJUSTIFIED";
 
     const evidenceRefs = uniqueRefs(
       records.flatMap((record) => [
@@ -694,6 +699,9 @@ function evaluateMilestones(
     let supportLevel = supportFromEvidenceRecords(records, relevantVerificationRequests.length > 0);
     if (achieved && directComplete && supportLevel === "WEAK" && progress.value.inferenceConfidence >= 0.8) {
       supportLevel = "MODERATE";
+    }
+    if (achieved && incompleteSupport) {
+      supportLevel = minSupport(supportLevel, "WEAK");
     }
 
     base.set(milestone.id, {
@@ -808,6 +816,7 @@ function evaluateTechnicalCorrectness(
   }>();
   const activeCorrectnessKeys = new Set<string>();
   const unresolvedRefs: EvaluationEvidenceRef[] = [];
+  let unresolvedCount = 0;
 
   for (const record of activeEvidence.values()) {
     if (record.key.dimension !== "CORRECTNESS") continue;
@@ -828,6 +837,7 @@ function evaluateTechnicalCorrectness(
 
     const score = correctnessRatingScore(record.value.value);
     if (score === null) {
+      unresolvedCount += 1;
       unresolvedRefs.push(...recordRefs, ...verificationRefs);
       continue;
     }
@@ -867,7 +877,11 @@ function evaluateTechnicalCorrectness(
       if (representative === undefined) continue;
       sampleBySubject.set(subjectKey(representative.evidenceKey), {
         score: 0,
-        supportLevel: "MODERATE",
+        supportLevel: supportFromCount(
+          1,
+          Math.min(...contradicted.map((request) => request.result?.interpretationConfidence ?? 0)),
+          true
+        ),
         refs: uniqueRefs([
           ...contradicted.map((request) =>
             evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
@@ -882,6 +896,7 @@ function evaluateTechnicalCorrectness(
       continue;
     }
 
+    if (unresolved.length > 0) unresolvedCount += 1;
     unresolvedRefs.push(
       ...unresolved.map((request) =>
         evaluationRef("VERIFICATION_REQUEST", request.verificationRequestId)
@@ -900,14 +915,20 @@ function evaluateTechnicalCorrectness(
       ),
       positiveCount: 0,
       negativeCount: 0,
-      unresolvedCount: unresolvedRefs.length
+      unresolvedCount
     };
   }
 
   const score = roundScore(
     samples.reduce((sum, sample) => sum + sample.score, 0) / samples.length
   );
-  const supportLevel = aggregateSampleSupport(samples.map((sample) => sample.supportLevel));
+  let supportLevel = aggregateSampleSupport(samples.map((sample) => sample.supportLevel));
+  if (unresolvedCount > 0) {
+    supportLevel = minSupport(
+      supportLevel,
+      unresolvedCount >= samples.length ? "WEAK" : "MODERATE"
+    );
+  }
   const refs = uniqueRefs([
     ...samples.flatMap((sample) => sample.refs),
     ...unresolvedRefs
@@ -917,7 +938,7 @@ function evaluateTechnicalCorrectness(
     result: scoredDimension(score, supportLevel, refs),
     positiveCount: samples.filter((sample) => sample.positive).length,
     negativeCount: samples.filter((sample) => sample.negative).length,
-    unresolvedCount: unresolvedRefs.length
+    unresolvedCount
   };
 }
 
@@ -1364,7 +1385,7 @@ function buildSummary(
     unresolvedCorrectnessCount > 0
       ? " " +
         String(unresolvedCorrectnessCount) +
-        " accepted verification result(s) remained unresolved."
+        " current correctness subject(s) remain unresolved."
       : "";
 
   return (
