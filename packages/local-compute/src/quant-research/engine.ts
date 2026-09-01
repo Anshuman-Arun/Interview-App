@@ -548,8 +548,8 @@ function publicPrompt(state: InternalState): string {
       if (state.stage === "PERTURBED_ALLOCATION") return "Experiment costs changed. Reallocate samples under the same total budget.";
       return "Scenario complete.";
     case "MODEL_COMPARISON":
-      if (state.stage === "INITIAL_MODEL_CHOICE") return "Choose whether a constant or linear model better explains the observations.";
-      if (state.stage === "OUTLIER_MODEL_CHOICE") return "An outlier has been introduced. Reassess the model family.";
+      if (state.stage === "INITIAL_MODEL_CHOICE") return "Choose which generating family is more plausible for these observations: a constant mean or a linear trend.";
+      if (state.stage === "OUTLIER_MODEL_CHOICE") return "An outlier has been introduced. Reassess which generating family is more plausible.";
       return "Scenario complete.";
     case "CONSTRAINED_OPTIMIZATION":
       if (state.stage === "BASE_OPTIMIZATION") return "Choose nonnegative integer x and y to maximize the stated objective under the public constraints.";
