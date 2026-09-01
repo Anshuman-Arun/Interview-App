@@ -156,9 +156,14 @@ export class QuantResearchCoordinator {
       QuantResearchCoordinatorOutcomeSchema,
       (state) => {
         assertSessionAvailable(state);
+        if (state.started) throw new Error("Session is already started");
         if (state.problem !== undefined) throw new Error("Session already has a presented problem");
         if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
         const drafts: EventDraft[] = [{
+          source: "APPLICATION",
+          type: "SESSION_STARTED",
+          payload: { startedAt: new Date().toISOString() }
+        }, {
           source: "APPLICATION",
           type: "PROBLEM_PRESENTED",
           payload: {
@@ -210,6 +215,13 @@ export class QuantResearchCoordinator {
             source: "APPLICATION",
             type: "QUANT_RESEARCH_SCENARIO_COMPLETED",
             payload: { result }
+          }, {
+            source: "APPLICATION",
+            type: "SESSION_COMPLETED",
+            payload: {
+              completedAt: new Date().toISOString(),
+              summary: "Quant Research scenario completed."
+            }
           });
         }
         return {
