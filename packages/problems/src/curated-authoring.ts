@@ -84,9 +84,7 @@ export function authorCuratedProblem(spec: CuratedProblemSpec): CuratedProblemEn
     && requestedReviewStatus !== "ready"
     && requestedReviewStatus !== "expert-review"
   ) {
-    throw new Error(
-      `Problem "${spec.id}" has invalid review status "${String(requestedReviewStatus)}"`
-    );
+    throw new Error(`Problem "${spec.id}" has invalid review status`);
   }
   if (spec.hints.length !== HINT_LEVELS.length) {
     throw new Error(`Problem "${spec.id}" must define exactly five hint stages`);
