@@ -616,6 +616,69 @@ describe("Real tldraw mounted browser integration", () => {
     container.remove();
   });
 
+  it("keeps legacy locked untagged shapes protected from native user edits and deletion", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const adapter = new TldrawWhiteboardAdapter();
+    const handle = createWhiteboardCanvasMount({ adapter });
+
+    await act(async () => {
+      handle.mount(container);
+    });
+    const bridge = requireRealTldrawBridge(handle);
+    const nativeEditor = bridge.getNativeEditor();
+    const legacyId = createShapeId("legacy-locked-untagged");
+
+    await act(async () => {
+      nativeEditor.createShapes([{
+        id: legacyId,
+        type: "geo",
+        x: 25,
+        y: 35,
+        props: { geo: "rectangle", w: 40, h: 30 }
+      }]);
+    });
+
+    const seeded = nativeEditor.getShape(legacyId);
+    if (seeded === undefined) throw new Error("Failed to seed legacy-shape fixture");
+
+    await act(async () => {
+      nativeEditor.store.mergeRemoteChanges(() => {
+        nativeEditor.store.put([{
+          ...seeded,
+          isLocked: true,
+          meta: {}
+        }]);
+      });
+    });
+
+    const legacy = nativeEditor.getShape(legacyId);
+    if (legacy === undefined) throw new Error("Legacy-shape fixture disappeared");
+    expect(legacy.isLocked).toBe(true);
+    expect(legacy.meta["layer"]).toBeUndefined();
+
+    const beforeRevision = adapter.getBoardRevision();
+    await act(async () => {
+      nativeEditor.updateShapes([{
+        id: legacyId,
+        type: "geo",
+        x: 999
+      }]);
+      nativeEditor.deleteShapes([legacyId]);
+    });
+
+    const after = nativeEditor.getShape(legacyId);
+    expect(after).toBeDefined();
+    expect(after?.x).toBe(legacy.x);
+    expect(after?.isLocked).toBe(true);
+    expect(after?.meta["layer"]).toBeUndefined();
+    expect(adapter.getBoardRevision()).toBe(beforeRevision);
+
+    handle.unmount();
+    container.remove();
+  });
+
   it("tags native user shapes and blocks native deletion of protected layers", async () => {
     const container = document.createElement("div");
     container.style.width = "800px";
