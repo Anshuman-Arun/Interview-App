@@ -236,7 +236,7 @@ export class LoopbackCommandServer {
           }
         } catch (error) {
           if (error instanceof RequestIdConflictError) throw error;
-          if (writer.getState().started) {
+          if (error instanceof Error && error.message === "Session already started") {
             throw new ProtocolHttpError(409, "CONFLICT", "Session is already started");
           }
           throw error;
@@ -244,6 +244,7 @@ export class LoopbackCommandServer {
         // Establish the process-lifetime recovery boundary immediately after
         // authoritative creation, before a live delivery can become in-flight.
         await this.options.sessions.ensureRecovered(command.sessionId);
+        const problem = toInterviewProblemPublicView(composition);
         return {
           protocolVersion: 1,
           ok: true,
@@ -251,9 +252,7 @@ export class LoopbackCommandServer {
           requestId: command.requestId,
           sessionId: command.sessionId,
           configuration: composition.configuration,
-          ...(toInterviewProblemPublicView(composition) === undefined
-            ? {}
-            : { problem: toInterviewProblemPublicView(composition) })
+          ...(problem === undefined ? {} : { problem })
         };
       }
       case "RESUME_SESSION": {
