@@ -479,9 +479,12 @@ function transitionBayesian(state: BayesianState, action: QuantResearchAction): 
     ));
     let next = appendAction(state, action, { stage: "COMPLETE", status: "COMPLETE" });
     const correctness = shiftedReferenceScore(submitted.value, target, baseline, 0.025);
+    const previousUpdate = state.evidence.find((item) => item.category === "NUMERICAL_CORRECTNESS" && item.stage === "POSTERIOR_UPDATE");
+    if (previousUpdate === undefined) throw new Error("Bayesian posterior evidence invariant violated");
+    const consistency = Math.min(previousUpdate.score, correctness);
     next = appendEvidence(next, [
       evidence("ADAPTATION", state.stage, correctness, "The revised prior was incorporated into the candidate's update."),
-      evidence("CONSISTENCY", state.stage, correctness, "The final probability remained internally consistent with the revealed evidence and changed assumption.")
+      evidence("CONSISTENCY", state.stage, consistency, "Consistency requires both posterior computations to agree with their respective revealed assumptions.")
     ]);
     return next;
   }
