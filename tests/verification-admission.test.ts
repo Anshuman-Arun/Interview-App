@@ -42,6 +42,26 @@ class VerificationCoordinator extends UnscopedVerificationCoordinator {
 }
 
 describe("deterministic verification admission", () => {
+  it("rejects direct verification for a turn that is no longer the latest committed input", async () => {
+    const harness = await createCoreHarness();
+    const coordinator = new VerificationCoordinator(harness.writer);
+    const eventCountBeforeNewTurn = harness.store.eventCount(harness.sessionId);
+    await harness.turns.commitInput("newer student reasoning supersedes the old verification target");
+    expect(harness.store.eventCount(harness.sessionId)).toBeGreaterThan(eventCountBeforeNewTurn);
+
+    const eventCountBeforeRequest = harness.store.eventCount(harness.sessionId);
+    await expect(coordinator.requestVerification({
+      inputEpisodeId: harness.inputEpisodeId,
+      turnId: harness.turnId,
+      verifier: TWO_COLOUR_GRAPH_VERIFIER_NAME,
+      candidateFormalInterpretation: completeGraphStatement(6, () => "ACQUAINTANCE"),
+      interpretationConfidence: 1,
+      evidenceKey: claimEvidenceKey
+    })).rejects.toThrow(/latest committed Turn/u);
+    expect(harness.store.eventCount(harness.sessionId)).toBe(eventCountBeforeRequest);
+    harness.store.close();
+  });
+
   it("requires an explicit exact verifier-to-evidence authorization before append", async () => {
     const harness = await createCoreHarness();
     const unscoped = new UnscopedVerificationCoordinator(harness.writer);
