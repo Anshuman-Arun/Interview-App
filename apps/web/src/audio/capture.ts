@@ -736,7 +736,7 @@ export class BrowserMicrophoneCapture {
     this.resources = undefined;
     if (resources === undefined) return this.cleanupTail;
 
-    return this.trackCleanup(
+    return this.trackCleanup(() =>
       releaseCaptureParts(
         resources.tracks,
         resources.trackEnded,
@@ -752,7 +752,7 @@ export class BrowserMicrophoneCapture {
     if (resources?.operation !== operation) return this.cleanupTail;
     this.resources = undefined;
 
-    return this.trackCleanup(
+    return this.trackCleanup(() =>
       releaseCaptureParts(
         resources.tracks,
         resources.trackEnded,
