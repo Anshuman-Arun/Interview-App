@@ -862,6 +862,313 @@ describe("production Socratic policy engine", () => {
     }
   });
 
+  it("does not let an older error on an abandoned branch override newer alternate-branch progress", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "close-triangle", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(sixPeopleProblem, "complement-case", "PROGRESS"),
+      "PROGRESSING"
+    );
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("UNEXPECTED_VALID_APPROACH");
+    expect(decision.realizationRequest.requiredAction).toBe("WAIT");
+  });
+
+  it("does honor a newer branch-specific error after earlier alternate-branch progress", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "complement-case", "PROGRESS"),
+      "PROGRESSING"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(sixPeopleProblem, "close-triangle", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("LOCAL_ERROR");
+    expect(decision.realizationRequest.requiredAction).toBe("CHECK_LOCAL_STEP");
+  });
+
+  it("does not announce completion while an active error remains on the completed branch", () => {
+    const { state: base, turnId } = makeState();
+    let state = base;
+    for (const milestoneId of ["model-relations", "choose-vertex", "close-triangle", "verify"]) {
+      state = withEvidence(
+        state,
+        milestoneKey(sixPeopleProblem, milestoneId, "PROGRESS"),
+        "COMPLETE"
+      );
+    }
+    state = withEvidence(
+      state,
+      milestoneKey(sixPeopleProblem, "close-triangle", "CORRECTNESS"),
+      "STRUCTURAL_ERROR"
+    );
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).not.toBe("COMPLETED_PRIMARY_APPROACH");
+    expect(decision.realizationRequest.requiredAction).not.toBe("ASK_ALTERNATE_SOLUTION");
+    expect(decision.realizationRequest.requiredAction).not.toBe("GENERALIZE");
+  });
+
+  it("treats high-confidence positive correctness evidence as productive without inventing proof completion", () => {
+    const { state: base, turnId } = makeState();
+    const state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "CORRECT"
+    );
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("PRODUCTIVE_PROGRESS");
+    expect(decision.realizationRequest.requiredAction).toBe("WAIT");
+  });
+
+  it("does not turn low-confidence error evidence into a confident correction", () => {
+    const { state: base, turnId } = makeState();
+    const state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "LOCAL_ERROR",
+      { confidence: 0.69 }
+    );
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("AMBIGUOUS_STATEMENT");
+    expect(decision.realizationRequest.requiredAction).toBe("CLARIFY");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("lets productive evidence de-escalate even after high-disclosure assistance on the same target", () => {
+    const { state: base, turnId } = makeState();
+    let state = withAssistance(base, {
+      target: target("milestone", "choose-vertex"),
+      action: "EXPLICIT_HINT",
+      maximumDisclosure: 4,
+      effectiveDisclosureLevel: 4
+    });
+    state = withEvidence(
+      state,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "CORRECTNESS"),
+      "CORRECT"
+    );
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.classification).toBe("PRODUCTIVE_PROGRESS");
+    expect(decision.realizationRequest.requiredAction).toBe("WAIT");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("does not let legacy vague-target assistance escalate an unrelated milestone", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "close-triangle", "PROGRESS"),
+      "STALLED"
+    );
+    for (let index = 0; index < 3; index += 1) {
+      state = withAssistance(state, {
+        target: "the student's most recent asserted step",
+        action: "PROBE_JUSTIFICATION",
+        maximumDisclosure: 0
+      });
+    }
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.realizationRequest.requiredAction).toBe("ASK_FOR_EXAMPLE");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("can escalate repeated local failure to an explicit hint only when target metadata authorizes it", () => {
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(sixPeopleProblem, "close-triangle", "CORRECTNESS"),
+      "LOCAL_ERROR"
+    );
+    for (const action of ["CHECK_LOCAL_STEP", "FOCUS_ATTENTION", "DIRECTIONAL_NUDGE"] as const) {
+      state = withAssistance(state, {
+        target: target("milestone", "close-triangle"),
+        action,
+        maximumDisclosure: action === "DIRECTIONAL_NUDGE" ? 2 : action === "FOCUS_ATTENTION" ? 1 : 0
+      });
+    }
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.realizationRequest.requiredAction).toBe("EXPLICIT_HINT");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(4);
+  });
+
+  it("does not re-authorize a protected fact already exposed on the same target", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing choose-person disclosure");
+
+    const { state: base, turnId } = makeState();
+    let state = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "choose-vertex", "PROGRESS"),
+      "STALLED"
+    );
+    state = withAssistance(state, {
+      target: target("milestone", "choose-vertex"),
+      action: "DIRECTIONAL_NUDGE",
+      maximumDisclosure: 2,
+      effectiveDisclosureLevel: 2,
+      disclosureIds: [disclosure.id],
+      allowedDisclosureIds: [disclosure.id]
+    });
+    state = withAssistance(state, {
+      target: target("milestone", "choose-vertex"),
+      action: "FOCUS_ATTENTION",
+      maximumDisclosure: 1
+    });
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.realizationRequest.requiredAction).toBe("DIRECTIONAL_NUDGE");
+    expect(decision.realizationRequest.allowedDisclosureIds ?? []).not.toContain(disclosure.id);
+  });
+
+  it("fails closed if same-ID/version problem metadata differs from the session-bound definition", () => {
+    const { state, turnId } = makeState();
+    const tampered: InterviewProblem = {
+      ...sixPeopleProblem,
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        reasoningGraph: {
+          ...sixPeopleProblem.interviewer.reasoningGraph,
+          milestones: sixPeopleProblem.interviewer.reasoningGraph.milestones.map((milestone) =>
+            milestone.id === "model-relations"
+              ? { ...milestone, description: "tampered policy target description" }
+              : milestone
+          )
+        }
+      }
+    };
+    const decision = decidePedagogicalPolicy(state, turnId, tampered);
+    expect(decision.reasonCode).toBe("PROBLEM_DEFINITION_MISMATCH");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("rejects evidence whose authoritative sequence does not match its evidence-update event", () => {
+    const { state: base, turnId } = makeState();
+    const valid = withEvidence(
+      base,
+      milestoneKey(sixPeopleProblem, "model-relations", "PROGRESS"),
+      "PROGRESSING"
+    );
+    const [canonicalKey, history] = Object.entries(valid.evidenceHistory)[0] ?? [];
+    expect(canonicalKey).toBeDefined();
+    expect(history?.[0]).toBeDefined();
+    if (canonicalKey === undefined || history?.[0] === undefined) throw new Error("missing evidence fixture");
+    const badValue = {
+      ...history[0].value,
+      lastUpdatedSequence: history[0].value.lastUpdatedSequence - 1
+    };
+    const malformed: SessionState = {
+      ...valid,
+      studentEvidence: { ...valid.studentEvidence, [canonicalKey]: badValue },
+      evidenceHistory: {
+        ...valid.evidenceHistory,
+        [canonicalKey]: [{ ...history[0], value: badValue }]
+      }
+    };
+    const decision = decidePedagogicalPolicy(malformed, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("rejects verification state whose map key and embedded request ID disagree", () => {
+    const { state: base, turnId } = makeState();
+    const verified = withVerification(
+      base,
+      claimKey(sixPeopleProblem, "verification-id-mismatch", "CORRECTNESS"),
+      "VERIFIED"
+    );
+    const entry = Object.entries(verified.verificationRequests)[0];
+    expect(entry).toBeDefined();
+    if (entry === undefined) throw new Error("missing verification fixture");
+    const malformed: SessionState = {
+      ...verified,
+      verificationRequests: { different_request_key: entry[1] }
+    };
+    const decision = decidePedagogicalPolicy(malformed, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("rejects a disclosure ledger that forgets an exposed protected fact", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing protected disclosure");
+
+    const { state: base, turnId } = makeState();
+    const exposed = withAssistance(base, {
+      target: target("milestone", "choose-vertex"),
+      action: "DIRECTIONAL_NUDGE",
+      maximumDisclosure: 2,
+      effectiveDisclosureLevel: 2,
+      disclosureIds: [disclosure.id],
+      allowedDisclosureIds: [disclosure.id]
+    });
+    const malformed: SessionState = { ...exposed, disclosureLedger: [] };
+    const decision = decidePedagogicalPolicy(malformed, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("fails before deep parsing when a milestone exceeds the bounded prerequisite fan-in", () => {
+    const { state, turnId } = makeState();
+    const malformed = {
+      ...sixPeopleProblem,
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        reasoningGraph: {
+          ...sixPeopleProblem.interviewer.reasoningGraph,
+          milestones: sixPeopleProblem.interviewer.reasoningGraph.milestones.map((milestone, index) =>
+            index === 0
+              ? {
+                  ...milestone,
+                  optionalPrerequisiteIds: Array.from({ length: 2_049 }, () => "choose-vertex")
+                }
+              : milestone
+          )
+        }
+      }
+    } as unknown as InterviewProblem;
+    const decision = decidePedagogicalPolicy(state, turnId, malformed);
+    expect(decision.reasonCode).toBe("RESOURCE_LIMIT_EXCEEDED");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+
+  it("keeps an authorized disclosure out of the provider forbidden-disclosure set", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[0];
+    const other = sixPeopleProblem.interviewer.protectedDisclosures[1];
+    expect(disclosure).toBeDefined();
+    expect(other).toBeDefined();
+    if (disclosure === undefined || other === undefined) throw new Error("missing protected disclosures");
+
+    const { state, turnId } = makeState();
+    const context = compileContext({
+      state,
+      problem: sixPeopleProblem,
+      turnId,
+      realizationRequest: {
+        requiredAction: "DIRECTIONAL_NUDGE",
+        target: target("milestone", "choose-vertex"),
+        maximumDisclosure: 2,
+        allowedDisclosureIds: [disclosure.id]
+      }
+    });
+    expect(context.forbiddenDisclosureIds).not.toContain(disclosure.id);
+    expect(context.forbiddenDisclosureIds).toContain(other.id);
+  });
+
   it("keeps protected solution text out of policy diagnostics", () => {
     const { state: base, turnId } = makeState();
     const state = withEvidence(base, milestoneKey(sixPeopleProblem, "close-triangle", "PROGRESS"), "STALLED");
@@ -900,5 +1207,72 @@ describe("target-scoped disclosure validator", () => {
     if (!result.accepted) {
       expect(result.reason).toMatch(/target authorization/i);
     }
+  });
+
+  it("treats a missing allowed-disclosure list as authorizing no protected facts", () => {
+    const disclosure = sixPeopleProblem.interviewer.protectedDisclosures[1];
+    expect(disclosure).toBeDefined();
+    if (disclosure === undefined) throw new Error("missing protected disclosure");
+
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([]));
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "EXPLICIT_HINT",
+        claimedDisclosureLevel: 4,
+        claimedDisclosureIds: [disclosure.id],
+        speechText: disclosure.fact
+      },
+      request: {
+        requiredAction: "EXPLICIT_HINT",
+        maximumDisclosure: 4
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) expect(result.reason).toMatch(/target authorization/i);
+  });
+
+  it("fails closed when protected metadata normalizes to an empty formulation", () => {
+    const malformedDisclosure = {
+      id: DisclosureIdSchema.parse("disclosure_punctuation_only"),
+      fact: "!!!",
+      minimumDisclosureLevel: 2 as const,
+      equivalentFormulations: ["???"]
+    };
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer(["safe probe"]));
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "FOCUS_ATTENTION",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "safe probe"
+      },
+      request: {
+        requiredAction: "FOCUS_ATTENTION",
+        maximumDisclosure: 1,
+        allowedDisclosureIds: []
+      },
+      protectedDisclosures: [malformedDisclosure]
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) expect(result.reason).toMatch(/uncertain/i);
+  });
+
+  it("fails closed on oversized disclosure-analysis text", () => {
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([]));
+    const result = validator.validate({
+      proposal: {
+        realizedAction: "CLARIFY",
+        claimedDisclosureLevel: 0,
+        claimedDisclosureIds: [],
+        speechText: "x".repeat(100_001)
+      },
+      request: {
+        requiredAction: "CLARIFY",
+        maximumDisclosure: 0
+      },
+      protectedDisclosures: sixPeopleProblem.interviewer.protectedDisclosures
+    });
+    expect(result.accepted).toBe(false);
   });
 });
