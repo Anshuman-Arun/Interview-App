@@ -55,8 +55,14 @@ export class LocalInterviewTransportRuntime {
       source: {
         hasSession: (sessionId) =>
           options.store?.hasSession(sessionId) ?? options.registry.hasSession(sessionId),
-        listSessions: () =>
-          options.store?.listSessions() ?? options.registry.listSessions(),
+        sessionCount: () =>
+          options.store?.sessionCount() ?? options.registry.sessionCount(),
+        listRecentSessionIds: (limit) =>
+          options.store?.listRecentSessionIds(limit)
+          ?? options.registry.listRecentSessionIds(limit),
+        eventCount: (sessionId) =>
+          options.store?.eventCount(sessionId)
+          ?? options.registry.eventCount(sessionId),
         loadEvents: (sessionId) =>
           options.store?.load(sessionId) ?? options.registry.loadEvents(sessionId)
       }
