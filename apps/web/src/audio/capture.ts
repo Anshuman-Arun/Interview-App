@@ -906,12 +906,15 @@ function snapshotMicrophoneCaptureOptions(options: unknown): MicrophoneCaptureOp
     throw new RangeError("Audio capture channel count must be an integer from 1 through 32");
   }
 
+  const acceptedOnFrame = onFrame as MicrophoneCaptureOptions["onFrame"];
+  const acceptedOnError = onError as MicrophoneCaptureOptions["onError"];
+
   return {
     ...(deviceId === undefined ? {} : { deviceId }),
     frameSize,
     channelCount,
-    onFrame,
-    ...(onError === undefined ? {} : { onError })
+    onFrame: acceptedOnFrame,
+    ...(acceptedOnError === undefined ? {} : { onError: acceptedOnError })
   };
 }
 
