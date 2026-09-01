@@ -102,6 +102,8 @@ export interface GenerationState {
   readonly provider: string;
   /** Derived during replay from the application-selected action that existed when generation began. */
   readonly pedagogicalAction?: RealizationRequest;
+  /** Derived from PROPOSAL_VALIDATED and preserved through later supersession. */
+  readonly interviewerProposalValidated?: true;
   readonly status: "ACTIVE" | "PROPOSAL_RECEIVED" | "VALIDATED" | "REJECTED" | "SUPERSEDED";
   readonly contextManifest?: ContextCompilationManifest;
   readonly proposal?: InterviewerProposal;
