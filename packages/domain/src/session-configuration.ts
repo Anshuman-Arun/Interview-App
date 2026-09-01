@@ -26,11 +26,14 @@ export const InterventionPolicySchema = z.enum([
 ]);
 export type InterventionPolicy = z.infer<typeof InterventionPolicySchema>;
 
+const ProviderMachineIdSchema = z.string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u);
+
 export const ProviderSelectionReferenceSchema = z.object({
-  profileId: z.string()
-    .min(1)
-    .max(64)
-    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u)
+  providerId: ProviderMachineIdSchema,
+  modelId: ProviderMachineIdSchema
 }).strict();
 export type ProviderSelectionReference = z.infer<typeof ProviderSelectionReferenceSchema>;
 
