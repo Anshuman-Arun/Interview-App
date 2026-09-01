@@ -76,6 +76,25 @@ describe("normalized tldraw board changes", () => {
     ]);
   });
 
+  it("rejects malformed normalized bounds instead of clamping or propagating them", () => {
+    const shape = studentShape();
+
+    expect(() => normalizeStudentShape(shape, {
+      ...bounds,
+      width: Number.POSITIVE_INFINITY
+    })).toThrow(/non-finite width bounds/u);
+
+    expect(() => normalizeStudentShape(shape, {
+      ...bounds,
+      height: -1
+    })).toThrow(/non-negative/u);
+
+    expect(() => normalizeStudentShape(shape, {
+      ...bounds,
+      x: Number.NaN
+    })).toThrow(/non-finite x bounds/u);
+  });
+
   it("drops non-finite geometry points from normalized mutations", () => {
     const shape = studentShape({
       type: "draw",
