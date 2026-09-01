@@ -326,8 +326,7 @@ export class BrowserAudioPlayback {
 
     const pending = this.current;
     if (
-      pending === undefined
-      || pending.settled
+      pending.settled
       || pending.setupStarted
       || this.setupInFlight
     ) return;
