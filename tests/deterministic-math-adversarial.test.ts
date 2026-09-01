@@ -1159,7 +1159,7 @@ describe("adversarial deterministic math verification", () => {
       41n, 43n, 47n, 53n, 59n, 61n, 67n, 71n, 73n, 79n, 83n, 89n,
       97n, 101n, 103n, 107n, 109n, 113n, 127n, 131n, 137n, 139n, 149n, 151n
     ] as const;
-    const scales = bases.map((base) => primePowerAtLeastDigits(base, 239));
+    const scales = bases.map((base) => primePowerAtLeastDigits(base, 240));
     const scaleProduct = scales.reduce((product, scale) => product * scale, 1n);
     expect(scaleProduct.toString().length)
       .toBeGreaterThan(MAX_WIDE_RATIONAL_WORK_DECIMAL_DIGITS);
