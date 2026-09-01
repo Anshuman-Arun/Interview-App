@@ -23,7 +23,7 @@ export const CompiledContextSchema = z.object({
 }).strict();
 export type CompiledContext = z.infer<typeof CompiledContextSchema>;
 
-export const CONTEXT_COMPILER_VERSION = "phase0-safe-context@1" as const;
+export const CONTEXT_COMPILER_VERSION = "phase0-safe-context@2" as const;
 
 const MAX_LIVE_CONTEXT_STUDENT_TEXT_CHARACTERS = 1_000_000;
 const MAX_LIVE_CONTEXT_PROBLEM_PROMPT_CHARACTERS = 100_000;
@@ -81,26 +81,39 @@ function canonicalJsonBounded(
       throw new Error("Canonical JSON array exceeds the bounded node budget");
     }
     const items: string[] = [];
-    for (const item of value) {
-      items.push(canonicalJsonBounded(item, depth + 1, budget));
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (descriptor === undefined || !("value" in descriptor)) {
+        throw new Error("Canonical JSON arrays must contain only own data elements");
+      }
+      items.push(canonicalJsonBounded(descriptor.value, depth + 1, budget));
     }
     return `[${items.join(",")}]`;
   }
   if (typeof value === "object") {
     const record = value as Readonly<Record<string, unknown>>;
-    const keys: string[] = [];
-    for (const key in record) {
-      if (!Object.prototype.hasOwnProperty.call(record, key) || record[key] === undefined) continue;
-      consumeCanonicalText(budget, key);
-      keys.push(key);
-      if (keys.length > MAX_CANONICAL_JSON_NODES) {
-        throw new Error("Canonical JSON object exceeds the bounded node budget");
-      }
+    const descriptors = Object.getOwnPropertyDescriptors(record);
+    const keys = Object.keys(descriptors)
+      .filter((key) => {
+        const descriptor = descriptors[key];
+        if (descriptor === undefined || !descriptor.enumerable) return false;
+        if (!("value" in descriptor)) {
+          throw new Error("Canonical JSON objects must contain only own data properties");
+        }
+        return descriptor.value !== undefined;
+      });
+    if (keys.length > MAX_CANONICAL_JSON_NODES) {
+      throw new Error("Canonical JSON object exceeds the bounded node budget");
     }
+    for (const key of keys) consumeCanonicalText(budget, key);
     keys.sort();
-    const entries = keys.map(
-      (key) => `${JSON.stringify(key)}:${canonicalJsonBounded(record[key], depth + 1, budget)}`
-    );
+    const entries = keys.map((key) => {
+      const descriptor = descriptors[key];
+      if (descriptor === undefined || !("value" in descriptor)) {
+        throw new Error("Canonical JSON objects must contain only own data properties");
+      }
+      return `${JSON.stringify(key)}:${canonicalJsonBounded(descriptor.value, depth + 1, budget)}`;
+    });
     return `{${entries.join(",")}}`;
   }
   throw new Error("Canonical JSON accepts only JSON-compatible values");
