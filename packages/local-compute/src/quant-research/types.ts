@@ -53,11 +53,11 @@ export interface ConstrainedOptimizationConfig {
 }
 
 export type QuantResearchScenarioDefinition =
-  | Readonly<{ family: "BAYESIAN_UPDATING"; version: typeof QUANT_RESEARCH_VERSION; seed: number; config: BayesianUpdatingConfig }>
-  | Readonly<{ family: "SAMPLING_ESTIMATION"; version: typeof QUANT_RESEARCH_VERSION; seed: number; config: SamplingEstimationConfig }>
-  | Readonly<{ family: "EXPERIMENTAL_ALLOCATION"; version: typeof QUANT_RESEARCH_VERSION; seed: number; config: ExperimentalAllocationConfig }>
-  | Readonly<{ family: "MODEL_COMPARISON"; version: typeof QUANT_RESEARCH_VERSION; seed: number; config: ModelComparisonConfig }>
-  | Readonly<{ family: "CONSTRAINED_OPTIMIZATION"; version: typeof QUANT_RESEARCH_VERSION; seed: number; config: ConstrainedOptimizationConfig }>;
+  | Readonly<{ family: "BAYESIAN_UPDATING"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: BayesianUpdatingConfig }>
+  | Readonly<{ family: "SAMPLING_ESTIMATION"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: SamplingEstimationConfig }>
+  | Readonly<{ family: "EXPERIMENTAL_ALLOCATION"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ExperimentalAllocationConfig }>
+  | Readonly<{ family: "MODEL_COMPARISON"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ModelComparisonConfig }>
+  | Readonly<{ family: "CONSTRAINED_OPTIMIZATION"; version: typeof QUANT_RESEARCH_VERSION; rngVersion: typeof QUANT_RESEARCH_RNG_VERSION; seed: number; config: ConstrainedOptimizationConfig }>;
 
 interface ActionBase {
   readonly actionId: string;
@@ -180,7 +180,7 @@ function asRecord(value: unknown, context: string, fail: (message: string) => ne
   let keys: readonly PropertyKey[];
   try {
     prototype = Object.getPrototypeOf(value) as object | null;
-    keys = Reflect.ownKeys(value);
+    keys = Reflect.ownKeys(arrayValue);
   } catch {
     fail(context + " could not be safely inspected");
   }
@@ -228,11 +228,12 @@ function boundedFiniteNumber(value: unknown, min: number, max: number, context: 
 
 function finiteNumberVector(value: unknown): readonly number[] {
   if (!safeIsArray(value, "values", failAction)) failAction("values must be an array");
+  const arrayValue = value as unknown[];
   let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
-    keys = Reflect.ownKeys(value);
-    lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+    keys = Reflect.ownKeys(arrayValue);
+    lengthDescriptor = Object.getOwnPropertyDescriptor(arrayValue, "length");
   } catch {
     failAction("values could not be safely inspected");
   }
@@ -255,7 +256,7 @@ function finiteNumberVector(value: unknown): readonly number[] {
   for (let index = 0; index < length; index += 1) {
     let descriptor: PropertyDescriptor | undefined;
     try {
-      descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      descriptor = Object.getOwnPropertyDescriptor(arrayValue, String(index));
     } catch {
       failAction("values could not be safely inspected");
     }
@@ -379,20 +380,21 @@ function parseOptimizationConfig(value: unknown): ConstrainedOptimizationConfig 
 
 export function parseQuantResearchDefinition(input: unknown): QuantResearchScenarioDefinition {
   const record = asRecord(input, "Scenario definition", failDefinition);
-  assertExactKeys(record, ["family", "version", "seed", "config"], "Scenario definition", failDefinition);
+  assertExactKeys(record, ["family", "version", "rngVersion", "seed", "config"], "Scenario definition", failDefinition);
   if (record.version !== QUANT_RESEARCH_VERSION) failDefinition("Unsupported scenario version");
+  if (record.rngVersion !== QUANT_RESEARCH_RNG_VERSION) failDefinition("Unsupported deterministic RNG version");
   const seed = boundedInteger(record.seed, 0, MAX_SEED, "seed", failDefinition);
   switch (record.family) {
     case "BAYESIAN_UPDATING":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, seed, config: parseBayesianConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseBayesianConfig(record.config) };
     case "SAMPLING_ESTIMATION":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, seed, config: parseSamplingConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseSamplingConfig(record.config) };
     case "EXPERIMENTAL_ALLOCATION":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, seed, config: parseExperimentalConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseExperimentalConfig(record.config) };
     case "MODEL_COMPARISON":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, seed, config: parseModelConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseModelConfig(record.config) };
     case "CONSTRAINED_OPTIMIZATION":
-      return { family: record.family, version: QUANT_RESEARCH_VERSION, seed, config: parseOptimizationConfig(record.config) };
+      return { family: record.family, version: QUANT_RESEARCH_VERSION, rngVersion: QUANT_RESEARCH_RNG_VERSION, seed, config: parseOptimizationConfig(record.config) };
     default:
       failDefinition("Unknown scenario family");
   }
@@ -457,11 +459,12 @@ export function assertUniqueQuantResearchRegistrations(registrationsInput: unkno
   })) {
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry must be an array");
   }
+  const registrations = registrationsInput as unknown[];
   let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
-    keys = Reflect.ownKeys(registrationsInput);
-    lengthDescriptor = Object.getOwnPropertyDescriptor(registrationsInput, "length");
+    keys = Reflect.ownKeys(registrations);
+    lengthDescriptor = Object.getOwnPropertyDescriptor(registrations, "length");
   } catch {
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry could not be safely inspected");
   }
@@ -487,7 +490,7 @@ export function assertUniqueQuantResearchRegistrations(registrationsInput: unkno
   for (let index = 0; index < length; index += 1) {
     let descriptor: PropertyDescriptor | undefined;
     try {
-      descriptor = Object.getOwnPropertyDescriptor(registrationsInput, String(index));
+      descriptor = Object.getOwnPropertyDescriptor(registrations, String(index));
     } catch {
       throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry could not be safely inspected");
     }
