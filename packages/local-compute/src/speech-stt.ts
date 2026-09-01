@@ -437,6 +437,7 @@ function sameAudioBasis(left: SourceAudioBasis, right: SourceAudioBasis): boolea
     && left.startTimestampMs === right.startTimestampMs
     && left.endTimestampMs === right.endTimestampMs
     && left.sampleRate === right.sampleRate
+    && left.channels === right.channels
     && left.sampleCount === right.sampleCount
     && left.pcmSha256 === right.pcmSha256;
 }
