@@ -19,6 +19,8 @@ export interface BrowserSessionReadClientOptions {
   readonly fetchImpl?: typeof fetch;
 }
 
+export const MAX_SESSION_READ_RESPONSE_BYTES = 8 * 1024 * 1024;
+
 export type BrowserSessionReadTransportErrorKind = "ABORTED" | "NETWORK";
 
 export class BrowserSessionReadTransportError extends Error {
@@ -34,7 +36,8 @@ export class BrowserSessionReadResponseError extends Error {
       | "INVALID_CONTENT_TYPE"
       | "MALFORMED_JSON"
       | "SCHEMA_MISMATCH"
-      | "CORRELATION_MISMATCH",
+      | "CORRELATION_MISMATCH"
+      | "BODY_TOO_LARGE",
     public readonly status: number
   ) {
     super("Session read server returned an invalid response");
@@ -163,10 +166,30 @@ export class BrowserSessionReadClient {
       );
     }
 
+    const declaredLength = response.headers.get("content-length");
+    if (declaredLength !== null) {
+      const parsedLength = Number(declaredLength);
+      if (
+        !Number.isSafeInteger(parsedLength)
+        || parsedLength < 0
+        || parsedLength > MAX_SESSION_READ_RESPONSE_BYTES
+      ) {
+        throw new BrowserSessionReadResponseError(
+          "BODY_TOO_LARGE",
+          response.status
+        );
+      }
+    }
+
     let responseText: string;
     try {
-      responseText = await response.text();
-    } catch {
+      responseText = await readBoundedResponseText(
+        response,
+        MAX_SESSION_READ_RESPONSE_BYTES,
+        signal
+      );
+    } catch (error) {
+      if (error instanceof BrowserSessionReadResponseError) throw error;
       throw new BrowserSessionReadTransportError(
         isSignalAborted(signal) ? "ABORTED" : "NETWORK"
       );
@@ -238,4 +261,45 @@ function normalizeLoopbackBaseUrl(input: string): string {
 
 function isSignalAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted ?? false;
+}
+
+
+async function readBoundedResponseText(
+  response: Response,
+  maximumBytes: number,
+  signal: AbortSignal | undefined
+): Promise<string> {
+  if (response.body === null) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let text = "";
+  try {
+    for (;;) {
+      if (isSignalAborted(signal)) {
+        throw new BrowserSessionReadTransportError("ABORTED");
+      }
+      const result = await reader.read();
+      if (result.done) break;
+      totalBytes += result.value.byteLength;
+      if (totalBytes > maximumBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // Best-effort cancellation after the response has already violated
+          // the bounded read contract.
+        }
+        throw new BrowserSessionReadResponseError(
+          "BODY_TOO_LARGE",
+          response.status
+        );
+      }
+      text += decoder.decode(result.value, { stream: true });
+    }
+    text += decoder.decode();
+    return text;
+  } finally {
+    reader.releaseLock();
+  }
 }
