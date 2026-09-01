@@ -151,7 +151,8 @@ export class MoonshineSpeechRecognizer implements SpeechRecognizer {
 
   public async cancel(requestId: RequestId): Promise<boolean> {
     if (!this.supportsAbort || this.options.runtime.cancel === undefined) return false;
-    return (await this.options.runtime.cancel(requestId)) === true;
+    const boundedRequestId = SpeechRequestIdSchema.parse(requestId);
+    return (await this.options.runtime.cancel(boundedRequestId)) === true;
   }
 }
 
