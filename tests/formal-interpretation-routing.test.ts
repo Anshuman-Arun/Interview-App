@@ -1002,7 +1002,7 @@ describe("provider cancellation capacity accounting", () => {
       const firstProviderWork = new Promise<unknown>((resolve) => {
         releaseFirstProvider = resolve;
       });
-      const provider = new DeterministicFormalInterpretationProvider((request) => {
+      const provider = new DeterministicFormalInterpretationProvider((request: FormalInterpretationRequest) => {
         if (request.requestId === firstRequest.requestId) {
           if (signalProviderStarted === undefined) {
             throw new Error("Provider start signal was not initialized");
@@ -1059,7 +1059,7 @@ describe("EvidenceKey authority identity", () => {
         subject: { kind: "CLAIM", claimId: "x|CLAIM|y" },
         dimension: "CORRECTNESS"
       };
-      const collidingKey: EvidenceKey = {
+      const collidingKey: FormalInterpretationCandidate["target"] = {
         problemId: "oxford-six-people|CLAIM|x",
         subject: { kind: "CLAIM", claimId: "y" },
         dimension: "CORRECTNESS"
