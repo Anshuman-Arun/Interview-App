@@ -1780,6 +1780,151 @@ describe("production Socratic policy engine", () => {
     expect(decision.realizationRequest.maximumDisclosure).toBe(0);
   });
 
+  it("requires every same-approach predecessor before authorizing a protected join", () => {
+    const disclosureId = DisclosureIdSchema.parse("disclosure_same_approach_join");
+    const problem: InterviewProblem = {
+      ...sixPeopleProblem,
+      id: "same-approach-join-test",
+      version: "1.0.0",
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        reasoningGraph: {
+          version: "1.0.0",
+          approaches: [{ id: "approach-a", label: "Approach A" }],
+          milestones: [
+            {
+              id: "parent-a",
+              description: "First required parent.",
+              approachIds: ["approach-a"],
+              optionalPrerequisiteIds: [],
+              protectedDisclosureIds: []
+            },
+            {
+              id: "parent-b",
+              description: "Second required parent.",
+              approachIds: ["approach-a"],
+              optionalPrerequisiteIds: [],
+              protectedDisclosureIds: []
+            },
+            {
+              id: "join",
+              description: "Join requiring both parents.",
+              approachIds: ["approach-a"],
+              optionalPrerequisiteIds: ["parent-a", "parent-b"],
+              protectedDisclosureIds: [disclosureId]
+            }
+          ],
+          edges: [],
+          commonErrors: [],
+          extensions: []
+        },
+        protectedDisclosures: [{
+          id: disclosureId,
+          fact: "Use both completed parent arguments at the join.",
+          minimumDisclosureLevel: 1,
+          equivalentFormulations: ["use both parent arguments"]
+        }]
+      }
+    };
+
+    const { state: base, turnId } = makeState(problem);
+    let state = withEvidence(
+      base,
+      milestoneKey(problem, "parent-a", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(problem, "join", "CORRECTNESS"),
+      "STRUCTURAL_ERROR"
+    );
+
+    const premature = decidePedagogicalPolicy(state, turnId, problem);
+    expect(premature.realizationRequest).toMatchObject({
+      requiredAction: "CHANGE_REPRESENTATION",
+      maximumDisclosure: 1,
+      allowedDisclosureIds: []
+    });
+
+    state = withEvidence(
+      state,
+      milestoneKey(problem, "parent-b", "PROGRESS"),
+      "COMPLETE"
+    );
+    const ready = decidePedagogicalPolicy(state, turnId, problem);
+    expect(ready.realizationRequest.allowedDisclosureIds).toEqual([disclosureId]);
+  });
+
+  it("allows either explicitly authored approach branch to satisfy a shared join", () => {
+    const disclosureId = DisclosureIdSchema.parse("disclosure_alternate_join");
+    const problem: InterviewProblem = {
+      ...sixPeopleProblem,
+      id: "alternate-approach-join-test",
+      version: "1.0.0",
+      interviewer: {
+        ...sixPeopleProblem.interviewer,
+        reasoningGraph: {
+          version: "1.0.0",
+          approaches: [
+            { id: "approach-a", label: "Approach A" },
+            { id: "approach-b", label: "Approach B" }
+          ],
+          milestones: [
+            {
+              id: "branch-a",
+              description: "Approach A branch.",
+              approachIds: ["approach-a"],
+              optionalPrerequisiteIds: [],
+              protectedDisclosureIds: []
+            },
+            {
+              id: "branch-b",
+              description: "Approach B branch.",
+              approachIds: ["approach-b"],
+              optionalPrerequisiteIds: [],
+              protectedDisclosureIds: []
+            },
+            {
+              id: "join",
+              description: "Shared branch join.",
+              approachIds: ["approach-a", "approach-b"],
+              optionalPrerequisiteIds: ["branch-a", "branch-b"],
+              protectedDisclosureIds: [disclosureId]
+            }
+          ],
+          edges: [],
+          commonErrors: [],
+          extensions: []
+        },
+        protectedDisclosures: [{
+          id: disclosureId,
+          fact: "Carry the completed branch into the shared join.",
+          minimumDisclosureLevel: 1,
+          equivalentFormulations: ["carry the completed branch"]
+        }]
+      }
+    };
+
+    const { state: base, turnId } = makeState(problem);
+    let state = withEvidence(
+      base,
+      milestoneKey(problem, "branch-a", "PROGRESS"),
+      "COMPLETE"
+    );
+    state = withEvidence(
+      state,
+      milestoneKey(problem, "join", "CORRECTNESS"),
+      "STRUCTURAL_ERROR"
+    );
+
+    const decision = decidePedagogicalPolicy(state, turnId, problem);
+    expect(decision.realizationRequest).toMatchObject({
+      requiredAction: "CHANGE_REPRESENTATION",
+      maximumDisclosure: 1,
+      allowedDisclosureIds: [disclosureId]
+    });
+  });
+
   it("fails closed when optional prerequisites introduce a cycle even if authored edges are acyclic", () => {
     const cyclic: InterviewProblem = {
       ...sixPeopleProblem,
