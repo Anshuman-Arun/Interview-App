@@ -43,7 +43,15 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
   let next: SessionState;
   switch (event.type) {
     case "SESSION_STARTED":
-      next = { ...state, started: true, status: "ACTIVE" };
+      if (state.started) throw new Error("Session is already started");
+      next = {
+        ...state,
+        started: true,
+        status: "ACTIVE",
+        ...(event.payload.configuration === undefined
+          ? {}
+          : { configuration: event.payload.configuration })
+      };
       break;
     case "PROBLEM_PRESENTED":
       next = {
