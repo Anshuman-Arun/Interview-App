@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SessionIdSchema, type SessionId } from "../../../packages/domain/src/index.js";
 import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
@@ -28,6 +28,9 @@ export const App: React.FC = () => {
     readonly tab: SessionReviewTab;
   } | null>(null);
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const historyAbortRef = useRef<AbortController | null>(null);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -99,16 +102,38 @@ export const App: React.FC = () => {
   };
 
   const refreshStoredSessions = (): void => {
-    void session.fetchAvailableSessions();
-    void session.readSessionHistory()
-      .then((value) => setHistoryRead(value))
-      .catch(() => setHistoryRead(null));
+    historyAbortRef.current?.abort();
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+    setHistoryLoading(true);
+    setHistoryError(null);
+
+    void session.readSessionHistory(controller.signal)
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        setHistoryRead(value);
+        setHistoryLoading(false);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setHistoryError("Bounded session history could not be loaded.");
+        setHistoryLoading(false);
+      });
   };
 
   const openSessionsModal = (): void => {
     refreshStoredSessions();
     setShowSessionsModal(true);
   };
+
+  useEffect(() => {
+    return () => {
+      historyAbortRef.current?.abort();
+      historyAbortRef.current = null;
+    };
+  }, []);
+
+  const boundedSessions = historyRead?.sessions ?? [];
 
   const handleWhiteboardEditorMount = useCallback((editor: TldrawEditor): void => {
     if (editor.getCurrentPageShapes().length > 0) return;
@@ -287,7 +312,9 @@ export const App: React.FC = () => {
             <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold text-slate-900">Stored Interview Sessions</span>
-                <span className="text-xs text-slate-500 font-mono">({session.availableSessions.length})</span>
+                <span className="text-xs text-slate-500 font-mono">
+                  ({boundedSessions.length}{historyRead?.sessionTruncation.truncated ? "+" : ""})
+                </span>
               </div>
               <button
                 type="button"
@@ -373,12 +400,20 @@ export const App: React.FC = () => {
                 </section>
               ) : null}
 
-              {session.availableSessions.length === 0 ? (
+              {historyLoading && historyRead === null ? (
                 <div className="text-center py-8 text-slate-400 text-xs">
-                  No local sessions found. Start a new session to begin.
+                  Loading bounded session history…
+                </div>
+              ) : historyError !== null && historyRead === null ? (
+                <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                  {historyError}
+                </div>
+              ) : boundedSessions.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  No bounded local sessions found. Start a new session to begin.
                 </div>
               ) : (
-                session.availableSessions.map((s) => (
+                boundedSessions.map((s) => (
                   <div
                     key={s.sessionId}
                     className="p-3 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors flex items-center justify-between bg-white shadow-2xs"
@@ -393,40 +428,57 @@ export const App: React.FC = () => {
                       <div className="text-[11px] text-slate-500 flex items-center gap-3">
                         <span>Problem: {s.problemId ?? "Unbound/unknown"}</span>
                         <span>•</span>
-                        <span>Events: {s.eventCount}</span>
-                        <span>•</span>
-                        <span>Updated: {new Date(s.updatedAt).toLocaleTimeString()}</span>
+                        <span>Events: {s.eventCount ?? "unknown"}</span>
+                        {s.updatedAt !== undefined ? (
+                          <>
+                            <span>•</span>
+                            <span>Updated: {new Date(s.updatedAt).toLocaleTimeString()}</span>
+                          </>
+                        ) : null}
+                        {s.readStatus !== "AVAILABLE" ? (
+                          <>
+                            <span>•</span>
+                            <span>{s.readStatus}</span>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={
-                        s.status === "ACTIVE"
+s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
                           ? () => void handleRecoverSession(s.sessionId)
-                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                          : s.readStatus === "AVAILABLE"
+                            && (s.status === "COMPLETED" || s.status === "ARCHIVED")
                             ? () => openHistoricalReview(s.sessionId)
                             : undefined
                       }
                       disabled={
-                        s.status !== "ACTIVE"
-                        && s.status !== "COMPLETED"
-                        && s.status !== "ARCHIVED"
+                        s.readStatus !== "AVAILABLE"
+                        || (
+                          s.status !== "ACTIVE"
+                          && s.status !== "COMPLETED"
+                          && s.status !== "ARCHIVED"
+                        )
                       }
                       className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
-                        s.status === "ACTIVE"
+s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
                           ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
-                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                          : s.readStatus === "AVAILABLE"
+                            && (s.status === "COMPLETED" || s.status === "ARCHIVED")
                             ? "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
                             : "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
                       }`}
                     >
-                      {s.sessionId === session.sessionId && s.status === "ACTIVE"
-                        ? "Current"
-                        : s.status === "ACTIVE"
-                          ? "Resume"
-                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
-                            ? "Review"
-                            : "Unavailable"}
+                      {s.readStatus !== "AVAILABLE"
+                        ? "Unavailable"
+                        : s.sessionId === session.sessionId && s.status === "ACTIVE"
+                          ? "Current"
+                          : s.status === "ACTIVE"
+                            ? "Resume"
+                            : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                              ? "Review"
+                              : "Unavailable"}
                     </button>
                   </div>
                 ))
