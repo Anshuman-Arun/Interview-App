@@ -829,13 +829,54 @@ export interface QuantResearchReplayOutput {
   readonly acceptedActions: readonly QuantResearchAction[];
 }
 
-export function replayQuantResearch(definitionInput: unknown, actionsInput: unknown): QuantResearchReplayOutput {
+function snapshotReplayActions(actionsInput: unknown): readonly unknown[] {
   if (!Array.isArray(actionsInput)) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be an array");
-  if (actionsInput.length > MAX_ACTIONS) {
-    throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Replay action list exceeds the maximum size");
+  let keys: readonly PropertyKey[];
+  let lengthDescriptor: PropertyDescriptor | undefined;
+  try {
+    keys = Reflect.ownKeys(actionsInput);
+    lengthDescriptor = Object.getOwnPropertyDescriptor(actionsInput, "length");
+  } catch {
+    throw new QuantResearchError("INVALID_REPLAY", "Replay actions could not be safely inspected");
   }
+  if (
+    lengthDescriptor === undefined ||
+    lengthDescriptor.get !== undefined ||
+    lengthDescriptor.set !== undefined ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0
+  ) {
+    throw new QuantResearchError("INVALID_REPLAY", "Replay action length is invalid");
+  }
+  const length = lengthDescriptor.value as number;
+  if (length > MAX_ACTIONS) throw new QuantResearchError("RESOURCE_LIMIT_EXCEEDED", "Replay action list exceeds the maximum size");
+  const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
+  for (const key of keys) {
+    if (typeof key !== "string" || !allowedKeys.has(key)) {
+      throw new QuantResearchError("INVALID_REPLAY", "Replay actions contains unsupported properties");
+    }
+  }
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(actionsInput, String(index));
+    } catch {
+      throw new QuantResearchError("INVALID_REPLAY", "Replay actions could not be safely inspected");
+    }
+    if (descriptor === undefined) throw new QuantResearchError("INVALID_REPLAY", "Replay actions must be dense");
+    if (descriptor.get !== undefined || descriptor.set !== undefined) {
+      throw new QuantResearchError("INVALID_REPLAY", "Replay actions must contain only data properties");
+    }
+    snapshot.push(descriptor.value);
+  }
+  return snapshot;
+}
+
+export function replayQuantResearch(definitionInput: unknown, actionsInput: unknown): QuantResearchReplayOutput {
+  const actions = snapshotReplayActions(actionsInput);
   const engine = new QuantResearchEngine(definitionInput);
-  for (const action of actionsInput) engine.applyAction(action);
+  for (const action of actions) engine.applyAction(action);
   return { state: engine.getState(), result: engine.getResult(), acceptedActions: engine.getAcceptedActions() };
 }
 
