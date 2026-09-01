@@ -71,7 +71,19 @@ export class ServerTurnOrchestrator {
     const turns = new TurnCoordinator(writer);
 
     for (const [turnId, turn] of Object.entries(state.turns)) {
-      if (turn.studentText.length === 0) continue;
+      // Clean up stranded in-flight generations from pre-crash processes, including older turns.
+      const strandedGenerations = Object.values(state.generations).filter(
+        (g) => g.basis.turnId === turnId && (g.status === "ACTIVE" || g.status === "PROPOSAL_RECEIVED")
+      );
+      for (const stranded of strandedGenerations) {
+        await turns.supersedeGeneration(stranded.generationId, "CRASH_RECOVERY_STRANDED");
+      }
+
+      if (
+        turn.studentText.length === 0
+        || state.lastCommittedInputSequence === undefined
+        || turn.committedSequence !== state.lastCommittedInputSequence
+      ) continue;
 
       const hasValidatedGeneration = Object.values(state.generations).some(
         (g) => g.basis.turnId === turnId && g.status === "VALIDATED"
@@ -79,16 +91,6 @@ export class ServerTurnOrchestrator {
       const hasDeliveries = Object.values(state.deliveries).some(
         (d) => Object.values(state.generations).some((g) => g.generationId === d.generationId && g.basis.turnId === turnId)
       );
-      const existingAction = state.pedagogicalActions[turnId];
-      if (existingAction?.requiredAction === "WAIT") continue;
-
-      // Clean up stranded in-flight generations from pre-crash processes
-      const strandedGenerations = Object.values(state.generations).filter(
-        (g) => g.basis.turnId === turnId && (g.status === "ACTIVE" || g.status === "PROPOSAL_RECEIVED")
-      );
-      for (const stranded of strandedGenerations) {
-        await turns.supersedeGeneration(stranded.generationId, "CRASH_RECOVERY_STRANDED");
-      }
 
       if (!hasValidatedGeneration && !hasDeliveries) {
         await this.orchestrateTurn({
@@ -104,21 +106,29 @@ export class ServerTurnOrchestrator {
   private async executeOrchestration(input: TurnOrchestrationInput): Promise<void> {
     const writer = this.sessions.getWriter(input.sessionId);
 
-    // Check if turn already has validated generation or deliveries to ensure strict idempotency
+    // Resolve all orchestration inputs back to authoritative state before doing any provider work.
     const currentState = writer.getState();
+    const authoritativeTurn = currentState.turns[input.turnId];
+    if (
+      authoritativeTurn === undefined
+      || authoritativeTurn.turnId !== input.turnId
+      || authoritativeTurn.inputEpisodeId !== input.inputEpisodeId
+      || currentState.lastCommittedInputSequence === undefined
+      || authoritativeTurn.committedSequence !== currentState.lastCommittedInputSequence
+    ) {
+      return;
+    }
+
     const existingGeneration = Object.values(currentState.generations).find(
       (g) => g.basis.turnId === input.turnId && g.status === "VALIDATED"
     );
     if (existingGeneration !== undefined) {
       return;
     }
-    if (currentState.pedagogicalActions[input.turnId]?.requiredAction === "WAIT") {
-      return;
-    }
 
     const turns = new TurnCoordinator(writer);
 
-    // 1. Pedagogical policy selects the required action
+    // 1. Pedagogical policy selects (or refreshes) the required action
     const realizationRequest = await turns.selectAction(input.turnId, sixPeopleProblem);
     if (realizationRequest.requiredAction === "WAIT") {
       return;
@@ -126,7 +136,7 @@ export class ServerTurnOrchestrator {
 
     // 2. Realize only wording/content already authorized by application policy
     const proposal = this.createInterviewerProposal(
-      input.studentText,
+      authoritativeTurn.studentText,
       realizationRequest
     );
 
@@ -136,8 +146,8 @@ export class ServerTurnOrchestrator {
     // 4. ProviderCoordinator initiates generation, compiles context, and validates proposal
     const coordinator = new ProviderCoordinator(writer);
     const execution = await coordinator.start({
-      inputEpisodeId: input.inputEpisodeId,
-      turnId: input.turnId,
+      inputEpisodeId: authoritativeTurn.inputEpisodeId,
+      turnId: authoritativeTurn.turnId,
       provider,
       policy: {
         allowMeteredUsage: false,
