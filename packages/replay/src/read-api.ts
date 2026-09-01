@@ -947,6 +947,104 @@ export const SessionReplayReadModelSchema = z.object({
     eventType: z.string().min(1).max(128).optional()
   }).strict()).max(32)
 }).strict().superRefine((replay, context) => {
+  const issueCodes = new Set(replay.issues.map((issue) => issue.code));
+  if (
+    replay.lifecycle.historyComplete !== replay.currentStateAvailable
+    || replay.verificationSummary.statusIsCurrent !== replay.currentStateAvailable
+    || (!replay.currentStateAvailable && replay.lifecycle.status !== "UNKNOWN")
+    || (
+      replay.currentStateAvailable
+      && (
+        replay.lifecycle.status === "UNKNOWN"
+        || replay.lifecycle.started === null
+        || replay.lifecycle.completed === null
+        || replay.lifecycle.archived === null
+      )
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay lifecycle/current-state metadata is inconsistent"
+    });
+  }
+
+  if (
+    replay.currentStateAvailable
+    && (
+      replay.evidenceSummary.currentActive === undefined
+      || replay.evidenceSummary.superseded === undefined
+      || replay.evidenceSummary.stale === undefined
+      || replay.evidenceSummary.currentActive
+        + replay.evidenceSummary.superseded
+        + replay.evidenceSummary.stale
+        !== replay.evidenceSummary.recordedUpdates
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Current replay evidence summary is inconsistent"
+    });
+  }
+  if (
+    !replay.currentStateAvailable
+    && (
+      replay.evidenceSummary.currentActive !== undefined
+      || replay.evidenceSummary.superseded !== undefined
+      || replay.evidenceSummary.stale !== undefined
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Incomplete replay cannot claim final evidence-state counts"
+    });
+  }
+
+  if (
+    replay.counts.exposedInterventions
+      + replay.counts.possiblyExposedInterventions
+      + replay.counts.cancelledInterventions
+      > replay.counts.deliveries
+    || replay.counts.turns > replay.totalEventCount
+    || replay.counts.deliveries > replay.totalEventCount
+    || replay.evidenceSummary.recordedUpdates
+      + replay.evidenceSummary.recordedInvalidations
+      > replay.totalEventCount
+    || replay.verificationSummary.pending
+      + replay.verificationSummary.verified
+      + replay.verificationSummary.contradicted
+      + replay.verificationSummary.unresolved
+      + replay.verificationSummary.discarded
+      > replay.totalEventCount
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay aggregate counts exceed authoritative event bounds"
+    });
+  }
+
+  if (
+    replay.observedThroughSequence + replay.eventTruncation.remainingCount
+      !== replay.totalEventCount
+    || replay.entries.length + replay.timelineTruncation.remainingCount
+      !== replay.observedThroughSequence
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay truncation arithmetic is inconsistent with observed history"
+    });
+  }
+
+  if (
+    issueCodes.has("EVENT_LIMIT_REACHED") !== replay.eventTruncation.truncated
+    || issueCodes.has("TIMELINE_LIMIT_REACHED") !== replay.timelineTruncation.truncated
+    || issueCodes.has("CURRENT_STATE_UNAVAILABLE") !== !replay.currentStateAvailable
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Replay issue flags do not match truncation/current-state metadata"
+    });
+  }
+
   if (
     replay.validatedThroughSequence > replay.observedThroughSequence
     || replay.observedThroughSequence > replay.totalEventCount
