@@ -16,16 +16,17 @@ Every scenario is created from an explicit definition:
     "EXPERIMENTAL_ALLOCATION" | "MODEL_COMPARISON" |
     "CONSTRAINED_OPTIMIZATION",
   version: "1.0.0",
+  rngVersion: "xorshift32-rejection-v1",
   seed: number,
   config: { ...family-specific bounded configuration... }
 }
 ```
 
-Definitions are strict runtime-validated plain objects. Unknown fields, accessor-backed values, unsafe seeds, malformed bounds, deadlocked experiment budgets, no-op perturbations, non-meaningful outlier settings, seed-insensitive sampling configurations, and oversized configurations are rejected before scenario generation. Generated hidden state is then checked against family-specific invariants before use.
+Definitions are strict runtime-validated plain objects. Unknown fields, accessor-backed values, unsupported scenario/RNG versions, unsafe seeds, malformed bounds, deadlocked experiment budgets, no-op perturbations, non-meaningful outlier settings, zero-noise sampling configurations, and oversized configurations are rejected before scenario generation. Generated hidden state is then checked against family-specific invariants before use, including meaningful Bayesian updates, non-degenerate reachable samples, unambiguous experimental evidence, and perturbations that actually change the exact optimal allocation/solution.
 
 ## Deterministic seed semantics
 
-The engine never uses ambient randomness. `DeterministicRng` is seeded from the explicit safe-integer seed plus the family/version namespace. The exported `QUANT_RESEARCH_RNG_VERSION` identifies the current RNG semantics and should be persisted alongside the scenario definition by future integration code. All random-looking observations and latent parameters are generated during initialization. State inspection does not consume RNG state.
+The engine never uses ambient randomness. `DeterministicRng` is seeded from the explicit safe-integer seed plus the family/version namespace. The scenario definition itself carries the required `rngVersion`, and runtime parsing rejects an incompatible RNG version rather than silently replaying a persisted seed under different semantics. All random-looking observations and latent parameters are generated during initialization. State inspection does not consume RNG state.
 
 Identical `(family, version, seed, config)` inputs therefore produce identical hidden state and, for an identical ordered action sequence, identical public state, evidence, and result. Golden version-1 fixtures pin representative generated instances so an RNG/generator change cannot silently retain the same scenario version.
 
@@ -68,7 +69,7 @@ The candidate chooses how many observations to request from a seeded finite popu
 
 ### Experimental allocation
 
-The candidate allocates a bounded budget between two noisy experiments, with every comparison allocation requiring at least one observation from each arm, sees deterministic sample summaries, selects the higher-mean option, and then reallocates after experiment costs change. The information objective is the reciprocal variance of the estimated mean difference, using the exact variance of the engine's discrete-uniform noise model; allocation quality is compared with the exact bounded frontier under the same feasibility rules as the candidate action.
+The candidate allocates a bounded budget between two noisy experiments, with every comparison allocation requiring at least one observation from each arm, sees deterministic sample summaries whose ordering is validated not to contradict the latent mean ordering, selects the higher-mean option, and then reallocates after experiment costs change. The information objective is the reciprocal variance of the estimated mean difference, using the exact variance of the engine's discrete-uniform noise model; allocation quality is compared with the exact bounded frontier under the same feasibility rules as the candidate action.
 
 ### Model comparison
 
@@ -76,7 +77,7 @@ The candidate distinguishes a constant versus linear latent data-generating fami
 
 ### Constrained optimization
 
-The candidate chooses two nonnegative integer parameters for a seeded linear/interacting objective under explicit box and budget constraints, then adapts after budget/penalty changes. The engine enumerates the bounded feasible set to own the exact optimum and objective-quality evidence.
+The candidate chooses two nonnegative integer parameters for a seeded linear/interacting objective under explicit box and budget constraints, then adapts after budget/penalty changes. Generated variants are rejected if the base and perturbed problems share an exact optimum, so an unchanged optimal answer cannot receive full adaptation credit. The engine enumerates the bounded feasible set to own the exact optimum and objective-quality evidence.
 
 ## Evidence and scoring
 
@@ -99,7 +100,7 @@ Threshold comparisons use a small machine-precision allowance so mathematically 
 
 Replay requires:
 
-1. the original scenario definition/version/seed/config; and
+1. the original scenario definition, including family, scenario version, RNG version, seed, and config; and
 2. the ordered accepted candidate actions.
 
 `replayQuantResearch(definition, actions)` creates a fresh engine and reapplies those actions through the same runtime validation and transition path. It returns reconstructed public state, result, and accepted actions. The replay container itself is runtime validated, and replay input is bounded to the same maximum action count.
