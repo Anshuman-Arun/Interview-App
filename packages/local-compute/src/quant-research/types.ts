@@ -180,7 +180,7 @@ function asRecord(value: unknown, context: string, fail: (message: string) => ne
   let keys: readonly PropertyKey[];
   try {
     prototype = Object.getPrototypeOf(value) as object | null;
-    keys = Reflect.ownKeys(arrayValue);
+    keys = Reflect.ownKeys(value);
   } catch {
     fail(context + " could not be safely inspected");
   }
