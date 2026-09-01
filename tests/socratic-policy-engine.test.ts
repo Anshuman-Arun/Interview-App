@@ -2847,3 +2847,59 @@ describe("takeover adversarial regressions", () => {
     expect(result.analysis.effectiveDisclosureLevel).toBe(disclosure.minimumDisclosureLevel);
   });
 });
+
+describe("mainline evidence-identity integration", () => {
+  it("fails closed when a verification provenance key only collides under the persistence encoding", () => {
+    const { state: base, turnId } = makeState();
+    const activeKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id,
+      subject: { kind: "CLAIM", claimId: "alpha|CLAIM|beta" },
+      dimension: "CORRECTNESS"
+    };
+    const collidingVerificationKey: EvidenceKey = {
+      problemId: sixPeopleProblem.id + "|CLAIM|alpha",
+      subject: { kind: "CLAIM", claimId: "beta" },
+      dimension: "CORRECTNESS"
+    };
+    expect(evidenceKeyToString(activeKey)).toBe(evidenceKeyToString(collidingVerificationKey));
+
+    const withRequest = withVerification(base, collidingVerificationKey, "VERIFIED");
+    const verification = Object.values(withRequest.verificationRequests)[0];
+    expect(verification).toBeDefined();
+    if (verification === undefined) throw new Error("missing verification fixture");
+
+    const evidenceEventId = EventIdSchema.parse(nextId("event_collision_evidence"));
+    const evidenceValue = {
+      value: "CORRECT" as const,
+      inferenceConfidence: 1,
+      evidenceEventIds: [
+        ...verification.evidenceEventIds,
+        verification.requestedEventId
+      ],
+      lastUpdatedSequence: withRequest.sequence + 1
+    };
+    const canonicalKey = evidenceKeyToString(activeKey);
+    const state: SessionState = {
+      ...withRequest,
+      sequence: withRequest.sequence + 1,
+      eventIds: [...withRequest.eventIds, evidenceEventId],
+      studentEvidence: {
+        ...withRequest.studentEvidence,
+        [canonicalKey]: evidenceValue
+      },
+      evidenceHistory: {
+        ...withRequest.evidenceHistory,
+        [canonicalKey]: [{
+          evidenceEventId,
+          key: activeKey,
+          value: evidenceValue,
+          status: "ACTIVE"
+        }]
+      }
+    };
+
+    const decision = decidePedagogicalPolicy(state, turnId, sixPeopleProblem);
+    expect(decision.reasonCode).toBe("MALFORMED_POLICY_INPUT");
+    expect(decision.realizationRequest.maximumDisclosure).toBe(0);
+  });
+});

@@ -10,6 +10,7 @@ import {
   ReasoningGraphSchema,
   SocraticActionSchema,
   VerificationResultSchema,
+  evidenceKeyIdentity,
   evidenceKeyToString,
   isDisclosedStatus,
   isEvidenceValueAllowed,
@@ -816,7 +817,7 @@ function collectActiveEvidence(
       const verificationLink = verificationEvidenceLinks.get(provenanceEventId);
       if (verificationLink === undefined) continue;
       if (
-        evidenceKeyToString(verificationLink.key) !== storedKey
+        evidenceKeyIdentity(verificationLink.key) !== evidenceKeyIdentity(key)
         || value.value !== "CORRECT"
         || value.inferenceConfidence !== verificationLink.result.interpretationConfidence
         || verificationLink.result.status !== "VERIFIED"
