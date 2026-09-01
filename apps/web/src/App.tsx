@@ -15,6 +15,7 @@ import {
   type SessionReviewTab
 } from "./components/SessionReviewModal.js";
 import type { SessionHistoryReadResponse } from "../../../packages/replay/src/index.js";
+import { isSessionIdAddressableForRead } from "./session-read-client.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
 
@@ -444,25 +445,29 @@ export const App: React.FC = () => {
                     <button
                       type="button"
                       onClick={
-s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
+                        s.status === "ACTIVE"
                           ? () => void handleRecoverSession(s.sessionId)
-                          : s.readStatus === "AVAILABLE"
-                            && (s.status === "COMPLETED" || s.status === "ARCHIVED")
+                          : (
+                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
+                              && isSessionIdAddressableForRead(s.sessionId)
+                            )
                             ? () => openHistoricalReview(s.sessionId)
                             : undefined
                       }
                       disabled={
-                        s.readStatus !== "AVAILABLE"
-                        || (
-                          s.status !== "ACTIVE"
-                          && s.status !== "COMPLETED"
-                          && s.status !== "ARCHIVED"
+                        s.status !== "ACTIVE"
+                        && (
+                          (s.status !== "COMPLETED" && s.status !== "ARCHIVED")
+                          || !isSessionIdAddressableForRead(s.sessionId)
                         )
                       }
                       className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
                         s.status === "ACTIVE"
                           ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
-                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                          : (
+                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
+                              && isSessionIdAddressableForRead(s.sessionId)
+                            )
                             ? "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
                             : "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
                       }`}
@@ -471,7 +476,10 @@ s.readStatus === "AVAILABLE" && s.status === "ACTIVE"
                         ? "Current"
                         : s.status === "ACTIVE"
                           ? "Resume"
-                          : s.status === "COMPLETED" || s.status === "ARCHIVED"
+                          : (
+                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
+                              && isSessionIdAddressableForRead(s.sessionId)
+                            )
                             ? "Review"
                             : "Unavailable"}
                     </button>
