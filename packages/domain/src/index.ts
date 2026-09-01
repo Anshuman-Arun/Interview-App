@@ -15,6 +15,7 @@ export * from "./provider.js";
 export * from "./reasoning.js";
 export * from "./revisions.js";
 export * from "./security.js";
+export * from "./session-configuration.js";
 export * from "./verification.js";
 export * from "./vision.js";
 export * from "./whiteboard.js";
