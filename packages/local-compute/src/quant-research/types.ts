@@ -232,15 +232,12 @@ function boundedFiniteNumber(value: unknown, min: number, max: number, context: 
 function finiteNumberVector(value: unknown): readonly number[] {
   if (!safeIsArray(value, "values", failAction)) failAction("values must be an array");
   const arrayValue = value as unknown[];
-  let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
-    keys = Reflect.ownKeys(arrayValue);
     lengthDescriptor = Object.getOwnPropertyDescriptor(arrayValue, "length");
   } catch {
     failAction("values could not be safely inspected");
   }
-  if (keys.length > MAX_ACTION_VECTOR + 1) failAction("values contains too many properties");
   if (
     lengthDescriptor === undefined ||
     lengthDescriptor.get !== undefined ||
@@ -252,7 +249,13 @@ function finiteNumberVector(value: unknown): readonly number[] {
     failAction("values must contain between 1 and 8 entries");
   }
   const length = lengthDescriptor.value as number;
-  if (keys.length > length + 1) failAction("values contains too many properties");
+  let keys: readonly PropertyKey[];
+  try {
+    keys = Reflect.ownKeys(arrayValue);
+  } catch {
+    failAction("values could not be safely inspected");
+  }
+  if (keys.length !== length + 1) failAction("values must be a dense array without extra properties");
   const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
   for (const key of keys) {
     if (typeof key !== "string" || !allowedKeys.has(key)) failAction("values contains unsupported properties");
@@ -271,7 +274,6 @@ function finiteNumberVector(value: unknown): readonly number[] {
   }
   return result;
 }
-
 function boundedInteger(value: unknown, min: number, max: number, context: string, fail: (message: string) => never): number {
   const number = finiteNumber(value, context, fail);
   if (!Number.isSafeInteger(number) || number < min || number > max) fail(context + " is outside the allowed integer range");
@@ -465,10 +467,8 @@ export function assertUniqueQuantResearchRegistrations(registrationsInput: unkno
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry must be an array");
   }
   const registrations = registrationsInput as unknown[];
-  let keys: readonly PropertyKey[];
   let lengthDescriptor: PropertyDescriptor | undefined;
   try {
-    keys = Reflect.ownKeys(registrations);
     lengthDescriptor = Object.getOwnPropertyDescriptor(registrations, "length");
   } catch {
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry could not be safely inspected");
@@ -484,7 +484,15 @@ export function assertUniqueQuantResearchRegistrations(registrationsInput: unkno
     throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry size is invalid");
   }
   const length = lengthDescriptor.value as number;
-  if (keys.length > length + 1) throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry contains too many properties");
+  let keys: readonly PropertyKey[];
+  try {
+    keys = Reflect.ownKeys(registrations);
+  } catch {
+    throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry could not be safely inspected");
+  }
+  if (keys.length !== length + 1) {
+    throw new QuantResearchError("INVALID_REGISTRY", "Scenario registry must be dense without extra properties");
+  }
   const allowedKeys = new Set(["length", ...Array.from({ length }, (_item, index) => String(index))]);
   for (const key of keys) {
     if (typeof key !== "string" || !allowedKeys.has(key)) {
