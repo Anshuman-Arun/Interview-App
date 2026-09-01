@@ -45,6 +45,17 @@ function frame(sequence: number): AudioFrame {
   };
 }
 
+function proxyGet(target: object, property: PropertyKey, receiver: unknown): unknown {
+  const value: unknown = Reflect.get(target, property, receiver);
+  return value;
+}
+
+function asVoidCallback<Args extends unknown[]>(
+  callback: (...args: Args) => Promise<void>
+): (...args: Args) => void {
+  return callback;
+}
+
 describe("bounded audio buffering", () => {
   it("preserves order, drops oldest on overflow, clears, and remains reusable", () => {
     const buffer = new BoundedAudioFrameBuffer(2);
@@ -77,7 +88,9 @@ describe("bounded audio buffering", () => {
     expect(buffer.peek()?.samples[0]).toBe(1);
 
     const snapshot = buffer.snapshot();
-    snapshot[0]!.samples[0] = 55;
+    const snapshotFrame = snapshot[0];
+    if (snapshotFrame === undefined) throw new Error("Expected snapshot frame");
+    snapshotFrame.samples[0] = 55;
     expect(buffer.peek()?.samples[0]).toBe(1);
 
     const shifted = buffer.shift();
@@ -86,8 +99,6 @@ describe("bounded audio buffering", () => {
 
   it("copies PCM before validation so hostile typed-array species cannot alter admitted samples", () => {
     const buffer = new BoundedAudioFrameBuffer(2);
-    let source!: Float32Array;
-
     class MutatingSpeciesPcm extends Float32Array {
       public static get [Symbol.species](): Float32ArrayConstructor {
         source[0] = Number.NaN;
@@ -95,7 +106,7 @@ describe("bounded audio buffering", () => {
       }
     }
 
-    source = new MutatingSpeciesPcm([1]);
+    const source = new MutatingSpeciesPcm([1]);
     const hostile = {
       ...frame(1),
       samples: source
@@ -398,9 +409,7 @@ describe("browser audio devices", () => {
       }
     });
     const manager = new BrowserAudioDeviceManager({
-      enumerateDevices: async () => {
-        throw hostileError;
-      }
+      enumerateDevices: () => Promise.reject(hostileError)
     });
 
     expect(await manager.enumerate()).toEqual({
@@ -519,10 +528,12 @@ describe("browser audio devices", () => {
   it("contains async device-change observer rejection", async () => {
     const media = new FakeMediaDevices();
     let calls = 0;
-    const unsubscribe = new BrowserAudioDeviceManager(media).subscribe(async () => {
-      calls += 1;
-      throw new Error("observer rejected");
-    });
+    const unsubscribe = new BrowserAudioDeviceManager(media).subscribe(
+      asVoidCallback(async () => {
+        calls += 1;
+        throw new Error("observer rejected");
+      })
+    );
 
     media.emitDeviceChange();
     await Promise.resolve();
@@ -594,19 +605,20 @@ describe("browser audio devices", () => {
   it("prevents recursive device-change unsubscription during browser removal", () => {
     const listeners = new Set<() => void>();
     let removalAttempts = 0;
-    let unsubscribe: (() => void) | undefined;
+    const unsubscribeHolder: { current?: () => void } = {};
     const media: AudioMediaDevicesLike = {
       addEventListener: (_type, listener) => {
         listeners.add(listener);
       },
       removeEventListener: (_type, listener) => {
         removalAttempts += 1;
-        unsubscribe?.();
+        unsubscribeHolder.current?.();
         listeners.delete(listener);
       }
     };
 
-    unsubscribe = new BrowserAudioDeviceManager(media).subscribe(() => undefined);
+    const unsubscribe = new BrowserAudioDeviceManager(media).subscribe(() => undefined);
+    unsubscribeHolder.current = unsubscribe;
     unsubscribe();
 
     expect(removalAttempts).toBe(1);
@@ -750,7 +762,7 @@ class FakeCaptureContext implements CaptureAudioContextLike {
   public async resume(): Promise<void> {
     this.resumeCount += 1;
     await this.resumeGate;
-    if (this.resumeError !== undefined) throw this.resumeError;
+    if (this.resumeError !== undefined) await Promise.reject(this.resumeError);
     this.state = "running";
   }
 
@@ -1197,9 +1209,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: async () => {
-        throw hostileError;
-      }
+      getUserMedia: () => Promise.reject(hostileError)
     };
     capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1226,9 +1236,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: async () => {
-        throw hostileError;
-      }
+      getUserMedia: () => Promise.reject(hostileError)
     };
     capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1251,9 +1259,7 @@ describe("microphone capture lifecycle", () => {
       }
     });
     const media: AudioMediaDevicesLike = {
-      getUserMedia: async () => {
-        throw hostileError;
-      }
+      getUserMedia: () => Promise.reject(hostileError)
     };
     const capture = new BrowserMicrophoneCapture({
       mediaDevices: media,
@@ -1491,9 +1497,9 @@ describe("microphone capture lifecycle", () => {
 
     await expect(capture.start({
       onFrame: () => undefined,
-      onError: async () => {
+      onError: asVoidCallback(async () => {
         throw new Error("observer rejected");
-      }
+      })
     })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
 
     await Promise.resolve();
@@ -1670,7 +1676,7 @@ describe("microphone capture lifecycle", () => {
     const hostileTracks = new Proxy(target, {
       get(array, property, receiver) {
         if (property === "1") throw new Error("track slot unavailable");
-        return Reflect.get(array, property, receiver);
+        return proxyGet(array, property, receiver);
       }
     });
     const stream: AudioMediaStreamLike = {
@@ -1749,9 +1755,9 @@ describe("microphone capture lifecycle", () => {
     const capture = new BrowserMicrophoneCapture(setup.environment);
     const errors: AudioInfrastructureError[] = [];
     await capture.start({
-      onFrame: async () => {
+      onFrame: asVoidCallback(async () => {
         throw new Error("async consumer failed");
-      },
+      }),
       onError: (error) => errors.push(error)
     });
 
@@ -1786,12 +1792,12 @@ describe("microphone capture lifecycle", () => {
       numberOfChannels: 1,
       getChannelData: () => new Float32Array([0.25])
     };
-    const event = {
+    const event: CaptureAudioProcessEventLike = {
       get inputBuffer() {
         void capture.stop();
         return inputBuffer;
       }
-    } as CaptureAudioProcessEventLike;
+    };
 
     processor.onaudioprocess(event);
     await Promise.resolve();
@@ -2110,7 +2116,7 @@ describe("microphone capture lifecycle", () => {
           stopReads += 1;
           if (stopReads > 1) throw new Error("duplicate track capability was reread");
         }
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     }) as AudioMediaStreamTrackLike;
     const capture = new BrowserMicrophoneCapture({
@@ -3429,7 +3435,9 @@ describe("queued browser audio playback", () => {
     });
     const first = playback.enqueue({ id: "a", source: "/a.wav" });
     let second: ReturnType<BrowserAudioPlayback["enqueue"]> | undefined;
-    elements[0]!.onPause = () => {
+    const firstElement = elements[0];
+    if (firstElement === undefined) throw new Error("Expected first playback element");
+    firstElement.onPause = () => {
       second = playback.enqueue({ id: "b", source: "/b.wav" });
       expect(elements).toHaveLength(1);
     };
@@ -3507,7 +3515,7 @@ describe("queued browser audio playback", () => {
           pauseReads += 1;
           throw new Error("pause should not be read after factory cancellation");
         }
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     });
     let playback!: BrowserAudioPlayback;
@@ -3586,7 +3594,7 @@ describe("queued browser audio playback", () => {
             addCalls += 1;
           };
         }
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     });
     playback = new BrowserAudioPlayback(() => element);
@@ -3662,7 +3670,7 @@ describe("queued browser audio playback", () => {
             sinkCalls += 1;
           };
         }
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     });
     playback = new BrowserAudioPlayback(() => element);
@@ -3736,7 +3744,7 @@ describe("queued browser audio playback", () => {
           if (sinkReads > 1) throw new Error("setSinkId getter was reread");
           return target.setSinkId.bind(target);
         }
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     });
     const playback = new BrowserAudioPlayback(() => element);
@@ -3928,7 +3936,7 @@ describe("queued browser audio playback", () => {
             playCalls += 1;
           };
         }
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     });
     playback = new BrowserAudioPlayback(() => element);
@@ -4045,7 +4053,7 @@ describe("queued browser audio playback", () => {
           if (target.playCount > 0) throw new Error("pause capability changed after playback started");
           return stablePause;
         }
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     });
     const playback = new BrowserAudioPlayback(() => element);
@@ -4071,7 +4079,7 @@ describe("queued browser audio playback", () => {
           if (removalReads > 1) throw new Error("removeEventListener was reread during teardown");
           return stableRemove;
         }
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     });
     const playback = new BrowserAudioPlayback(() => element);
@@ -4091,7 +4099,7 @@ describe("queued browser audio playback", () => {
     const element = new Proxy(base, {
       get(target, property, receiver) {
         if (property === "removeAttribute") throw new Error("removeAttribute getter failed");
-        return Reflect.get(target, property, receiver);
+        return proxyGet(target, property, receiver);
       }
     });
     const playback = new BrowserAudioPlayback(() => element);
@@ -4113,9 +4121,9 @@ describe("queued browser audio playback", () => {
       }
     });
     const setup = playbackFixture();
-    setup.elements[0]!.play = async () => {
-      throw hostileError;
-    };
+    const hostileElement = setup.elements[0];
+    if (hostileElement === undefined) throw new Error("Expected playback element");
+    hostileElement.play = () => Promise.reject(hostileError);
     const first = setup.playback.enqueue({ id: "hostile", source: "/hostile.wav" });
     const second = setup.playback.enqueue({ id: "next", source: "/next.wav" });
 
