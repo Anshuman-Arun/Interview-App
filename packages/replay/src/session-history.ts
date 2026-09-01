@@ -205,7 +205,8 @@ interface MutableVerificationHistory {
 
 function verificationHistoryFrom(
   items: readonly NormalizedReplayEvent[],
-  bounds: ReplayBounds
+  bounds: ReplayBounds,
+  statusIsCurrent: boolean
 ): ReturnType<typeof takeBounded<ReplayVerificationHistoryEntry>> {
   const byRequest = new Map<string, MutableVerificationHistory>();
   for (const item of items) {
@@ -283,6 +284,7 @@ function verificationHistoryFrom(
       ...(entry.sourceProposalRequestId === undefined ? {} : { sourceProposalRequestId: entry.sourceProposalRequestId }),
       requestProvenance: entry.requestProvenance,
       status: entry.status,
+      statusIsCurrent,
       ...(entry.result === undefined ? {} : { result: entry.result }),
       ...(entry.discard === undefined ? {} : { discard: entry.discard })
     }));
@@ -712,7 +714,11 @@ export function projectSessionHistory(
   const currentEvidence = state === undefined
     ? takeBounded<ReplayCurrentEvidence>([], bounds.maxEvidenceHistoryEntries)
     : currentEvidenceFromState(state, bounds);
-  const verification = verificationHistoryFrom(semanticItems, bounds);
+  const verification = verificationHistoryFrom(
+    semanticItems,
+    bounds,
+    state !== undefined
+  );
   const generations = generationHistoryFrom(semanticItems, state, bounds);
   const directCounts = directDeliveryCounts(events);
   const eventCounts = {

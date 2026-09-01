@@ -810,6 +810,15 @@ describe("replay/history projections", () => {
     });
     expect(history.verificationSummary.pending).toBe(1_001);
     expect(history.verificationHistoryComplete).toBe(false);
+    expect(history.verificationHistory.every((entry) => entry.statusIsCurrent))
+      .toBe(true);
+
+    const truncatedPrefix = projectSessionHistory(events, {
+      bounds: { maxEvents: 7 }
+    });
+    expect(truncatedPrefix.currentStateAvailable).toBe(false);
+    expect(truncatedPrefix.verificationHistory[0]?.status).toBe("PENDING");
+    expect(truncatedPrefix.verificationHistory[0]?.statusIsCurrent).toBe(false);
   });
 
   it("handles lifecycle states, mixed v1/v2 upcasts, future events, and explicit bounds safely", () => {
@@ -980,6 +989,42 @@ describe("replay/history projections", () => {
     }
   });
 
+  it("allows a producer-valid late vision callback after completion", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const request = await harness.turns.requestVision("late-result", ["shape-late"]);
+      await harness.turns.completeSession();
+
+      const result = await harness.turns.processVisionResult({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "late-vision-worker",
+          correlationId: request.visionRequestId,
+          sourceRevision: request.sourceBoardRevision
+        }),
+        observation: {
+          regionId: "late-result",
+          sourceBoardRevision: request.sourceBoardRevision,
+          relevantShapeIds: ["shape-late"],
+          bounds: { x: 0, y: 0, width: 10, height: 10 },
+          interpretation: "late but still fresh observation",
+          confidence: 0.9
+        }
+      });
+      expect(result).toEqual({ accepted: true });
+
+      const projected = projectSessionHistory(
+        harness.store.load(harness.sessionId)
+      );
+      expect(projected.lifecycle.status).toBe("COMPLETED");
+      expect(projected.timeline.entries.at(-1)).toMatchObject({
+        kind: "VISION_RESULT_ACCEPTED"
+      });
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("allows late renderer completion for an already exposed delivery after archival", async () => {
     const harness = await createCoreHarness();
     try {
@@ -1070,6 +1115,39 @@ describe("replay/history projections", () => {
           authoritative.length + 1,
           "DELIVERY_QUEUED",
           { atom: duplicateAtom }
+        )
+      ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("rejects new delivery queueing after the validated generation basis becomes stale", async () => {
+    const harness = await createCoreHarness();
+    try {
+      await authorizeSafeProbe(harness);
+      await harness.turns.commitInput("A later turn makes the old generation stale.");
+
+      const staleAudio = DeliveryAtomSchema.parse({
+        deliveryId: newDeliveryId(),
+        generationId: harness.generationId,
+        content: {
+          medium: "AUDIO",
+          text: harness.safeProbe,
+          audioRef: "/fixture/stale-audio.wav"
+        },
+        disclosureIds: [],
+        effectiveDisclosureLevel: 0,
+        status: "VALIDATED"
+      });
+      const authoritative = harness.store.load(harness.sessionId);
+      expect(() => projectSessionHistory([
+        ...authoritative,
+        event(
+          harness.sessionId,
+          authoritative.length + 1,
+          "DELIVERY_QUEUED",
+          { atom: staleAudio }
         )
       ])).toThrow(expect.objectContaining({ code: "INVALID_EVENT_SEMANTICS" }));
     } finally {

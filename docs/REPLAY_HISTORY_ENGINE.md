@@ -105,7 +105,9 @@ are not a safe alternate channel for realization content. Their effective disclo
 level and disclosure-ID count remain available for audit. A validated proposal's
 delivery authorization is also consumption-bounded: replay rejects fresh DeliveryId
 duplicates that would realize more TEXT/AUDIO/board outputs than the proposal
-actually authorized.
+actually authorized. Every newly queued atom is also rechecked against the
+generation's current `GenerationBasis`, so a later Turn/revision cannot authorize
+fresh delivery from a proposal that was valid only for stale state.
 
 ## Evidence and verification history
 
@@ -123,7 +125,10 @@ Verification projection links each request to its verifier, GenerationBasis,
 evidence scope, interpretation provenance, and accepted/discarded callback. Every
 verification request must include provenance for the committed Turn named by its
 basis; additional supporting event IDs may be present, so this check does not
-overfit the current one-ID producer shape. VERIFIED,
+overfit the current one-ID producer shape. Per-request `statusIsCurrent` is true
+only when the complete authoritative session state was replayed. A request observed
+as PENDING in a truncated or unknown prefix remains visible for chronology but is
+not claimed to be the current request state. VERIFIED,
 CONTRADICTED, and UNRESOLVED are retained exactly. Discarded callbacks remain
 discarded and are never promoted into authoritative verification outcomes.
 

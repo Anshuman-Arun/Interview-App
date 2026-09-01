@@ -1036,6 +1036,8 @@ export function validateKnownReplayPrefix(
             generation?.proposal === undefined
             || analysis === undefined
             || authorizationUsage === undefined
+            || isGenerationBasisStillCompatible(generation.basis, state)
+              !== "COMPATIBLE"
             || event.payload.atom.effectiveDisclosureLevel
               !== analysis.effectiveDisclosureLevel
             || !arraysEqual(

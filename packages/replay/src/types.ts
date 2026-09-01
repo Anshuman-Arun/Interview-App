@@ -229,6 +229,7 @@ export interface ReplayVerificationHistoryEntry {
   readonly sourceProposalRequestId?: string;
   readonly requestProvenance: ReplayEventProvenance;
   readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
+  readonly statusIsCurrent: boolean;
   readonly result?: {
     readonly status: VerificationStatus;
     readonly verifier: string;
