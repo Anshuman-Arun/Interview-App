@@ -1,0 +1,346 @@
+import {
+  ProtocolErrorResponseSchema,
+  type ProtocolErrorResponse,
+  type SessionId
+} from "../../../packages/domain/src/index.js";
+import {
+  MAX_REPLAY_IDENTIFIER_CHARS,
+  SessionEvaluationReadResponseSchema,
+  SessionHistoryReadResponseSchema,
+  SessionReplayReadResponseSchema,
+  type SessionEvaluationReadResponse,
+  type SessionHistoryReadResponse,
+  type SessionReplayReadResponse
+} from "../../../packages/replay/src/index.js";
+
+export interface BrowserSessionReadClientOptions {
+  readonly baseUrl: string;
+  readonly clientToken?: string;
+  readonly externalAuthenticationHeaderValue?: string;
+  readonly fetchImpl?: typeof fetch;
+}
+
+export const MAX_SESSION_READ_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+export type BrowserSessionReadTransportErrorKind = "ABORTED" | "NETWORK";
+
+export class BrowserSessionReadTransportError extends Error {
+  public constructor(public readonly kind: BrowserSessionReadTransportErrorKind) {
+    super(kind === "ABORTED" ? "Session read was aborted" : "Session read transport failed");
+    this.name = "BrowserSessionReadTransportError";
+  }
+}
+
+export class BrowserSessionReadResponseError extends Error {
+  public constructor(
+    public readonly reason:
+      | "INVALID_CONTENT_TYPE"
+      | "MALFORMED_JSON"
+      | "SCHEMA_MISMATCH"
+      | "CORRELATION_MISMATCH"
+      | "BODY_TOO_LARGE",
+    public readonly status: number
+  ) {
+    super("Session read server returned an invalid response");
+    this.name = "BrowserSessionReadResponseError";
+  }
+}
+
+export class BrowserSessionReadProtocolError extends Error {
+  public readonly code: ProtocolErrorResponse["error"]["code"];
+
+  public constructor(
+    public readonly status: number,
+    code: ProtocolErrorResponse["error"]["code"]
+  ) {
+    super(`Session read rejected with protocol error ${code}`);
+    this.name = "BrowserSessionReadProtocolError";
+    this.code = code;
+  }
+}
+
+export class BrowserSessionReadClient {
+  readonly #baseUrl: string;
+  readonly #authenticationHeaderValue: string;
+  readonly #fetchImpl: typeof fetch;
+
+  public constructor(options: BrowserSessionReadClientOptions) {
+    this.#baseUrl = normalizeLoopbackBaseUrl(options.baseUrl);
+    if (
+      options.clientToken !== undefined
+      && options.externalAuthenticationHeaderValue !== undefined
+    ) {
+      throw new Error("Session read client authentication configuration is ambiguous");
+    }
+    if (options.externalAuthenticationHeaderValue !== undefined) {
+      if (options.externalAuthenticationHeaderValue !== "desktop-managed-v1") {
+        throw new Error("External authentication marker is invalid");
+      }
+      this.#authenticationHeaderValue = options.externalAuthenticationHeaderValue;
+    } else {
+      if (
+        typeof options.clientToken !== "string"
+        || options.clientToken.length < 32
+        || /[\r\n]/u.test(options.clientToken)
+      ) {
+        throw new Error("Client token must contain at least 32 characters");
+      }
+      this.#authenticationHeaderValue = options.clientToken;
+    }
+    this.#fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  }
+
+  public async getEvaluation(
+    sessionId: SessionId,
+    signal?: AbortSignal
+  ): Promise<SessionEvaluationReadResponse> {
+    const result = await this.read(
+      `/v1/read/sessions/${encodeReadSessionId(sessionId)}/evaluation`,
+      (value) => SessionEvaluationReadResponseSchema.parse(value),
+      signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserSessionReadResponseError("CORRELATION_MISMATCH", 200);
+    }
+    return result;
+  }
+
+  public async getReplay(
+    sessionId: SessionId,
+    signal?: AbortSignal
+  ): Promise<SessionReplayReadResponse> {
+    const result = await this.read(
+      `/v1/read/sessions/${encodeReadSessionId(sessionId)}/replay`,
+      (value) => SessionReplayReadResponseSchema.parse(value),
+      signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserSessionReadResponseError("CORRELATION_MISMATCH", 200);
+    }
+    return result;
+  }
+
+  public getHistory(signal?: AbortSignal): Promise<SessionHistoryReadResponse> {
+    return this.read(
+      "/v1/read/sessions",
+      (value) => SessionHistoryReadResponseSchema.parse(value),
+      signal
+    );
+  }
+
+  private async read<TResult>(
+    path: string,
+    parse: (value: unknown) => TResult,
+    signal: AbortSignal | undefined
+  ): Promise<TResult> {
+    if (isSignalAborted(signal)) {
+      throw new BrowserSessionReadTransportError("ABORTED");
+    }
+
+    const init: RequestInit = {
+      method: "GET",
+      headers: {
+        "x-interview-client-token": this.#authenticationHeaderValue
+      },
+      cache: "no-store",
+      credentials: "omit",
+      mode: "cors",
+      redirect: "error",
+      referrerPolicy: "no-referrer"
+    };
+    if (signal !== undefined) init.signal = signal;
+
+    let response: Response;
+    try {
+      response = await this.#fetchImpl(`${this.#baseUrl}${path}`, init);
+    } catch {
+      throw new BrowserSessionReadTransportError(
+        isSignalAborted(signal) ? "ABORTED" : "NETWORK"
+      );
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (contentType?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
+      throw new BrowserSessionReadResponseError(
+        "INVALID_CONTENT_TYPE",
+        response.status
+      );
+    }
+
+    const declaredLength = response.headers.get("content-length");
+    if (declaredLength !== null) {
+      const parsedLength = Number(declaredLength);
+      if (
+        !Number.isSafeInteger(parsedLength)
+        || parsedLength < 0
+        || parsedLength > MAX_SESSION_READ_RESPONSE_BYTES
+      ) {
+        throw new BrowserSessionReadResponseError(
+          "BODY_TOO_LARGE",
+          response.status
+        );
+      }
+    }
+
+    let responseText: string;
+    try {
+      responseText = await readBoundedResponseText(
+        response,
+        MAX_SESSION_READ_RESPONSE_BYTES,
+        signal
+      );
+    } catch (error) {
+      if (error instanceof BrowserSessionReadResponseError) throw error;
+      throw new BrowserSessionReadTransportError(
+        isSignalAborted(signal) ? "ABORTED" : "NETWORK"
+      );
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(responseText) as unknown;
+    } catch {
+      throw new BrowserSessionReadResponseError(
+        "MALFORMED_JSON",
+        response.status
+      );
+    }
+
+    if (!response.ok) {
+      let protocolError: ProtocolErrorResponse;
+      try {
+        protocolError = ProtocolErrorResponseSchema.parse(payload);
+      } catch {
+        throw new BrowserSessionReadResponseError(
+          "SCHEMA_MISMATCH",
+          response.status
+        );
+      }
+      throw new BrowserSessionReadProtocolError(
+        response.status,
+        protocolError.error.code
+      );
+    }
+
+    try {
+      return parse(payload);
+    } catch {
+      throw new BrowserSessionReadResponseError(
+        "SCHEMA_MISMATCH",
+        response.status
+      );
+    }
+  }
+}
+
+function normalizeLoopbackBaseUrl(input: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(input);
+  } catch {
+    throw new Error("Session read server base URL must be a valid URL");
+  }
+
+  if (parsed.protocol !== "http:") {
+    throw new Error("Session read server base URL must use HTTP loopback transport");
+  }
+  if (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "[::1]") {
+    throw new Error("Session read server base URL must target a loopback host");
+  }
+  if (
+    parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+    || parsed.pathname !== "/"
+  ) {
+    throw new Error("Session read server base URL must be an exact origin without credentials or paths");
+  }
+
+  return parsed.origin;
+}
+
+function isSignalAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted ?? false;
+}
+
+
+async function readBoundedResponseText(
+  response: Response,
+  maximumBytes: number,
+  signal: AbortSignal | undefined
+): Promise<string> {
+  if (response.body === null) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let totalBytes = 0;
+  let text = "";
+  try {
+    for (;;) {
+      if (isSignalAborted(signal)) {
+        throw new BrowserSessionReadTransportError("ABORTED");
+      }
+      const result = await reader.read();
+      if (result.done) break;
+      totalBytes += result.value.byteLength;
+      if (totalBytes > maximumBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // Best-effort cancellation after the response has already violated
+          // the bounded read contract.
+        }
+        throw new BrowserSessionReadResponseError(
+          "BODY_TOO_LARGE",
+          response.status
+        );
+      }
+      try {
+        text += decoder.decode(result.value, { stream: true });
+      } catch {
+        throw new BrowserSessionReadResponseError(
+          "MALFORMED_JSON",
+          response.status
+        );
+      }
+    }
+    try {
+      text += decoder.decode();
+    } catch {
+      throw new BrowserSessionReadResponseError(
+        "MALFORMED_JSON",
+        response.status
+      );
+    }
+    return text;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+
+export function isSessionIdAddressableForRead(sessionId: SessionId): boolean {
+  if (
+    sessionId.length === 0
+    || sessionId.length > MAX_REPLAY_IDENTIFIER_CHARS
+    || sessionId === "."
+    || sessionId === ".."
+  ) {
+    return false;
+  }
+  for (const character of sessionId) {
+    const code = character.charCodeAt(0);
+    if (character === "/" || character === "\\" || code <= 31 || code === 127) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function encodeReadSessionId(sessionId: SessionId): string {
+  if (!isSessionIdAddressableForRead(sessionId)) {
+    throw new Error("Session ID cannot be addressed by the bounded read transport");
+  }
+  return encodeURIComponent(sessionId);
+}

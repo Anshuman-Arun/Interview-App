@@ -127,6 +127,30 @@ export class SqliteEventStore {
     return rows.map((r) => SessionIdSchema.parse(r.session_id));
   }
 
+  public sessionCount(): number {
+    const row = this.database.prepare(
+      "SELECT COUNT(DISTINCT session_id) AS count FROM session_events"
+    ).get() as { count: number };
+    if (!Number.isSafeInteger(row.count) || row.count < 0) {
+      throw new CorruptEventStreamError("Invalid persisted session count");
+    }
+    return row.count;
+  }
+
+  public listRecentSessionIds(limit: number): readonly SessionId[] {
+    if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 10_000) {
+      throw new RangeError("Session list limit must be a positive safe integer at most 10000");
+    }
+    const rows = this.database.prepare(
+      `SELECT session_id
+       FROM session_events
+       GROUP BY session_id
+       ORDER BY MAX(rowid) DESC, session_id ASC
+       LIMIT ?`
+    ).all(limit) as unknown as readonly { session_id: string }[];
+    return rows.map((row) => SessionIdSchema.parse(row.session_id));
+  }
+
   public listSessions(): readonly StoredSessionSummary[] {
     // The index is only a rebuildable projection. Rebuilding before reads makes
     // authoritative events win over missing, stale, or injected projection rows.

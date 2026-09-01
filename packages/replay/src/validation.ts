@@ -616,13 +616,16 @@ export function validateKnownReplayPrefix(
       if (
         state.started
         && state.problem === undefined
+        && state.configuration?.mode !== "QUANT_TRADING"
         && event.type !== "SESSION_STARTED"
         && event.type !== "PROBLEM_PRESENTED"
       ) fail();
 
       switch (event.type) {
         case "SESSION_STARTED":
-          pendingNext = { kind: "PROBLEM_PRESENTED" };
+          if (event.payload.configuration?.mode !== "QUANT_TRADING") {
+            pendingNext = { kind: "PROBLEM_PRESENTED" };
+          }
           break;
 
         case "PROBLEM_PRESENTED":
@@ -1223,7 +1226,11 @@ export function validateKnownReplayPrefix(
 
   if (options.completeHistory === true) {
     if (
-      state.started && state.problem === undefined
+      (
+        state.started
+        && state.problem === undefined
+        && state.configuration?.mode !== "QUANT_TRADING"
+      )
       || pendingNext !== undefined
       || requiredFollowUps.length > 0
     ) fail();
