@@ -13,6 +13,14 @@ export interface DisclosureAnalyzer {
 }
 
 const MAX_DISCLOSURE_ANALYSIS_CHARACTERS = 100_000;
+const MAX_PROTECTED_DISCLOSURES = 1_024;
+const MAX_EQUIVALENT_FORMULATIONS = 256;
+const MAX_ANALYZER_DISCLOSURE_IDS = 256;
+const MAX_BOARD_ACTIONS = 256;
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 const normalize = (text: string): string =>
   text
@@ -23,22 +31,70 @@ const normalize = (text: string): string =>
     .replace(/[^a-z0-9]+/gu, " ")
     .trim();
 
+function unknownAnalysis(reason: string): DisclosureAnalysis {
+  return {
+    status: "UNKNOWN",
+    effectiveDisclosureLevel: 5,
+    effectiveDisclosureIds: [],
+    confidence: 0,
+    reason
+  };
+}
+
+function analyzerResultWithinBounds(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const ids = value["effectiveDisclosureIds"];
+  const reason = value["reason"];
+  return Array.isArray(ids)
+    && ids.length <= MAX_ANALYZER_DISCLOSURE_IDS
+    && typeof reason === "string"
+    && reason.length > 0
+    && reason.length <= MAX_DISCLOSURE_ANALYSIS_CHARACTERS;
+}
+
+function protectedMetadataWithinBounds(
+  protectedDisclosures: readonly ProtectedDisclosure[]
+): boolean {
+  if (protectedDisclosures.length > MAX_PROTECTED_DISCLOSURES) return false;
+  for (const disclosure of protectedDisclosures) {
+    if (
+      disclosure.fact.length === 0
+      || disclosure.fact.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS
+      || disclosure.equivalentFormulations.length === 0
+      || disclosure.equivalentFormulations.length > MAX_EQUIVALENT_FORMULATIONS
+      || disclosure.equivalentFormulations.some(
+        (formulation) =>
+          formulation.length === 0
+          || formulation.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS
+      )
+    ) return false;
+  }
+  return true;
+}
+
 export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
   private readonly safeTexts: ReadonlySet<string>;
 
   public constructor(safeTexts: readonly string[]) {
-    this.safeTexts = new Set(safeTexts.map(normalize));
+    const normalized = safeTexts.map((text) => {
+      if (text.length === 0 || text.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS) {
+        throw new Error("Reviewed safe text is outside the bounded disclosure-analysis input size");
+      }
+      const value = normalize(text);
+      if (value.length === 0) {
+        throw new Error("Reviewed safe text must contain analyzable alphanumeric content");
+      }
+      return value;
+    });
+    this.safeTexts = new Set(normalized);
   }
 
   public analyze(text: string, protectedDisclosures: readonly ProtectedDisclosure[]): DisclosureAnalysis {
     if (text.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS) {
-      return {
-        status: "UNKNOWN",
-        effectiveDisclosureLevel: 5,
-        effectiveDisclosureIds: [],
-        confidence: 0,
-        reason: "Text exceeds the bounded disclosure-analysis input size"
-      };
+      return unknownAnalysis("Text exceeds the bounded disclosure-analysis input size");
+    }
+    if (!protectedMetadataWithinBounds(protectedDisclosures)) {
+      return unknownAnalysis("Protected disclosure metadata exceeds the bounded disclosure-analysis input size");
     }
 
     const normalized = normalize(text);
@@ -47,13 +103,7 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
     for (const item of protectedDisclosures) {
       const formulations = [item.fact, ...item.equivalentFormulations].map(normalize);
       if (formulations.some((phrase) => phrase.length === 0)) {
-        return {
-          status: "UNKNOWN",
-          effectiveDisclosureLevel: 5,
-          effectiveDisclosureIds: [],
-          confidence: 0,
-          reason: "Protected disclosure metadata normalizes to an empty formulation"
-        };
+        return unknownAnalysis("Protected disclosure metadata normalizes to an empty formulation");
       }
       if (formulations.some((phrase) => normalized.includes(phrase))) {
         ids.push(item.id);
@@ -69,7 +119,7 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
         reason: "Protected formulation classified independently"
       };
     }
-    if (this.safeTexts.has(normalized)) {
+    if (normalized.length > 0 && this.safeTexts.has(normalized)) {
       return {
         status: "SAFE",
         effectiveDisclosureLevel: 0,
@@ -78,13 +128,7 @@ export class ClosedWorldDisclosureAnalyzer implements DisclosureAnalyzer {
         reason: "Exact reviewed zero-disclosure probe"
       };
     }
-    return {
-      status: "UNKNOWN",
-      effectiveDisclosureLevel: 5,
-      effectiveDisclosureIds: [],
-      confidence: 0,
-      reason: "Text is outside the reviewed Phase 0 disclosure set"
-    };
+    return unknownAnalysis("Text is outside the reviewed Phase 0 disclosure set");
   }
 }
 
@@ -106,13 +150,41 @@ export class DisclosureValidator {
     if (input.proposal.speechText === undefined && (input.proposal.boardActions?.length ?? 0) === 0) {
       return { accepted: false, reason: "Proposal contains no deliverable realization" };
     }
+    if (
+      (input.proposal.speechText?.length ?? 0) > MAX_DISCLOSURE_ANALYSIS_CHARACTERS
+      || (input.proposal.boardActions?.length ?? 0) > MAX_BOARD_ACTIONS
+      || (input.proposal.boardActions ?? []).some(
+        (action) =>
+          (action.content?.length ?? 0) > MAX_DISCLOSURE_ANALYSIS_CHARACTERS
+          || action.annotationPurpose.length > MAX_DISCLOSURE_ANALYSIS_CHARACTERS
+      )
+    ) {
+      return { accepted: false, reason: "Proposal exceeds the bounded disclosure-validation input size" };
+    }
+    if (!protectedMetadataWithinBounds(input.protectedDisclosures)) {
+      return { accepted: false, reason: "Protected disclosure metadata exceeds the bounded validation input size" };
+    }
 
-    const texts = [
-      input.proposal.speechText ?? "",
-      ...(input.proposal.boardActions ?? []).map((item) => item.content ?? item.annotationPurpose)
-    ];
+    const disclosureById = new Map<DisclosureId, ProtectedDisclosure>();
+    for (const disclosure of input.protectedDisclosures) {
+      if (disclosureById.has(disclosure.id)) {
+        return { accepted: false, reason: "Protected disclosure metadata contains duplicate IDs" };
+      }
+      disclosureById.set(disclosure.id, disclosure);
+    }
+
+    const texts: string[] = [];
+    if (input.proposal.speechText !== undefined) texts.push(input.proposal.speechText);
+    for (const action of input.proposal.boardActions ?? []) {
+      if (action.content !== undefined && action.content.length > 0) texts.push(action.content);
+      texts.push(action.annotationPurpose);
+    }
+    if (texts.length === 0) {
+      return { accepted: false, reason: "Proposal contains no analyzable deliverable realization" };
+    }
+
     const analyses: DisclosureAnalysis[] = [];
-    for (const text of texts.filter((candidate) => candidate.length > 0)) {
+    for (const text of texts) {
       let rawAnalysis: unknown;
       try {
         rawAnalysis = this.analyzer.analyze(text, input.protectedDisclosures);
@@ -120,6 +192,12 @@ export class DisclosureValidator {
         return {
           accepted: false,
           reason: "Disclosure analyzer failed and therefore fails closed"
+        };
+      }
+      if (!analyzerResultWithinBounds(rawAnalysis)) {
+        return {
+          accepted: false,
+          reason: "Disclosure analyzer returned an invalid or oversized result and therefore fails closed"
         };
       }
       const parsed = DisclosureAnalysisSchema.safeParse(rawAnalysis);
@@ -149,11 +227,25 @@ export class DisclosureValidator {
       };
     }
 
-    const effectiveLevel = analyses.reduce<DisclosureLevel>(
+    const effectiveIds = Array.from(new Set(analyses.flatMap((item) => item.effectiveDisclosureIds)));
+    let metadataFloor: DisclosureLevel = 0;
+    for (const disclosureId of effectiveIds) {
+      const disclosure = disclosureById.get(disclosureId);
+      if (disclosure === undefined) {
+        return {
+          accepted: false,
+          reason: "Disclosure analyzer referenced an unknown protected disclosure"
+        };
+      }
+      if (disclosure.minimumDisclosureLevel > metadataFloor) {
+        metadataFloor = disclosure.minimumDisclosureLevel;
+      }
+    }
+    const analyzedLevel = analyses.reduce<DisclosureLevel>(
       (maximum, item) => item.effectiveDisclosureLevel > maximum ? item.effectiveDisclosureLevel : maximum,
       0
     );
-    const effectiveIds = Array.from(new Set(analyses.flatMap((item) => item.effectiveDisclosureIds)));
+    const effectiveLevel = analyzedLevel > metadataFloor ? analyzedLevel : metadataFloor;
     const combined: DisclosureAnalysis = {
       status: "SAFE",
       effectiveDisclosureLevel: effectiveLevel,
@@ -161,6 +253,32 @@ export class DisclosureValidator {
       confidence: Math.min(...analyses.map((item) => item.confidence)),
       reason: analyses.map((item) => item.reason).join("; ")
     };
+
+    const allowed = new Set<DisclosureId>(input.request.allowedDisclosureIds ?? []);
+    if (allowed.size !== (input.request.allowedDisclosureIds?.length ?? 0)) {
+      return {
+        accepted: false,
+        reason: "Application-selected target authorization contains duplicate protected disclosures",
+        analysis: combined
+      };
+    }
+    for (const disclosureId of allowed) {
+      const disclosure = disclosureById.get(disclosureId);
+      if (disclosure === undefined) {
+        return {
+          accepted: false,
+          reason: "Application-selected target authorization references an unknown protected disclosure",
+          analysis: combined
+        };
+      }
+      if (disclosure.minimumDisclosureLevel > input.request.maximumDisclosure) {
+        return {
+          accepted: false,
+          reason: "Application-selected target authorization exceeds its numeric disclosure ceiling",
+          analysis: combined
+        };
+      }
+    }
 
     if (combined.effectiveDisclosureLevel > input.request.maximumDisclosure) {
       return {
@@ -173,16 +291,6 @@ export class DisclosureValidator {
       return {
         accepted: false,
         reason: "Model claimed disclosure level understates effective disclosure",
-        analysis: combined
-      };
-    }
-
-    const protectedDisclosureIds = new Set(input.protectedDisclosures.map((item) => item.id));
-    const allowed = new Set<DisclosureId>(input.request.allowedDisclosureIds ?? []);
-    if ([...allowed].some((disclosureId) => !protectedDisclosureIds.has(disclosureId))) {
-      return {
-        accepted: false,
-        reason: "Application-selected target authorization references an unknown protected disclosure",
         analysis: combined
       };
     }
