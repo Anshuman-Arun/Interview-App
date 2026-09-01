@@ -1237,8 +1237,8 @@ export function replayQuantResearch(definitionInput: unknown, actionsInput: unkn
   replayingQuantResearch = true;
   try {
     const definition = parseQuantResearchDefinition(definitionInput);
-    const actions = snapshotReplayActions(actionsInput).map((action) => parseQuantResearchAction(action));
     const engine = new QuantResearchEngine(definition);
+    const actions = snapshotReplayActions(actionsInput).map((action) => parseQuantResearchAction(action));
     for (const action of actions) engine.applyAction(action);
     return { state: engine.getState(), result: engine.getResult(), acceptedActions: engine.getAcceptedActions() };
   } finally {
