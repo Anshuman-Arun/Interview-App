@@ -16,6 +16,7 @@ Every scenario is created from an explicit definition:
     "EXPERIMENTAL_ALLOCATION" | "MODEL_COMPARISON" |
     "CONSTRAINED_OPTIMIZATION",
   version: "1.0.0",
+  generatorVersion: "quant-research-generator-v1",
   rngVersion: "xorshift32-rejection-v1",
   seed: number,
   config: { ...family-specific bounded configuration... }
@@ -26,7 +27,7 @@ Definitions are strict runtime-validated plain objects. Unknown fields, accessor
 
 ## Deterministic seed semantics
 
-The engine never uses ambient randomness. `DeterministicRng` is seeded from the explicit safe-integer seed plus the family/version namespace. The scenario definition itself carries the required `rngVersion`, and runtime parsing rejects an incompatible RNG version rather than silently replaying a persisted seed under different semantics. All random-looking observations and latent parameters are generated during initialization. State inspection does not consume RNG state.
+The engine never uses ambient randomness. `DeterministicRng` is seeded from the explicit safe-integer seed plus the family/version namespace. The scenario definition itself carries both `generatorVersion` and `rngVersion`. Runtime parsing rejects incompatible generator or RNG semantics rather than silently replaying a persisted seed under a different implementation. All random-looking observations and latent parameters are generated during initialization. State inspection does not consume RNG state.
 
 Identical `(family, version, seed, config)` inputs therefore produce identical hidden state and, for an identical ordered action sequence, identical public state, evidence, and result. Golden version-1 fixtures pin representative generated instances so an RNG/generator change cannot silently retain the same scenario version.
 
@@ -100,7 +101,7 @@ Threshold comparisons use a small machine-precision allowance so mathematically 
 
 Replay requires:
 
-1. the original scenario definition, including family, scenario version, RNG version, seed, and config; and
+1. the original scenario definition, including family, scenario version, generator version, RNG version, seed, and config; and
 2. the ordered accepted candidate actions.
 
 `replayQuantResearch(definition, actions)` creates a fresh engine and reapplies those actions through the same runtime validation and transition path. It returns reconstructed public state, result, and accepted actions. The replay container itself is runtime validated, and replay input is bounded to the same maximum action count.
