@@ -1133,8 +1133,9 @@ export class QuantResearchEngine {
       }
       const next = transition(this.#state, action);
       assertStateInvariants(next);
+      const transitionState = clone(publicState(next));
       this.#state = next;
-      return { accepted: true, actionId: action.actionId, state: this.getState() };
+      return { accepted: true, actionId: action.actionId, state: transitionState };
     } finally {
       this.#applyingAction = false;
     }
