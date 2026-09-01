@@ -7,9 +7,21 @@ import {
   RequestIdSchema,
   SessionIdSchema,
   TurnIdSchema,
+  InterviewProblemPublicViewSchema,
   type DeliveryStatus
 } from "../packages/domain/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
+
+const sixPeoplePublicView = InterviewProblemPublicViewSchema.parse({
+  id: sixPeopleProblem.id,
+  version: sixPeopleProblem.version,
+  title: "Six People: Friends or Strangers",
+  category: "combinatorics",
+  difficulty: sixPeopleProblem.interviewer.difficulty,
+  prompt: sixPeopleProblem.public.prompt,
+  givenInformation: [...sixPeopleProblem.public.givenInformation],
+  topics: [...sixPeopleProblem.interviewer.topics]
+});
 import {
   MathText,
   parseMathSegments,
@@ -133,29 +145,28 @@ describe("UI Shell & KaTeX Math Rendering", () => {
   });
 
   describe("3. ProblemCard Component", () => {
-    it("renders Oxford Ramsey R(3,3) problem statement and metadata", () => {
+    it("renders a safe public problem view without private/interviewer structures", () => {
       const element = React.createElement(ProblemCard, {
-        problem: sixPeopleProblem
+        problem: sixPeoplePublicView
       });
       const markup = renderToStaticMarkup(element);
 
-      expect(markup).toContain("Oxford Mathematics: Ramsey Theorem");
+      expect(markup).toContain("Six People: Friends or Strangers");
       expect(markup).toContain("In a group of six people");
       expect(markup).toContain("three mutual acquaintances or three mutual strangers");
       expect(markup).toContain("Acquaintance is symmetric");
-      expect(markup).toContain("Ramsey Theory");
-      expect(markup).toContain("Complete Graph");
-      expect(markup).toContain("Pigeonhole Principle");
       expect(markup).toContain("combinatorics");
       expect(markup).toContain("graph theory");
+      expect(markup).not.toContain(sixPeopleProblem.private.canonicalSolution);
+      expect(markup).not.toContain("protectedDisclosures");
     });
 
-    it("defaults to sixPeopleProblem when problem prop is null/undefined", () => {
+    it("renders a neutral placeholder when no Oxford problem view is available", () => {
       const element = React.createElement(ProblemCard, {});
       const markup = renderToStaticMarkup(element);
 
-      expect(markup).toContain("oxford-six-people");
-      expect(markup).toContain("introductory-oxford");
+      expect(markup).toContain("No Oxford Mathematics problem is bound to this session.");
+      expect(markup).not.toContain("oxford-six-people");
     });
   });
 
