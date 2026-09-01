@@ -32,7 +32,7 @@ import {
   RATIONAL_ARITHMETIC_PROTOCOL,
   RATIONAL_ARITHMETIC_VERIFIER_NAME
 } from "../packages/verification/src/index.js";
-import { createCoreHarness, type CoreHarness } from "./harness.js";
+import { createCoreHarness, type CoreHarness } from "./formal-interpretation-harness.js";
 
 const claimEvidenceKey: EvidenceKey = {
   problemId: "oxford-six-people",

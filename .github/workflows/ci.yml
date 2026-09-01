@@ -123,17 +123,24 @@ jobs:
           packages/verification/src/verifier-common.ts
           tests/formal-interpretation-routing.test.ts
           tests/formal-interpretation-routing.property.test.ts
+          tests/formal-interpretation-harness.ts
       - name: Eta focused tests
-        run: pnpm exec vitest run tests/formal-interpretation-routing.test.ts tests/formal-interpretation-routing.property.test.ts tests/formal-interpretation-admission.test.ts tests/verification-admission.test.ts tests/verification-contract-hardening.test.ts tests/deterministic-math-invariants.test.ts
+        run: pnpm exec vitest run tests/formal-interpretation-routing.test.ts tests/formal-interpretation-routing.property.test.ts tests/verification-contract-hardening.test.ts tests/deterministic-math-invariants.test.ts
       - name: Full Vitest suite
+        if: always()
         run: pnpm test
       - name: Build browser application
+        if: always()
         run: pnpm build:web
       - name: Run replay verification
+        if: always()
         run: pnpm test:replay
       - name: Run property test suite
+        if: always()
         run: pnpm test:property
       - name: Run end-to-end typed interview suite
+        if: always()
         run: pnpm test:e2e
       - name: Run synthetic interview demo
+        if: always()
         run: pnpm demo

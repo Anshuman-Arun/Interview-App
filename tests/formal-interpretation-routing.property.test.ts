@@ -11,7 +11,7 @@ import {
   echoInterpretationCandidateSource
 } from "../packages/interview-engine/src/index.js";
 import { DETERMINISTIC_MATH_VERIFIERS } from "../packages/verification/src/index.js";
-import { createCoreHarness } from "./harness.js";
+import { createCoreHarness } from "./formal-interpretation-harness.js";
 
 const target: EvidenceKey = {
   problemId: "oxford-six-people",
