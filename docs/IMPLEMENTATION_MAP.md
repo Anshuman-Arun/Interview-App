@@ -9,7 +9,7 @@ This map describes the code that exists on the current repository baseline and, 
 | `PRODUCTION_WIRED` | Reached by the current browser/Electron/server product composition. |
 | `BACKEND_IMPLEMENTED` | Bounded implementation and tests exist, but the main product does not expose it end to end. |
 | `RUNTIME_SEAM_ONLY` | Interface/adapter/runtime seam exists without the intended live runtime/model selected. |
-| `TEST/HARNESS_ONLY` | Deterministic fake, fixture, synthetic path, or other non-production harness. |
+| `TEST/HARNESS_ONLY` | Deterministic fake, fixture, synthetic path, or validation-only tooling outside the product runtime. |
 | `DEFERRED` | Intentionally outside the current implementation milestone. |
 
 ## Authoritative product composition
@@ -154,4 +154,4 @@ The workflow executes:
 - the typed E2E script;
 - the synthetic interview demo.
 
-Superseded first-attempt PR runs may be cancelled. Main-push runs use commit-SHA concurrency groups, so workflow concurrency does not replace one scheduled main-push validation run with another. The repository currently has no branch protection/ruleset requiring successful CI, and GitHub-level skip/manual-cancel behavior remains outside the workflow guarantee.
+Superseded first-attempt PR runs may be cancelled. Main pushes and reruns use SHA/attempt-scoped concurrency groups, so newly queued validation does not replace unrelated pending or running validation. The repository currently has no branch protection/ruleset requiring successful CI, and GitHub-level skip/manual-cancel behavior remains outside the workflow guarantee.

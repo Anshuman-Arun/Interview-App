@@ -6,7 +6,7 @@ This document describes the repository-wide readiness contract. It no longer fre
 
 Repository policy considers a change ready for merge only when the authoritative CI matrix passes on both Ubuntu and Windows and no required gate is skipped, downgraded to a warning, or made conditional merely to obtain green status.
 
-GitHub Actions is configured for pull-request and `main`-push events. Superseded first-attempt PR runs may be cancelled. Main-push runs use commit-SHA concurrency groups, so workflow concurrency does not supersede one scheduled main-push run with another.
+GitHub Actions is configured for pull-request and `main`-push events. Superseded first-attempt PR runs may be cancelled. Main pushes and reruns use SHA/attempt-scoped concurrency groups, so a newly queued validation run does not replace unrelated pending or running validation.
 
 This is a readiness contract, not a GitHub-enforced merge rule: the repository currently has no branch protection/ruleset requiring successful CI, and GitHub-level skip instructions or manual cancellation can prevent a configured run from completing.
 
@@ -27,7 +27,7 @@ The workflow currently enforces:
 11. the typed E2E interview script;
 12. the synthetic interview smoke/demo path.
 
-The complete Vitest suite is one gate, not a collection of duplicated CI invocations. `vitest.config.ts` includes:
+The complete Vitest suite is the authoritative repository-wide discovery gate. `vitest.config.ts` includes:
 
 ```text
 tests/**/*.test.ts

@@ -88,7 +88,7 @@ GitHub Actions runs the required validation on:
 
 for pull-request and `main`-push events.
 
-The workflow uses `fail-fast: false` so one operating system failing does not hide the other platform's result. Superseded first-attempt PR runs may be cancelled. Main-push runs use SHA-scoped concurrency so workflow concurrency does not replace one scheduled main-push run with a later push. Branch protection is not currently configured, and GitHub-level skip/manual-cancel behavior is outside this workflow guarantee.
+The workflow uses `fail-fast: false` so one operating system failing does not hide the other platform's result. Superseded first-attempt PR runs may be cancelled. Main pushes and reruns use SHA/attempt-scoped concurrency so newly queued validation does not replace unrelated pending or running validation. Branch protection is not currently configured, and GitHub-level skip/manual-cancel behavior is outside this workflow guarantee.
 
 ## Quantitative claims
 

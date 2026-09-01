@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 concurrency:
-  # PR runs share a ref-scoped group so a newer head can supersede an older
-  # head. Main-push runs use the commit SHA so workflow concurrency never
-  # supersedes one main-push validation run with another.
-  group: ci-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  # First-attempt PR runs share a ref-scoped group so a newer head can
+  # supersede an older one. Main pushes and reruns are SHA/attempt-scoped,
+  # preventing a new queued run from replacing unrelated pending validation.
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.run_attempt == 1 && github.ref || github.sha }}-${{ github.run_attempt }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.run_attempt == 1 }}
 
 jobs:
