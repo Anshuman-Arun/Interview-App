@@ -36,7 +36,7 @@ export interface SileroVadRuntime {
     readonly sampleRate: number;
     readonly modelPath: string;
     readonly signal?: AbortSignal;
-  }): Promise<number>;
+  }): Promise<unknown>;
 }
 
 export class SileroVadBackend implements VadBackend {
@@ -44,21 +44,21 @@ export class SileroVadBackend implements VadBackend {
     private readonly runtime: SileroVadRuntime,
     private readonly modelPath: string
   ) {
-    const path = modelPath.trim();
-    if (path.length === 0 || path.length > 1_024 || /^[a-z][a-z0-9+.-]*:\/\//iu.test(path)) {
-      throw new Error("Silero model path must be an explicitly supplied local path");
-    }
+    validateLocalModelPath(modelPath, "Silero model path");
+    validateRuntimeIdentity(runtime.runtimeVersion, "Silero runtime version");
+    if (typeof runtime.score !== "function") throw new Error("Silero runtime score callback is required");
   }
 
   public async classify(frame: PcmFrameSnapshot, signal?: AbortSignal): Promise<VadObservation> {
-    const probability = await this.runtime.score({
+    const rawProbability = await this.runtime.score({
       pcmBytes: frame.bytes,
       sampleRate: frame.envelope.sampleRate,
-      modelPath: this.modelPath,
+      modelPath: this.modelPath.trim(),
       ...(signal === undefined ? {} : { signal })
     });
-    validateProbability(probability, "Silero speech probability");
-    return { speechProbability: probability };
+    if (typeof rawProbability !== "number") throw new Error("Silero speech probability must be numeric");
+    validateProbability(rawProbability, "Silero speech probability");
+    return { speechProbability: rawProbability };
   }
 }
 
@@ -117,6 +117,9 @@ export class VoiceActivityStateMachine {
     }
     if (!Number.isFinite(config.onsetHysteresisMs) || config.onsetHysteresisMs <= 0) {
       throw new Error("Onset hysteresis must be positive");
+    }
+    if (config.onsetHysteresisMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
+      throw new Error("Onset hysteresis cannot exceed the maximum utterance duration");
     }
   }
 
@@ -259,6 +262,16 @@ export class AdaptiveEndpointingPolicy {
     if (config.maximumUtteranceMs > MAX_SPEECH_UTTERANCE_DURATION_MS) {
       throw new Error("Endpointing cannot exceed the global utterance duration limit");
     }
+    if (config.minimumSpeechMs > config.maximumUtteranceMs) {
+      throw new Error("Minimum speech duration cannot exceed maximum utterance duration");
+    }
+    if (config.maximumPauseMs > config.maximumUtteranceMs) {
+      throw new Error("Maximum pause cannot exceed maximum utterance duration");
+    }
+  }
+
+  public getMaximumUtteranceMs(): number {
+    return this.config.maximumUtteranceMs;
   }
 
   public decide(input: EndpointingInput): EndpointingDecision {
@@ -289,5 +302,19 @@ export class AdaptiveEndpointingPolicy {
 function validateProbability(value: number, label: string): void {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
     throw new Error(`${label} must be within [0, 1]`);
+  }
+}
+
+function validateLocalModelPath(value: string, label: string): void {
+  const path = value.trim();
+  if (path.length === 0 || path.length > 1_024) throw new Error(`${label} is invalid`);
+  if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(path) || /[\p{Cc}\p{Cf}]/u.test(path)) {
+    throw new Error(`${label} must be an explicitly supplied safe local path`);
+  }
+}
+
+function validateRuntimeIdentity(value: string, label: string): void {
+  if (typeof value !== "string" || value.length === 0 || value.length > 100 || /[\p{Cc}\p{Cf}]/u.test(value)) {
+    throw new Error(`${label} is invalid`);
   }
 }
