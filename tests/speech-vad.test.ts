@@ -156,6 +156,27 @@ describe("adaptive endpointing policy", () => {
     })).toThrow(/terminal/u);
   });
 
+  it("rejects endpoint snapshots that no real VAD state could produce", () => {
+    expect(() => policy.decide({
+      state: "SILENCE",
+      speechMs: 1,
+      silenceMs: 0,
+      utteranceMs: 1
+    })).toThrow(/Silent VAD state/u);
+    expect(() => policy.decide({
+      state: "POSSIBLE_END",
+      speechMs: 100,
+      silenceMs: 0,
+      utteranceMs: 100
+    })).toThrow(/Possible-end VAD state/u);
+    expect(() => policy.decide({
+      state: "SPEECH",
+      speechMs: 100,
+      silenceMs: 50,
+      utteranceMs: 150
+    })).toThrow(/Speech VAD state/u);
+  });
+
   it("does not finalize on a brief pause", () => {
     expect(policy.decide({ state: "POSSIBLE_END", speechMs: 400, silenceMs: 300, utteranceMs: 700 })).toEqual({ kind: "CONTINUE" });
   });
