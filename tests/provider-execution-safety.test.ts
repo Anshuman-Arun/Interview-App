@@ -270,6 +270,10 @@ describe("provider execution admission", () => {
       "image"
     )).toThrow(TypeError);
     expect([...session.capabilities.inputModalities]).toEqual(["text"]);
+    session.capabilities.inputModalities.forEach((_value, _key, owner) => {
+      expect(owner).toBe(session.capabilities.inputModalities);
+      expect(() => owner.add("image")).toThrow(TypeError);
+    });
     expect(() => session.capabilities.reasoningLevels?.push("high")).toThrow(TypeError);
     expect(session.capabilities.reasoningLevels).toEqual(["low"]);
 
@@ -293,6 +297,38 @@ describe("provider execution admission", () => {
       policy: NO_METERED_POLICY,
       now: NOW
     })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(getterCalls).toBe(0);
+
+    const verifierAccessor = testProvider();
+    Object.defineProperty(verifierAccessor, "verifyBillingSafety", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return async ({ now }: { readonly now: Date }) => validVerification(now);
+      }
+    });
+    await expect(openProviderExecutionSession({
+      provider: verifierAccessor,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "MISSING_BILLING_VERIFIER" });
+    expect(getterCalls).toBe(0);
+
+    const capabilityAccessor = testProvider();
+    Object.defineProperty(capabilityAccessor, "capabilities", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return CAPABILITIES;
+      }
+    });
+    await expect(openProviderExecutionSession({
+      provider: capabilityAccessor,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "INVALID_PROVIDER_CAPABILITIES" });
     expect(getterCalls).toBe(0);
   });
 
