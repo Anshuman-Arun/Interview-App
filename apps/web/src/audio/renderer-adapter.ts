@@ -1,12 +1,10 @@
-import type { DeliveryId } from "../../../packages/domain/src/index.js";
+import type { DeliveryId } from "../../../../packages/domain/src/index.js";
 import {
   RendererPresentationNotExposedError,
   type AudioPlayer
 } from "../renderer-client.js";
-import {
-  AudioInfrastructureError,
-  BrowserAudioPlayback
-} from "./playback.js";
+import { BrowserAudioPlayback } from "./playback.js";
+import { AudioInfrastructureError } from "./types.js";
 
 export interface ResolvedAudioSource {
   readonly source: string;
