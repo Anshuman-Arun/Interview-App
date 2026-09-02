@@ -797,15 +797,20 @@ export function validateKnownReplayPrefix(
           assertBoundedIdentifier(event.payload.visionRequestId);
           const request = state.visionRequests[event.payload.visionRequestId];
           const observation = event.payload.observation;
+          const dependencyShapeIds = event.payload.admission?.sourceRelevantShapeIds
+            ?? observation.relevantShapeIds;
+          const boardBasisMatches = event.payload.admission === undefined
+            ? request?.sourceBoardRevision === state.boardRevision
+            : event.payload.admission.admittedAtBoardRevision === state.boardRevision;
           if (
             request === undefined
             || request.status !== "PENDING"
-            || request.sourceBoardRevision !== state.boardRevision
+            || !boardBasisMatches
             || observation.sourceBoardRevision !== request.sourceBoardRevision
             || observation.regionId !== request.regionId
-            || observation.relevantShapeIds.length !== request.relevantShapeIds.length
+            || dependencyShapeIds.length !== request.relevantShapeIds.length
             || !request.relevantShapeIds.every((shapeId) =>
-              observation.relevantShapeIds.includes(shapeId)
+              dependencyShapeIds.includes(shapeId)
             )
           ) fail();
           break;

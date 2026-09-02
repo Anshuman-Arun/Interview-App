@@ -6,6 +6,7 @@ import {
   MAX_WHITEBOARD_VISION_DIMENSION,
   MAX_WHITEBOARD_VISION_PIXELS,
   MAX_WHITEBOARD_VISION_PNG_BYTES,
+  VisionEvidenceInterpreterFingerprintSchema,
   VisionInferenceRequestSchema,
   WhiteboardVisionSnapshotResponseSchema,
   WhiteboardVisionSnapshotUploadSchema,
@@ -62,6 +63,7 @@ export class WhiteboardVisionCoordinator {
   private readonly sessions: SessionRecoveryCoordinator;
   private readonly backend: VisionInferenceBackend | undefined;
   private readonly evidenceInterpreter: VisionEvidenceInterpreter | undefined;
+  private readonly evidenceInterpreterFingerprint: string | undefined;
   private readonly backendTimeoutMs: number;
   private readonly managers = new Map<SessionId, VisionRequestManager>();
   private readonly tombstones = new Map<string, ResponseTombstone>();
@@ -71,6 +73,9 @@ export class WhiteboardVisionCoordinator {
     this.sessions = options.sessions;
     this.backend = options.backend;
     this.evidenceInterpreter = options.evidenceInterpreter;
+    this.evidenceInterpreterFingerprint = options.evidenceInterpreter === undefined
+      ? undefined
+      : VisionEvidenceInterpreterFingerprintSchema.parse(options.evidenceInterpreter.fingerprint);
     this.backendTimeoutMs = options.backendTimeoutMs ?? DEFAULT_BACKEND_TIMEOUT_MS;
     if (
       !Number.isSafeInteger(this.backendTimeoutMs)
@@ -369,7 +374,7 @@ export class WhiteboardVisionCoordinator {
       }),
       observation: accepted.observation,
       admission: accepted,
-      evidenceInterpreterFingerprint: this.evidenceInterpreter?.fingerprint ?? null
+      evidenceInterpreterFingerprint: this.evidenceInterpreterFingerprint ?? null
     });
     if (!persisted.accepted) {
       return this.remember(upload.requestId, fingerprint, rejected(
@@ -430,7 +435,7 @@ export class WhiteboardVisionCoordinator {
       const interpreter = this.evidenceInterpreter;
       if (
         interpreter === undefined
-        || interpreter.fingerprint !== request.evidenceBridge.interpreterFingerprint
+        || this.evidenceInterpreterFingerprint !== request.evidenceBridge.interpreterFingerprint
       ) {
         return {
           completed: false,
@@ -451,7 +456,14 @@ export class WhiteboardVisionCoordinator {
         });
         if (candidate !== undefined) {
           const parsed = EvidenceProposalSchema.safeParse(candidate);
-          if (parsed.success) proposal = parsed.data;
+          if (
+            parsed.success
+            && parsed.data.key.problemId === problemId
+            && parsed.data.evidenceEventIds.length === 1
+            && parsed.data.evidenceEventIds[0] === request.resultEventId
+          ) {
+            proposal = parsed.data;
+          }
         }
       } catch {
         proposal = undefined;
@@ -464,7 +476,7 @@ export class WhiteboardVisionCoordinator {
           requestId: RequestIdSchema.parse(`vision-evidence-decision:${visionRequestId}`),
           correlationId: visionRequestId
         }),
-        interpreterFingerprint: interpreter.fingerprint,
+        interpreterFingerprint: request.evidenceBridge.interpreterFingerprint,
         ...(proposal === undefined ? {} : { proposal })
       });
 
