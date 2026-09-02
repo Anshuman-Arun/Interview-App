@@ -27,6 +27,10 @@ const TREE_GRACE_MS = 250;
 const TREE_FORCE_MS = 1_000;
 
 const EXECUTABLE_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u;
+const ISOLATED_HOME_PATH_SEGMENT =
+  /^(?:\.[A-Za-z0-9](?:[A-Za-z0-9._-]{0,125}[A-Za-z0-9])?|[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?)$/u;
+const WINDOWS_RESERVED_PATH_SEGMENT =
+  /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/iu;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 
 export type SupervisedProcessErrorCode =
@@ -527,10 +531,8 @@ function snapshotIsolatedHomeFiles(
     if (
       segments.length > MAX_ISOLATED_HOME_PATH_SEGMENTS
       || segments.some((segment) =>
-        segment.length === 0
-        || segment === "."
-        || segment === ".."
-        || segment.includes("\0")
+        !ISOLATED_HOME_PATH_SEGMENT.test(segment)
+        || WINDOWS_RESERVED_PATH_SEGMENT.test(segment)
       )
     ) {
       throw new SupervisedProcessError("INVALID_DEFINITION");
