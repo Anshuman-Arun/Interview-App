@@ -1,6 +1,8 @@
 import {
   BoardRevisionSchema,
   BoardObservationSchema,
+  NormalizedBoardMutationSchema,
+  MAX_AUTHORITATIVE_BOARD_SHAPES,
   CommandEnvelopeSchema,
   CommandIdentityValueSchema,
   ContextEpochSchema,
@@ -28,6 +30,7 @@ import {
   newUtteranceId,
   type BoardObservation,
   type BoardRevision,
+  type NormalizedBoardMutation,
   type CommandEnvelope,
   type CommandIdentityValue,
   type DeliveryAtom,
@@ -69,6 +72,15 @@ const UtteranceDiscardedResultSchema = z.object({ discarded: z.literal(true) }).
 const UtteranceFinalizedResultSchema = z.object({ inputEpisodeId: InputEpisodeIdSchema, transcriptRevision: TranscriptRevisionSchema }).strict();
 const InputAppendedResultSchema = z.object({ appended: z.literal(true) }).strict();
 const BoardInputAppendedResultSchema = z.object({ appended: z.literal(true), boardRevision: BoardRevisionSchema }).strict();
+const BoardMutationCommitResultSchema = z.object({
+  committed: z.boolean(),
+  boardRevision: BoardRevisionSchema,
+  reason: z.enum(["STALE_CLIENT", "MUTATION_CONFLICT", "BOARD_AUTHORITY_UNKNOWN"]).optional()
+}).strict().superRefine((result, context) => {
+  if (result.committed === (result.reason !== undefined)) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "Board mutation result reason is inconsistent" });
+  }
+});
 const VisionRequestedResultSchema = z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema }).strict();
 const VisionProcessedResultSchema = z.object({ accepted: z.boolean(), reason: z.string().min(1).optional() }).strict();
 const EvidenceProcessedResultSchema = z.object({ committed: z.boolean(), key: z.string().min(1), reason: z.string().min(1).optional() }).strict();
@@ -964,6 +976,115 @@ export class TurnCoordinator {
         ...atoms.map((atom): EventDraft => ({ source: "APPLICATION", type: "DELIVERY_QUEUED", payload: { atom } }))
       ];
       return { drafts, result: { accepted: true, deliveryAtoms: atoms } };
+    });
+    return outcome.value;
+  }
+
+  public async commitBoardMutation(
+    mutationInput: NormalizedBoardMutation,
+    commandEnvelope?: CommandEnvelope
+  ): Promise<z.infer<typeof BoardMutationCommitResultSchema>> {
+    const mutation = NormalizedBoardMutationSchema.parse(mutationInput);
+    const envelope = CommandEnvelopeSchema.parse(
+      commandEnvelope ?? createCommandEnvelope({
+        sessionId: this.writer.sessionId,
+        producer: "whiteboard"
+      })
+    );
+    const outcome = await this.writer.execute(envelope, {
+      operation: "COMMIT_BOARD_MUTATION",
+      payload: { mutation: commandIdentityValue(mutation) }
+    }, BoardMutationCommitResultSchema, (state) => {
+      assertSessionActive(state, "commit board mutation");
+      if (mutation.baseBoardRevision !== state.boardRevision) {
+        return {
+          drafts: [],
+          result: {
+            committed: false,
+            boardRevision: state.boardRevision,
+            reason: "STALE_CLIENT" as const
+          }
+        };
+      }
+      if (!state.boardShapeAuthorityKnown) {
+        return {
+          drafts: [],
+          result: {
+            committed: false,
+            boardRevision: state.boardRevision,
+            reason: "BOARD_AUTHORITY_UNKNOWN" as const
+          }
+        };
+      }
+
+      let resultingShapeCount = Object.keys(state.boardShapes).length;
+      for (const shape of mutation.added) {
+        if (state.boardShapes[shape.id] !== undefined) {
+          return {
+            drafts: [],
+            result: {
+              committed: false,
+              boardRevision: state.boardRevision,
+              reason: "MUTATION_CONFLICT" as const
+            }
+          };
+        }
+        resultingShapeCount += 1;
+      }
+      for (const entry of mutation.updated) {
+        const existing = state.boardShapes[entry.shape.id];
+        if (existing === undefined || existing.revision !== entry.beforeRevision) {
+          return {
+            drafts: [],
+            result: {
+              committed: false,
+              boardRevision: state.boardRevision,
+              reason: "MUTATION_CONFLICT" as const
+            }
+          };
+        }
+      }
+      for (const entry of mutation.deleted) {
+        const existing = state.boardShapes[entry.shapeId];
+        if (existing === undefined || existing.revision !== entry.expectedRevision) {
+          return {
+            drafts: [],
+            result: {
+              committed: false,
+              boardRevision: state.boardRevision,
+              reason: "MUTATION_CONFLICT" as const
+            }
+          };
+        }
+        resultingShapeCount -= 1;
+      }
+      if (resultingShapeCount < 0 || resultingShapeCount > MAX_AUTHORITATIVE_BOARD_SHAPES) {
+        return {
+          drafts: [],
+          result: {
+            committed: false,
+            boardRevision: state.boardRevision,
+            reason: "MUTATION_CONFLICT" as const
+          }
+        };
+      }
+
+      const boardRevision = BoardRevisionSchema.parse(state.boardRevision + 1);
+      const summary = `Normalized whiteboard mutation (+${String(mutation.added.length)} ~${String(mutation.updated.length)} -${String(mutation.deleted.length)})`;
+      return {
+        drafts: [
+          {
+            source: "USER",
+            type: "BOARD_PATCH_COMMITTED",
+            payload: { boardRevision, summary, mutation }
+          },
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative board state changed before delivery"
+          )
+        ],
+        result: { committed: true, boardRevision }
+      };
     });
     return outcome.value;
   }

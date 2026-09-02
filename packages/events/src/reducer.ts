@@ -198,9 +198,54 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "TRANSCRIPT_CORRECTED":
       next = { ...state, transcriptRevision: event.payload.transcriptRevision, contextEpoch: event.payload.contextEpoch };
       break;
-    case "BOARD_PATCH_COMMITTED":
-      next = { ...state, boardRevision: event.payload.boardRevision };
+    case "BOARD_PATCH_COMMITTED": {
+      if (event.payload.boardRevision !== state.boardRevision + 1) {
+        throw new Error("Board revision must advance exactly once per committed patch");
+      }
+      const mutation = event.payload.mutation;
+      if (mutation === undefined) {
+        next = {
+          ...state,
+          boardRevision: event.payload.boardRevision,
+          boardShapeAuthorityKnown: false
+        };
+        break;
+      }
+      if (!state.boardShapeAuthorityKnown) {
+        throw new Error("Normalized board mutation cannot apply while shape authority is unknown");
+      }
+      if (mutation.baseBoardRevision !== state.boardRevision) {
+        throw new Error("Normalized board mutation basis does not match authoritative board revision");
+      }
+      const boardShapes = { ...state.boardShapes };
+      for (const shape of mutation.added) {
+        if (boardShapes[shape.id] !== undefined) {
+          throw new Error("Normalized board add targets an existing shape");
+        }
+        boardShapes[shape.id] = shape;
+      }
+      for (const entry of mutation.updated) {
+        const existing = boardShapes[entry.shape.id];
+        if (existing === undefined || existing.revision !== entry.beforeRevision) {
+          throw new Error("Normalized board update has a stale shape basis");
+        }
+        boardShapes[entry.shape.id] = entry.shape;
+      }
+      for (const entry of mutation.deleted) {
+        const existing = boardShapes[entry.shapeId];
+        if (existing === undefined || existing.revision !== entry.expectedRevision) {
+          throw new Error("Normalized board delete has a stale shape basis");
+        }
+        delete boardShapes[entry.shapeId];
+      }
+      next = {
+        ...state,
+        boardRevision: event.payload.boardRevision,
+        boardShapeAuthorityKnown: true,
+        boardShapes
+      };
       break;
+    }
     case "VISION_REQUESTED":
       next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...event.payload, status: "PENDING" } } };
       break;

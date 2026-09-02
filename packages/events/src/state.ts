@@ -22,6 +22,7 @@ import type {
   TurnId,
   UtteranceId,
   BoardObservation,
+  AuthoritativeStudentShape,
   RequestId,
   VerificationResult,
   EvidenceKey
@@ -144,6 +145,8 @@ export interface SessionState {
   readonly contextEpoch: ContextEpoch;
   readonly transcriptRevision: TranscriptRevision;
   readonly boardRevision: BoardRevision;
+  readonly boardShapeAuthorityKnown: boolean;
+  readonly boardShapes: Readonly<Record<string, AuthoritativeStudentShape>>;
   readonly problemStateRevision: ProblemStateRevision;
   readonly policyRevision: PolicyRevision;
   readonly lastCommittedInputSequence?: number;
@@ -172,6 +175,8 @@ export const initialSessionState = (sessionId: SessionId): SessionState => ({
   contextEpoch: zeroContextEpoch,
   transcriptRevision: zeroTranscriptRevision,
   boardRevision: zeroBoardRevision,
+  boardShapeAuthorityKnown: true,
+  boardShapes: {},
   problemStateRevision: zeroProblemStateRevision,
   policyRevision: zeroPolicyRevision,
   eventIds: [],
