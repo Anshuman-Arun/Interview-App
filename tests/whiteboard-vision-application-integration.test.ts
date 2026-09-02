@@ -38,8 +38,11 @@ function graphShape(revision = 1, x = 0): AuthoritativeStudentShape {
 }
 
 function pngBase64(width = 16, height = 16): string {
-  const png = new PNG({ width, height });
-  return PNG.sync.write(png).toString("base64");
+  const data = Buffer.alloc(width * height * 4, 255);
+  return PNG.sync.write(
+    { width, height, data },
+    { colorType: 6, inputColorType: 6, bitDepth: 8 }
+  ).toString("base64");
 }
 
 function upload(
