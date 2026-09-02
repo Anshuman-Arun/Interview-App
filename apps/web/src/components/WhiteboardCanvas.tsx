@@ -151,10 +151,7 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
   }, [cleanupMountedEditor]);
 
   useEffect(() => {
-    const mountedEditor = effectiveAdapter.getEditor();
-    if (mountedEditor instanceof RealTldrawEditorBridge) {
-      mountedEditor.getNativeEditor().updateInstanceState({ isReadonly: readOnly });
-    }
+    effectiveAdapter.setReadOnly(readOnly);
   }, [effectiveAdapter, readOnly]);
 
   return (
