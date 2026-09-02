@@ -26,6 +26,7 @@ import type {
   AuthoritativeStudentShape,
   RequestId,
   VisionBounds,
+  VisionEvidenceInterpreterFingerprint,
   VisionRequestedObservationKind,
   VisionShapeRevisionBinding,
   VisionSnapshotBasis,
@@ -63,6 +64,29 @@ export interface UtteranceState {
   readonly inputEpisodeId?: InputEpisodeId;
   readonly text?: string;
 }
+export type VisionEvidenceBridgeState =
+  | {
+      readonly status: "SKIPPED_NO_INTERPRETER";
+      readonly interpreterFingerprint: null;
+    }
+  | {
+      readonly status: "PENDING";
+      readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+    }
+  | {
+      readonly status: "DECIDED";
+      readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+      readonly decision: "NO_PROPOSAL";
+      readonly decisionEventId: EventId;
+    }
+  | {
+      readonly status: "DECIDED";
+      readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+      readonly decision: "PROPOSAL";
+      readonly proposal: EvidenceProposal;
+      readonly decisionEventId: EventId;
+    };
+
 export interface VisionRequestState {
   readonly visionRequestId: RequestId;
   readonly sourceBoardRevision: BoardRevision;
@@ -76,6 +100,7 @@ export interface VisionRequestState {
   readonly observation?: BoardObservation;
   readonly acceptedObservation?: AcceptedBoardObservation;
   readonly resultEventId?: EventId;
+  readonly evidenceBridge?: VisionEvidenceBridgeState;
   readonly discardReason?: string;
 }
 export interface LocalComputeRequestState {
