@@ -99,9 +99,80 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       };
       break;
     }
+    case "QUANT_TRADING_SCENARIO_INITIALIZED": {
+      if (state.quantTrading !== undefined) throw new Error("Quant Trading scenario is already initialized");
+      if (state.quantResearch !== undefined) throw new Error("Quant Research state cannot be attached to a Quant Trading session");
+      if (state.problem !== undefined) throw new Error("Quant Trading sessions cannot contain problem state");
+      const configuration = state.configuration;
+      if (
+        !state.started
+        || state.status !== "ACTIVE"
+        || configuration?.mode !== "QUANT_TRADING"
+        || configuration.scenario.id !== event.payload.definition.family
+        || configuration.scenario.version !== event.payload.definition.version
+      ) {
+        throw new Error("Quant Trading initialization does not match authoritative session configuration");
+      }
+      next = {
+        ...state,
+        quantTrading: {
+          definition: event.payload.definition,
+          rounds: []
+        }
+      };
+      break;
+    }
+    case "QUANT_TRADING_ROUND_RESOLVED": {
+      const quantTrading = state.quantTrading;
+      if (quantTrading === undefined) throw new Error("Quant Trading scenario is not initialized");
+      if (state.status !== "ACTIVE" || quantTrading.result !== undefined) {
+        throw new Error("Quant Trading scenario is already complete");
+      }
+      if (quantTrading.rounds.length >= 256) {
+        throw new Error("Quant Trading round history exceeds the maximum size");
+      }
+      if (event.payload.evidence.round !== quantTrading.rounds.length + 1) {
+        throw new Error("Quant Trading round resolution is not contiguous");
+      }
+      next = {
+        ...state,
+        quantTrading: {
+          ...quantTrading,
+          rounds: [...quantTrading.rounds, event.payload.evidence]
+        }
+      };
+      break;
+    }
+    case "QUANT_TRADING_SCENARIO_COMPLETED": {
+      const quantTrading = state.quantTrading;
+      if (quantTrading === undefined) throw new Error("Quant Trading scenario is not initialized");
+      if (state.status !== "ACTIVE" || quantTrading.result !== undefined) {
+        throw new Error("Quant Trading scenario is already complete");
+      }
+      const result = event.payload.result;
+      if (
+        result.family !== quantTrading.definition.family
+        || result.version !== quantTrading.definition.version
+        || result.seed !== quantTrading.definition.seed
+        || result.roundsCompleted !== quantTrading.rounds.length
+        || result.tradeCount !== result.finalPortfolio.tradeCount
+      ) {
+        throw new Error("Quant Trading completion result does not match authoritative history");
+      }
+      next = {
+        ...state,
+        quantTrading: {
+          ...quantTrading,
+          result
+        }
+      };
+      break;
+    }
     case "QUANT_RESEARCH_SCENARIO_INITIALIZED": {
       if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
+      if (state.quantTrading !== undefined) throw new Error("Quant Trading state cannot be attached to a Quant Research session");
       if (
+        (state.configuration !== undefined && state.configuration.mode !== "QUANT_RESEARCH") ||
         event.payload.definition.family !== event.payload.authoritativeSnapshot.family ||
         state.problem?.id !== event.payload.definition.family ||
         state.problem.version !== event.payload.definition.version
@@ -711,6 +782,18 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       next = { ...state, problemStateRevision: event.payload.problemStateRevision, contextEpoch: event.payload.contextEpoch };
       break;
     case "SESSION_COMPLETED":
+      if (
+        state.configuration?.mode === "QUANT_TRADING"
+        && state.quantTrading?.result === undefined
+      ) {
+        throw new Error("Quant Trading sessions complete only after deterministic scenario completion");
+      }
+      if (
+        state.configuration?.mode === "QUANT_RESEARCH"
+        && state.quantResearch?.result === undefined
+      ) {
+        throw new Error("Quant Research sessions complete only after deterministic scenario completion");
+      }
       next = {
         ...state,
         status: "COMPLETED",
