@@ -197,13 +197,34 @@ export function AppearanceDock({
             </button>
             <label className="appearance-zoom__value">
               <input
+                key={settings.zoomPercent}
                 type="number"
                 min={MIN_INTERFACE_ZOOM_PERCENT}
                 max={MAX_INTERFACE_ZOOM_PERCENT}
                 step="1"
-                value={settings.zoomPercent}
+                defaultValue={settings.zoomPercent}
                 aria-label="Interface zoom percent"
-                onChange={(event) => setZoomPercent(Number(event.target.value))}
+                onBlur={(event) => {
+                  const raw = event.currentTarget.value.trim();
+                  if (raw.length === 0) {
+                    event.currentTarget.value = String(settings.zoomPercent);
+                    return;
+                  }
+                  const next = Number(raw);
+                  if (!Number.isFinite(next)) {
+                    event.currentTarget.value = String(settings.zoomPercent);
+                    return;
+                  }
+                  setZoomPercent(next);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  } else if (event.key === "Escape") {
+                    event.currentTarget.value = String(settings.zoomPercent);
+                    event.currentTarget.blur();
+                  }
+                }}
               />
               <span>%</span>
             </label>
