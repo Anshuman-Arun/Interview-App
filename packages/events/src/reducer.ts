@@ -117,6 +117,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         ...state,
         quantTrading: {
           definition: event.payload.definition,
+          actions: [],
           rounds: []
         }
       };
@@ -129,6 +130,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         state.status !== "ACTIVE"
         || quantTrading.result !== undefined
         || quantTrading.pendingAction !== undefined
+        || quantTrading.actions.length !== quantTrading.rounds.length
       ) {
         throw new Error("Quant Trading candidate action cannot be accepted in the current state");
       }
@@ -155,15 +157,16 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       }
       if (
         event.payload.evidence.round !== quantTrading.rounds.length + 1
-        || JSON.stringify(event.payload.evidence.studentAction) !== JSON.stringify(quantTrading.pendingAction)
+        || quantTrading.actions.length !== quantTrading.rounds.length
       ) {
-        throw new Error("Quant Trading round resolution does not match the accepted action");
+        throw new Error("Quant Trading round resolution is not contiguous with accepted actions");
       }
       next = {
         ...state,
         quantTrading: {
           ...quantTrading,
           pendingAction: undefined,
+          actions: [...quantTrading.actions, quantTrading.pendingAction],
           rounds: [...quantTrading.rounds, event.payload.evidence]
         }
       };
