@@ -292,10 +292,10 @@ describe("production quant runtime integration", () => {
       "ARCHIVED"
     );
     const legacySessions = [
-      { sessionId: activeTrading, status: "ACTIVE" },
-      { sessionId: activeResearch, status: "ACTIVE" },
-      { sessionId: completedTrading, status: "COMPLETED" },
-      { sessionId: archivedResearch, status: "ARCHIVED" }
+      { sessionId: activeTrading, status: "ACTIVE", configuration: tradingConfiguration() },
+      { sessionId: activeResearch, status: "ACTIVE", configuration: researchConfiguration() },
+      { sessionId: completedTrading, status: "COMPLETED", configuration: tradingConfiguration() },
+      { sessionId: archivedResearch, status: "ARCHIVED", configuration: researchConfiguration() }
     ] as const;
 
     const listed = SessionsListResponseSchema.parse(
@@ -321,10 +321,11 @@ describe("production quant runtime integration", () => {
         requestId: newRequestId(),
         sessionId: legacy.sessionId
       }), 409, "CONFLICT");
-      await expectProtocolError(postStart(
-        legacy.sessionId,
-        legacy.sessionId === activeTrading ? tradingConfiguration() : researchConfiguration()
-      ), 409, "CONFLICT");
+      await expectProtocolError(
+        postStart(legacy.sessionId, legacy.configuration),
+        409,
+        "CONFLICT"
+      );
       expect(store.eventCount(legacy.sessionId)).toBe(countBefore);
     }
 
