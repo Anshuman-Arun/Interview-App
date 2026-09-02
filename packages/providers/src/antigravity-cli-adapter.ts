@@ -11,9 +11,14 @@ import {
 
 export const ANTIGRAVITY_CLI_PROVIDER_ID = "antigravity-cli";
 export const ANTIGRAVITY_CLI_MODEL_ID = "gemini-3.7-flash-medium";
+export const ANTIGRAVITY_CLI_AGENT_ID = "interview-realizer";
 export const ANTIGRAVITY_CLI_ADAPTER_VERSION = "1.0.0";
 
 const MAX_CONTEXT_BYTES = 96 * 1024;
+const MAX_SCHEMA_BYTES = 64 * 1024;
+const MAX_JSON_DEPTH = 32;
+const MAX_JSON_NODES = 10_000;
+const MAX_JSON_TEXT_CHARACTERS = 128 * 1024;
 const EXECUTION_TIMEOUT_MS = 120_000;
 const MAX_STDOUT_BYTES = 384 * 1024;
 const MAX_STDERR_BYTES = 128 * 1024;
@@ -114,19 +119,31 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
 const INTERVIEWER_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA
 );
+const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
+  INTERVIEWER_PROPOSAL_JSON_SCHEMA,
+  MAX_SCHEMA_BYTES
+);
 
 const InitEventSchema = z.looseObject({
   event: z.literal("init"),
+  conversation_id: z.string().min(1).max(256),
   init: z.looseObject({
+    tools: z.array(z.string().min(1)).max(128),
     permission_mode: z.string().min(1),
-    model: z.string().min(1)
+    model: z.string().min(1),
+    agent: z.string().min(1),
+    json_schema: z.unknown()
   })
 });
 
 const StepUpdateEventSchema = z.looseObject({
   event: z.literal("step_update"),
   step_update: z.looseObject({
+    conversation_id: z.string().min(1).max(256),
+    step_index: z.number().int().nonnegative(),
+    state: z.enum(["ACTIVE", "DONE"]),
     step_type: z.string().min(1),
+    tool_name: z.string().min(1).optional(),
     tool_info: z.unknown().optional(),
     subagent_info: z.unknown().optional()
   })
@@ -135,9 +152,11 @@ const StepUpdateEventSchema = z.looseObject({
 const ResultEventSchema = z.looseObject({
   event: z.literal("result"),
   result: z.looseObject({
+    conversation_id: z.string().min(1).max(256),
     status: z.string().min(1),
     num_turns: z.number().int().nonnegative(),
-    structured_output: z.unknown().optional()
+    structured_output: z.unknown().optional(),
+    json_schema: z.unknown()
   })
 });
 
@@ -204,6 +223,8 @@ export function createAntigravityCliReasoningProvider(
             INTERVIEWER_PROPOSAL_SCHEMA_ARGUMENT,
             "--model",
             modelId,
+            "--agent",
+            ANTIGRAVITY_CLI_AGENT_ID,
             "--print-timeout",
             "2m",
             "--sandbox"
@@ -221,7 +242,11 @@ export function createAntigravityCliReasoningProvider(
       if (result.exitCode !== 0) {
         throw new AntigravityCliAdapterError("PROCESS_FAILED");
       }
-      return parseAntigravityStream(result.stdout, modelId);
+      return parseAntigravityStream(
+        result.stdout,
+        modelId,
+        ANTIGRAVITY_CLI_AGENT_ID
+      );
     }
   });
 }
@@ -251,14 +276,11 @@ function captureExecutor(
 function createSingleTurnInput(input: ReasoningTurnInput): string {
   let serializedContext: string;
   try {
-    serializedContext = JSON.stringify(input.context);
+    serializedContext = serializeBoundedPlainJson(
+      readOwnTurnContext(input),
+      MAX_CONTEXT_BYTES
+    );
   } catch {
-    throw new AntigravityCliAdapterError("INVALID_CONTEXT");
-  }
-  if (
-    typeof serializedContext !== "string"
-    || new TextEncoder().encode(serializedContext).byteLength > MAX_CONTEXT_BYTES
-  ) {
     throw new AntigravityCliAdapterError("INVALID_CONTEXT");
   }
 
@@ -282,11 +304,13 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
 
 function parseAntigravityStream(
   stdout: string,
-  expectedModelId: string
+  expectedModelId: string,
+  expectedAgentId: string
 ): InterviewerProposal {
   const lines = stdout.split(/\r?\n/u);
   let sawInit = false;
   let sawResult = false;
+  let conversationId: string | undefined;
   let proposal: InterviewerProposal | undefined;
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -303,10 +327,21 @@ function parseAntigravityStream(
 
     const init = InitEventSchema.safeParse(event);
     if (init.success) {
+      let schemaMatches = false;
+      try {
+        schemaMatches =
+          serializeBoundedPlainJson(init.data.init.json_schema, MAX_SCHEMA_BYTES)
+          === INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL;
+      } catch {
+        schemaMatches = false;
+      }
       if (
         sawInit
         || index !== firstNonBlankLineIndex(lines)
         || init.data.init.model !== expectedModelId
+        || init.data.init.agent !== expectedAgentId
+        || init.data.init.tools.length !== 0
+        || !schemaMatches
         || (
           init.data.init.permission_mode !== "strict"
           && init.data.init.permission_mode !== "request-review"
@@ -314,29 +349,55 @@ function parseAntigravityStream(
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
+      conversationId = init.data.conversation_id;
       sawInit = true;
       continue;
     }
 
     const step = StepUpdateEventSchema.safeParse(event);
     if (step.success) {
-      if (!sawInit) throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+      if (
+        !sawInit
+        || conversationId === undefined
+        || step.data.step_update.conversation_id !== conversationId
+      ) {
+        throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+      }
       if (
         step.data.step_update.step_type === "tool"
+        || step.data.step_update.tool_name !== undefined
         || step.data.step_update.tool_info !== undefined
         || step.data.step_update.subagent_info !== undefined
       ) {
         throw new AntigravityCliAdapterError("TOOL_ACTIVITY_REJECTED");
+      }
+      if (
+        step.data.step_update.step_type !== "user_input"
+        && step.data.step_update.step_type !== "agent_response"
+        && step.data.step_update.step_type !== "checkpoint"
+      ) {
+        throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
       continue;
     }
 
     const result = ResultEventSchema.safeParse(event);
     if (result.success) {
+      let schemaMatches = false;
+      try {
+        schemaMatches =
+          serializeBoundedPlainJson(result.data.result.json_schema, MAX_SCHEMA_BYTES)
+          === INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL;
+      } catch {
+        schemaMatches = false;
+      }
       if (
         !sawInit
+        || conversationId === undefined
+        || result.data.result.conversation_id !== conversationId
         || result.data.result.status !== "SUCCESS"
         || result.data.result.num_turns !== 1
+        || !schemaMatches
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
@@ -358,6 +419,139 @@ function parseAntigravityStream(
     throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
   }
   return proposal;
+}
+
+function readOwnTurnContext(input: unknown): unknown {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new Error("Turn input must be a plain object");
+  }
+  const prototype = Object.getPrototypeOf(input);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error("Turn input must be a plain object");
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(input);
+  const context = descriptors.context;
+  if (
+    context === undefined
+    || context.enumerable !== true
+    || !("value" in context)
+  ) {
+    throw new Error("Turn context must be an own data property");
+  }
+  return context.value;
+}
+
+function serializeBoundedPlainJson(
+  value: unknown,
+  maximumBytes: number
+): string {
+  const seen = new WeakSet<object>();
+  const budget = { nodes: 0, textCharacters: 0 };
+
+  const visit = (candidate: unknown, depth: number): string => {
+    if (depth > MAX_JSON_DEPTH) throw new Error("JSON depth exceeded");
+    budget.nodes += 1;
+    if (budget.nodes > MAX_JSON_NODES) throw new Error("JSON node budget exceeded");
+
+    if (candidate === null) return "null";
+    if (typeof candidate === "string") {
+      budget.textCharacters += candidate.length;
+      if (
+        candidate.length > MAX_JSON_TEXT_CHARACTERS
+        || budget.textCharacters > MAX_JSON_TEXT_CHARACTERS
+      ) {
+        throw new Error("JSON text budget exceeded");
+      }
+      return JSON.stringify(candidate);
+    }
+    if (typeof candidate === "boolean") return candidate ? "true" : "false";
+    if (typeof candidate === "number") {
+      if (!Number.isFinite(candidate)) throw new Error("Non-finite JSON number");
+      return JSON.stringify(candidate);
+    }
+    if (typeof candidate !== "object") {
+      throw new Error("Non-JSON value");
+    }
+
+    if (seen.has(candidate)) throw new Error("Cyclic JSON value");
+    seen.add(candidate);
+    try {
+      const symbols = Object.getOwnPropertySymbols(candidate);
+      if (symbols.length !== 0) throw new Error("Symbol properties are forbidden");
+
+      if (Array.isArray(candidate)) {
+        if (Object.getPrototypeOf(candidate) !== Array.prototype) {
+          throw new Error("Array prototype is not trusted");
+        }
+        const descriptors = Object.getOwnPropertyDescriptors(candidate);
+        const lengthDescriptor = descriptors.length;
+        const length = lengthDescriptor?.value;
+        if (
+          typeof length !== "number"
+          || !Number.isSafeInteger(length)
+          || length < 0
+          || length > MAX_JSON_NODES
+        ) {
+          throw new Error("Invalid JSON array length");
+        }
+        const allowedKeys = new Set<string>(["length"]);
+        const items: string[] = [];
+        for (let index = 0; index < length; index += 1) {
+          const key = String(index);
+          allowedKeys.add(key);
+          const descriptor = descriptors[key];
+          if (
+            descriptor === undefined
+            || descriptor.enumerable !== true
+            || !("value" in descriptor)
+          ) {
+            throw new Error("JSON arrays must be dense data arrays");
+          }
+          items.push(visit(descriptor.value, depth + 1));
+        }
+        for (const key of Object.keys(descriptors)) {
+          if (!allowedKeys.has(key)) throw new Error("JSON array has side properties");
+        }
+        return `[${items.join(",")}]`;
+      }
+
+      const prototype = Object.getPrototypeOf(candidate);
+      if (prototype !== Object.prototype && prototype !== null) {
+        throw new Error("JSON object prototype is not trusted");
+      }
+      const descriptors = Object.getOwnPropertyDescriptors(candidate);
+      const entries: Array<readonly [string, string]> = [];
+      for (const [key, descriptor] of Object.entries(descriptors)) {
+        if (
+          descriptor.enumerable !== true
+          || !("value" in descriptor)
+          || descriptor.value === undefined
+          || key === "__proto__"
+          || key === "prototype"
+          || key === "constructor"
+        ) {
+          throw new Error("JSON objects must contain only own data properties");
+        }
+        budget.textCharacters += key.length;
+        if (budget.textCharacters > MAX_JSON_TEXT_CHARACTERS) {
+          throw new Error("JSON text budget exceeded");
+        }
+        entries.push([key, visit(descriptor.value, depth + 1)]);
+      }
+      entries.sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+      return `{${entries.map(([key, serialized]) =>
+        `${JSON.stringify(key)}:${serialized}`
+      ).join(",")}}`;
+    } finally {
+      seen.delete(candidate);
+    }
+  };
+
+  const serialized = visit(value, 0);
+  if (new TextEncoder().encode(serialized).byteLength > maximumBytes) {
+    throw new Error("JSON byte budget exceeded");
+  }
+  return serialized;
 }
 
 function firstNonBlankLineIndex(lines: readonly string[]): number {
