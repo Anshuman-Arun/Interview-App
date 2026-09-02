@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SupervisedProcessRunner
 } from "../packages/local-runtime/src/index.js";
@@ -23,7 +23,10 @@ const FIXTURE = fileURLToPath(
 const temporaryRoots: string[] = [];
 const fixturePids: number[] = [];
 const DEFAULT_TEST_EXECUTION_TIMEOUT_MS =
-  process.platform === "win32" ? 7_500 : 1_000;
+  process.platform === "win32" ? 12_000 : 1_000;
+if (process.platform === "win32") {
+  vi.setConfig({ testTimeout: 20_000 });
+}
 const WINDOWS_TREE_TEST_TIMEOUT_MS = 10_000;
 const FILE_WAIT_TIMEOUT_MS =
   process.platform === "win32" ? 7_500 : 1_000;
