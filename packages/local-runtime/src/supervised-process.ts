@@ -1664,7 +1664,7 @@ async function runWindowsTaskkill(
       executable,
       ["/PID", String(pid), "/T", "/F"],
       {
-        env: environment,
+        env: minimalWindowsHelperEnvironment(environment),
         shell: false,
         windowsHide: true,
         stdio: "ignore"
@@ -1693,6 +1693,17 @@ async function runWindowsTaskkill(
       finish(false);
     }, TREE_FORCE_MS);
   });
+}
+
+function minimalWindowsHelperEnvironment(
+  environment: NodeJS.ProcessEnv
+): NodeJS.ProcessEnv {
+  const output = Object.create(null) as NodeJS.ProcessEnv;
+  for (const key of ["SYSTEMROOT", "WINDIR", "PATH", "PATHEXT"]) {
+    const value = environment[key];
+    if (typeof value === "string") output[key] = value;
+  }
+  return Object.freeze(output);
 }
 
 async function waitForChildExit(
