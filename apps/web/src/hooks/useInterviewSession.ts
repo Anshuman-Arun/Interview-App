@@ -136,6 +136,7 @@ function readDesktopBootstrap(): DesktopBootstrap | undefined {
     "protocolVersion",
     "commandBaseUrl",
     "rendererStreamUrl",
+    "voiceBaseUrl",
     "authentication",
     "appVersion",
     "platform"
@@ -270,6 +271,7 @@ export function useInterviewSession(
       options.clientToken !== undefined
       || options.baseUrl !== undefined
       || options.rendererStreamUrl !== undefined
+      || options.voiceBaseUrl !== undefined
     )
   ) {
     throw new Error(
@@ -501,6 +503,11 @@ export function useInterviewSession(
           setError(err instanceof Error ? err.message : "Renderer stream disconnected");
         }
       } finally {
+        audioPlayer.dispose();
+        if (rendererAudioPlayerRef.current === audioPlayer) {
+          rendererAudioPlayerRef.current = null;
+          setIsSpeaking(false);
+        }
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
           rendererClientRef.current = null;
@@ -509,7 +516,7 @@ export function useInterviewSession(
         }
       }
     },
-    [authenticatedFetch, baseUrl, options.whiteboardAdapter, rendererStreamUrl]
+    [audioVoiceClient, authenticatedFetch, baseUrl, options.whiteboardAdapter, rendererStreamUrl]
   );
 
   const startSession = useCallback(
@@ -755,6 +762,7 @@ export function useInterviewSession(
   );
 
   const disconnect = useCallback((): void => {
+    void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     if (abortControllerRef.current !== null) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -765,7 +773,7 @@ export function useInterviewSession(
     setIsSpeaking(false);
     setIsStreaming(false);
     setIsConnected(false);
-  }, []);
+  }, [voiceIntegration.voiceControls]);
 
   const clearError = useCallback((): void => {
     setError(null);
