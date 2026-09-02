@@ -697,7 +697,7 @@ function safelyCheckAudioAsset(
   audioRef: string
 ): boolean {
   try {
-    return check(sessionId, audioRef) === true;
+    return check(sessionId, audioRef);
   } catch {
     return false;
   }
