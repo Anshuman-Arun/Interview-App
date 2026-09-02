@@ -14,6 +14,7 @@ import {
   SpeechWorkerCore,
   TtsWorkerCore,
   type RecognizerAudioInput,
+  type SpeechRecognizer,
   type SynthesizedPcm,
   type TtsSegmentSynthesisRequest,
   type VadBackend
@@ -94,6 +95,44 @@ class ControlledAudioElement implements BrowserAudioElementLike {
 
   public emit(type: "playing" | "ended" | "error"): void {
     for (const listener of [...(this.listeners.get(type) ?? [])]) listener();
+  }
+}
+
+class BlockingIgnoringRecognizer implements SpeechRecognizer {
+  public readonly modelIdentity = Object.freeze({
+    name: "blocking-ignore-cancel",
+    version: "1"
+  } as const);
+  public readonly cancellationCapability = "NONE" as const;
+  private releaseGate!: () => void;
+  private signalStarted!: () => void;
+  private signalReturned!: () => void;
+  private readonly gate = new Promise<void>((resolve) => {
+    this.releaseGate = resolve;
+  });
+  public readonly started = new Promise<void>((resolve) => {
+    this.signalStarted = resolve;
+  });
+  public readonly returned = new Promise<void>((resolve) => {
+    this.signalReturned = resolve;
+  });
+
+  public async recognize(input: RecognizerAudioInput, _signal: AbortSignal): Promise<unknown> {
+    this.signalStarted();
+    await this.gate;
+    this.signalReturned();
+    return {
+      requestId: input.requestId,
+      utteranceId: input.utteranceId,
+      text: "late transcript that must be suppressed",
+      isFinal: true,
+      model: this.modelIdentity,
+      sourceAudioBasis: input.sourceAudioBasis
+    };
+  }
+
+  public release(): void {
+    this.releaseGate();
   }
 }
 
@@ -505,6 +544,85 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
       "dropped speech transport cancellation"
     );
     expect(Object.keys(server.registry.get(sessionId).getState().utterances)).toHaveLength(0);
+  });
+
+  it("suppresses a late STT result after the PCM transport is cancelled", async () => {
+    const recognizer = new BlockingIgnoringRecognizer();
+    const speechWorker = new SpeechWorkerCore({
+      vadBackend: new ScriptedVadBackend([1, 1, 0, 0, 0, 0, 0, 0]),
+      recognizer
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const voiceClient = new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: fetchWithAuth
+    });
+    const speech = await voiceClient.openStream(sessionId);
+
+    await speech.sendFrame(microphoneFrame(0.2));
+    await speech.sendFrame(microphoneFrame(0.2));
+
+    const controller = new AbortController();
+    let recognitionFrame: Promise<unknown> | undefined;
+    for (let index = 0; index < 6; index += 1) {
+      const pending = speech.sendFrame(microphoneFrame(0), controller.signal);
+      const outcome = await Promise.race([
+        pending.then(() => "FRAME_COMPLETED" as const),
+        recognizer.started.then(() => "RECOGNITION_STARTED" as const)
+      ]);
+      if (outcome === "RECOGNITION_STARTED") {
+        recognitionFrame = pending;
+        break;
+      }
+    }
+    if (recognitionFrame === undefined) {
+      throw new Error("Expected a silence frame to enter recognition");
+    }
+
+    controller.abort();
+    await expect(recognitionFrame).rejects.toBeDefined();
+    recognizer.release();
+    await recognizer.returned;
+    await waitFor(
+      () => speechWorker.getActiveStreamCount() === 0,
+      "late recognizer suppression after transport cancellation"
+    );
+    const writer = server.registry.get(sessionId);
+    await writer.waitForIdle();
+
+    const state = writer.getState();
+    expect(Object.keys(state.turns)).toHaveLength(0);
+    expect(Object.keys(state.inputEpisodes)).toHaveLength(0);
+    expect(Object.values(state.utterances).every(
+      (utterance) => utterance.status !== "CAPTURING"
+    )).toBe(true);
   });
 
   it("does not barge in on a false VAD onset", async () => {
