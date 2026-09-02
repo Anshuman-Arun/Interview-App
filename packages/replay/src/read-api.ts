@@ -581,6 +581,10 @@ export type ReplayReadCategory = z.infer<typeof ReplayReadCategorySchema>;
 const SAFE_REPLAY_SUMMARY_BY_KIND = {
   SESSION_STARTED: "Session started",
   PROBLEM_PRESENTED: "Problem presented",
+  QUANT_TRADING_SCENARIO_INITIALIZED: "Quant Trading scenario initialized",
+  QUANT_TRADING_ACTION_ACCEPTED: "Quant Trading candidate action accepted",
+  QUANT_TRADING_ROUND_RESOLVED: "Quant Trading round resolved",
+  QUANT_TRADING_SCENARIO_COMPLETED: "Quant Trading scenario completed",
   QUANT_RESEARCH_SCENARIO_INITIALIZED: "Quant Research scenario initialized",
   QUANT_RESEARCH_ACTION_ACCEPTED: "Quant Research action accepted",
   QUANT_RESEARCH_SCENARIO_COMPLETED: "Quant Research scenario completed",
@@ -636,6 +640,7 @@ function expectedReplayReadCategory(
 ): ReplayReadCategory {
   if (
     kind === "TURN_COMMITTED"
+    || kind === "QUANT_TRADING_ACTION_ACCEPTED"
     || kind === "UTTERANCE_STARTED"
     || kind === "UTTERANCE_DISCARDED"
     || kind === "INPUT_EPISODE_STARTED"
