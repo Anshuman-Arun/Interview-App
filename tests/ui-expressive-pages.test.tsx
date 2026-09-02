@@ -106,6 +106,54 @@ describe("expressive product page layer", () => {
     expect(markup).toContain("Review");
   });
 
+  it("does not render ACTIVE-session problem identity on Home or Sessions", () => {
+    const activeOnly: readonly StoredSessionSummary[] = [{
+      sessionId: ACTIVE,
+      problemId: "spoiler-active-problem-id",
+      problemVersion: "secret-version",
+      status: "ACTIVE",
+      sequence: 10,
+      createdAt: "2026-09-01T20:00:00.000Z",
+      updatedAt: "2026-09-01T20:20:00.000Z",
+      eventCount: 10
+    }];
+
+    const homeMarkup = renderToStaticMarkup(
+      React.createElement(HomePage, {
+        activeSessionId: ACTIVE,
+        activeProblemTitle: null,
+        sessions: activeOnly,
+        onStartInterview: vi.fn(),
+        onResumeInterview: vi.fn(),
+        onOpenSessions: vi.fn(),
+        onOpenSettings: vi.fn(),
+        canReview: () => false,
+        onReview: vi.fn(),
+        sessionEntryPending: false
+      })
+    );
+    expect(homeMarkup).toContain("Active interview");
+    expect(homeMarkup).not.toContain("spoiler-active-problem-id");
+    expect(homeMarkup).not.toContain("secret-version");
+
+    const sessionsMarkup = renderToStaticMarkup(
+      React.createElement(SessionsPage, {
+        sessions: activeOnly,
+        currentSessionId: null,
+        canReview: () => false,
+        onResume: vi.fn(),
+        onReview: vi.fn(),
+        onRefresh: vi.fn(),
+        history: null,
+        historyLoading: false,
+        historyError: null
+      })
+    );
+    expect(sessionsMarkup).toContain("Active interview");
+    expect(sessionsMarkup).not.toContain("spoiler-active-problem-id");
+    expect(sessionsMarkup).not.toContain("secret-version");
+  });
+
   it("keeps review presentation independent of product-read implementation", () => {
     const markup = renderToStaticMarkup(
       React.createElement(ReviewPageShell, {
