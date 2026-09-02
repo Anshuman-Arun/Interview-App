@@ -430,6 +430,22 @@ describe("supervised one-shot process execution", () => {
     expect(String(stderrError)).not.toContain("eeee");
   });
 
+  it.each(["stdout", "stderr"] as const)(
+    "terminates a process that writes %s forever when its byte budget is crossed",
+    async (stream) => {
+      const runtime = runner();
+      await expect(runtime.execute(request([
+        FIXTURE,
+        "write-forever",
+        stream
+      ], {
+        timeoutMs: 2_000,
+        maxStdoutBytes: 16 * 1024,
+        maxStderrBytes: 16 * 1024
+      }))).rejects.toMatchObject({ code: "OUTPUT_LIMIT_EXCEEDED" });
+    }
+  );
+
   it("rejects malformed UTF-8 stdout", async () => {
     const runtime = runner();
     await expect(runtime.execute(request([FIXTURE, "invalid-utf8"])))
