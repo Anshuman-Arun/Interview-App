@@ -241,6 +241,9 @@ describe("local worker lifecycle manager", () => {
     expect(status.handshake).toMatchObject({
       componentVersion: "fixture-1",
       protocolVersion: 1,
+      workerType: "fixture",
+      runtimeVersion: "fixture-runtime-1",
+      modelVersionOrHash: "fixture-model-1",
       capabilities: ["FIXTURE"]
     });
   });
