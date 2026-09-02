@@ -27,6 +27,7 @@ import {
   QUANT_RESEARCH_VERSION,
   QUANT_TRADER_SCENARIO_VERSION,
   QuantResearchEngine,
+  QuantTraderScenarioFamilySchema,
   createProductionQuantResearchDefinition,
   createQuantTraderScenario
 } from "../packages/local-compute/src/index.js";
@@ -1577,6 +1578,48 @@ describe("production quant start seed lifecycle", () => {
     } finally {
       await writer.close();
       store.close();
+    }
+  });
+});
+
+describe("production Quant Trading public serialization", () => {
+  it("keeps every advertised Trading family bounded and replayable through terminal state", async () => {
+    for (const [familyIndex, family] of QuantTraderScenarioFamilySchema.options.entries()) {
+      const store = new SqliteEventStore(":memory:");
+      const sessionId = newSessionId();
+      const writer = SessionWriter.open(store, sessionId);
+      const coordinator = new QuantTradingSessionCoordinator(writer);
+      try {
+        await coordinator.initializeConfigured(
+          tradingConfiguration(family),
+          20_000 + familyIndex,
+          createCommandEnvelope({ sessionId, producer: "quant-public-schema-test" })
+        );
+
+        let state = coordinator.getPublicState();
+        while (state.actionRequired) {
+          expect(QuantTradingPublicStateSchema.parse(state)).toEqual(state);
+          const serialized = JSON.stringify(state);
+          expect(serialized).not.toContain('"seed"');
+          expect(serialized).not.toContain("orderFlowType");
+          expect(serialized).not.toContain("incomingMarketSide");
+          expect(serialized).not.toContain("counterparty");
+
+          state = (await coordinator.applyAction(
+            { type: "PASS" },
+            state.currentRound,
+            createCommandEnvelope({ sessionId, producer: "quant-public-schema-test" })
+          )).value;
+        }
+
+        expect(QuantTradingPublicStateSchema.parse(state)).toEqual(state);
+        expect(state.status === "COMPLETED" || state.status === "RISK_STOPPED").toBe(true);
+        expect(writer.getState().status).toBe("COMPLETED");
+        expect(replayQuantTradingSessionState(writer.getState())).toEqual(state);
+      } finally {
+        await writer.close();
+        store.close();
+      }
     }
   });
 });
