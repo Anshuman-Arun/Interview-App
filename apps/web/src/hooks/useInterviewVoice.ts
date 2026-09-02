@@ -27,6 +27,7 @@ const MAX_PENDING_MICROPHONE_FRAMES = 256;
 const MAX_PENDING_MICROPHONE_DURATION_MS = 3_000;
 const MAX_PENDING_MICROPHONE_BYTES = 2 * 1024 * 1024;
 const VOICE_CANCEL_TIMEOUT_MS = 1_000;
+const VOICE_CANCEL_ATTEMPTS = 2;
 
 export type VoicePermissionState =
   | "UNKNOWN"
@@ -567,17 +568,21 @@ function normalizeDeviceId(deviceId: string | undefined): string | undefined {
 
 
 async function cancelStreamBounded(stream: BrowserVoiceStream): Promise<void> {
-  const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => {
-    controller.abort();
-  }, VOICE_CANCEL_TIMEOUT_MS);
-  try {
-    await stream.cancel(controller.signal);
-  } catch {
-    // Transport cancellation is best-effort. Local integration epochs and the
-    // server-side stream lease independently suppress late worker callbacks.
-  } finally {
-    globalThis.clearTimeout(timeout);
+  const attemptBudgetMs = Math.floor(VOICE_CANCEL_TIMEOUT_MS / VOICE_CANCEL_ATTEMPTS);
+  for (let attempt = 0; attempt < VOICE_CANCEL_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => {
+      controller.abort();
+    }, attemptBudgetMs);
+    try {
+      await stream.cancel(controller.signal);
+      return;
+    } catch {
+      // Retry within the same total bounded cancellation budget. Local epochs
+      // and the server-side idle lease remain the final fail-closed backstops.
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
   }
 }
 
