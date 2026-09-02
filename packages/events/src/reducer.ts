@@ -211,8 +211,10 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
       if (state.quantTrading !== undefined) throw new Error("Quant Trading state cannot be attached to a Quant Research session");
       if (
-        (state.configuration !== undefined && state.configuration.mode !== "QUANT_RESEARCH") ||
-        event.payload.definition.family !== event.payload.authoritativeSnapshot.family ||
+        !state.started
+        || state.status !== "ACTIVE"
+        || (state.configuration !== undefined && state.configuration.mode !== "QUANT_RESEARCH")
+        || event.payload.definition.family !== event.payload.authoritativeSnapshot.family ||
         state.problem?.id !== event.payload.definition.family ||
         state.problem.version !== event.payload.definition.version
       ) {
@@ -231,7 +233,9 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "QUANT_RESEARCH_ACTION_ACCEPTED": {
       const quantResearch = state.quantResearch;
       if (quantResearch === undefined) throw new Error("Quant Research scenario is not initialized");
-      if (quantResearch.result !== undefined) throw new Error("Quant Research scenario is already complete");
+      if (state.status !== "ACTIVE" || quantResearch.result !== undefined) {
+        throw new Error("Quant Research scenario is not active");
+      }
       if (quantResearch.actions.length >= 64) throw new Error("Quant Research action history exceeds the maximum size");
       if (quantResearch.actions.some((action) => action.actionId === event.payload.action.actionId)) {
         throw new Error("Quant Research action ID is already present in authoritative history");
@@ -248,7 +252,9 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "QUANT_RESEARCH_SCENARIO_COMPLETED": {
       const quantResearch = state.quantResearch;
       if (quantResearch === undefined) throw new Error("Quant Research scenario is not initialized");
-      if (quantResearch.result !== undefined) throw new Error("Quant Research scenario is already complete");
+      if (state.status !== "ACTIVE" || quantResearch.result !== undefined) {
+        throw new Error("Quant Research scenario is already complete or inactive");
+      }
       const result = event.payload.result;
       if (
         result.status !== "COMPLETE" ||
@@ -841,6 +847,13 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       };
       break;
     case "SESSION_ARCHIVED":
+      if (
+        (state.configuration?.mode === "QUANT_TRADING"
+          || state.configuration?.mode === "QUANT_RESEARCH")
+        && state.status !== "COMPLETED"
+      ) {
+        throw new Error("Quant sessions can be archived only after deterministic session completion");
+      }
       next = {
         ...state,
         status: "ARCHIVED",
