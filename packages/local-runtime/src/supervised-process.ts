@@ -1020,11 +1020,23 @@ async function compileWindowsSupervisorAssembly(
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"]
     });
+    child.stdin.on("error", () => undefined);
+    child.stdout.on("error", () => undefined);
+    child.stderr.on("error", () => undefined);
     child.stdin.end();
     child.stdout.resume();
     child.stderr.resume();
 
-    const close = waitForClose(child);
+    const close = Promise.race([
+      waitForClose(child),
+      new Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>(
+        (resolve) => {
+          child?.once("error", () => resolve(
+            Object.freeze({ code: null, signal: null })
+          ));
+        }
+      )
+    ]);
     let removeAbortListener = (): void => undefined;
     const abortRequested = new Promise<"ABORT">((resolve) => {
       const onAbort = (): void => resolve("ABORT");
@@ -1067,6 +1079,9 @@ async function compileWindowsSupervisorAssembly(
           ? "EXECUTION_CANCELLED"
           : "EXECUTION_TIMEOUT"
       );
+    }
+    if (outcome.result.code === null) {
+      throw new SupervisedProcessError("SPAWN_FAILED");
     }
     if (outcome.result.code !== 0) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
