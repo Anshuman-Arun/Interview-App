@@ -13,7 +13,8 @@ import type { RendererAcknowledgementSender, RendererClient } from "./renderer-c
 type FetchLike = typeof fetch;
 
 const RENDERER_ACK_TIMEOUT_MS = 2_000;
-const MAX_RENDERER_ACK_RESPONSE_CHARS = 16 * 1024;
+const MAX_RENDERER_ACK_RESPONSE_BYTES = 16 * 1024;
+const MAX_RENDERER_ACK_RESPONSE_CHUNKS = 256;
 
 export interface RendererStreamConsumerOptions {
   readonly streamUrl: string;
@@ -124,24 +125,41 @@ export function createLoopbackAcknowledgementSender(
   return {
     send: async (input: RendererAcknowledgementCommand): Promise<void> => {
       const command = RendererAcknowledgementCommandSchema.parse(input);
-      const response = await fetchWithTimeout(fetchImpl, options.commandUrl, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(command)
+      const controller = new AbortController();
+      let timedOut = false;
+      const timeoutId = globalThis.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
       }, RENDERER_ACK_TIMEOUT_MS);
-
-      if (!response.ok) throw new Error("Renderer acknowledgement was not accepted");
-      const responseText = await response.text();
-      if (responseText.length > MAX_RENDERER_ACK_RESPONSE_CHARS) {
-        throw new Error("Renderer acknowledgement response exceeded its bound");
-      }
       let responseJson: unknown;
       try {
-        responseJson = JSON.parse(responseText) as unknown;
-      } catch {
-        throw new Error("Renderer acknowledgement response was not valid JSON");
+        const response = await fetchImpl(options.commandUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(command),
+          signal: controller.signal
+        });
+        if (!response.ok) throw new Error("Renderer acknowledgement was not accepted");
+        const responseText = await readBoundedUtf8Response(
+          response,
+          MAX_RENDERER_ACK_RESPONSE_BYTES,
+          MAX_RENDERER_ACK_RESPONSE_CHUNKS,
+          "Renderer acknowledgement response"
+        );
+        try {
+          responseJson = JSON.parse(responseText) as unknown;
+        } catch {
+          throw new Error("Renderer acknowledgement response was not valid JSON");
+        }
+      } catch (error) {
+        if (timedOut) {
+          throw new Error("Renderer acknowledgement timed out", { cause: error });
+        }
+        throw error;
+      } finally {
+        globalThis.clearTimeout(timeoutId);
       }
       const parsed = DeliveryAcknowledgedResponseSchema.parse(responseJson);
       const expectedAcknowledgement = command.type === "ACK_DELIVERY_EXPOSED" ? "EXPOSED" : "COMPLETED";
@@ -156,28 +174,55 @@ export function createLoopbackAcknowledgementSender(
   };
 }
 
-async function fetchWithTimeout(
-  fetchImpl: FetchLike,
-  input: RequestInfo | URL,
-  init: RequestInit,
-  timeoutMs: number
-): Promise<Response> {
-  const controller = new AbortController();
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timeoutId = setTimeout(() => {
-      controller.abort();
-      reject(new Error("Renderer acknowledgement timed out"));
-    }, timeoutMs);
-  });
-  try {
-    return await Promise.race([
-      fetchImpl(input, { ...init, signal: controller.signal }),
-      timeout
-    ]);
-  } finally {
-    if (timeoutId !== undefined) clearTimeout(timeoutId);
+async function readBoundedUtf8Response(
+  response: Response,
+  maximumBytes: number,
+  maximumChunks: number,
+  label: string
+): Promise<string> {
+  const declared = response.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(declared)) {
+      throw new Error(`${label} declared size is malformed`);
+    }
+    const parsed = Number(declared);
+    if (!Number.isSafeInteger(parsed) || parsed > maximumBytes) {
+      throw new Error(`${label} declared size exceeds its bound`);
+    }
   }
+  if (response.body === null) throw new Error(`${label} has no body`);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let text = "";
+  let totalBytes = 0;
+  let chunks = 0;
+  try {
+    for (;;) {
+      const result = await reader.read();
+      if (result.done) break;
+      chunks += 1;
+      totalBytes += result.value.byteLength;
+      if (chunks > maximumChunks || totalBytes > maximumBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(`${label} exceeded its bound`);
+      }
+      text += decoder.decode(result.value, { stream: true });
+    }
+    text += decoder.decode();
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`${label} was not valid UTF-8`, { cause: error });
+    }
+    throw error;
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Reader cleanup must not obscure the acknowledgement result.
+    }
+  }
+  return text;
 }
 
 async function handleSseBlock(block: string, renderer: RendererClient): Promise<void> {
