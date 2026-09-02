@@ -125,8 +125,10 @@ function antigravityEnvironment(): {
   if (process.platform === "win32") {
     const systemRoot = trustedWindowsSystemRoot();
     return Object.freeze({
-      inherit: Object.freeze(["USERNAME"]),
+      inherit: Object.freeze([]),
       values: Object.freeze({
+        SYSTEMROOT: systemRoot,
+        WINDIR: systemRoot,
         PATH: win32Path.join(systemRoot, "System32"),
         PATHEXT: ".COM;.EXE;.BAT;.CMD",
         AGY_CLI_DISABLE_AUTO_UPDATE: "true"
