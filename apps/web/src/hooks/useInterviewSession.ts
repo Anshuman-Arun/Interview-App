@@ -22,11 +22,23 @@ import {
 import { BrowserSessionReadClient } from "../session-read-client.js";
 import {
   RendererClient,
-  RendererPresentationNotExposedError,
-  type AudioPlayer,
   type TextPresenter,
   type WhiteboardPresenter
 } from "../renderer-client.js";
+import {
+  BrowserAudioPlayback,
+  QueuedRendererAudioPlayer
+} from "../audio/index.js";
+import {
+  BrowserVoiceClient,
+  deriveDefaultVoiceBaseUrl,
+  type BrowserVoiceCommit
+} from "../voice-client.js";
+import {
+  useInterviewVoice,
+  type InterviewVoiceControls,
+  type InterviewVoiceState
+} from "./useInterviewVoice.js";
 import {
   consumeAuthenticatedRendererStream,
   createLoopbackAcknowledgementSender
@@ -37,6 +49,7 @@ import type { TranscriptItem } from "../components/TranscriptFeed.js";
 export interface UseInterviewSessionOptions {
   readonly baseUrl?: string;
   readonly rendererStreamUrl?: string;
+  readonly voiceBaseUrl?: string;
   readonly clientToken?: string;
   readonly initialSessionId?: SessionId;
   readonly whiteboardAdapter?: TldrawWhiteboardAdapter;
@@ -55,6 +68,8 @@ export interface UseInterviewSessionResult {
   readonly sequence: number;
   readonly contextEpoch: number;
   readonly error: string | null;
+  readonly voice: InterviewVoiceState;
+  readonly voiceControls: InterviewVoiceControls;
   readonly baseUrl: string;
   readonly isTransportManaged: boolean;
   readonly setBaseUrl: (url: string) => void;
@@ -91,6 +106,7 @@ interface DesktopBootstrap {
   readonly protocolVersion: 1;
   readonly commandBaseUrl: string;
   readonly rendererStreamUrl: string;
+  readonly voiceBaseUrl: string;
   readonly authentication: {
     readonly mode: "DESKTOP_MANAGED";
     readonly headerValue: "desktop-managed-v1";
@@ -137,6 +153,7 @@ function readDesktopBootstrap(): DesktopBootstrap | undefined {
     || record["protocolVersion"] !== 1
     || typeof record["commandBaseUrl"] !== "string"
     || typeof record["rendererStreamUrl"] !== "string"
+    || typeof record["voiceBaseUrl"] !== "string"
     || authentication["mode"] !== "DESKTOP_MANAGED"
     || authentication["headerValue"] !== DESKTOP_AUTH_HEADER_VALUE
     || typeof record["appVersion"] !== "string"
@@ -151,6 +168,7 @@ function readDesktopBootstrap(): DesktopBootstrap | undefined {
     protocolVersion: 1,
     commandBaseUrl: exactDesktopLoopbackOrigin(record["commandBaseUrl"]),
     rendererStreamUrl: exactDesktopRendererStreamUrl(record["rendererStreamUrl"]),
+    voiceBaseUrl: exactDesktopLoopbackOrigin(record["voiceBaseUrl"]),
     authentication: {
       mode: "DESKTOP_MANAGED",
       headerValue: DESKTOP_AUTH_HEADER_VALUE
@@ -285,6 +303,9 @@ export function useInterviewSession(
   const pendingSubmissionsRef = useRef<Map<string, PendingSubmissionRecord>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
+  const rendererAudioPlayerRef = useRef<QueuedRendererAudioPlayer | null>(null);
+  const audioOutputDeviceRef = useRef<string | undefined>(undefined);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const fetchImpl = useMemo(
     () => options.fetchImpl ?? globalThis.fetch.bind(globalThis),
     [options.fetchImpl]
@@ -294,6 +315,53 @@ export function useInterviewSession(
     headers.set("x-interview-client-token", authenticationHeaderValue);
     return fetchImpl(input, { ...init, headers });
   }, [authenticationHeaderValue, fetchImpl]);
+
+  const voiceBaseUrl = useMemo(
+    () => desktopBootstrap?.voiceBaseUrl ?? options.voiceBaseUrl ?? deriveDefaultVoiceBaseUrl(baseUrl),
+    [baseUrl, desktopBootstrap, options.voiceBaseUrl]
+  );
+  const audioVoiceClient = useMemo(
+    () => new BrowserVoiceClient({
+      baseUrl: voiceBaseUrl,
+      authenticatedFetch
+    }),
+    [authenticatedFetch, voiceBaseUrl]
+  );
+  const interruptPlaybackForBargeIn = useCallback((): void => {
+    const player = rendererAudioPlayerRef.current;
+    if (player === null) return;
+    player.interruptCurrent();
+    player.clearQueued();
+  }, []);
+  const setAudioOutputDevice = useCallback((deviceId: string | undefined): void => {
+    audioOutputDeviceRef.current = deviceId;
+    rendererAudioPlayerRef.current?.setOutputDeviceId(deviceId);
+  }, []);
+  const onVoiceCommit = useCallback((commit: BrowserVoiceCommit): void => {
+    setTranscript((previous) => {
+      if (previous.some((item) => item.turnId === commit.turnId)) return previous;
+      const item: TranscriptItem = {
+        id: `student_${commit.turnId}`,
+        role: "student",
+        text: commit.text,
+        status: "ACKNOWLEDGED",
+        timestamp: Date.now(),
+        turnId: commit.turnId,
+        inputEpisodeId: commit.inputEpisodeId
+      };
+      return [...previous, item];
+    });
+  }, []);
+  const voiceIntegration = useInterviewVoice({
+    sessionId,
+    sessionActive: isSessionStarted && sessionStatus === "ACTIVE",
+    voiceBaseUrl,
+    authenticatedFetch,
+    speaking: isSpeaking,
+    interruptPlaybackForBargeIn,
+    setOutputDeviceId: setAudioOutputDevice,
+    onVoiceCommit
+  });
 
   const setBaseUrl = useCallback((url: string): void => {
     if (desktopBootstrap !== undefined) {
@@ -387,13 +455,20 @@ export function useInterviewSession(
         }
       };
 
-      const audioPlayer: AudioPlayer = {
-        playAudio: () => {
-          throw new RendererPresentationNotExposedError(
-            "Audio playback is unavailable until a physical audio player is installed"
-          );
-        }
-      };
+      rendererAudioPlayerRef.current?.dispose();
+      const playback = new BrowserAudioPlayback();
+      const audioPlayer = new QueuedRendererAudioPlayer(playback, {
+        outputDeviceId: audioOutputDeviceRef.current,
+        onSpeakingChanged: setIsSpeaking,
+        resolveAudioSource: (audioRef, deliveryId, signal) =>
+          audioVoiceClient.resolveAudioSource(
+            targetSessionId,
+            audioRef,
+            deliveryId,
+            signal
+          )
+      });
+      rendererAudioPlayerRef.current = audioPlayer;
 
       const whiteboardPresenter: WhiteboardPresenter | undefined = options.whiteboardAdapter;
 
@@ -521,6 +596,7 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.completeSession(sessionId, summary);
+        rendererAudioPlayerRef.current?.cancelAll();
         setSessionStatus("COMPLETED");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to complete session";
@@ -538,6 +614,7 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.archiveSession(sessionId, reason);
+        rendererAudioPlayerRef.current?.cancelAll();
         setSessionStatus("ARCHIVED");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to archive session";
@@ -683,6 +760,9 @@ export function useInterviewSession(
       abortControllerRef.current = null;
     }
     rendererClientRef.current = null;
+    rendererAudioPlayerRef.current?.dispose();
+    rendererAudioPlayerRef.current = null;
+    setIsSpeaking(false);
     setIsStreaming(false);
     setIsConnected(false);
   }, []);
@@ -698,6 +778,8 @@ export function useInterviewSession(
         abortControllerRef.current = null;
       }
       rendererClientRef.current = null;
+      rendererAudioPlayerRef.current?.dispose();
+      rendererAudioPlayerRef.current = null;
     };
   }, []);
 
@@ -713,6 +795,8 @@ export function useInterviewSession(
     sequence,
     contextEpoch,
     error,
+    voice: voiceIntegration.voice,
+    voiceControls: voiceIntegration.voiceControls,
     baseUrl,
     isTransportManaged: desktopBootstrap !== undefined,
     setBaseUrl,
