@@ -293,9 +293,13 @@ export class QuantTradingSessionCoordinator {
 
   public async applyAction(
     actionInput: QuantTradingCandidateAction,
+    expectedRound: number,
     commandEnvelope?: CommandEnvelope
   ): Promise<CommandResult<QuantTradingPublicState>> {
     const publicAction = QuantTradingCandidateActionSchema.parse(actionInput);
+    if (!Number.isSafeInteger(expectedRound) || expectedRound < 1 || expectedRound > 256) {
+      throw new RangeError("Quant Trading expected round must be between 1 and 256");
+    }
     const action = QuantStudentActionSchema.parse(publicAction);
     const envelope = CommandEnvelopeSchema.parse(
       commandEnvelope ?? createCommandEnvelope({
@@ -306,12 +310,18 @@ export class QuantTradingSessionCoordinator {
 
     return this.writer.execute(envelope, {
       operation: "APPLY_QUANT_TRADING_ACTION",
-      payload: { action: commandIdentityValue(publicAction) }
+      payload: {
+        expectedRound,
+        action: commandIdentityValue(publicAction)
+      }
     }, QuantTradingPublicStateSchema, (state) => {
       if (!state.started || state.status !== "ACTIVE") {
         throw new Error(`Cannot apply Quant Trading action in status ${state.status}`);
       }
       const { configuration, engine } = reconstructQuantTradingEngine(state);
+      if (engine.getState().currentRound !== expectedRound) {
+        throw new Error("Cannot apply Quant Trading action to a stale round");
+      }
       engine.submitAction(action);
       const evidence = persistedRoundEvidence(engine.advance());
       const drafts: EventDraft[] = [
