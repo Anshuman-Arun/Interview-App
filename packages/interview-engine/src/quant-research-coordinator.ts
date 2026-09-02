@@ -18,6 +18,7 @@ import {
 } from "../../events/src/index.js";
 import {
   QuantResearchEngine,
+  QuantResearchError,
   parseQuantResearchAction,
   parseQuantResearchDefinition,
   type QuantResearchAction,
