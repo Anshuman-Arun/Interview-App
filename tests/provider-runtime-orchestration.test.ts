@@ -62,6 +62,54 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("graceful shutdown cancels a provider runtime source that never resolves", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const registry = new SessionRuntimeRegistry(store);
+    let enteredResolution: (() => void) | undefined;
+    const resolutionEntered = new Promise<void>((resolve) => {
+      enteredResolution = resolve;
+    });
+    const providerRuntimeResolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        async resolveConfiguration() {
+          enteredResolution?.();
+          return await new Promise<never>(() => undefined);
+        }
+      }
+    });
+    const runtime = new LocalInterviewTransportRuntime({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: new Set(["http://127.0.0.1:5173"]),
+        clientToken: "provider-runtime-shutdown-token-long-enough"
+      },
+      registry,
+      store,
+      providerRuntimeResolver
+    });
+
+    try {
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      await turns.startSession(sixPeopleProblem);
+      const committed = await turns.commitInput(STUDENT_TEXT);
+
+      const orchestration = runtime.orchestrator.orchestrateTurn({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+      await resolutionEntered;
+
+      await expect(runtime.stop()).resolves.toBeUndefined();
+      await expect(orchestration).resolves.toBeUndefined();
+    } finally {
+      store.close();
+    }
+  });
+
   it("keeps legacy/default mock execution working through the provider control plane", async () => {
     const harness = createHarness();
     try {
