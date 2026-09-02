@@ -9,6 +9,7 @@ import {
   TtsWorkerCore
 } from "../../../../packages/local-compute/src/index.js";
 import {
+  LocalRuntimeError,
   LocalRuntimeManager,
   type LocalComponentDefinition,
   type LocalComponentStatus
@@ -203,14 +204,26 @@ export class DesktopLocalRuntimeComposition {
       return;
     }
 
-    const [speechResult, ttsResult] = await Promise.allSettled([
-      this.startSpeech(signal),
-      this.startTts(signal)
-    ]);
-    if (speechResult.status === "rejected" && this.speechStatus.state === "UNAVAILABLE") {
+    // Runtime views copy large verified model artifacts onto the same app-data
+    // filesystem. Start them sequentially so each disk-space check sees the
+    // previous materialization instead of allowing two independent reservations
+    // to overcommit the same free space.
+    let speechFailed = false;
+    try {
+      await this.startSpeech(signal);
+    } catch {
+      speechFailed = true;
+    }
+    let ttsFailed = false;
+    try {
+      await this.startTts(signal);
+    } catch {
+      ttsFailed = true;
+    }
+    if (speechFailed && this.speechStatus.state === "UNAVAILABLE") {
       this.speechStatus = failed("WORKER_START_FAILED");
     }
-    if (ttsResult.status === "rejected" && this.ttsStatus.state === "UNAVAILABLE") {
+    if (ttsFailed && this.ttsStatus.state === "UNAVAILABLE") {
       this.ttsStatus = failed("WORKER_START_FAILED");
     }
     const speechReady = this.speechWorker !== undefined
@@ -258,32 +271,32 @@ export class DesktopLocalRuntimeComposition {
       return;
     }
     if (abortRequested(signal)) return;
-    this.speechView = await materializeRuntimeAssetView({
-      manager: this.assetManager,
-      assets: SPEECH_ASSETS,
-      baseRoot: this.runtimeViewsRoot,
-      ...(signal === undefined ? {} : { signal })
-    });
-
-    const sileroPath = requiredViewPath(this.speechView, "speech/silero/silero_vad.onnx");
-    const moonshineRoot = path.join(this.speechView.root, "speech", "moonshine");
-    const token = randomBytes(32).toString("hex");
-    this.runtimeManager.register(this.workerDefinition({
-      componentId: SPEECH_COMPONENT_ID,
-      component: "speech",
-      token,
-      modelIdentity: SPEECH_WORKER_MODEL_IDENTITY,
-      runtimeVersion: SPEECH_RUNTIME_VERSION,
-      capabilities: ["vad", "stt"],
-      args: [
-        "--component", "speech",
-        "--port", "0",
-        "--silero-model", sileroPath,
-        "--moonshine-model-root", moonshineRoot
-      ]
-    }));
-    this.speechStatus = unavailable("WORKER_STARTING");
     try {
+      this.speechView = await materializeRuntimeAssetView({
+        manager: this.assetManager,
+        assets: SPEECH_ASSETS,
+        baseRoot: this.runtimeViewsRoot,
+        ...(signal === undefined ? {} : { signal })
+      });
+
+      const sileroPath = requiredViewPath(this.speechView, "speech/silero/silero_vad.onnx");
+      const moonshineRoot = path.join(this.speechView.root, "speech", "moonshine");
+      const token = randomBytes(32).toString("hex");
+      this.runtimeManager.register(this.workerDefinition({
+        componentId: SPEECH_COMPONENT_ID,
+        component: "speech",
+        token,
+        modelIdentity: SPEECH_WORKER_MODEL_IDENTITY,
+        runtimeVersion: SPEECH_RUNTIME_VERSION,
+        capabilities: ["vad", "stt"],
+        args: [
+          "--component", "speech",
+          "--port", "0",
+          "--silero-model", sileroPath,
+          "--moonshine-model-root", moonshineRoot
+        ]
+      }));
+      this.speechStatus = unavailable("WORKER_STARTING");
       await this.runtimeManager.start(
         SPEECH_COMPONENT_ID,
         signal === undefined ? {} : { signal }
@@ -332,32 +345,32 @@ export class DesktopLocalRuntimeComposition {
       return;
     }
     if (abortRequested(signal)) return;
-    this.ttsView = await materializeRuntimeAssetView({
-      manager: this.assetManager,
-      assets: TTS_ASSETS,
-      baseRoot: this.runtimeViewsRoot,
-      ...(signal === undefined ? {} : { signal })
-    });
-
-    const modelPath = requiredViewPath(this.ttsView, "tts/kokoro/model.ort");
-    const configPath = requiredViewPath(this.ttsView, "tts/kokoro/config.json");
-    const ttsRoot = path.join(this.ttsView.root, "tts");
-    const token = randomBytes(32).toString("hex");
-    this.runtimeManager.register(this.workerDefinition({
-      componentId: TTS_COMPONENT_ID,
-      component: "tts",
-      token,
-      modelIdentity: TTS_WORKER_MODEL_IDENTITY,
-      runtimeVersion: TTS_RUNTIME_VERSION,
-      capabilities: ["tts"],
-      args: [
-        "--component", "tts",
-        "--port", "0",
-        "--tts-asset-root", ttsRoot
-      ]
-    }));
-    this.ttsStatus = unavailable("WORKER_STARTING");
     try {
+      this.ttsView = await materializeRuntimeAssetView({
+        manager: this.assetManager,
+        assets: TTS_ASSETS,
+        baseRoot: this.runtimeViewsRoot,
+        ...(signal === undefined ? {} : { signal })
+      });
+
+      const modelPath = requiredViewPath(this.ttsView, "tts/kokoro/model.ort");
+      const configPath = requiredViewPath(this.ttsView, "tts/kokoro/config.json");
+      const ttsRoot = path.join(this.ttsView.root, "tts");
+      const token = randomBytes(32).toString("hex");
+      this.runtimeManager.register(this.workerDefinition({
+        componentId: TTS_COMPONENT_ID,
+        component: "tts",
+        token,
+        modelIdentity: TTS_WORKER_MODEL_IDENTITY,
+        runtimeVersion: TTS_RUNTIME_VERSION,
+        capabilities: ["tts"],
+        args: [
+          "--component", "tts",
+          "--port", "0",
+          "--tts-asset-root", ttsRoot
+        ]
+      }));
+      this.ttsStatus = unavailable("WORKER_STARTING");
       await this.runtimeManager.start(
         TTS_COMPONENT_ID,
         signal === undefined ? {} : { signal }
@@ -401,10 +414,24 @@ export class DesktopLocalRuntimeComposition {
       }
     }
 
+    let registered = true;
     try {
-      await this.runtimeManager.stop(componentId);
-    } catch {
-      return false;
+      this.runtimeManager.getStatus(componentId);
+    } catch (error) {
+      if (error instanceof LocalRuntimeError && error.code === "UNKNOWN_COMPONENT") {
+        registered = false;
+      } else {
+        return false;
+      }
+    }
+    if (registered) {
+      try {
+        await this.runtimeManager.stop(componentId);
+      } catch {
+        // The worker may still own open model files. Preserve the runtime view
+        // until process-tree cleanup is verified rather than deleting beneath it.
+        return false;
+      }
     }
 
     if (component === "speech") this.speechWorker = undefined;
