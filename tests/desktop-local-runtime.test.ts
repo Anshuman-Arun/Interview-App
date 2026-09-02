@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { LocalRuntimeManager, type LocalComponentDefinition } from "../packages/local-runtime/src/index.js";
+import {\n  SpeechRequestIdSchema,\n  SpeechUtteranceIdSchema\n} from "../packages/local-compute/src/index.js";\nimport { LocalRuntimeManager, type LocalComponentDefinition } from "../packages/local-runtime/src/index.js";
 import { DesktopLocalRuntimeComposition } from "../apps/desktop/src/runtime/composition.js";
 import { ManagedModelWorkerClient } from "../apps/desktop/src/runtime/managed-worker-client.js";
 import {
