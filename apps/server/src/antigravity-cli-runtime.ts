@@ -43,10 +43,6 @@ description: Stateless interviewer proposal realization engine.
 tools: []
 mainAgent: true
 subagent: false
-commandExecutionPolicy: "off"
-mcpServers: []
-skills: []
-plugins: []
 ---
 
 # System Prompt
