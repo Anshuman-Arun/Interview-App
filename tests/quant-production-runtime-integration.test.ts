@@ -247,6 +247,54 @@ describe("production quant runtime integration", () => {
     expect(registry.get(sessionId).getState().quantTrading?.rounds).toHaveLength(0);
   });
 
+  it("keeps legacy pre-runtime Quant sessions discoverable without reseeding or resuming them", async () => {
+    const legacySessions = [
+      { sessionId: newSessionId(), configuration: tradingConfiguration() },
+      { sessionId: newSessionId(), configuration: researchConfiguration() }
+    ] as const;
+
+    for (const legacy of legacySessions) {
+      await new TurnCoordinator(registry.get(legacy.sessionId)).startConfiguredSession(
+        { configuration: legacy.configuration },
+        createCommandEnvelope({
+          sessionId: legacy.sessionId,
+          producer: "legacy-quant-fixture"
+        })
+      );
+      const state = registry.get(legacy.sessionId).getState();
+      expect(state.status).toBe("ACTIVE");
+      expect(state.problem).toBeUndefined();
+      expect(state.quantTrading).toBeUndefined();
+      expect(state.quantResearch).toBeUndefined();
+    }
+
+    const listed = SessionsListResponseSchema.parse(
+      await responseJson(await post({
+        protocolVersion: 1,
+        type: "LIST_SESSIONS",
+        requestId: newRequestId()
+      }))
+    );
+    for (const legacy of legacySessions) {
+      const summary = listed.sessions.find((item) => item.sessionId === legacy.sessionId);
+      expect(summary).toMatchObject({
+        sessionId: legacy.sessionId,
+        status: "ACTIVE"
+      });
+      expect(summary?.problemId).toBeUndefined();
+      const countBefore = store.eventCount(legacy.sessionId);
+
+      await expectProtocolError(getQuantState(legacy.sessionId), 409, "CONFLICT");
+      await expectProtocolError(post({
+        protocolVersion: 1,
+        type: "RESUME_SESSION",
+        requestId: newRequestId(),
+        sessionId: legacy.sessionId
+      }), 409, "CONFLICT");
+      expect(store.eventCount(legacy.sessionId)).toBe(countBefore);
+    }
+  });
+
   it("rejects an unsupported configured Quant Trading scenario version before session authority is created", async () => {
     const sessionId = newSessionId();
     const configuration = {
