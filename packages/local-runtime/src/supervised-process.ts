@@ -320,7 +320,7 @@ export class SupervisedProcessRunner {
       const exit = await closePromise;
       if (cleanupStarted !== undefined) {
         const cleaned = await cleanupStarted;
-        if (!cleaned && pendingFailure !== "OUTPUT_LIMIT_EXCEEDED") {
+        if (!cleaned) {
           pendingFailure = "PROCESS_TREE_CLEANUP_FAILED";
         }
       }
