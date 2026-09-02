@@ -513,6 +513,33 @@ describe("supervised one-shot process execution", () => {
   );
 
   it.runIf(process.platform === "win32")(
+    "contains a detached Windows descendant after the provider root exits",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "supervised-windows-detached-tree-"));
+      temporaryRoots.push(root);
+      const pidFile = join(root, "child.pid");
+      const runtime = runner();
+
+      await expect(runtime.execute(request([
+        FIXTURE,
+        "exit-with-detached-tree",
+        pidFile
+      ], {
+        timeoutMs: 2_000
+      }))).resolves.toMatchObject({ exitCode: 0 });
+      await waitForFile(pidFile);
+      const childPid = Number(readFileSync(pidFile, "utf8"));
+      fixturePids.push(childPid);
+
+      const deadline = Date.now() + 1_000;
+      while (Date.now() < deadline && isProcessAlive(childPid)) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      }
+      expect(isProcessAlive(childPid)).toBe(false);
+    }
+  );
+
+  it.runIf(process.platform === "win32")(
     "rejects provider arguments that exceed the bounded Windows command line",
     async () => {
       const runtime = runner();
