@@ -94,7 +94,9 @@ process-tree shutdown.
 ## Worker supervision and handshake
 
 Both production workers are registered through `LocalRuntimeManager`; the
-desktop code does not call raw `spawn()`.
+desktop code does not call raw `spawn()`. The selected CPython interpreter is
+launched with `-I` isolated mode, and the supervisor's environment allowlist
+does not inherit `PYTHONPATH` or other ambient Python injection variables.
 
 A worker is trusted only after a bounded stdout JSON readiness message matches
 all application-owned expectations:
