@@ -6,6 +6,7 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON,
   SPEECH_VAD_TIMEOUT_ABORT_REASON,
   SpeechRequestIdSchema,
   SpeechUtteranceIdSchema,
@@ -681,6 +682,72 @@ describe("desktop local model runtime", () => {
       sampleRate: 16_000,
       streamId: "stream-1"
     })).rejects.toThrow("rejected");
+  });
+
+  it("recycles active Moonshine only for recognizer timeout, not ordinary cancellation", async () => {
+    const token = "0".repeat(64);
+    const runtime = fixtureManager(
+      "speech-recognizer-timeout-recycle",
+      "speech",
+      "fixture-speech-1",
+      token
+    );
+    await runtime.start("speech-recognizer-timeout-recycle");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-recognizer-timeout-recycle",
+      "speech",
+      token
+    );
+    const workerInstance = client.workerInstanceIdentity();
+    let recycleCount = 0;
+    let rejectActive: ((error: unknown) => void) | undefined;
+    let resolveActive: ((value: unknown) => void) | undefined;
+    const mutable = client as unknown as {
+      postJson(): Promise<unknown>;
+      recycleAfterUncertainRequest(expectedWorkerInstance: string): Promise<void>;
+    };
+    mutable.postJson = async () => new Promise<unknown>((resolve, reject) => {
+      resolveActive = resolve;
+      rejectActive = reject;
+    });
+    mutable.recycleAfterUncertainRequest = async (expectedWorkerInstance) => {
+      expect(expectedWorkerInstance).toBe(workerInstance);
+      recycleCount += 1;
+      rejectActive?.(new Error("synthetic worker recycle"));
+    };
+
+    const adapter = new ManagedMoonshineRuntime(client, "/verified/moonshine");
+    const timeout = new AbortController();
+    const timedOut = adapter.transcribe({
+      requestId: SpeechRequestIdSchema.parse("recognizer-timeout-1"),
+      utteranceId: SpeechUtteranceIdSchema.parse("recognizer-timeout-utterance-1"),
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      modelPath: "/verified/moonshine",
+      signal: timeout.signal
+    });
+    await waitForCondition(() => rejectActive !== undefined);
+    timeout.abort(SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON);
+    await expect(timedOut).rejects.toThrow("synthetic worker recycle");
+    expect(recycleCount).toBe(1);
+
+    rejectActive = undefined;
+    resolveActive = undefined;
+    const ordinary = new AbortController();
+    const cancelled = adapter.transcribe({
+      requestId: SpeechRequestIdSchema.parse("recognizer-cancel-2"),
+      utteranceId: SpeechUtteranceIdSchema.parse("recognizer-cancel-utterance-2"),
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      modelPath: "/verified/moonshine",
+      signal: ordinary.signal
+    });
+    await waitForCondition(() => resolveActive !== undefined);
+    ordinary.abort();
+    resolveActive?.({ text: "late but suppressible" });
+    await expect(cancelled).resolves.toEqual({ text: "late but suppressible" });
+    expect(recycleCount).toBe(1);
   });
 
   it("drops a cancelled Moonshine request while it is queued behind native inference", async () => {
