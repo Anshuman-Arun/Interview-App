@@ -437,6 +437,12 @@ export class WhiteboardVisionCoordinator {
     if (request.evidenceBridge.status === "SKIPPED_NO_INTERPRETER") {
       return { completed: true, evidenceCommittedCount: 0 };
     }
+    if (request.evidenceBridge.status === "COMPLETED") {
+      return {
+        completed: true,
+        evidenceCommittedCount: request.evidenceBridge.evidenceCommitted ? 1 : 0
+      };
+    }
 
     if (request.evidenceBridge.status === "PENDING") {
       const interpreter = this.evidenceInterpreter;
@@ -506,6 +512,11 @@ export class WhiteboardVisionCoordinator {
       return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
     }
 
+    const bridge = request.evidenceBridge;
+    if (bridge.status !== "DECIDED" || bridge.decision !== "PROPOSAL") {
+      return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
+    }
+
     const evidenceResult = await turn.processEvidenceProposal({
       envelope: createCommandEnvelope({
         sessionId: writer.sessionId,
@@ -513,12 +524,33 @@ export class WhiteboardVisionCoordinator {
         requestId: RequestIdSchema.parse(`vision-evidence-commit:${visionRequestId}`),
         correlationId: visionRequestId
       }),
-      proposal: request.evidenceBridge.proposal,
+      proposal: bridge.proposal,
       requiredBoardRevision: acceptedObservation.admittedAtBoardRevision
     });
+
+    await turn.recordVisionEvidenceBridgeCompletion({
+      envelope: createCommandEnvelope({
+        sessionId: writer.sessionId,
+        producer: "vision-evidence-bridge",
+        requestId: RequestIdSchema.parse(`vision-evidence-completion:${visionRequestId}`),
+        correlationId: visionRequestId
+      }),
+      interpreterFingerprint: bridge.interpreterFingerprint,
+      evidenceCommitted: evidenceResult.committed
+    });
+
+    state = writer.getState();
+    request = state.visionRequests[visionRequestId];
+    if (
+      request === undefined
+      || request.status !== "ACCEPTED"
+      || request.evidenceBridge?.status !== "COMPLETED"
+    ) {
+      return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
+    }
     return {
       completed: true,
-      evidenceCommittedCount: evidenceResult.committed ? 1 : 0
+      evidenceCommittedCount: request.evidenceBridge.evidenceCommitted ? 1 : 0
     };
   }
 
