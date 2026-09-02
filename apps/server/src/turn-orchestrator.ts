@@ -191,12 +191,17 @@ export class ServerTurnOrchestrator {
       );
 
       if (!hasValidatedGeneration && !hasDeliveries) {
+        // A recovery attempt cancelled by application shutdown is not a
+        // successful recovery. Report it separately so the recovery cache does
+        // not strand this authoritative pending turn across a stop/start cycle.
+        if (!this.acceptingWork) return "DEFERRED";
         const turnDisposition = await this.orchestrateTurnWithDisposition({
           sessionId,
           turnId: turnId as TurnId,
           inputEpisodeId: turn.inputEpisodeId,
           studentText: turn.studentText
         });
+        if (!this.acceptingWork) return "DEFERRED";
         if (turnDisposition === "RETRYABLE_PROVIDER_RUNTIME") {
           disposition = "RETRYABLE";
         }
