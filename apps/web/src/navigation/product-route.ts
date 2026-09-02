@@ -121,9 +121,7 @@ export function routeForActiveInterview(
 ): ProductRoute {
   if (!hasActiveInterview) return route;
   if (isPaused) {
-    return route.page === "interview" || route.page === "home"
-      ? route
-      : { page: "home" };
+    return route.page === "home" ? route : { page: "home" };
   }
   return route.page === "interview" ? route : { page: "interview" };
 }
