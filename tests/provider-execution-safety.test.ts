@@ -214,6 +214,64 @@ describe("provider execution admission", () => {
     await session.close();
   });
 
+  it("captures reasoning-session operation identities once and rejects accessor-backed operations without invoking them", async () => {
+    let replacementSendTurnCalls = 0;
+    let replacementCloseCalls = 0;
+    const rawSession: ReasoningSession = {
+      async *sendTurn() {
+        yield PROPOSAL;
+      },
+      async cancelTurn() {
+        return { semantics: "NONE" };
+      },
+      async close() {}
+    };
+    const provider = testProvider({
+      createSession: async () => rawSession
+    });
+    const session = await openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    rawSession.sendTurn = async function* () {
+      replacementSendTurnCalls += 1;
+      throw new Error("replacement sendTurn must not execute");
+    };
+    rawSession.close = async () => {
+      replacementCloseCalls += 1;
+      throw new Error("replacement close must not execute");
+    };
+
+    expect(await collect(session.sendTurn({
+      context: {},
+      generationId: newGenerationId()
+    }))).toEqual([PROPOSAL]);
+    await expect(session.close()).resolves.toBeUndefined();
+    expect(replacementSendTurnCalls).toBe(0);
+    expect(replacementCloseCalls).toBe(0);
+
+    let getterCalls = 0;
+    const accessorSession = Object.defineProperty({
+      async close() {}
+    }, "sendTurn", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return async function* () {
+          yield PROPOSAL;
+        };
+      }
+    }) as ReasoningSession;
+    await expect(openProviderExecutionSession({
+      provider: testProvider({ createSession: async () => accessorSession }),
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(getterCalls).toBe(0);
+  });
+
   it("runtime-validates provider output and suppresses provider error secrets", async () => {
     const outputSecret = "malformed-output-secret";
     const outputProvider = testProvider({
