@@ -9,6 +9,7 @@ import {
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
   MAX_AUTHORITATIVE_BOARD_SHAPES,
+  MAX_VISION_REGION_SHAPES,
   CommandEnvelopeSchema,
   CommandIdentityValueSchema,
   ContextEpochSchema,
@@ -34,6 +35,7 @@ import {
   newTurnId,
   newUtteranceId,
   type AcceptedBoardObservation,
+  type AuthoritativeStudentShape,
   type BoardObservation,
   type BoardRevision,
   type NormalizedBoardMutation,
@@ -54,8 +56,8 @@ import {
   type RealizationRequest,
   type RequestId,
   type TranscriptRevision,
-  type TurnId
-  ,type UtteranceId
+  type TurnId,
+  type UtteranceId
 } from "../../domain/src/index.js";
 import type { EventDraft, SessionState } from "../../events/src/index.js";
 import { z } from "zod";
@@ -676,6 +678,10 @@ export class TurnCoordinator {
             type: "BOARD_PATCH_COMMITTED",
             payload: { boardRevision, summary }
           },
+          ...invalidateVisionDerivedEvidence(
+            state,
+            "Whiteboard shape authority became unknown after a summary-only board update"
+          ),
           {
             source: "USER",
             type: "INPUT_EPISODE_UPDATED",
@@ -1268,9 +1274,12 @@ export class TurnCoordinator {
         };
       }
 
-      let resultingShapeCount = Object.keys(state.boardShapes).length;
+      const resultingShapes: Record<string, AuthoritativeStudentShape> = {
+        ...state.boardShapes
+      };
+      let resultingShapeCount = Object.keys(resultingShapes).length;
       for (const shape of mutation.added) {
-        if (state.boardShapes[shape.id] !== undefined) {
+        if (resultingShapes[shape.id] !== undefined) {
           return {
             drafts: [],
             result: {
@@ -1280,10 +1289,11 @@ export class TurnCoordinator {
             }
           };
         }
+        resultingShapes[shape.id] = shape;
         resultingShapeCount += 1;
       }
       for (const entry of mutation.updated) {
-        const existing = state.boardShapes[entry.shape.id];
+        const existing = resultingShapes[entry.shape.id];
         if (existing === undefined || existing.revision !== entry.beforeRevision) {
           return {
             drafts: [],
@@ -1294,9 +1304,10 @@ export class TurnCoordinator {
             }
           };
         }
+        resultingShapes[entry.shape.id] = entry.shape;
       }
       for (const entry of mutation.deleted) {
-        const existing = state.boardShapes[entry.shapeId];
+        const existing = resultingShapes[entry.shapeId];
         if (existing === undefined || existing.revision !== entry.expectedRevision) {
           return {
             drafts: [],
@@ -1306,6 +1317,9 @@ export class TurnCoordinator {
               reason: "MUTATION_CONFLICT" as const
             }
           };
+        }
+        if (!Reflect.deleteProperty(resultingShapes, entry.shapeId)) {
+          throw new Error("Validated board deletion could not be simulated for freshness");
         }
         resultingShapeCount -= 1;
       }
@@ -1329,6 +1343,11 @@ export class TurnCoordinator {
             type: "BOARD_PATCH_COMMITTED",
             payload: { boardRevision, summary, mutation }
           },
+          ...invalidateVisionDerivedEvidence(
+            state,
+            "Authoritative whiteboard changed the supporting vision basis",
+            resultingShapes
+          ),
           ...invalidateUndeliveredPolicyOutput(
             state,
             "Authoritative board state changed before delivery"
@@ -1354,6 +1373,10 @@ export class TurnCoordinator {
             type: "BOARD_PATCH_COMMITTED",
             payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary }
           },
+          ...invalidateVisionDerivedEvidence(
+            state,
+            "Whiteboard shape authority became unknown after a summary-only board update"
+          ),
           ...invalidateUndeliveredPolicyOutput(
             state,
             "Authoritative board state changed before delivery"
@@ -1447,4 +1470,99 @@ function rejectAndSupersedeDrafts(
     ],
     result: rejected.result
   };
+}
+
+
+function invalidateVisionDerivedEvidence(
+  state: SessionState,
+  reason: string,
+  resultingShapes?: Readonly<Record<string, AuthoritativeStudentShape>>
+): EventDraft[] {
+  const staleVisionResultEventIds = new Set<string>();
+
+  for (const request of Object.values(state.visionRequests)) {
+    if (
+      request.status !== "ACCEPTED"
+      || request.resultEventId === undefined
+      || request.acceptedObservation === undefined
+    ) {
+      continue;
+    }
+    if (
+      resultingShapes === undefined
+      || !acceptedVisionObservationRemainsFresh(
+        request.acceptedObservation,
+        resultingShapes
+      )
+    ) {
+      staleVisionResultEventIds.add(request.resultEventId);
+    }
+  }
+
+  if (staleVisionResultEventIds.size === 0) return [];
+
+  const invalidations: EventDraft[] = [];
+  for (const records of Object.values(state.evidenceHistory)) {
+    const activeRecords = records.filter((record) => record.status === "ACTIVE");
+    if (activeRecords.length > 1) {
+      throw new Error("Evidence history contains multiple active records");
+    }
+    const active = activeRecords[0];
+    if (
+      active === undefined
+      || !active.value.evidenceEventIds.some((eventId) =>
+        staleVisionResultEventIds.has(eventId)
+      )
+    ) {
+      continue;
+    }
+    invalidations.push({
+      source: "APPLICATION",
+      type: "STUDENT_EVIDENCE_INVALIDATED",
+      payload: {
+        key: active.key,
+        invalidatesEventId: active.evidenceEventId,
+        reason
+      }
+    });
+  }
+  return invalidations;
+}
+
+function acceptedVisionObservationRemainsFresh(
+  accepted: AcceptedBoardObservation,
+  shapes: Readonly<Record<string, AuthoritativeStudentShape>>
+): boolean {
+  if (
+    accepted.sourceRelevantShapeIds.length > 0
+    && accepted.shapeRevisionBindings.length !== accepted.sourceRelevantShapeIds.length
+  ) {
+    return false;
+  }
+
+  for (const binding of accepted.shapeRevisionBindings) {
+    if (shapes[binding.shapeId]?.revision !== binding.expectedRevision) {
+      return false;
+    }
+  }
+
+  const regionShapeIds = Object.values(shapes)
+    .filter((shape) => boardBoundsIntersect(shape.bounds, accepted.observation.bounds))
+    .map((shape) => shape.id)
+    .sort();
+  if (regionShapeIds.length > MAX_VISION_REGION_SHAPES) return false;
+
+  const expectedShapeIds = [...accepted.sourceRelevantShapeIds].sort();
+  return regionShapeIds.length === expectedShapeIds.length
+    && regionShapeIds.every((shapeId, index) => shapeId === expectedShapeIds[index]);
+}
+
+function boardBoundsIntersect(
+  left: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  right: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+): boolean {
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y;
 }
