@@ -497,8 +497,7 @@ function serializeBoundedPlainJson(
           throw new Error("Array prototype is not trusted");
         }
         const descriptors = Object.getOwnPropertyDescriptors(candidate);
-        const lengthDescriptor = descriptors.length;
-        const length = lengthDescriptor?.value;
+        const length = Object.getOwnPropertyDescriptor(candidate, "length")?.value as unknown;
         if (
           typeof length !== "number"
           || !Number.isSafeInteger(length)
