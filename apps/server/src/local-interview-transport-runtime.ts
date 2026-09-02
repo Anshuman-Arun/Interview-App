@@ -99,6 +99,7 @@ export class LocalInterviewTransportRuntime {
       sessions: this.sessions,
       reads: this.readService,
       orchestrator: this.orchestrator,
+      onSessionTerminal: (sessionId) => this.handleSessionTerminal(sessionId),
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })
     });
     this.rendererStreamServer = new RendererStreamServer({
@@ -274,6 +275,15 @@ export class LocalInterviewTransportRuntime {
       }
       throw error;
     }
+  }
+
+  private handleSessionTerminal(
+    sessionId: Parameters<VoiceSynthesisCoordinator["cancelSession"]>[0]
+  ): void {
+    const writer = this.sessions.getWriter(sessionId);
+    this.audioAssets.pruneUnauthorizedSessionAssets(sessionId, writer.getState());
+    void this.voiceInput?.cancelSession(sessionId).catch(() => undefined);
+    void this.voiceSynthesis?.cancelSession(sessionId).catch(() => undefined);
   }
 
   private scheduleVoiceDelivery(
