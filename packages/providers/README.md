@@ -68,13 +68,17 @@ execution is injected by the trusted server/local-runtime layer; provider config
 choose an executable path or arbitrary process environment.
 
 Antigravity authentication is deliberately outside provider/session state. The trusted runtime
-reuses the CLI's existing local authenticated account/session through the user's normal profile
-directories and does not inspect, copy, persist, or return those credentials.
+relies only on the CLI's documented OS-native keyring sign-in and does not inspect, copy, persist,
+or return those credentials. Each supervised turn receives a fresh temporary CLI profile rather
+than the user's normal `~/.gemini` profile. That profile pins strict tool review,
+non-workspace access off, terminal sandboxing on, AI-credit fallback off, telemetry off, and no
+user plugins/hooks/MCP/custom agents. The CLI self-updater is disabled for the supervised child.
 
 Antigravity remains a remote inference path even though the client process is local. Its model
 capabilities therefore declare both local process execution and remote execution, conservative
-remote data use, and unknown metered-execution status. The adapter's billing verification reports
-`spendImpossible: false`; invoking a subscription-backed CLI is not proof that paid overage is
+remote data use, and unknown metered-execution status. The isolated profile explicitly disables
+the CLI's AI-credit fallback, but the adapter still reports `spendImpossible: false`: this PR
+does not claim that a local client setting alone proves all account-side incremental billing is
 technically impossible. The server default policy consequently fails closed. Personal use
 requires the application-owned host opt-in
 `INTERVIEW_ALLOW_METERED_REMOTE_REASONING=1`, which permits the remote path without weakening
