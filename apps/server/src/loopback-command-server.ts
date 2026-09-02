@@ -772,6 +772,9 @@ function classifyError(error: unknown): ProtocolHttpError {
       : new ProtocolHttpError(409, "CONFLICT", "Quant Trading action conflicts with current scenario state");
   }
   if (error instanceof QuantResearchError) {
+    if (error.code === "INVALID_DEFINITION") {
+      return new ProtocolHttpError(500, "INTERNAL_ERROR", "Quant Research scenario initialization failed");
+    }
     return error.code === "INVALID_ACTION"
       ? new ProtocolHttpError(400, "INVALID_COMMAND", "Quant Research action is invalid")
       : new ProtocolHttpError(409, "CONFLICT", "Quant Research action conflicts with current scenario state");
