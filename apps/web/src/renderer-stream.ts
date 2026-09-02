@@ -12,6 +12,9 @@ import type { RendererAcknowledgementSender, RendererClient } from "./renderer-c
 
 type FetchLike = typeof fetch;
 
+const RENDERER_ACK_TIMEOUT_MS = 2_000;
+const MAX_RENDERER_ACK_RESPONSE_CHARS = 16 * 1024;
+
 export interface RendererStreamConsumerOptions {
   readonly streamUrl: string;
   readonly sessionId: string;
@@ -115,16 +118,26 @@ export function createLoopbackAcknowledgementSender(
   return {
     send: async (input: RendererAcknowledgementCommand): Promise<void> => {
       const command = RendererAcknowledgementCommandSchema.parse(input);
-      const response = await fetchImpl(options.commandUrl, {
+      const response = await fetchWithTimeout(fetchImpl, options.commandUrl, {
         method: "POST",
         headers: {
           "content-type": "application/json"
         },
         body: JSON.stringify(command)
-      });
+      }, RENDERER_ACK_TIMEOUT_MS);
 
       if (!response.ok) throw new Error("Renderer acknowledgement was not accepted");
-      const parsed = DeliveryAcknowledgedResponseSchema.parse(await response.json() as unknown);
+      const responseText = await response.text();
+      if (responseText.length > MAX_RENDERER_ACK_RESPONSE_CHARS) {
+        throw new Error("Renderer acknowledgement response exceeded its bound");
+      }
+      let responseJson: unknown;
+      try {
+        responseJson = JSON.parse(responseText) as unknown;
+      } catch {
+        throw new Error("Renderer acknowledgement response was not valid JSON");
+      }
+      const parsed = DeliveryAcknowledgedResponseSchema.parse(responseJson);
       const expectedAcknowledgement = command.type === "ACK_DELIVERY_EXPOSED" ? "EXPOSED" : "COMPLETED";
       if (
         parsed.requestId !== command.requestId
@@ -135,6 +148,30 @@ export function createLoopbackAcknowledgementSender(
       }
     }
   };
+}
+
+async function fetchWithTimeout(
+  fetchImpl: FetchLike,
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error("Renderer acknowledgement timed out"));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      fetchImpl(input, { ...init, signal: controller.signal }),
+      timeout
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 }
 
 async function handleSseBlock(block: string, renderer: RendererClient): Promise<void> {
