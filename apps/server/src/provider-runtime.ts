@@ -1,3 +1,4 @@
+import process from "node:process";
 import {
   DataUsePolicySchema,
   type InterviewerProposal,
@@ -6,6 +7,7 @@ import {
   type ReasoningProvider
 } from "../../../packages/domain/src/index.js";
 import {
+  ANTIGRAVITY_CLI_PROVIDER_ID,
   ProviderControlPlaneError,
   registerBuiltInProviders,
   resolveAdapterFactory,
@@ -14,6 +16,7 @@ import {
   type ProviderRegistry,
   type ProviderSecretResolver
 } from "../../../packages/providers/src/index.js";
+import { createApplicationProviderAdapterRuntimeSource } from "./antigravity-cli-runtime.js";
 
 const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 const RUNTIME_CONFIGURATION_KEYS = new Set([
@@ -110,13 +113,13 @@ export class ProviderRuntimeResolver {
       "RUNTIME_CONFIGURATION_FAILED"
     );
     this.adapterRuntimeOperation = captureRuntimeSourceOperation(
-      options.adapterRuntimeSource,
+      options.adapterRuntimeSource ?? createApplicationProviderAdapterRuntimeSource(),
       "resolveRuntime",
       "RUNTIME_DEPENDENCY_FAILED"
     );
     this.secretResolver = options.secretResolver;
     this.policyOperation = captureRuntimeSourceOperation(
-      options.policySource,
+      options.policySource ?? createApplicationProviderRuntimePolicySource(),
       "resolvePolicy",
       "POLICY_RESOLUTION_FAILED"
     );
@@ -157,9 +160,7 @@ export class ProviderRuntimeResolver {
     // adapter-specific runtime dependencies or credential material.
     let rawPolicy: unknown;
     try {
-      rawPolicy = this.policyOperation === undefined
-        ? DEFAULT_PROVIDER_RUNTIME_POLICY
-        : await invokeRuntimeSource(this.policyOperation, selection);
+      rawPolicy = await invokeRuntimeSource(this.policyOperation, selection);
     } catch {
       throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
     }
@@ -202,6 +203,26 @@ export class ProviderRuntimeResolver {
       policy
     });
   }
+}
+
+function createApplicationProviderRuntimePolicySource(): ProviderRuntimePolicySource {
+  const allowMeteredRemoteReasoning =
+    process.env["INTERVIEW_ALLOW_METERED_REMOTE_REASONING"] === "1";
+  const antigravityPolicy: ProviderPolicy = Object.freeze({
+    allowMeteredUsage: allowMeteredRemoteReasoning,
+    maximumDataUse: allowMeteredRemoteReasoning
+      ? "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT"
+      : "LOCAL_ONLY",
+    billingVerificationMaxAgeMs: 60_000
+  });
+
+  return Object.freeze({
+    resolvePolicy(selection: ProviderSelectionReference): ProviderPolicy {
+      return selection.providerId === ANTIGRAVITY_CLI_PROVIDER_ID
+        ? antigravityPolicy
+        : DEFAULT_PROVIDER_RUNTIME_POLICY;
+    }
+  });
 }
 
 function assertRuntimeResolutionActive(
