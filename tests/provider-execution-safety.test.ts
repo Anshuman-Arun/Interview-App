@@ -237,7 +237,8 @@ describe("provider execution admission", () => {
 
     Reflect.set(rawSession, "sendTurn", async function* () {
       replacementSendTurnCalls += 1;
-      throw new Error("replacement sendTurn must not execute");
+      await Promise.reject(new Error("replacement sendTurn must not execute"));
+      yield PROPOSAL;
     });
     Reflect.set(rawSession, "close", async () => {
       replacementCloseCalls += 1;
