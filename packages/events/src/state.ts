@@ -157,6 +157,7 @@ export interface EvidenceRecordState {
 export interface QuantTradingSessionState {
   readonly definition: QuantTradingScenarioDefinitionEvent;
   readonly pendingAction?: QuantTradingCandidateAction | undefined;
+  readonly actions: readonly QuantTradingCandidateAction[];
   readonly rounds: readonly QuantTradingRoundEvidenceEvent[];
   readonly result?: QuantTradingResultEvent | undefined;
 }
