@@ -755,6 +755,15 @@ describe("production quant runtime integration", () => {
     expect(tradingStillInitial.currentRound).toBe(1);
     expect(tradingStillInitial.actionRequired).toBe(true);
 
+    const researchReplay = projectSessionReplayReadModel(
+      projectSessionHistory(store.load(researchSession))
+    );
+    expect(
+      researchReplay.entries
+        .filter((entry) => entry.kind === "QUANT_RESEARCH_ACTION_ACCEPTED")
+        .every((entry) => entry.category === "STUDENT")
+    ).toBe(true);
+
     const terminalEventCount = store.eventCount(researchSession);
     await restart();
     expect(QuantResearchStateResponseSchema.parse(
