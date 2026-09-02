@@ -814,6 +814,20 @@ describe("production quant runtime integration", () => {
       }
     }), 409, "CONFLICT");
 
+    await expectProtocolError(post({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_RESEARCH_ACTION",
+      requestId: newRequestId(),
+      sessionId: researchSession,
+      expectedActionCount: first.acceptedActionCount,
+      action: {
+        actionId: "model-choice-1",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }
+    }), 409, "CONFLICT");
+    expect(store.eventCount(researchSession)).toBe(countAfterFirst);
+
     const terminalRequestId = newRequestId();
     const terminalCommand = {
       protocolVersion: 1 as const,
