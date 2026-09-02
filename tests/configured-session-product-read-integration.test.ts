@@ -237,6 +237,8 @@ describe("configured session product-read integration", () => {
         interventionPolicy: "STRICT"
       });
       await command.startConfiguredSession(sessionId, configuration);
+      const healthySessionId = newSessionId();
+      await command.startConfiguredSession(healthySessionId, configuration);
 
       const trading = new QuantTradingSessionCoordinator(server.registry.get(sessionId));
       await trading.applyAction(
@@ -266,9 +268,11 @@ describe("configured session product-read integration", () => {
         "UPDATE session_events SET event_json = ? WHERE session_id = ? AND sequence = ?"
       ).run(JSON.stringify(tampered), sessionId, roundRow.sequence);
 
-      await expect(command.listSessions()).rejects.toMatchObject({
-        status: 500,
-        code: "INTERNAL_ERROR"
+      const listed = await command.listSessions();
+      expect(listed.some((item) => item.sessionId === sessionId)).toBe(false);
+      expect(listed.find((item) => item.sessionId === healthySessionId)).toMatchObject({
+        sessionId: healthySessionId,
+        status: "ACTIVE"
       });
 
       const replay = await reads.getReplay(sessionId);
