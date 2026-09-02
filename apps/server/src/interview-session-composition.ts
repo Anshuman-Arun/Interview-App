@@ -10,7 +10,8 @@ import {
 import type { SessionState } from "../../../packages/events/src/index.js";
 import {
   createProviderContextSpecFingerprintSync,
-  replayQuantResearchSessionState
+  replayQuantResearchSessionState,
+  replayQuantTradingSessionState
 } from "../../../packages/interview-engine/src/index.js";
 import {
   QUANT_TRADER_SCENARIO_VERSION,
@@ -162,6 +163,9 @@ function assertPersistedCompositionMatchesState(
   configuredStream: boolean
 ): void {
   if (composition.mode === "OXFORD_MATHEMATICS") {
+    if (state.quantTrading !== undefined || state.quantResearch !== undefined) {
+      throw new Error("Quant state cannot be attached to an Oxford Mathematics session");
+    }
     const persistedProblem = state.problem;
     if (
       persistedProblem === undefined
@@ -185,6 +189,9 @@ function assertPersistedCompositionMatchesState(
   }
 
   if (composition.mode === "QUANT_RESEARCH") {
+    if (state.quantTrading !== undefined) {
+      throw new Error("Quant Trading state cannot be attached to a Quant Research session");
+    }
     const persistedResearch = state.quantResearch;
     if (persistedResearch === undefined) {
       if (state.problem !== undefined) {
@@ -210,6 +217,17 @@ function assertPersistedCompositionMatchesState(
   }
   if (state.problem !== undefined) {
     throw new Error("Oxford problem state cannot be attached to a Quant Trading session");
+  }
+  if (state.quantTrading !== undefined) {
+    if (
+      state.quantTrading.definition.family !== composition.configuration.scenario.id
+      || state.quantTrading.definition.version !== composition.configuration.scenario.version
+    ) {
+      throw new Error("Persisted Quant Trading identity does not match session configuration");
+    }
+    replayQuantTradingSessionState(state);
+  } else if (state.status === "COMPLETED") {
+    throw new Error("Completed Quant Trading session lacks authoritative scenario state");
   }
 }
 
