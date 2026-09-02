@@ -669,7 +669,7 @@ describe("Real tldraw mounted browser integration", () => {
           props: { geo: "rectangle", w: 20, h: 20 }
         }]);
       })
-    ).rejects.toThrow(/revision mirror.*Number\.MAX_SAFE_INTEGER/u);
+    ).rejects.toThrow(/BoardRevision mirror.*Number\.MAX_SAFE_INTEGER/u);
 
     expect(bridge.getShape(nativeId)).toBeUndefined();
     expect(adapter.getBoardRevision()).toBe(Number.MAX_SAFE_INTEGER);
