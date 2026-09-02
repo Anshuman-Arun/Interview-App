@@ -940,18 +940,18 @@ function acquireSharedWindowsSupervisorAssembly(
   let entry = SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key);
   if (entry === undefined) {
     const controller = new AbortController();
-    const created: WindowsSupervisorAssemblyEntry = {
-      promise: Promise.resolve(undefined as never),
-      controller,
-      consumers: 0,
-      settled: false
-    };
-    created.promise = compileWindowsSupervisorAssembly(
+    const promise = compileWindowsSupervisorAssembly(
       powershell,
       temporaryRoot,
       environment,
       controller.signal
     );
+    const created: WindowsSupervisorAssemblyEntry = {
+      promise,
+      controller,
+      consumers: 0,
+      settled: false
+    };
     entry = created;
     SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.set(key, entry);
     void created.promise.finally(() => {
