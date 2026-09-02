@@ -165,18 +165,43 @@ export class ProviderCoordinator {
     }
     if (this.cancellationRequested(record.generationId)) return this.finishCancellation(record);
 
-    let session: ProviderExecutionSession;
-    try {
-      session = await openProviderExecutionSession({
-        provider: input.provider,
-        policy: input.policy,
-        ...(input.now === undefined ? {} : { now: input.now })
+    const sessionOpening = openProviderExecutionSession({
+      provider: input.provider,
+      policy: input.policy,
+      ...(input.now === undefined ? {} : { now: input.now })
+    }).then(
+      (session) => ({ kind: "SESSION" as const, session }),
+      (error: unknown) => ({ kind: "ERROR" as const, error })
+    );
+
+    const admission = await Promise.race([
+      sessionOpening,
+      record.cancellationSignal.then(() => ({ kind: "CANCELLED" as const }))
+    ]);
+
+    if (admission.kind === "CANCELLED") {
+      // The provider may still finish creating a session later. Close it if it
+      // does, but never make authoritative cancellation wait for that cleanup.
+      void sessionOpening.then((late) => {
+        if (late.kind === "SESSION") {
+          void late.session.close().catch(() => undefined);
+        }
       });
-    } catch (error) {
-      if (this.cancellationRequested(record.generationId)) return this.finishCancellation(record);
-      await this.supersedeIfPossible(record.generationId, "Provider admission failed");
-      return failed(record.generationId, "PROVIDER_ADMISSION", safeProviderFailureCode(error));
+      return this.finishCancellation(record);
     }
+    if (admission.kind === "ERROR") {
+      if (this.cancellationRequested(record.generationId)) {
+        return this.finishCancellation(record);
+      }
+      await this.supersedeIfPossible(record.generationId, "Provider admission failed");
+      return failed(
+        record.generationId,
+        "PROVIDER_ADMISSION",
+        safeProviderFailureCode(admission.error)
+      );
+    }
+
+    const session = admission.session;
     record.session = session;
 
     let outcome: ProviderGenerationOutcome;
