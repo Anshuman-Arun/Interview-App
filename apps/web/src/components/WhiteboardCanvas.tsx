@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { getAssetUrlsByImport } from "@tldraw/assets/imports.vite";
 import { Tldraw, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import {
@@ -15,6 +16,8 @@ import type {
 } from "../whiteboard/normalized-board.js";
 import { useOptionalTheme } from "../theme/ThemeProvider.js";
 import styles from "./WhiteboardCanvas.module.css";
+
+const TLDRAW_ASSET_URLS = getAssetUrlsByImport();
 
 export interface WhiteboardCanvasProps {
   readonly adapter?: TldrawWhiteboardAdapter;
@@ -164,6 +167,7 @@ const WhiteboardCanvasComponent: React.FC<WhiteboardCanvasProps> = ({
       style={style}
     >
       <Tldraw
+        assetUrls={TLDRAW_ASSET_URLS}
         colorScheme={colorScheme}
         onMount={handleMount}
       />

@@ -121,6 +121,24 @@ describe("professional UI foundation invariants", () => {
     expect(whiteboardSource).toContain('import styles from "./WhiteboardCanvas.module.css"');
   });
 
+  it("bundles tldraw UI assets locally for Electron-safe toolbar rendering", () => {
+    const whiteboardSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),
+      "utf8"
+    );
+    const packageSource = fs.readFileSync(
+      path.resolve(process.cwd(), "package.json"),
+      "utf8"
+    );
+
+    expect(packageSource).toContain('"@tldraw/assets": "5.3.2"');
+    expect(whiteboardSource).toContain(
+      'from "@tldraw/assets/imports.vite"'
+    );
+    expect(whiteboardSource).toContain("getAssetUrlsByImport()");
+    expect(whiteboardSource).toContain("assetUrls={TLDRAW_ASSET_URLS}");
+  });
+
   it("isolates the native whiteboard surface from unrelated shell rerenders", () => {
     const whiteboardSource = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),
