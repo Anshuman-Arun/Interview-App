@@ -66,12 +66,14 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
     this.pendingResolutions.set(input.deliveryId, controller);
 
     let resolved: ResolvedAudioSource | undefined;
+    let releaseResolved: (() => void) | undefined;
     try {
       const resolver = this.options.resolveAudioSource;
       resolved = resolver === undefined
         ? { source: input.audioRef }
         : await resolver(input.audioRef, input.deliveryId, controller.signal);
       validateResolvedSource(resolved);
+      releaseResolved = createReleaseOnce(resolved);
 
       if (
         controller.signal.aborted
@@ -79,7 +81,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
         || epoch !== this.resolutionEpoch
         || this.pendingResolutions.get(input.deliveryId) !== controller
       ) {
-        safelyRelease(resolved);
+        releaseResolved?.();
         throw new RendererPresentationNotExposedError(
           "Audio delivery was cancelled before physical playback admission"
         );
@@ -105,7 +107,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
           }
         });
       } catch (error) {
-        safelyRelease(resolved);
+        releaseResolved?.();
         if (isDefinitelyNotEnqueued(error)) {
           throw new RendererPresentationNotExposedError(
             "Audio playback was rejected before queue admission",
@@ -119,15 +121,15 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
         }
       }
 
-      const ownedResolved = resolved;
+      const releaseOwnedSource = releaseResolved;
       void handle.result.then(
         () => {
           this.options.onSpeakingChanged?.(false);
-          safelyRelease(ownedResolved);
+          releaseOwnedSource?.();
         },
         () => {
           this.options.onSpeakingChanged?.(false);
-          safelyRelease(ownedResolved);
+          releaseOwnedSource?.();
         }
       );
 
@@ -144,7 +146,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
         this.pendingResolutions.delete(input.deliveryId);
       }
       if (resolved !== undefined && controller.signal.aborted) {
-        safelyRelease(resolved);
+        releaseResolved?.();
       }
       if (error instanceof RendererPresentationNotExposedError) throw error;
       if (controller.signal.aborted) {
@@ -231,13 +233,18 @@ function normalizeOutputDeviceId(deviceId: string | undefined): string | undefin
   return deviceId;
 }
 
-function safelyRelease(resolved: ResolvedAudioSource): void {
-  try {
-    resolved.release?.();
-  } catch {
-    // Object URL/resource release is best-effort and must not rewrite physical
-    // exposure acknowledgement state.
-  }
+function createReleaseOnce(resolved: ResolvedAudioSource): () => void {
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    try {
+      resolved.release?.();
+    } catch {
+      // Object URL/resource release is best-effort and must not rewrite physical
+      // exposure acknowledgement state.
+    }
+  };
 }
 
 function isDefinitelyNotEnqueued(error: unknown): boolean {
