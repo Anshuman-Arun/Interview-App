@@ -327,6 +327,7 @@ export function useInterviewSession(
   const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
   const rendererLaunchEpochRef = useRef(0);
   const sessionTransitionEpochRef = useRef(0);
+  const sessionMutationAdmissionRef = useRef(false);
   const transportEpochRef = useRef(0);
   const sessionListRequestEpochRef = useRef(0);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
@@ -438,6 +439,7 @@ export function useInterviewSession(
     transportEpochRef.current += 1;
     sessionListRequestEpochRef.current += 1;
     sessionTransitionEpochRef.current += 1;
+    sessionMutationAdmissionRef.current = false;
     pendingSubmissionsRef.current.clear();
     resetBoardSync();
     setAvailableSessions([]);
@@ -805,6 +807,7 @@ export function useInterviewSession(
   const beginSessionTransition = useCallback(async (): Promise<number> => {
     const transitionEpoch = sessionTransitionEpochRef.current + 1;
     sessionTransitionEpochRef.current = transitionEpoch;
+    sessionMutationAdmissionRef.current = false;
 
     // Session replacement is an authority boundary, not merely a React state
     // change. Revoke the old renderer synchronously and begin bounded
@@ -865,6 +868,7 @@ export function useInterviewSession(
           });
         }
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        sessionMutationAdmissionRef.current = true;
         launchRendererStream(targetSessionId);
       } catch (err) {
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
@@ -924,8 +928,10 @@ export function useInterviewSession(
         }
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         if (response.status === "ACTIVE") {
+          sessionMutationAdmissionRef.current = true;
           launchRendererStream(targetSessionId);
         } else {
+          sessionMutationAdmissionRef.current = false;
           stopRendererTransport();
         }
       } catch (err) {
@@ -959,7 +965,11 @@ export function useInterviewSession(
   const submitWhiteboardMutation = useCallback(async (
     change: NormalizedStudentShapeChange
   ): Promise<void> => {
-    if (sessionId === null || sessionStatus !== "ACTIVE") return;
+    if (
+      sessionId === null
+      || sessionStatus !== "ACTIVE"
+      || !sessionMutationAdmissionRef.current
+    ) return;
     const coordinator = getBoardSyncCoordinator(sessionId);
     const scheduler = getVisionScheduler(sessionId);
     if (coordinator.snapshot().status === "UNINITIALIZED") {
@@ -993,6 +1003,7 @@ export function useInterviewSession(
     async (summary?: string): Promise<void> => {
       if (sessionId === null || sessionStatus !== "ACTIVE") return;
       sessionTransitionEpochRef.current += 1;
+      sessionMutationAdmissionRef.current = false;
       setError(null);
       try {
         const client = getCommandClient();
@@ -1002,6 +1013,7 @@ export function useInterviewSession(
         stopRendererTransport();
         setSessionStatus("COMPLETED");
       } catch (err) {
+        sessionMutationAdmissionRef.current = true;
         const msg = err instanceof Error ? err.message : "Failed to complete session";
         setError(msg);
         throw err;
@@ -1021,6 +1033,7 @@ export function useInterviewSession(
     async (reason?: string): Promise<void> => {
       if (sessionId === null || sessionStatus !== "ACTIVE") return;
       sessionTransitionEpochRef.current += 1;
+      sessionMutationAdmissionRef.current = false;
       setError(null);
       try {
         const client = getCommandClient();
@@ -1030,6 +1043,7 @@ export function useInterviewSession(
         stopRendererTransport();
         setSessionStatus("ARCHIVED");
       } catch (err) {
+        sessionMutationAdmissionRef.current = true;
         const msg = err instanceof Error ? err.message : "Failed to archive session";
         setError(msg);
         throw err;
@@ -1047,7 +1061,11 @@ export function useInterviewSession(
 
   const submitTypedInput = useCallback(
     async (text: string): Promise<void> => {
-      if (sessionId === null || sessionStatus !== "ACTIVE") {
+      if (
+        sessionId === null
+        || sessionStatus !== "ACTIVE"
+        || !sessionMutationAdmissionRef.current
+      ) {
         throw new Error("Cannot submit input without an active session");
       }
 
@@ -1109,7 +1127,11 @@ export function useInterviewSession(
 
   const retrySubmission = useCallback(
     async (itemId: string): Promise<void> => {
-      if (sessionId === null || sessionStatus !== "ACTIVE") return;
+      if (
+        sessionId === null
+        || sessionStatus !== "ACTIVE"
+        || !sessionMutationAdmissionRef.current
+      ) return;
       const record = pendingSubmissionsRef.current.get(itemId);
       if (record === undefined) return;
       if (record.sessionId !== sessionId) {
@@ -1176,6 +1198,7 @@ export function useInterviewSession(
 
   const disconnect = useCallback((): void => {
     sessionTransitionEpochRef.current += 1;
+    sessionMutationAdmissionRef.current = false;
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
   }, [stopRendererTransport, voiceIntegration.voiceControls]);
@@ -1187,6 +1210,7 @@ export function useInterviewSession(
   useEffect(() => {
     return () => {
       sessionTransitionEpochRef.current += 1;
+      sessionMutationAdmissionRef.current = false;
       rendererLaunchEpochRef.current += 1;
       rendererRestartRef.current = null;
       if (abortControllerRef.current !== null) {
