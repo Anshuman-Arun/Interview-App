@@ -1,17 +1,19 @@
 import { randomBytes } from "node:crypto";
-import { constants as fsConstants } from "node:fs";
 import {
-  copyFile,
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readdir,
   rm,
   statfs
 } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { verifyArtifactFile } from "../../../../packages/model-assets/src/index.js";
+import {
+  copyLocalArtifactBounded,
+  verifyArtifactFile
+} from "../../../../packages/model-assets/src/index.js";
 import type { ModelAssetManager } from "../../../../packages/model-assets/src/index.js";
 import type { DesktopRuntimeAsset } from "./model-assets.js";
 
@@ -83,7 +85,20 @@ export async function materializeRuntimeAssetView(input: {
       const source = await input.manager.getInstalledPath(asset.manifest, input.signal);
       const destination = resolveWithinRoot(root, asset.runtimeRelativePath);
       await mkdir(path.dirname(destination), { recursive: true });
-      await copyFile(source, destination, fsConstants.COPYFILE_EXCL);
+      if (abortRequested(input.signal)) throw abortError();
+      const destinationHandle = await open(destination, "wx", 0o600);
+      try {
+        await copyLocalArtifactBounded(
+          source,
+          destinationHandle,
+          asset.manifest.sizeBytes,
+          asset.manifest.sizeBytes,
+          input.signal ?? new AbortController().signal
+        );
+      } finally {
+        await destinationHandle.close().catch(() => undefined);
+      }
+      if (abortRequested(input.signal)) throw abortError();
       const verification = await verifyArtifactFile(destination, {
         sizeBytes: asset.manifest.sizeBytes,
         sha256: asset.manifest.sha256,
