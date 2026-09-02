@@ -28,6 +28,9 @@ const VOICE_AUDIO_PREFIX = "/v1/voice/audio/";
 const MAX_CONTROL_BYTES = 4 * 1024;
 const MAX_FRAME_BYTES = Math.ceil(48_000 * (MAX_SPEECH_FRAME_DURATION_MS / 1_000)) * 4;
 const DEFAULT_MAX_FRAME_REQUESTS = 8;
+const VOICE_HTTP_REQUEST_TIMEOUT_MS = 5_000;
+const VOICE_HTTP_HEADERS_TIMEOUT_MS = 5_000;
+const VOICE_HTTP_KEEP_ALIVE_TIMEOUT_MS = 5_000;
 const MAX_REQUEST_BODY_CHUNKS = 128;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
@@ -106,6 +109,12 @@ export class VoiceTransportServer {
     this.server = createServer((request, response) => {
       void this.handle(request, response);
     });
+    // These deadlines bound only receipt of the local HTTP request and idle
+    // keep-alive sockets. VAD/STT execution begins after the bounded body is
+    // admitted and remains governed by the speech worker's own timeouts.
+    this.server.requestTimeout = VOICE_HTTP_REQUEST_TIMEOUT_MS;
+    this.server.headersTimeout = VOICE_HTTP_HEADERS_TIMEOUT_MS;
+    this.server.keepAliveTimeout = VOICE_HTTP_KEEP_ALIVE_TIMEOUT_MS;
   }
 
   public async start(): Promise<BoundVoiceTransportAddress> {
