@@ -210,6 +210,9 @@ describe("configured session product-read integration", () => {
       const history = await reads.getHistory();
       expect(history.sessions.find((item) => item.sessionId === sessionId)?.evaluation)
         .toBeUndefined();
+      expect(history.longitudinal.includedSessionCount).toBe(0);
+      expect(history.longitudinal.problemsAttempted).toBe(0);
+      expect(history.longitudinal.evaluationStatistics).toEqual([]);
     } finally {
       if (server !== undefined) await server.stop();
     }
