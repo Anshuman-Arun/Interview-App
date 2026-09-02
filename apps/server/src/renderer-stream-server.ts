@@ -301,7 +301,7 @@ export class RendererStreamServer {
       return { outcome: "MESSAGE_TOO_LARGE", deliveryId, status: atom.status };
     }
 
-    if (connection.response.destroyed || connection.response.writableEnded) {
+    if (rendererConnectionClosed(connection.response)) {
       this.removeConnection(connection);
       return { outcome: "NO_CLIENT", deliveryId };
     }
@@ -347,7 +347,7 @@ export class RendererStreamServer {
           status: beforePhysicalWrite.status
         };
       }
-      if (connection.response.destroyed || connection.response.writableEnded) {
+      if (rendererConnectionClosed(connection.response)) {
         this.removeConnection(connection);
         return { outcome: "NO_CLIENT", deliveryId };
       }
@@ -712,6 +712,10 @@ function sendJsonError(
   }
   response.writeHead(error.status, headers);
   response.end(json);
+}
+
+function rendererConnectionClosed(response: ServerResponse): boolean {
+  return response.destroyed || response.writableEnded;
 }
 
 function safelyCheckAudioAsset(
