@@ -21,6 +21,14 @@ export const TTS_WORKER_MODEL_IDENTITY =
 
 const MOONSHINE_ASSET_REPOSITORY =
   "https://huggingface.co/moonshine-ai/moonshine-voice-assets";
+const MOONSHINE_LICENSE = Object.freeze({
+  name: "MIT",
+  url: "https://github.com/moonshine-ai/moonshine/blob/main/LICENSE"
+});
+const KOKORO_LICENSE = Object.freeze({
+  name: "Apache-2.0",
+  url: "https://huggingface.co/hexgrad/Kokoro-82M"
+});
 
 function moonshineAsset(input: {
   readonly group: DesktopVoiceAssetGroup;
@@ -47,6 +55,7 @@ function moonshineAsset(input: {
       sha256: input.sha256,
       sourceUrl: `https://download.moonshine.ai/${input.sourcePath}`,
       modelVersion: input.modelVersion,
+      license: input.familyId === "kokoro-en" ? KOKORO_LICENSE : MOONSHINE_LICENSE,
       sourceMetadata: {
         publisher: "Moonshine AI",
         repository: MOONSHINE_ASSET_REPOSITORY,
