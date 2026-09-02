@@ -90,6 +90,32 @@ function isProcessAlive(pid: number): boolean {
 }
 
 describe("supervised one-shot process execution", () => {
+  it.runIf(process.platform === "win32")(
+    "does not let one runner drain cancel another runner's shared helper setup",
+    async () => {
+      const first = runner();
+      const second = runner();
+
+      const firstExecution = first.execute(request([FIXTURE, "hang"], {
+        timeoutMs: WINDOWS_TREE_TEST_TIMEOUT_MS
+      }));
+      const secondExecution = second.execute(request([FIXTURE, "echo"], {
+        stdin: "independent-runner"
+      }));
+
+      const firstDrain = first.drain();
+      await expect(firstExecution).rejects.toMatchObject({
+        code: "EXECUTION_CANCELLED"
+      });
+      await expect(firstDrain).resolves.toBeUndefined();
+      await expect(secondExecution).resolves.toMatchObject({
+        exitCode: 0,
+        stdout: "independent-runner"
+      });
+      await expect(second.drain()).resolves.toBeUndefined();
+    }
+  );
+
   it("passes bounded stdin literally and returns bounded UTF-8 stdout", async () => {
     const runtime = runner();
     const result = await runtime.execute(request([FIXTURE, "echo"], {
