@@ -78,7 +78,8 @@ export type ProviderRuntimeResolutionErrorCode =
   | "RUNTIME_CONFIGURATION_FAILED"
   | "RUNTIME_DEPENDENCY_FAILED"
   | "POLICY_RESOLUTION_FAILED"
-  | "MOCK_PROPOSAL_REQUIRED";
+  | "MOCK_PROPOSAL_REQUIRED"
+  | "RUNTIME_RESOLUTION_CANCELLED";
 
 export class ProviderRuntimeResolutionError extends Error {
   public constructor(public readonly code: ProviderRuntimeResolutionErrorCode) {
@@ -124,7 +125,9 @@ export class ProviderRuntimeResolver {
   public async resolve(input: {
     readonly selection?: ProviderSelectionReference;
     readonly mockProposal?: InterviewerProposal;
+    readonly cancellationRequested?: () => boolean;
   }): Promise<ProviderRuntimeResolution> {
+    assertRuntimeResolutionActive(input.cancellationRequested);
     const selection = snapshotProviderSelection(input.selection);
 
     let runtimeConfiguration: unknown;
@@ -137,6 +140,7 @@ export class ProviderRuntimeResolver {
       throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
     }
 
+    assertRuntimeResolutionActive(input.cancellationRequested);
     const configuration = composeProviderConfiguration(selection, runtimeConfiguration);
     let resolved: ReturnType<typeof resolveProviderConfiguration>;
     try {
@@ -159,6 +163,7 @@ export class ProviderRuntimeResolver {
     } catch {
       throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
     }
+    assertRuntimeResolutionActive(input.cancellationRequested);
     const policy = snapshotProviderPolicy(rawPolicy);
 
     let runtime: unknown;
@@ -175,6 +180,8 @@ export class ProviderRuntimeResolver {
       }
     }
 
+    assertRuntimeResolutionActive(input.cancellationRequested);
+
     let provider: ReasoningProvider;
     try {
       const factory = resolveAdapterFactory(resolved);
@@ -187,12 +194,28 @@ export class ProviderRuntimeResolver {
       throw controlPlaneResolutionError(error);
     }
 
+    assertRuntimeResolutionActive(input.cancellationRequested);
     return Object.freeze({
       providerId: resolved.provider.id,
       modelId: resolved.model.id,
       provider,
       policy
     });
+  }
+}
+
+function assertRuntimeResolutionActive(
+  cancellationRequested: (() => boolean) | undefined
+): void {
+  if (cancellationRequested === undefined) return;
+  let cancelled: boolean;
+  try {
+    cancelled = cancellationRequested();
+  } catch {
+    throw new ProviderRuntimeResolutionError("RUNTIME_RESOLUTION_CANCELLED");
+  }
+  if (cancelled) {
+    throw new ProviderRuntimeResolutionError("RUNTIME_RESOLUTION_CANCELLED");
   }
 }
 
@@ -432,6 +455,8 @@ function providerRuntimeResolutionErrorMessage(
       return "Provider runtime policy could not be resolved";
     case "MOCK_PROPOSAL_REQUIRED":
       return "Mock provider execution requires an application-owned proposal";
+    case "RUNTIME_RESOLUTION_CANCELLED":
+      return "Provider runtime resolution was cancelled";
     default:
       return "Provider runtime resolution failed";
   }
