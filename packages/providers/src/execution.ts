@@ -17,6 +17,9 @@ import { assertProviderPermitted, preflightProviderPolicy } from "./policy.js";
 import { snapshotValidatedModelCapabilities } from "./runtime-capabilities.js";
 
 const REFLECT_APPLY_INTRINSIC = Reflect.apply;
+const MAX_PROVIDER_OUTPUT_DEPTH = 32;
+const MAX_PROVIDER_OUTPUT_NODES = 10_000;
+const MAX_PROVIDER_OUTPUT_TEXT_CHARACTERS = 1_000_000;
 
 export type ProviderExecutionErrorCode =
   | "INVALID_PROVIDER_IDENTITY"
@@ -301,8 +304,18 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
       } catch {
         rawResult = { semantics: "NONE" };
       }
-      const parsed = ProviderCancellationResultSchema.safeParse(rawResult);
-      if (!parsed.success) throw new ProviderExecutionError("INVALID_CANCELLATION_RESULT");
+      let cancellationSnapshot: unknown;
+      try {
+        cancellationSnapshot = snapshotUntrustedProviderData(rawResult);
+      } catch {
+        throw new ProviderExecutionError("INVALID_CANCELLATION_RESULT");
+      }
+      const parsed = ProviderCancellationResultSchema.safeParse(
+        cancellationSnapshot
+      );
+      if (!parsed.success) {
+        throw new ProviderExecutionError("INVALID_CANCELLATION_RESULT");
+      }
       adapterResult = parsed.data;
       if (!cancellationResultAllowed(this.capabilities.cancellation, adapterResult.semantics)) {
         throw new ProviderExecutionError("CANCELLATION_OVERCLAIMED");
@@ -344,8 +357,16 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
       );
       for await (const candidate of stream) {
         if (this.cancelled.has(input.generationId) || this.closed) return;
-        const parsed = InterviewerProposalSchema.safeParse(candidate);
-        if (!parsed.success) throw new ProviderExecutionError("INVALID_PROVIDER_OUTPUT");
+        let candidateSnapshot: unknown;
+        try {
+          candidateSnapshot = snapshotUntrustedProviderData(candidate);
+        } catch {
+          throw new ProviderExecutionError("INVALID_PROVIDER_OUTPUT");
+        }
+        const parsed = InterviewerProposalSchema.safeParse(candidateSnapshot);
+        if (!parsed.success) {
+          throw new ProviderExecutionError("INVALID_PROVIDER_OUTPUT");
+        }
         yield parsed.data;
       }
     } catch (error) {
@@ -353,6 +374,130 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
       throw new ProviderExecutionError("PROVIDER_STREAM_FAILED");
     }
   }
+}
+
+function snapshotUntrustedProviderData(value: unknown): unknown {
+  const seen = new WeakSet<object>();
+  const budget = { nodes: 0, textCharacters: 0 };
+
+  const visit = (candidate: unknown, depth: number): unknown => {
+    if (depth > MAX_PROVIDER_OUTPUT_DEPTH) {
+      throw new Error("Provider output depth exceeded");
+    }
+    budget.nodes += 1;
+    if (budget.nodes > MAX_PROVIDER_OUTPUT_NODES) {
+      throw new Error("Provider output node budget exceeded");
+    }
+
+    if (candidate === null) return null;
+    if (typeof candidate === "boolean") return candidate;
+    if (typeof candidate === "number") {
+      if (!Number.isFinite(candidate)) {
+        throw new Error("Provider output number is non-finite");
+      }
+      return candidate;
+    }
+    if (typeof candidate === "string") {
+      budget.textCharacters += candidate.length;
+      if (budget.textCharacters > MAX_PROVIDER_OUTPUT_TEXT_CHARACTERS) {
+        throw new Error("Provider output text budget exceeded");
+      }
+      return candidate;
+    }
+    if (
+      typeof candidate !== "object"
+      || utilTypes.isProxy(candidate)
+      || seen.has(candidate)
+    ) {
+      throw new Error("Provider output is not plain bounded data");
+    }
+
+    seen.add(candidate);
+    try {
+      let prototype: object | null;
+      let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+      let symbols: readonly symbol[];
+      try {
+        const rawPrototype: unknown = Object.getPrototypeOf(candidate);
+        if (rawPrototype !== null && typeof rawPrototype !== "object") {
+          throw new Error("Invalid prototype");
+        }
+        prototype = rawPrototype;
+        descriptors = Object.getOwnPropertyDescriptors(candidate);
+        symbols = Object.getOwnPropertySymbols(candidate);
+      } catch {
+        throw new Error("Provider output inspection failed");
+      }
+      if (symbols.length !== 0) {
+        throw new Error("Provider output symbols are forbidden");
+      }
+
+      if (Array.isArray(candidate)) {
+        if (prototype !== Array.prototype) {
+          throw new Error("Provider output array prototype is invalid");
+        }
+        const length = Object.getOwnPropertyDescriptor(
+          candidate,
+          "length"
+        )?.value as unknown;
+        if (
+          typeof length !== "number"
+          || !Number.isSafeInteger(length)
+          || length < 0
+          || length > MAX_PROVIDER_OUTPUT_NODES
+        ) {
+          throw new Error("Provider output array length is invalid");
+        }
+        const output: unknown[] = [];
+        const allowed = new Set<string>(["length"]);
+        for (let index = 0; index < length; index += 1) {
+          const key = String(index);
+          allowed.add(key);
+          const descriptor = descriptors[key];
+          if (
+            descriptor === undefined
+            || descriptor.enumerable !== true
+            || !("value" in descriptor)
+          ) {
+            throw new Error("Provider output arrays must be dense data");
+          }
+          output.push(visit(descriptor.value, depth + 1));
+        }
+        if (Object.keys(descriptors).some((key) => !allowed.has(key))) {
+          throw new Error("Provider output array has side properties");
+        }
+        return output;
+      }
+
+      if (prototype !== Object.prototype && prototype !== null) {
+        throw new Error("Provider output object prototype is invalid");
+      }
+      const output: Record<string, unknown> =
+        Object.create(null) as Record<string, unknown>;
+      for (const [key, descriptor] of Object.entries(descriptors)) {
+        if (
+          descriptor.enumerable !== true
+          || !("value" in descriptor)
+          || descriptor.value === undefined
+          || key === "__proto__"
+          || key === "prototype"
+          || key === "constructor"
+        ) {
+          throw new Error("Provider output object is not plain data");
+        }
+        budget.textCharacters += key.length;
+        if (budget.textCharacters > MAX_PROVIDER_OUTPUT_TEXT_CHARACTERS) {
+          throw new Error("Provider output text budget exceeded");
+        }
+        output[key] = visit(descriptor.value, depth + 1);
+      }
+      return output;
+    } finally {
+      seen.delete(candidate);
+    }
+  };
+
+  return visit(value, 0);
 }
 
 function parseProviderIdentity(value: unknown): string {
