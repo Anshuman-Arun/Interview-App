@@ -5,6 +5,8 @@ import {
   type DeliveryId,
   type SessionId
 } from "../packages/domain/src/index.js";
+import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
+import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   DeterministicFakeRecognizer,
   DeterministicFakeSpeechSynthesizer,
@@ -15,6 +17,8 @@ import {
   type VadBackend
 } from "../packages/local-compute/src/index.js";
 import {
+  ClosedWorldDisclosureAnalyzer,
+  DisclosureValidator,
   TurnCoordinator
 } from "../packages/interview-engine/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
@@ -35,6 +39,7 @@ import {
   createLoopbackAcknowledgementSender
 } from "../apps/web/src/renderer-stream.js";
 import { createAndStartServer } from "../apps/server/src/server.js";
+import { authorizeSafeProbe } from "./harness.js";
 
 const TEST_CLIENT_TOKEN = "voice_e2e_test_token_minimum_32_characters_001";
 const TEST_ORIGIN = "http://127.0.0.1:5173";
@@ -87,6 +92,29 @@ class ControlledAudioElement implements BrowserAudioElementLike {
 
   public emit(type: "playing" | "ended" | "error"): void {
     for (const listener of [...(this.listeners.get(type) ?? [])]) listener();
+  }
+}
+
+class BlockingFakeSpeechSynthesizer extends DeterministicFakeSpeechSynthesizer {
+  private releaseGate!: () => void;
+  private signalStarted!: () => void;
+  private readonly gate = new Promise<void>((resolve) => {
+    this.releaseGate = resolve;
+  });
+  public readonly started = new Promise<void>((resolve) => {
+    this.signalStarted = resolve;
+  });
+
+  public override async synthesize(
+    request: Parameters<DeterministicFakeSpeechSynthesizer["synthesize"]>[0]
+  ) {
+    this.signalStarted();
+    await this.gate;
+    return super.synthesize(request);
+  }
+
+  public release(): void {
+    this.releaseGate();
   }
 }
 
@@ -327,6 +355,77 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(finalState.turns[committedTurnId]?.studentText)
       .toBe("I would first isolate the symmetric case.");
     expect(presentedTexts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("rejects late TTS output even when no cancellation reaches the synthesizer", async () => {
+    const synthesizer = new BlockingFakeSpeechSynthesizer();
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker: new SpeechWorkerCore({
+          vadBackend: new ScriptedVadBackend([0]),
+          recognizer: new DeterministicFakeRecognizer()
+        }),
+        tts: {
+          worker: new TtsWorkerCore(synthesizer),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const sessionId = newSessionId();
+    const writer = server.registry.get(sessionId);
+    const turns = new TurnCoordinator(writer);
+    await turns.startSession(sixPeopleProblem);
+    const { inputEpisodeId, turnId } = await turns.commitInput(
+      "I have a claim, but I have not justified it yet."
+    );
+    await turns.selectAction(turnId, sixPeopleProblem);
+    const { generationId } = await turns.startGeneration(
+      inputEpisodeId,
+      turnId,
+      "blocking-tts-test"
+    );
+    const safeProbe = "Why must that step be true?";
+    const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([safeProbe]));
+    const source = await authorizeSafeProbe({
+      store: server.store,
+      sessionId,
+      writer,
+      turns,
+      inputEpisodeId,
+      turnId,
+      generationId,
+      safeProbe,
+      validator
+    });
+    await new DeliveryCoordinator(writer).markStarted(source.deliveryId);
+
+    const synthesis = server.runtime.voiceSynthesis;
+    if (synthesis === undefined) throw new Error("Expected voice synthesis coordinator");
+    const pendingSynthesis = synthesis.synthesizeSentTextDelivery(sessionId, source.deliveryId);
+    await synthesizer.started;
+
+    await turns.beginUtterance();
+    expect(writer.getState().generations[generationId]?.status).toBe("SUPERSEDED");
+
+    // Deliberately do not call synthesis.cancelSession(). The underlying TTS
+    // finishes as though cancellation were ignored/unavailable.
+    synthesizer.release();
+    await expect(pendingSynthesis).resolves.toBeUndefined();
+    expect(Object.values(writer.getState().deliveries).filter(
+      (delivery) => delivery.content.medium === "AUDIO"
+    )).toHaveLength(0);
+    expect(server.runtime.audioAssets.inspect()).toEqual({ count: 0, bytes: 0 });
   });
 
   it("cancels an in-flight speech stream when the PCM transport is dropped", async () => {
