@@ -22,6 +22,7 @@ const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneErro
 
 const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
 const GEMINI_RUNTIME_KEYS = new Set(["fetchImpl", "billingVerificationFactory"]);
+const MAX_BUILT_IN_CREDENTIAL_LENGTH = 4_096;
 const PROPOSAL_KEYS = Object.freeze([
   "realizedAction",
   "claimedDisclosureLevel",
@@ -44,6 +45,7 @@ const BOARD_ACTION_KEY_SET = new Set<string>(BOARD_ACTION_KEYS);
 const SET_HAS_INTRINSIC = Set.prototype.has;
 const SET_ADD_INTRINSIC = Set.prototype.add;
 const STRING_TRIM_INTRINSIC = String.prototype.trim;
+const STRING_CHAR_CODE_AT_INTRINSIC = String.prototype.charCodeAt;
 /* eslint-enable @typescript-eslint/unbound-method */
 
 function setHas<T>(set: ReadonlySet<T>, value: T): boolean {
@@ -55,13 +57,44 @@ function setAdd<T>(set: Set<T>, value: T): void {
   REFLECT_APPLY_INTRINSIC(SET_ADD_INTRINSIC, set, [value]);
 }
 
-function trimBuiltInCredential(value: string): string {
+function normalizeBuiltInCredential(value: string): string {
   const result: unknown = REFLECT_APPLY_INTRINSIC(STRING_TRIM_INTRINSIC, value, []);
   if (typeof result !== "string") {
     throw new ProviderControlPlaneError(
       "CREDENTIAL_RESOLUTION_FAILED",
       "Provider credential normalization failed"
     );
+  }
+  if (result.length === 0) {
+    throw new ProviderControlPlaneError(
+      "CREDENTIALS_REQUIRED",
+      "Provider credential could not be resolved"
+    );
+  }
+  if (result.length > MAX_BUILT_IN_CREDENTIAL_LENGTH) {
+    throw new ProviderControlPlaneError(
+      "CREDENTIAL_RESOLUTION_FAILED",
+      "Provider credential value is malformed"
+    );
+  }
+  for (let index = 0; index < result.length; index += 1) {
+    const code: unknown = REFLECT_APPLY_INTRINSIC(
+      STRING_CHAR_CODE_AT_INTRINSIC,
+      result,
+      [index]
+    );
+    if (
+      typeof code !== "number"
+      || code <= 0x1f
+      || (code >= 0x7f && code <= 0x9f)
+      || code === 0x2028
+      || code === 0x2029
+    ) {
+      throw new ProviderControlPlaneError(
+        "CREDENTIAL_RESOLUTION_FAILED",
+        "Provider credential value is malformed"
+      );
+    }
   }
   return result;
 }
@@ -340,15 +373,10 @@ const geminiFactory: ProviderAdapterFactoryDefinition = {
         "Gemini API credential resolver returned an invalid value"
       );
     }
-    if (trimBuiltInCredential(resolvedSecret).length === 0) {
-      throw new ProviderControlPlaneError(
-        "CREDENTIALS_REQUIRED",
-        "Gemini API credential could not be resolved"
-      );
-    }
+    const normalizedSecret = normalizeBuiltInCredential(resolvedSecret);
 
     return new GeminiApiAdapter({
-      apiKey: resolvedSecret,
+      apiKey: normalizedSecret,
       model: input.resolved.model.adapterModelId ?? input.resolved.model.id,
       ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
       ...(runtime.billingVerificationFactory === undefined
