@@ -480,6 +480,30 @@ describe("Antigravity CLI one-turn protocol", () => {
     await lyingSession.close();
   });
 
+  it("rejects a terminal response that contradicts structured_output", async () => {
+    const lines = antigravityStream().trim().split("\n");
+    const terminal = JSON.parse(lines[lines.length - 1] ?? "{}") as {
+      result?: { response?: string };
+    };
+    if (terminal.result === undefined) {
+      throw new Error("test terminal result is missing");
+    }
+    terminal.result.response = JSON.stringify({
+      ...PROPOSAL,
+      speechText: "contradictory response"
+    });
+    lines[lines.length - 1] = JSON.stringify(terminal);
+
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => executionResult(lines.join("\n") + "\n"))
+    );
+    const session = await provider.createSession();
+    await expect(collectProposals(
+      session.sendTurn(turnInput({ safe: true }))
+    )).rejects.toMatchObject({ code: "INVALID_PROTOCOL" });
+    await session.close();
+  });
+
   it("does not surface stdout, stderr, or executor exception credentials in adapter errors", async () => {
     const secret = "SENSITIVE_EXECUTOR_SENTINEL";
     const provider = createAntigravityCliReasoningProvider(
