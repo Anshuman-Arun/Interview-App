@@ -422,6 +422,90 @@ describe("browser authoritative board synchronization", () => {
     expect(sync.currentAuthoritativeRevision()).toBe(BoardRevisionSchema.parse(1));
   });
 
+  it("never bootstraps a mounted canvas into an empty session without explicit session-scoped authorization", async () => {
+    const sessionId = newSessionId();
+    let commits = 0;
+    const client: SyncClient = {
+      getBoardState: async () =>
+        boardStateResponse(sessionId, BoardRevisionSchema.parse(0), []),
+      commitBoardMutation: async (_targetSessionId, _mutation, options) => {
+        commits += 1;
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_MUTATION_COMMITTED",
+          requestId: options?.requestId ?? newRequestId(),
+          sessionId,
+          committed: true,
+          boardRevision: BoardRevisionSchema.parse(1)
+        };
+      }
+    };
+    const local = [shape("shape:foreign-session", 1, 10)];
+    const sync = new AuthoritativeBoardSyncCoordinator(client);
+
+    const refused = await sync.synchronize(sessionId, local);
+    expect(refused.status).toBe("UNSYNCHRONIZED");
+    expect(commits).toBe(0);
+
+    sync.reset();
+    const authorized = await sync.synchronize(
+      sessionId,
+      local,
+      { allowBootstrapIntoEmptyAuthority: true }
+    );
+    expect(authorized).toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: BoardRevisionSchema.parse(1)
+    });
+    expect(commits).toBe(1);
+  });
+
+  it("recovers only the missing suffix of an explicitly authorized partial bootstrap", async () => {
+    const sessionId = newSessionId();
+    const committedMutations: Parameters<SyncClient["commitBoardMutation"]>[1][] = [];
+    const client: SyncClient = {
+      getBoardState: async () =>
+        boardStateResponse(
+          sessionId,
+          BoardRevisionSchema.parse(1),
+          [{ shapeId: "shape:first-bootstrap", revision: 1 }]
+        ),
+      commitBoardMutation: async (_targetSessionId, mutation, options) => {
+        committedMutations.push(mutation);
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_MUTATION_COMMITTED",
+          requestId: options?.requestId ?? newRequestId(),
+          sessionId,
+          committed: true,
+          boardRevision: BoardRevisionSchema.parse(2)
+        };
+      }
+    };
+    const sync = new AuthoritativeBoardSyncCoordinator(client);
+    const snapshot = await sync.synchronize(
+      sessionId,
+      [
+        shape("shape:first-bootstrap", 1, 10),
+        shape("shape:missing-bootstrap", 1, 200)
+      ],
+      { allowBootstrapIntoEmptyAuthority: true }
+    );
+
+    expect(snapshot).toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: BoardRevisionSchema.parse(2),
+      pendingMutationCount: 0
+    });
+    expect(committedMutations).toHaveLength(1);
+    expect(committedMutations[0]).toMatchObject({
+      baseBoardRevision: BoardRevisionSchema.parse(1),
+      added: [{ id: "shape:missing-bootstrap", revision: 1 }]
+    });
+  });
+
   it("fails closed on reconnect when local shape revisions do not match authority", async () => {
     const sessionId = newSessionId();
     const client: SyncClient = {
