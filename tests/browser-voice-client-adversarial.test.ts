@@ -231,10 +231,12 @@ describe("browser voice client adversarial boundaries", () => {
   it("carries only a max-duration trigger frame proven outside the finalized audio basis", async () => {
     let frameRequest = 0;
     const streamId = "speech_stream_max_duration_carry";
-    const authenticatedFetch: typeof fetch = async (input) => {
+    const authenticatedFetch: typeof fetch = async (input, init = {}) => {
       if (!requestUrl(input).endsWith("/v1/voice/frames")) {
         throw new Error("Unexpected browser voice carry test request");
       }
+      const requestId = new Headers(init.headers).get("x-speech-request-id");
+      if (requestId === null) throw new Error("Expected exact speech request identity");
       frameRequest += 1;
       const body = frameRequest === 1
         ? {
@@ -251,7 +253,7 @@ describe("browser voice client adversarial boundaries", () => {
             events: [{
               protocolVersion: 1,
               type: "UTTERANCE_FINALIZED",
-              requestId: "request_max_duration",
+              requestId,
               streamId,
               utteranceId: "utterance_max_duration",
               finalizationReason: "MAX_DURATION",
