@@ -8,7 +8,10 @@ import { StudentInputArea } from "./components/StudentInputArea.js";
 import { VoiceControls } from "./components/VoiceControls.js";
 import { WhiteboardCanvas } from "./components/WhiteboardCanvas.js";
 import { TldrawWhiteboardAdapter } from "./tldraw-whiteboard-adapter.js";
-import { useInterviewSession } from "./hooks/useInterviewSession.js";
+import {
+  TerminalSessionOutcomeUnknownError,
+  useInterviewSession
+} from "./hooks/useInterviewSession.js";
 import type { SessionHistoryReadResponse } from "../../../packages/replay/src/index.js";
 import { isSessionIdAddressableForRead } from "./session-read-client.js";
 import { ProductPageRouter } from "./navigation/ProductPageRouter.js";
@@ -113,8 +116,10 @@ export const App: React.FC = () => {
         sessionId: targetSessionId,
         view: "evaluation"
       });
-    } catch {
-      whiteboardAdapter.setReadOnly(false);
+    } catch (error) {
+      if (!(error instanceof TerminalSessionOutcomeUnknownError)) {
+        whiteboardAdapter.setReadOnly(false);
+      }
       // Error handled in session.error
     } finally {
       sessionTerminalPendingRef.current = false;
@@ -140,8 +145,10 @@ export const App: React.FC = () => {
         sessionId: targetSessionId,
         view: "evaluation"
       });
-    } catch {
-      whiteboardAdapter.setReadOnly(false);
+    } catch (error) {
+      if (!(error instanceof TerminalSessionOutcomeUnknownError)) {
+        whiteboardAdapter.setReadOnly(false);
+      }
       // Error handled in session.error
     } finally {
       sessionTerminalPendingRef.current = false;
