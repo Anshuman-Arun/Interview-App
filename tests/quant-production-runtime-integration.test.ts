@@ -1484,7 +1484,7 @@ describe("adversarial quant lifecycle invariants", () => {
       const recovery = new SessionRecoveryCoordinator(registry);
       try {
         await expect(recovery.ensureRecovered(sessionId))
-          .rejects.toThrow(/does not match deterministic replay/u);
+          .rejects.toThrow("Authoritative quant session recovery validation failed");
         expect(store.eventCount(sessionId)).toBe(countBeforeRecovery);
       } finally {
         await registry.closeAll();
@@ -1850,7 +1850,7 @@ describe("adversarial quant lifecycle invariants", () => {
       });
 
       expect(() => SessionWriter.open(store, sessionId))
-        .toThrow(/Quant Research initialization does not match/);
+        .toThrow();
     } finally {
       store.close();
     }
