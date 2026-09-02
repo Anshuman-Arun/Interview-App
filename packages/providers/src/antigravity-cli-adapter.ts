@@ -17,6 +17,13 @@ export const ANTIGRAVITY_CLI_ADAPTER_VERSION = "1.0.0";
 
 const MAX_CONTEXT_BYTES = 96 * 1024;
 const MAX_SCHEMA_BYTES = 64 * 1024;
+const MAX_SPEECH_CHARACTERS = 12_000;
+const MAX_DISCLOSURE_IDS = 128;
+const MAX_DISCLOSURE_ID_CHARACTERS = 256;
+const MAX_BOARD_ACTIONS = 64;
+const MAX_BOARD_CONTENT_CHARACTERS = 8_000;
+const MAX_BOARD_TARGET_ID_CHARACTERS = 256;
+const MAX_ANNOTATION_PURPOSE_CHARACTERS = 2_000;
 const MAX_JSON_DEPTH = 32;
 const MAX_JSON_NODES = 10_000;
 const MAX_JSON_TEXT_CHARACTERS = 128 * 1024;
@@ -67,14 +74,21 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
     },
     claimedDisclosureIds: {
       type: "array",
-      items: { type: "string", minLength: 1 }
+      maxItems: MAX_DISCLOSURE_IDS,
+      items: {
+        type: "string",
+        minLength: 1,
+        maxLength: MAX_DISCLOSURE_ID_CHARACTERS
+      }
     },
     speechText: {
       type: "string",
-      minLength: 1
+      minLength: 1,
+      maxLength: MAX_SPEECH_CHARACTERS
     },
     boardActions: {
       type: "array",
+      maxItems: MAX_BOARD_ACTIONS,
       items: {
         type: "object",
         additionalProperties: false,
@@ -87,15 +101,23 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
             type: "string",
             enum: ["AI_ANNOTATION"]
           },
-          content: { type: "string" },
-          targetShapeId: { type: "string", minLength: 1 },
+          content: {
+            type: "string",
+            maxLength: MAX_BOARD_CONTENT_CHARACTERS
+          },
+          targetShapeId: {
+            type: "string",
+            minLength: 1,
+            maxLength: MAX_BOARD_TARGET_ID_CHARACTERS
+          },
           expectedShapeRevision: {
             type: "integer",
             minimum: 1
           },
           annotationPurpose: {
             type: "string",
-            minLength: 1
+            minLength: 1,
+            maxLength: MAX_ANNOTATION_PURPOSE_CHARACTERS
           }
         },
         required: ["operation", "layer", "annotationPurpose"]
@@ -424,7 +446,10 @@ function parseAntigravityStream(
       const parsedProposal = InterviewerProposalSchema.safeParse(
         result.data.result.structured_output
       );
-      if (!parsedProposal.success) {
+      if (
+        !parsedProposal.success
+        || !antigravityProposalWithinBounds(parsedProposal.data)
+      ) {
         throw new AntigravityCliAdapterError("INVALID_PROPOSAL");
       }
       proposal = parsedProposal.data;
@@ -439,6 +464,42 @@ function parseAntigravityStream(
     throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
   }
   return proposal;
+}
+
+function antigravityProposalWithinBounds(
+  proposal: InterviewerProposal
+): boolean {
+  if (
+    proposal.speechText !== undefined
+    && proposal.speechText.length > MAX_SPEECH_CHARACTERS
+  ) {
+    return false;
+  }
+  if (proposal.claimedDisclosureIds.length > MAX_DISCLOSURE_IDS) return false;
+  for (const disclosureId of proposal.claimedDisclosureIds) {
+    if (disclosureId.length > MAX_DISCLOSURE_ID_CHARACTERS) return false;
+  }
+
+  const boardActions = proposal.boardActions ?? [];
+  if (boardActions.length > MAX_BOARD_ACTIONS) return false;
+  for (const action of boardActions) {
+    if (
+      action.content !== undefined
+      && action.content.length > MAX_BOARD_CONTENT_CHARACTERS
+    ) {
+      return false;
+    }
+    if (
+      action.targetShapeId !== undefined
+      && action.targetShapeId.length > MAX_BOARD_TARGET_ID_CHARACTERS
+    ) {
+      return false;
+    }
+    if (action.annotationPurpose.length > MAX_ANNOTATION_PURPOSE_CHARACTERS) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function schemaMatchesProposalContract(value: unknown): boolean {
