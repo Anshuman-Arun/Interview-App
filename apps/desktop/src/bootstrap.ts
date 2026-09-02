@@ -3,12 +3,15 @@ export const DESKTOP_ZOOM_CHANNEL = "interview-desktop:set-zoom";
 export const DESKTOP_ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 export const DESKTOP_AUTH_HEADER_VALUE = "desktop-managed-v1";
 
-export const DESKTOP_ZOOM_FACTORS = [0.875, 1, 1.125, 1.25] as const;
-export type DesktopZoomFactor = typeof DESKTOP_ZOOM_FACTORS[number];
+export const DESKTOP_MIN_ZOOM_FACTOR = 0.25;
+export const DESKTOP_MAX_ZOOM_FACTOR = 3;
+export type DesktopZoomFactor = number;
 
 export function isDesktopZoomFactor(value: unknown): value is DesktopZoomFactor {
   return typeof value === "number"
-    && DESKTOP_ZOOM_FACTORS.some((factor) => factor === value);
+    && Number.isFinite(value)
+    && value >= DESKTOP_MIN_ZOOM_FACTOR
+    && value <= DESKTOP_MAX_ZOOM_FACTOR;
 }
 
 export interface DesktopRendererBootstrap {
