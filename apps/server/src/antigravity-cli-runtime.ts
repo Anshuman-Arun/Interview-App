@@ -20,10 +20,42 @@ const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
   useG1Credits: false,
   enableTelemetry: false,
   notifications: false,
-  showFeedbackSurvey: false
+  showFeedbackSurvey: false,
+  permissions: {
+    allow: [],
+    ask: [],
+    deny: [
+      "read_file(*)",
+      "write_file(*)",
+      "read_url(*)",
+      "execute_url(*)",
+      "command(*)",
+      "unsandboxed(*)",
+      "mcp(*)"
+    ]
+  }
 });
 const ANTIGRAVITY_SAFE_SETTINGS_JSON =
   JSON.stringify(ANTIGRAVITY_SAFE_SETTINGS) + "\n";
+const ANTIGRAVITY_REALIZER_AGENT = `---
+name: interview-realizer
+description: Stateless interviewer proposal realization engine.
+tools: []
+mainAgent: true
+subagent: false
+commandExecutionPolicy: "off"
+mcpServers: []
+skills: []
+plugins: []
+---
+
+# System Prompt
+
+You are a fallible, stateless interviewer-response realization engine.
+Use only the user message supplied for the current turn.
+Return only the structured interviewer proposal requested by the caller.
+Do not use tools, files, commands, URLs, MCP, plugins, skills, subagents, or prior conversations.
+`;
 
 export interface ApplicationProviderAdapterRuntimeSource {
   readonly resolveRuntime: (
@@ -38,7 +70,8 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     environment: antigravityEnvironment(),
     isolatedWorkingDirectory: true,
     isolatedHomeFiles: {
-      ".gemini/antigravity-cli/settings.json": ANTIGRAVITY_SAFE_SETTINGS_JSON
+      ".gemini/antigravity-cli/settings.json": ANTIGRAVITY_SAFE_SETTINGS_JSON,
+      ".gemini/config/agents/interview-realizer/agent.md": ANTIGRAVITY_REALIZER_AGENT
     }
   }]);
 
