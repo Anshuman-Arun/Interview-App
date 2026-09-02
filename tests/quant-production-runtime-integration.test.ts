@@ -224,7 +224,7 @@ describe("production quant runtime integration", () => {
       sessionId,
       configuration as InterviewSessionConfiguration
     ), 404, "NOT_FOUND");
-    expect(registry.has(sessionId)).toBe(false);
+    expect(registry.hasSession(sessionId)).toBe(false);
     expect(store.eventCount(sessionId)).toBe(0);
   });
 
