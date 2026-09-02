@@ -226,6 +226,25 @@ describe("supervised one-shot process execution", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("rejects isolated-home traversal and Windows device-name path tricks", () => {
+    for (const relativePath of [
+      "../outside.txt",
+      "C:/outside.txt",
+      "CON/settings.txt",
+      "nested/COM1",
+      "nested\\outside.txt",
+      "trailing./settings.txt"
+    ]) {
+      expect(() => new SupervisedProcessRunner([{
+        id: "fixture",
+        executable: process.execPath,
+        isolatedHomeFiles: {
+          [relativePath]: "must-not-be-written"
+        }
+      }])).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    }
+  });
+
   it("recovers when a missing executable later appears, then pins its identity", async () => {
     const root = mkdtempSync(join(tmpdir(), "supervised-recovery-"));
     temporaryRoots.push(root);
