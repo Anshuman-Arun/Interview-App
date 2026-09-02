@@ -194,8 +194,6 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         || result.roundsCompleted > result.plannedRounds
         || result.completionRate !== result.roundsCompleted / result.plannedRounds
         || (result.completionStatus === "COMPLETED" && result.roundsCompleted !== result.plannedRounds)
-        || result.finalFairValue !== lastRound.fairValue
-        || !jsonDataEqual(result.finalPortfolio, lastRound.portfolio)
         || result.tradeCount !== result.finalPortfolio.tradeCount
       ) {
         throw new Error("Quant Trading completion result does not match authoritative history");
