@@ -40,8 +40,11 @@ explicit UTF-16 code-unit comparison rather than locale-sensitive collation.
 The package intentionally exposes three projection entrypoints:
 `projectReplayTimeline`, `projectSessionHistory`, and
 `projectLongitudinalHistory`, plus projection types, bounded configuration, and
-the sanitized `ReplayProjectionError`. Raw normalization/upcaster hooks and
-collection/text slicing helpers remain internal implementation details.
+the sanitized `ReplayProjectionError`. It also exposes the narrow
+`assertReplayPrefixValidForRecovery` admission seam used by server recovery to
+validate event provenance/transition semantics before recovery writes; this
+returns no replay projection or internal state. Raw normalization/upcaster hooks
+and collection/text slicing helpers remain internal implementation details.
 
 The current event-type catalog is compile-time exhaustive: all 46 current
 authoritative `EventType` values require an explicit timeline mapping and
