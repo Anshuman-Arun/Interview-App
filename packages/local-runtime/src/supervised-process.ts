@@ -71,7 +71,6 @@ export interface SupervisedProcessExecutionResult {
 
 export interface SupervisedProcessRunnerOptions {
   readonly parentEnvironment?: NodeJS.ProcessEnv;
-  readonly platform?: NodeJS.Platform;
 }
 
 interface ExecutableDefinitionSnapshot {
@@ -115,13 +114,17 @@ export class SupervisedProcessRunner {
     definitions: readonly SupervisedExecutableDefinition[],
     options: SupervisedProcessRunnerOptions = {}
   ) {
-    if (!Array.isArray(definitions) || definitions.length === 0 || definitions.length > MAX_EXECUTABLES) {
-      throw new SupervisedProcessError("INVALID_DEFINITION");
-    }
-    this.platform = options.platform ?? process.platform;
-    this.parentEnvironment = snapshotParentEnvironmentRecord(options.parentEnvironment ?? process.env);
-    for (const definition of definitions) {
-      const snapshot = snapshotExecutableDefinition(definition, this.platform);
+    const optionRecord = inspectPlainRecord(
+      options,
+      new Set(["parentEnvironment"]),
+      "INVALID_DEFINITION"
+    );
+    this.platform = process.platform;
+    this.parentEnvironment = snapshotParentEnvironmentRecord(
+      (optionRecord.parentEnvironment as NodeJS.ProcessEnv | undefined) ?? process.env
+    );
+    const snapshots = snapshotExecutableDefinitions(definitions, this.platform);
+    for (const snapshot of snapshots) {
       if (this.definitions.has(snapshot.id)) {
         throw new SupervisedProcessError("INVALID_DEFINITION");
       }
@@ -321,6 +324,63 @@ export class SupervisedProcessRunner {
   }
 }
 
+function snapshotExecutableDefinitions(
+  value: readonly SupervisedExecutableDefinition[],
+  platform: NodeJS.Platform
+): readonly ExecutableDefinitionSnapshot[] {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || !Array.isArray(value)
+  ) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+  } catch {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+  const rawLength = Object.getOwnPropertyDescriptor(value, "length")?.value as unknown;
+  if (
+    symbols.length !== 0
+    || typeof rawLength !== "number"
+    || !Number.isSafeInteger(rawLength)
+    || rawLength <= 0
+    || rawLength > MAX_EXECUTABLES
+  ) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+
+  const allowedKeys = new Set<string>(["length"]);
+  const output: ExecutableDefinitionSnapshot[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    const key = String(index);
+    allowedKeys.add(key);
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined
+      || descriptor.enumerable !== true
+      || !("value" in descriptor)
+    ) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+    output.push(snapshotExecutableDefinition(
+      descriptor.value as SupervisedExecutableDefinition,
+      platform
+    ));
+  }
+  for (const key of Object.keys(descriptors)) {
+    if (!allowedKeys.has(key)) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+  }
+  return Object.freeze(output);
+}
+
 function snapshotExecutableDefinition(
   input: SupervisedExecutableDefinition,
   platform: NodeJS.Platform
@@ -395,7 +455,15 @@ function snapshotExecutionRequest(input: SupervisedProcessExecutionRequest): {
     throw new SupervisedProcessError("INVALID_REQUEST");
   }
   const signal = record.signal;
-  if (signal !== undefined && !(signal instanceof AbortSignal)) {
+  if (
+    signal !== undefined
+    && (
+      typeof signal !== "object"
+      || signal === null
+      || utilTypes.isProxy(signal)
+      || !(signal instanceof AbortSignal)
+    )
+  ) {
     throw new SupervisedProcessError("INVALID_REQUEST");
   }
   const onProcessStart = record.onProcessStart;
@@ -635,15 +703,33 @@ async function terminateProcessTree(
   }
 
   if (platform === "win32") {
-    const graceful = await runTaskkill(pid, false, TREE_FORCE_MS);
-    if (graceful) return true;
-    return await runTaskkill(pid, true, TREE_FORCE_MS);
+    const gracefulRequested = await runTaskkill(pid, false, TREE_FORCE_MS);
+    if (
+      gracefulRequested
+      && await waitForChildExit(child, TREE_GRACE_MS)
+    ) {
+      return true;
+    }
+    const forced = await runTaskkill(pid, true, TREE_FORCE_MS);
+    return forced && await waitForChildExit(child, TREE_FORCE_MS);
   }
 
   signalPosixGroup(child, "SIGTERM");
   if (await waitForPosixGroupExit(pid, TREE_GRACE_MS)) return true;
   signalPosixGroup(child, "SIGKILL");
   return await waitForPosixGroupExit(pid, TREE_FORCE_MS);
+}
+
+async function waitForChildExit(
+  child: ChildProcessWithoutNullStreams,
+  timeoutMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(child)) return true;
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  }
+  return !isProcessAlive(child);
 }
 
 function signalPosixGroup(
