@@ -285,6 +285,7 @@ export class LocalInterviewTransportRuntime {
     sessionId: Parameters<VoiceSynthesisCoordinator["cancelSession"]>[0]
   ): void {
     const writer = this.sessions.getWriter(sessionId);
+    this.rendererStreamServer.closeSession(sessionId);
     this.audioAssets.pruneUnauthorizedSessionAssets(sessionId, writer.getState());
     void this.voiceInput?.cancelSession(sessionId).catch(() => undefined);
     void this.voiceSynthesis?.cancelSession(sessionId).catch(() => undefined);
