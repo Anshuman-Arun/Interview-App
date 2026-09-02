@@ -10,15 +10,15 @@
 export const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
 
-$configPath = $env:INTERVIEW_SUPERVISED_CONFIG
-if ([string]::IsNullOrWhiteSpace($configPath)) {
+$configJson = $env:INTERVIEW_SUPERVISED_CONFIG_JSON
+if ([string]::IsNullOrWhiteSpace($configJson)) {
   exit 191
 }
-Remove-Item Env:INTERVIEW_SUPERVISED_CONFIG -ErrorAction SilentlyContinue
+Remove-Item Env:INTERVIEW_SUPERVISED_CONFIG_JSON -ErrorAction SilentlyContinue
 Remove-Item Env:INTERVIEW_SUPERVISED_BOOTSTRAP -ErrorAction SilentlyContinue
 
-$config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
+$config = $configJson | ConvertFrom-Json
+$configJson = $null
 
 $source = @'
 using System;
