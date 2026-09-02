@@ -299,6 +299,11 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
 
 async function failStartup(message: string): Promise<void> {
   process.exitCode = 1;
+  if (process.argv.includes("--install-local-models")) {
+    console.error("Local model setup failed.");
+    app.quit();
+    return;
+  }
   if (!app.isReady()) {
     app.quit();
     return;
