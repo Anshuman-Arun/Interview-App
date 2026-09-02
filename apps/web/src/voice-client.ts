@@ -21,7 +21,7 @@ import type { AudioFrame } from "./audio/types.js";
 const MAX_VOICE_RESPONSE_BYTES = 512 * 1024;
 const MAX_VOICE_RESPONSE_CHUNKS = 256;
 const FAILED_OPEN_CANCEL_TIMEOUT_MS = 1_000;
-const MAX_WAV_ASSET_BYTES = TTS_LIMITS.maxPcmBytes + 44;
+const MAX_WAV_ASSET_BYTES = Math.floor(TTS_LIMITS.maxPcmBytes / 2) + 44;
 const MAX_WAV_ASSET_CHUNKS = 4_096;
 const TARGET_SPEECH_SAMPLE_RATE = 48_000 as const;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
