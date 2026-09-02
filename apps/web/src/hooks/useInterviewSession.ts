@@ -828,6 +828,10 @@ export function useInterviewSession(
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
 
       try {
+        if (sessionId !== null && sessionId !== targetSessionId) {
+          options.whiteboardAdapter?.resetForNewSession();
+          resetBoardSync();
+        }
         const client = getCommandClient();
         await client.startSession(targetSessionId);
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
