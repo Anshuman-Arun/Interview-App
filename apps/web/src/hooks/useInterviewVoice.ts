@@ -170,8 +170,14 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
       interruptPlaybackForBargeIn: optionsRef.current.interruptPlaybackForBargeIn,
       onVoiceCommit: optionsRef.current.onVoiceCommit
     });
+    const workerError = result.events.find((event) => event.type === "SPEECH_WORKER_ERROR");
+    if (workerError !== undefined) {
+      streamRef.current = null;
+      failVoiceCycle(workerError.message);
+      return;
+    }
     if (result.terminal) streamRef.current = null;
-  }, []);
+  }, [failVoiceCycle]);
 
   const drainFrames = useCallback(async (epoch: number): Promise<void> => {
     if (drainingRef.current) return;
