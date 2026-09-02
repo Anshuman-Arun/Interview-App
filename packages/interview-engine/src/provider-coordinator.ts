@@ -210,9 +210,10 @@ export class ProviderCoordinator {
     },
     context: unknown
   ): Promise<ProviderGenerationOutcome> {
-    let iterator: AsyncIterator<unknown> | undefined;
-    let nextOperation: (() => Promise<IteratorResult<unknown>>) | undefined;
-    let returnOperation: ((value?: unknown) => Promise<IteratorResult<unknown>>) | undefined;
+    let iterator: AsyncIterator<InterviewerProposal> | undefined;
+    let nextOperation: (() => Promise<IteratorResult<InterviewerProposal>>) | undefined;
+    let returnOperation:
+      ((value?: unknown) => Promise<IteratorResult<InterviewerProposal>>) | undefined;
 
     try {
       const stream = record.session?.sendTurn({
@@ -228,20 +229,20 @@ export class ProviderCoordinator {
       if (typeof iteratorCandidate !== "object" || iteratorCandidate === null) {
         throw new Error("Provider stream iterator is malformed");
       }
-      iterator = iteratorCandidate as AsyncIterator<unknown>;
+      iterator = iteratorCandidate;
 
       const rawNext: unknown = iterator.next;
       const rawReturn: unknown = iterator.return;
       if (typeof rawNext !== "function") {
         throw new Error("Provider stream iterator next operation is malformed");
       }
-      nextOperation = () => Reflect.apply(rawNext, iterator, []) as Promise<IteratorResult<unknown>>;
+      nextOperation = () => Reflect.apply(rawNext, iterator, []) as Promise<IteratorResult<InterviewerProposal>>;
       if (rawReturn !== undefined) {
         if (typeof rawReturn !== "function") {
           throw new Error("Provider stream iterator return operation is malformed");
         }
         returnOperation = (value?: unknown) =>
-          Reflect.apply(rawReturn, iterator, [value]) as Promise<IteratorResult<unknown>>;
+          Reflect.apply(rawReturn, iterator, [value]) as Promise<IteratorResult<InterviewerProposal>>;
       }
 
       while (true) {
@@ -353,7 +354,8 @@ export class ProviderCoordinator {
   }
 
   private requestIteratorReturn(
-    returnOperation: ((value?: unknown) => Promise<IteratorResult<unknown>>) | undefined
+    returnOperation:
+      ((value?: unknown) => Promise<IteratorResult<InterviewerProposal>>) | undefined
   ): void {
     if (returnOperation === undefined) return;
     try {
