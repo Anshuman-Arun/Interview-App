@@ -21,6 +21,7 @@ const MAX_RUNTIME_VIEW_DIRECTORY_ENTRIES = 1_024;
 const MAX_STALE_RUNTIME_VIEW_DELETIONS = 16;
 const RUNTIME_VIEW_OWNER_TOKEN = randomBytes(16).toString("hex");
 const RUNTIME_VIEW_NAME = /^run-([1-9][0-9]*)-([0-9a-f]{32})-/u;
+const ACTIVE_RUNTIME_VIEW_ROOTS = new Set<string>();
 
 export interface RuntimeAssetView {
   readonly root: string;
@@ -47,10 +48,10 @@ export async function cleanupStaleRuntimeAssetViews(baseRoot: string): Promise<v
       await rm(candidate, { force: true });
       continue;
     }
-    // The Electron application holds a single-instance lock for this app-data
-    // root. Protect only views created by this exact process instance; PID
-    // liveness alone is unsafe because operating systems reuse PIDs.
-    if (runtimeViewOwnedByCurrentProcess(entry.name)) continue;
+    // Protect only views this process still actively owns. A same-process
+    // token alone is insufficient: a failed materialization can leave an
+    // untracked partial directory that must be eligible for retry cleanup.
+    if (ACTIVE_RUNTIME_VIEW_ROOTS.has(path.resolve(candidate))) continue;
     if (deleted >= MAX_STALE_RUNTIME_VIEW_DELETIONS) continue;
     await rm(candidate, { recursive: true, force: true });
     deleted += 1;
@@ -80,8 +81,9 @@ export async function materializeRuntimeAssetView(input: {
     input.baseRoot,
     `run-${String(process.pid)}-${RUNTIME_VIEW_OWNER_TOKEN}-`
   ));
+  const resolvedRoot = path.resolve(root);
+  ACTIVE_RUNTIME_VIEW_ROOTS.add(resolvedRoot);
   const paths = new Map<string, string>();
-  let complete = false;
   try {
     for (const asset of input.assets) {
       if (abortRequested(input.signal)) throw abortError();
@@ -112,16 +114,28 @@ export async function materializeRuntimeAssetView(input: {
       }
       paths.set(asset.runtimeRelativePath, destination);
     }
-    complete = true;
     return Object.freeze({
       root,
       paths,
       dispose: async () => {
         await rm(root, { recursive: true, force: true });
+        ACTIVE_RUNTIME_VIEW_ROOTS.delete(resolvedRoot);
       }
     });
-  } finally {
-    if (!complete) await rm(root, { recursive: true, force: true }).catch(() => undefined);
+  } catch (error) {
+    // The caller never receives a RuntimeAssetView on failed materialization,
+    // so this root must no longer be protected as live even if immediate
+    // cleanup itself fails. A later stale-view sweep can retry it.
+    ACTIVE_RUNTIME_VIEW_ROOTS.delete(resolvedRoot);
+    try {
+      await rm(root, { recursive: true, force: true });
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Local runtime asset materialization and cleanup both failed"
+      );
+    }
+    throw error;
   }
 }
 
@@ -149,12 +163,6 @@ function resolveWithinRoot(root: string, relativePath: string): string {
     throw new Error("Runtime asset path escapes its managed root");
   }
   return resolved;
-}
-
-function runtimeViewOwnedByCurrentProcess(name: string): boolean {
-  const match = RUNTIME_VIEW_NAME.exec(name);
-  if (match?.[1] === undefined || match[2] === undefined) return false;
-  return Number(match[1]) === process.pid && match[2] === RUNTIME_VIEW_OWNER_TOKEN;
 }
 
 function abortRequested(signal: AbortSignal | undefined): boolean {
