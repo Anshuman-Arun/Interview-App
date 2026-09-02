@@ -350,6 +350,58 @@ describe("production provider runtime resolution", () => {
     });
   });
 
+  it("stops stale runtime resolution before credential access after cancellation", async () => {
+    let enteredResolve: (() => void) | undefined;
+    let releaseResolve: (() => void) | undefined;
+    const entered = new Promise<void>((resolve) => {
+      enteredResolve = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseResolve = resolve;
+    });
+    let cancelled = false;
+    let secretCalls = 0;
+
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        async resolveConfiguration() {
+          enteredResolve?.();
+          await release;
+          return {
+            credentialRef: {
+              id: "gemini-test-key",
+              purpose: "API_KEY" as const
+            }
+          };
+        }
+      },
+      secretResolver: {
+        async resolveSecret() {
+          secretCalls += 1;
+          return "runtime-only-secret-must-not-be-read";
+        }
+      },
+      policySource: {
+        resolvePolicy() {
+          return REMOTE_NO_METERED_POLICY;
+        }
+      }
+    });
+
+    const pending = resolver.resolve({
+      selection: GEMINI_SELECTION,
+      cancellationRequested: () => cancelled
+    });
+    await entered;
+    cancelled = true;
+    releaseResolve?.();
+
+    await expect(pending).rejects.toMatchObject({
+      code: "RUNTIME_RESOLUTION_CANCELLED"
+    });
+    expect(secretCalls).toBe(0);
+  });
+
   it("resolves and validates policy before adapter runtime or credential material", async () => {
     let adapterRuntimeCalls = 0;
     let secretCalls = 0;
