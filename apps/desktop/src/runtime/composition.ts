@@ -290,8 +290,14 @@ export class DesktopLocalRuntimeComposition {
     let speechFailed = false;
     try {
       await this.startSpeech(signal);
-    } catch {
+    } catch (error) {
       speechFailed = true;
+      if (this.speechStatus.reasonCode === "WORKER_CLEANUP_FAILED") {
+        throw new Error(
+          "Speech worker startup failed and its process tree could not be safely cleaned",
+          { cause: error }
+        );
+      }
       if (abortRequested(signal)) this.markPendingCapabilitiesCancelled();
     }
 
@@ -303,8 +309,14 @@ export class DesktopLocalRuntimeComposition {
     } else {
       try {
         await this.startTts(signal);
-      } catch {
+      } catch (error) {
         ttsFailed = true;
+        if (this.ttsStatus.reasonCode === "WORKER_CLEANUP_FAILED") {
+          throw new Error(
+            "TTS worker startup failed and its process tree could not be safely cleaned",
+            { cause: error }
+          );
+        }
       }
     }
 
@@ -347,12 +359,22 @@ export class DesktopLocalRuntimeComposition {
       this.speechStatus = cleaned
         ? unavailable("VOICE_RUNTIME_INCOMPLETE", SPEECH_WORKER_MODEL_IDENTITY)
         : failed("WORKER_CLEANUP_FAILED", SPEECH_WORKER_MODEL_IDENTITY);
+      if (!cleaned) {
+        throw new Error(
+          "Incomplete voice startup left the speech worker process tree unverified"
+        );
+      }
     }
     if (ttsReady) {
       const cleaned = await this.cleanupCapability("tts");
       this.ttsStatus = cleaned
         ? unavailable("VOICE_RUNTIME_INCOMPLETE", TTS_WORKER_MODEL_IDENTITY)
         : failed("WORKER_CLEANUP_FAILED", TTS_WORKER_MODEL_IDENTITY);
+      if (!cleaned) {
+        throw new Error(
+          "Incomplete voice startup left the TTS worker process tree unverified"
+        );
+      }
     }
   }
 
