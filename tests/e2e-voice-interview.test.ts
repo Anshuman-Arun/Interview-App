@@ -123,6 +123,51 @@ class DuplicateOnsetWorker extends SpeechWorkerCore {
   }
 }
 
+class OnsetThenTamperedFinalizationWorker extends SpeechWorkerCore {
+  public override async submitFrame(
+    envelopeInput: unknown,
+    payload: unknown,
+    heuristicsInput: unknown = {}
+  ): Promise<readonly SpeechWorkerEvent[]> {
+    void payload;
+    void heuristicsInput;
+    const envelope = SpeechPcmFrameEnvelopeSchema.parse(envelopeInput);
+    const utteranceId = newUtteranceId();
+    const durationMs = envelope.frameSamples / envelope.sampleRate * 1_000;
+    return [
+      {
+        protocolVersion: 1,
+        type: "SPEECH_STARTED",
+        requestId: envelope.requestId,
+        streamId: envelope.streamId,
+        utteranceId,
+        atTimestampMs: envelope.timestampMs
+      },
+      {
+        protocolVersion: 1,
+        type: "UTTERANCE_FINALIZED",
+        requestId: envelope.requestId,
+        streamId: envelope.streamId,
+        utteranceId,
+        finalizationReason: "MAX_DURATION",
+        speechFrameCount: 1,
+        durationMs,
+        sourceAudioBasis: {
+          streamId: envelope.streamId,
+          firstSequence: envelope.sequence,
+          lastSequence: envelope.sequence,
+          startTimestampMs: envelope.timestampMs,
+          endTimestampMs: envelope.timestampMs + durationMs,
+          sampleRate: envelope.sampleRate,
+          channels: 1,
+          sampleCount: envelope.frameSamples,
+          pcmSha256: "0".repeat(64)
+        }
+      }
+    ];
+  }
+}
+
 class TerminalThenStaleOnsetWorker extends SpeechWorkerCore {
   public override async submitFrame(
     envelopeInput: unknown,
@@ -781,6 +826,69 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.values(writer.getState().utterances)[0]?.status).toBe("CAPTURING");
 
     await speech.cancel();
+  });
+
+  it("still publishes an admitted onset when a later callback in the same batch is inconsistent", async () => {
+    const speechWorker = new OnsetThenTamperedFinalizationWorker({
+      vadBackend: new ScriptedVadBackend([0]),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const voiceClient = new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: fetchWithAuth
+    });
+    const speech = await voiceClient.openStream(sessionId);
+
+    const result = await speech.sendFrame(microphoneFrame(0.2));
+    expect(result.terminal).toBe(true);
+    expect(result.events.map((event) => event.type)).toEqual([
+      "SPEECH_STARTED",
+      "SPEECH_WORKER_ERROR"
+    ]);
+
+    let interrupted = 0;
+    applyAdmittedVoiceFrameResult(result, {
+      interruptPlaybackForBargeIn: () => {
+        interrupted += 1;
+      },
+      onVoiceCommit: () => undefined
+    });
+    expect(interrupted).toBe(1);
+
+    const state = server.registry.get(sessionId).getState();
+    expect(Object.keys(state.inputEpisodes)).toHaveLength(0);
+    expect(Object.keys(state.turns)).toHaveLength(0);
+    expect(Object.values(state.utterances).every(
+      (utterance) => utterance.status !== "CAPTURING"
+    )).toBe(true);
   });
 
   it("does not expose trailing worker onset events after a terminal event revoked the stream", async () => {
