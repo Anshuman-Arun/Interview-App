@@ -165,7 +165,6 @@ export interface ReplayQuantTradingDetail {
   readonly riskBreached?: boolean;
   readonly completionStatus?: "COMPLETED" | "RISK_STOPPED";
   readonly roundsCompleted?: number;
-  readonly objectiveScore?: number;
   readonly specializedValidationRequired: true;
 }
 
