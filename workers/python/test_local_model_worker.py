@@ -70,26 +70,44 @@ class _FakeTts:
 
 
 class ProductionWorkerUnitTests(unittest.TestCase):
-    def test_parent_stdin_eof_and_explicit_shutdown_both_stop_worker(self) -> None:
+    def test_parent_stdin_eof_before_server_creation_exits_worker_immediately(self) -> None:
+        exit_codes: list[int] = []
+        worker.monitor_parent_stdin(
+            {},
+            io.StringIO(""),
+            lambda code: exit_codes.append(code),
+        )
+        self.assertEqual(exit_codes, [0])
+
+    def test_parent_stdin_eof_and_explicit_shutdown_stop_existing_server(self) -> None:
         eof_server = _FakeServer()
-        worker.monitor_parent_stdin(eof_server, io.StringIO(""))
+        worker.monitor_parent_stdin(
+            {"server": eof_server},
+            io.StringIO(""),
+            lambda _code: self.fail("existing server must use graceful shutdown"),
+        )
         self.assertEqual(eof_server.shutdown_calls, 1)
 
         command_server = _FakeServer()
         worker.monitor_parent_stdin(
-            command_server,
+            {"server": command_server},
             io.StringIO("ignored\nshutdown\ntrailing\n"),
+            lambda _code: self.fail("existing server must use graceful shutdown"),
         )
         self.assertEqual(command_server.shutdown_calls, 1)
 
-    def test_parent_stdin_read_failure_still_stops_worker(self) -> None:
+    def test_parent_stdin_read_failure_still_stops_existing_server(self) -> None:
         class _FailingStream:
             def __iter__(self):
                 raise OSError("synthetic stdin failure")
 
         server = _FakeServer()
         with self.assertRaisesRegex(OSError, "synthetic stdin failure"):
-            worker.monitor_parent_stdin(server, _FailingStream())
+            worker.monitor_parent_stdin(
+                {"server": server},
+                _FailingStream(),
+                lambda _code: self.fail("existing server must use graceful shutdown"),
+            )
         self.assertEqual(server.shutdown_calls, 1)
 
     def test_worker_server_bounds_connection_slots(self) -> None:
