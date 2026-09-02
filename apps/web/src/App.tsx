@@ -74,7 +74,8 @@ export const App: React.FC = () => {
         (storedSession) => storedSession.status === "ACTIVE"
       );
       if (activeSessions.length > 1) {
-        setShowSessionsModal(true);
+        setShowSessionsModal(false);
+        navigate({ page: "sessions" });
         return;
       }
       const existingActive = activeSessions[0];
