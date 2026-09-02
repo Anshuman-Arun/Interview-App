@@ -432,6 +432,27 @@ describe("Antigravity CLI one-turn protocol", () => {
     }
   });
 
+  it("preserves a data-method executor receiver without exposing it to the provider", async () => {
+    const executor = {
+      prefix: "receiver:",
+      async execute(
+        this: { readonly prefix: string },
+        _request: SupervisedCliExecutionRequest
+      ): Promise<SupervisedCliExecutionResult> {
+        if (this.prefix !== "receiver:") {
+          throw new Error("receiver was lost");
+        }
+        return executionResult(antigravityStream());
+      }
+    };
+    const provider = createAntigravityCliReasoningProvider(executor);
+    const session = await provider.createSession();
+    await expect(collectProposals(
+      session.sendTurn(turnInput({ receiver: true }))
+    )).resolves.toEqual([PROPOSAL]);
+    await session.close();
+  });
+
   it("rejects accessor/proxy executor results and lying byte counters without invoking traps", async () => {
     let getterCalls = 0;
     const accessorResult = Object.defineProperty({
