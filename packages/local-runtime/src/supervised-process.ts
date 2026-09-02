@@ -433,18 +433,27 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("INVALID_REQUEST");
     }
 
-    const isolation = await createExecutionIsolation(
-      definition,
-      this.platform,
-      this.temporaryRoot
-    );
+    let isolation: ExecutionIsolation;
+    try {
+      isolation = await createExecutionIsolation(
+        definition,
+        this.platform,
+        this.temporaryRoot
+      );
+    } catch (error) {
+      if (isProcessTreeCleanupError(error)) {
+        this.quarantineExecutable(definition.id);
+      }
+      throw error;
+    }
+
     const expectedIdentity = this.pinnedIdentities.get(definition.id);
     if (expectedIdentity === undefined) {
-      await cleanupExecutionIsolation(isolation);
+      await this.cleanupIsolationOrQuarantine(definition.id, isolation);
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
     if (request.signal !== undefined && abortSignalAborted(request.signal)) {
-      await cleanupExecutionIsolation(isolation);
+      await this.cleanupIsolationOrQuarantine(definition.id, isolation);
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
@@ -467,18 +476,25 @@ export class SupervisedProcessRunner {
       }
     }
 
-    try {
-      await cleanupExecutionIsolation(isolation);
-    } catch {
-      this.quarantineExecutable(definition.id);
-      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
-    }
+    await this.cleanupIsolationOrQuarantine(definition.id, isolation);
 
     if (failed) throw failure;
     if (result === undefined) {
       throw new SupervisedProcessError("SPAWN_FAILED");
     }
     return result;
+  }
+
+  private async cleanupIsolationOrQuarantine(
+    executableId: string,
+    isolation: ExecutionIsolation
+  ): Promise<void> {
+    try {
+      await cleanupExecutionIsolation(isolation);
+    } catch {
+      this.quarantineExecutable(executableId);
+      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+    }
   }
 
   private async initializeWindowsExecutableIdentity(
@@ -1626,14 +1642,24 @@ async function cleanupExecutionIsolation(
   let failed = false;
   if (isolation.workingDirectory !== undefined) {
     try {
-      await rm(isolation.workingDirectory, { recursive: true, force: true });
+      await rm(isolation.workingDirectory, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 50
+      });
     } catch {
       failed = true;
     }
   }
   if (isolation.homeDirectory !== undefined) {
     try {
-      await rm(isolation.homeDirectory, { recursive: true, force: true });
+      await rm(isolation.homeDirectory, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 50
+      });
     } catch {
       failed = true;
     }
