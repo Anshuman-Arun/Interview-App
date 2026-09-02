@@ -5,6 +5,7 @@ import type {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 35_000;
 const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
+const MAX_JSON_RESPONSE_CHUNKS = 1_024;
 
 export class ManagedModelWorkerClient {
   public constructor(
@@ -147,31 +148,47 @@ async function readBoundedBody(response: Response, maximumBytes: number): Promis
     throw new Error("Managed worker response byte limit is invalid");
   }
   const declaredLength = response.headers.get("content-length");
+  let declaredBytes: number | undefined;
   if (declaredLength !== null) {
-    if (!/^(?:0|[1-9][0-9]*)$/u.test(declaredLength)
-        || Number(declaredLength) > maximumBytes) {
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(declaredLength)) {
+      response.body?.cancel().catch(() => undefined);
+      throw new Error("Managed local model worker response declared an invalid byte length");
+    }
+    const parsed = Number(declaredLength);
+    if (!Number.isSafeInteger(parsed) || parsed > maximumBytes) {
       response.body?.cancel().catch(() => undefined);
       throw new Error("Managed local model worker response exceeds its byte limit");
     }
+    declaredBytes = parsed;
   }
   const body = response.body;
-  if (body === null) return new Uint8Array();
+  if (body === null) {
+    if (declaredBytes !== undefined && declaredBytes !== 0) {
+      throw new Error("Managed local model worker response length did not match Content-Length");
+    }
+    return new Uint8Array();
+  }
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
+  let chunkCount = 0;
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      chunkCount += 1;
       total += value.byteLength;
-      if (total > maximumBytes) {
+      if (chunkCount > MAX_JSON_RESPONSE_CHUNKS || total > maximumBytes) {
         await reader.cancel().catch(() => undefined);
-        throw new Error("Managed local model worker response exceeds its byte limit");
+        throw new Error("Managed local model worker response exceeds its transport bound");
       }
       chunks.push(value);
     }
   } finally {
     reader.releaseLock();
+  }
+  if (declaredBytes !== undefined && total !== declaredBytes) {
+    throw new Error("Managed local model worker response length did not match Content-Length");
   }
   const output = new Uint8Array(total);
   let offset = 0;
