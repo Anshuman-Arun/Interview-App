@@ -2032,23 +2032,29 @@ function normalizeReportedHandshake(
   const rawWorkerType = dataDescriptorValue(descriptors, "workerType", fail);
   let workerType: string | undefined;
   if (rawWorkerType !== undefined) {
-    if (typeof rawWorkerType !== "string"
-        || rawWorkerType.length === 0
-        || rawWorkerType.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+    if (typeof rawWorkerType === "string") {
+      if (rawWorkerType.length === 0
+          || rawWorkerType.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+        fail("workerType must be a non-empty bounded string");
+      }
+      workerType = rawWorkerType;
+    } else {
       fail("workerType must be a non-empty bounded string");
     }
-    workerType = rawWorkerType;
   }
 
   const rawRuntimeVersion = dataDescriptorValue(descriptors, "runtimeVersion", fail);
   let runtimeVersion: string | undefined;
   if (rawRuntimeVersion !== undefined) {
-    if (typeof rawRuntimeVersion !== "string"
-        || rawRuntimeVersion.length === 0
-        || rawRuntimeVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+    if (typeof rawRuntimeVersion === "string") {
+      if (rawRuntimeVersion.length === 0
+          || rawRuntimeVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+        fail("runtimeVersion must be a non-empty bounded string");
+      }
+      runtimeVersion = rawRuntimeVersion;
+    } else {
       fail("runtimeVersion must be a non-empty bounded string");
     }
-    runtimeVersion = rawRuntimeVersion;
   }
 
   const rawModelVersionOrHash = dataDescriptorValue(descriptors, "modelVersionOrHash", fail);
