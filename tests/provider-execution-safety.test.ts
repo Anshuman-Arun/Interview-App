@@ -379,8 +379,7 @@ describe("provider execution admission", () => {
         throw new Error("must-not-run");
       }
     });
-    const provider = testProvider();
-    Object.setPrototypeOf(provider, providerPrototype);
+    const provider = Object.create(providerPrototype) as ReasoningProvider;
 
     await expect(openProviderExecutionSession({
       provider,
@@ -400,8 +399,7 @@ describe("provider execution admission", () => {
         throw new Error("must-not-run");
       }
     });
-    const rawSession = proposalSession();
-    Object.setPrototypeOf(rawSession, sessionPrototype);
+    const rawSession = Object.create(sessionPrototype) as ReasoningSession;
 
     await expect(openProviderExecutionSession({
       provider: testProvider({
