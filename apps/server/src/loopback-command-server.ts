@@ -56,6 +56,7 @@ export interface LoopbackCommandServerOptions {
   readonly reads?: SessionReadService;
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly whiteboardVision?: WhiteboardVisionCoordinator;
+  readonly onSessionTerminal?: (sessionId: SessionId) => void | Promise<void>;
   readonly port?: number;
 }
 
@@ -215,6 +216,17 @@ export class LoopbackCommandServer {
         ok: false,
         error: { code: protocolError.code, message: protocolError.message }
       }), this.allowedOrigin(origin) ? origin : undefined);
+    }
+  }
+
+  private scheduleSessionTerminalCleanup(sessionId: SessionId): void {
+    const cleanup = this.options.onSessionTerminal;
+    if (cleanup === undefined) return;
+    try {
+      void Promise.resolve(cleanup(sessionId)).catch(() => undefined);
+    } catch {
+      // Durable terminal authority has already committed. Cleanup is
+      // best-effort and must never rewrite that outcome.
     }
   }
 
@@ -390,6 +402,7 @@ export class LoopbackCommandServer {
       }
       case "COMPLETE_SESSION": {
         const completed = await new TurnCoordinator(writer).completeSession(envelope, command.summary);
+        this.scheduleSessionTerminalCleanup(command.sessionId);
         return {
           protocolVersion: 1,
           ok: true,
@@ -401,6 +414,7 @@ export class LoopbackCommandServer {
       }
       case "ARCHIVE_SESSION": {
         const archived = await new TurnCoordinator(writer).archiveSession(envelope, command.reason);
+        this.scheduleSessionTerminalCleanup(command.sessionId);
         return {
           protocolVersion: 1,
           ok: true,

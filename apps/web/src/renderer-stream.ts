@@ -12,11 +12,21 @@ import type { RendererAcknowledgementSender, RendererClient } from "./renderer-c
 
 type FetchLike = typeof fetch;
 
+const RENDERER_ACK_TIMEOUT_MS = 2_000;
+const MAX_RENDERER_ACK_RESPONSE_BYTES = 16 * 1024;
+const MAX_RENDERER_ACK_RESPONSE_CHUNKS = 256;
+
 export interface RendererStreamConsumerOptions {
   readonly streamUrl: string;
   readonly sessionId: string;
   readonly authenticatedFetch: FetchLike;
   readonly signal?: AbortSignal;
+}
+
+export class RendererStreamConnectionError extends Error {
+  public constructor(public readonly status: number) {
+    super(`Renderer stream connection failed with HTTP ${String(status)}`);
+  }
 }
 
 export interface LoopbackAcknowledgementSenderOptions {
@@ -29,6 +39,8 @@ export async function consumeAuthenticatedRendererStream(
   renderer: RendererClient
 ): Promise<void> {
   const fetchImpl = options.authenticatedFetch;
+  const streamUrl = exactLoopbackEndpoint(options.streamUrl, "/v1/renderer-stream", "Renderer stream");
+  const signal = options.signal;
   const attach = RendererStreamAttachRequestSchema.parse({
     protocolVersion: 1,
     type: "ATTACH_RENDERER_STREAM",
@@ -43,28 +55,29 @@ export async function consumeAuthenticatedRendererStream(
     },
     body: JSON.stringify(attach)
   };
-  if (options.signal !== undefined) requestInit.signal = options.signal;
+  if (signal !== undefined) requestInit.signal = signal;
 
   let response: Response;
   try {
-    response = await fetchImpl(options.streamUrl, requestInit);
+    response = await fetchImpl(streamUrl, requestInit);
   } catch (error) {
-    if (options.signal?.aborted === true) return;
+    if (isSignalAborted(signal)) return;
     throw error;
   }
 
-  if (!response.ok) throw new Error("Renderer stream connection failed");
+  if (!response.ok) throw new RendererStreamConnectionError(response.status);
   const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
   if (contentType !== "text/event-stream") throw new Error("Renderer stream returned an invalid content type");
   if (response.body === null) throw new Error("Renderer stream response has no body");
 
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   let buffer = "";
 
   try {
     for (;;) {
       const chunk = await reader.read();
+      if (isSignalAborted(signal)) return;
       if (chunk.done) break;
       buffer += decoder.decode(chunk.value, { stream: true });
       if (byteLength(buffer) > MAX_RENDERER_STREAM_MESSAGE_BYTES * 2) {
@@ -75,7 +88,9 @@ export async function consumeAuthenticatedRendererStream(
       while (boundary !== undefined) {
         const block = buffer.slice(0, boundary.index);
         buffer = buffer.slice(boundary.index + boundary.length);
+        if (isSignalAborted(signal)) return;
         if (block.length > 0) await handleSseBlock(block, renderer);
+        if (isSignalAborted(signal)) return;
         boundary = findEventBoundary(buffer);
       }
     }
@@ -85,7 +100,7 @@ export async function consumeAuthenticatedRendererStream(
       throw new Error("Renderer stream ended with an incomplete event");
     }
   } catch (error) {
-    if (options.signal?.aborted === true) return;
+    if (isSignalAborted(signal)) return;
     if (error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted") || error.message.includes("terminated"))) {
       return;
     }
@@ -108,20 +123,52 @@ export function createLoopbackAcknowledgementSender(
   options: LoopbackAcknowledgementSenderOptions
 ): RendererAcknowledgementSender {
   const fetchImpl = options.authenticatedFetch;
+  const commandUrl = exactLoopbackEndpoint(options.commandUrl, "/v1/commands", "Renderer acknowledgement");
 
   return {
     send: async (input: RendererAcknowledgementCommand): Promise<void> => {
       const command = RendererAcknowledgementCommandSchema.parse(input);
-      const response = await fetchImpl(options.commandUrl, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(command)
-      });
-
-      if (!response.ok) throw new Error("Renderer acknowledgement was not accepted");
-      const parsed = DeliveryAcknowledgedResponseSchema.parse(await response.json() as unknown);
+      const controller = new AbortController();
+      const timeoutState = { timedOut: false };
+      const timeoutId = globalThis.setTimeout(() => {
+        timeoutState.timedOut = true;
+        controller.abort();
+      }, RENDERER_ACK_TIMEOUT_MS);
+      let responseJson: unknown;
+      try {
+        const response = await fetchImpl(commandUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(command),
+          signal: controller.signal
+        });
+        if (!response.ok) throw new Error("Renderer acknowledgement was not accepted");
+        const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+        if (contentType !== "application/json") {
+          throw new Error("Renderer acknowledgement response had an invalid content type");
+        }
+        const responseText = await readBoundedUtf8Response(
+          response,
+          MAX_RENDERER_ACK_RESPONSE_BYTES,
+          MAX_RENDERER_ACK_RESPONSE_CHUNKS,
+          "Renderer acknowledgement response"
+        );
+        try {
+          responseJson = JSON.parse(responseText) as unknown;
+        } catch {
+          throw new Error("Renderer acknowledgement response was not valid JSON");
+        }
+      } catch (error) {
+        if (timeoutState.timedOut) {
+          throw new Error("Renderer acknowledgement timed out", { cause: error });
+        }
+        throw error;
+      } finally {
+        globalThis.clearTimeout(timeoutId);
+      }
+      const parsed = DeliveryAcknowledgedResponseSchema.parse(responseJson);
       const expectedAcknowledgement = command.type === "ACK_DELIVERY_EXPOSED" ? "EXPOSED" : "COMPLETED";
       if (
         parsed.requestId !== command.requestId
@@ -132,6 +179,66 @@ export function createLoopbackAcknowledgementSender(
       }
     }
   };
+}
+
+async function readBoundedUtf8Response(
+  response: Response,
+  maximumBytes: number,
+  maximumChunks: number,
+  label: string
+): Promise<string> {
+  const declared = response.headers.get("content-length");
+  let declaredBytes: number | undefined;
+  if (declared !== null) {
+    if (
+      declared.length === 0
+      || declared.length > 16
+      || !/^(?:0|[1-9][0-9]*)$/u.test(declared)
+    ) {
+      throw new Error(`${label} declared size is malformed`);
+    }
+    const parsed = Number(declared);
+    if (!Number.isSafeInteger(parsed) || parsed > maximumBytes) {
+      throw new Error(`${label} declared size exceeds its bound`);
+    }
+    declaredBytes = parsed;
+  }
+  if (response.body === null) throw new Error(`${label} has no body`);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let text = "";
+  let totalBytes = 0;
+  let chunks = 0;
+  try {
+    for (;;) {
+      const result = await reader.read();
+      if (result.done) break;
+      chunks += 1;
+      totalBytes += result.value.byteLength;
+      if (chunks > maximumChunks || totalBytes > maximumBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(`${label} exceeded its bound`);
+      }
+      text += decoder.decode(result.value, { stream: true });
+    }
+    text += decoder.decode();
+    if (declaredBytes !== undefined && totalBytes !== declaredBytes) {
+      throw new Error(`${label} body length does not match Content-Length`);
+    }
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`${label} was not valid UTF-8`, { cause: error });
+    }
+    throw error;
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Reader cleanup must not obscure the acknowledgement result.
+    }
+  }
+  return text;
 }
 
 async function handleSseBlock(block: string, renderer: RendererClient): Promise<void> {
@@ -183,6 +290,38 @@ function findEventBoundary(buffer: string): { readonly index: number; readonly l
     : { index: crlf, length: 4 };
 }
 
+function exactLoopbackEndpoint(
+  value: string,
+  expectedPath: string,
+  label: string
+): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2_048) {
+    throw new Error(`${label} URL must be a bounded string`);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch (error) {
+    throw new Error(`${label} URL is invalid`, { cause: error });
+  }
+  if (
+    parsed.protocol !== "http:"
+    || (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "[::1]")
+    || parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.pathname !== expectedPath
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+  ) {
+    throw new Error(`${label} URL must be an exact HTTP loopback endpoint`);
+  }
+  return parsed.toString();
+}
+
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
+}
+
+function isSignalAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }

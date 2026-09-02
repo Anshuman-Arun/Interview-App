@@ -1,6 +1,7 @@
 export * from "./interview-session-composition.js";
 export * from "./local-interview-transport-runtime.js";
 export * from "./loopback-command-server.js";
+export * from "./provider-runtime.js";
 export * from "./renderer-stream-server.js";
 export * from "./session-recovery-coordinator.js";
 export * from "./turn-orchestrator.js";

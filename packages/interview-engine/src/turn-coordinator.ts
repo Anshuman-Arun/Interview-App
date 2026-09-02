@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   AcceptedBoardObservationSchema,
   BoardRevisionSchema,
@@ -15,6 +16,7 @@ import {
   CommandIdentityValueSchema,
   ContextEpochSchema,
   DeliveryAtomSchema,
+  DeliveryIdSchema,
   GenerationBasisSchema,
   GenerationIdSchema,
   InputEpisodeIdSchema,
@@ -48,6 +50,7 @@ import {
   type CommandEnvelope,
   type CommandIdentityValue,
   type DeliveryAtom,
+  type DeliveryId,
   type GenerationBasis,
   type GenerationId,
   type InputEpisodeId,
@@ -84,6 +87,11 @@ const CorrectedResultSchema = z.object({ corrected: z.literal(true) }).strict();
 const UtteranceStartedResultSchema = z.object({ utteranceId: UtteranceIdSchema }).strict();
 const UtteranceDiscardedResultSchema = z.object({ discarded: z.literal(true) }).strict();
 const UtteranceFinalizedResultSchema = z.object({ inputEpisodeId: InputEpisodeIdSchema, transcriptRevision: TranscriptRevisionSchema }).strict();
+const AudioDeliveryQueuedResultSchema = z.object({
+  queued: z.boolean(),
+  atom: DeliveryAtomSchema.optional(),
+  reason: z.string().min(1).optional()
+}).strict();
 const InputAppendedResultSchema = z.object({ appended: z.literal(true) }).strict();
 const BoardInputAppendedResultSchema = z.object({ appended: z.literal(true), boardRevision: BoardRevisionSchema }).strict();
 const BoardMutationCommitResultSchema = z.object({
@@ -242,7 +250,11 @@ function terminalInvalidationDrafts(
   const drafts: EventDraft[] = [];
 
   for (const generation of Object.values(state.generations)) {
-    if (generation.status === "ACTIVE" || generation.status === "PROPOSAL_RECEIVED") {
+    if (
+      generation.status === "ACTIVE"
+      || generation.status === "PROPOSAL_RECEIVED"
+      || generation.status === "VALIDATED"
+    ) {
       drafts.push({
         source: "APPLICATION",
         type: "MODEL_GENERATION_SUPERSEDED",
@@ -420,6 +432,9 @@ export class TurnCoordinator {
       if (!state.started || state.status !== "ACTIVE") {
         throw new Error(`Cannot complete session in status ${state.status}`);
       }
+      if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
+        throw new Error("Cannot complete session while an input episode is active");
+      }
       const completedAt = new Date().toISOString();
       return {
         drafts: [
@@ -444,6 +459,9 @@ export class TurnCoordinator {
     }, ArchivedResultSchema, (state) => {
       if (!state.started || (state.status !== "ACTIVE" && state.status !== "COMPLETED")) {
         throw new Error(`Cannot archive session in status ${state.status}`);
+      }
+      if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
+        throw new Error("Cannot archive session while an input episode is active");
       }
       const archivedAt = new Date().toISOString();
       return {
@@ -1508,6 +1526,131 @@ export class TurnCoordinator {
       };
     });
     return outcome.value;
+  }
+
+  public async queueAudioDeliveryFromValidatedText(input: {
+    readonly sourceDeliveryId: DeliveryId;
+    readonly generationId: GenerationId;
+    readonly text: string;
+    readonly textSha256: string;
+    readonly audioRef: string;
+  }): Promise<DeliveryAtom | undefined> {
+    const sourceDeliveryId = DeliveryIdSchema.parse(input.sourceDeliveryId);
+    const generationId = GenerationIdSchema.parse(input.generationId);
+    if (
+      typeof input.text !== "string"
+      || input.text.length === 0
+      || input.text.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
+    ) {
+      throw new Error("TTS source text is invalid or exceeds the bounded realization size");
+    }
+    if (
+      typeof input.textSha256 !== "string"
+      || input.textSha256.length !== 64
+      || !/^[0-9a-f]{64}$/u.test(input.textSha256)
+    ) {
+      throw new Error("TTS source text hash is malformed");
+    }
+    const computedTextSha256 = createHash("sha256").update(input.text, "utf8").digest("hex");
+    if (computedTextSha256 !== input.textSha256) {
+      throw new Error("TTS source text hash does not match the exact realization text");
+    }
+    if (
+      typeof input.audioRef !== "string"
+      || input.audioRef.length !== 73
+      || !/^audio_v1_[0-9a-f]{64}$/u.test(input.audioRef)
+    ) {
+      throw new Error("TTS audio reference is malformed");
+    }
+
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "tts-delivery",
+      generationId
+    });
+    const result = await this.writer.execute(envelope, {
+      operation: "QUEUE_AUDIO_DELIVERY",
+      payload: {
+        sourceDeliveryId,
+        generationId,
+        textSha256: input.textSha256,
+        audioRef: input.audioRef
+      }
+    }, AudioDeliveryQueuedResultSchema, (state) => {
+      if (!state.started || state.status !== "ACTIVE") {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "TTS delivery is not authorized for a terminal session" }
+        };
+      }
+      const source = state.deliveries[sourceDeliveryId];
+      if (
+        source === undefined
+        || source.generationId !== generationId
+        || source.content.medium !== "TEXT"
+      ) {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "Validated speech source delivery is unavailable or mismatched" }
+        };
+      }
+      if (
+        source.status !== "DELIVERING"
+        && source.status !== "EXPOSED"
+        && source.status !== "COMPLETED"
+      ) {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "Validated speech source has not begun an authorized physical delivery" }
+        };
+      }
+      if (
+        source.content.text !== input.text
+        || createHash("sha256").update(source.content.text, "utf8").digest("hex") !== input.textSha256
+      ) {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "TTS result does not match the exact validated speech text" }
+        };
+      }
+
+      const generation = state.generations[generationId];
+      if (generation === undefined || generation.status !== "VALIDATED") {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "TTS generation is no longer authorized for delivery" }
+        };
+      }
+      const compatibility = isGenerationBasisStillCompatible(generation.basis, state);
+      if (compatibility !== "COMPATIBLE") {
+        return {
+          drafts: [],
+          result: { queued: false, reason: `TTS generation compatibility is ${compatibility}` }
+        };
+      }
+
+      const atom = DeliveryAtomSchema.parse({
+        deliveryId: newDeliveryId(),
+        generationId,
+        content: {
+          medium: "AUDIO",
+          text: source.content.text,
+          audioRef: input.audioRef
+        },
+        disclosureIds: [...source.disclosureIds],
+        effectiveDisclosureLevel: source.effectiveDisclosureLevel,
+        status: "VALIDATED"
+      });
+      return {
+        drafts: [{
+          source: "APPLICATION",
+          type: "DELIVERY_QUEUED",
+          payload: { atom }
+        }],
+        result: { queued: true, atom }
+      };
+    });
+    return result.value.queued ? result.value.atom : undefined;
   }
 
   public async commitBoardPatch(summary: string): Promise<void> {

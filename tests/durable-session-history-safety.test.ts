@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { DeliveryCoordinator } from "../packages/delivery/src/index.js";
 import { SessionRuntimeRegistry } from "../packages/interview-engine/src/index.js";
@@ -72,6 +73,112 @@ describe("durable presentation history safety", () => {
         status: "COMPLETED"
       })
     ]);
+
+    harness.store.close();
+  });
+
+  it("does not duplicate a text response when its derived audio is also exposed", async () => {
+    const harness = await createCoreHarness();
+    const recovery = new SessionRecoveryCoordinator(
+      new SessionRuntimeRegistry(harness.store),
+      harness.store
+    );
+    const source = await authorizeSafeProbe(harness);
+    const deliveries = new DeliveryCoordinator(harness.writer);
+
+    await deliveries.markStarted(source.deliveryId);
+    await deliveries.acknowledgeExposed(source.deliveryId);
+
+    const audio = await harness.turns.queueAudioDeliveryFromValidatedText({
+      sourceDeliveryId: source.deliveryId,
+      generationId: source.generationId,
+      text: harness.safeProbe,
+      textSha256: createHash("sha256").update(harness.safeProbe, "utf8").digest("hex"),
+      audioRef: `audio_v1_${"a".repeat(64)}`
+    });
+    if (audio === undefined) throw new Error("Expected derived audio delivery");
+    await deliveries.markStarted(audio.deliveryId);
+    await deliveries.acknowledgeExposed(audio.deliveryId);
+    await deliveries.acknowledgeCompleted(audio.deliveryId);
+
+    const interviewer = interviewerHistory(recovery, harness.sessionId);
+    expect(interviewer).toHaveLength(1);
+    expect(interviewer[0]).toEqual(expect.objectContaining({
+      role: "INTERVIEWER",
+      deliveryId: source.deliveryId,
+      text: harness.safeProbe,
+      status: "EXPOSED"
+    }));
+
+    harness.store.close();
+  });
+
+  it("preserves a derived audio exposure when the source text never received an exposure acknowledgement", async () => {
+    const harness = await createCoreHarness();
+    const recovery = new SessionRecoveryCoordinator(
+      new SessionRuntimeRegistry(harness.store),
+      harness.store
+    );
+    const source = await authorizeSafeProbe(harness);
+    const deliveries = new DeliveryCoordinator(harness.writer);
+
+    await deliveries.markStarted(source.deliveryId);
+
+    const audio = await harness.turns.queueAudioDeliveryFromValidatedText({
+      sourceDeliveryId: source.deliveryId,
+      generationId: source.generationId,
+      text: harness.safeProbe,
+      textSha256: createHash("sha256").update(harness.safeProbe, "utf8").digest("hex"),
+      audioRef: `audio_v1_${"b".repeat(64)}`
+    });
+    if (audio === undefined) throw new Error("Expected derived audio delivery");
+    await deliveries.markStarted(audio.deliveryId);
+    await deliveries.acknowledgeExposed(audio.deliveryId);
+    await deliveries.acknowledgeCompleted(audio.deliveryId);
+
+    const interviewer = interviewerHistory(recovery, harness.sessionId);
+    expect(interviewer).toHaveLength(1);
+    expect(interviewer[0]).toEqual(expect.objectContaining({
+      role: "INTERVIEWER",
+      deliveryId: audio.deliveryId,
+      text: harness.safeProbe,
+      status: "COMPLETED"
+    }));
+
+    harness.store.close();
+  });
+
+  it("preserves the first physical exposure when audio precedes its source text", async () => {
+    const harness = await createCoreHarness();
+    const recovery = new SessionRecoveryCoordinator(
+      new SessionRuntimeRegistry(harness.store),
+      harness.store
+    );
+    const source = await authorizeSafeProbe(harness);
+    const deliveries = new DeliveryCoordinator(harness.writer);
+
+    await deliveries.markStarted(source.deliveryId);
+
+    const audio = await harness.turns.queueAudioDeliveryFromValidatedText({
+      sourceDeliveryId: source.deliveryId,
+      generationId: source.generationId,
+      text: harness.safeProbe,
+      textSha256: createHash("sha256").update(harness.safeProbe, "utf8").digest("hex"),
+      audioRef: `audio_v1_${"c".repeat(64)}`
+    });
+    if (audio === undefined) throw new Error("Expected derived audio delivery");
+    await deliveries.markStarted(audio.deliveryId);
+    await deliveries.acknowledgeExposed(audio.deliveryId);
+
+    await deliveries.acknowledgeExposed(source.deliveryId);
+
+    const interviewer = interviewerHistory(recovery, harness.sessionId);
+    expect(interviewer).toHaveLength(1);
+    expect(interviewer[0]).toEqual(expect.objectContaining({
+      role: "INTERVIEWER",
+      deliveryId: audio.deliveryId,
+      text: harness.safeProbe
+    }));
 
     harness.store.close();
   });

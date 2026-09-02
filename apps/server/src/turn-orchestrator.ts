@@ -1,18 +1,22 @@
 import type {
+  GenerationId,
   InputEpisodeId,
   SessionId,
   TurnId
 } from "../../../packages/domain/src/index.js";
-import { MockModelAdapter } from "../../../packages/providers/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
   ProviderCoordinator,
   TurnCoordinator
 } from "../../../packages/interview-engine/src/index.js";
-import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import type {
+  SessionRecoveryCoordinator,
+  TurnRecoveryDisposition
+} from "./session-recovery-coordinator.js";
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
+import { ProviderRuntimeResolver } from "./provider-runtime.js";
 import {
   getReviewedProblemRealizationTexts,
   realizeProblemInterviewerProposal
@@ -25,7 +29,23 @@ export interface TurnOrchestrationInput {
   readonly studentText: string;
 }
 
-function permitsCurrentMockExecution(
+type TurnOrchestrationDisposition =
+  | "COMPLETE"
+  | "RETRYABLE_PROVIDER_RUNTIME";
+
+interface ActiveProviderExecution {
+  readonly sessionId: SessionId;
+  readonly generationId: GenerationId;
+  readonly coordinator: ProviderCoordinator;
+}
+
+interface InFlightOrchestration {
+  readonly input: TurnOrchestrationInput;
+  readonly completion: Promise<TurnOrchestrationDisposition>;
+  readonly signalCancellation: () => void;
+}
+
+function usesDeterministicMockRealization(
   configuration: {
     readonly providerSelection?: {
       readonly providerId: string;
@@ -40,12 +60,15 @@ function permitsCurrentMockExecution(
 
 export class ServerTurnOrchestrator {
   private readonly validator: DisclosureValidator;
-  private readonly inFlight = new Map<string, Promise<void>>();
+  private readonly inFlight = new Map<string, InFlightOrchestration>();
+  private readonly activeProviderExecutions = new Map<GenerationId, ActiveProviderExecution>();
+  private acceptingWork = true;
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
     private readonly getRendererStreamServer: () => RendererStreamServer | undefined,
-    validator?: DisclosureValidator
+    validator?: DisclosureValidator,
+    private readonly providerRuntime: ProviderRuntimeResolver = new ProviderRuntimeResolver()
   ) {
     this.validator = validator ?? new DisclosureValidator(
       new ClosedWorldDisclosureAnalyzer(getReviewedProblemRealizationTexts())
@@ -53,38 +76,91 @@ export class ServerTurnOrchestrator {
   }
 
   public async orchestrateTurn(input: TurnOrchestrationInput): Promise<void> {
-    const key = `${input.sessionId}:${input.turnId}`;
-    const existing = this.inFlight.get(key);
-    if (existing !== undefined) {
-      return existing;
+    await this.orchestrateTurnWithDisposition(input);
+  }
+
+  /**
+   * Requests physical provider cancellation after authoritative invalidation.
+   * This never waits for a fallible provider to acknowledge cancellation, so
+   * new authoritative work cannot be blocked by an uncooperative remote.
+   */
+  public requestCancellationForSupersededWork(
+    sessionId: SessionId
+  ): void {
+    for (const orchestration of this.inFlight.values()) {
+      if (orchestration.input.sessionId === sessionId) {
+        orchestration.signalCancellation();
+      }
     }
 
-    const orchestration = this.executeOrchestration(input).finally(() => {
-      this.inFlight.delete(key);
-    });
+    const writer = this.sessions.getWriter(sessionId);
+    const state = writer.getState();
+    const records = Array.from(this.activeProviderExecutions.values())
+      .filter((record) => record.sessionId === sessionId);
 
-    this.inFlight.set(key, orchestration);
-    return orchestration;
+    for (const record of records) {
+      const status = state.generations[record.generationId]?.status;
+      if (
+        status === "ACTIVE"
+        || status === "PROPOSAL_RECEIVED"
+        || status === "VALIDATED"
+      ) {
+        continue;
+      }
+      void record.coordinator.cancelGeneration(
+        record.generationId,
+        "Authoritative state superseded provider execution"
+      ).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Requests cancellation of every orchestration admitted before graceful
+   * shutdown. Command admission must already be closed by the caller.
+   * Provider acknowledgement is best effort and never gates process progress.
+   */
+  public requestCancellationForShutdown(): void {
+    this.acceptingWork = false;
+    for (const orchestration of this.inFlight.values()) {
+      orchestration.signalCancellation();
+    }
+    for (const record of this.activeProviderExecutions.values()) {
+      void record.coordinator.cancelGeneration(
+        record.generationId,
+        "Application shutdown cancelled provider execution"
+      ).catch(() => undefined);
+    }
+  }
+
+  public resumeAfterShutdown(): void {
+    if (this.acceptingWork) return;
+    if (this.inFlight.size !== 0 || this.activeProviderExecutions.size !== 0) {
+      throw new Error("Cannot resume provider orchestration while prior work is still active");
+    }
+    this.acceptingWork = true;
   }
 
   public async waitForAll(): Promise<void> {
-    await Promise.all(Array.from(this.inFlight.values()));
+    await Promise.all(
+      Array.from(this.inFlight.values()).map((record) => record.completion)
+    );
   }
 
-  public async recoverPendingTurns(sessionId: SessionId): Promise<void> {
+  public async recoverPendingTurns(
+    sessionId: SessionId
+  ): Promise<TurnRecoveryDisposition> {
     const writer = this.sessions.getWriter(sessionId);
     const state = writer.getState();
     if (!state.started || state.status !== "ACTIVE") {
-      return;
+      return "COMPLETE";
     }
 
     const composition = resolveSessionStateComposition(state);
     if (composition.mode !== "OXFORD_MATHEMATICS") {
-      return;
+      return "COMPLETE";
     }
-    const canExecuteCurrentProvider = permitsCurrentMockExecution(composition.configuration);
-
     const turns = new TurnCoordinator(writer);
+    let disposition: TurnRecoveryDisposition = "COMPLETE";
 
     for (const [turnId, turn] of Object.entries(state.turns)) {
       // Clean up stranded in-flight generations from pre-crash processes, including older turns.
@@ -114,18 +190,77 @@ export class ServerTurnOrchestrator {
           )
       );
 
-      if (canExecuteCurrentProvider && !hasValidatedGeneration && !hasDeliveries) {
-        await this.orchestrateTurn({
+      if (!hasValidatedGeneration && !hasDeliveries) {
+        // A recovery attempt cancelled by application shutdown is not a
+        // successful recovery. Report it separately so the recovery cache does
+        // not strand this authoritative pending turn across a stop/start cycle.
+        const turnDisposition = await this.orchestrateTurnWithDisposition({
           sessionId,
           turnId: turnId as TurnId,
           inputEpisodeId: turn.inputEpisodeId,
           studentText: turn.studentText
         });
+        if (!this.acceptingWork) return "DEFERRED";
+        if (turnDisposition === "RETRYABLE_PROVIDER_RUNTIME") {
+          disposition = "RETRYABLE";
+        }
       }
     }
+    return disposition;
   }
 
-  private async executeOrchestration(input: TurnOrchestrationInput): Promise<void> {
+  private async orchestrateTurnWithDisposition(
+    input: TurnOrchestrationInput
+  ): Promise<TurnOrchestrationDisposition> {
+    if (!this.acceptingWork) {
+      return "COMPLETE";
+    }
+    const key = `${input.sessionId}:${input.turnId}`;
+    const existing = this.inFlight.get(key);
+    if (existing !== undefined) {
+      return existing.completion;
+    }
+
+    // A new authoritative turn normally arrives after commitInput has already
+    // superseded old generations. Cancel older resolver/provider work locally
+    // before beginning this turn, but never wait for remote acknowledgement.
+    this.requestCancellationForSupersededWork(input.sessionId);
+
+    let requested = false;
+    let signalCancellation: (() => void) | undefined;
+    const cancellationSignal = new Promise<void>((resolve) => {
+      signalCancellation = () => {
+        if (requested) return;
+        requested = true;
+        resolve();
+      };
+    });
+    if (signalCancellation === undefined) {
+      throw new Error("Orchestration cancellation signal initialization failed");
+    }
+
+    const completion = this.executeOrchestration(
+      input,
+      cancellationSignal,
+      () => requested
+    ).finally(() => {
+      this.inFlight.delete(key);
+    });
+    const record: InFlightOrchestration = {
+      input,
+      completion,
+      signalCancellation
+    };
+
+    this.inFlight.set(key, record);
+    return completion;
+  }
+
+  private async executeOrchestration(
+    input: TurnOrchestrationInput,
+    cancellationSignal: Promise<void>,
+    cancellationRequested: () => boolean
+  ): Promise<TurnOrchestrationDisposition> {
     const writer = this.sessions.getWriter(input.sessionId);
 
     // Resolve all orchestration inputs back to authoritative state before doing any provider work.
@@ -138,24 +273,19 @@ export class ServerTurnOrchestrator {
       || currentState.lastCommittedInputSequence === undefined
       || authoritativeTurn.committedSequence !== currentState.lastCommittedInputSequence
     ) {
-      return;
+      return "COMPLETE";
     }
 
     const existingGeneration = Object.values(currentState.generations).find(
       (g) => g.basis.turnId === input.turnId && g.status === "VALIDATED"
     );
     if (existingGeneration !== undefined) {
-      return;
+      return "COMPLETE";
     }
 
     const composition = resolveSessionStateComposition(currentState);
     if (composition.mode !== "OXFORD_MATHEMATICS") {
-      return;
-    }
-    if (!permitsCurrentMockExecution(composition.configuration)) {
-      // Real provider resolution/execution is intentionally deferred. Never
-      // silently substitute the mock adapter for an authoritative selection.
-      return;
+      return "COMPLETE";
     }
     const problem = composition.problem;
     const turns = new TurnCoordinator(writer);
@@ -163,38 +293,99 @@ export class ServerTurnOrchestrator {
     // 1. Pedagogical policy selects (or refreshes) the required action
     const realizationRequest = await turns.selectAction(input.turnId, problem);
     if (realizationRequest.requiredAction === "WAIT") {
-      return;
+      return "COMPLETE";
     }
 
-    // 2. Realize only wording/content already authorized by application policy
-    const proposal = realizeProblemInterviewerProposal(
-      problem,
-      authoritativeTurn.studentText,
-      realizationRequest
+    // 2. Keep deterministic problem-specific realization only for the mock provider.
+    // Real providers receive the application-selected action through compiled context
+    // and remain fallible realization engines.
+    const mockProposal = usesDeterministicMockRealization(composition.configuration)
+      ? realizeProblemInterviewerProposal(
+          problem,
+          authoritativeTurn.studentText,
+          realizationRequest
+        )
+      : undefined;
+
+    // 3. Resolve the authoritative provider/model through the application-owned
+    // runtime boundary and the existing provider control plane. Raw runtime
+    // errors never escape; recovery receives only a stable retry disposition.
+    const runtimeOpening = this.providerRuntime.resolve({
+      ...(composition.configuration.providerSelection === undefined
+        ? {}
+        : { selection: composition.configuration.providerSelection }),
+      ...(mockProposal === undefined ? {} : { mockProposal }),
+      cancellationRequested
+    }).then(
+      (resolution) => ({ kind: "RESOLVED" as const, resolution }),
+      () => ({ kind: "FAILED" as const })
     );
 
-    // 3. MockModelAdapter with zero metered spend
-    const provider = new MockModelAdapter({ proposal });
+    const runtimeResult = await Promise.race([
+      runtimeOpening,
+      cancellationSignal.then(() => ({ kind: "CANCELLED" as const }))
+    ]);
+    if (runtimeResult.kind === "CANCELLED" || cancellationRequested()) {
+      return "COMPLETE";
+    }
+    if (runtimeResult.kind === "FAILED") {
+      return "RETRYABLE_PROVIDER_RUNTIME";
+    }
+    const runtimeResolution = runtimeResult.resolution;
 
-    // 4. ProviderCoordinator initiates generation, compiles context, and validates proposal
+    // 4. ProviderCoordinator owns policy/billing admission, context compilation,
+    // provider execution, proposal admission, and delivery validation.
     const coordinator = new ProviderCoordinator(writer);
-    const execution = await coordinator.start({
-      inputEpisodeId: authoritativeTurn.inputEpisodeId,
-      turnId: authoritativeTurn.turnId,
-      provider,
-      policy: {
-        allowMeteredUsage: false,
-        maximumDataUse: "LOCAL_ONLY",
-        billingVerificationMaxAgeMs: 60_000
-      },
-      problem,
-      validator: this.validator
-    });
+    let execution: Awaited<ReturnType<ProviderCoordinator["start"]>>;
+    try {
+      execution = await coordinator.start({
+        inputEpisodeId: authoritativeTurn.inputEpisodeId,
+        turnId: authoritativeTurn.turnId,
+        provider: runtimeResolution.provider,
+        policy: runtimeResolution.policy,
+        problem,
+        validator: this.validator
+      });
+    } catch {
+      // The authoritative turn may have changed while runtime credentials or
+      // dependencies were resolving. Never surface raw setup/state errors.
+      return "COMPLETE";
+    }
+
+    const activeRecord: ActiveProviderExecution = {
+      sessionId: input.sessionId,
+      generationId: execution.generationId,
+      coordinator
+    };
+    this.activeProviderExecutions.set(execution.generationId, activeRecord);
 
     try {
+      // Close the race where authoritative invalidation happens between
+      // startGeneration and registration in activeProviderExecutions.
+      this.requestCancellationIfSuperseded(activeRecord);
+      if (cancellationRequested()) {
+        void coordinator.cancelGeneration(
+          execution.generationId,
+          "Authoritative state superseded provider execution"
+        ).catch(() => undefined);
+      }
+
       const outcome = await execution.completion;
+      if (outcome.status === "FAILED") {
+        if (
+          this.isTurnStillLatest(input)
+          && (
+            outcome.stage === "PROVIDER_ADMISSION"
+            || outcome.stage === "PROVIDER_STREAM"
+            || outcome.stage === "NO_PROPOSAL"
+          )
+        ) {
+          return "RETRYABLE_PROVIDER_RUNTIME";
+        }
+        return "COMPLETE";
+      }
       if (outcome.status !== "ACCEPTED") {
-        return;
+        return "COMPLETE";
       }
 
       // 5. Publish delivery atoms to active renderer stream (SSE)
@@ -204,10 +395,42 @@ export class ServerTurnOrchestrator {
           await streamServer.publishDelivery(input.sessionId, atom.deliveryId);
         }
       }
+      return "COMPLETE";
     } catch {
-      // Safe semantic outcome handling - never print raw exception strings
+      return this.isTurnStillLatest(input)
+        ? "RETRYABLE_PROVIDER_RUNTIME"
+        : "COMPLETE";
+    } finally {
+      if (this.activeProviderExecutions.get(execution.generationId) === activeRecord) {
+        this.activeProviderExecutions.delete(execution.generationId);
+      }
     }
   }
 
+  private requestCancellationIfSuperseded(
+    record: ActiveProviderExecution
+  ): void {
+    const writer = this.sessions.getWriter(record.sessionId);
+    const status = writer.getState().generations[record.generationId]?.status;
+    if (
+      status === "ACTIVE"
+      || status === "PROPOSAL_RECEIVED"
+      || status === "VALIDATED"
+    ) {
+      return;
+    }
+    void record.coordinator.cancelGeneration(
+      record.generationId,
+      "Authoritative state superseded provider execution"
+    ).catch(() => undefined);
+  }
 
+  private isTurnStillLatest(input: TurnOrchestrationInput): boolean {
+    const state = this.sessions.getWriter(input.sessionId).getState();
+    const turn = state.turns[input.turnId];
+    return turn !== undefined
+      && turn.inputEpisodeId === input.inputEpisodeId
+      && state.lastCommittedInputSequence !== undefined
+      && turn.committedSequence === state.lastCommittedInputSequence;
+  }
 }

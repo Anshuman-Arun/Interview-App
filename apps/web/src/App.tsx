@@ -3,6 +3,7 @@ import { SessionIdSchema, type SessionId } from "../../../packages/domain/src/in
 import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
 import { StudentInputArea } from "./components/StudentInputArea.js";
+import { VoiceControls } from "./components/VoiceControls.js";
 import { WhiteboardCanvas } from "./components/WhiteboardCanvas.js";
 import { TldrawWhiteboardAdapter } from "./tldraw-whiteboard-adapter.js";
 import { useInterviewSession } from "./hooks/useInterviewSession.js";
@@ -559,6 +560,11 @@ export const App: React.FC = () => {
 
           {/* Bottom Reasoning Input Area */}
           <div className="p-4 border-t border-slate-200 bg-slate-50/50 shrink-0">
+            <VoiceControls
+              state={session.voice}
+              controls={session.voiceControls}
+              disabled={!session.isSessionStarted || session.sessionStatus !== "ACTIVE"}
+            />
             <StudentInputArea
               onSubmit={(text) => session.submitTypedInput(text)}
               disabled={!session.isSessionStarted || session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"}

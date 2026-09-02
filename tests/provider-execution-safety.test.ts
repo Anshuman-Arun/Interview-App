@@ -162,6 +162,173 @@ describe("provider execution admission", () => {
     expect(sessionCreations).toBe(0);
   });
 
+
+  it("captures provider operations before billing verification can swap execution behavior", async () => {
+    let verificationEntered: (() => void) | undefined;
+    let releaseVerification: (() => void) | undefined;
+    let originalSessionCreations = 0;
+    let replacementSessionCreations = 0;
+    const entered = new Promise<void>((resolve) => {
+      verificationEntered = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      releaseVerification = resolve;
+    });
+    const provider = testProvider({
+      async verifyBillingSafety({ now }) {
+        verificationEntered?.();
+        await blocked;
+        return validVerification(now);
+      },
+      async createSession() {
+        originalSessionCreations += 1;
+        return proposalSession();
+      }
+    });
+
+    const opening = openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+    await entered;
+    Reflect.set(provider, "createSession", async () => {
+      replacementSessionCreations += 1;
+      throw new Error("replacement createSession must not execute");
+    });
+    releaseVerification?.();
+
+    const session = await opening;
+    expect(originalSessionCreations).toBe(1);
+    expect(replacementSessionCreations).toBe(0);
+    expect(await collect(session.sendTurn({
+      context: {},
+      generationId: newGenerationId()
+    }))).toEqual([PROPOSAL]);
+    await session.close();
+  });
+
+  it("keeps the parsed policy authoritative when caller policy mutates during billing verification", async () => {
+    const mutablePolicy = {
+      allowMeteredUsage: false,
+      maximumDataUse: "LOCAL_ONLY" as const,
+      billingVerificationMaxAgeMs: 1_000
+    };
+    const provider = testProvider({
+      async verifyBillingSafety() {
+        mutablePolicy.billingVerificationMaxAgeMs = 1_000_000;
+        return validVerification(new Date(NOW.getTime() - 1_001));
+      }
+    });
+
+    await expect(openProviderExecutionSession({
+      provider,
+      policy: mutablePolicy,
+      now: NOW
+    })).rejects.toMatchObject({ code: "VERIFICATION_STALE" });
+  });
+
+  it("does not lend the authoritative admission clock to provider billing code", async () => {
+    const callerNow = new Date(NOW.getTime());
+    const originalTime = callerNow.getTime();
+    const provider = testProvider({
+      async verifyBillingSafety({ now }) {
+        now.setTime(originalTime - 10_000);
+        return validVerification(now);
+      }
+    });
+
+    await expect(openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: callerNow
+    })).rejects.toMatchObject({ code: "VERIFICATION_STALE" });
+    expect(callerNow.getTime()).toBe(originalTime);
+  });
+
+  it("returns an immutable capability snapshot that cannot change cancellation or modality semantics", async () => {
+    const provider = testProvider({
+      capabilities: {
+        ...CAPABILITIES,
+        reasoningLevels: ["low"]
+      }
+    });
+    const session = await openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    expect(Reflect.set(session.capabilities, "cancellation", "CANCEL_PROVIDER_COMPUTE"))
+      .toBe(false);
+    expect(session.capabilities.cancellation).toBe("NONE");
+    const modalities = session.capabilities.inputModalities;
+    modalities.add("image");
+    modalities.delete("text");
+    Set.prototype.add.call(modalities, "image");
+    expect([...modalities]).toEqual(["image"]);
+    expect([...session.capabilities.inputModalities]).toEqual(["text"]);
+
+    const levels = session.capabilities.reasoningLevels;
+    levels?.push("high");
+    expect(levels).toEqual(["low", "high"]);
+    expect(session.capabilities.reasoningLevels).toEqual(["low"]);
+
+    await session.close();
+  });
+
+  it("rejects accessor-backed provider operations without invoking them", async () => {
+    let getterCalls = 0;
+    const provider = testProvider();
+    Object.defineProperty(provider, "createSession", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return async () => proposalSession();
+      }
+    });
+
+    await expect(openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(getterCalls).toBe(0);
+
+    const verifierAccessor = testProvider();
+    Object.defineProperty(verifierAccessor, "verifyBillingSafety", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return async ({ now }: { readonly now: Date }) => validVerification(now);
+      }
+    });
+    await expect(openProviderExecutionSession({
+      provider: verifierAccessor,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "MISSING_BILLING_VERIFIER" });
+    expect(getterCalls).toBe(0);
+
+    const capabilityAccessor = testProvider();
+    Object.defineProperty(capabilityAccessor, "capabilities", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return CAPABILITIES;
+      }
+    });
+    await expect(openProviderExecutionSession({
+      provider: capabilityAccessor,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "INVALID_PROVIDER_CAPABILITIES" });
+    expect(getterCalls).toBe(0);
+  });
+
   it("drops a provider result released after cancellation even when the provider ignores cancellation", async () => {
     let release: (() => void) | undefined;
     const blocked = new Promise<void>((resolve) => { release = resolve; });
@@ -212,6 +379,67 @@ describe("provider execution admission", () => {
     await expect(session.cancelTurn(generationId)).rejects.toMatchObject({ code: "CANCELLATION_OVERCLAIMED" });
     expect(await collect(session.sendTurn({ context: {}, generationId }))).toEqual([]);
     await session.close();
+  });
+
+  it("captures reasoning-session operation identities once and rejects accessor-backed operations without invoking them", async () => {
+    let replacementSendTurnCalls = 0;
+    let replacementCloseCalls = 0;
+    const rawSession: ReasoningSession = {
+      async *sendTurn() {
+        yield PROPOSAL;
+      },
+      async cancelTurn() {
+        return { semantics: "NONE" };
+      },
+      async close() {}
+    };
+    const provider = testProvider({
+      createSession: async () => rawSession
+    });
+    const session = await openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    Reflect.set(rawSession, "sendTurn", async function* () {
+      replacementSendTurnCalls += 1;
+      await Promise.reject(new Error("replacement sendTurn must not execute"));
+      yield PROPOSAL;
+    });
+    Reflect.set(rawSession, "close", async () => {
+      replacementCloseCalls += 1;
+      throw new Error("replacement close must not execute");
+    });
+
+    expect(await collect(session.sendTurn({
+      context: {},
+      generationId: newGenerationId()
+    }))).toEqual([PROPOSAL]);
+    await expect(session.close()).resolves.toBeUndefined();
+    expect(replacementSendTurnCalls).toBe(0);
+    expect(replacementCloseCalls).toBe(0);
+
+    let getterCalls = 0;
+    const accessorSessionCandidate: object = {
+      async close() {}
+    };
+    Object.defineProperty(accessorSessionCandidate, "sendTurn", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return async function* () {
+          yield PROPOSAL;
+        };
+      }
+    });
+    const accessorSession = accessorSessionCandidate as unknown as ReasoningSession;
+    await expect(openProviderExecutionSession({
+      provider: testProvider({ createSession: async () => accessorSession }),
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(getterCalls).toBe(0);
   });
 
   it("runtime-validates provider output and suppresses provider error secrets", async () => {

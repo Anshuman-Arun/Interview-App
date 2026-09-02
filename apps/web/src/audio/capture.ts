@@ -180,6 +180,7 @@ export class BrowserMicrophoneCapture {
           const acquisitionResult: unknown = Reflect.apply(getUserMedia, mediaDevices, [{
             audio: {
               channelCount,
+              ...preferredSpeechCaptureConstraints(mediaDevices),
               ...(deviceId === undefined || deviceId === "" || deviceId === "default"
                 ? {}
                 : { deviceId: { exact: deviceId } })
@@ -1353,5 +1354,27 @@ function errorName(error: unknown): string {
     return String(Reflect.get(error, "name"));
   } catch {
     return "";
+  }
+}
+
+function preferredSpeechCaptureConstraints(
+  mediaDevices: AudioMediaDevicesLike
+): MediaTrackConstraints {
+  try {
+    const candidate = readUnknownProperty(mediaDevices, "getSupportedConstraints");
+    if (typeof candidate !== "function") return {};
+    const supported: unknown = Reflect.apply(candidate, mediaDevices, []);
+    if (typeof supported !== "object" || supported === null) return {};
+    const record = supported as Record<string, unknown>;
+    return {
+      ...(record["echoCancellation"] === true ? { echoCancellation: true } : {}),
+      ...(record["noiseSuppression"] === true ? { noiseSuppression: true } : {}),
+      ...(record["autoGainControl"] === true ? { autoGainControl: true } : {}),
+      ...(record["sampleRate"] === true ? { sampleRate: { ideal: 48_000 } } : {})
+    };
+  } catch {
+    // Capability probing is advisory. Capture remains available with the
+    // browser's default processing rather than failing setup.
+    return {};
   }
 }

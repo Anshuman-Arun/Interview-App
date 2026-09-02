@@ -108,6 +108,7 @@ function snapshotServerConfig(config: ServerConfig): ServerConfig {
     "host",
     "commandPort",
     "rendererStreamPort",
+    "voicePort",
     "clientToken",
     "allowedOrigins",
     "databasePath"
@@ -124,6 +125,7 @@ function snapshotServerConfig(config: ServerConfig): ServerConfig {
     ...(config.rendererStreamPort !== undefined
       ? { rendererStreamPort: config.rendererStreamPort }
       : {}),
+    ...(config.voicePort !== undefined ? { voicePort: config.voicePort } : {}),
     ...(config.clientToken !== undefined ? { clientToken: config.clientToken } : {}),
     ...(config.allowedOrigins !== undefined
       ? { allowedOrigins: [...config.allowedOrigins] }
@@ -140,6 +142,7 @@ function fingerprintServerConfig(config: ServerConfig): string {
     host: config.host,
     commandPort: config.commandPort,
     rendererStreamPort: config.rendererStreamPort,
+    voicePort: config.voicePort,
     clientToken: config.clientToken,
     allowedOrigins,
     databasePath: config.databasePath

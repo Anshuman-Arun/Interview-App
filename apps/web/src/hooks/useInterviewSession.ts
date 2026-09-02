@@ -22,12 +22,25 @@ import {
 import { BrowserSessionReadClient } from "../session-read-client.js";
 import {
   RendererClient,
-  RendererPresentationNotExposedError,
-  type AudioPlayer,
   type TextPresenter,
   type WhiteboardPresenter
 } from "../renderer-client.js";
 import {
+  BrowserAudioPlayback,
+  QueuedRendererAudioPlayer
+} from "../audio/index.js";
+import {
+  BrowserVoiceClient,
+  deriveDefaultVoiceBaseUrl,
+  type BrowserVoiceCommit
+} from "../voice-client.js";
+import {
+  useInterviewVoice,
+  type InterviewVoiceControls,
+  type InterviewVoiceState
+} from "./useInterviewVoice.js";
+import {
+  RendererStreamConnectionError,
   consumeAuthenticatedRendererStream,
   createLoopbackAcknowledgementSender
 } from "../renderer-stream.js";
@@ -41,9 +54,13 @@ import { WhiteboardVisionClient } from "../whiteboard/whiteboard-vision-client.j
 import { WhiteboardVisionScheduler } from "../whiteboard/vision-scheduler.js";
 import type { TranscriptItem } from "../components/TranscriptFeed.js";
 
+const RENDERER_REATTACH_MAX_ATTEMPTS = 10;
+const RENDERER_REATTACH_DELAY_MS = 50;
+
 export interface UseInterviewSessionOptions {
   readonly baseUrl?: string;
   readonly rendererStreamUrl?: string;
+  readonly voiceBaseUrl?: string;
   readonly clientToken?: string;
   readonly initialSessionId?: SessionId;
   readonly whiteboardAdapter?: TldrawWhiteboardAdapter;
@@ -62,6 +79,8 @@ export interface UseInterviewSessionResult {
   readonly sequence: number;
   readonly contextEpoch: number;
   readonly error: string | null;
+  readonly voice: InterviewVoiceState;
+  readonly voiceControls: InterviewVoiceControls;
   readonly baseUrl: string;
   readonly isTransportManaged: boolean;
   readonly setBaseUrl: (url: string) => void;
@@ -101,6 +120,7 @@ interface DesktopBootstrap {
   readonly protocolVersion: 1;
   readonly commandBaseUrl: string;
   readonly rendererStreamUrl: string;
+  readonly voiceBaseUrl: string;
   readonly authentication: {
     readonly mode: "DESKTOP_MANAGED";
     readonly headerValue: "desktop-managed-v1";
@@ -130,6 +150,7 @@ function readDesktopBootstrap(): DesktopBootstrap | undefined {
     "protocolVersion",
     "commandBaseUrl",
     "rendererStreamUrl",
+    "voiceBaseUrl",
     "authentication",
     "appVersion",
     "platform"
@@ -147,6 +168,7 @@ function readDesktopBootstrap(): DesktopBootstrap | undefined {
     || record["protocolVersion"] !== 1
     || typeof record["commandBaseUrl"] !== "string"
     || typeof record["rendererStreamUrl"] !== "string"
+    || typeof record["voiceBaseUrl"] !== "string"
     || authentication["mode"] !== "DESKTOP_MANAGED"
     || authentication["headerValue"] !== DESKTOP_AUTH_HEADER_VALUE
     || typeof record["appVersion"] !== "string"
@@ -161,6 +183,7 @@ function readDesktopBootstrap(): DesktopBootstrap | undefined {
     protocolVersion: 1,
     commandBaseUrl: exactDesktopLoopbackOrigin(record["commandBaseUrl"]),
     rendererStreamUrl: exactDesktopRendererStreamUrl(record["rendererStreamUrl"]),
+    voiceBaseUrl: exactDesktopLoopbackOrigin(record["voiceBaseUrl"]),
     authentication: {
       mode: "DESKTOP_MANAGED",
       headerValue: DESKTOP_AUTH_HEADER_VALUE
@@ -262,6 +285,7 @@ export function useInterviewSession(
       options.clientToken !== undefined
       || options.baseUrl !== undefined
       || options.rendererStreamUrl !== undefined
+      || options.voiceBaseUrl !== undefined
     )
   ) {
     throw new Error(
@@ -298,12 +322,19 @@ export function useInterviewSession(
 
   const pendingSubmissionsRef = useRef<Map<string, PendingSubmissionRecord>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
+  const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
+  const rendererLaunchEpochRef = useRef(0);
+  const sessionTransitionEpochRef = useRef(0);
+  const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
   const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
   const boardSyncSessionRef = useRef<SessionId | null>(null);
   const boardBootstrapSessionRef = useRef<SessionId | null>(null);
   const visionSchedulerRef = useRef<WhiteboardVisionScheduler | null>(null);
   const visionSchedulerSessionRef = useRef<SessionId | null>(null);
+  const rendererAudioPlayerRef = useRef<QueuedRendererAudioPlayer | null>(null);
+  const audioOutputDeviceRef = useRef<string | undefined>(undefined);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const fetchImpl = useMemo(
     () => options.fetchImpl ?? globalThis.fetch.bind(globalThis),
     [options.fetchImpl]
@@ -324,6 +355,58 @@ export function useInterviewSession(
     boardBootstrapSessionRef.current = null;
     setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
   }, []);
+
+  const voiceBaseUrl = useMemo(
+    () => desktopBootstrap?.voiceBaseUrl ?? options.voiceBaseUrl ?? deriveDefaultVoiceBaseUrl(baseUrl),
+    [baseUrl, desktopBootstrap, options.voiceBaseUrl]
+  );
+  const audioVoiceClient = useMemo(
+    () => new BrowserVoiceClient({
+      baseUrl: voiceBaseUrl,
+      authenticatedFetch
+    }),
+    [authenticatedFetch, voiceBaseUrl]
+  );
+  const interruptPlaybackForBargeIn = useCallback((): void => {
+    const player = rendererAudioPlayerRef.current;
+    player?.interruptCurrent();
+    player?.clearQueued();
+
+    // Discard any pre-barge-in delivery commands still buffered in the old SSE
+    // connection. The replacement connection attaches only after the old
+    // consumer has settled, so recovery can classify uncertainty first and
+    // cannot replay cancelled/POSSIBLY_EXPOSED output.
+    if (sessionId !== null) rendererRestartRef.current?.(sessionId);
+  }, [sessionId]);
+  const setAudioOutputDevice = useCallback((deviceId: string | undefined): void => {
+    audioOutputDeviceRef.current = deviceId;
+    rendererAudioPlayerRef.current?.setOutputDeviceId(deviceId);
+  }, []);
+  const onVoiceCommit = useCallback((commit: BrowserVoiceCommit): void => {
+    setTranscript((previous) => {
+      if (previous.some((item) => item.turnId === commit.turnId)) return previous;
+      const item: TranscriptItem = {
+        id: `student_${commit.turnId}`,
+        role: "student",
+        text: commit.text,
+        status: "ACKNOWLEDGED",
+        timestamp: Date.now(),
+        turnId: commit.turnId,
+        inputEpisodeId: commit.inputEpisodeId
+      };
+      return [...previous, item];
+    });
+  }, []);
+  const voiceIntegration = useInterviewVoice({
+    sessionId,
+    sessionActive: isSessionStarted && sessionStatus === "ACTIVE",
+    voiceBaseUrl,
+    authenticatedFetch,
+    speaking: isSpeaking,
+    interruptPlaybackForBargeIn,
+    setOutputDeviceId: setAudioOutputDevice,
+    onVoiceCommit
+  });
 
   const setBaseUrl = useCallback((url: string): void => {
     if (desktopBootstrap !== undefined) {
@@ -493,13 +576,22 @@ export function useInterviewSession(
         }
       };
 
-      const audioPlayer: AudioPlayer = {
-        playAudio: () => {
-          throw new RendererPresentationNotExposedError(
-            "Audio playback is unavailable until a physical audio player is installed"
-          );
-        }
-      };
+      rendererAudioPlayerRef.current?.dispose();
+      const playback = new BrowserAudioPlayback();
+      const audioPlayer = new QueuedRendererAudioPlayer(playback, {
+        ...(audioOutputDeviceRef.current === undefined
+          ? {}
+          : { outputDeviceId: audioOutputDeviceRef.current }),
+        onSpeakingChanged: setIsSpeaking,
+        resolveAudioSource: (audioRef, deliveryId, signal) =>
+          audioVoiceClient.resolveAudioSource(
+            targetSessionId,
+            audioRef,
+            deliveryId,
+            signal
+          )
+      });
+      rendererAudioPlayerRef.current = audioPlayer;
 
       const whiteboardAdapter = options.whiteboardAdapter;
       const whiteboardPresenter: WhiteboardPresenter | undefined =
@@ -546,10 +638,13 @@ export function useInterviewSession(
           signal: controller.signal
         }, client);
       } catch (err) {
-        if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : "Renderer stream disconnected");
-        }
+        if (!controller.signal.aborted) throw err;
       } finally {
+        audioPlayer.dispose();
+        if (rendererAudioPlayerRef.current === audioPlayer) {
+          rendererAudioPlayerRef.current = null;
+          setIsSpeaking(false);
+        }
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
           rendererClientRef.current = null;
@@ -558,8 +653,93 @@ export function useInterviewSession(
         }
       }
     },
-    [authenticatedFetch, baseUrl, options.whiteboardAdapter, rendererStreamUrl]
+    [audioVoiceClient, authenticatedFetch, baseUrl, options.whiteboardAdapter, rendererStreamUrl]
   );
+
+  const launchRendererStream = useCallback((targetSessionId: SessionId): void => {
+    const launchEpoch = rendererLaunchEpochRef.current + 1;
+    rendererLaunchEpochRef.current = launchEpoch;
+    const priorTask = rendererStreamTaskRef.current;
+    abortControllerRef.current?.abort();
+
+    const task = (async (): Promise<void> => {
+      if (priorTask !== null) {
+        await priorTask.catch(() => undefined);
+      }
+      if (rendererLaunchEpochRef.current !== launchEpoch) return;
+
+      let lastError: unknown;
+      for (let attempt = 0; attempt < RENDERER_REATTACH_MAX_ATTEMPTS; attempt += 1) {
+        if (rendererLaunchEpochRef.current !== launchEpoch) return;
+        try {
+          await attachRendererStream(targetSessionId);
+          if (rendererLaunchEpochRef.current !== launchEpoch) return;
+
+          // An authenticated renderer stream is intended to live for the
+          // session. Returning without a launch-epoch change means the server,
+          // transport, or presentation failed/ended unexpectedly. Reattach so
+          // disconnect recovery can conservatively classify any in-flight atom
+          // and later QUEUED output is not stranded.
+          lastError = new Error("Renderer stream ended unexpectedly");
+        } catch (err) {
+          if (rendererLaunchEpochRef.current !== launchEpoch) return;
+          lastError = err;
+        }
+
+        if (attempt + 1 >= RENDERER_REATTACH_MAX_ATTEMPTS) break;
+        const replacementConflict =
+          lastError instanceof RendererStreamConnectionError
+          && lastError.status === 409;
+        await delay(
+          replacementConflict
+            ? RENDERER_REATTACH_DELAY_MS
+            : Math.min(RENDERER_REATTACH_DELAY_MS * 2 ** attempt, 800)
+        );
+      }
+
+      if (rendererLaunchEpochRef.current === launchEpoch) {
+        setError(
+          lastError instanceof Error
+            ? lastError.message
+            : "Renderer stream disconnected"
+        );
+      }
+    })();
+    rendererStreamTaskRef.current = task;
+    void task.finally(() => {
+      if (rendererStreamTaskRef.current === task) {
+        rendererStreamTaskRef.current = null;
+      }
+    }).catch(() => undefined);
+  }, [attachRendererStream]);
+  rendererRestartRef.current = launchRendererStream;
+
+  const stopRendererTransport = useCallback((): void => {
+    rendererLaunchEpochRef.current += 1;
+    if (abortControllerRef.current !== null) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    rendererClientRef.current = null;
+    rendererAudioPlayerRef.current?.dispose();
+    rendererAudioPlayerRef.current = null;
+    setIsSpeaking(false);
+    setIsStreaming(false);
+    setIsConnected(false);
+  }, []);
+
+  const beginSessionTransition = useCallback(async (): Promise<number> => {
+    const transitionEpoch = sessionTransitionEpochRef.current + 1;
+    sessionTransitionEpochRef.current = transitionEpoch;
+
+    // Session replacement is an authority boundary, not merely a React state
+    // change. Revoke the old renderer synchronously and begin bounded
+    // microphone teardown before any fallible replacement command can yield.
+    stopRendererTransport();
+    resetBoardSync();
+    await voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    return transitionEpoch;
+  }, [resetBoardSync, stopRendererTransport, voiceIntegration.voiceControls]);
 
   const startSession = useCallback(
     async (customSessionId?: SessionId): Promise<void> => {
@@ -567,19 +747,25 @@ export function useInterviewSession(
       const targetSessionId =
         customSessionId ??
         SessionIdSchema.parse(`session_${globalThis.crypto.randomUUID()}`);
+      const transitionEpoch = await beginSessionTransition();
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
 
       try {
         const client = getCommandClient();
         await client.startSession(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let problemView: InterviewProblemPublicView | null = null;
         try {
           const context = await client.getInterviewSessionContext(targetSessionId);
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
           problemView = context.problem ?? null;
         } catch {
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
           // The authoritative start already succeeded. A read-model/context
           // failure must not make the caller retry session creation.
           setError("Session started, but session context could not be loaded");
         }
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         if (sessionId !== targetSessionId) {
           const mayBootstrapFreshCanvas = sessionId === null;
           pendingSubmissionsRef.current.clear();
@@ -597,14 +783,17 @@ export function useInterviewSession(
         try {
           await synchronizeWhiteboardFor(targetSessionId);
         } catch {
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
           setWhiteboardSync({
             status: "UNSYNCHRONIZED",
             pendingMutationCount: 0,
             reason: "Whiteboard authority synchronization failed"
           });
         }
-        void attachRendererStream(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        launchRendererStream(targetSessionId);
       } catch (err) {
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let msg = "Failed to start interview session";
         if (err instanceof BrowserCommandProtocolError) {
           msg = `Command error [${err.code}]: HTTP ${String(err.status)}`;
@@ -616,8 +805,9 @@ export function useInterviewSession(
       }
     },
     [
+      beginSessionTransition,
       getCommandClient,
-      attachRendererStream,
+      launchRendererStream,
       resetBoardSync,
       sessionId,
       synchronizeWhiteboardFor
@@ -627,10 +817,14 @@ export function useInterviewSession(
   const recoverSession = useCallback(
     async (targetSessionId: SessionId): Promise<void> => {
       setError(null);
+      const transitionEpoch = await beginSessionTransition();
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       try {
         const client = getCommandClient();
         const context = await client.getInterviewSessionContext(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         const response = await client.resumeSession(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
           resetBoardSync();
@@ -647,14 +841,21 @@ export function useInterviewSession(
         try {
           await synchronizeWhiteboardFor(targetSessionId);
         } catch {
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
           setWhiteboardSync({
             status: "UNSYNCHRONIZED",
             pendingMutationCount: 0,
             reason: "Recovered whiteboard does not have a verified local revision correspondence"
           });
         }
-        void attachRendererStream(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (response.status === "ACTIVE") {
+          launchRendererStream(targetSessionId);
+        } else {
+          stopRendererTransport();
+        }
       } catch (err) {
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let msg = "Failed to recover session";
         if (err instanceof BrowserCommandProtocolError) {
           msg = `Recovery error [${err.code}]: HTTP ${String(err.status)}`;
@@ -666,10 +867,12 @@ export function useInterviewSession(
       }
     },
     [
+      beginSessionTransition,
       getCommandClient,
-      attachRendererStream,
+      launchRendererStream,
       resetBoardSync,
       sessionId,
+      stopRendererTransport,
       synchronizeWhiteboardFor
     ]
   );
@@ -715,10 +918,14 @@ export function useInterviewSession(
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
       if (sessionId === null) return;
+      sessionTransitionEpochRef.current += 1;
       setError(null);
       try {
         const client = getCommandClient();
         await client.completeSession(sessionId, summary);
+        resetBoardSync();
+        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+        stopRendererTransport();
         resetBoardSync();
         setSessionStatus("COMPLETED");
       } catch (err) {
@@ -727,16 +934,26 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, getCommandClient, resetBoardSync]
+    [
+      getCommandClient,
+      resetBoardSync,
+      sessionId,
+      stopRendererTransport,
+      voiceIntegration.voiceControls
+    ]
   );
 
   const archiveSession = useCallback(
     async (reason?: string): Promise<void> => {
       if (sessionId === null) return;
+      sessionTransitionEpochRef.current += 1;
       setError(null);
       try {
         const client = getCommandClient();
         await client.archiveSession(sessionId, reason);
+        resetBoardSync();
+        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+        stopRendererTransport();
         resetBoardSync();
         setSessionStatus("ARCHIVED");
       } catch (err) {
@@ -745,7 +962,13 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, getCommandClient, resetBoardSync]
+    [
+      getCommandClient,
+      resetBoardSync,
+      sessionId,
+      stopRendererTransport,
+      voiceIntegration.voiceControls
+    ]
   );
 
   const submitTypedInput = useCallback(
@@ -878,14 +1101,10 @@ export function useInterviewSession(
   );
 
   const disconnect = useCallback((): void => {
-    if (abortControllerRef.current !== null) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    rendererClientRef.current = null;
-    setIsStreaming(false);
-    setIsConnected(false);
-  }, []);
+    sessionTransitionEpochRef.current += 1;
+    void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    stopRendererTransport();
+  }, [stopRendererTransport, voiceIntegration.voiceControls]);
 
   const clearError = useCallback((): void => {
     setError(null);
@@ -893,6 +1112,9 @@ export function useInterviewSession(
 
   useEffect(() => {
     return () => {
+      sessionTransitionEpochRef.current += 1;
+      rendererLaunchEpochRef.current += 1;
+      rendererRestartRef.current = null;
       if (abortControllerRef.current !== null) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -904,6 +1126,8 @@ export function useInterviewSession(
       boardSyncRef.current?.reset();
       boardSyncRef.current = null;
       boardSyncSessionRef.current = null;
+      rendererAudioPlayerRef.current?.dispose();
+      rendererAudioPlayerRef.current = null;
     };
   }, []);
 
@@ -919,6 +1143,8 @@ export function useInterviewSession(
     sequence,
     contextEpoch,
     error,
+    voice: voiceIntegration.voice,
+    voiceControls: voiceIntegration.voiceControls,
     baseUrl,
     isTransportManaged: desktopBootstrap !== undefined,
     setBaseUrl,
@@ -938,6 +1164,12 @@ export function useInterviewSession(
     clearError,
     disconnect
   };
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, milliseconds);
+  });
 }
 
 function historyEntryToTranscriptItem(entry: SessionHistoryEntry): TranscriptItem {

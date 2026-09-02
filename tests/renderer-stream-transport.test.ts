@@ -18,6 +18,7 @@ import {
 } from "../packages/delivery/src/index.js";
 import {
   SessionRuntimeRegistry,
+  TurnCoordinator,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
@@ -80,6 +81,83 @@ describe("authenticated renderer stream transport", () => {
     store.close();
   });
 
+  it("drops renderer commands buffered behind a barge-in stream abort", async () => {
+    const sessionId = newSessionId();
+    const firstDeliveryId = newDeliveryId();
+    const secondDeliveryId = newDeliveryId();
+    const controller = new AbortController();
+    const visible: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+          if (deliveryId === firstDeliveryId) controller.abort();
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+
+    const wire = [
+      rendererEvent(firstDeliveryId, "first before barge-in"),
+      rendererEvent(secondDeliveryId, "stale buffered after barge-in")
+    ].join("");
+    const fetchBufferedStream: typeof fetch = async () => new Response(
+      new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.enqueue(new TextEncoder().encode(wire));
+          streamController.close();
+        }
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "text/event-stream; charset=utf-8" }
+      }
+    );
+
+    await consumeAuthenticatedRendererStream({
+      streamUrl: "http://127.0.0.1:43124/v1/renderer-stream",
+      sessionId,
+      authenticatedFetch: fetchBufferedStream,
+      signal: controller.signal
+    }, renderer);
+
+    expect(visible).toEqual([firstDeliveryId]);
+  });
+
+  it("snapshots the renderer origin allowlist against post-construction mutation", async () => {
+    const origins = new Set([CLIENT_ORIGIN]);
+    const isolated = new RendererStreamServer({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: origins,
+        clientToken: CLIENT_TOKEN
+      },
+      sessions
+    });
+    origins.add("http://attacker.invalid");
+    const address = await isolated.start();
+    try {
+      const response = await fetch(address.streamUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://attacker.invalid",
+          "x-interview-client-token": CLIENT_TOKEN
+        },
+        body: JSON.stringify({
+          protocolVersion: 1,
+          type: "ATTACH_RENDERER_STREAM",
+          sessionId: newSessionId()
+        })
+      });
+      expect(response.status).toBe(403);
+    } finally {
+      await isolated.stop();
+    }
+  });
+
   it("rejects malformed transport tokens before either HTTP server can start", () => {
     for (const clientToken of [
       12345 as never,
@@ -102,7 +180,7 @@ describe("authenticated renderer stream transport", () => {
           clientToken
         },
         sessions
-      })).toThrow(/Client token must contain at least 32 characters/u);
+      })).toThrow(/Renderer stream client token must contain between 32 and 256 safe characters/u);
     }
   });
 
@@ -338,6 +416,246 @@ describe("authenticated renderer stream transport", () => {
     await replacementConsumer;
   });
 
+  it("keeps same-connection AUDIO publish idempotent after its one-shot asset is consumed", async () => {
+    await streamServer.stop();
+
+    let audioAssetAvailable = true;
+    streamServer = new RendererStreamServer({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: new Set([CLIENT_ORIGIN]),
+        clientToken: CLIENT_TOKEN
+      },
+      sessions,
+      audioAssetAvailable: () => audioAssetAvailable
+    });
+    streamAddress = await streamServer.start();
+
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const controller = new AbortController();
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, {
+      medium: "AUDIO",
+      text: "single-use logical asset",
+      audioRef: `audio_v1_${"a".repeat(64)}`
+    });
+    const first = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+    expect(first).toMatchObject({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId,
+      status: "DELIVERING"
+    });
+
+    // The authenticated asset GET is single-use. Once the browser takes those
+    // bytes, a duplicate publication on the same live renderer connection is
+    // an idempotent transport retry, not evidence that exposure became
+    // uncertain.
+    audioAssetAvailable = false;
+    const duplicate = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+    expect(duplicate).toMatchObject({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId,
+      status: "DELIVERING"
+    });
+    expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+    controller.abort();
+    await consumer;
+  });
+
+  it("does not report SENT when renderer backpressure ends in a stalled socket", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const controller = new AbortController();
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const internals = streamServer as unknown as {
+      connections: Map<SessionId, Set<{
+        response: {
+          write: (chunk: string) => boolean;
+          destroy: () => void;
+        };
+      }>>;
+    };
+    const connection = [...(internals.connections.get(sessionId) ?? [])][0];
+    if (connection === undefined) throw new Error("Expected renderer connection");
+
+    const writeSpy = vi.spyOn(connection.response, "write").mockImplementation(() => {
+      queueMicrotask(() => connection.response.destroy());
+      return false;
+    });
+
+    try {
+      const atom = await queueDelivery(writer, {
+        medium: "TEXT",
+        text: "stalled renderer backpressure"
+      });
+      const result = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+
+      expect(result).toMatchObject({
+        outcome: "NOT_DELIVERABLE",
+        deliveryId: atom.deliveryId,
+        status: "POSSIBLY_EXPOSED"
+      });
+      expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      writeSpy.mockRestore();
+      controller.abort();
+      await consumer;
+    }
+  });
+
+  it("does not memoize a send when durable DELIVERING admission throws before the physical write", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const visible: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, {
+      medium: "TEXT",
+      text: "retry after pre-write post-commit failure"
+    });
+    const originalExecute = writer.execute.bind(writer);
+    let injected = false;
+    const executeSpy = vi.spyOn(writer, "execute").mockImplementation(
+      async (...args: Parameters<typeof writer.execute>) => {
+        const result = await originalExecute(...args);
+        if (!injected && args[1].operation === "RECONNECT_DELIVERY") {
+          injected = true;
+          throw new Error("injected post-commit pre-write failure");
+        }
+        return result;
+      }
+    );
+
+    await expect(streamServer.publishDelivery(sessionId, atom.deliveryId))
+      .rejects.toThrow(/post-commit pre-write/u);
+    expect(injected).toBe(true);
+    expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+    expect(visible).toEqual([]);
+
+    executeSpy.mockRestore();
+    const retried = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+    expect(retried).toEqual({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId,
+      status: "DELIVERING"
+    });
+    await waitFor(() => visible.includes(atom.deliveryId));
+
+    controller.abort();
+    await consumer;
+  });
+
+  it("does not physically write a delivery invalidated after DELIVERING admission", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const visible: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, {
+      medium: "TEXT",
+      text: "must not cross the barge-in authority boundary"
+    });
+    const turns = new TurnCoordinator(writer);
+    const originalExecute = writer.execute.bind(writer);
+    let injectedInvalidation = false;
+    const executeSpy = vi.spyOn(writer, "execute").mockImplementation(
+      async (...args: Parameters<typeof writer.execute>) => {
+        const result = await originalExecute(...args);
+        const identity = args[1];
+        if (!injectedInvalidation && identity.operation === "RECONNECT_DELIVERY") {
+          injectedInvalidation = true;
+          await turns.beginUtterance();
+        }
+        return result;
+      }
+    );
+
+    const published = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+    expect(injectedInvalidation).toBe(true);
+    expect(published).toEqual({
+      outcome: "NOT_DELIVERABLE",
+      deliveryId: atom.deliveryId,
+      status: "POSSIBLY_EXPOSED"
+    });
+    await Promise.resolve();
+    expect(visible).toEqual([]);
+    expect(deliveryLifecycle(store.load(sessionId), atom.deliveryId)).toEqual([
+      "DELIVERY_QUEUED",
+      "DELIVERY_STARTED",
+      "DELIVERY_POSSIBLY_EXPOSED"
+    ]);
+
+    executeSpy.mockRestore();
+    controller.abort();
+    await consumer;
+  });
+
   it("serializes concurrent publication attempts without duplicating visible output", async () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
@@ -484,6 +802,15 @@ describe("authenticated renderer stream transport", () => {
     expect(malformed.status).toBe(400);
     expect(RendererStreamErrorResponseSchema.parse(await malformed.json() as unknown).error.code).toBe("INVALID_STREAM_REQUEST");
 
+    const malformedUtf8 = await fetch(streamAddress.streamUrl, {
+      method: "POST",
+      headers: authenticatedHeaders(),
+      body: new Uint8Array([0xc3, 0x28])
+    });
+    expect(malformedUtf8.status).toBe(400);
+    expect(RendererStreamErrorResponseSchema.parse(await malformedUtf8.json() as unknown).error.code)
+      .toBe("INVALID_STREAM_REQUEST");
+
     const oversized = await fetch(streamAddress.streamUrl, {
       method: "POST",
       headers: authenticatedHeaders(),
@@ -522,6 +849,28 @@ describe("authenticated renderer stream transport", () => {
     controller.abort();
     await first.body?.cancel().catch(() => undefined);
     await waitFor(() => streamServer.activeConnectionCount() === 0);
+  });
+
+  it("rejects fresh renderer attachment after authoritative session completion", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    await new TurnCoordinator(writer).completeSession();
+
+    const response = await fetch(streamAddress.streamUrl, {
+      method: "POST",
+      headers: authenticatedHeaders(),
+      body: JSON.stringify({
+        protocolVersion: 1,
+        type: "ATTACH_RENDERER_STREAM",
+        sessionId
+      })
+    });
+
+    expect(response.status).toBe(409);
+    expect(RendererStreamErrorResponseSchema.parse(await response.json() as unknown).error.code)
+      .toBe("INVALID_STREAM_REQUEST");
+    expect(streamServer.activeConnectionCount()).toBe(0);
   });
 
   it("drains an admitted publication before shutdown classifies renderer uncertainty", async () => {
@@ -812,6 +1161,17 @@ async function postAcknowledgement(
     },
     body: JSON.stringify(body)
   });
+}
+
+function rendererEvent(deliveryId: DeliveryId, text: string): string {
+  return `event: delivery\ndata: ${JSON.stringify({
+    protocolVersion: 1,
+    type: "DELIVERY_COMMAND",
+    command: {
+      deliveryId,
+      content: { medium: "TEXT", text }
+    }
+  })}\n\n`;
 }
 
 function authenticatedHeaders(): Record<string, string> {
