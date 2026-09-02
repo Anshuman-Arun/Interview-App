@@ -13,7 +13,7 @@ import {
   type SessionWriter
 } from "../../../packages/interview-engine/src/index.js";
 
-export type TurnRecoveryDisposition = "COMPLETE" | "RETRYABLE";
+export type TurnRecoveryDisposition = "COMPLETE" | "RETRYABLE" | "DEFERRED";
 
 export interface TurnRecoveryDelegate {
   readonly recoverPendingTurns: (
@@ -137,6 +137,13 @@ export class SessionRecoveryCoordinator {
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.delegate !== undefined) {
         const disposition = await this.delegate.recoverPendingTurns(sessionId);
+        if (disposition === "DEFERRED") {
+          // Shutdown-cancelled provider work did not recover the pending turn.
+          // Reject this recovery attempt so the process-lifetime cache is
+          // cleared by the common failure path and a later restart can retry.
+          this.retryableTurnRecoveries.delete(sessionId);
+          throw new Error("Turn recovery was deferred during provider shutdown");
+        }
         if (disposition === "RETRYABLE") {
           this.retryableTurnRecoveries.add(sessionId);
         } else {
