@@ -148,11 +148,8 @@ export const App: React.FC = () => {
     targetSessionId: SessionId,
     tab: SessionReviewTab = "evaluation"
   ): void => {
+    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") return;
     setShowSessionsModal(false);
-    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
-      setReviewTarget({ sessionId: targetSessionId, tab });
-      return;
-    }
     navigate({
       page: "review",
       sessionId: targetSessionId,
@@ -471,12 +468,14 @@ export const App: React.FC = () => {
           <form onSubmit={handleSaveSettings} className="flex flex-wrap items-center gap-4 flex-1">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">
-                Loopback Command URL
+                Loopback Command URL · locked during active interview
               </label>
               <input
                 type="text"
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
+                disabled
+                aria-disabled="true"
                 className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono w-56 focus:outline-none focus:border-indigo-400"
                 placeholder="http://127.0.0.1:43123"
               />
@@ -485,9 +484,10 @@ export const App: React.FC = () => {
             <div className="flex items-end gap-2 pt-4">
               <button
                 type="submit"
+                disabled
                 className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold"
               >
-                Apply Config
+                Locked
               </button>
               <button
                 type="button"
