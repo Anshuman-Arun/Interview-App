@@ -202,6 +202,9 @@ export function createAntigravityCliReasoningProvider(
       usageReporting: false,
       dataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT"
     },
+    snapshotTurnInput(input) {
+      return snapshotAntigravityTurnInput(input);
+    },
     async verifyBillingSafety({ now }) {
       return {
         billingClass: "UNKNOWN",
@@ -278,6 +281,26 @@ function captureExecutor(
     throw new AntigravityCliAdapterError("INVALID_RUNTIME");
   }
   return descriptor.value as SupervisedCliExecutor["execute"];
+}
+
+function snapshotAntigravityTurnInput(
+  input: ReasoningTurnInput
+): ReasoningTurnInput {
+  let serializedContext: string;
+  let snapshotContext: unknown;
+  try {
+    serializedContext = serializeBoundedPlainJson(
+      readOwnTurnContext(input),
+      MAX_CONTEXT_BYTES
+    );
+    snapshotContext = parseStrictJson(serializedContext);
+  } catch {
+    throw new AntigravityCliAdapterError("INVALID_CONTEXT");
+  }
+  return Object.freeze({
+    generationId: input.generationId,
+    context: snapshotContext
+  });
 }
 
 function createSingleTurnInput(input: ReasoningTurnInput): string {
