@@ -380,7 +380,10 @@ export class RendererStreamServer {
 
           const stalledStatus = writer.getState().deliveries[deliveryId]?.status;
           if (stalledStatus === "EXPOSED" || stalledStatus === "COMPLETED") {
-            return { outcome: "SENT", deliveryId, status: stalledStatus };
+            // SENT describes the transport admission that already occurred;
+            // this result variant intentionally carries the send-time
+            // DELIVERING status even if a concurrent ACK has advanced state.
+            return { outcome: "SENT", deliveryId, status: "DELIVERING" };
           }
           return {
             outcome: "NOT_DELIVERABLE",
