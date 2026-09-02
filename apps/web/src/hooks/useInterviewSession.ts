@@ -1099,6 +1099,7 @@ export function useInterviewSession(
       if (summary.started && summary.status === "ACTIVE") {
         sessionMutationAdmissionRef.current = true;
         setSessionStatus("ACTIVE");
+        launchRendererStream(targetSessionId);
         const message = originalError instanceof Error
           ? originalError.message
           : "Terminal session command failed";
@@ -1116,7 +1117,11 @@ export function useInterviewSession(
       }
       failClosedUnknownTerminalOutcome();
     }
-  }, [failClosedUnknownTerminalOutcome, settleTerminalSession]);
+  }, [
+    failClosedUnknownTerminalOutcome,
+    launchRendererStream,
+    settleTerminalSession
+  ]);
 
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
@@ -1124,6 +1129,8 @@ export function useInterviewSession(
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
       sessionTransitionEpochRef.current = transitionEpoch;
       sessionMutationAdmissionRef.current = false;
+      stopRendererTransport();
+      void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
       setError(null);
       const client = getCommandClient();
       try {
@@ -1151,6 +1158,8 @@ export function useInterviewSession(
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
       sessionTransitionEpochRef.current = transitionEpoch;
       sessionMutationAdmissionRef.current = false;
+      stopRendererTransport();
+      void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
       setError(null);
       const client = getCommandClient();
       try {
