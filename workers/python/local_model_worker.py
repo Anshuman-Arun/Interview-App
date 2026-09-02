@@ -802,7 +802,13 @@ def main() -> int:
 
     server = WorkerServer(("127.0.0.1", 0), Handler, token=token, component=args.component, runtime=runtime)
     port = int(server.server_address[1])
-
+    serve_thread = threading.Thread(
+        target=server.serve_forever,
+        kwargs={"poll_interval": 0.2},
+        name="desktop-worker-http",
+        daemon=False,
+    )
+    serve_thread.start()
     server_holder["server"] = server
     ready = {
         "ready": True,
