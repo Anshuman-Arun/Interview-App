@@ -3,6 +3,9 @@ import type {
   SessionId,
   StoredSessionSummary
 } from "../../../../packages/domain/src/index.js";
+import type {
+  SessionHistoryReadResponse
+} from "../../../../packages/replay/src/index.js";
 import { ProductFrame, type ProductPageId } from "../components/ProductFrame.js";
 import { HomePage } from "../pages/HomePage.js";
 import { ReviewPageShell, type ReviewView } from "../pages/ReviewPageShell.js";
@@ -43,7 +46,7 @@ export function ProductPageRouter({
     options?: { readonly replace?: boolean }
   ) => void;
   readonly onRefreshSessions: () => void;
-  readonly history: import("../../../../packages/replay/src/index.js").SessionHistoryReadResponse | null;
+  readonly history: SessionHistoryReadResponse | null;
   readonly historyLoading: boolean;
   readonly historyError: string | null;
   readonly connection?: {
