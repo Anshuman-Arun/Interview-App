@@ -236,16 +236,43 @@ export class InMemoryTldrawEditor implements TldrawEditor {
 export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPresenter {
   private editor: TldrawEditor | null;
   private localBoardRevision = 0;
+  private detachedPageShapes: readonly TLShapeRecord[] | null = null;
 
   public constructor(editor?: TldrawEditor | null) {
     this.editor = editor ?? null;
   }
 
   public attachEditor(editor: TldrawEditor): void {
+    if (this.editor === editor) return;
+
+    const detached = this.detachedPageShapes;
+    if (detached !== null && editor.getCurrentPageShapes().length > 0) {
+      throw new Error(
+        "Cannot restore a detached whiteboard into a non-empty editor"
+      );
+    }
+
     this.editor = editor;
+    if (detached === null) return;
+
+    try {
+      if (detached.length > 0) {
+        editor.createShapes(detached.map((shape) => globalThis.structuredClone(shape)));
+      }
+      this.detachedPageShapes = null;
+    } catch (error) {
+      this.editor = null;
+      throw error;
+    }
   }
 
   public detachEditor(): void {
+    const editor = this.editor;
+    if (editor !== null) {
+      this.detachedPageShapes = editor
+        .getCurrentPageShapes()
+        .map((shape) => globalThis.structuredClone(shape));
+    }
     this.editor = null;
   }
 
@@ -258,6 +285,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }
 
   public resetForNewSession(): void {
+    this.detachedPageShapes = null;
     const editor = this.editor;
     if (editor !== null) {
       const ids = editor.getCurrentPageShapes().map((shape) => shape.id);
