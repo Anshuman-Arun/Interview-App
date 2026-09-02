@@ -323,10 +323,16 @@ export class LoopbackCommandServer {
       throw new ProtocolHttpError(404, "NOT_FOUND", "Session not found");
     }
 
+    if (!isStartCommand) {
+      // Recovery owns writer opening for existing sessions. This ordering lets
+      // migration/corruption admission inspect persisted events before modern
+      // reducer construction, while normal recovery still returns the canonical
+      // process-local writer through SessionRuntimeRegistry.
+      await this.options.sessions.ensureRecovered(command.sessionId);
+    }
     const writer = await this.options.sessions.getWriterAsync(command.sessionId);
     let recoveredComposition: ReturnType<typeof resolveSessionStateComposition> | undefined;
     if (!isStartCommand) {
-      await this.options.sessions.ensureRecovered(command.sessionId);
       recoveredComposition = resolveSessionStateComposition(writer.getState());
     }
     const envelope = createCommandEnvelope({
