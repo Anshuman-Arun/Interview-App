@@ -59,7 +59,7 @@ export const App: React.FC = () => {
   const [inputUrl, setInputUrl] = useState(session.baseUrl);
 
   const handleStartSession = async (): Promise<void> => {
-    if (sessionEntryPendingRef.current) return;
+    if (sessionEntryPendingRef.current || sessionTerminalPendingRef.current) return;
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
     try {
@@ -84,7 +84,11 @@ export const App: React.FC = () => {
 
   const handleCompleteSession = async (): Promise<void> => {
     const targetSessionId = session.sessionId;
-    if (targetSessionId === null || sessionTerminalPendingRef.current) return;
+    if (
+      targetSessionId === null
+      || sessionTerminalPendingRef.current
+      || sessionEntryPendingRef.current
+    ) return;
     sessionTerminalPendingRef.current = true;
     setSessionTerminalPending(true);
     try {
@@ -105,7 +109,11 @@ export const App: React.FC = () => {
 
   const handleArchiveSession = async (): Promise<void> => {
     const targetSessionId = session.sessionId;
-    if (targetSessionId === null || sessionTerminalPendingRef.current) return;
+    if (
+      targetSessionId === null
+      || sessionTerminalPendingRef.current
+      || sessionEntryPendingRef.current
+    ) return;
     sessionTerminalPendingRef.current = true;
     setSessionTerminalPending(true);
     try {
@@ -141,7 +149,15 @@ export const App: React.FC = () => {
   };
 
   const handleRecoverSession = async (targetSessionId: SessionId): Promise<void> => {
-    if (sessionEntryPendingRef.current) return;
+    if (
+      sessionEntryPendingRef.current
+      || sessionTerminalPendingRef.current
+      || (
+        session.isSessionStarted
+        && session.sessionStatus === "ACTIVE"
+        && session.sessionId === targetSessionId
+      )
+    ) return;
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
     try {
@@ -158,7 +174,11 @@ export const App: React.FC = () => {
 
   const handleManualRecover = async (e: React.SyntheticEvent): Promise<void> => {
     e.preventDefault();
-    if (!recoverySessionInput.trim() || sessionEntryPendingRef.current) return;
+    if (
+      !recoverySessionInput.trim()
+      || sessionEntryPendingRef.current
+      || sessionTerminalPendingRef.current
+    ) return;
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
     try {
@@ -378,7 +398,7 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleCompleteSession()}
-                disabled={sessionTerminalPending}
+                disabled={sessionTerminalPending || sessionEntryPending}
                 className="app-header__end"
               >
                 {sessionTerminalPending ? "Ending…" : "End interview"}
@@ -386,7 +406,7 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleArchiveSession()}
-                disabled={sessionTerminalPending}
+                disabled={sessionTerminalPending || sessionEntryPending}
                 className="app-header__quiet"
               >
                 {sessionTerminalPending ? "Working…" : "Archive"}
@@ -495,7 +515,7 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handleStartSession()}
-                    disabled={sessionEntryPending}
+                    disabled={sessionEntryPending || sessionTerminalPending}
                     className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors"
                   >
                     {sessionEntryPending ? "Opening interview…" : "+ Start New Interview Session"}
@@ -610,8 +630,10 @@ export const App: React.FC = () => {
                     <button
                       type="button"
                       onClick={
-                        s.status === "ACTIVE"
-                          ? () => void handleRecoverSession(s.sessionId)
+                        s.status === "ACTIVE" && s.sessionId === session.sessionId
+                          ? undefined
+                          : s.status === "ACTIVE"
+                            ? () => void handleRecoverSession(s.sessionId)
                           : (
                               (s.status === "COMPLETED" || s.status === "ARCHIVED")
                               && isSessionIdAddressableForRead(s.sessionId)
@@ -620,10 +642,20 @@ export const App: React.FC = () => {
                             : undefined
                       }
                       disabled={
-                        s.status !== "ACTIVE"
-                        && (
+                        (
+                          s.status === "ACTIVE"
+                          && (
+                            s.sessionId === session.sessionId
+                            || sessionEntryPending
+                            || sessionTerminalPending
+                          )
+                        )
+                        || (
+                          s.status !== "ACTIVE"
+                          && (
                           (s.status !== "COMPLETED" && s.status !== "ARCHIVED")
-                          || !isSessionIdAddressableForRead(s.sessionId)
+                            || !isSessionIdAddressableForRead(s.sessionId)
+                          )
                         )
                       }
                       className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
