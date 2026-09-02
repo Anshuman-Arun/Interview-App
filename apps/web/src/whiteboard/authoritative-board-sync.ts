@@ -174,6 +174,15 @@ export class AuthoritativeBoardSyncCoordinator {
       return Promise.reject(new Error(this.reason ?? "Whiteboard authority is unsynchronized"));
     }
 
+    const operationCount =
+      change.added.length + change.updated.length + change.deleted.length;
+    if (operationCount === 0) return Promise.resolve();
+    if (operationCount > MAX_BOARD_MUTATION_SHAPES) {
+      const reason = "Whiteboard editor transaction exceeds the bounded mutation size";
+      this.failClosed(reason);
+      return Promise.reject(new Error(reason));
+    }
+
     const prepared = prepareMutation(change);
     const fingerprint = fingerprintPrepared(prepared);
     if (this.recentFingerprints.includes(fingerprint)
@@ -224,10 +233,21 @@ export class AuthoritativeBoardSyncCoordinator {
           return;
         }
 
-        const mutation = NormalizedBoardMutationSchema.parse({
-          baseBoardRevision: this.authoritativeRevision,
-          ...entry.change
-        });
+        let mutation: NormalizedBoardMutation;
+        try {
+          mutation = NormalizedBoardMutationSchema.parse({
+            baseBoardRevision: this.authoritativeRevision,
+            ...entry.change
+          });
+        } catch (error) {
+          this.failClosed(
+            "Whiteboard mutation failed local bounded validation",
+            error instanceof Error
+              ? error
+              : new Error("Whiteboard mutation validation failed")
+          );
+          return;
+        }
         let response;
         for (;;) {
           entry.attempts += 1;
