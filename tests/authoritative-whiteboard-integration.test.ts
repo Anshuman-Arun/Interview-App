@@ -354,6 +354,74 @@ describe("browser authoritative board synchronization", () => {
     expect(sync.currentAuthoritativeRevision()).toBe(BoardRevisionSchema.parse(1));
   });
 
+  it("does not let a late old-session acknowledgement resurrect synchronization after reset", async () => {
+    const firstSessionId = newSessionId();
+    const secondSessionId = newSessionId();
+    type CommitResponse = Awaited<ReturnType<SyncClient["commitBoardMutation"]>>;
+    const oldAck = deferred<CommitResponse>();
+    let oldRequestId: ReturnType<typeof newRequestId> | undefined;
+
+    const client: SyncClient = {
+      getBoardState: async (targetSessionId) =>
+        boardStateResponse(
+          targetSessionId,
+          BoardRevisionSchema.parse(0),
+          []
+        ),
+      commitBoardMutation: async (targetSessionId, _mutation, options = {}) => {
+        const requestId = options.requestId ?? newRequestId();
+        if (targetSessionId === firstSessionId) {
+          oldRequestId = requestId;
+          return oldAck.promise;
+        }
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_MUTATION_COMMITTED",
+          requestId,
+          sessionId: secondSessionId,
+          committed: true,
+          boardRevision: BoardRevisionSchema.parse(1)
+        };
+      }
+    };
+    const sync = new AuthoritativeBoardSyncCoordinator(client);
+    await sync.synchronize(firstSessionId, []);
+
+    const pending = sync.submit(studentChange("ADD", 10));
+    const resetRejection = expect(pending).rejects.toThrow(/reset/u);
+    sync.reset();
+    await resetRejection;
+
+    if (oldRequestId === undefined) throw new Error("Expected in-flight old-session request");
+    oldAck.resolve({
+      protocolVersion: 1,
+      ok: true,
+      type: "BOARD_MUTATION_COMMITTED",
+      requestId: oldRequestId,
+      sessionId: firstSessionId,
+      committed: true,
+      boardRevision: BoardRevisionSchema.parse(1)
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sync.snapshot()).toMatchObject({
+      status: "UNINITIALIZED",
+      pendingMutationCount: 0
+    });
+    expect(sync.currentAuthoritativeRevision()).toBeUndefined();
+
+    await sync.synchronize(secondSessionId, []);
+    await sync.submit({
+      source: "EDITOR",
+      added: [shape("shape:second-session", 1, 50)],
+      updated: [],
+      deleted: []
+    });
+    expect(sync.currentAuthoritativeRevision()).toBe(BoardRevisionSchema.parse(1));
+  });
+
   it("fails closed on reconnect when local shape revisions do not match authority", async () => {
     const sessionId = newSessionId();
     const client: SyncClient = {
