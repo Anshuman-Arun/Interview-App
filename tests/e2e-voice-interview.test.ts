@@ -15,6 +15,7 @@ import {
   TtsWorkerCore,
   type RecognizerAudioInput,
   type SpeechRecognizer,
+  type SpeechWorkerEvent,
   type SynthesizedPcm,
   type TtsSegmentSynthesisRequest,
   type VadBackend
@@ -95,6 +96,41 @@ class ControlledAudioElement implements BrowserAudioElementLike {
 
   public emit(type: "playing" | "ended" | "error"): void {
     for (const listener of [...(this.listeners.get(type) ?? [])]) listener();
+  }
+}
+
+class TamperingSpeechWorker extends SpeechWorkerCore {
+  public override async submitFrame(
+    envelopeInput: unknown,
+    payload: unknown,
+    heuristicsInput: unknown = {}
+  ): Promise<readonly SpeechWorkerEvent[]> {
+    const events = await super.submitFrame(envelopeInput, payload, heuristicsInput);
+    const forgedHash = "0".repeat(64);
+    return events.map((event) => {
+      if (event.type === "UTTERANCE_FINALIZED") {
+        return {
+          ...event,
+          sourceAudioBasis: {
+            ...event.sourceAudioBasis,
+            pcmSha256: forgedHash
+          }
+        };
+      }
+      if (event.type === "TRANSCRIPT_CANDIDATE") {
+        return {
+          ...event,
+          candidate: {
+            ...event.candidate,
+            sourceAudioBasis: {
+              ...event.candidate.sourceAudioBasis,
+              pcmSha256: forgedHash
+            }
+          }
+        };
+      }
+      return event;
+    });
   }
 }
 
@@ -628,6 +664,71 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.keys(state.turns)).toHaveLength(0);
     expect(Object.keys(state.inputEpisodes)).toHaveLength(0);
     expect(Object.values(state.utterances).every(
+      (utterance) => utterance.status !== "CAPTURING"
+    )).toBe(true);
+  });
+
+  it("rejects a schema-valid worker audio basis that does not match admitted PCM", async () => {
+    const speechWorker = new TamperingSpeechWorker({
+      vadBackend: new ScriptedVadBackend([1, 1, 0, 0, 0, 0, 0, 0]),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const voiceClient = new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: fetchWithAuth
+    });
+    const speech = await voiceClient.openStream(sessionId);
+
+    await speech.sendFrame(microphoneFrame(0.2));
+    await speech.sendFrame(microphoneFrame(0.2));
+
+    let rejected = false;
+    for (let index = 0; index < 8; index += 1) {
+      try {
+        await speech.sendFrame(microphoneFrame(0));
+      } catch {
+        rejected = true;
+        break;
+      }
+    }
+    expect(rejected).toBe(true);
+
+    const writer = server.registry.get(sessionId);
+    await writer.waitForIdle();
+    expect(Object.keys(writer.getState().inputEpisodes)).toHaveLength(0);
+    expect(Object.keys(writer.getState().turns)).toHaveLength(0);
+
+    await speech.cancel();
+    await writer.waitForIdle();
+    expect(Object.values(writer.getState().utterances).every(
       (utterance) => utterance.status !== "CAPTURING"
     )).toBe(true);
   });
