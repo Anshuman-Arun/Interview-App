@@ -23,8 +23,8 @@ switch (mode) {
     break;
   case "crash":
     collectStdin(() => {
-      process.stdout.write("private-stdout-value");
-      process.stderr.write("private-stderr-value");
+      process.stdout.write("SENSITIVE_STDOUT_SENTINEL");
+      process.stderr.write("SENSITIVE_STDERR_SENTINEL");
       process.exit(7);
     });
     break;
