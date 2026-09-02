@@ -384,6 +384,68 @@ describe("authenticated renderer stream transport", () => {
     await replacementConsumer;
   });
 
+  it("keeps same-connection AUDIO publish idempotent after its one-shot asset is consumed", async () => {
+    await streamServer.stop();
+
+    let audioAssetAvailable = true;
+    streamServer = new RendererStreamServer({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: new Set([CLIENT_ORIGIN]),
+        clientToken: CLIENT_TOKEN
+      },
+      sessions,
+      audioAssetAvailable: () => audioAssetAvailable
+    });
+    streamAddress = await streamServer.start();
+
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const controller = new AbortController();
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, {
+      medium: "AUDIO",
+      text: "single-use logical asset",
+      audioRef: `audio_v1_${"a".repeat(64)}`
+    });
+    const first = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+    expect(first).toMatchObject({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId,
+      status: "DELIVERING"
+    });
+
+    // The authenticated asset GET is single-use. Once the browser takes those
+    // bytes, a duplicate publication on the same live renderer connection is
+    // an idempotent transport retry, not evidence that exposure became
+    // uncertain.
+    audioAssetAvailable = false;
+    const duplicate = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+    expect(duplicate).toMatchObject({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId,
+      status: "DELIVERING"
+    });
+    expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+
+    controller.abort();
+    await consumer;
+  });
+
   it("does not report SENT when renderer backpressure ends in a stalled socket", async () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
