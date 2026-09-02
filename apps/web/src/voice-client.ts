@@ -18,8 +18,10 @@ import type { ResolvedAudioSource } from "./audio/renderer-adapter.js";
 import type { AudioFrame } from "./audio/types.js";
 
 const MAX_VOICE_RESPONSE_BYTES = 512 * 1024;
+const MAX_VOICE_RESPONSE_CHUNKS = 256;
 const FAILED_OPEN_CANCEL_TIMEOUT_MS = 1_000;
 const MAX_WAV_ASSET_BYTES = 8 * 1024 * 1024;
+const MAX_WAV_ASSET_CHUNKS = 4_096;
 const TARGET_SPEECH_SAMPLE_RATE = 48_000 as const;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
 
@@ -226,6 +228,7 @@ export class BrowserVoiceClient {
     const audioBytes = await readBoundedResponseBytes(
       response,
       MAX_WAV_ASSET_BYTES,
+      MAX_WAV_ASSET_CHUNKS,
       "Audio asset"
     );
     if (audioBytes.byteLength === 0) {
@@ -408,9 +411,14 @@ async function parseVoiceFrameResponse(response: Response): Promise<BrowserVoice
 }
 
 async function parseBoundedJson(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType !== "application/json") {
+    throw new Error("Voice transport response has an unexpected content type");
+  }
   const bytes = await readBoundedResponseBytes(
     response,
     MAX_VOICE_RESPONSE_BYTES,
+    MAX_VOICE_RESPONSE_CHUNKS,
     "Voice transport response"
   );
   let text: string;
@@ -429,6 +437,7 @@ async function parseBoundedJson(response: Response): Promise<unknown> {
 async function readBoundedResponseBytes(
   response: Response,
   maximumBytes: number,
+  maximumChunks: number,
   label: string
 ): Promise<Uint8Array<ArrayBuffer>> {
   const declared = response.headers.get("content-length");
@@ -446,12 +455,14 @@ async function readBoundedResponseBytes(
   const reader = response.body.getReader();
   const chunks: Uint8Array<ArrayBuffer>[] = [];
   let total = 0;
+  let chunkCount = 0;
   try {
     for (;;) {
       const chunk = await reader.read();
       if (chunk.done) break;
+      chunkCount += 1;
       total += chunk.value.byteLength;
-      if (total > maximumBytes) {
+      if (chunkCount > maximumChunks || total > maximumBytes) {
         await reader.cancel().catch(() => undefined);
         throw new Error(`${label} body exceeds the browser bound`);
       }
