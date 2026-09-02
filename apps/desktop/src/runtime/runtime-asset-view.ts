@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import {
   copyFile,
@@ -15,6 +16,8 @@ import type { ModelAssetManager } from "../../../../packages/model-assets/src/in
 import type { DesktopRuntimeAsset } from "./model-assets.js";
 
 const MAX_STALE_RUNTIME_VIEWS = 32;
+const RUNTIME_VIEW_OWNER_TOKEN = randomBytes(16).toString("hex");
+const RUNTIME_VIEW_NAME = /^run-([1-9][0-9]*)-([0-9a-f]{32})-/u;
 
 export interface RuntimeAssetView {
   readonly root: string;
@@ -40,11 +43,10 @@ export async function cleanupStaleRuntimeAssetViews(baseRoot: string): Promise<v
       await rm(candidate, { force: true });
       continue;
     }
-    const ownerPid = runtimeViewOwnerPid(entry.name);
-    // Unknown legacy/currently-being-created run directories fail closed.
-    // A known live owner must never have its verified model view deleted by
-    // another concurrently launched desktop process.
-    if (ownerPid === undefined || processIsAlive(ownerPid)) continue;
+    // The Electron application holds a single-instance lock for this app-data
+    // root. Protect only views created by this exact process instance; PID
+    // liveness alone is unsafe because operating systems reuse PIDs.
+    if (runtimeViewOwnedByCurrentProcess(entry.name)) continue;
     await rm(candidate, { recursive: true, force: true });
   }
 }
@@ -65,7 +67,10 @@ export async function materializeRuntimeAssetView(input: {
     throw new Error("Insufficient disk space for verified local runtime asset view");
   }
 
-  const root = await mkdtemp(path.join(input.baseRoot, `run-${String(process.pid)}-`));
+  const root = await mkdtemp(path.join(
+    input.baseRoot,
+    `run-${String(process.pid)}-${RUNTIME_VIEW_OWNER_TOKEN}-`
+  ));
   const paths = new Map<string, string>();
   let complete = false;
   try {
@@ -124,26 +129,10 @@ function resolveWithinRoot(root: string, relativePath: string): string {
   return resolved;
 }
 
-function runtimeViewOwnerPid(name: string): number | undefined {
-  const match = /^run-([1-9][0-9]*)-/u.exec(name);
-  if (match?.[1] === undefined) return undefined;
-  const pid = Number(match[1]);
-  return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
-}
-
-function processIsAlive(pid: number): boolean {
-  if (pid === process.pid) return true;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    if (isNodeError(error) && error.code === "EPERM") return true;
-    return false;
-  }
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error;
+function runtimeViewOwnedByCurrentProcess(name: string): boolean {
+  const match = RUNTIME_VIEW_NAME.exec(name);
+  if (match?.[1] === undefined || match[2] === undefined) return false;
+  return Number(match[1]) === process.pid && match[2] === RUNTIME_VIEW_OWNER_TOKEN;
 }
 
 function abortRequested(signal: AbortSignal | undefined): boolean {
