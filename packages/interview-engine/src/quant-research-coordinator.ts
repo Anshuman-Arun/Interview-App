@@ -1,8 +1,12 @@
 import { z } from "zod";
 import {
   CommandEnvelopeSchema,
+  CommandIdentityValueSchema,
   InterviewSessionConfigurationSchema,
-  type CommandEnvelope
+  QuantResearchPublicStateSchema as QuantResearchRuntimePublicStateSchema,
+  type CommandEnvelope,
+  type CommandIdentityValue,
+  type InterviewSessionConfiguration
 } from "../../domain/src/index.js";
 import {
   QuantResearchActionEventSchema,
@@ -22,6 +26,8 @@ import {
 } from "../../local-compute/src/index.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import type { SessionWriter } from "./session-writer.js";
+
+const StartedResultSchema = z.object({ started: z.literal(true) }).strict();
 
 const QuantResearchFamilySchema = z.enum([
   "BAYESIAN_UPDATING",
@@ -64,6 +70,10 @@ export interface ReplayedQuantResearchSession {
   readonly state: QuantResearchPublicState;
   readonly result: QuantResearchResult;
   readonly acceptedActions: readonly QuantResearchAction[];
+}
+
+function commandIdentityValue(value: unknown): CommandIdentityValue {
+  return CommandIdentityValueSchema.parse(JSON.parse(JSON.stringify(value)));
 }
 
 function assertSessionAvailable(state: Readonly<SessionState>): void {
@@ -153,6 +163,81 @@ export function replayQuantResearchSessionState(state: Readonly<SessionState>): 
 
 export class QuantResearchCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
+
+  public initializeConfigured(
+    configurationInput: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_RESEARCH" }>,
+    definitionInput: unknown,
+    commandEnvelope?: CommandEnvelope
+  ) {
+    const configuration = InterviewSessionConfigurationSchema.parse(configurationInput);
+    if (configuration.mode !== "QUANT_RESEARCH") {
+      throw new Error("Quant Research initialization requires Quant Research configuration");
+    }
+    const definition = parseQuantResearchDefinition(definitionInput);
+    if (
+      definition.family !== configuration.scenario.id
+      || definition.version !== configuration.scenario.version
+    ) {
+      throw new Error("Quant Research definition does not match configured scenario identity");
+    }
+    const engine = new QuantResearchEngine(definition);
+    const publicState = engine.getState();
+    const authoritativeSnapshot = canonicalEventSnapshot(engine);
+    const eventDefinition = QuantResearchScenarioDefinitionEventSchema.parse(definition);
+    const envelope = CommandEnvelopeSchema.parse(
+      commandEnvelope ?? createCommandEnvelope({
+        sessionId: this.writer.sessionId,
+        producer: "application"
+      })
+    );
+
+    return this.writer.execute(
+      envelope,
+      {
+        operation: "START_SESSION",
+        payload: {
+          configuration: commandIdentityValue(configuration),
+          problem: null
+        }
+      },
+      StartedResultSchema,
+      (state) => {
+        if (state.started) throw new Error("Session already started");
+        const drafts: EventDraft[] = [
+          {
+            source: "APPLICATION",
+            type: "SESSION_STARTED",
+            payload: {
+              startedAt: new Date().toISOString(),
+              configuration
+            }
+          },
+          {
+            source: "APPLICATION",
+            type: "PROBLEM_PRESENTED",
+            payload: {
+              problemId: definition.family,
+              problemVersion: definition.version,
+              prompt: publicState.prompt
+            }
+          },
+          {
+            source: "APPLICATION",
+            type: "QUANT_RESEARCH_SCENARIO_INITIALIZED",
+            payload: {
+              definition: eventDefinition,
+              authoritativeSnapshot
+            }
+          }
+        ];
+        return { drafts, result: { started: true as const } };
+      }
+    );
+  }
+
+  public getPublicState() {
+    return QuantResearchRuntimePublicStateSchema.parse(this.replay().state);
+  }
 
   public initialize(definitionInput: unknown, commandEnvelope?: CommandEnvelope) {
     const definition = parseQuantResearchDefinition(definitionInput);
