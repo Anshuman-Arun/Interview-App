@@ -347,6 +347,7 @@ export function useInterviewSession(
   const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
   const rendererLaunchEpochRef = useRef(0);
   const sessionTransitionEpochRef = useRef(0);
+  const terminalTransitionInFlightRef = useRef(false);
   const sessionMutationAdmissionRef = useRef(false);
   const transportEpochRef = useRef(0);
   const sessionListRequestEpochRef = useRef(0);
@@ -930,6 +931,9 @@ export function useInterviewSession(
 
   const recoverSession = useCallback(
     async (targetSessionId: SessionId): Promise<SessionStatus | null> => {
+      if (terminalTransitionInFlightRef.current) {
+        throw new Error("Cannot recover a session while a terminal transition is in progress");
+      }
       if (
         sessionId !== null
         && sessionStatus === "ACTIVE"
@@ -1034,6 +1038,7 @@ export function useInterviewSession(
       || sessionStatus !== "ACTIVE"
       || !isSessionStarted
       || isPaused
+      || terminalTransitionInFlightRef.current
     ) {
       return;
     }
@@ -1060,6 +1065,7 @@ export function useInterviewSession(
       || sessionStatus !== "ACTIVE"
       || !isSessionStarted
       || !isPaused
+      || terminalTransitionInFlightRef.current
     ) {
       return;
     }
@@ -1265,22 +1271,28 @@ export function useInterviewSession(
         || sessionStatus !== "ACTIVE"
         || !isSessionStarted
         || !sessionMutationAdmissionRef.current
+        || terminalTransitionInFlightRef.current
       ) return;
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
       sessionTransitionEpochRef.current = transitionEpoch;
+      terminalTransitionInFlightRef.current = true;
       sessionMutationAdmissionRef.current = false;
       stopRendererTransport();
       void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
       setError(null);
       const client = getCommandClient();
       try {
-        await client.completeSession(sessionId, summary);
-        if (sessionTransitionEpochRef.current !== transitionEpoch) {
-          throw new TerminalSessionTransitionSupersededError();
+        try {
+          await client.completeSession(sessionId, summary);
+          if (sessionTransitionEpochRef.current !== transitionEpoch) {
+            throw new TerminalSessionTransitionSupersededError();
+          }
+          settleTerminalSession("COMPLETED");
+        } catch (err) {
+          await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
         }
-        settleTerminalSession("COMPLETED");
-      } catch (err) {
-        await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
+      } finally {
+        terminalTransitionInFlightRef.current = false;
       }
     },
     [
@@ -1300,22 +1312,28 @@ export function useInterviewSession(
         || sessionStatus !== "ACTIVE"
         || !isSessionStarted
         || !sessionMutationAdmissionRef.current
+        || terminalTransitionInFlightRef.current
       ) return;
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
       sessionTransitionEpochRef.current = transitionEpoch;
+      terminalTransitionInFlightRef.current = true;
       sessionMutationAdmissionRef.current = false;
       stopRendererTransport();
       void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
       setError(null);
       const client = getCommandClient();
       try {
-        await client.archiveSession(sessionId, reason);
-        if (sessionTransitionEpochRef.current !== transitionEpoch) {
-          throw new TerminalSessionTransitionSupersededError();
+        try {
+          await client.archiveSession(sessionId, reason);
+          if (sessionTransitionEpochRef.current !== transitionEpoch) {
+            throw new TerminalSessionTransitionSupersededError();
+          }
+          settleTerminalSession("ARCHIVED");
+        } catch (err) {
+          await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
         }
-        settleTerminalSession("ARCHIVED");
-      } catch (err) {
-        await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
+      } finally {
+        terminalTransitionInFlightRef.current = false;
       }
     },
     [
@@ -1467,6 +1485,7 @@ export function useInterviewSession(
 
   const disconnect = useCallback((): void => {
     sessionTransitionEpochRef.current += 1;
+    terminalTransitionInFlightRef.current = false;
     sessionMutationAdmissionRef.current = false;
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
@@ -1479,6 +1498,7 @@ export function useInterviewSession(
   useEffect(() => {
     return () => {
       sessionTransitionEpochRef.current += 1;
+      terminalTransitionInFlightRef.current = false;
       sessionMutationAdmissionRef.current = false;
       rendererLaunchEpochRef.current += 1;
       rendererRestartRef.current = null;
