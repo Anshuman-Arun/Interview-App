@@ -32,6 +32,7 @@ import {
 import { z } from "zod";
 import { createCommandEnvelope } from "./envelopes.js";
 import type { SessionWriter } from "./session-writer.js";
+import { terminalInvalidationDrafts } from "./turn-coordinator.js";
 
 const StartedResultSchema = z.object({ started: z.literal(true) }).strict();
 
@@ -234,26 +235,24 @@ export function replayQuantTradingSessionState(
 export class QuantTradingSessionCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
 
-  public async initializeConfigured(
+  public initializeConfigured(
     configurationInput: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_TRADING" }>,
     seed: number,
     commandEnvelope?: CommandEnvelope
   ): Promise<CommandResult<{ readonly started: true }>> {
-    const parsed = QuantTradingSessionConfigurationSchema.parse(configurationInput);
-    const definition = QuantTradingScenarioDefinitionEventSchema.parse({
-      family: QuantTraderScenarioFamilySchema.parse(parsed.scenario.id),
-      version: parsed.scenario.version,
-      seed
-    });
-    // Construct before persistence so invalid or non-runnable definitions fail closed.
-    const engine = createQuantTraderScenario({
-      family: definition.family,
-      seed: definition.seed
-    });
-    if (engine.getState().status !== "ACTIVE") {
-      throw new Error("Production Quant Trading scenario must begin awaiting a candidate action");
-    }
+    return this.initializeConfiguredWithSeedFactory(
+      configurationInput,
+      () => seed,
+      commandEnvelope
+    );
+  }
 
+  public initializeConfiguredWithSeedFactory(
+    configurationInput: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_TRADING" }>,
+    seedFactory: () => number,
+    commandEnvelope?: CommandEnvelope
+  ): Promise<CommandResult<{ readonly started: true }>> {
+    const parsed = QuantTradingSessionConfigurationSchema.parse(configurationInput);
     const envelope = CommandEnvelopeSchema.parse(
       commandEnvelope ?? createCommandEnvelope({
         sessionId: this.writer.sessionId,
@@ -268,6 +267,23 @@ export class QuantTradingSessionCoordinator {
       }
     }, StartedResultSchema, (state) => {
       if (state.started) throw new Error("Session already started");
+
+      const definition = QuantTradingScenarioDefinitionEventSchema.parse({
+        family: QuantTraderScenarioFamilySchema.parse(parsed.scenario.id),
+        version: parsed.scenario.version,
+        seed: seedFactory()
+      });
+      // Construct only after command idempotency/state admission. This both
+      // proves the definition is runnable and prevents losing concurrent start
+      // requests from consuming fresh randomness.
+      const engine = createQuantTraderScenario({
+        family: definition.family,
+        seed: definition.seed
+      });
+      if (engine.getState().status !== "ACTIVE") {
+        throw new Error("Production Quant Trading scenario must begin awaiting a candidate action");
+      }
+
       const drafts: EventDraft[] = [
         {
           source: "APPLICATION",
@@ -338,8 +354,15 @@ export class QuantTradingSessionCoordinator {
       ];
 
       if (engine.getState().status !== "ACTIVE") {
+        if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
+          throw new Error("Cannot complete Quant Trading while an input episode is active");
+        }
         const result = terminalResultEvent(engine.getResult());
         const completedAt = new Date().toISOString();
+        drafts.unshift(...terminalInvalidationDrafts(
+          state,
+          "Deterministic Quant Trading scenario completed"
+        ));
         drafts.push(
           {
             source: "APPLICATION",
