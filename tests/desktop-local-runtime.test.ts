@@ -393,6 +393,56 @@ describe("desktop local model runtime", () => {
     })).rejects.toThrow("restarted during an active VAD stream");
   });
 
+  it("cancels queued Moonshine STT before it reaches the single native batch lane", async () => {
+    const token = "8".repeat(64);
+    const runtime = fixtureManager(
+      "stt-serialize-fixture",
+      "speech",
+      "fixture-speech-1",
+      token,
+      "delayed-stt"
+    );
+    await runtime.start("stt-serialize-fixture");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "stt-serialize-fixture",
+      "speech",
+      token
+    );
+    const adapter = new ManagedMoonshineRuntime(client, "/verified/moonshine");
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const firstRequestId = SpeechRequestIdSchema.parse("stt-serialized-1");
+    const secondRequestId = SpeechRequestIdSchema.parse("stt-serialized-2");
+
+    const first = adapter.transcribe({
+      requestId: firstRequestId,
+      utteranceId: SpeechUtteranceIdSchema.parse("utterance-stt-1"),
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      modelPath: "/verified/moonshine",
+      signal: firstController.signal
+    });
+    await waitForStatus(runtime, "stt-serialize-fixture", (status) =>
+      status.stdout.lines.includes(`STT_STARTED:${firstRequestId}`)
+    );
+
+    const second = adapter.transcribe({
+      requestId: secondRequestId,
+      utteranceId: SpeechUtteranceIdSchema.parse("utterance-stt-2"),
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      modelPath: "/verified/moonshine",
+      signal: secondController.signal
+    });
+    secondController.abort();
+
+    await expect(first).resolves.toMatchObject({ text: "fixture transcript" });
+    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    expect(runtime.getStatus("stt-serialize-fixture").stdout.lines)
+      .not.toContain(`STT_STARTED:${secondRequestId}`);
+  });
+
   it("queues the second concrete Kokoro synthesis instead of racing the single native synthesizer", async () => {
     const token = "9".repeat(64);
     const runtime = fixtureManager(
