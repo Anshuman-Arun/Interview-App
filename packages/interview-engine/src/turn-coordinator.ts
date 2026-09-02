@@ -817,10 +817,13 @@ export class TurnCoordinator {
           result: { accepted: false, reason: "Vision request is not pending" }
         };
       }
+      const dependencyShapeIds = admission === undefined
+        ? observation.relevantShapeIds
+        : admission.sourceRelevantShapeIds;
       const sameDependencySet = request.regionId === observation.regionId
-        && request.relevantShapeIds.length === observation.relevantShapeIds.length
+        && request.relevantShapeIds.length === dependencyShapeIds.length
         && request.relevantShapeIds.every((shapeId) =>
-          observation.relevantShapeIds.includes(shapeId)
+          dependencyShapeIds.includes(shapeId)
         );
       const freshness = admission === undefined
         ? assessVisionFreshness(observation, state)
@@ -834,9 +837,25 @@ export class TurnCoordinator {
         && admission.sessionId === state.sessionId
         && admission.observation.sourceBoardRevision === request.sourceBoardRevision
         && admission.observation.regionId === request.regionId
+        && canonicalJson(admission.sourceRelevantShapeIds)
+          === canonicalJson(request.relevantShapeIds)
         && (
           request.snapshotBasis === undefined
-          || JSON.stringify(admission.snapshotBasis) === JSON.stringify(request.snapshotBasis)
+          || canonicalJson(admission.snapshotBasis) === canonicalJson(request.snapshotBasis)
+        )
+        && (
+          request.relevantShapeRevisions === undefined
+          || canonicalJson(admission.shapeRevisionBindings)
+            === canonicalJson(request.relevantShapeRevisions)
+        )
+        && (
+          request.regionBounds === undefined
+          || canonicalJson(admission.observation.bounds) === canonicalJson(request.regionBounds)
+        )
+        && (
+          request.requestedObservationKind === undefined
+          || request.requestedObservationKind === "ANY"
+          || admission.observationKind === request.requestedObservationKind
         )
       );
       if (
