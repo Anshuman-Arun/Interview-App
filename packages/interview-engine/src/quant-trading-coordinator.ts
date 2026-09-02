@@ -1,7 +1,7 @@
 import {
   CommandEnvelopeSchema,
   CommandIdentityValueSchema,
-  InterviewSessionConfigurationSchema,
+  QuantTradingSessionConfigurationSchema,
   QuantTradingCandidateActionSchema,
   QuantTradingPublicStateSchema,
   type CommandEnvelope,
@@ -239,7 +239,7 @@ export class QuantTradingSessionCoordinator {
     seed: number,
     commandEnvelope?: CommandEnvelope
   ): Promise<CommandResult<{ readonly started: true }>> {
-    const parsed = InterviewSessionConfigurationSchema.parse(configurationInput);
+    const parsed = QuantTradingSessionConfigurationSchema.parse(configurationInput);
     const definition = QuantTradingScenarioDefinitionEventSchema.parse({
       family: QuantTraderScenarioFamilySchema.parse(parsed.scenario.id),
       version: parsed.scenario.version,
