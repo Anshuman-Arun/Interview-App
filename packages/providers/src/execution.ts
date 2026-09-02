@@ -471,12 +471,14 @@ function snapshotReasoningTurnInput(
   ) {
     throw new Error("Reasoning turn input must contain own data properties");
   }
-  const generationId = GenerationIdSchema.safeParse(generationDescriptor.value);
+  const generationValue: unknown = generationDescriptor.value;
+  const contextValue: unknown = contextDescriptor.value;
+  const generationId = GenerationIdSchema.safeParse(generationValue);
   if (!generationId.success) throw new Error("Reasoning generation ID is invalid");
 
   return Object.freeze({
     generationId: generationId.data,
-    context: contextDescriptor.value
+    context: contextValue
   });
 }
 
