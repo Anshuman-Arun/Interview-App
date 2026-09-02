@@ -1589,6 +1589,41 @@ describe("production quant start seed lifecycle", () => {
       store.close();
     }
   });
+  it("does not consume another Research seed for a losing concurrent start with a different RequestId", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    let seedCalls = 0;
+    const runtime = new ProductionSessionRuntime({
+      seedSource: () => {
+        seedCalls += 1;
+        return 99;
+      }
+    });
+    const composition = resolveInterviewSessionConfiguration(researchConfiguration());
+    try {
+      const outcomes = await Promise.allSettled([
+        runtime.startConfigured(writer, composition, createCommandEnvelope({
+          sessionId,
+          requestId: newRequestId(),
+          producer: "quant-runtime-test"
+        })),
+        runtime.startConfigured(writer, composition, createCommandEnvelope({
+          sessionId,
+          requestId: newRequestId(),
+          producer: "quant-runtime-test"
+        }))
+      ]);
+      expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.status === "rejected")).toHaveLength(1);
+      expect(seedCalls).toBe(1);
+      expect(writer.getState().quantResearch?.definition.seed).toEqual(expect.any(Number));
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
 });
 
 describe("production Quant Trading public serialization", () => {
