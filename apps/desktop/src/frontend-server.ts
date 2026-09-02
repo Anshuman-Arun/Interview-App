@@ -30,11 +30,16 @@ export class DesktopFrontendServer {
     return starting;
   }
 
-  public configureBackendOrigins(commandBaseUrl: string, rendererStreamUrl: string): void {
+  public configureBackendOrigins(
+    commandBaseUrl: string,
+    rendererStreamUrl: string,
+    voiceBaseUrl: string
+  ): void {
     const commandOrigin = exactLoopbackOrigin(commandBaseUrl);
     const streamOrigin = new URL(rendererStreamUrl).origin;
     exactLoopbackOrigin(streamOrigin);
-    this.connectOrigins = [...new Set([commandOrigin, streamOrigin])];
+    const voiceOrigin = exactLoopbackOrigin(voiceBaseUrl);
+    this.connectOrigins = [...new Set([commandOrigin, streamOrigin, voiceOrigin])];
   }
 
   public stop(): Promise<void> {
