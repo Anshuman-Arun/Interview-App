@@ -611,6 +611,25 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(presentedTexts.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("fails closed instead of restarting HTTP transports around terminally shut down voice workers", async () => {
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: voiceRuntime([0], () => "unused")
+    });
+
+    await server.runtime.stop();
+
+    await expect(server.runtime.start()).rejects.toThrow(
+      "cannot restart after voice worker shutdown"
+    );
+  });
+
   it("rejects late TTS output even when no cancellation reaches the synthesizer", async () => {
     const synthesizer = new BlockingFakeSpeechSynthesizer();
     server = await createAndStartServer({
