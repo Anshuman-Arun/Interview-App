@@ -37,6 +37,21 @@ class _FakeSilero:
         ).copy()
 
 
+class _FakeTranscript:
+    lines: list[object] = []
+
+
+class _FakeTranscriber:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def transcribe_without_streaming(self, _samples, *, sample_rate: int):
+        self.calls += 1
+        if sample_rate != 16_000:
+            raise AssertionError("unexpected sample rate")
+        return _FakeTranscript()
+
+
 class _FakeTts:
     def __init__(self) -> None:
         self.cancel_calls = 0
@@ -137,24 +152,39 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         self.assertEqual(raised.exception.status, 400)
         self.assertEqual(raised.exception.code, "STREAM_SAMPLE_RATE_CHANGED")
 
-    def test_stt_busy_fails_fast_without_entering_transcriber(self) -> None:
+    def test_stt_waits_for_the_single_native_batch_lane_instead_of_failing_busy(self) -> None:
         runtime = object.__new__(worker.SpeechRuntime)
         runtime._np = np
         runtime._stt_lock = threading.Lock()
+        runtime._transcriber = _FakeTranscriber()
         runtime._stt_lock.acquire()
-        runtime._transcriber = None
-        try:
-            with self.assertRaises(worker.ProtocolError) as raised:
-                runtime.transcribe({
+        completed = threading.Event()
+        outcome: dict[str, object] = {}
+
+        def run_transcription() -> None:
+            try:
+                outcome["value"] = runtime.transcribe({
                     "requestId": "request-1",
                     "utteranceId": "utterance-1",
                     "sampleRate": 16_000,
                     "pcmF32Base64": pcm_base64([0.0]),
                 })
-        finally:
-            runtime._stt_lock.release()
-        self.assertEqual(raised.exception.status, 429)
-        self.assertEqual(raised.exception.code, "STT_BUSY")
+            except Exception as exc:
+                outcome["error"] = exc
+            finally:
+                completed.set()
+
+        thread = threading.Thread(target=run_transcription)
+        thread.start()
+        self.assertFalse(completed.wait(0.05))
+        self.assertEqual(runtime._transcriber.calls, 0)
+
+        runtime._stt_lock.release()
+        self.assertTrue(completed.wait(1.0))
+        thread.join(timeout=1.0)
+        self.assertNotIn("error", outcome)
+        self.assertEqual(outcome.get("value"), {"text": ""})
+        self.assertEqual(runtime._transcriber.calls, 1)
 
     def test_tts_cancel_before_synthesis_registration_prevents_model_start(self) -> None:
         runtime = object.__new__(worker.TtsRuntime)
