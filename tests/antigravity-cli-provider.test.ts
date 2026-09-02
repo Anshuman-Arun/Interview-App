@@ -288,7 +288,7 @@ describe("Antigravity CLI one-turn protocol", () => {
   });
 
   it("does not surface stdout, stderr, or executor exception credentials in adapter errors", async () => {
-    const secret = "private-provider-credential-value";
+    const secret = "SENSITIVE_EXECUTOR_SENTINEL";
     const provider = createAntigravityCliReasoningProvider(
       fakeExecutor(async () => {
         throw new Error(secret);
@@ -319,6 +319,7 @@ describe("Antigravity CLI one-turn protocol", () => {
       request.onProcessStart();
       firstStarted?.();
       return await new Promise<SupervisedCliExecutionResult>((resolve, reject) => {
+        void resolve;
         const onAbort = (): void => reject(new Error("cancelled-local-process"));
         request.signal.addEventListener("abort", onAbort, { once: true });
         if (request.signal.aborted) onAbort();
