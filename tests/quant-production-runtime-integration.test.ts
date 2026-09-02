@@ -483,11 +483,14 @@ describe("production quant runtime integration", () => {
       { side: "SELL", price: 50.5, size: 4 }
     ]);
     expect(stopped.marketUpdates).toEqual([]);
-    expect(stopped.completion?.lastRiskBreach).toMatchObject({
+    expect(stopped.completion?.lastRiskBreach).toEqual({
       round: 1,
       source: "POST_ROUND"
     });
-    expect(stopped.completion?.lastRiskBreach?.reason).toContain("stop-loss");
+    const stoppedSerialized = JSON.stringify(stopped);
+    expect(stoppedSerialized).not.toContain("stop-loss");
+    expect(stoppedSerialized).not.toContain("threshold");
+    expect(stoppedSerialized).not.toContain("max drawdown");
     expect(stopped.completion?.riskBreachCount).toBe(1);
     expect(registry.get(sessionId).getState().status).toBe("COMPLETED");
   });
