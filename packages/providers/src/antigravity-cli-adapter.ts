@@ -125,11 +125,13 @@ const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
   MAX_SCHEMA_BYTES
 );
 
+const INIT_TOOLS_FIELD = "tools" as const;
+
 const InitEventSchema = z.looseObject({
   event: z.literal("init"),
   conversation_id: z.string().min(1).max(256),
   init: z.looseObject({
-    tools: z.array(z.string().min(1)).max(128),
+    [INIT_TOOLS_FIELD]: z.array(z.string().min(1)).max(128),
     permission_mode: z.string().min(1),
     model: z.string().min(1),
     agent: z.string().min(1),
