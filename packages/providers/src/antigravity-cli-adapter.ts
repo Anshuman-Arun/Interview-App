@@ -1,3 +1,4 @@
+import { types as utilTypes } from "node:util";
 import { z } from "zod";
 import {
   InterviewerProposalSchema,
@@ -254,7 +255,11 @@ export function createAntigravityCliReasoningProvider(
 function captureExecutor(
   executor: unknown
 ): SupervisedCliExecutor["execute"] {
-  if (typeof executor !== "object" || executor === null) {
+  if (
+    typeof executor !== "object"
+    || executor === null
+    || utilTypes.isProxy(executor)
+  ) {
     throw new AntigravityCliAdapterError("INVALID_RUNTIME");
   }
   let descriptor: PropertyDescriptor | undefined;
@@ -422,7 +427,12 @@ function parseAntigravityStream(
 }
 
 function readOwnTurnContext(input: unknown): unknown {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  if (
+    typeof input !== "object"
+    || input === null
+    || utilTypes.isProxy(input)
+    || Array.isArray(input)
+  ) {
     throw new Error("Turn input must be a plain object");
   }
   const prototype = Object.getPrototypeOf(input);
@@ -473,6 +483,7 @@ function serializeBoundedPlainJson(
       throw new Error("Non-JSON value");
     }
 
+    if (utilTypes.isProxy(candidate)) throw new Error("Proxy JSON values are forbidden");
     if (seen.has(candidate)) throw new Error("Cyclic JSON value");
     seen.add(candidate);
     try {
