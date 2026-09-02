@@ -448,7 +448,7 @@ function snapshotUntrustedModelCapabilities(
       REFLECT_GET_OWN_PROPERTY_DESCRIPTORS_INTRINSIC,
       Object,
       [value]
-    ) as Readonly<Record<string, PropertyDescriptor>>;
+    );
     symbols = Object.getOwnPropertySymbols(value);
   } catch {
     throw new Error("Provider capabilities inspection failed");
@@ -508,12 +508,12 @@ function snapshotUntrustedModelCapabilities(
     SET_HAS_INTRINSIC,
     rawModalities,
     ["text"]
-  ) === true;
+  );
   const hasImage = REFLECT_APPLY_INTRINSIC(
     SET_HAS_INTRINSIC,
     rawModalities,
     ["image"]
-  ) === true;
+  );
   const knownSize = Number(hasText) + Number(hasImage);
   if (
     typeof modalitySize !== "number"
