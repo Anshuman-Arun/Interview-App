@@ -275,9 +275,14 @@ describe("Antigravity CLI one-turn protocol", () => {
       readonly message?: { readonly content?: unknown };
     };
     expect(stdinMessage.event).toBe("user");
-    expect(stdinMessage.message?.content).toContain(
-      JSON.stringify(context)
-    );
+    const content = stdinMessage.message?.content;
+    expect(typeof content).toBe("string");
+    if (typeof content !== "string") throw new Error("Expected string prompt content");
+    const contextMarker = "APPLICATION_SELECTED_CONTEXT_JSON\n";
+    const contextIndex = content.indexOf(contextMarker);
+    expect(contextIndex).toBeGreaterThanOrEqual(0);
+    const serializedContext = content.slice(contextIndex + contextMarker.length);
+    expect(JSON.parse(serializedContext)).toEqual(context);
     await session.close();
   });
 
