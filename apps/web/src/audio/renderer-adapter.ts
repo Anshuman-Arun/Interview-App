@@ -1,4 +1,5 @@
 import type { DeliveryId } from "../../../../packages/domain/src/index.js";
+import { TTS_LIMITS } from "../../../../packages/local-compute/src/index.js";
 import {
   RendererPresentationNotExposedError,
   type AudioPlayer
@@ -8,6 +9,7 @@ import { AudioInfrastructureError } from "./types.js";
 
 const AUDIO_SOURCE_RESOLUTION_TIMEOUT_MS = 5_000;
 const AUDIO_PLAYBACK_START_TIMEOUT_MS = 5_000;
+const AUDIO_PLAYBACK_COMPLETION_TIMEOUT_MS = TTS_LIMITS.maxOutputDurationMs + 10_000;
 const MAX_PENDING_AUDIO_RESOLUTIONS = 32;
 
 export interface ResolvedAudioSource {
@@ -198,7 +200,14 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
         handle.started,
         AUDIO_PLAYBACK_START_TIMEOUT_MS
       );
-      if (startOutcome === "STARTED") return;
+      if (startOutcome === "STARTED") {
+        void enforcePlaybackCompletionDeadline(
+          handle.result,
+          handle.cancel,
+          AUDIO_PLAYBACK_COMPLETION_TIMEOUT_MS
+        );
+        return;
+      }
       if (startOutcome === "TIMED_OUT") {
         handle.cancel();
         throw new RendererPresentationNotExposedError(
@@ -350,6 +359,26 @@ async function waitForPlaybackStart(
       started.then((value) => value ? "STARTED" as const : "SETTLED_WITHOUT_START" as const),
       timeout
     ]);
+  } finally {
+    if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
+  }
+}
+
+async function enforcePlaybackCompletionDeadline(
+  result: Promise<unknown>,
+  cancel: () => void,
+  timeoutMs: number
+): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"TIMED_OUT">((resolve) => {
+    timeoutId = globalThis.setTimeout(() => resolve("TIMED_OUT"), timeoutMs);
+  });
+  try {
+    const outcome = await Promise.race([
+      result.then(() => "SETTLED" as const, () => "SETTLED" as const),
+      timeout
+    ]);
+    if (outcome === "TIMED_OUT") cancel();
   } finally {
     if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
   }
