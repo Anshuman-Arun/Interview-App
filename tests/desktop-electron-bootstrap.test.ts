@@ -6,7 +6,8 @@ import {
   DESKTOP_AUTH_HEADER_VALUE,
   DESKTOP_ZOOM_CHANGED_CHANNEL,
   DESKTOP_ZOOM_CHANNEL,
-  DESKTOP_ZOOM_FACTORS,
+  DESKTOP_MAX_ZOOM_FACTOR,
+  DESKTOP_MIN_ZOOM_FACTOR,
   createDesktopRendererBootstrap,
   isAuthorizedDesktopBootstrapRequest,
   isDesktopZoomFactor,
@@ -636,15 +637,18 @@ describe("desktop secure bootstrap", () => {
     })).toThrow(/token is invalid/u);
   });
 
-  it("bounds desktop interface zoom to approved factors", () => {
+  it("bounds continuous desktop interface zoom without named presets", () => {
     expect(DESKTOP_ZOOM_CHANNEL).toBe("interview-desktop:set-zoom");
     expect(DESKTOP_ZOOM_CHANGED_CHANNEL).toBe("interview-desktop:zoom-changed");
-    expect(DESKTOP_ZOOM_FACTORS).toEqual([0.875, 1, 1.125, 1.25]);
-    for (const factor of DESKTOP_ZOOM_FACTORS) {
+    expect(DESKTOP_MIN_ZOOM_FACTOR).toBe(0.25);
+    expect(DESKTOP_MAX_ZOOM_FACTOR).toBe(3);
+    for (const factor of [0.25, 0.5, 1, 1.13, 2, 3]) {
       expect(isDesktopZoomFactor(factor)).toBe(true);
     }
-    expect(isDesktopZoomFactor(0.5)).toBe(false);
-    expect(isDesktopZoomFactor(2)).toBe(false);
+    expect(isDesktopZoomFactor(0.249)).toBe(false);
+    expect(isDesktopZoomFactor(3.001)).toBe(false);
+    expect(isDesktopZoomFactor(Number.NaN)).toBe(false);
+    expect(isDesktopZoomFactor(Number.POSITIVE_INFINITY)).toBe(false);
     expect(isDesktopZoomFactor("1")).toBe(false);
   });
 
@@ -657,7 +661,9 @@ describe("desktop secure bootstrap", () => {
     expect(preload).toContain("getBootstrap");
     expect(preload).toContain("setZoomFactor");
     expect(preload).toContain("onZoomFactorChanged");
-    expect(preload).toContain('const ZOOM_FACTORS = new Set([0.875, 1, 1.125, 1.25])');
+    expect(preload).toContain("const MIN_ZOOM_FACTOR = 0.25");
+    expect(preload).toContain("const MAX_ZOOM_FACTOR = 3");
+    expect(preload).toContain("Number.isFinite(value)");
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
     expect(preload).not.toContain("shell.");
@@ -672,6 +678,9 @@ describe("desktop secure bootstrap", () => {
     expect(mainSource).toContain("stepDesktopZoom(window, 1)");
     expect(mainSource).toContain("stepDesktopZoom(window, -1)");
     expect(mainSource).toContain("applyDesktopZoomFactor(window, 1, true)");
+    expect(mainSource).toContain("direction * 0.1");
+    expect(mainSource).toContain("DESKTOP_MIN_ZOOM_FACTOR");
+    expect(mainSource).toContain("DESKTOP_MAX_ZOOM_FACTOR");
     expect(mainSource).not.toContain("Menu.setApplicationMenu");
   });
 
