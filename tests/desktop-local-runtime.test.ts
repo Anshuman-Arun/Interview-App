@@ -385,6 +385,33 @@ describe("desktop local model runtime", () => {
     );
   });
 
+  it("retries stale-view cleanup after a shutdown sweep fails", async () => {
+    const appDataRoot = temporaryRoot("desktop-stop-stale-retry-");
+    const runtimeRoot = join(appDataRoot, "runtime-models");
+    mkdirSync(runtimeRoot, { recursive: true });
+    for (let index = 0; index < 1_025; index += 1) {
+      mkdirSync(join(runtimeRoot, `entry-${String(index)}`));
+    }
+
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot,
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    await expect(composition.stopWorkers()).rejects.toThrow(
+      "Desktop local model runtime shutdown failed"
+    );
+
+    rmSync(runtimeRoot, { recursive: true, force: true });
+    mkdirSync(runtimeRoot, { recursive: true });
+
+    await expect(composition.stopWorkers()).resolves.toBeUndefined();
+  });
+
   it("coalesces concurrent composition shutdown instead of double-closing worker cores", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-stop-coalesce-"),
