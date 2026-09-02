@@ -459,13 +459,19 @@ export class VoiceTransportServer {
       throw new VoiceHttpError(404, "NOT_FOUND", "Audio asset endpoint not found");
     }
     const encodedRef = rawUrl.slice(VOICE_AUDIO_PREFIX.length);
+    if (
+      encodedRef.length !== 73
+      || !/^audio_v1_[0-9a-f]{64}$/u.test(encodedRef)
+    ) {
+      throw new VoiceHttpError(404, "NOT_FOUND", "Audio asset reference is invalid");
+    }
     let audioRef: string;
     try {
       audioRef = decodeURIComponent(encodedRef);
     } catch {
       throw new VoiceHttpError(404, "NOT_FOUND", "Audio asset reference is invalid");
     }
-    if (!AUDIO_REF_PATTERN.test(audioRef)) {
+    if (audioRef !== encodedRef || !AUDIO_REF_PATTERN.test(audioRef)) {
       throw new VoiceHttpError(404, "NOT_FOUND", "Audio asset reference is invalid");
     }
     const sessionId = SessionIdSchema.safeParse(headerValue(request, "x-interview-session-id"));
