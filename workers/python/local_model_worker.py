@@ -11,9 +11,11 @@ from __future__ import annotations
 import argparse
 import base64
 import hmac
+import hashlib
 import json
 import math
 import os
+import stat
 import sys
 import threading
 from collections import OrderedDict
@@ -23,7 +25,8 @@ from typing import Any
 
 WORKER_COMPONENT_VERSION = "1"
 WORKER_PROTOCOL_VERSION = 1
-MOONSHINE_VERSION = "0.1.5"\nONNXRUNTIME_VERSION = "1.29.0"
+MOONSHINE_VERSION = "0.1.5"
+ONNXRUNTIME_VERSION = "1.29.0"
 MAX_REQUEST_BYTES = 16 * 1024 * 1024
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 MAX_TRANSCRIPT_CHARS = 20_000
@@ -40,6 +43,55 @@ SPEECH_MODEL_IDENTITY = (
 )
 TTS_MODEL_IDENTITY = "kokoro-af-heart+35d84fc0eb2d7451da9973c990e8a77066abb105"
 
+SPEECH_ASSET_SPECS = {
+    "decoder_model_merged.ort": (
+        30_412_256,
+        "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0",
+    ),
+    "encoder_model.ort": (
+        13_281_600,
+        "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221",
+    ),
+    "tokenizer.bin": (
+        249_974,
+        "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d",
+    ),
+}
+SILERO_ASSET_SPEC = (
+    2_327_524,
+    "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
+)
+TTS_ASSET_SPECS = {
+    "en_us/dict_filtered_heteronyms.tsv": (
+        2_900_453,
+        "8fb0fa0e3ce1a74b864f03c06ace015257660fa2116c6157d11061f4e35bb6b7",
+    ),
+    "en_us/g2p-config.json": (
+        60,
+        "f10e652b28c49edd90a94ceb139b94d2368de5814650d81289fcb985fe1ca0f5",
+    ),
+    "en_us/oov/model.ort": (
+        22_143_488,
+        "ef8d07a0577a07617fabf5282d80d680e4e17ad07a763e7e3748417f94554d94",
+    ),
+    "en_us/oov/onnx-config.json": (
+        4_641,
+        "60a7cf2592ae66702f56e4368a8614e72235eef89205de96f4cf6bace96c5692",
+    ),
+    "kokoro/config.json": (
+        2_351,
+        "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f",
+    ),
+    "kokoro/model.ort": (
+        92_586_320,
+        "ffe5ac61b1035e787d37451457d52052ce34ef4fe9e014ceed1aad55a6d915da",
+    ),
+    "kokoro/voices/af_heart.kokorovoice": (
+        522_252,
+        "908e14de5b4709da55562129164e618f5d135fcc34dac419e0c3de5189b72d2c",
+    ),
+}
+
 
 class ProtocolError(Exception):
     def __init__(self, status: int, code: str) -> None:
@@ -48,18 +100,112 @@ class ProtocolError(Exception):
         self.code = code
 
 
+def _is_linklike(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    is_junction = getattr(os.path, "isjunction", None)
+    return bool(is_junction(path)) if callable(is_junction) else False
+
+
 def require_file(path: str, label: str) -> Path:
-    candidate = Path(path).resolve(strict=True)
-    if not candidate.is_file() or candidate.is_symlink():
+    original = Path(path)
+    if _is_linklike(original):
+        raise RuntimeError(f"{label} may not be a symlink or junction")
+    candidate = original.resolve(strict=True)
+    if not candidate.is_file() or _is_linklike(candidate):
         raise RuntimeError(f"{label} is not a regular file")
     return candidate
 
 
 def require_directory(path: str, label: str) -> Path:
-    candidate = Path(path).resolve(strict=True)
-    if not candidate.is_dir() or candidate.is_symlink():
+    original = Path(path)
+    if _is_linklike(original):
+        raise RuntimeError(f"{label} may not be a symlink or junction")
+    candidate = original.resolve(strict=True)
+    if not candidate.is_dir() or _is_linklike(candidate):
         raise RuntimeError(f"{label} is not a regular directory")
     return candidate
+
+
+def verify_asset_file(
+    candidate: Path,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+    label: str,
+) -> Path:
+    if _is_linklike(candidate):
+        raise RuntimeError(f"{label} may not be a symlink or junction")
+    before = os.lstat(candidate)
+    if not stat.S_ISREG(before.st_mode) or before.st_size != expected_size:
+        raise RuntimeError(f"{label} has an unexpected file identity or size")
+
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_BINARY", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(candidate, flags)
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_size != expected_size:
+            raise RuntimeError(f"{label} changed before verification")
+        if (
+            getattr(before, "st_dev", None) != getattr(opened, "st_dev", None)
+            or getattr(before, "st_ino", None) != getattr(opened, "st_ino", None)
+        ):
+            raise RuntimeError(f"{label} changed before verification")
+        while True:
+            chunk = os.read(fd, min(1024 * 1024, expected_size - total + 1))
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > expected_size:
+                raise RuntimeError(f"{label} exceeds its expected size")
+            digest.update(chunk)
+    finally:
+        os.close(fd)
+
+    after = os.lstat(candidate)
+    if (
+        total != expected_size
+        or digest.hexdigest() != expected_sha256
+        or getattr(before, "st_dev", None) != getattr(after, "st_dev", None)
+        or getattr(before, "st_ino", None) != getattr(after, "st_ino", None)
+        or before.st_size != after.st_size
+        or before.st_mtime_ns != after.st_mtime_ns
+    ):
+        raise RuntimeError(f"{label} failed immutable digest verification")
+    return candidate.resolve(strict=True)
+
+
+def verify_asset_tree(
+    root: Path,
+    specs: dict[str, tuple[int, str]],
+    label: str,
+) -> None:
+    for relative, (expected_size, expected_sha256) in specs.items():
+        parts = Path(relative).parts
+        if (
+            Path(relative).is_absolute()
+            or not parts
+            or any(part in ("", ".", "..") for part in parts)
+        ):
+            raise RuntimeError(f"{label} contains an invalid relative asset path")
+        parent = root
+        for part in parts[:-1]:
+            parent = parent / part
+            if _is_linklike(parent):
+                raise RuntimeError(f"{label} contains a symlink or junction")
+            metadata = os.lstat(parent)
+            if not stat.S_ISDIR(metadata.st_mode):
+                raise RuntimeError(f"{label} contains a non-directory parent")
+        verify_asset_file(
+            root.joinpath(*parts),
+            expected_size=expected_size,
+            expected_sha256=expected_sha256,
+            label=f"{label} asset {relative}",
+        )
 
 
 def require_worker_token() -> str:
@@ -293,7 +439,8 @@ class TtsRuntime:
 
 
 class WorkerServer(ThreadingHTTPServer):
-    daemon_threads = True
+    daemon_threads = False
+    block_on_close = True
     allow_reuse_address = False
 
     def __init__(self, address: tuple[str, int], handler: type[BaseHTTPRequestHandler], *, token: str, component: str, runtime: Any) -> None:
@@ -399,16 +546,33 @@ def main() -> int:
     if args.component == "speech":
         if not args.silero_model or not args.moonshine_model_root:
             raise RuntimeError("speech model paths are required")
+        silero_model = require_file(args.silero_model, "Silero model")
+        moonshine_model_root = require_directory(
+            args.moonshine_model_root, "Moonshine model root"
+        )
+        verify_asset_file(
+            silero_model,
+            expected_size=SILERO_ASSET_SPEC[0],
+            expected_sha256=SILERO_ASSET_SPEC[1],
+            label="Silero model",
+        )
+        verify_asset_tree(
+            moonshine_model_root,
+            SPEECH_ASSET_SPECS,
+            "Moonshine model root",
+        )
         runtime = SpeechRuntime(
-            silero_model=require_file(args.silero_model, "Silero model"),
-            moonshine_model_root=require_directory(args.moonshine_model_root, "Moonshine model root"),
+            silero_model=silero_model,
+            moonshine_model_root=moonshine_model_root,
         )
         model_identity = SPEECH_MODEL_IDENTITY
         capabilities = ["vad", "stt"]
     else:
         if not args.tts_asset_root:
             raise RuntimeError("TTS asset root is required")
-        runtime = TtsRuntime(asset_root=require_directory(args.tts_asset_root, "TTS asset root"))
+        tts_asset_root = require_directory(args.tts_asset_root, "TTS asset root")
+        verify_asset_tree(tts_asset_root, TTS_ASSET_SPECS, "TTS asset root")
+        runtime = TtsRuntime(asset_root=tts_asset_root)
         model_identity = TTS_MODEL_IDENTITY
         capabilities = ["tts"]
 
