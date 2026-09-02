@@ -263,11 +263,24 @@ describe("production quant runtime integration", () => {
           producer: "legacy-quant-fixture"
         })
       );
-      const state = registry.get(legacy.sessionId).getState();
+      const writer = registry.get(legacy.sessionId);
+      const state = writer.getState();
       expect(state.status).toBe("ACTIVE");
       expect(state.problem).toBeUndefined();
       expect(state.quantTrading).toBeUndefined();
       expect(state.quantResearch).toBeUndefined();
+
+      const countBeforeRejectedWrites = store.eventCount(legacy.sessionId);
+      const turns = new TurnCoordinator(writer);
+      await expect(turns.completeSession(createCommandEnvelope({
+        sessionId: legacy.sessionId,
+        producer: "legacy-quant-fixture"
+      }))).rejects.toThrow(/Legacy Quant session is read-only/u);
+      await expect(turns.commitInput("must not mutate legacy quant", createCommandEnvelope({
+        sessionId: legacy.sessionId,
+        producer: "legacy-quant-fixture"
+      }))).rejects.toThrow(/Legacy Quant session is read-only/u);
+      expect(store.eventCount(legacy.sessionId)).toBe(countBeforeRejectedWrites);
     }
 
     const completedTrading = injectLegacyTerminalQuant(
