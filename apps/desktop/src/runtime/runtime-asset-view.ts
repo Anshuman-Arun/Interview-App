@@ -51,7 +51,7 @@ export async function materializeRuntimeAssetView(input: {
   readonly baseRoot: string;
   readonly signal?: AbortSignal;
 }): Promise<RuntimeAssetView> {
-  if (input.signal?.aborted === true) throw abortError();
+  if (abortRequested(input.signal)) throw abortError();
   await ensureOwnedDirectory(input.baseRoot);
 
   const totalBytes = input.assets.reduce((sum, asset) => sum + asset.manifest.sizeBytes, 0);
@@ -66,7 +66,7 @@ export async function materializeRuntimeAssetView(input: {
   let complete = false;
   try {
     for (const asset of input.assets) {
-      if (input.signal?.aborted === true) throw abortError();
+      if (abortRequested(input.signal)) throw abortError();
       const source = await input.manager.getInstalledPath(asset.manifest);
       const destination = resolveWithinRoot(root, asset.runtimeRelativePath);
       await mkdir(path.dirname(destination), { recursive: true });
@@ -118,6 +118,10 @@ function resolveWithinRoot(root: string, relativePath: string): string {
     throw new Error("Runtime asset path escapes its managed root");
   }
   return resolved;
+}
+
+function abortRequested(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }
 
 function abortError(): Error {
