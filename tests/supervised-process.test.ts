@@ -401,6 +401,66 @@ describe("supervised one-shot process execution", () => {
     }
   );
 
+  it.runIf(process.platform === "win32")(
+    "surfaces containment failure above output-limit errors and quarantines the executable",
+    async () => {
+      const runtime = runner();
+      const originalSystemRoot = process.env.SystemRoot;
+      const originalUpperSystemRoot = process.env.SYSTEMROOT;
+      process.env.SystemRoot = "C:\\definitely-missing-supervised-system-root";
+      process.env.SYSTEMROOT = "C:\\definitely-missing-supervised-system-root";
+      try {
+        await expect(runtime.execute(request([
+          FIXTURE,
+          "huge-stdout",
+          "100000"
+        ], {
+          maxStdoutBytes: 512
+        }))).rejects.toMatchObject({
+          code: "PROCESS_TREE_CLEANUP_FAILED"
+        });
+      } finally {
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
+        if (originalUpperSystemRoot === undefined) delete process.env.SYSTEMROOT;
+        else process.env.SYSTEMROOT = originalUpperSystemRoot;
+      }
+
+      let started = false;
+      await expect(runtime.execute(request([FIXTURE, "echo"], {
+        onProcessStart: () => {
+          started = true;
+        }
+      }))).rejects.toMatchObject({
+        code: "PROCESS_TREE_CLEANUP_FAILED"
+      });
+      expect(started).toBe(false);
+    }
+  );
+
+  it.runIf(process.platform === "win32")(
+    "fails closed when a root exits before a surviving Windows descendant can be verified",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "supervised-windows-residual-tree-"));
+      temporaryRoots.push(root);
+      const pidFile = join(root, "child.pid");
+      const runtime = runner();
+
+      await expect(runtime.execute(request([
+        FIXTURE,
+        "exit-with-tree",
+        pidFile
+      ], {
+        timeoutMs: 150
+      }))).rejects.toMatchObject({
+        code: "PROCESS_TREE_CLEANUP_FAILED"
+      });
+      await waitForFile(pidFile);
+      const childPid = Number(readFileSync(pidFile, "utf8"));
+      fixturePids.push(childPid);
+    }
+  );
+
   it("recovers after a crash and supports simultaneous isolated executions", async () => {
     const runtime = runner();
 
