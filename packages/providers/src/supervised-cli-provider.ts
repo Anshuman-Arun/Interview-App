@@ -1,3 +1,4 @@
+import { types as utilTypes } from "node:util";
 import {
   GenerationIdSchema,
   ModelCapabilitiesSchema,
@@ -186,7 +187,12 @@ class SupervisedCliReasoningSession implements ReasoningSession {
   }
 }
 function snapshotReasoningTurnInput(input: unknown): ReasoningTurnInput {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  if (
+    typeof input !== "object"
+    || input === null
+    || utilTypes.isProxy(input)
+    || Array.isArray(input)
+  ) {
     throw new Error("Supervised CLI turn input is invalid");
   }
   const prototype = Object.getPrototypeOf(input);
