@@ -159,8 +159,13 @@ interface WindowsSupervisorAssembly {
   readonly sha256: string;
 }
 
+interface WindowsSupervisorAssemblyEntry {
+  readonly promise: Promise<WindowsSupervisorAssembly>;
+  readonly controller: AbortController;
+}
+
 const SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES =
-  new Map<string, Promise<WindowsSupervisorAssembly>>();
+  new Map<string, WindowsSupervisorAssemblyEntry>();
 
 type PendingFailure =
   | "SPAWN_FAILED"
@@ -182,6 +187,7 @@ export class SupervisedProcessRunner {
     new Map<string, AbortController>();
   private containmentCompromised = false;
   private windowsSupervisorIdentity: ExecutableIdentity | undefined;
+  private windowsSupervisorAssemblyEntry: WindowsSupervisorAssemblyEntry | undefined;
   private readonly activeControllers = new Set<AbortController>();
   private readonly activeOperations = new Set<Promise<SupervisedProcessExecutionResult>>();
   private draining: Promise<void> | undefined;
@@ -334,6 +340,7 @@ export class SupervisedProcessRunner {
     for (const controller of this.identityInitializationControllers.values()) {
       controller.abort();
     }
+    this.windowsSupervisorAssemblyEntry?.controller.abort();
   }
 
   private async drainActiveOperations(): Promise<void> {
@@ -341,10 +348,14 @@ export class SupervisedProcessRunner {
     for (const controller of this.identityInitializationControllers.values()) {
       controller.abort();
     }
+    this.windowsSupervisorAssemblyEntry?.controller.abort();
 
     const operations: Promise<unknown>[] = [
       ...this.activeOperations,
-      ...this.identityInitializations.values()
+      ...this.identityInitializations.values(),
+      ...(this.windowsSupervisorAssemblyEntry === undefined
+        ? []
+        : [this.windowsSupervisorAssemblyEntry.promise])
     ];
     const results = await settleWithin(operations, DRAIN_TIMEOUT_MS);
     if (results === undefined) {
@@ -797,6 +808,20 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
+    const assemblyEntry = getSharedWindowsSupervisorAssembly(
+      identity.canonicalPath,
+      this.temporaryRoot,
+      environment
+    );
+    this.windowsSupervisorAssemblyEntry = assemblyEntry;
+    const assembly = await waitForOperationOrAbort(
+      assemblyEntry.promise,
+      request.signal
+    );
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
+
     const configuration = JSON.stringify({
       executable: expectedIdentity.canonicalPath,
       arguments: [...definition.fixedArgs, ...request.args],
@@ -829,6 +854,8 @@ export class SupervisedProcessRunner {
       if (typeof value === "string") supervisorEnvironment[key] = value;
     }
     supervisorEnvironment.INTERVIEW_SUPERVISED_CONFIG_JSON = configuration;
+    supervisorEnvironment.INTERVIEW_SUPERVISED_ASSEMBLY_PATH = assembly.path;
+    supervisorEnvironment.INTERVIEW_SUPERVISED_ASSEMBLY_SHA256 = assembly.sha256;
     supervisorEnvironment.INTERVIEW_SUPERVISED_BOOTSTRAP =
       WINDOWS_JOB_SUPERVISOR_SCRIPT;
     if (
@@ -845,6 +872,203 @@ export class SupervisedProcessRunner {
       identity
     });
   }
+}
+
+function getSharedWindowsSupervisorAssembly(
+  powershell: string,
+  temporaryRoot: string,
+  environment: NodeJS.ProcessEnv
+): WindowsSupervisorAssemblyEntry {
+  const key =
+    `${normalizeWindowsIdentityPath(powershell)}\n${normalizeWindowsIdentityPath(temporaryRoot)}`;
+  const existing = SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key);
+  if (existing !== undefined) return existing;
+
+  const controller = new AbortController();
+  const promise = compileWindowsSupervisorAssembly(
+    powershell,
+    temporaryRoot,
+    environment,
+    controller.signal
+  );
+  const entry = Object.freeze({ promise, controller });
+  SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.set(key, entry);
+  void promise.catch(() => {
+    if (SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key) === entry) {
+      SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.delete(key);
+    }
+  });
+  return entry;
+}
+
+async function compileWindowsSupervisorAssembly(
+  powershell: string,
+  temporaryRoot: string,
+  environment: NodeJS.ProcessEnv,
+  signal: AbortSignal
+): Promise<WindowsSupervisorAssembly> {
+  if (abortSignalAborted(signal)) {
+    throw new SupervisedProcessError("EXECUTION_CANCELLED");
+  }
+
+  const directory = await mkdtemp(
+    path.join(temporaryRoot, "interview-job-supervisor-")
+  );
+  const output = path.join(directory, "InterviewJobSupervisor.dll");
+  const compilerEnvironment = windowsSupervisorCompilerEnvironment(
+    environment,
+    temporaryRoot,
+    output
+  );
+  const args = [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    "$ErrorActionPreference='Stop'; Add-Type -TypeDefinition $env:INTERVIEW_SUPERVISOR_SOURCE -Language CSharp -OutputAssembly $env:INTERVIEW_SUPERVISOR_OUTPUT -OutputType Library"
+  ];
+
+  let child: ChildProcessWithoutNullStreams | undefined;
+  let succeeded = false;
+  try {
+    child = spawn(powershell, args, {
+      env: compilerEnvironment,
+      shell: false,
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    child.stdin.end();
+
+    const close = waitForClose(child);
+    const abortRequested = new Promise<"ABORT">((resolve) => {
+      const onAbort = (): void => resolve("ABORT");
+      addAbortSignalListener(signal, onAbort);
+      void close.finally(() => {
+        removeAbortSignalListener(signal, onAbort);
+      });
+    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<"TIMEOUT">((resolve) => {
+      timeout = setTimeout(
+        () => resolve("TIMEOUT"),
+        WINDOWS_SUPERVISOR_COMPILE_TIMEOUT_MS
+      );
+    });
+    const outcome = await Promise.race([
+      close.then((result) => ({ kind: "CLOSE" as const, result })),
+      abortRequested.then(() => ({ kind: "ABORT" as const })),
+      timedOut.then(() => ({ kind: "TIMEOUT" as const }))
+    ]);
+    if (timeout !== undefined) clearTimeout(timeout);
+
+    if (outcome.kind !== "CLOSE") {
+      const cleaned = await terminateProcessTree(
+        child,
+        "win32",
+        compilerEnvironment
+      );
+      if (!cleaned) {
+        throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+      }
+      throw new SupervisedProcessError(
+        outcome.kind === "ABORT"
+          ? "EXECUTION_CANCELLED"
+          : "EXECUTION_TIMEOUT"
+      );
+    }
+    if (outcome.result.code !== 0) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+
+    const info = await lstat(output, { bigint: true });
+    const canonical = await realpath(output);
+    if (
+      !info.isFile()
+      || info.isSymbolicLink()
+      || info.nlink !== 1n
+      || info.size <= 0n
+      || info.size > BigInt(MAX_WINDOWS_SUPERVISOR_ASSEMBLY_BYTES)
+      || normalizeWindowsIdentityPath(output)
+        !== normalizeWindowsIdentityPath(canonical)
+    ) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+
+    const hashController = new AbortController();
+    const forwardAbort = (): void => {
+      hashController.abort();
+    };
+    if (abortSignalAborted(signal)) {
+      forwardAbort();
+    } else {
+      addAbortSignalListener(signal, forwardAbort);
+    }
+    let sha256: string;
+    try {
+      sha256 = await sha256Executable(canonical, hashController.signal);
+    } finally {
+      removeAbortSignalListener(signal, forwardAbort);
+    }
+
+    process.once("exit", () => {
+      try {
+        rmSync(directory, { recursive: true, force: true });
+      } catch {
+        // Process exit cleanup is best effort; per-turn hash verification
+        // prevents stale helper bytes from becoming trusted execution input.
+      }
+    });
+    succeeded = true;
+    return Object.freeze({
+      path: canonical,
+      sha256
+    });
+  } catch (error) {
+    if (error instanceof SupervisedProcessError) throw error;
+    throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+  } finally {
+    child?.stdin.destroy();
+    child?.stdout.destroy();
+    child?.stderr.destroy();
+    if (!succeeded) {
+      try {
+        await rm(directory, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 50
+        });
+      } catch {
+        // No provider/session data is written here. The failed compiler
+        // directory is untrusted and will not be reused by the cache.
+      }
+    }
+  }
+}
+
+function windowsSupervisorCompilerEnvironment(
+  environment: NodeJS.ProcessEnv,
+  temporaryRoot: string,
+  output: string
+): NodeJS.ProcessEnv {
+  const result = Object.create(null) as NodeJS.ProcessEnv;
+  const system32 = windowsSystem32ExecutablePath(environment);
+  const systemRoot = win32Path.dirname(system32);
+  result.SYSTEMROOT = systemRoot;
+  result.WINDIR = systemRoot;
+  result.PATH = system32;
+  result.PATHEXT = ".COM;.EXE;.BAT;.CMD";
+  result.TEMP = temporaryRoot;
+  result.TMP = temporaryRoot;
+  result.INTERVIEW_SUPERVISOR_SOURCE = WINDOWS_JOB_SUPERVISOR_CSHARP_SOURCE;
+  result.INTERVIEW_SUPERVISOR_OUTPUT = output;
+  if (
+    windowsEnvironmentBlockCharacters(result)
+    > MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS
+  ) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+  return Object.freeze(result);
 }
 
 function snapshotExecutableDefinitions(
