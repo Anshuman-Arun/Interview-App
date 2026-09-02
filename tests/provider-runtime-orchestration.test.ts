@@ -7,8 +7,6 @@ import {
   type SessionId
 } from "../packages/domain/src/index.js";
 import {
-  ClosedWorldDisclosureAnalyzer,
-  DisclosureValidator,
   SessionRuntimeRegistry,
   TurnCoordinator
 } from "../packages/interview-engine/src/index.js";
@@ -111,7 +109,7 @@ describe("production provider runtime resolution", () => {
       const orchestrator = new ServerTurnOrchestrator(
         harness.sessions,
         () => undefined,
-        validatorFor(proposal),
+        undefined,
         resolver
       );
 
@@ -153,7 +151,7 @@ describe("production provider runtime resolution", () => {
       const orchestrator = new ServerTurnOrchestrator(
         harness.sessions,
         () => undefined,
-        validatorFor(safeProbeProposal()),
+        undefined,
         resolver
       );
 
@@ -312,7 +310,6 @@ describe("production provider runtime resolution", () => {
     const sessionId = newSessionId();
     let registry = new SessionRuntimeRegistry(store);
     try {
-      const firstSessions = new SessionRecoveryCoordinator(registry, store);
       const writer = registry.get(sessionId);
       const turns = new TurnCoordinator(writer);
       await turns.startConfiguredSession({
@@ -335,7 +332,7 @@ describe("production provider runtime resolution", () => {
       const recoveredOrchestrator = new ServerTurnOrchestrator(
         recoveredSessions,
         () => undefined,
-        validatorFor(proposal),
+        undefined,
         geminiResolver({
           proposal,
           onFetch: () => {
@@ -357,7 +354,6 @@ describe("production provider runtime resolution", () => {
       expect(Object.values(recoveredState.generations).some(
         (generation) => generation.provider === "mock-model"
       )).toBe(false);
-      void firstSessions;
     } finally {
       await registry.closeAll();
       store.close();
@@ -389,7 +385,7 @@ describe("production provider runtime resolution", () => {
       const orchestrator = new ServerTurnOrchestrator(
         sessions,
         () => undefined,
-        validatorFor(proposal),
+        undefined,
         resolver
       );
 
@@ -555,14 +551,6 @@ function geminiResolver(input: {
       }
     }
   });
-}
-
-function validatorFor(proposal: InterviewerProposal): DisclosureValidator {
-  return new DisclosureValidator(
-    new ClosedWorldDisclosureAnalyzer([
-      proposal.speechText ?? "Why must that step be true?"
-    ])
-  );
 }
 
 function safeProbeProposal(): InterviewerProposal {
