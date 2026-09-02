@@ -251,9 +251,10 @@ Do not claim this real-device evidence until it has actually been performed.
 
 ### Supported wheel platforms
 
-The current production Python worker is validated on Windows x86-64 and Ubuntu
-x86-64. Upstream Moonshine 0.1.5 also publishes Linux ARM64 and macOS ARM64
-wheels, but those paths are not claimed production-validated by this PR.
+The current production Python worker is admitted only on Windows x86-64 and
+Linux x86-64, matching the CI/runtime evidence in this PR. Other
+platform/architecture combinations report `UNSUPPORTED_RUNTIME_PLATFORM`
+instead of silently running an unvalidated production stack.
 
 
 ## Packaged executable boundary
