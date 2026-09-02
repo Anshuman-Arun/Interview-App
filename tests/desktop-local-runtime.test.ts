@@ -125,6 +125,7 @@ describe("desktop local model runtime", () => {
     compositions.push(composition);
 
     const mutable = composition as unknown as {
+      pythonExecutable?: string;
       workerDefinition(input: {
         readonly componentId: string;
         readonly component: "speech" | "tts";
@@ -135,6 +136,9 @@ describe("desktop local model runtime", () => {
         readonly args: readonly string[];
       }): LocalComponentDefinition;
     };
+    // workerDefinition is an internal post-preflight primitive. Pin the
+    // already-known absolute test executable so this test can focus on -I.
+    mutable.pythonExecutable = process.execPath;
     const definition = mutable.workerDefinition({
       componentId: "isolated-fixture",
       component: "speech",
@@ -149,6 +153,38 @@ describe("desktop local model runtime", () => {
     if (args === undefined) throw new Error("Expected production worker arguments");
     expect(args[0]).toBe("-I");
     expect(args[1]).toBe(PRODUCTION_WORKER);
+  });
+
+  it("degrades voice without spawning when the configured Python runtime cannot be resolved", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-missing-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: join(
+        temporaryRoot("desktop-python-missing-bin-"),
+        process.platform === "win32" ? "python.exe" : "python3"
+      )
+    });
+    compositions.push(composition);
+
+    await expect(composition.start()).resolves.toBeUndefined();
+
+    expect(composition.voiceRuntime).toBeUndefined();
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
+      },
+      vision: {
+        state: "UNAVAILABLE",
+        reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+      }
+    });
   });
 
   it("keeps typed desktop startup usable when production model assets are absent", async () => {
