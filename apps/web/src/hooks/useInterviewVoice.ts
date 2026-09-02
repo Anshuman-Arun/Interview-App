@@ -19,12 +19,13 @@ import {
   type BrowserVoiceStream
 } from "../voice-client.js";
 
-// Capture emits 2,048-sample frames at 48 kHz (~42.7 ms). The speech worker
-// performs final STT inline, so a sub-second queue can falsely trip
-// backpressure during an otherwise healthy local recognition. Sixty-four
-// frames remains tightly bounded (~2.73 s / ~0.5 MiB of Float32 PCM) while
-// bridging realistic local STT latency.
-const MAX_PENDING_MICROPHONE_FRAMES = 64;
+// Final STT runs inline. Buffer a small, explicit amount of continuing
+// capture while recognition is pending, bounded independently by time, memory,
+// and fragmentation so non-48-kHz browser AudioContexts do not collapse the
+// latency budget or expand memory without limit.
+const MAX_PENDING_MICROPHONE_FRAMES = 256;
+const MAX_PENDING_MICROPHONE_DURATION_MS = 3_000;
+const MAX_PENDING_MICROPHONE_BYTES = 2 * 1024 * 1024;
 const VOICE_CANCEL_TIMEOUT_MS = 1_000;
 
 export type VoicePermissionState =
@@ -278,11 +279,25 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
 
   const enqueueFrame = useCallback((frame: AudioFrame, epoch: number): void => {
     if (epoch !== epochRef.current || !microphoneEnabledRef.current) return;
-    if (frameQueueRef.current.length >= MAX_PENDING_MICROPHONE_FRAMES) {
+    const queued = frameQueueRef.current;
+    let pendingDurationMs = 0;
+    let pendingBytes = 0;
+    for (const pending of queued) {
+      pendingDurationMs += pending.samples.length / pending.sampleRate * 1_000;
+      pendingBytes += pending.samples.byteLength;
+    }
+    const frameDurationMs = frame.samples.length / frame.sampleRate * 1_000;
+    if (
+      !Number.isFinite(frameDurationMs)
+      || frameDurationMs <= 0
+      || queued.length >= MAX_PENDING_MICROPHONE_FRAMES
+      || pendingDurationMs + frameDurationMs > MAX_PENDING_MICROPHONE_DURATION_MS
+      || pendingBytes + frame.samples.byteLength > MAX_PENDING_MICROPHONE_BYTES
+    ) {
       failVoiceCycle("Microphone transport backpressure limit reached");
       return;
     }
-    frameQueueRef.current.push(frame);
+    queued.push(frame);
     void drainFrames(epoch);
   }, [drainFrames, failVoiceCycle]);
 
