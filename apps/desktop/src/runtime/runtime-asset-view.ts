@@ -9,6 +9,7 @@ import {
   statfs
 } from "node:fs/promises";
 import path from "node:path";
+import process from "node:process";
 import { verifyArtifactFile } from "../../../../packages/model-assets/src/index.js";
 import type { ModelAssetManager } from "../../../../packages/model-assets/src/index.js";
 import type { DesktopRuntimeAsset } from "./model-assets.js";
@@ -39,6 +40,11 @@ export async function cleanupStaleRuntimeAssetViews(baseRoot: string): Promise<v
       await rm(candidate, { force: true });
       continue;
     }
+    const ownerPid = runtimeViewOwnerPid(entry.name);
+    // Unknown legacy/currently-being-created run directories fail closed.
+    // A known live owner must never have its verified model view deleted by
+    // another concurrently launched desktop process.
+    if (ownerPid === undefined || processIsAlive(ownerPid)) continue;
     await rm(candidate, { recursive: true, force: true });
   }
 }
@@ -59,7 +65,7 @@ export async function materializeRuntimeAssetView(input: {
     throw new Error("Insufficient disk space for verified local runtime asset view");
   }
 
-  const root = await mkdtemp(path.join(input.baseRoot, "run-"));
+  const root = await mkdtemp(path.join(input.baseRoot, `run-${String(process.pid)}-`));
   const paths = new Map<string, string>();
   let complete = false;
   try {
@@ -116,6 +122,28 @@ function resolveWithinRoot(root: string, relativePath: string): string {
     throw new Error("Runtime asset path escapes its managed root");
   }
   return resolved;
+}
+
+function runtimeViewOwnerPid(name: string): number | undefined {
+  const match = /^run-([1-9][0-9]*)-/u.exec(name);
+  if (match?.[1] === undefined) return undefined;
+  const pid = Number(match[1]);
+  return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
+}
+
+function processIsAlive(pid: number): boolean {
+  if (pid === process.pid) return true;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "EPERM") return true;
+    return false;
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error;
 }
 
 function abortRequested(signal: AbortSignal | undefined): boolean {
