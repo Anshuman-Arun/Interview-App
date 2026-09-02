@@ -4,7 +4,7 @@ export const DESKTOP_ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 export const DESKTOP_AUTH_HEADER_VALUE = "desktop-managed-v1";
 
 export const DESKTOP_MIN_ZOOM_FACTOR = 0.25;
-export const DESKTOP_MAX_ZOOM_FACTOR = 3;
+export const DESKTOP_MAX_ZOOM_FACTOR = 5;
 export type DesktopZoomFactor = number;
 
 export function isDesktopZoomFactor(value: unknown): value is DesktopZoomFactor {
