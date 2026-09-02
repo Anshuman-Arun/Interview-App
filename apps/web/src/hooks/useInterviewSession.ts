@@ -327,6 +327,8 @@ export function useInterviewSession(
   const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
   const rendererLaunchEpochRef = useRef(0);
   const sessionTransitionEpochRef = useRef(0);
+  const transportEpochRef = useRef(0);
+  const sessionListRequestEpochRef = useRef(0);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
   const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
@@ -414,6 +416,10 @@ export function useInterviewSession(
     if (desktopBootstrap !== undefined) {
       throw new Error("Desktop-managed command endpoint cannot be changed by renderer state");
     }
+    if (isSessionStarted && sessionStatus === "ACTIVE") {
+      setError("Command server URL cannot change while an interview is active");
+      return;
+    }
 
     const candidate = url.trim();
     try {
@@ -426,9 +432,32 @@ export function useInterviewSession(
     const normalized = new URL(candidate).origin;
     setError(null);
     if (normalized === baseUrl) return;
+
+    // Endpoint changes are authority boundaries. Invalidate every in-flight
+    // transition/list read before clearing state from the previous server.
+    transportEpochRef.current += 1;
+    sessionListRequestEpochRef.current += 1;
+    sessionTransitionEpochRef.current += 1;
+    pendingSubmissionsRef.current.clear();
     resetBoardSync();
+    setAvailableSessions([]);
+    setSessionId(null);
+    setIsSessionStarted(false);
+    setSessionStatus("CREATED");
+    setProblem(null);
+    setTranscript([]);
+    setSequence(0);
+    setContextEpoch(0);
+    setIsConnected(false);
+    setIsStreaming(false);
     setBaseUrlState(normalized);
-  }, [baseUrl, desktopBootstrap, resetBoardSync]);
+  }, [
+    baseUrl,
+    desktopBootstrap,
+    isSessionStarted,
+    resetBoardSync,
+    sessionStatus
+  ]);
 
   const getCommandClient = useCallback((): BrowserCommandClient => {
     return new BrowserCommandClient({
@@ -552,9 +581,18 @@ export function useInterviewSession(
   }, [getSessionReadClient]);
 
   const listAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
+    const transportEpoch = transportEpochRef.current;
+    const requestEpoch = sessionListRequestEpochRef.current + 1;
+    sessionListRequestEpochRef.current = requestEpoch;
     const client = getCommandClient();
     const sessions = await client.listSessions();
-    setAvailableSessions(sessions);
+
+    if (transportEpochRef.current !== transportEpoch) {
+      throw new Error("Command server changed while stored sessions were being read");
+    }
+    if (sessionListRequestEpochRef.current === requestEpoch) {
+      setAvailableSessions(sessions);
+    }
     return sessions;
   }, [getCommandClient]);
 
@@ -1007,7 +1045,7 @@ export function useInterviewSession(
 
   const submitTypedInput = useCallback(
     async (text: string): Promise<void> => {
-      if (sessionId === null) {
+      if (sessionId === null || sessionStatus !== "ACTIVE") {
         throw new Error("Cannot submit input without an active session");
       }
 
@@ -1064,7 +1102,7 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, getCommandClient]
+    [sessionId, sessionStatus, getCommandClient]
   );
 
   const retrySubmission = useCallback(
