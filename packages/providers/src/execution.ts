@@ -87,7 +87,86 @@ export async function openProviderExecutionSession(input: {
   } catch {
     throw new ProviderExecutionError("SESSION_CREATION_FAILED");
   }
-  return new GuardedProviderExecutionSession(providerName, adapterVersion, capabilities, rawSession);
+  const sessionOperations = snapshotReasoningSessionOperations(rawSession);
+  return new GuardedProviderExecutionSession(
+    providerName,
+    adapterVersion,
+    capabilities,
+    sessionOperations
+  );
+}
+
+interface ReasoningSessionOperations {
+  readonly receiver: object;
+  readonly sendTurn: ReasoningSession["sendTurn"];
+  readonly cancelTurn?: ReasoningSession["cancelTurn"];
+  readonly close: ReasoningSession["close"];
+}
+
+function snapshotReasoningSessionOperations(
+  session: ReasoningSession
+): ReasoningSessionOperations {
+  const sessionValue: unknown = session;
+  if (typeof sessionValue !== "object" || sessionValue === null) {
+    throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+  }
+  const sendTurn = readReasoningSessionOperation(sessionValue, "sendTurn", true);
+  const cancelTurn = readReasoningSessionOperation(sessionValue, "cancelTurn", false);
+  const close = readReasoningSessionOperation(sessionValue, "close", true);
+  if (sendTurn === undefined || close === undefined) {
+    throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+  }
+  return Object.freeze({
+    receiver: sessionValue,
+    sendTurn: sendTurn as ReasoningSession["sendTurn"],
+    ...(cancelTurn === undefined
+      ? {}
+      : { cancelTurn: cancelTurn as NonNullable<ReasoningSession["cancelTurn"]> }),
+    close: close as ReasoningSession["close"]
+  });
+}
+
+function readReasoningSessionOperation(
+  value: object,
+  key: "sendTurn" | "cancelTurn" | "close",
+  required: boolean
+): Function | undefined {
+  const seen = new Set<object>();
+  let current: object | null = value;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) break;
+    if (seen.has(current)) {
+      throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+    }
+    seen.add(current);
+
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+    }
+    if (descriptor !== undefined) {
+      if (!("value" in descriptor) || typeof descriptor.value !== "function") {
+        throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+      }
+      return descriptor.value as Function;
+    }
+
+    try {
+      const prototypeCandidate: unknown = Object.getPrototypeOf(current);
+      if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+        throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+      }
+      current = prototypeCandidate;
+    } catch {
+      throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+    }
+  }
+  if (required) {
+    throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+  }
+  return undefined;
 }
 
 class GuardedProviderExecutionSession implements ProviderExecutionSession {
@@ -98,7 +177,7 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
     public readonly providerName: string,
     public readonly adapterVersion: string,
     public readonly capabilities: ModelCapabilities,
-    private readonly rawSession: ReasoningSession
+    private readonly operations: ReasoningSessionOperations
   ) {}
 
   public sendTurn(input: ReasoningTurnInput): AsyncIterable<InterviewerProposal> {
@@ -109,10 +188,14 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
     this.assertOpen();
     this.cancelled.add(generationId);
     let adapterResult: ProviderCancellationResult = { semantics: "NONE" };
-    if (this.rawSession.cancelTurn !== undefined) {
+    if (this.operations.cancelTurn !== undefined) {
       let rawResult: unknown;
       try {
-        rawResult = await this.rawSession.cancelTurn(generationId);
+        rawResult = await Reflect.apply(
+          this.operations.cancelTurn,
+          this.operations.receiver,
+          [generationId]
+        ) as unknown;
       } catch {
         rawResult = { semantics: "NONE" };
       }
@@ -134,7 +217,11 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
     if (this.closed) return;
     this.closed = true;
     try {
-      await this.rawSession.close();
+      await Reflect.apply(
+        this.operations.close,
+        this.operations.receiver,
+        []
+      );
     } catch {
       throw new ProviderExecutionError("SESSION_CLOSE_FAILED");
     }
@@ -148,7 +235,12 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
     this.assertOpen();
     if (this.cancelled.has(input.generationId)) return;
     try {
-      for await (const candidate of this.rawSession.sendTurn(input)) {
+      const stream = Reflect.apply(
+        this.operations.sendTurn,
+        this.operations.receiver,
+        [input]
+      ) as AsyncIterable<InterviewerProposal>;
+      for await (const candidate of stream) {
         if (this.cancelled.has(input.generationId) || this.closed) return;
         const parsed = InterviewerProposalSchema.safeParse(candidate);
         if (!parsed.success) throw new ProviderExecutionError("INVALID_PROVIDER_OUTPUT");
