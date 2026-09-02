@@ -142,7 +142,6 @@ describe("desktop secure bootstrap", () => {
       commandBaseUrl: "http://127.0.0.1:41000",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41002",
-      voiceBaseUrl: "http://127.0.0.1:41002",
       appVersion: "1.0.0",
       platform: "test"
     });
@@ -157,7 +156,6 @@ describe("desktop secure bootstrap", () => {
       commandBaseUrl: "https://example.com",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41002",
-      voiceBaseUrl: "http://127.0.0.1:41002",
       authentication: { mode: "DESKTOP_MANAGED", headerValue: DESKTOP_AUTH_HEADER_VALUE },
       appVersion: "1",
       platform: "test"
@@ -167,7 +165,6 @@ describe("desktop secure bootstrap", () => {
       commandBaseUrl: "http://127.0.0.1:41000?token=bad",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41002",
-      voiceBaseUrl: "http://127.0.0.1:41002",
       authentication: { mode: "DESKTOP_MANAGED", headerValue: DESKTOP_AUTH_HEADER_VALUE },
       appVersion: "1",
       platform: "test"
@@ -179,7 +176,6 @@ describe("desktop secure bootstrap", () => {
       commandBaseUrl: "http://127.0.0.1:41000",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41002",
-      voiceBaseUrl: "http://127.0.0.1:41002",
       appVersion: "1.0.0",
       platform: "test"
     });
@@ -376,7 +372,6 @@ describe("desktop secure bootstrap", () => {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -457,7 +452,6 @@ describe("desktop secure bootstrap", () => {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => {
@@ -515,7 +509,6 @@ describe("desktop secure bootstrap", () => {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -528,7 +521,6 @@ describe("desktop secure bootstrap", () => {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -540,7 +532,6 @@ describe("desktop secure bootstrap", () => {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 43,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -561,7 +552,6 @@ describe("desktop secure bootstrap", () => {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -591,26 +581,24 @@ describe("desktop secure bootstrap", () => {
         commandUrl: "https://attacker.invalid/v1/commands",
         rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
         webContentsId: 42
       },
       {
         commandUrl: "http://127.0.0.1:41100/v1/commands?redirect=bad",
         rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
         webContentsId: 42
       },
       {
         commandUrl: "http://127.0.0.1:41100/v1/commands",
         rendererStreamUrl: "http://127.0.0.1:41101/not-the-stream",
+        voiceBaseUrl: "http://127.0.0.1:41102",
         webContentsId: 42
       },
       {
         commandUrl: "http://127.0.0.1:41100/v1/commands",
         rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
         webContentsId: 0
       }
     ];
@@ -629,7 +617,6 @@ describe("desktop secure bootstrap", () => {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: "x".repeat(31),
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -639,7 +626,6 @@ describe("desktop secure bootstrap", () => {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41102",
-      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: 12345 as never,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
