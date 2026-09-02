@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  newRequestId,
   newSessionId,
   newUtteranceId,
   type DeliveryId,
@@ -143,6 +144,37 @@ class DuplicateOnsetWorker extends SpeechWorkerCore {
       atTimestampMs: envelope.timestampMs
     };
     return [onset, { ...onset }];
+  }
+}
+
+class OnsetThenWrongRequestWorker extends SpeechWorkerCore {
+  public override async submitFrame(
+    envelopeInput: unknown,
+    _payload: unknown,
+    _heuristicsInput: unknown = {}
+  ): Promise<readonly SpeechWorkerEvent[]> {
+    void _payload;
+    void _heuristicsInput;
+    const envelope = SpeechPcmFrameEnvelopeSchema.parse(envelopeInput);
+    const utteranceId = newUtteranceId();
+    return [
+      {
+        protocolVersion: 1,
+        type: "SPEECH_STARTED",
+        requestId: envelope.requestId,
+        streamId: envelope.streamId,
+        utteranceId,
+        atTimestampMs: envelope.timestampMs
+      },
+      {
+        protocolVersion: 1,
+        type: "SPEECH_STARTED",
+        requestId: newRequestId(),
+        streamId: envelope.streamId,
+        utteranceId,
+        atTimestampMs: envelope.timestampMs
+      }
+    ];
   }
 }
 
@@ -849,6 +881,53 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.values(writer.getState().utterances)[0]?.status).toBe("CAPTURING");
 
     await speech.cancel();
+  });
+
+  it("keeps synthesized post-onset worker errors bound to the admitted request id", async () => {
+    const speechWorker = new OnsetThenWrongRequestWorker({
+      vadBackend: new ScriptedVadBackend([0]),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const speech = await new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: fetchWithAuth
+    }).openStream(sessionId);
+
+    const result = await speech.sendFrame(microphoneFrame(0.2));
+    expect(result.events.map((event) => event.type)).toEqual([
+      "SPEECH_STARTED",
+      "SPEECH_WORKER_ERROR"
+    ]);
+    expect(result.events[1]?.requestId).toBe(result.events[0]?.requestId);
+    expect(result.terminal).toBe(true);
   });
 
   it("still publishes an admitted onset when a later callback in the same batch is inconsistent", async () => {
