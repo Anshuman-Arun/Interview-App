@@ -637,6 +637,172 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
+  it("resumes an accepted-but-pending evidence bridge after restart without rerunning vision", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "The graph representation is productive.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const acceptedFingerprint = "a".repeat(64);
+    const changedFingerprint = "b".repeat(64);
+    let fingerprintReads = 0;
+    const firstCoordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      evidenceInterpreter: {
+        get fingerprint() {
+          fingerprintReads += 1;
+          return fingerprintReads === 1 ? acceptedFingerprint : changedFingerprint;
+        },
+        propose: () => {
+          throw new Error("Interpreter must not run after its fingerprint changes");
+        }
+      }
+    });
+
+    const request = upload(harness.sessionId);
+    try {
+      const interrupted = await firstCoordinator.process(request);
+      expect(interrupted).toMatchObject({
+        status: "REJECTED",
+        reason: "EVIDENCE_INTERPRETER_MISMATCH"
+      });
+      expect(backend.analyzeCallCount).toBe(1);
+      const interruptedState = harness.writer.getState();
+      expect(interruptedState.visionRequests[request.requestId]).toMatchObject({
+        status: "ACCEPTED",
+        evidenceBridge: {
+          status: "PENDING",
+          interpreterFingerprint: acceptedFingerprint
+        }
+      });
+      expect(Object.keys(interruptedState.studentEvidence)).toHaveLength(0);
+    } finally {
+      firstCoordinator.shutdown();
+    }
+
+    const resumedCoordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      evidenceInterpreter: {
+        fingerprint: acceptedFingerprint,
+        propose: (context) => progressInterpreter().propose(context)
+      }
+    });
+    try {
+      const resumed = await resumedCoordinator.process(request);
+      expect(resumed).toMatchObject({
+        status: "ACCEPTED",
+        observationCount: 1,
+        evidenceCommittedCount: 1
+      });
+      expect(backend.analyzeCallCount).toBe(1);
+      expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
+        .toMatchObject({
+          status: "DECIDED",
+          decision: "PROPOSAL",
+          interpreterFingerprint: acceptedFingerprint
+        });
+    } finally {
+      resumedCoordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("resumes a durable evidence decision after restart without rerunning the interpreter", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "The graph representation is productive.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const acceptedFingerprint = "c".repeat(64);
+    let fingerprintReads = 0;
+    const firstCoordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      evidenceInterpreter: {
+        get fingerprint() {
+          fingerprintReads += 1;
+          return fingerprintReads === 1 ? acceptedFingerprint : "d".repeat(64);
+        },
+        propose: () => {
+          throw new Error("Interpreter must not run while forcing the crash boundary");
+        }
+      }
+    });
+
+    const request = upload(harness.sessionId);
+    try {
+      expect(await firstCoordinator.process(request)).toMatchObject({
+        status: "REJECTED",
+        reason: "EVIDENCE_INTERPRETER_MISMATCH"
+      });
+    } finally {
+      firstCoordinator.shutdown();
+    }
+
+    const interruptedState = harness.writer.getState();
+    const requestState = interruptedState.visionRequests[request.requestId];
+    if (
+      requestState?.acceptedObservation === undefined
+      || requestState.resultEventId === undefined
+    ) {
+      throw new Error("Expected an accepted observation at the bridge crash boundary");
+    }
+    const interpreter = progressInterpreter();
+    const proposal = interpreter.propose({
+      observation: requestState.acceptedObservation,
+      problemId: sixPeopleProblem.id,
+      evidenceEventId: requestState.resultEventId
+    });
+    if (proposal === undefined) throw new Error("Expected the fixture interpreter to propose evidence");
+
+    await harness.turns.recordVisionEvidenceBridgeDecision({
+      envelope: createCommandEnvelope({
+        sessionId: harness.sessionId,
+        producer: "test-crash-boundary",
+        correlationId: request.requestId
+      }),
+      interpreterFingerprint: acceptedFingerprint,
+      proposal
+    });
+    expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
+      .toMatchObject({ status: "DECIDED", decision: "PROPOSAL" });
+    expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
+
+    let proposeCalls = 0;
+    const resumedCoordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      evidenceInterpreter: {
+        fingerprint: acceptedFingerprint,
+        propose: () => {
+          proposeCalls += 1;
+          throw new Error("A durable bridge decision must not be reinterpreted");
+        }
+      }
+    });
+    try {
+      const resumed = await resumedCoordinator.process(request);
+      expect(resumed).toMatchObject({
+        status: "ACCEPTED",
+        observationCount: 1,
+        evidenceCommittedCount: 1
+      });
+      expect(proposeCalls).toBe(0);
+      expect(backend.analyzeCallCount).toBe(1);
+
+      const replay = await resumedCoordinator.process(request);
+      expect(replay).toEqual(resumed);
+      expect(proposeCalls).toBe(0);
+    } finally {
+      resumedCoordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
   it("treats a throwing vision evidence interpreter as no evidence without losing an accepted observation", async () => {
     const harness = await startedBoardSession();
     const backend = new DeterministicFakeVisionBackend([{
@@ -649,6 +815,7 @@ describe("application whiteboard vision integration", () => {
       sessions: harness.sessions,
       backend,
       evidenceInterpreter: {
+        fingerprint: "f".repeat(64),
         propose: () => {
           throw new Error("malicious evidence interpreter");
         }
