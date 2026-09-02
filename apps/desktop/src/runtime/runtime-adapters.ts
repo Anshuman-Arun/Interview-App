@@ -113,7 +113,7 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
     this.transcriptionReservations += 1;
     this.activeRequestIds.add(input.requestId);
     const operation = this.transcriptionTail.then(async () => {
-      if (input.signal?.aborted === true) throw abortError();
+      if (abortRequested(input.signal)) throw abortError();
 
       const workerInstance = this.client.workerInstanceIdentity();
       const timeoutRecovery: { promise?: Promise<void> } = {};
@@ -124,7 +124,7 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
       };
 
       input.signal?.addEventListener("abort", onAbort, { once: true });
-      if (input.signal?.aborted === true) onAbort();
+      if (abortRequested(input.signal)) onAbort();
 
       let outcome:
         | { readonly ok: true; readonly value: unknown }
@@ -365,4 +365,9 @@ function abortError(): Error {
   const error = new Error("Managed local model operation was cancelled before native inference");
   error.name = "AbortError";
   return error;
+}
+
+
+function abortRequested(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }
