@@ -377,6 +377,37 @@ export class LoopbackCommandServer {
           turnId: committed.turnId
         };
       }
+      case "COMMIT_BOARD_MUTATION": {
+        const committed = await new TurnCoordinator(writer).commitBoardMutation(
+          command.mutation,
+          envelope
+        );
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_MUTATION_COMMITTED",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          committed: committed.committed,
+          boardRevision: committed.boardRevision,
+          ...(committed.reason === undefined ? {} : { reason: committed.reason })
+        };
+      }
+      case "GET_BOARD_STATE": {
+        const state = writer.getState();
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_STATE",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          boardRevision: state.boardRevision,
+          shapeAuthorityKnown: state.boardShapeAuthorityKnown,
+          shapeRevisions: Object.values(state.boardShapes)
+            .map((shape) => ({ shapeId: shape.id, revision: shape.revision }))
+            .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
+        };
+      }
       case "GET_SESSION_SUMMARY": {
         const state = writer.getState();
         return {
