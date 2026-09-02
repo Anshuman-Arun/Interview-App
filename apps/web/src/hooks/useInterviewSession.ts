@@ -1046,10 +1046,13 @@ export function useInterviewSession(
   const reconcileTerminalFailure = useCallback(async (
     client: BrowserCommandClient,
     targetSessionId: SessionId,
+    transitionEpoch: number,
     originalError: unknown
   ): Promise<void> => {
+    if (sessionTransitionEpochRef.current !== transitionEpoch) return;
     try {
       const summary = await client.getSessionSummary(targetSessionId);
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
         settleTerminalSession(summary.status);
         setError(null);
@@ -1077,15 +1080,17 @@ export function useInterviewSession(
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
       if (sessionId === null || sessionStatus !== "ACTIVE") return;
-      sessionTransitionEpochRef.current += 1;
+      const transitionEpoch = sessionTransitionEpochRef.current + 1;
+      sessionTransitionEpochRef.current = transitionEpoch;
       sessionMutationAdmissionRef.current = false;
       setError(null);
       const client = getCommandClient();
       try {
         await client.completeSession(sessionId, summary);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         settleTerminalSession("COMPLETED");
       } catch (err) {
-        await reconcileTerminalFailure(client, sessionId, err);
+        await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
       }
     },
     [
@@ -1100,15 +1105,17 @@ export function useInterviewSession(
   const archiveSession = useCallback(
     async (reason?: string): Promise<void> => {
       if (sessionId === null || sessionStatus !== "ACTIVE") return;
-      sessionTransitionEpochRef.current += 1;
+      const transitionEpoch = sessionTransitionEpochRef.current + 1;
+      sessionTransitionEpochRef.current = transitionEpoch;
       sessionMutationAdmissionRef.current = false;
       setError(null);
       const client = getCommandClient();
       try {
         await client.archiveSession(sessionId, reason);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         settleTerminalSession("ARCHIVED");
       } catch (err) {
-        await reconcileTerminalFailure(client, sessionId, err);
+        await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
       }
     },
     [
