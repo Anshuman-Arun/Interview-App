@@ -121,6 +121,16 @@ describe("professional UI foundation invariants", () => {
     expect(whiteboardSource).toContain('import styles from "./WhiteboardCanvas.module.css"');
   });
 
+  it("starts the native whiteboard in the pencil tool", () => {
+    const whiteboardSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),
+      "utf8"
+    );
+
+    expect(whiteboardSource).toContain('initialState="draw"');
+    expect(whiteboardSource).not.toContain('initialState="select"');
+  });
+
   it("bundles tldraw UI assets locally for Electron-safe toolbar rendering", () => {
     const whiteboardSource = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),

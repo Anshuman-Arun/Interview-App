@@ -169,6 +169,7 @@ const WhiteboardCanvasComponent: React.FC<WhiteboardCanvasProps> = ({
       <Tldraw
         assetUrls={TLDRAW_ASSET_URLS}
         colorScheme={colorScheme}
+        initialState="draw"
         onMount={handleMount}
       />
     </div>
