@@ -343,10 +343,10 @@ class SpeechRuntime:
                 source = self._np.concatenate((state.pending_48k, samples))
                 usable = (source.size // 3) * 3
                 if usable > 0:
-                    # A stateful three-sample box filter before 3:1 decimation
-                    # avoids resetting phase at frame boundaries and suppresses
-                    # the worst high-frequency aliasing without another runtime.
-                    samples = source[:usable].reshape(-1, 3).mean(axis=1).astype(
+                    # Match Silero v6.2.1's official 48 kHz preprocessing
+                    # (x[:, ::3]) while preserving decimation phase across
+                    # arbitrary HTTP frame boundaries.
+                    samples = source[:usable:3].astype(
                         self._np.float32, copy=False
                     )
                 else:
