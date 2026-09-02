@@ -762,7 +762,8 @@ async function inspectExecutable(
     const actual = path.resolve(canonicalPath);
     if (
       platform === "win32"
-        ? configured.toLowerCase() !== actual.toLowerCase()
+        ? normalizeWindowsIdentityPath(configured)
+          !== normalizeWindowsIdentityPath(actual)
         : configured !== actual
     ) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
@@ -792,7 +793,8 @@ function tryInspectExecutableSync(
     const actual = path.resolve(canonicalPath);
     if (
       platform === "win32"
-        ? configured.toLowerCase() !== actual.toLowerCase()
+        ? normalizeWindowsIdentityPath(configured)
+          !== normalizeWindowsIdentityPath(actual)
         : configured !== actual
     ) {
       return undefined;
@@ -809,13 +811,24 @@ function tryInspectExecutableSync(
   }
 }
 
+function normalizeWindowsIdentityPath(value: string): string {
+  let normalized = win32Path.resolve(value).replaceAll("/", "\\");
+  if (normalized.toLowerCase().startsWith("\\\\?\\unc\\")) {
+    normalized = "\\\\" + normalized.slice(8);
+  } else if (normalized.startsWith("\\\\?\\")) {
+    normalized = normalized.slice(4);
+  }
+  return normalized.toLowerCase();
+}
+
 function sameExecutableIdentity(
   left: ExecutableIdentity,
   right: ExecutableIdentity,
   platform: NodeJS.Platform
 ): boolean {
   const samePath = platform === "win32"
-    ? left.canonicalPath.toLowerCase() === right.canonicalPath.toLowerCase()
+    ? normalizeWindowsIdentityPath(left.canonicalPath)
+      === normalizeWindowsIdentityPath(right.canonicalPath)
     : left.canonicalPath === right.canonicalPath;
   return samePath
     && left.device === right.device
