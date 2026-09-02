@@ -44,6 +44,37 @@ The default policy is `NEVER`. `ON_FAILURE` requires an explicit finite retry bu
 
 Node core cannot create Windows Job Objects, and no portable API can retain a durable Windows tree handle after the root process exits. Tree-aware `taskkill /T` escalation is therefore verified when escalation owns a live root process; if that mechanism is unavailable, shutdown fails closed rather than treating a root-only kill as proof that descendants are gone. A component with unverified residual-tree cleanup cannot be started again until cleanup can be verified. A Windows root that exits before tree-aware escalation cannot provide the same descendant-absence guarantee through Node core alone. Local components must not daemonize or intentionally leave long-lived descendants behind.
 
+## Supervised one-shot execution
+
+`SupervisedProcessRunner` is a separate one-shot process boundary for adapters that need a
+fresh bounded child process per request rather than a long-lived ready/degraded component.
+
+Executable definitions are registered by trusted application code and snapshotted before use.
+The public execution request identifies only a registered executable ID plus bounded arguments,
+stdin, output budgets, deadline, and cancellation signal; it cannot supply an executable path,
+working directory, or environment. Executables must be absolute regular files, symbolic-link
+indirection is rejected, and the runner re-checks device/inode/size/mtime identity immediately
+after spawn to fail closed on detectable replacement races.
+
+Each execution uses `shell: false`, bounded stdin/stdout/stderr, fatal UTF-8 validation for
+returned stdout, and optional private temporary working directories. Stderr content is never
+returned through the result surface. Timeout, cancellation, output-budget violations, and
+unsafe executable replacement all trigger bounded process-tree cleanup.
+
+On POSIX, each one-shot process receives its own process group. Cancellation escalates from
+group SIGTERM to SIGKILL, and a normally exiting root is followed by a residual process-group
+check so descendants cannot intentionally remain in that owned group.
+
+On Windows, cancellation uses the same absolute System32 `taskkill.exe /T` mechanism as the
+long-lived manager while the root process is alive. Node core still cannot prove descendant
+absence after a Windows root exits before tree-aware cleanup owns it; one-shot providers must
+therefore not intentionally daemonize or detach descendants. A provider requiring a stronger
+Windows guarantee must use a runtime with Job Object ownership rather than claiming this runner
+provides that guarantee.
+
+The one-shot boundary is non-authoritative. It does not parse provider semantics, own interview
+state, or decide billing/data-use policy.
+
 ## Relationship to local-compute
 
 `packages/local-compute` keeps its existing bounded NDJSON protocol and admission behavior unchanged in this PR. A later integration can use `LocalRuntimeManager` to own the Python worker process while retaining the existing protocol client, without changing the worker schema or interview semantics.
