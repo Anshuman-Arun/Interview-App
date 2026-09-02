@@ -380,10 +380,11 @@ describe("Antigravity CLI one-turn protocol", () => {
     const session = await provider.createSession();
     const input = turnInput({ turn: "pre-iteration" });
     const stream = session.sendTurn(input);
-    const cancelTurn = session.cancelTurn;
-    if (cancelTurn === undefined) throw new Error("Antigravity session must support cancellation");
+    if (session.cancelTurn === undefined) {
+      throw new Error("Antigravity session must support cancellation");
+    }
 
-    await expect(cancelTurn(input.generationId)).resolves.toEqual({
+    await expect(session.cancelTurn(input.generationId)).resolves.toEqual({
       semantics: "INTERRUPT_LOCAL_PROCESS",
       signalSent: false
     });
@@ -415,9 +416,10 @@ describe("Antigravity CLI one-turn protocol", () => {
     const completion = collectProposals(session.sendTurn(input));
 
     await started;
-    const cancelTurn = session.cancelTurn;
-    if (cancelTurn === undefined) throw new Error("Antigravity session must support cancellation");
-    const cancellation = await cancelTurn(input.generationId);
+    if (session.cancelTurn === undefined) {
+      throw new Error("Antigravity session must support cancellation");
+    }
+    const cancellation = await session.cancelTurn(input.generationId);
     expect(cancellation).toEqual({
       semantics: "INTERRUPT_LOCAL_PROCESS",
       signalSent: true
@@ -446,8 +448,18 @@ describe("Antigravity CLI one-turn protocol", () => {
     ]);
 
     expect(prompts).toHaveLength(2);
-    expect(prompts.some((prompt) => prompt.includes('"session":"alpha"'))).toBe(true);
-    expect(prompts.some((prompt) => prompt.includes('"session":"beta"'))).toBe(true);
+    const contents = prompts.map((prompt) => {
+      const message = JSON.parse(prompt.trim()) as {
+        readonly message?: { readonly content?: unknown };
+      };
+      return message.message?.content;
+    });
+    expect(contents.some(
+      (content) => typeof content === "string" && content.includes('"session":"alpha"')
+    )).toBe(true);
+    expect(contents.some(
+      (content) => typeof content === "string" && content.includes('"session":"beta"')
+    )).toBe(true);
     for (const prompt of prompts) {
       expect(prompt).not.toContain("--continue");
     }
