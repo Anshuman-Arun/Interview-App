@@ -381,7 +381,7 @@ export const WhiteboardVisionSnapshotUploadSchema = z.object({
   relevantShapeRevisions: z.array(VisionShapeRevisionBindingSchema)
     .min(1)
     .max(MAX_VISION_REGION_SHAPES),
-  requestedObservationKind: VisionObservationKindSchema,
+  requestedObservationKind: VisionRequestedObservationKindSchema,
   pngBase64: z.string()
     .min(4)
     .max(MAX_WHITEBOARD_VISION_BASE64_LENGTH)

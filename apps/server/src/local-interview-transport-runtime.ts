@@ -1,5 +1,9 @@
 import type { LocalTransportSecurity } from "../../../packages/domain/src/index.js";
-import type { SessionRuntimeRegistry } from "../../../packages/interview-engine/src/index.js";
+import type {
+  SessionRuntimeRegistry,
+  VisionEvidenceInterpreter,
+  VisionInferenceBackend
+} from "../../../packages/interview-engine/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
 import {
   LoopbackCommandServer,
@@ -12,6 +16,7 @@ import {
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
+import { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 
 export interface LocalInterviewTransportRuntimeOptions {
   readonly security: LocalTransportSecurity;
@@ -24,6 +29,8 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererMessageBytes?: number;
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly readService?: SessionReadService;
+  readonly visionBackend?: VisionInferenceBackend;
+  readonly visionEvidenceInterpreter?: VisionEvidenceInterpreter;
 }
 
 export interface BoundLocalInterviewTransport {
@@ -38,6 +45,7 @@ export class LocalInterviewTransportRuntime {
   public readonly readService: SessionReadService;
   public readonly commandServer: LoopbackCommandServer;
   public readonly rendererStreamServer: RendererStreamServer;
+  public readonly whiteboardVision: WhiteboardVisionCoordinator;
   private bound: BoundLocalInterviewTransport | undefined;
   private starting: Promise<BoundLocalInterviewTransport> | undefined;
   private stopping: Promise<void> | undefined;
@@ -67,11 +75,19 @@ export class LocalInterviewTransportRuntime {
           options.store?.load(sessionId) ?? options.registry.loadEvents(sessionId)
       }
     });
+    this.whiteboardVision = new WhiteboardVisionCoordinator({
+      sessions: this.sessions,
+      ...(options.visionBackend === undefined ? {} : { backend: options.visionBackend }),
+      ...(options.visionEvidenceInterpreter === undefined
+        ? {}
+        : { evidenceInterpreter: options.visionEvidenceInterpreter })
+    });
     this.commandServer = new LoopbackCommandServer({
       security: options.security,
       sessions: this.sessions,
       reads: this.readService,
       orchestrator: this.orchestrator,
+      whiteboardVision: this.whiteboardVision,
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })
     });
     this.rendererStreamServer = new RendererStreamServer({
@@ -138,6 +154,11 @@ export class LocalInterviewTransportRuntime {
     // are still available.
     try {
       await this.commandServer.stop();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      this.whiteboardVision.shutdown();
     } catch (error) {
       failures.push(error);
     }

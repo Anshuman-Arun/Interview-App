@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import {
   ClientCommandSchema,
+  MAX_WHITEBOARD_VISION_BASE64_LENGTH,
   ProtocolErrorResponseSchema,
   ProtocolSuccessResponseSchema,
   SessionIdSchema,
@@ -22,6 +23,7 @@ import { MAX_REPLAY_IDENTIFIER_CHARS } from "../../../packages/replay/src/index.
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { SessionReadService } from "./session-read-service.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
+import type { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 import {
   listInterviewCatalogEntries,
   resolveInterviewSessionConfiguration,
@@ -33,6 +35,8 @@ import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compat
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const COMMAND_PATH = "/v1/commands";
+const WHITEBOARD_VISION_PATH = "/v1/whiteboard-vision";
+const MAX_WHITEBOARD_VISION_BODY_BYTES = MAX_WHITEBOARD_VISION_BASE64_LENGTH + 64 * 1024;
 const SESSION_READ_HISTORY_PATH = "/v1/read/sessions";
 const CORS_COMMAND_METHOD = "POST";
 const CORS_READ_METHOD = "GET";
@@ -47,6 +51,7 @@ export interface LoopbackCommandServerOptions {
   readonly sessions: SessionRecoveryCoordinator;
   readonly reads?: SessionReadService;
   readonly orchestrator?: ServerTurnOrchestrator;
+  readonly whiteboardVision?: WhiteboardVisionCoordinator;
   readonly port?: number;
 }
 
@@ -144,13 +149,34 @@ export class LoopbackCommandServer {
         return;
       }
 
-      if (request.method !== CORS_COMMAND_METHOD || request.url !== COMMAND_PATH) {
+      if (
+        request.method !== CORS_COMMAND_METHOD
+        || (request.url !== COMMAND_PATH && request.url !== WHITEBOARD_VISION_PATH)
+      ) {
         throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
       }
       const contentType = headerValue(request, "content-type");
       if (contentType?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
         throw new ProtocolHttpError(415, "INVALID_CONTENT_TYPE", "Content-Type must be application/json");
       }
+
+      if (request.url === WHITEBOARD_VISION_PATH) {
+        const coordinator = this.options.whiteboardVision;
+        if (coordinator === undefined) {
+          throw new ProtocolHttpError(503, "INTERNAL_ERROR", "Whiteboard vision coordinator is unavailable");
+        }
+        const body = await readBody(request, MAX_WHITEBOARD_VISION_BODY_BYTES, "Whiteboard vision body");
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          throw new ProtocolHttpError(400, "INVALID_COMMAND", "Whiteboard vision body is not valid JSON");
+        }
+        const result = await coordinator.process(parsed);
+        sendJson(response, 200, result, origin);
+        return;
+      }
+
       const command = parseCommand(await readBody(request));
       const result = await this.dispatch(command);
       sendJson(response, 200, ProtocolSuccessResponseSchema.parse(result), origin);
@@ -529,7 +555,7 @@ function containsUnsafeReadPathCharacter(value: string): boolean {
 }
 
 function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | undefined {
-  if (rawUrl === COMMAND_PATH) return CORS_COMMAND_METHOD;
+  if (rawUrl === COMMAND_PATH || rawUrl === WHITEBOARD_VISION_PATH) return CORS_COMMAND_METHOD;
   return parseReadRoute(rawUrl) === undefined ? undefined : CORS_READ_METHOD;
 }
 
@@ -549,13 +575,23 @@ function constantTimeEquals(received: string, expected: string): boolean {
   return receivedBytes.length === expectedBytes.length && timingSafeEqual(receivedBytes, expectedBytes);
 }
 
-async function readBody(request: IncomingMessage): Promise<string> {
+async function readBody(
+  request: IncomingMessage,
+  maxBytes: number = MAX_COMMAND_BYTES,
+  bodyLabel: string = "Command body"
+): Promise<string> {
   const chunks: Buffer[] = [];
   let byteLength = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
     byteLength += buffer.byteLength;
-    if (byteLength > MAX_COMMAND_BYTES) throw new ProtocolHttpError(413, "BODY_TOO_LARGE", "Command body exceeds the size limit");
+    if (byteLength > maxBytes) {
+      throw new ProtocolHttpError(
+        413,
+        "BODY_TOO_LARGE",
+        `${bodyLabel} exceeds the size limit`
+      );
+    }
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString("utf8");

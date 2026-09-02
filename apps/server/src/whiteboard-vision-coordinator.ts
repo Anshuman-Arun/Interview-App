@@ -5,11 +5,8 @@ import {
   VisionInferenceRequestSchema,
   WhiteboardVisionSnapshotResponseSchema,
   WhiteboardVisionSnapshotUploadSchema,
-  createCommandEnvelope,
   type AuthoritativeBoardBounds,
-  type BoardRevision,
   type SessionId,
-  type VisionAdmissionReason,
   type VisionInferenceRequest,
   type WhiteboardVisionSnapshotResponse,
   type WhiteboardVisionSnapshotUpload
@@ -17,6 +14,7 @@ import {
 import {
   TurnCoordinator,
   VisionRequestManager,
+  createCommandEnvelope,
   type VisionEvidenceInterpreter,
   type VisionInferenceBackend
 } from "../../../packages/interview-engine/src/index.js";
