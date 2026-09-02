@@ -91,6 +91,33 @@ describe("desktop local model runtime", () => {
     await liveView.dispose();
   });
 
+  it("deletes an untracked same-process-token runtime view while preserving the active one", async () => {
+    const root = temporaryRoot("desktop-runtime-view-same-token-");
+    const manager = new ModelAssetManager({
+      rootDir: temporaryRoot("desktop-runtime-view-same-token-assets-"),
+      maxArtifactBytes: 1024,
+      maxCacheBytes: 4096
+    });
+    const liveView = await materializeRuntimeAssetView({
+      manager,
+      assets: [],
+      baseRoot: root
+    });
+    const liveName = liveView.root.slice(liveView.root.lastIndexOf(join("a", "b").slice(1, 2)) + 1);
+    const match = /^run-([1-9][0-9]*)-([0-9a-f]{32})-/u.exec(liveName);
+    if (match?.[1] === undefined || match[2] === undefined) {
+      throw new Error("Expected runtime view owner identity in generated directory");
+    }
+    const orphan = join(root, `run-${match[1]}-${match[2]}-orphan`);
+    mkdirSync(orphan, { recursive: true });
+
+    await cleanupStaleRuntimeAssetViews(root);
+
+    expect(existsSync(liveView.root)).toBe(true);
+    expect(existsSync(orphan)).toBe(false);
+    await liveView.dispose();
+  });
+
   it("deletes an orphaned runtime view even when its PID has been reused", async () => {
     const root = temporaryRoot("desktop-runtime-view-pid-reuse-");
     const orphan = join(root, `run-${String(process.pid)}-${"0".repeat(32)}-orphan`);
