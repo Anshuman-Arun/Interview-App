@@ -659,6 +659,11 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     const writer = server.registry.get(sessionId);
     const turns = new TurnCoordinator(writer);
     await turns.startSession(sixPeopleProblem);
+    // Establish the process-lifetime recovery barrier before deliberately
+    // placing the source delivery into DELIVERING. Calling ensureRecovered()
+    // for the first time after markStarted() would correctly classify that
+    // synthetic unacknowledged delivery as POSSIBLY_EXPOSED and skip TTS.
+    await server.runtime.sessions.ensureRecovered(sessionId);
     const { inputEpisodeId, turnId } = await turns.commitInput(
       "I have a claim, but I have not justified it yet."
     );
