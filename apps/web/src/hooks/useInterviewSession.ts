@@ -32,6 +32,11 @@ import {
   createLoopbackAcknowledgementSender
 } from "../renderer-stream.js";
 import type { TldrawWhiteboardAdapter } from "../tldraw-whiteboard-adapter.js";
+import {
+  AuthoritativeBoardSyncCoordinator,
+  type AuthoritativeBoardSyncSnapshot
+} from "../whiteboard/authoritative-board-sync.js";
+import type { NormalizedStudentShapeChange } from "../whiteboard/normalized-board.js";
 import type { TranscriptItem } from "../components/TranscriptFeed.js";
 
 export interface UseInterviewSessionOptions {
@@ -74,6 +79,9 @@ export interface UseInterviewSessionResult {
   readonly recoverSession: (sessionId: SessionId) => Promise<void>;
   readonly completeSession: (summary?: string) => Promise<void>;
   readonly archiveSession: (reason?: string) => Promise<void>;
+  readonly whiteboardSync: AuthoritativeBoardSyncSnapshot;
+  readonly synchronizeWhiteboard: () => Promise<void>;
+  readonly submitWhiteboardMutation: (change: NormalizedStudentShapeChange) => Promise<void>;
   readonly submitTypedInput: (text: string) => Promise<void>;
   readonly retrySubmission: (itemId: string) => Promise<void>;
   readonly clearError: () => void;
@@ -281,10 +289,16 @@ export function useInterviewSession(
   const [sequence, setSequence] = useState<number>(0);
   const [contextEpoch, setContextEpoch] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [whiteboardSync, setWhiteboardSync] = useState<AuthoritativeBoardSyncSnapshot>({
+    status: "UNINITIALIZED",
+    pendingMutationCount: 0
+  });
 
   const pendingSubmissionsRef = useRef<Map<string, PendingSubmissionRecord>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
+  const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
+  const boardSyncSessionRef = useRef<SessionId | null>(null);
   const fetchImpl = useMemo(
     () => options.fetchImpl ?? globalThis.fetch.bind(globalThis),
     [options.fetchImpl]
@@ -299,8 +313,9 @@ export function useInterviewSession(
     if (desktopBootstrap !== undefined) {
       throw new Error("Desktop-managed command endpoint cannot be changed by renderer state");
     }
+    resetBoardSync();
     setBaseUrlState(url);
-  }, [desktopBootstrap]);
+  }, [desktopBootstrap, resetBoardSync]);
 
   const getCommandClient = useCallback((): BrowserCommandClient => {
     return new BrowserCommandClient({
@@ -311,6 +326,40 @@ export function useInterviewSession(
       fetchImpl
     });
   }, [baseUrl, desktopBootstrap, fetchImpl]);
+
+  const resetBoardSync = useCallback((): void => {
+    boardSyncRef.current?.reset();
+    boardSyncRef.current = null;
+    boardSyncSessionRef.current = null;
+    setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
+  }, []);
+
+  const getBoardSyncCoordinator = useCallback((
+    targetSessionId: SessionId
+  ): AuthoritativeBoardSyncCoordinator => {
+    if (
+      boardSyncRef.current === null
+      || boardSyncSessionRef.current !== targetSessionId
+    ) {
+      boardSyncRef.current?.reset();
+      boardSyncRef.current = new AuthoritativeBoardSyncCoordinator(getCommandClient());
+      boardSyncSessionRef.current = targetSessionId;
+    }
+    return boardSyncRef.current;
+  }, [getCommandClient]);
+
+  const synchronizeWhiteboardFor = useCallback(async (
+    targetSessionId: SessionId
+  ): Promise<void> => {
+    const adapter = options.whiteboardAdapter;
+    if (adapter === undefined || adapter.getEditor() === null) return;
+    const coordinator = getBoardSyncCoordinator(targetSessionId);
+    const snapshot = await coordinator.synchronize(
+      targetSessionId,
+      adapter.getNormalizedStudentShapes()
+    );
+    setWhiteboardSync(snapshot);
+  }, [getBoardSyncCoordinator, options.whiteboardAdapter]);
 
   const getSessionReadClient = useCallback((): BrowserSessionReadClient => {
     return new BrowserSessionReadClient({
@@ -458,6 +507,7 @@ export function useInterviewSession(
         }
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
+          resetBoardSync();
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(true);
@@ -465,6 +515,15 @@ export function useInterviewSession(
         setProblem(problemView);
         setTranscript([]);
 
+        try {
+          await synchronizeWhiteboardFor(targetSessionId);
+        } catch {
+          setWhiteboardSync({
+            status: "UNSYNCHRONIZED",
+            pendingMutationCount: 0,
+            reason: "Whiteboard authority synchronization failed"
+          });
+        }
         void attachRendererStream(targetSessionId);
       } catch (err) {
         let msg = "Failed to start interview session";
@@ -477,7 +536,7 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, attachRendererStream]
+    [getCommandClient, attachRendererStream, resetBoardSync, synchronizeWhiteboardFor]
   );
 
   const recoverSession = useCallback(
@@ -489,6 +548,7 @@ export function useInterviewSession(
         const response = await client.resumeSession(targetSessionId);
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
+          resetBoardSync();
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(response.started);
@@ -499,6 +559,15 @@ export function useInterviewSession(
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
 
+        try {
+          await synchronizeWhiteboardFor(targetSessionId);
+        } catch {
+          setWhiteboardSync({
+            status: "UNSYNCHRONIZED",
+            pendingMutationCount: 0,
+            reason: "Recovered whiteboard does not have a verified local revision correspondence"
+          });
+        }
         void attachRendererStream(targetSessionId);
       } catch (err) {
         let msg = "Failed to recover session";
@@ -511,8 +580,38 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, attachRendererStream]
+    [getCommandClient, attachRendererStream, resetBoardSync, synchronizeWhiteboardFor]
   );
+
+  const synchronizeWhiteboard = useCallback(async (): Promise<void> => {
+    if (sessionId === null || sessionStatus !== "ACTIVE") return;
+    await synchronizeWhiteboardFor(sessionId);
+  }, [sessionId, sessionStatus, synchronizeWhiteboardFor]);
+
+  const submitWhiteboardMutation = useCallback(async (
+    change: NormalizedStudentShapeChange
+  ): Promise<void> => {
+    if (sessionId === null || sessionStatus !== "ACTIVE") return;
+    const coordinator = getBoardSyncCoordinator(sessionId);
+    if (coordinator.snapshot().status === "UNINITIALIZED") {
+      await synchronizeWhiteboardFor(sessionId);
+      return;
+    }
+    try {
+      const pending = coordinator.submit(change);
+      setWhiteboardSync(coordinator.snapshot());
+      await pending;
+      setWhiteboardSync(coordinator.snapshot());
+    } catch (error) {
+      setWhiteboardSync(coordinator.snapshot());
+      throw error;
+    }
+  }, [
+    getBoardSyncCoordinator,
+    sessionId,
+    sessionStatus,
+    synchronizeWhiteboardFor
+  ]);
 
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
@@ -698,6 +797,9 @@ export function useInterviewSession(
         abortControllerRef.current = null;
       }
       rendererClientRef.current = null;
+      boardSyncRef.current?.reset();
+      boardSyncRef.current = null;
+      boardSyncSessionRef.current = null;
     };
   }, []);
 
@@ -724,6 +826,9 @@ export function useInterviewSession(
     recoverSession,
     completeSession,
     archiveSession,
+    whiteboardSync,
+    synchronizeWhiteboard,
+    submitWhiteboardMutation,
     submitTypedInput,
     retrySubmission,
     clearError,

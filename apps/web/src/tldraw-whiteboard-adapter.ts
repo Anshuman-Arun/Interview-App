@@ -7,7 +7,11 @@ import {
   type DeliveryId
 } from "../../../packages/domain/src/index.js";
 import type { WhiteboardPresenter } from "./renderer-client.js";
-import type { NormalizedStudentMutationSource } from "./whiteboard/normalized-board.js";
+import {
+  normalizeStudentShape,
+  type NormalizedStudentMutationSource
+} from "./whiteboard/normalized-board.js";
+import type { StudentShape } from "../../../packages/whiteboard/src/index.js";
 
 export class StudentShapeImmutableError extends Error {
   public constructor(message: string) {
@@ -310,6 +314,21 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     if (aiShapeIds.length > 0) {
       editor.deleteShapes(aiShapeIds);
     }
+  }
+
+  public getNormalizedStudentShapes(): readonly StudentShape[] {
+    const editor = this.requireEditor();
+    const shapes: StudentShape[] = [];
+    for (const shape of editor.getCurrentPageShapes()) {
+      const layer = shape.meta?.["layer"];
+      if (layer !== "STUDENT" && layer !== undefined) continue;
+      const normalized = normalizeStudentShape(
+        shape,
+        this.resolveShapeBounds(editor, shape)
+      );
+      if (normalized !== null) shapes.push(normalized);
+    }
+    return shapes;
   }
 
   public getCanvasSnapshot(): CanvasSnapshot {
