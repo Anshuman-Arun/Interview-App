@@ -608,8 +608,9 @@ describe("QueuedRendererAudioPlayer exposure semantics", () => {
         callbacks: { onStarted, onCompleted }
       });
 
+      const rejected = expect(presentation).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
       await vi.advanceTimersByTimeAsync(5_000);
-      await expect(presentation).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+      await rejected;
       expect(observedSignal?.aborted).toBe(true);
       expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
       expect(onStarted).not.toHaveBeenCalled();
@@ -635,8 +636,9 @@ describe("QueuedRendererAudioPlayer exposure semantics", () => {
       });
 
       await Promise.resolve();
+      const rejected = expect(presentation).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
       await vi.advanceTimersByTimeAsync(5_000);
-      await expect(presentation).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+      await rejected;
       expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
       expect(onStarted).not.toHaveBeenCalled();
       expect(onCompleted).not.toHaveBeenCalled();
