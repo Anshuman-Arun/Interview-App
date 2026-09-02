@@ -91,6 +91,14 @@ export interface TldrawEditor {
   createShapes: (shapes: readonly TLShapePartialRecord[]) => void;
   deleteShapes: (ids: readonly string[]) => void;
   updateShapes: (shapes: readonly TLShapePartialRecord[]) => void;
+  exportStudentShapesPng?: (
+    shapeIds: readonly string[],
+    bounds: TLShapeBounds
+  ) => Promise<{
+    readonly bytes: Uint8Array;
+    readonly width: number;
+    readonly height: number;
+  }>;
   getShapePageBounds?: (id: string | TLShapeRecord) => TLShapeBounds | undefined;
   store?: {
     listen?: (listener: (entry: unknown) => void) => () => void;
@@ -329,6 +337,21 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       if (normalized !== null) shapes.push(normalized);
     }
     return shapes;
+  }
+
+  public async exportStudentRegionPng(
+    shapeIds: readonly string[],
+    bounds: TLShapeBounds
+  ): Promise<{
+    readonly bytes: Uint8Array;
+    readonly width: number;
+    readonly height: number;
+  }> {
+    const editor = this.requireEditor();
+    if (editor.exportStudentShapesPng === undefined) {
+      throw new Error("Mounted whiteboard editor does not support bounded PNG export");
+    }
+    return editor.exportStudentShapesPng(shapeIds, bounds);
   }
 
   public getCanvasSnapshot(): CanvasSnapshot {

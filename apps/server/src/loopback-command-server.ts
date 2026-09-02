@@ -408,6 +408,9 @@ export class LoopbackCommandServer {
           command.mutation,
           envelope
         );
+        if (committed.committed) {
+          this.options.whiteboardVision?.supersedeStaleRequests(command.sessionId);
+        }
         return {
           protocolVersion: 1,
           ok: true,

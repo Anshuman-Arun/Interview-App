@@ -1,4 +1,5 @@
 import {
+  Box,
   type Editor,
   type TLShape,
   type TLShapeId,
@@ -182,6 +183,60 @@ export class RealTldrawEditorBridge implements TldrawEditor {
       if (token !== undefined) this.pendingAdapterMutationTokens.delete(token);
       throw error;
     }
+  }
+
+  public async exportStudentShapesPng(
+    shapeIds: readonly string[],
+    bounds: TLShapeBounds
+  ): Promise<{
+    readonly bytes: Uint8Array;
+    readonly width: number;
+    readonly height: number;
+  }> {
+    if (shapeIds.length === 0 || shapeIds.length > 64) {
+      throw new RangeError("Whiteboard vision export requires between 1 and 64 shapes");
+    }
+    if (new Set(shapeIds).size !== shapeIds.length) {
+      throw new Error("Whiteboard vision export shape IDs must be unique");
+    }
+
+    const nativeIds: TLShapeId[] = [];
+    for (const id of shapeIds) {
+      const nativeId = toShapeId(id);
+      const shape = this.nativeEditor.getShape(nativeId);
+      if (shape === undefined || effectiveNativeLayer(shape) !== STUDENT_LAYER) {
+        throw new Error("Whiteboard vision export may include only current student-owned shapes");
+      }
+      nativeIds.push(nativeId);
+    }
+    if (
+      !Number.isFinite(bounds.x)
+      || !Number.isFinite(bounds.y)
+      || !Number.isFinite(bounds.width)
+      || !Number.isFinite(bounds.height)
+      || bounds.width <= 0
+      || bounds.height <= 0
+    ) {
+      throw new RangeError("Whiteboard vision export bounds are invalid");
+    }
+
+    const result = await this.nativeEditor.toImage(nativeIds, {
+      format: "png",
+      background: false,
+      pixelRatio: 1,
+      padding: 0,
+      bounds: new Box(bounds.x, bounds.y, bounds.width, bounds.height)
+    });
+    if (
+      !Number.isSafeInteger(result.width)
+      || !Number.isSafeInteger(result.height)
+      || result.width <= 0
+      || result.height <= 0
+    ) {
+      throw new Error("tldraw returned invalid whiteboard export dimensions");
+    }
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+    return { bytes, width: result.width, height: result.height };
   }
 
   public getShapePageBounds(idOrShape: string | TLShapeRecord): TLShapeBounds | undefined {
