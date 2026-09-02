@@ -27,6 +27,7 @@ export interface TurnRecoveryDelegate {
  */
 export class SessionRecoveryCoordinator {
   private readonly recoveries = new Map<SessionId, Promise<readonly DeliveryId[]>>();
+  private readonly retryableTurnRecoveries = new Set<SessionId>();
   private delegate: TurnRecoveryDelegate | undefined;
 
   public constructor(
@@ -107,6 +108,22 @@ export class SessionRecoveryCoordinator {
     return this.registry.getAsync(sessionId);
   }
 
+  /**
+   * Explicitly re-arms a pending turn after application runtime configuration
+   * changes (for example, a credential becomes available). Ordinary reads and
+   * attaches do not repeatedly redispatch a failed provider.
+   */
+  public retryPendingTurnRecovery(
+    sessionId: SessionId
+  ): Promise<readonly DeliveryId[]> {
+    if (!this.retryableTurnRecoveries.has(sessionId)) {
+      return this.ensureRecovered(sessionId);
+    }
+    this.retryableTurnRecoveries.delete(sessionId);
+    this.recoveries.delete(sessionId);
+    return this.ensureRecovered(sessionId);
+  }
+
   public ensureRecovered(sessionId: SessionId): Promise<readonly DeliveryId[]> {
     if (!this.hasSession(sessionId)) {
       return Promise.reject(new Error("Session not found in authoritative event stream"));
@@ -115,35 +132,26 @@ export class SessionRecoveryCoordinator {
     const existing = this.recoveries.get(sessionId);
     if (existing !== undefined) return existing;
 
-    let cacheSuccessfulRecovery = true;
     const recovery = (async () => {
       const writer = await this.getWriterAsync(sessionId);
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.delegate !== undefined) {
         const disposition = await this.delegate.recoverPendingTurns(sessionId);
         if (disposition === "RETRYABLE") {
-          cacheSuccessfulRecovery = false;
+          this.retryableTurnRecoveries.add(sessionId);
+        } else {
+          this.retryableTurnRecoveries.delete(sessionId);
         }
       }
       return deliveryIds;
     })();
 
     this.recoveries.set(sessionId, recovery);
-    void recovery.then(
-      () => {
-        if (
-          !cacheSuccessfulRecovery
-          && this.recoveries.get(sessionId) === recovery
-        ) {
-          this.recoveries.delete(sessionId);
-        }
-      },
-      () => {
-        if (this.recoveries.get(sessionId) === recovery) {
-          this.recoveries.delete(sessionId);
-        }
+    void recovery.catch(() => {
+      if (this.recoveries.get(sessionId) === recovery) {
+        this.recoveries.delete(sessionId);
       }
-    );
+    });
     return recovery;
   }
 }
