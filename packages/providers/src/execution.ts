@@ -130,7 +130,7 @@ function readReasoningSessionOperation(
   value: object,
   key: "sendTurn" | "cancelTurn" | "close",
   required: boolean
-): Function | undefined {
+): unknown {
   const seen = new Set<object>();
   let current: object | null = value;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
@@ -150,7 +150,7 @@ function readReasoningSessionOperation(
       if (!("value" in descriptor) || typeof descriptor.value !== "function") {
         throw new ProviderExecutionError("SESSION_CREATION_FAILED");
       }
-      return descriptor.value as Function;
+      return descriptor.value;
     }
 
     try {
