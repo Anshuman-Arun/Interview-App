@@ -89,7 +89,10 @@ export class AuthoritativeBoardSyncCoordinator {
 
   public async synchronize(
     sessionId: SessionId,
-    localShapes: readonly StudentShape[]
+    localShapes: readonly StudentShape[],
+    options: {
+      readonly allowBootstrapIntoEmptyAuthority?: boolean;
+    } = {}
   ): Promise<AuthoritativeBoardSyncSnapshot> {
     const epoch = this.lifecycleEpoch + 1;
     this.lifecycleEpoch = epoch;
@@ -123,15 +126,29 @@ export class AuthoritativeBoardSyncCoordinator {
       return this.snapshot();
     }
 
-    if (state.boardRevision !== 0 || state.shapeRevisions.length !== 0) {
-      return this.failClosed("Local whiteboard does not match recovered authoritative shape revisions");
+    if (options.allowBootstrapIntoEmptyAuthority !== true) {
+      return this.failClosed(
+        "Local whiteboard does not match authoritative state and bootstrap was not explicitly authorized"
+      );
+    }
+
+    const remoteSubset = authoritativeSubsetOfLocal(
+      state.shapeRevisions,
+      localShapes
+    );
+    if (!remoteSubset) {
+      return this.failClosed(
+        "Authoritative whiteboard is not an exact subset of the authorized bootstrap canvas"
+      );
     }
 
     this.authoritativeRevision = state.boardRevision;
     this.status = "SYNCED";
     this.reason = undefined;
-    for (let offset = 0; offset < localShapes.length; offset += MAX_BOARD_MUTATION_SHAPES) {
-      const chunk = localShapes.slice(offset, offset + MAX_BOARD_MUTATION_SHAPES);
+    const remoteIds = new Set(state.shapeRevisions.map((entry) => entry.shapeId));
+    const missing = localShapes.filter((shape) => !remoteIds.has(shape.id));
+    for (let offset = 0; offset < missing.length; offset += MAX_BOARD_MUTATION_SHAPES) {
+      const chunk = missing.slice(offset, offset + MAX_BOARD_MUTATION_SHAPES);
       const change = {
         added: chunk.map(toAuthoritativeShape),
         updated: [],
@@ -319,4 +336,18 @@ function fingerprintPrepared(
 function rememberFingerprint(recent: string[], fingerprint: string): void {
   recent.push(fingerprint);
   while (recent.length > MAX_RECENT_FINGERPRINTS) recent.shift();
+}
+
+function authoritativeSubsetOfLocal(
+  remote: readonly { readonly shapeId: string; readonly revision: number }[],
+  localShapes: readonly StudentShape[]
+): boolean {
+  if (remote.length > localShapes.length) return false;
+  const localById = new Map(localShapes.map((shape) => [
+    shape.id,
+    shape.revision
+  ] as const));
+  return remote.every((entry) =>
+    localById.get(entry.shapeId) === entry.revision
+  );
 }
