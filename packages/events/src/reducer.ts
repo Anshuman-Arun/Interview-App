@@ -352,8 +352,75 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
             status: "ACCEPTED",
             observation,
             ...(admission === undefined ? {} : { acceptedObservation: admission }),
-            resultEventId: event.eventId
+            resultEventId: event.eventId,
+            ...(event.payload.evidenceInterpreterFingerprint === undefined
+              ? {}
+              : event.payload.evidenceInterpreterFingerprint === null
+                ? {
+                    evidenceBridge: {
+                      status: "SKIPPED_NO_INTERPRETER" as const,
+                      interpreterFingerprint: null
+                    }
+                  }
+                : {
+                    evidenceBridge: {
+                      status: "PENDING" as const,
+                      interpreterFingerprint: event.payload.evidenceInterpreterFingerprint
+                    }
+                  })
           }
+        }
+      };
+      break;
+    }
+    case "VISION_EVIDENCE_BRIDGE_DECIDED": {
+      const request = state.visionRequests[event.payload.visionRequestId];
+      if (
+        request === undefined
+        || request.status !== "ACCEPTED"
+        || request.resultEventId === undefined
+        || request.acceptedObservation === undefined
+        || request.evidenceBridge?.status !== "PENDING"
+      ) {
+        throw new Error("Vision evidence bridge decision requires an accepted pending bridge");
+      }
+      if (request.evidenceBridge.interpreterFingerprint !== event.payload.interpreterFingerprint) {
+        throw new Error("Vision evidence bridge interpreter fingerprint does not match acceptance");
+      }
+      const proposal = event.payload.proposal;
+      if (proposal !== undefined) {
+        if (
+          proposal.evidenceEventIds.length !== 1
+          || proposal.evidenceEventIds[0] !== request.resultEventId
+          || state.problem?.id !== proposal.key.problemId
+        ) {
+          throw new Error("Vision evidence bridge proposal provenance or problem scope is invalid");
+        }
+      }
+      next = {
+        ...state,
+        visionRequests: {
+          ...state.visionRequests,
+          [event.payload.visionRequestId]: proposal === undefined
+            ? {
+                ...request,
+                evidenceBridge: {
+                  status: "DECIDED",
+                  interpreterFingerprint: event.payload.interpreterFingerprint,
+                  decision: "NO_PROPOSAL",
+                  decisionEventId: event.eventId
+                }
+              }
+            : {
+                ...request,
+                evidenceBridge: {
+                  status: "DECIDED",
+                  interpreterFingerprint: event.payload.interpreterFingerprint,
+                  decision: "PROPOSAL",
+                  proposal,
+                  decisionEventId: event.eventId
+                }
+              }
         }
       };
       break;
