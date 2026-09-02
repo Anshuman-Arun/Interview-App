@@ -772,6 +772,85 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
+  it("enforces a coordinator-wide backend reservation cap across sessions", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const registry = new SessionRuntimeRegistry(store);
+    const sessions = new SessionRecoveryCoordinator(registry, store);
+    const sessionIds: SessionId[] = [];
+
+    for (let index = 0; index < 17; index += 1) {
+      const sessionId = newSessionId();
+      sessionIds.push(sessionId);
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      await turns.startSession(sixPeopleProblem);
+      const committed = await turns.commitBoardMutation({
+        baseBoardRevision: BoardRevisionSchema.parse(0),
+        added: [graphShape()],
+        updated: [],
+        deleted: []
+      });
+      if (!committed.committed) throw new Error("Global vision-cap fixture did not commit");
+    }
+
+    const fake = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "Bounded shared backend execution.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const allStarted = deferred<undefined>();
+    const release = deferred<undefined>();
+    let startedCount = 0;
+    const backend: VisionInferenceBackend = {
+      provenance: fake.provenance,
+      analyze: async (request, options) => {
+        startedCount += 1;
+        if (startedCount === 16) allStarted.resolve(undefined);
+        await release.promise;
+        return fake.analyze(request, options);
+      }
+    };
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions,
+      backend,
+      backendTimeoutMs: 5_000
+    });
+
+    try {
+      const firstSixteen = sessionIds.slice(0, 16).map((sessionId) =>
+        coordinator.process(upload(sessionId))
+      );
+      await allStarted.promise;
+
+      const seventeenthSession = sessionIds[16];
+      if (seventeenthSession === undefined) throw new Error("Missing saturation session");
+      const overflowRequest = upload(seventeenthSession);
+      const overflow = await coordinator.process(overflowRequest);
+      expect(overflow).toMatchObject({
+        status: "REJECTED",
+        reason: "RESOURCE_LIMIT",
+        observationCount: 0,
+        evidenceCommittedCount: 0
+      });
+      expect(startedCount).toBe(16);
+      expect(registry.get(seventeenthSession).getState().visionRequests[overflowRequest.requestId])
+        .toMatchObject({
+          status: "DISCARDED",
+          discardReason: "RESOURCE_LIMIT"
+        });
+
+      release.resolve(undefined);
+      const admitted = await Promise.all(firstSixteen);
+      expect(admitted.every((result) => result.status === "ACCEPTED")).toBe(true);
+      expect(startedCount).toBe(16);
+    } finally {
+      release.resolve(undefined);
+      coordinator.shutdown();
+      store.close();
+    }
+  });
+
   it("bounds a backend that never settles and records a timeout discard", async () => {
     const harness = await startedBoardSession();
     const provenance = new DeterministicFakeVisionBackend([]).provenance;
