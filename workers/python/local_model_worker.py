@@ -62,6 +62,7 @@ MAX_TTS_TEXT_CHARS = 4_000
 MAX_TTS_SECONDS = 60
 MAX_TTS_CANCELLATION_TOMBSTONES = 256
 MAX_VAD_STREAMS = 64
+MAX_VAD_EVICTED_STREAM_TOMBSTONES = 4_096
 MAX_SPEECH_NATIVE_RESERVATIONS = 4
 MAX_HTTP_CONNECTIONS = 16
 HTTP_SOCKET_TIMEOUT_SECONDS = 5.0
@@ -314,6 +315,7 @@ class SpeechRuntime:
         self._transcriber = Transcriber(str(moonshine_model_root), model_arch=ModelArch.TINY)
         self._np = np
         self._states: OrderedDict[str, SileroState] = OrderedDict()
+        self._evicted_streams: OrderedDict[str, None] = OrderedDict()
         self._vad_lock = threading.Lock()
         self._vad_slots = threading.BoundedSemaphore(MAX_SPEECH_NATIVE_RESERVATIONS)
         self._stt_lock = threading.Lock()
@@ -345,6 +347,8 @@ class SpeechRuntime:
             with self._vad_lock:
                 state = self._states.pop(stream_id, None)
                 if state is None:
+                    if stream_id in self._evicted_streams:
+                        raise ProtocolError(409, "VAD_STREAM_STATE_EVICTED")
                     state = SileroState(self._np)
                 if state.input_sample_rate is None:
                     state.input_sample_rate = int(sample_rate)
@@ -352,7 +356,11 @@ class SpeechRuntime:
                     raise ProtocolError(400, "STREAM_SAMPLE_RATE_CHANGED")
                 self._states[stream_id] = state
                 while len(self._states) > MAX_VAD_STREAMS:
-                    self._states.popitem(last=False)
+                    evicted_stream_id, _ = self._states.popitem(last=False)
+                    self._evicted_streams.pop(evicted_stream_id, None)
+                    self._evicted_streams[evicted_stream_id] = None
+                while len(self._evicted_streams) > MAX_VAD_EVICTED_STREAM_TOMBSTONES:
+                    self._evicted_streams.popitem(last=False)
 
                 if sample_rate == 48_000:
                     source = self._np.concatenate((state.pending_48k, samples))
