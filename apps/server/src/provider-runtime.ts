@@ -179,7 +179,7 @@ function composeProviderConfiguration(
   configuration.version = 1;
   configuration.providerId = selection.providerId;
   configuration.modelId = selection.modelId;
-  configuration.enabled = extras.enabled ?? true;
+  configuration.enabled = "enabled" in extras ? extras.enabled : true;
   if (extras.reasoning !== undefined) configuration.reasoning = extras.reasoning;
   if (extras.settings !== undefined) configuration.settings = extras.settings;
   if (extras.credentialRef !== undefined) configuration.credentialRef = extras.credentialRef;
