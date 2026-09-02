@@ -7,8 +7,11 @@ import {
 } from "../../domain/src/index.js";
 import {
   SupervisedCliReasoningProvider,
+  type SupervisedCliExecutionResult,
   type SupervisedCliExecutor
 } from "./supervised-cli-provider.js";
+
+const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 
 export const ANTIGRAVITY_CLI_PROVIDER_ID = "antigravity-cli";
 export const ANTIGRAVITY_CLI_MODEL_ID = "gemini-3.7-flash-medium";
@@ -394,7 +397,11 @@ function captureExecutor(
   ) {
     throw new AntigravityCliAdapterError("INVALID_RUNTIME");
   }
-  return descriptor.value as SupervisedCliExecutor["execute"];
+  const operation = descriptor.value as SupervisedCliExecutor["execute"];
+  return async (request: Parameters<SupervisedCliExecutor["execute"]>[0]) => {
+    return await REFLECT_APPLY_INTRINSIC(operation, executor, [request]) as
+      SupervisedCliExecutionResult;
+  };
 }
 
 function snapshotAntigravityTurnInput(
