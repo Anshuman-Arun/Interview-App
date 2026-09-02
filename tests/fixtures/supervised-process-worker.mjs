@@ -23,6 +23,11 @@ switch (mode) {
       process.stdout.write(input, () => process.exit(0));
     });
     break;
+  case "echo-args":
+    collectStdin(() => {
+      process.stdout.write(JSON.stringify(args), () => process.exit(0));
+    });
+    break;
   case "crash":
     collectStdin(() => {
       process.stdout.write("SENSITIVE_STDOUT_SENTINEL");
