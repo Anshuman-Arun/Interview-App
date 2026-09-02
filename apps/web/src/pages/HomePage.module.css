@@ -1,0 +1,234 @@
+.home {
+  width: min(100%, 1040px);
+  margin: 0 auto;
+}
+
+.hero {
+  display: flex;
+  min-height: 220px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 34px 4px 30px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.heroCopy {
+  max-width: 660px;
+}
+
+.eyebrow {
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.hero h2 {
+  max-width: 18ch;
+  margin: 7px 0 0;
+  color: var(--text-primary);
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+}
+
+.hero p {
+  max-width: 62ch;
+  margin: 14px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.heroActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+  padding-bottom: 4px;
+}
+
+.primaryAction,
+.secondaryAction,
+.sectionHeader button,
+.sessionRow button {
+  min-height: 32px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font: 500 10px/1 var(--ui-font-sans);
+}
+
+.primaryAction {
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.primaryAction:hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+.secondaryAction {
+  padding: 0 11px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+}
+
+.secondaryAction:hover,
+.sessionRow button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.recent {
+  padding: 24px 4px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.sectionHeader h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sectionHeader p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.sectionHeader button {
+  min-height: 26px;
+  padding: 0 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.sectionHeader button:hover {
+  color: var(--text-primary);
+}
+
+.sessionList {
+  border-top: 1px solid var(--border-default);
+}
+
+.sessionRow {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 86px 78px 68px 70px;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sessionIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.sessionIdentity strong {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionIdentity code {
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 400 8px/1.35 var(--ui-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  width: fit-content;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status[data-status="ACTIVE"] {
+  color: var(--success);
+}
+
+.status[data-status="COMPLETED"] {
+  color: var(--info);
+}
+
+.events,
+.sessionRow time {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.sessionRow time {
+  font-family: var(--ui-font-mono);
+}
+
+.sessionRow button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+}
+
+.sessionRow button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.empty {
+  padding: 38px 12px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .hero {
+    min-height: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    padding-top: 20px;
+  }
+
+  .hero h2 {
+    font-size: 30px;
+  }
+
+  .sessionRow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 5px 10px;
+    padding: 9px 0;
+  }
+
+  .sessionIdentity {
+    grid-column: 1 / -1;
+  }
+
+  .events {
+    display: none;
+  }
+}

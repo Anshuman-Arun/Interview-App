@@ -15,6 +15,11 @@ import {
 } from "./components/SessionReviewModal.js";
 import type { SessionHistoryReadResponse } from "../../../packages/replay/src/index.js";
 import { isSessionIdAddressableForRead } from "./session-read-client.js";
+import { useAppRoute } from "./navigation/useAppRoute.js";
+import {
+  ProductPageRouter,
+  type ProductNavPage
+} from "./pages/ProductPageRouter.js";
 import styles from "./AppShell.module.css";
 
 export const App: React.FC = () => {
@@ -45,6 +50,7 @@ export const App: React.FC = () => {
   const session = useInterviewSession({
     whiteboardAdapter
   });
+  const { route, navigate } = useAppRoute();
 
   const [inputUrl, setInputUrl] = useState(session.baseUrl);
 
@@ -52,6 +58,7 @@ export const App: React.FC = () => {
     try {
       await session.startSession();
       setShowSessionsModal(false);
+      navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
     }
@@ -66,7 +73,12 @@ export const App: React.FC = () => {
     if (targetSessionId === null) return;
     try {
       await session.completeSession();
-      setReviewTarget({ sessionId: targetSessionId, tab: "evaluation" });
+      setReviewTarget(null);
+      navigate({
+        page: "review",
+        sessionId: targetSessionId,
+        tab: "evaluation"
+      });
     } catch {
       // Error handled in session.error
     }
@@ -77,13 +89,18 @@ export const App: React.FC = () => {
     tab: SessionReviewTab = "evaluation"
   ): void => {
     setShowSessionsModal(false);
-    setReviewTarget({ sessionId: targetSessionId, tab });
+    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
+      setReviewTarget({ sessionId: targetSessionId, tab });
+      return;
+    }
+    navigate({ page: "review", sessionId: targetSessionId, tab });
   };
 
   const handleRecoverSession = async (targetSessionId: SessionId): Promise<void> => {
     try {
       await session.recoverSession(targetSessionId);
       setShowSessionsModal(false);
+      navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
     }
@@ -111,7 +128,7 @@ export const App: React.FC = () => {
     setShowSettings(false);
   };
 
-  const refreshStoredSessions = (): void => {
+  const refreshStoredSessions = useCallback((): void => {
     void session.fetchAvailableSessions();
     historyAbortRef.current?.abort();
     const controller = new AbortController();
@@ -131,13 +148,20 @@ export const App: React.FC = () => {
         setHistoryError("Bounded session history could not be loaded.");
         setHistoryLoading(false);
       });
-  };
+  }, [session.fetchAvailableSessions, session.readSessionHistory]);
 
   const openSessionsModal = (): void => {
     setShowSettings(false);
     refreshStoredSessions();
     setShowSessionsModal(true);
   };
+
+  const navigateProductPage = useCallback((page: ProductNavPage): void => {
+    setShowSettings(false);
+    setShowSessionsModal(false);
+    setReviewTarget(null);
+    navigate({ page });
+  }, [navigate]);
 
   const closeSessionsModal = useCallback((): void => {
     setShowSessionsModal(false);
@@ -214,6 +238,16 @@ export const App: React.FC = () => {
   }, [session.baseUrl]);
 
   useEffect(() => {
+    if (route.page === "sessions") {
+      refreshStoredSessions();
+      return;
+    }
+    if (route.page === "home") {
+      void session.fetchAvailableSessions();
+    }
+  }, [refreshStoredSessions, route.page, session.fetchAvailableSessions]);
+
+  useEffect(() => {
     return () => {
       historyAbortRef.current?.abort();
       historyAbortRef.current = null;
@@ -248,6 +282,14 @@ export const App: React.FC = () => {
   }, [closeSessionsModal, showSessionsModal, showSettings]);
 
 
+  const hasActiveInterview =
+    session.isSessionStarted && session.sessionStatus === "ACTIVE";
+
+  useEffect(() => {
+    if (!hasActiveInterview || route.page === "interview") return;
+    navigate({ page: "interview" }, { replace: true });
+  }, [hasActiveInterview, navigate, route.page]);
+
   const getStatusBadgeClass = (status: string): string => {
     switch (status) {
       case "ACTIVE":
@@ -261,11 +303,58 @@ export const App: React.FC = () => {
     }
   };
 
+  const displayRoute =
+    hasActiveInterview && route.page !== "interview"
+      ? ({ page: "interview" } as const)
+      : route;
+
+  if (displayRoute.page !== "interview") {
+    return (
+      <ProductPageRouter
+        route={displayRoute}
+        sessions={session.availableSessions}
+        currentSessionId={session.sessionId}
+        history={historyRead}
+        historyLoading={historyLoading}
+        historyError={historyError}
+        baseUrl={session.baseUrl}
+        isTransportManaged={session.isTransportManaged}
+        notice={session.error}
+        onDismissNotice={session.clearError}
+        onNavigate={navigateProductPage}
+        onStartInterview={handleStartSession}
+        onResumeInterview={handleRecoverSession}
+        onRefreshSessions={refreshStoredSessions}
+        onSaveBaseUrl={session.setBaseUrl}
+        onReviewRoute={(sessionId, tab, options) => {
+          navigate(
+            {
+              page: "review",
+              sessionId,
+              tab
+            },
+            options
+          );
+        }}
+        readEvaluation={session.readSessionEvaluation}
+        readReplay={session.readSessionReplay}
+      />
+    );
+  }
+
   return (
     <div className={styles.app ?? ""}>
       {/* Top Header Bar */}
       <header className={styles.header}>
-        <div className={styles.identity}>
+        <button
+          type="button"
+          className={styles.identityButton}
+          onClick={() => {
+            if (!hasActiveInterview) navigateProductPage("home");
+          }}
+          aria-label={hasActiveInterview ? "Interview in progress" : "Open home"}
+          disabled={hasActiveInterview}
+        >
           <BrandMark size={26} />
           <div className={styles.identityCopy}>
             <div className={styles.identityLine}>
@@ -280,7 +369,7 @@ export const App: React.FC = () => {
               {session.problem?.title ?? "Technical interview practice"}
             </p>
           </div>
-        </div>
+        </button>
 
         <div className={styles.headerActions}>
           <span
@@ -317,7 +406,11 @@ export const App: React.FC = () => {
           <button
             ref={sessionsTriggerRef}
             type="button"
-            onClick={openSessionsModal}
+            onClick={
+              hasActiveInterview
+                ? openSessionsModal
+                : () => navigateProductPage("sessions")
+            }
             className={styles.headerButton}
             data-testid="sessions-btn"
           >
@@ -331,6 +424,19 @@ export const App: React.FC = () => {
                 <span className={styles.menuLabel}>Appearance</span>
                 <ThemeControl compact />
               </div>
+
+              {!hasActiveInterview && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMoreMenu();
+                    navigateProductPage("settings");
+                  }}
+                  className={styles.menuItem}
+                >
+                  Settings
+                </button>
+              )}
 
               {session.isSessionStarted && session.sessionStatus === "ACTIVE" && (
                 <button

@@ -19,6 +19,11 @@ const FOUNDATION_FILES = [
   "apps/web/src/components/MathText.module.css",
   "apps/web/src/components/WhiteboardCanvas.module.css",
   "apps/web/src/components/VoiceControls.module.css",
+  "apps/web/src/components/AppPageFrame.module.css",
+  "apps/web/src/pages/HomePage.module.css",
+  "apps/web/src/pages/SessionsPage.module.css",
+  "apps/web/src/pages/SettingsPage.module.css",
+  "apps/web/src/pages/SessionReviewPage.module.css",
   "apps/web/src/AppShell.module.css",
   "apps/web/src/theme/ThemeProvider.tsx"
 ] as const;
@@ -178,6 +183,26 @@ describe("professional UI foundation invariants", () => {
     expect(composerSource).toContain("React.memo(StudentInputAreaComponent)");
     expect(appSource).toContain('className={styles.app ?? ""}');
     expect(appSource).toContain("onSubmit={handleSubmitReasoning}");
+  });
+
+  it("keeps product pages grounded in implemented capabilities", () => {
+    const pageSources = [
+      "apps/web/src/pages/HomePage.tsx",
+      "apps/web/src/pages/SessionsPage.tsx",
+      "apps/web/src/pages/SettingsPage.tsx",
+      "apps/web/src/pages/SessionReviewPage.tsx"
+    ]
+      .map((file) => fs.readFileSync(path.resolve(process.cwd(), file), "utf8"))
+      .join("\n");
+
+    expect(pageSources).not.toContain("Gemini");
+    expect(pageSources).not.toContain("OpenAI");
+    expect(pageSources).not.toContain("Quant Trading");
+    expect(pageSources).not.toContain("Quant Research");
+    expect(pageSources).not.toContain("Choose problem");
+    expect(pageSources).not.toContain("Select provider");
+    expect(pageSources).toContain("Grounded history");
+    expect(pageSources).toContain("Desktop managed");
   });
 
   it("integrates real voice controls without high-frequency decorative UI", () => {

@@ -23,11 +23,31 @@
   background: var(--surface-panel);
 }
 
-.identity {
+.identity,
+.identityButton {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 10px;
+}
+
+.identityButton {
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.identityButton:hover:not(:disabled) {
+  opacity: 0.82;
+}
+
+.identityButton:disabled {
+  cursor: default;
 }
 
 .identityCopy {

@@ -1,0 +1,143 @@
+.settings {
+  width: min(100%, 920px);
+  margin: 0 auto;
+  border-top: 1px solid var(--border-default);
+}
+
+.section {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(280px, 420px);
+  gap: 28px;
+  padding: 22px 2px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sectionCopy h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sectionCopy p {
+  max-width: 52ch;
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.sectionControl {
+  display: flex;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.managedConnection {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+
+.managedDot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.managedConnection > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.managedConnection strong {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.managedConnection code {
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 400 8px/1.4 var(--ui-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connectionForm {
+  display: grid;
+  width: 100%;
+  gap: 5px;
+}
+
+.connectionForm label {
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.connectionForm > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.connectionForm input {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: 400 9px/1 var(--ui-font-mono);
+}
+
+.connectionForm input:focus {
+  border-color: var(--accent);
+}
+
+.connectionForm button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font: 500 9px/1 var(--ui-font-sans);
+}
+
+.connectionForm button:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+.connectionForm button:disabled {
+  border-color: var(--border-default);
+  background: var(--surface-active);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .section {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.connectionForm input:disabled {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
