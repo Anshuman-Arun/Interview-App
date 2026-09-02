@@ -37,7 +37,6 @@ import {
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
   VerificationResultSchema,
-  MarketStateSchema,
   OrderFillSchema,
   QuantTradingCandidateActionSchema
 } from "../../domain/src/index.js";
@@ -363,11 +362,9 @@ export const QuantTradingRoundEvidenceEventSchema = z.object({
   round: PositiveSafeIntegerSchema.max(256),
   fairValue: QuantTradingPositiveFiniteSchema,
   marketEvents: z.array(QuantTradingMarketEventSchema).max(16),
-  studentAction: QuantTradingCandidateActionSchema,
   orderFlowType: z.enum(["INFORMED", "NOISE", "NO_TRADE"]),
   incomingMarketSide: z.enum(["BUY", "SELL"]).optional(),
   studentFills: z.array(OrderFillSchema).max(64),
-  marketStateAfterAction: MarketStateSchema,
   portfolio: QuantTradingPortfolioEventSchema,
   riskBreached: z.boolean(),
   riskReason: z.string().min(1).max(240).optional(),
@@ -403,8 +400,7 @@ export const QuantTradingResultEventSchema = z.object({
   noiseFlowCount: NonnegativeSafeIntegerSchema,
   adverseSelectionPnL: QuantTradingFiniteNumberSchema,
   accountingInvariantHolds: z.boolean(),
-  objectiveScore: QuantTradingFiniteNumberSchema,
-  terminalMarketEvents: z.array(QuantTradingMarketEventSchema).max(16)
+  objectiveScore: QuantTradingFiniteNumberSchema
 }).strict();
 export type QuantTradingResultEvent = z.infer<typeof QuantTradingResultEventSchema>;
 
