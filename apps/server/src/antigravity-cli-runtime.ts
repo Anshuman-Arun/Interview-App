@@ -1,3 +1,4 @@
+import { win32 as win32Path } from "node:path";
 import process from "node:process";
 import type { ProviderSelectionReference } from "../../../packages/domain/src/index.js";
 import {
@@ -122,9 +123,12 @@ function antigravityEnvironment(): {
   readonly values: Readonly<Record<string, string>>;
 } {
   if (process.platform === "win32") {
+    const systemRoot = trustedWindowsSystemRoot();
     return Object.freeze({
       inherit: Object.freeze(["USERNAME"]),
       values: Object.freeze({
+        PATH: win32Path.join(systemRoot, "System32"),
+        PATHEXT: ".COM;.EXE;.BAT;.CMD",
         AGY_CLI_DISABLE_AUTO_UPDATE: "true"
       })
     });
@@ -141,4 +145,28 @@ function antigravityEnvironment(): {
       AGY_CLI_DISABLE_AUTO_UPDATE: "true"
     })
   });
+}
+
+
+function trustedWindowsSystemRoot(): string {
+  const candidate = process.env["SystemRoot"] ?? process.env["SYSTEMROOT"];
+  if (
+    candidate === undefined
+    || candidate.length === 0
+    || candidate.includes("\0")
+    || !win32Path.isAbsolute(candidate)
+    || candidate.startsWith("\\\\")
+  ) {
+    throw new Error("Windows SystemRoot is unavailable or unsafe");
+  }
+  const normalized = win32Path.normalize(candidate);
+  const parsed = win32Path.parse(normalized);
+  if (
+    win32Path.basename(normalized).toLowerCase() !== "windows"
+    || win32Path.dirname(normalized).toLowerCase()
+      !== parsed.root.replace(/[\\/]$/u, "").toLowerCase()
+  ) {
+    throw new Error("Windows SystemRoot is not a root-level Windows directory");
+  }
+  return normalized;
 }
