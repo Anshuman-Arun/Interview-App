@@ -81,6 +81,51 @@ describe("authenticated renderer stream transport", () => {
     store.close();
   });
 
+  it("drops renderer commands buffered behind a barge-in stream abort", async () => {
+    const sessionId = newSessionId();
+    const firstDeliveryId = newDeliveryId();
+    const secondDeliveryId = newDeliveryId();
+    const controller = new AbortController();
+    const visible: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+          if (deliveryId === firstDeliveryId) controller.abort();
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+
+    const wire = [
+      rendererEvent(firstDeliveryId, "first before barge-in"),
+      rendererEvent(secondDeliveryId, "stale buffered after barge-in")
+    ].join("");
+    const fetchBufferedStream: typeof fetch = async () => new Response(
+      new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.enqueue(new TextEncoder().encode(wire));
+          streamController.close();
+        }
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "text/event-stream; charset=utf-8" }
+      }
+    );
+
+    await consumeAuthenticatedRendererStream({
+      streamUrl: "http://127.0.0.1:43124/v1/renderer-stream",
+      sessionId,
+      authenticatedFetch: fetchBufferedStream,
+      signal: controller.signal
+    }, renderer);
+
+    expect(visible).toEqual([firstDeliveryId]);
+  });
+
   it("rejects malformed transport tokens before either HTTP server can start", () => {
     for (const clientToken of [
       12345 as never,
@@ -876,6 +921,17 @@ async function postAcknowledgement(
     },
     body: JSON.stringify(body)
   });
+}
+
+function rendererEvent(deliveryId: DeliveryId, text: string): string {
+  return `event: delivery\ndata: ${JSON.stringify({
+    protocolVersion: 1,
+    type: "DELIVERY_COMMAND",
+    command: {
+      deliveryId,
+      content: { medium: "TEXT", text }
+    }
+  })}\n\n`;
 }
 
 function authenticatedHeaders(): Record<string, string> {
