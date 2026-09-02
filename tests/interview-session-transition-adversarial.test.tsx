@@ -8,6 +8,7 @@ import {
 } from "../packages/domain/src/index.js";
 import {
   TerminalSessionOutcomeUnknownError,
+  TerminalSessionTransitionSupersededError,
   useInterviewSession,
   type UseInterviewSessionResult
 } from "../apps/web/src/hooks/useInterviewSession.js";
@@ -866,6 +867,106 @@ describe("interview session transition authority", () => {
       .rejects.toThrow("Cannot submit input without an active session");
     expect(rendered.current().isConnected).toBe(false);
     expect(rendered.current().isStreaming).toBe(false);
+
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
+  it("does not let a delayed terminal response overwrite a newer disconnect transition", async () => {
+    const sessionId = newSessionId();
+    let releaseComplete: (() => void) | undefined;
+    let markCompleteSeen: (() => void) | undefined;
+    const completeSeen = new Promise<void>((resolve) => {
+      markCompleteSeen = resolve;
+    });
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = (): void => {
+            const error = new Error("renderer stream aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (init.signal?.aborted === true) {
+            abort();
+            return;
+          }
+          init.signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") throw new Error("Command body must be JSON text");
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
+
+      if (command.type === "START_SESSION") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_STARTED",
+          sessionId
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: false,
+          error: { code: "INTERNAL_ERROR", message: "context unavailable" }
+        }, 500);
+      }
+      if (command.type === "COMPLETE_SESSION") {
+        markCompleteSeen?.();
+        return new Promise<Response>((resolve) => {
+          releaseComplete = () => resolve(jsonResponse({
+            protocolVersion: 1,
+            requestId: command.requestId,
+            ok: true,
+            type: "SESSION_COMPLETED",
+            sessionId,
+            completedAt: "2026-09-02T15:30:00.000Z"
+          }));
+        });
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    await act(async () => {
+      await rendered.current().startSession(sessionId);
+    });
+
+    let completing: Promise<void> | undefined;
+    await act(async () => {
+      completing = rendered.current().completeSession();
+      await completeSeen;
+    });
+
+    act(() => {
+      rendered.current().disconnect();
+    });
+    if (releaseComplete === undefined) throw new Error("COMPLETE_SESSION was not deferred");
+    releaseComplete();
+
+    await expect(completing).rejects.toBeInstanceOf(
+      TerminalSessionTransitionSupersededError
+    );
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+    await expect(rendered.current().submitTypedInput("must remain closed"))
+      .rejects.toThrow("Cannot submit input without an active session");
 
     await act(async () => {
       rendered.root.unmount();
