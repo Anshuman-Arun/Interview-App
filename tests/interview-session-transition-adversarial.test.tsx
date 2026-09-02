@@ -863,6 +863,8 @@ describe("interview session transition authority", () => {
     await expect(rendered.current().archiveSession())
       .rejects.toBeInstanceOf(TerminalSessionOutcomeUnknownError);
     expect(rendered.current().error).toContain("outcome is unknown");
+    expect(rendered.current().isSessionStarted).toBe(false);
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
     await expect(rendered.current().submitTypedInput("must remain blocked"))
       .rejects.toThrow("Cannot submit input without an active session");
     expect(rendered.current().isConnected).toBe(false);
