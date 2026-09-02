@@ -1,5 +1,4 @@
 import type { DeliveryId } from "../../../../packages/domain/src/index.js";
-import { TTS_LIMITS } from "../../../../packages/local-compute/src/index.js";
 import {
   RendererPresentationNotExposedError,
   type AudioPlayer
@@ -9,7 +8,10 @@ import { AudioInfrastructureError } from "./types.js";
 
 const AUDIO_SOURCE_RESOLUTION_TIMEOUT_MS = 5_000;
 const AUDIO_PLAYBACK_START_TIMEOUT_MS = 5_000;
-const AUDIO_PLAYBACK_COMPLETION_TIMEOUT_MS = TTS_LIMITS.maxOutputDurationMs + 10_000;
+// Voice v1 TTS has a 120 s hard output ceiling. Keep 10 s of browser
+// scheduling/media-event grace without importing Node-oriented TTS protocol
+// code into the browser audio package.
+const AUDIO_PLAYBACK_COMPLETION_TIMEOUT_MS = 130_000;
 const MAX_PENDING_AUDIO_RESOLUTIONS = 32;
 
 export interface ResolvedAudioSource {
