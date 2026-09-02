@@ -117,6 +117,7 @@ export class LocalInterviewTransportRuntime {
     }
     if (this.bound !== undefined) return Promise.resolve(this.bound);
     if (this.starting !== undefined) return this.starting;
+    this.orchestrator.resumeAfterShutdown();
     const starting = this.startBoth();
     this.starting = starting;
     const clearStarting = (): void => {
