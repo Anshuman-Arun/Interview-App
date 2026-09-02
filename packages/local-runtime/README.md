@@ -75,7 +75,10 @@ check so descendants cannot intentionally remain in that owned group.
 On Windows, one-shot executions are launched through an application-owned Windows PowerShell
 bootstrap that creates a kernel Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The
 provider image is opened read-only, checked against the application-pinned SHA-256, created
-suspended, assigned to the Job Object before it executes, and only then resumed. A
+suspended, re-hashed while still suspended, assigned to the Job Object before it executes, and
+only then resumed. Bootstrap configuration is carried in the private snapshotted child
+environment rather than a mutable temporary control file and is removed before the provider is
+created. A
 `STARTUPINFOEX` handle list restricts inherited handles to stdin/stdout/stderr. Killing or
 crashing the bootstrap closes the sole Job handle and the kernel terminates remaining processes
 in that job, including descendants after the original provider root exits.
