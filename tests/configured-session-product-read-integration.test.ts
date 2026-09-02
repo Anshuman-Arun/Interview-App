@@ -202,6 +202,11 @@ describe("configured session product-read integration", () => {
         "UPDATE session_events SET event_json = ? WHERE session_id = ? AND sequence = ?"
       ).run(JSON.stringify(tampered), sessionId, roundRow.sequence);
 
+      await expect(command.listSessions()).rejects.toMatchObject({
+        status: 500,
+        code: "INTERNAL_ERROR"
+      });
+
       const replay = await reads.getReplay(sessionId);
       expect(replay).toMatchObject({
         available: false,
