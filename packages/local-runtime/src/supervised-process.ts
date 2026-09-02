@@ -317,8 +317,11 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
+    let result: SupervisedProcessExecutionResult | undefined;
+    let failed = false;
+    let failure: unknown;
     try {
-      return await this.runChild(
+      result = await this.runChild(
         definition,
         request,
         expectedIdentity,
@@ -327,18 +330,25 @@ export class SupervisedProcessRunner {
         isolation.controlDirectory
       );
     } catch (error) {
+      failed = true;
+      failure = error;
       if (isProcessTreeCleanupError(error)) {
         this.quarantinedExecutableIds.add(definition.id);
       }
-      throw error;
-    } finally {
-      try {
-        await cleanupExecutionIsolation(isolation);
-      } catch {
-        this.quarantinedExecutableIds.add(definition.id);
-        throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
-      }
     }
+
+    try {
+      await cleanupExecutionIsolation(isolation);
+    } catch {
+      this.quarantinedExecutableIds.add(definition.id);
+      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+    }
+
+    if (failed) throw failure;
+    if (result === undefined) {
+      throw new SupervisedProcessError("SPAWN_FAILED");
+    }
+    return result;
   }
 
   private async runChild(
@@ -1083,7 +1093,11 @@ async function sha256Executable(
       if (signal?.aborted) {
         throw new SupervisedProcessError("EXECUTION_CANCELLED");
       }
-      hash.update(chunk);
+      const chunkValue: unknown = chunk;
+      if (!Buffer.isBuffer(chunkValue)) {
+        throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+      }
+      hash.update(chunkValue);
     }
     if (signal?.aborted) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
