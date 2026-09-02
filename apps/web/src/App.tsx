@@ -213,6 +213,13 @@ export const App: React.FC = () => {
 
   const hasActiveInterview =
     session.isSessionStarted && session.sessionStatus === "ACTIVE";
+  const storedActiveSession = session.availableSessions.find(
+    (storedSession) => storedSession.status === "ACTIVE"
+  ) ?? null;
+  const resumableActiveSessionId =
+    hasActiveInterview && session.sessionId !== null
+      ? session.sessionId
+      : storedActiveSession?.sessionId ?? null;
   const displayRoute = routeForActiveInterview(route, hasActiveInterview);
 
   useEffect(() => {
@@ -238,8 +245,13 @@ export const App: React.FC = () => {
       <ProductPageRouter
         route={displayRoute}
         sessions={session.availableSessions}
-        activeSessionId={hasActiveInterview ? session.sessionId : null}
-        activeProblemTitle={session.problem?.title ?? null}
+        activeSessionId={resumableActiveSessionId}
+        currentSessionId={hasActiveInterview ? session.sessionId : null}
+        activeProblemTitle={
+          hasActiveInterview
+            ? session.problem?.title ?? null
+            : storedActiveSession?.problemId ?? null
+        }
         canReview={(storedSession) =>
           (
             storedSession.status === "COMPLETED"

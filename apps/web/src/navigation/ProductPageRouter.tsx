@@ -17,6 +17,7 @@ export function ProductPageRouter({
   route,
   sessions,
   activeSessionId,
+  currentSessionId,
   activeProblemTitle,
   canReview,
   onNavigatePage,
@@ -35,6 +36,7 @@ export function ProductPageRouter({
   readonly route: Exclude<ProductRoute, { readonly page: "interview" }>;
   readonly sessions: readonly StoredSessionSummary[];
   readonly activeSessionId: SessionId | null;
+  readonly currentSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
   readonly canReview: (session: StoredSessionSummary) => boolean;
   readonly onNavigatePage: (page: ProductPageId) => void;
@@ -93,7 +95,7 @@ export function ProductPageRouter({
       content = (
         <SessionsPage
           sessions={sessions}
-          currentSessionId={activeSessionId}
+          currentSessionId={currentSessionId}
           canReview={canReview}
           onResume={onResume}
           onReview={(sessionId) => onReview(sessionId, "evaluation")}

@@ -116,7 +116,7 @@ export function HomePage({
           <span className="expressive-home__active-index">NOW</span>
           <div>
             <strong>{activeProblemTitle ?? "Interview in progress"}</strong>
-            <p>Your live room is still open. Resume before starting anything else.</p>
+            <p>An active room already exists. Resume it before starting anything else.</p>
           </div>
           <button type="button" onClick={() => onResumeInterview(activeSessionId)}>
             Resume
