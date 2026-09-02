@@ -239,9 +239,9 @@ export function createAntigravityCliReasoningProvider(
     },
     async executeTurn(input, runtime) {
       const stdin = createSingleTurnInput(input);
-      let result;
+      let rawResult: unknown;
       try {
-        result = await execute({
+        rawResult = await execute({
           args: [
             "--input-format",
             "stream-json",
@@ -267,6 +267,7 @@ export function createAntigravityCliReasoningProvider(
       } catch {
         throw new AntigravityCliAdapterError("PROCESS_FAILED");
       }
+      const result = snapshotExecutionResult(rawResult);
       if (result.exitCode !== 0) {
         throw new AntigravityCliAdapterError("PROCESS_FAILED");
       }
@@ -276,6 +277,96 @@ export function createAntigravityCliReasoningProvider(
         ANTIGRAVITY_CLI_AGENT_ID
       );
     }
+  });
+}
+
+function snapshotExecutionResult(value: unknown): {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stdoutBytes: number;
+  readonly stderrBytes: number;
+} {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
+    throw new AntigravityCliAdapterError("PROCESS_FAILED");
+  }
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  let prototype: object | null;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+    const candidate: unknown = Object.getPrototypeOf(value);
+    if (candidate !== null && typeof candidate !== "object") {
+      throw new Error("invalid prototype");
+    }
+    prototype = candidate;
+  } catch {
+    throw new AntigravityCliAdapterError("PROCESS_FAILED");
+  }
+
+  const allowed = new Set([
+    "exitCode",
+    "stdout",
+    "stdoutBytes",
+    "stderrBytes"
+  ]);
+  if (
+    symbols.length !== 0
+    || (prototype !== Object.prototype && prototype !== null)
+    || Object.keys(descriptors).some((key) => !allowed.has(key))
+  ) {
+    throw new AntigravityCliAdapterError("PROCESS_FAILED");
+  }
+
+  const read = (key: string): unknown => {
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined
+      || descriptor.enumerable !== true
+      || !("value" in descriptor)
+    ) {
+      throw new AntigravityCliAdapterError("PROCESS_FAILED");
+    }
+    return descriptor.value;
+  };
+
+  const exitCode = read("exitCode");
+  const stdout = read("stdout");
+  const stdoutBytes = read("stdoutBytes");
+  const stderrBytes = read("stderrBytes");
+  const actualStdoutBytes = typeof stdout === "string"
+    ? new TextEncoder().encode(stdout).byteLength
+    : -1;
+
+  if (
+    typeof exitCode !== "number"
+    || !Number.isSafeInteger(exitCode)
+    || exitCode < 0
+    || typeof stdout !== "string"
+    || typeof stdoutBytes !== "number"
+    || !Number.isSafeInteger(stdoutBytes)
+    || stdoutBytes < 0
+    || stdoutBytes > MAX_STDOUT_BYTES
+    || stdoutBytes !== actualStdoutBytes
+    || typeof stderrBytes !== "number"
+    || !Number.isSafeInteger(stderrBytes)
+    || stderrBytes < 0
+    || stderrBytes > MAX_STDERR_BYTES
+  ) {
+    throw new AntigravityCliAdapterError("PROCESS_FAILED");
+  }
+
+  return Object.freeze({
+    exitCode,
+    stdout,
+    stdoutBytes,
+    stderrBytes
   });
 }
 
