@@ -141,6 +141,8 @@ describe("desktop secure bootstrap", () => {
     const bootstrap = createDesktopRendererBootstrap({
       commandBaseUrl: "http://127.0.0.1:41000",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41002",
+      voiceBaseUrl: "http://127.0.0.1:41002",
       appVersion: "1.0.0",
       platform: "test"
     });
@@ -154,6 +156,8 @@ describe("desktop secure bootstrap", () => {
       protocolVersion: 1,
       commandBaseUrl: "https://example.com",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41002",
+      voiceBaseUrl: "http://127.0.0.1:41002",
       authentication: { mode: "DESKTOP_MANAGED", headerValue: DESKTOP_AUTH_HEADER_VALUE },
       appVersion: "1",
       platform: "test"
@@ -162,6 +166,8 @@ describe("desktop secure bootstrap", () => {
       protocolVersion: 1,
       commandBaseUrl: "http://127.0.0.1:41000?token=bad",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41002",
+      voiceBaseUrl: "http://127.0.0.1:41002",
       authentication: { mode: "DESKTOP_MANAGED", headerValue: DESKTOP_AUTH_HEADER_VALUE },
       appVersion: "1",
       platform: "test"
@@ -172,6 +178,8 @@ describe("desktop secure bootstrap", () => {
     const valid = createDesktopRendererBootstrap({
       commandBaseUrl: "http://127.0.0.1:41000",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41002",
+      voiceBaseUrl: "http://127.0.0.1:41002",
       appVersion: "1.0.0",
       platform: "test"
     });
@@ -367,6 +375,8 @@ describe("desktop secure bootstrap", () => {
     const cleanup = installDesktopClientTokenInjector(webRequest, {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -446,6 +456,8 @@ describe("desktop secure bootstrap", () => {
     installDesktopClientTokenInjector(webRequest, {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => {
@@ -502,6 +514,8 @@ describe("desktop secure bootstrap", () => {
     expect(() => installDesktopClientTokenInjector(failed, {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -513,6 +527,8 @@ describe("desktop secure bootstrap", () => {
     const firstCleanup = installDesktopClientTokenInjector(webRequest, {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -523,6 +539,8 @@ describe("desktop secure bootstrap", () => {
     const secondCleanup = installDesktopClientTokenInjector(webRequest, {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 43,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -542,6 +560,8 @@ describe("desktop secure bootstrap", () => {
     installDesktopClientTokenInjector(webRequest, {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: secret,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -570,11 +590,15 @@ describe("desktop secure bootstrap", () => {
       {
         commandUrl: "https://attacker.invalid/v1/commands",
         rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
         webContentsId: 42
       },
       {
         commandUrl: "http://127.0.0.1:41100/v1/commands?redirect=bad",
         rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
         webContentsId: 42
       },
       {
@@ -585,6 +609,8 @@ describe("desktop secure bootstrap", () => {
       {
         commandUrl: "http://127.0.0.1:41100/v1/commands",
         rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
         webContentsId: 0
       }
     ];
@@ -602,6 +628,8 @@ describe("desktop secure bootstrap", () => {
     expect(() => installDesktopClientTokenInjector(new FakeWebRequest(), {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: "x".repeat(31),
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -610,6 +638,8 @@ describe("desktop secure bootstrap", () => {
     expect(() => installDesktopClientTokenInjector(new FakeWebRequest(), {
       commandUrl: "http://127.0.0.1:41100/v1/commands",
       rendererStreamUrl: "http://127.0.0.1:41101/v1/renderer-stream",
+     voiceBaseUrl: "http://127.0.0.1:41102",
+      voiceBaseUrl: "http://127.0.0.1:41102",
       clientToken: 12345 as never,
       webContentsId: 42,
       getTrustedMainFrame: () => TRUSTED_MAIN_FRAME
@@ -706,7 +736,8 @@ describe("desktop secure bootstrap", () => {
     const origin = await server.start();
     server.configureBackendOrigins(
       "http://127.0.0.1:42000",
-      "http://127.0.0.1:42001/v1/renderer-stream"
+      "http://127.0.0.1:42001/v1/renderer-stream",
+      "http://127.0.0.1:42002"
     );
 
     const response = await fetch(`${origin}/assets/leak.txt`);
@@ -725,7 +756,8 @@ describe("desktop secure bootstrap", () => {
     const origin = await server.start();
     server.configureBackendOrigins(
       "http://127.0.0.1:42000",
-      "http://127.0.0.1:42001/v1/renderer-stream"
+      "http://127.0.0.1:42001/v1/renderer-stream",
+      "http://127.0.0.1:42002"
     );
     await rm(indexPath);
 
@@ -750,7 +782,8 @@ describe("desktop secure bootstrap", () => {
 
     server.configureBackendOrigins(
       "http://127.0.0.1:42000",
-      "http://127.0.0.1:42001/v1/renderer-stream"
+      "http://127.0.0.1:42001/v1/renderer-stream",
+      "http://127.0.0.1:42002"
     );
     const response = await fetch(origin);
     expect(response.status).toBe(200);
