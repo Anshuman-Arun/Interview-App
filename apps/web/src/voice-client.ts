@@ -389,7 +389,7 @@ async function readBoundedResponseBytes(
   response: Response,
   maximumBytes: number,
   label: string
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const declared = response.headers.get("content-length");
   if (declared !== null) {
     if (!/^(?:0|[1-9][0-9]*)$/u.test(declared)) {
@@ -403,7 +403,7 @@ async function readBoundedResponseBytes(
   if (response.body === null) throw new Error(`${label} has no response body`);
 
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
   let total = 0;
   try {
     for (;;) {
@@ -424,7 +424,7 @@ async function readBoundedResponseBytes(
     }
   }
 
-  const output = new Uint8Array(total);
+  const output = new Uint8Array(new ArrayBuffer(total));
   let offset = 0;
   for (const chunk of chunks) {
     output.set(chunk, offset);
