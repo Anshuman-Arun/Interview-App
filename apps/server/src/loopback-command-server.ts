@@ -395,7 +395,12 @@ export class LoopbackCommandServer {
           sequence: state.sequence,
           started: state.started,
           status: state.status,
-          ...(state.problem?.id !== undefined ? { problemId: state.problem.id } : {}),
+          ...(
+            recoveredComposition?.mode === "OXFORD_MATHEMATICS"
+            && state.problem?.id !== undefined
+              ? { problemId: state.problem.id }
+              : {}
+          ),
           contextEpoch: state.contextEpoch,
           deliveryStatuses: Object.fromEntries(
             Object.values(state.deliveries).map((atom) => [atom.deliveryId, atom.status])
