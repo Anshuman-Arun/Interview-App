@@ -595,5 +595,21 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
       }
     );
     expect(oversized.status).toBe(413);
+
+    await stream.sendFrame(microphoneFrame(0, 20));
+    const duplicate = await fetchWithAuth(
+      `${server.bound.voice.url}/v1/voice/frames`,
+      {
+        method: "POST",
+        headers: {
+          ...commonHeaders,
+          "x-speech-request-id": "request_duplicate_sequence",
+          "x-speech-sequence": "0",
+          "x-speech-frame-samples": "960"
+        },
+        body: new Uint8Array(960 * 4)
+      }
+    );
+    expect(duplicate.status).toBe(409);
   });
 });
