@@ -313,6 +313,22 @@ describe("production quant runtime integration", () => {
     expect(state.completion?.accountingInvariantHolds).toBe(true);
     expect(JSON.stringify(state)).not.toContain('"seed"');
 
+    const terminalEvents = store.load(sessionId).slice(-4);
+    expect(terminalEvents.map((event) => event.type)).toEqual([
+      "QUANT_TRADING_ACTION_ACCEPTED",
+      "QUANT_TRADING_ROUND_RESOLVED",
+      "QUANT_TRADING_SCENARIO_COMPLETED",
+      "SESSION_COMPLETED"
+    ]);
+    expect(terminalEvents.map((event) => event.source)).toEqual([
+      "USER",
+      "APPLICATION",
+      "APPLICATION",
+      "APPLICATION"
+    ]);
+    expect(new Set(terminalEvents.map((event) => event.causationId)).size).toBe(1);
+    expect(new Set(terminalEvents.map((event) => event.correlationId)).size).toBe(1);
+
     await expectProtocolError(post({
       protocolVersion: 1,
       type: "SUBMIT_QUANT_TRADING_ACTION",
