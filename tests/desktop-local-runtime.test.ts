@@ -97,6 +97,23 @@ describe("desktop local model runtime", () => {
     expect(existsSync(orphan)).toBe(false);
   });
 
+  it("progressively cleans more than the old stale-view limit without permanent lockout", async () => {
+    const root = temporaryRoot("desktop-runtime-view-many-stale-");
+    for (let index = 0; index < 40; index += 1) {
+      mkdirSync(
+        join(root, `run-999999-${String(index).padStart(32, "0")}-stale`),
+        { recursive: true }
+      );
+    }
+
+    await cleanupStaleRuntimeAssetViews(root);
+    await cleanupStaleRuntimeAssetViews(root);
+    await cleanupStaleRuntimeAssetViews(root);
+
+    const remaining = (await import("node:fs/promises")).readdir(root);
+    await expect(remaining).resolves.toHaveLength(0);
+  });
+
   it("keeps typed desktop startup usable when production model assets are absent", async () => {
     const appDataRoot = temporaryRoot("desktop-local-models-");
     const composition = new DesktopLocalRuntimeComposition({
