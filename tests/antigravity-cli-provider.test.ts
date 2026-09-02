@@ -273,7 +273,7 @@ describe("Antigravity CLI one-turn protocol", () => {
         ...PROPOSAL,
         speechText: undefined,
         boardActions: undefined
-      } as unknown as InterviewerProposal)
+      })
     ];
 
     for (const stdout of invalidStreams) {
