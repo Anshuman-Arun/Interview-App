@@ -43,16 +43,17 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
     private readonly playback: BrowserAudioPlayback,
     options: QueuedRendererAudioPlayerOptions = {}
   ) {
-    if (typeof options !== "object" || options === null) {
+    const rawOptions: unknown = options;
+    if (typeof rawOptions !== "object" || rawOptions === null) {
       throw new AudioInfrastructureError("INVALID_REQUEST", "Audio renderer options are invalid");
     }
     let resolver: unknown;
     let speakingObserver: unknown;
     let outputDeviceId: unknown;
     try {
-      resolver = Reflect.get(options, "resolveAudioSource");
-      speakingObserver = Reflect.get(options, "onSpeakingChanged");
-      outputDeviceId = Reflect.get(options, "outputDeviceId");
+      resolver = Reflect.get(rawOptions, "resolveAudioSource");
+      speakingObserver = Reflect.get(rawOptions, "onSpeakingChanged");
+      outputDeviceId = Reflect.get(rawOptions, "outputDeviceId");
     } catch {
       throw new AudioInfrastructureError("INVALID_REQUEST", "Audio renderer options could not be inspected");
     }
