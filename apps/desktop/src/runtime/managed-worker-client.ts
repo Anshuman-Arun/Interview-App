@@ -120,7 +120,6 @@ export class ManagedModelWorkerClient {
         throw new Error("Managed local model worker returned invalid JSON");
       }
       if (!response.ok) {
-        if (response.status < 500) this.consecutiveUncertainRecycles = 0;
         throw new ManagedWorkerResponseError(
           response.status,
           readWorkerErrorCode(parsed)
