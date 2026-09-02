@@ -460,7 +460,9 @@ export function useInterviewSession(
       rendererAudioPlayerRef.current?.dispose();
       const playback = new BrowserAudioPlayback();
       const audioPlayer = new QueuedRendererAudioPlayer(playback, {
-        outputDeviceId: audioOutputDeviceRef.current,
+        ...(audioOutputDeviceRef.current === undefined
+          ? {}
+          : { outputDeviceId: audioOutputDeviceRef.current }),
         onSpeakingChanged: setIsSpeaking,
         resolveAudioSource: (audioRef, deliveryId, signal) =>
           audioVoiceClient.resolveAudioSource(
