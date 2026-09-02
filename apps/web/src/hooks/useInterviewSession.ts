@@ -371,16 +371,20 @@ export function useInterviewSession(
     return fetchImpl(input, { ...init, headers });
   }, [authenticationHeaderValue, fetchImpl]);
 
-  const resetBoardSync = useCallback((): void => {
+  const stopVisionScheduling = useCallback((): void => {
     visionSchedulerRef.current?.dispose();
     visionSchedulerRef.current = null;
     visionSchedulerSessionRef.current = null;
+  }, []);
+
+  const resetBoardSync = useCallback((): void => {
+    stopVisionScheduling();
     boardSyncRef.current?.reset();
     boardSyncRef.current = null;
     boardSyncSessionRef.current = null;
     boardBootstrapSessionRef.current = null;
     setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
-  }, []);
+  }, [stopVisionScheduling]);
 
   const voiceBaseUrl = useMemo(
     () => desktopBootstrap?.voiceBaseUrl ?? options.voiceBaseUrl ?? deriveDefaultVoiceBaseUrl(baseUrl),
@@ -1047,6 +1051,7 @@ export function useInterviewSession(
     // are revoked before the route can leave the interview.
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
+    stopVisionScheduling();
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
     setIsPaused(true);
@@ -1056,6 +1061,7 @@ export function useInterviewSession(
     sessionId,
     sessionStatus,
     stopRendererTransport,
+    stopVisionScheduling,
     voiceIntegration.voiceControls
   ]);
 
