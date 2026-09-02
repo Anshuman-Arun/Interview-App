@@ -202,9 +202,9 @@ On restart/reconnect:
 - terminal sessions reject/close renderer attachment rather than recreating a delivery channel;
 - V1 does not regenerate a missing queued asset automatically.
 
-Recovered semantic transcript history deduplicates TEXT+AUDIO when the corresponding TEXT delivery has a persisted exposure acknowledgement. If TEXT never received a persisted exposure acknowledgement but derived AUDIO did, the AUDIO exposure is retained as the single interviewer history entry rather than erasing user-heard output.
+Recovered semantic transcript history deduplicates equivalent TEXT+AUDIO realizations at exposure-event time. The first persisted physical exposure for an exact generation/text pair is retained, regardless of medium; any later duplicate exposure cannot retroactively replace it or move the interviewer response later in history. This preserves AUDIO when it was heard first, preserves TEXT when it was shown first, and never reconstructs POSSIBLY_EXPOSED output as a visible transcript entry.
 
-That last rule is conservative: regeneration may be added only when authoritative semantics can prove a new physical start is safe.
+That rule is conservative: regeneration may be added only when authoritative semantics can prove a new physical start is safe.
 
 ## Production runtime honesty
 
