@@ -469,6 +469,7 @@ export function useInterviewSession(
     sessionTransitionEpochRef.current += 1;
     sessionMutationAdmissionRef.current = false;
     pendingSubmissionsRef.current.clear();
+    options.whiteboardAdapter?.resetForNewSession();
     resetBoardSync();
     setAvailableSessions([]);
     setSessionId(null);
@@ -485,6 +486,7 @@ export function useInterviewSession(
   }, [
     baseUrl,
     desktopBootstrap,
+    options.whiteboardAdapter,
     resetBoardSync,
     sessionId,
     sessionStatus
