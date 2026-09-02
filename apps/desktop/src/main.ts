@@ -109,6 +109,7 @@ async function startDesktop(): Promise<void> {
     host: "127.0.0.1",
     commandPort: 0,
     rendererStreamPort: 0,
+    voicePort: 0,
     clientToken,
     allowedOrigins: [new URL(frontendUrl).origin],
     databasePath: paths.databasePath
@@ -117,13 +118,15 @@ async function startDesktop(): Promise<void> {
   if (frontendServer !== undefined) {
     frontendServer.configureBackendOrigins(
       server.bound.command.url,
-      server.bound.rendererStream.streamUrl
+      server.bound.rendererStream.streamUrl,
+      server.bound.voice.url
     );
   }
 
   bootstrap = createDesktopRendererBootstrap({
     commandBaseUrl: server.bound.command.url,
     rendererStreamUrl: server.bound.rendererStream.streamUrl,
+    voiceBaseUrl: server.bound.voice.url,
     appVersion: app.isPackaged ? app.getVersion() : "development",
     platform: process.platform
   });
@@ -192,6 +195,7 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
     {
       commandUrl: `${currentBootstrap.commandBaseUrl}/v1/commands`,
       rendererStreamUrl: currentBootstrap.rendererStreamUrl,
+      voiceBaseUrl: currentBootstrap.voiceBaseUrl,
       clientToken: token,
       webContentsId: window.webContents.id,
       getTrustedMainFrame: () => {
