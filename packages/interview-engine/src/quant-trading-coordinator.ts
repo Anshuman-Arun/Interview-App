@@ -25,7 +25,7 @@ import {
   QuantStudentActionSchema,
   QuantTraderScenarioFamilySchema,
   createQuantTraderScenario,
-  type QuantTraderInterview,
+  type QuantTraderInterviewEngine,
   type QuantTraderScenarioResult
 } from "../../local-compute/src/index.js";
 import { z } from "zod";
@@ -89,7 +89,7 @@ function publicRound(evidence: QuantTradingRoundEvidenceEvent) {
 
 function publicStateFromEngine(
   configuration: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_TRADING" }>,
-  engine: QuantTraderInterview
+  engine: QuantTraderInterviewEngine
 ): QuantTradingPublicState {
   const state = engine.getState();
   const lastRound = state.history.at(-1);
@@ -134,7 +134,7 @@ function reconstructQuantTradingEngine(
   state: Readonly<SessionState>
 ): {
   readonly configuration: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_TRADING" }>;
-  readonly engine: QuantTraderInterview;
+  readonly engine: QuantTraderInterviewEngine;
 } {
   const configuration = state.configuration;
   if (configuration?.mode !== "QUANT_TRADING") {
