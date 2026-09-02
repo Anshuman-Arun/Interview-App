@@ -8,6 +8,7 @@ import {
 import { DeliveryCoordinator } from "../../../packages/delivery/src/index.js";
 import { replaySession } from "../../../packages/events/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
+import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import {
   type SessionRuntimeRegistry,
   type SessionWriter
@@ -158,6 +159,10 @@ export class SessionRecoveryCoordinator {
 
     const recovery = (async () => {
       const writer = await this.getWriterAsync(sessionId);
+      // Validate exact application-owned session identity and specialized
+      // deterministic quant replay before recovery is allowed to append any
+      // delivery, vision, or turn-recovery events.
+      resolveSessionStateComposition(writer.getState());
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.visionEvidenceDelegate !== undefined) {
         await this.visionEvidenceDelegate.recoverPendingVisionEvidence(sessionId);
