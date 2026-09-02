@@ -80,7 +80,9 @@ export class WhiteboardVisionClient {
         }
         return result;
       } catch (error) {
-        if (isAborted(signal)) throw new Error("Whiteboard vision request was aborted");
+        if (isAborted(signal)) {
+          throw new Error("Whiteboard vision request was aborted", { cause: error });
+        }
         lastError = error;
       }
     }

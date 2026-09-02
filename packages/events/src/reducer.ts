@@ -241,7 +241,14 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         if (existing === undefined || existing.revision !== entry.expectedRevision) {
           throw new Error("Normalized board delete has a stale shape basis");
         }
-        delete boardShapes[entry.shapeId];
+        const { [entry.shapeId]: _removed, ...remainingBoardShapes } = boardShapes;
+        Object.assign(boardShapes, remainingBoardShapes);
+        Object.defineProperty(boardShapes, entry.shapeId, {
+          configurable: true,
+          enumerable: false,
+          writable: true,
+          value: undefined
+        });
       }
       next = {
         ...state,

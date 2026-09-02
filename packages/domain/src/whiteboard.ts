@@ -74,12 +74,10 @@ const NonnegativeSafeTimestampSchema = z.number().refine(
   { message: "Board shape timestamp must be a non-negative safe integer" }
 );
 const BoardCoordinateSchema = z.number()
-  .finite()
-  .min(-MAX_BOARD_COORDINATE_MAGNITUDE)
+    .min(-MAX_BOARD_COORDINATE_MAGNITUDE)
   .max(MAX_BOARD_COORDINATE_MAGNITUDE);
 const BoardDimensionSchema = z.number()
-  .finite()
-  .nonnegative()
+    .nonnegative()
   .max(MAX_BOARD_COORDINATE_MAGNITUDE);
 
 export const AuthoritativeBoardShapeTypeSchema = z.enum([
