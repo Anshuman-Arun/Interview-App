@@ -995,9 +995,19 @@ export function useInterviewSession(
   );
 
   const synchronizeWhiteboard = useCallback(async (): Promise<void> => {
-    if (sessionId === null || sessionStatus !== "ACTIVE") return;
+    if (
+      sessionId === null
+      || sessionStatus !== "ACTIVE"
+      || !isSessionStarted
+      || !sessionMutationAdmissionRef.current
+    ) return;
     await synchronizeWhiteboardFor(sessionId);
-  }, [sessionId, sessionStatus, synchronizeWhiteboardFor]);
+  }, [
+    isSessionStarted,
+    sessionId,
+    sessionStatus,
+    synchronizeWhiteboardFor
+  ]);
 
   const submitWhiteboardMutation = useCallback(async (
     change: NormalizedStudentShapeChange
@@ -1139,7 +1149,12 @@ export function useInterviewSession(
 
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
-      if (sessionId === null || sessionStatus !== "ACTIVE") return;
+      if (
+        sessionId === null
+        || sessionStatus !== "ACTIVE"
+        || !isSessionStarted
+        || !sessionMutationAdmissionRef.current
+      ) return;
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
       sessionTransitionEpochRef.current = transitionEpoch;
       sessionMutationAdmissionRef.current = false;
@@ -1159,6 +1174,7 @@ export function useInterviewSession(
     },
     [
       getCommandClient,
+      isSessionStarted,
       reconcileTerminalFailure,
       sessionId,
       sessionStatus,
@@ -1168,7 +1184,12 @@ export function useInterviewSession(
 
   const archiveSession = useCallback(
     async (reason?: string): Promise<void> => {
-      if (sessionId === null || sessionStatus !== "ACTIVE") return;
+      if (
+        sessionId === null
+        || sessionStatus !== "ACTIVE"
+        || !isSessionStarted
+        || !sessionMutationAdmissionRef.current
+      ) return;
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
       sessionTransitionEpochRef.current = transitionEpoch;
       sessionMutationAdmissionRef.current = false;
@@ -1188,6 +1209,7 @@ export function useInterviewSession(
     },
     [
       getCommandClient,
+      isSessionStarted,
       reconcileTerminalFailure,
       sessionId,
       sessionStatus,
