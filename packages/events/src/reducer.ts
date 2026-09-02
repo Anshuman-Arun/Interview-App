@@ -841,18 +841,20 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         || state.configuration?.mode === "QUANT_RESEARCH"
         || state.quantTrading !== undefined
         || state.quantResearch !== undefined;
-      if (isQuantSession && !legacyUninitializedQuant && state.status !== "ACTIVE") {
+      if (isQuantSession && state.status !== "ACTIVE") {
         throw new Error("Quant sessions can complete only from active state");
       }
-      if (
-        isQuantSession
-        && !legacyUninitializedQuant
-        && (
-          Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")
-          || Object.values(state.utterances).some((utterance) => utterance.status === "CAPTURING")
-        )
-      ) {
-        throw new Error("Quant sessions cannot complete with unresolved candidate input");
+      if (isQuantSession) {
+        const hasActiveInput = Object.values(state.inputEpisodes)
+          .some((episode) => episode.status === "ACTIVE");
+        const hasCapturingUtterance = Object.values(state.utterances)
+          .some((utterance) => utterance.status === "CAPTURING");
+        if (
+          hasActiveInput
+          || (!legacyUninitializedQuant && hasCapturingUtterance)
+        ) {
+          throw new Error("Quant sessions cannot complete with unresolved candidate input");
+        }
       }
       if (
         !legacyUninitializedQuant
@@ -882,18 +884,24 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       };
       break;
     }
-    case "SESSION_ARCHIVED":
-      if (
-        (
-          state.configuration?.mode === "QUANT_TRADING"
-          || state.configuration?.mode === "QUANT_RESEARCH"
-          || state.quantTrading !== undefined
-          || state.quantResearch !== undefined
-        )
-        && !isLegacyUninitializedQuantState(state)
-        && state.status !== "COMPLETED"
-      ) {
-        throw new Error("Quant sessions can be archived only after deterministic session completion");
+    case "SESSION_ARCHIVED": {
+      const legacyUninitializedQuant = isLegacyUninitializedQuantState(state);
+      const isQuantSession =
+        state.configuration?.mode === "QUANT_TRADING"
+        || state.configuration?.mode === "QUANT_RESEARCH"
+        || state.quantTrading !== undefined
+        || state.quantResearch !== undefined;
+      if (isQuantSession) {
+        if (legacyUninitializedQuant) {
+          if (state.status !== "ACTIVE" && state.status !== "COMPLETED") {
+            throw new Error("Legacy Quant sessions can be archived only from active or completed state");
+          }
+          if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
+            throw new Error("Legacy Quant sessions cannot be archived with an active input episode");
+          }
+        } else if (state.status !== "COMPLETED") {
+          throw new Error("Quant sessions can be archived only after deterministic session completion");
+        }
       }
       next = {
         ...state,
@@ -902,6 +910,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         ...(event.payload.reason ? { archivalReason: event.payload.reason } : {})
       };
       break;
+    }
     case "SESSION_RESUMED":
       next = state;
       break;
