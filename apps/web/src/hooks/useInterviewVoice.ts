@@ -173,7 +173,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
             failVoiceCycle(safeVoiceError(openError));
             return;
           }
-          if (epoch !== epochRef.current || !microphoneEnabledRef.current) {
+          if (!isVoiceEpochCurrent(epochRef.current, microphoneEnabledRef.current, epoch)) {
             await cancelStreamBounded(stream);
             return;
           }
@@ -246,7 +246,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
           );
         }
       });
-      if (epoch !== epochRef.current || !microphoneEnabledRef.current) return;
+      if (!isVoiceEpochCurrent(epochRef.current, microphoneEnabledRef.current, epoch)) return;
       if (mountedRef.current) {
         setPermission("GRANTED");
         setListening(true);
@@ -432,4 +432,13 @@ async function cancelStreamBounded(stream: BrowserVoiceStream): Promise<void> {
   } finally {
     globalThis.clearTimeout(timeout);
   }
+}
+
+
+function isVoiceEpochCurrent(
+  currentEpoch: number,
+  microphoneEnabled: boolean,
+  expectedEpoch: number
+): boolean {
+  return currentEpoch === expectedEpoch && microphoneEnabled;
 }
