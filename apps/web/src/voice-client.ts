@@ -84,7 +84,7 @@ export class BrowserVoiceStream {
   private sequence = 0;
   private timestampMs = 0;
   private closed = false;
-  private frameRequestInFlight = false;
+  private operationInFlight = false;
   private resamplerSourceRate: number | undefined;
   private sourceSamplesSeen = 0;
   private targetSamplesEmitted = 0;
@@ -98,8 +98,8 @@ export class BrowserVoiceStream {
 
   public async sendFrame(frame: AudioFrame, signal?: AbortSignal): Promise<BrowserVoiceFrameResult> {
     if (this.closed) throw new Error("Voice stream is closed");
-    if (this.frameRequestInFlight) {
-      throw new Error("Voice stream does not permit overlapping frame requests");
+    if (this.operationInFlight) {
+      throw new Error("Voice stream does not permit overlapping frame/flush operations");
     }
     if (
       frame.channelCount !== 1
@@ -126,7 +126,7 @@ export class BrowserVoiceStream {
     }
 
     const admittedSequence = this.sequence;
-    this.frameRequestInFlight = true;
+    this.operationInFlight = true;
     try {
       const result = await this.client.sendFrame({
         sessionId: this.sessionId,
@@ -156,15 +156,23 @@ export class BrowserVoiceStream {
         ? { ...result, carryCurrentFrameToNextStream: true }
         : result;
     } finally {
-      this.frameRequestInFlight = false;
+      this.operationInFlight = false;
     }
   }
 
   public async flush(signal?: AbortSignal): Promise<BrowserVoiceFrameResult> {
     if (this.closed) return { events: [], terminal: true };
-    const result = await this.client.flush(this.sessionId, this.streamId, signal);
-    if (result.terminal) this.closed = true;
-    return result;
+    if (this.operationInFlight) {
+      throw new Error("Voice stream does not permit overlapping frame/flush operations");
+    }
+    this.operationInFlight = true;
+    try {
+      const result = await this.client.flush(this.sessionId, this.streamId, signal);
+      if (result.terminal) this.closed = true;
+      return result;
+    } finally {
+      this.operationInFlight = false;
+    }
   }
 
   public async cancel(signal?: AbortSignal): Promise<void> {
