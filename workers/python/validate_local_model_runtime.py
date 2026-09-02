@@ -47,6 +47,10 @@ def require(condition: bool, message: str) -> None:
 def main() -> int:
     interpreter = sys.version_info[:2]
     require(
+        platform.python_implementation() == "CPython",
+        "desktop local model runtime requires CPython",
+    )
+    require(
         MIN_PYTHON <= interpreter < MAX_PYTHON_EXCLUSIVE,
         "desktop local model runtime requires CPython 3.12 or 3.13",
     )
