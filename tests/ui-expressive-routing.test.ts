@@ -34,7 +34,14 @@ describe("expressive product routing", () => {
       "#/review",
       "#/review/%2F",
       "#/review/%E0%A4%A",
-      `#/review/${sessionId}/other`
+      `#/review/${sessionId}/other`,
+      "#//sessions",
+      "#/sessions/",
+      "#/sessions//",
+      `#/review//${sessionId}/evaluation`,
+      `#/review/${sessionId}//evaluation`,
+      `#/review/${sessionId}/evaluation/`,
+      "sessions"
     ]) {
       expect(parseProductRoute(hash)).toEqual({ page: "home" });
     }
