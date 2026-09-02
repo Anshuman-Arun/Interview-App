@@ -157,6 +157,18 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("setSessionEntryPending(false)");
   });
 
+  it("serializes terminal session actions and manual recovery", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain("sessionTerminalPendingRef.current");
+    expect(app).toContain("if (targetSessionId === null || sessionTerminalPendingRef.current) return");
+    expect(app).toContain("disabled={sessionTerminalPending}");
+    expect(app).toContain("if (!recoverySessionInput.trim() || sessionEntryPendingRef.current) return");
+  });
+
   it("does not add expensive decorative effects", () => {
     for (const file of STYLE_FILES) {
       const css = fs.readFileSync(path.resolve(process.cwd(), file), "utf8");

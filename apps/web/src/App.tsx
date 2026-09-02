@@ -43,7 +43,9 @@ export const App: React.FC = () => {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const historyAbortRef = useRef<AbortController | null>(null);
   const sessionEntryPendingRef = useRef(false);
+  const sessionTerminalPendingRef = useRef(false);
   const [sessionEntryPending, setSessionEntryPending] = useState(false);
+  const [sessionTerminalPending, setSessionTerminalPending] = useState(false);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -82,7 +84,9 @@ export const App: React.FC = () => {
 
   const handleCompleteSession = async (): Promise<void> => {
     const targetSessionId = session.sessionId;
-    if (targetSessionId === null) return;
+    if (targetSessionId === null || sessionTerminalPendingRef.current) return;
+    sessionTerminalPendingRef.current = true;
+    setSessionTerminalPending(true);
     try {
       await session.completeSession();
       setReviewTarget(null);
@@ -93,12 +97,17 @@ export const App: React.FC = () => {
       });
     } catch {
       // Error handled in session.error
+    } finally {
+      sessionTerminalPendingRef.current = false;
+      setSessionTerminalPending(false);
     }
   };
 
   const handleArchiveSession = async (): Promise<void> => {
     const targetSessionId = session.sessionId;
-    if (targetSessionId === null) return;
+    if (targetSessionId === null || sessionTerminalPendingRef.current) return;
+    sessionTerminalPendingRef.current = true;
+    setSessionTerminalPending(true);
     try {
       await session.archiveSession();
       setReviewTarget(null);
@@ -109,6 +118,9 @@ export const App: React.FC = () => {
       });
     } catch {
       // Error handled in session.error
+    } finally {
+      sessionTerminalPendingRef.current = false;
+      setSessionTerminalPending(false);
     }
   };
 
@@ -146,7 +158,9 @@ export const App: React.FC = () => {
 
   const handleManualRecover = async (e: React.SyntheticEvent): Promise<void> => {
     e.preventDefault();
-    if (!recoverySessionInput.trim()) return;
+    if (!recoverySessionInput.trim() || sessionEntryPendingRef.current) return;
+    sessionEntryPendingRef.current = true;
+    setSessionEntryPending(true);
     try {
       const parsed = SessionIdSchema.parse(recoverySessionInput.trim());
       await session.recoverSession(parsed);
@@ -154,6 +168,9 @@ export const App: React.FC = () => {
       navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
+    } finally {
+      sessionEntryPendingRef.current = false;
+      setSessionEntryPending(false);
     }
   };
 
@@ -361,16 +378,18 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleCompleteSession()}
+                disabled={sessionTerminalPending}
                 className="app-header__end"
               >
-                End interview
+                {sessionTerminalPending ? "Ending…" : "End interview"}
               </button>
               <button
                 type="button"
                 onClick={() => void handleArchiveSession()}
+                disabled={sessionTerminalPending}
                 className="app-header__quiet"
               >
-                Archive
+                {sessionTerminalPending ? "Working…" : "Archive"}
               </button>
             </div>
           )}
