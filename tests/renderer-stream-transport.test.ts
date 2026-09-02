@@ -851,6 +851,28 @@ describe("authenticated renderer stream transport", () => {
     await waitFor(() => streamServer.activeConnectionCount() === 0);
   });
 
+  it("rejects fresh renderer attachment after authoritative session completion", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    await new TurnCoordinator(writer).completeSession();
+
+    const response = await fetch(streamAddress.streamUrl, {
+      method: "POST",
+      headers: authenticatedHeaders(),
+      body: JSON.stringify({
+        protocolVersion: 1,
+        type: "ATTACH_RENDERER_STREAM",
+        sessionId
+      })
+    });
+
+    expect(response.status).toBe(409);
+    expect(RendererStreamErrorResponseSchema.parse(await response.json() as unknown).error.code)
+      .toBe("INVALID_STREAM_REQUEST");
+    expect(streamServer.activeConnectionCount()).toBe(0);
+  });
+
   it("drains an admitted publication before shutdown classifies renderer uncertainty", async () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
