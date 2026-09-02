@@ -235,14 +235,14 @@ describe("provider execution admission", () => {
       now: NOW
     });
 
-    rawSession.sendTurn = async function* () {
+    Reflect.set(rawSession, "sendTurn", async function* () {
       replacementSendTurnCalls += 1;
       throw new Error("replacement sendTurn must not execute");
-    };
-    rawSession.close = async () => {
+    });
+    Reflect.set(rawSession, "close", async () => {
       replacementCloseCalls += 1;
       throw new Error("replacement close must not execute");
-    };
+    });
 
     expect(await collect(session.sendTurn({
       context: {},
