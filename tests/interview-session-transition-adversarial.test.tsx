@@ -469,6 +469,44 @@ describe("interview session transition authority", () => {
     rendered.container.remove();
   });
 
+  it("pauses an ACTIVE interview locally without ending authority and resumes explicitly", async () => {
+    const sessionId = newSessionId();
+    const harness = makeFetchHarness([]);
+    const rendered = renderHook(harness.fetchImpl);
+
+    await act(async () => {
+      await rendered.current().startSession(sessionId);
+    });
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+    expect(rendered.current().isSessionStarted).toBe(true);
+    expect(rendered.current().isPaused).toBe(false);
+
+    act(() => {
+      rendered.current().pauseSession();
+    });
+
+    expect(rendered.current().isPaused).toBe(true);
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+    expect(rendered.current().isSessionStarted).toBe(true);
+    expect(rendered.current().isStreaming).toBe(false);
+    await expect(rendered.current().submitTypedInput("blocked while paused"))
+      .rejects.toThrow("Cannot submit input without an active session");
+
+    await act(async () => {
+      await rendered.current().resumePausedSession();
+    });
+
+    expect(rendered.current().isPaused).toBe(false);
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+    expect(rendered.current().isSessionStarted).toBe(true);
+
+    act(() => rendered.current().disconnect());
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
   it("revokes typed-input admission synchronously while terminal authority is pending", async () => {
     const sessionId = newSessionId();
     let releaseComplete: (() => void) | undefined;
