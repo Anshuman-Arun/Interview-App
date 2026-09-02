@@ -262,19 +262,16 @@ describe("provider execution admission", () => {
     expect(Reflect.set(session.capabilities, "cancellation", "CANCEL_PROVIDER_COMPUTE"))
       .toBe(false);
     expect(session.capabilities.cancellation).toBe("NONE");
-    expect(() => session.capabilities.inputModalities.add("image")).toThrow(TypeError);
-    expect(() => session.capabilities.inputModalities.delete("text")).toThrow(TypeError);
-    expect(() => session.capabilities.inputModalities.clear()).toThrow(TypeError);
-    expect(() => Set.prototype.add.call(
-      session.capabilities.inputModalities,
-      "image"
-    )).toThrow(TypeError);
+    const modalities = session.capabilities.inputModalities;
+    modalities.add("image");
+    modalities.delete("text");
+    Set.prototype.add.call(modalities, "image");
+    expect([...modalities]).toEqual(["image"]);
     expect([...session.capabilities.inputModalities]).toEqual(["text"]);
-    session.capabilities.inputModalities.forEach((_value, _key, owner) => {
-      expect(owner).toBe(session.capabilities.inputModalities);
-      expect(() => owner.add("image")).toThrow(TypeError);
-    });
-    expect(() => session.capabilities.reasoningLevels?.push("high")).toThrow(TypeError);
+
+    const levels = session.capabilities.reasoningLevels;
+    levels?.push("high");
+    expect(levels).toEqual(["low", "high"]);
     expect(session.capabilities.reasoningLevels).toEqual(["low"]);
 
     await session.close();
