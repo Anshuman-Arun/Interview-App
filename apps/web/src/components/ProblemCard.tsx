@@ -32,7 +32,6 @@ export const ProblemCard: React.FC<ProblemCardProps> = ({
       <header className="problem-header">
         <div className="problem-header__eyebrow">
           <span>Interview problem</span>
-          <span>{problem.difficulty}</span>
         </div>
         <h2>{problem.title}</h2>
       </header>
