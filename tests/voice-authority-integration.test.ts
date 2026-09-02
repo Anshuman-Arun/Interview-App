@@ -99,6 +99,36 @@ describe("authoritative voice delivery admission", () => {
     }
   });
 
+  it("rejects late TTS admission after the session becomes terminal", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const source = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(source.deliveryId);
+      await deliveries.acknowledgeExposed(source.deliveryId);
+      await deliveries.acknowledgeCompleted(source.deliveryId);
+
+      await harness.turns.completeSession();
+      expect(harness.writer.getState().status).toBe("COMPLETED");
+      expect(harness.writer.getState().generations[harness.generationId]?.status)
+        .toBe("SUPERSEDED");
+
+      await expect(harness.turns.queueAudioDeliveryFromValidatedText({
+        sourceDeliveryId: source.deliveryId,
+        generationId: harness.generationId,
+        text: harness.safeProbe,
+        textSha256: sha256(harness.safeProbe),
+        audioRef: audioRef("terminal-late-tts")
+      })).resolves.toBeUndefined();
+
+      expect(Object.values(harness.writer.getState().deliveries)
+        .filter((delivery) => delivery.content.medium === "AUDIO"))
+        .toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("safely cancels queued audio on barge-in without rewriting it as exposed", async () => {
     const harness = await createCoreHarness();
     try {
