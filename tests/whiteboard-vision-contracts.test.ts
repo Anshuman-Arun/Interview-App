@@ -215,7 +215,12 @@ describe("authoritative whiteboard and vision runtime contracts", () => {
         sourceBoardRevision: 0,
         regionId: "region:test",
         relevantShapeIds: ["shape:a"],
-        snapshotBasis: complete.payload.snapshotBasis
+        snapshotBasis: {
+          snapshotId: "snapshot:test",
+          snapshotHash: "a".repeat(64),
+          preprocessingVersion: "test-v1",
+          sourceBoardRevision: 0
+        }
       }
     };
     expect(SessionEventSchema.safeParse(partial).success).toBe(false);
