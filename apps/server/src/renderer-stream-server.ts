@@ -28,6 +28,13 @@ const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const DEFAULT_MAX_CONNECTIONS = 4;
 const DEFAULT_MAX_CONNECTIONS_PER_SESSION = 1;
 const RENDERER_DRAIN_TIMEOUT_MS = 2_000;
+const RENDERER_STREAM_MAX_TOKEN_CHARACTERS = 256;
+const RENDERER_STREAM_MAX_ALLOWED_ORIGINS = 16;
+const RENDERER_STREAM_MAX_ORIGIN_CHARACTERS = 2_048;
+const RENDERER_STREAM_MAX_ATTACH_CHUNKS = 128;
+const RENDERER_STREAM_REQUEST_TIMEOUT_MS = 5_000;
+const RENDERER_STREAM_HEADERS_TIMEOUT_MS = 5_000;
+const LOOPBACK_ORIGIN_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 export interface RendererStreamServerOptions {
   readonly security: LocalTransportSecurity;
@@ -86,6 +93,7 @@ class RendererStreamHttpError extends Error {
 
 export class RendererStreamServer {
   private readonly server: Server;
+  private readonly security: LocalTransportSecurity;
   private readonly connections = new Map<SessionId, Set<ActiveConnection>>();
   private readonly maxConnections: number;
   private readonly maxConnectionsPerSession: number;
@@ -98,7 +106,7 @@ export class RendererStreamServer {
   private stoppingPromise: Promise<void> | undefined;
 
   public constructor(private readonly options: RendererStreamServerOptions) {
-    validateSecurity(options.security);
+    this.security = snapshotRendererSecurity(options.security);
     this.maxConnections = positiveInteger(options.maxConnections ?? DEFAULT_MAX_CONNECTIONS, "maxConnections");
     this.maxConnectionsPerSession = positiveInteger(
       options.maxConnectionsPerSession ?? DEFAULT_MAX_CONNECTIONS_PER_SESSION,
@@ -115,6 +123,8 @@ export class RendererStreamServer {
     this.server = createServer((request, response) => {
       void this.handle(request, response);
     });
+    this.server.requestTimeout = RENDERER_STREAM_REQUEST_TIMEOUT_MS;
+    this.server.headersTimeout = RENDERER_STREAM_HEADERS_TIMEOUT_MS;
   }
 
   public async start(): Promise<BoundRendererStreamAddress> {
@@ -127,7 +137,7 @@ export class RendererStreamServer {
       const onError = (error: Error): void => reject(error);
       this.server.once("error", onError);
       this.server.listen({
-        host: this.options.security.host,
+        host: this.security.host,
         port: this.options.port ?? 0,
         exclusive: true
       }, () => {
@@ -140,7 +150,7 @@ export class RendererStreamServer {
     if (address === null || typeof address === "string") {
       throw new Error("Renderer stream server has no TCP address");
     }
-    this.boundAddress = toBoundAddress(this.options.security.host, address);
+    this.boundAddress = toBoundAddress(this.security.host, address);
     return this.boundAddress;
   }
 
@@ -583,44 +593,99 @@ export class RendererStreamServer {
 
   private authorize(request: IncomingMessage, origin: string | undefined): void {
     const token = headerValue(request, "x-interview-client-token");
-    if (token === undefined || !constantTimeEquals(token, this.options.security.clientToken)) {
+    if (token === undefined || !constantTimeEquals(token, this.security.clientToken)) {
       throw new RendererStreamHttpError(401, "UNAUTHORIZED", "Client authentication failed");
     }
     this.authorizeOrigin(origin);
   }
 
   private authorizeOrigin(origin: string | undefined): void {
-    if (origin === undefined || !this.options.security.allowedOrigins.has(origin)) {
+    if (origin === undefined || !this.security.allowedOrigins.has(origin)) {
       throw new RendererStreamHttpError(403, "ORIGIN_FORBIDDEN", "Client origin is not allowed");
     }
   }
 
   private allowedOrigin(origin: string | undefined): boolean {
-    return origin !== undefined && this.options.security.allowedOrigins.has(origin);
+    return origin !== undefined && this.security.allowedOrigins.has(origin);
   }
 
 }
 
-function validateSecurity(security: LocalTransportSecurity): void {
-  if (!LOOPBACK_HOSTS.has(security.host)) {
+function snapshotRendererSecurity(securityInput: unknown): LocalTransportSecurity {
+  if (typeof securityInput !== "object" || securityInput === null) {
+    throw new Error("Renderer stream security configuration must be an object");
+  }
+
+  let host: unknown;
+  let clientToken: unknown;
+  let allowedOrigins: unknown;
+  try {
+    host = Reflect.get(securityInput, "host");
+    clientToken = Reflect.get(securityInput, "clientToken");
+    allowedOrigins = Reflect.get(securityInput, "allowedOrigins");
+  } catch (error) {
+    throw new Error("Renderer stream security configuration could not be inspected", { cause: error });
+  }
+
+  if (host !== "127.0.0.1" && host !== "::1") {
     throw new Error("Renderer stream server may bind only to a loopback address");
   }
   if (
-    typeof security.clientToken !== "string"
-    || security.clientToken.length < 32
-    || /[\r\n]/u.test(security.clientToken)
+    typeof clientToken !== "string"
+    || clientToken.length < 32
+    || clientToken.length > RENDERER_STREAM_MAX_TOKEN_CHARACTERS
+    || /[\r\n]/u.test(clientToken)
   ) {
-    throw new Error("Client token must contain at least 32 characters");
+    throw new Error("Renderer stream client token must contain between 32 and 256 safe characters");
   }
-  if (security.allowedOrigins.size === 0) {
-    throw new Error("At least one exact client origin is required");
+  if (!(allowedOrigins instanceof Set)) {
+    throw new Error("Renderer stream requires a Set of exact client origins");
   }
-  for (const origin of security.allowedOrigins) {
-    const parsed = new URL(origin);
-    if (parsed.origin !== origin) {
-      throw new Error("Allowed origins must be exact URL origins without paths");
+
+  const origins = new Set<string>();
+  let iterator: IterableIterator<unknown>;
+  try {
+    iterator = Set.prototype.values.call(allowedOrigins) as IterableIterator<unknown>;
+  } catch (error) {
+    throw new Error("Renderer stream origin allowlist could not be inspected", { cause: error });
+  }
+  for (const rawOrigin of iterator) {
+    if (origins.size >= RENDERER_STREAM_MAX_ALLOWED_ORIGINS) {
+      throw new Error("Renderer stream origin allowlist exceeds its bound");
     }
+    if (
+      typeof rawOrigin !== "string"
+      || rawOrigin.length === 0
+      || rawOrigin.length > RENDERER_STREAM_MAX_ORIGIN_CHARACTERS
+    ) {
+      throw new Error("Renderer stream allowed origin is invalid or too long");
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(rawOrigin);
+    } catch (error) {
+      throw new Error("Renderer stream allowed origin is not a valid URL origin", { cause: error });
+    }
+    if (
+      parsed.origin !== rawOrigin
+      || parsed.protocol !== "http:"
+      || !LOOPBACK_ORIGIN_HOSTS.has(parsed.hostname)
+      || parsed.username.length > 0
+      || parsed.password.length > 0
+    ) {
+      throw new Error("Renderer stream allowed origins must be exact HTTP loopback origins");
+    }
+    origins.add(rawOrigin);
   }
+  if (origins.size === 0) {
+    throw new Error("Renderer stream requires at least one exact client origin");
+  }
+
+  return Object.freeze({
+    host,
+    clientToken,
+    allowedOrigins: origins
+  });
 }
 
 function positiveInteger(value: number, label: string): number {
@@ -650,6 +715,10 @@ function headerValue(request: IncomingMessage, name: string): string | undefined
 }
 
 function constantTimeEquals(received: string, expected: string): boolean {
+  if (
+    received.length > RENDERER_STREAM_MAX_TOKEN_CHARACTERS
+    || received.length !== expected.length
+  ) return false;
   const receivedBytes = Buffer.from(received, "utf8");
   const expectedBytes = Buffer.from(expected, "utf8");
   return receivedBytes.length === expectedBytes.length
@@ -659,8 +728,17 @@ function constantTimeEquals(received: string, expected: string): boolean {
 async function readBody(request: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   let byteLength = 0;
+  let chunkCount = 0;
 
   for await (const chunk of request) {
+    chunkCount += 1;
+    if (chunkCount > RENDERER_STREAM_MAX_ATTACH_CHUNKS) {
+      throw new RendererStreamHttpError(
+        413,
+        "BODY_TOO_LARGE",
+        "Renderer stream request exceeds the fragmentation limit"
+      );
+    }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
     byteLength += buffer.byteLength;
     if (byteLength > MAX_RENDERER_STREAM_ATTACH_BYTES) {
@@ -673,7 +751,15 @@ async function readBody(request: IncomingMessage): Promise<string> {
     chunks.push(buffer);
   }
 
-  return Buffer.concat(chunks).toString("utf8");
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
+  } catch {
+    throw new RendererStreamHttpError(
+      400,
+      "INVALID_STREAM_REQUEST",
+      "Renderer stream request is not valid UTF-8"
+    );
+  }
 }
 
 function parseAttachRequest(body: string) {
