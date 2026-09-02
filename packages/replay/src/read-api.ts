@@ -1747,9 +1747,15 @@ export function projectSessionReplayReadModel(
       : [...history.timeline.issues];
   const issues = takeBounded(issueValues, 32).values;
 
+  const deterministicQuantTimeline = history.timeline.entries.some(
+    (entry) => entry.quantTrading !== undefined || entry.quantResearch !== undefined
+  );
+
   return SessionReplayReadModelSchema.parse({
     sessionId: history.sessionId,
-    ...(history.problem === undefined ? {} : { problem: history.problem }),
+    ...(history.problem === undefined || deterministicQuantTimeline
+      ? {}
+      : { problem: history.problem }),
     lifecycle: {
       status: history.lifecycle.status,
       historyComplete: history.lifecycle.historyComplete,
