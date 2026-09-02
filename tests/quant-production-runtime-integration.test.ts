@@ -8,6 +8,7 @@ import {
   QuantTradingStateResponseSchema,
   SessionResumedResponseSchema,
   SessionsListResponseSchema,
+  newInputEpisodeId,
   newRequestId,
   newSessionId,
   type InterviewSessionConfiguration,
@@ -1625,6 +1626,130 @@ describe("adversarial quant lifecycle invariants", () => {
         .toThrow(/Quant sessions can complete only from active state/u);
     } finally {
       if (!writer.isClosed()) await writer.close();
+      store.close();
+    }
+  });
+
+  it("keeps legacy Quant terminal replay compatible without allowing duplicate terminal events", () => {
+    for (const terminalType of ["SESSION_COMPLETED", "SESSION_ARCHIVED"] as const) {
+      const store = new SqliteEventStore(":memory:");
+      const sessionId = newSessionId();
+      try {
+        const firstRequestId = newRequestId();
+        const terminalAt = new Date().toISOString();
+        store.appendIdempotent({
+          sessionId,
+          requestId: firstRequestId,
+          causationId: firstRequestId,
+          correlationId: firstRequestId,
+          elapsedMs: 0,
+          expectedPriorSequence: 0,
+          commandFingerprint: terminalType === "SESSION_COMPLETED"
+            ? "a".repeat(64)
+            : "b".repeat(64),
+          drafts: [
+            {
+              source: "APPLICATION",
+              type: "SESSION_STARTED",
+              payload: {
+                startedAt: terminalAt,
+                configuration: tradingConfiguration()
+              }
+            },
+            terminalType === "SESSION_COMPLETED"
+              ? {
+                  source: "APPLICATION",
+                  type: "SESSION_COMPLETED",
+                  payload: { completedAt: terminalAt }
+                }
+              : {
+                  source: "APPLICATION",
+                  type: "SESSION_ARCHIVED",
+                  payload: { archivedAt: terminalAt }
+                }
+          ],
+          result: { injected: true }
+        });
+
+        const duplicateRequestId = newRequestId();
+        store.appendIdempotent({
+          sessionId,
+          requestId: duplicateRequestId,
+          causationId: duplicateRequestId,
+          correlationId: duplicateRequestId,
+          elapsedMs: 10,
+          expectedPriorSequence: 2,
+          commandFingerprint: terminalType === "SESSION_COMPLETED"
+            ? "c".repeat(64)
+            : "d".repeat(64),
+          drafts: [
+            terminalType === "SESSION_COMPLETED"
+              ? {
+                  source: "APPLICATION",
+                  type: "SESSION_COMPLETED",
+                  payload: { completedAt: new Date().toISOString() }
+                }
+              : {
+                  source: "APPLICATION",
+                  type: "SESSION_ARCHIVED",
+                  payload: { archivedAt: new Date().toISOString() }
+                }
+          ],
+          result: { injected: true }
+        });
+
+        expect(() => SessionWriter.open(store, sessionId)).toThrow(
+          terminalType === "SESSION_COMPLETED"
+            ? /Quant sessions can complete only from active state/u
+            : /Legacy Quant sessions can be archived only from active or completed state/u
+        );
+      } finally {
+        store.close();
+      }
+    }
+  });
+
+  it("does not let legacy Quant completion bypass the pre-runtime active-input guard", () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const inputEpisodeId = newInputEpisodeId();
+    try {
+      const requestId = newRequestId();
+      const terminalAt = new Date().toISOString();
+      store.appendIdempotent({
+        sessionId,
+        requestId,
+        causationId: requestId,
+        correlationId: requestId,
+        elapsedMs: 0,
+        expectedPriorSequence: 0,
+        commandFingerprint: "e".repeat(64),
+        drafts: [
+          {
+            source: "APPLICATION",
+            type: "SESSION_STARTED",
+            payload: {
+              startedAt: terminalAt,
+              configuration: researchConfiguration()
+            }
+          },
+          {
+            source: "USER",
+            type: "INPUT_EPISODE_STARTED",
+            payload: { inputEpisodeId }
+          },
+          {
+            source: "APPLICATION",
+            type: "SESSION_COMPLETED",
+            payload: { completedAt: terminalAt }
+          }
+        ],
+        result: { injected: true }
+      });
+
+      expect(() => SessionWriter.open(store, sessionId))
+        .toThrow(/cannot complete with unresolved candidate input/u);
+    } finally {
       store.close();
     }
   });
