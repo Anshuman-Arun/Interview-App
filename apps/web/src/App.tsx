@@ -975,27 +975,9 @@ export const App: React.FC = () => {
                   </p>
                 </div>
 
-                {session.problem === null ? (
-                  <div className="border border-slate-200 rounded-md p-4 bg-slate-50 text-sm text-slate-500">
-                    This session does not expose an Oxford Mathematics problem view.
-                  </div>
-                ) : (
-                  <>
-                    <div className="border border-slate-200 rounded-md p-4 bg-slate-50">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Problem ID</div>
-                          <div className="font-mono text-slate-800 mt-1">{session.problem.id}</div>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Version</div>
-                          <div className="font-mono text-slate-800 mt-1">{session.problem.version}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                  </>
-                )}
+                <div className="border border-slate-200 rounded-md p-4 bg-slate-50 text-sm text-slate-500">
+                  Problem metadata is intentionally hidden during the live interview.
+                </div>
               </div>
             )}
           </div>
