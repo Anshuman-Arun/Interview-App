@@ -327,7 +327,7 @@ function parseAntigravityStream(
 
     let event: unknown;
     try {
-      event = JSON.parse(raw) as unknown;
+      event = parseStrictJson(raw);
     } catch {
       throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
     }
@@ -564,6 +564,150 @@ function serializeBoundedPlainJson(
     throw new Error("JSON byte budget exceeded");
   }
   return serialized;
+}
+
+function parseStrictJson(raw: string): unknown {
+  let index = 0;
+  let nodes = 0;
+
+  const skipWhitespace = (): void => {
+    while (index < raw.length) {
+      const code = raw.charCodeAt(index);
+      if (code !== 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) return;
+      index += 1;
+    }
+  };
+
+  const parseString = (): string => {
+    if (raw[index] !== '"') throw new Error("Expected JSON string");
+    const start = index;
+    index += 1;
+    while (index < raw.length) {
+      const code = raw.charCodeAt(index);
+      if (code === 0x22) {
+        index += 1;
+        const decoded: unknown = JSON.parse(raw.slice(start, index));
+        if (typeof decoded !== "string") throw new Error("Invalid JSON string");
+        return decoded;
+      }
+      if (code <= 0x1f) throw new Error("Invalid JSON control character");
+      if (code === 0x5c) {
+        index += 1;
+        if (index >= raw.length) throw new Error("Truncated JSON escape");
+        const escape = raw[index];
+        if (escape === "u") {
+          if (!/^[0-9A-Fa-f]{4}$/u.test(raw.slice(index + 1, index + 5))) {
+            throw new Error("Invalid JSON unicode escape");
+          }
+          index += 5;
+          continue;
+        }
+        if (
+          escape !== '"'
+          && escape !== "\\"
+          && escape !== "/"
+          && escape !== "b"
+          && escape !== "f"
+          && escape !== "n"
+          && escape !== "r"
+          && escape !== "t"
+        ) {
+          throw new Error("Invalid JSON escape");
+        }
+      }
+      index += 1;
+    }
+    throw new Error("Unterminated JSON string");
+  };
+
+  const parseNumber = (): void => {
+    const match = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/u.exec(
+      raw.slice(index)
+    );
+    if (match === null || match[0].length === 0) {
+      throw new Error("Invalid JSON number");
+    }
+    index += match[0].length;
+  };
+
+  const consumeLiteral = (literal: string): void => {
+    if (!raw.startsWith(literal, index)) throw new Error("Invalid JSON literal");
+    index += literal.length;
+  };
+
+  const parseValue = (depth: number): void => {
+    if (depth > MAX_JSON_DEPTH) throw new Error("JSON depth exceeded");
+    nodes += 1;
+    if (nodes > MAX_JSON_NODES) throw new Error("JSON node budget exceeded");
+    skipWhitespace();
+    const token = raw[index];
+    if (token === "{") {
+      index += 1;
+      skipWhitespace();
+      const keys = new Set<string>();
+      if (raw[index] === "}") {
+        index += 1;
+        return;
+      }
+      for (;;) {
+        skipWhitespace();
+        const key = parseString();
+        if (keys.has(key)) throw new Error("Duplicate JSON object key");
+        keys.add(key);
+        skipWhitespace();
+        if (raw[index] !== ":") throw new Error("Expected JSON colon");
+        index += 1;
+        parseValue(depth + 1);
+        skipWhitespace();
+        if (raw[index] === "}") {
+          index += 1;
+          return;
+        }
+        if (raw[index] !== ",") throw new Error("Expected JSON object comma");
+        index += 1;
+      }
+    }
+    if (token === "[") {
+      index += 1;
+      skipWhitespace();
+      if (raw[index] === "]") {
+        index += 1;
+        return;
+      }
+      for (;;) {
+        parseValue(depth + 1);
+        skipWhitespace();
+        if (raw[index] === "]") {
+          index += 1;
+          return;
+        }
+        if (raw[index] !== ",") throw new Error("Expected JSON array comma");
+        index += 1;
+      }
+    }
+    if (token === '"') {
+      parseString();
+      return;
+    }
+    if (token === "t") {
+      consumeLiteral("true");
+      return;
+    }
+    if (token === "f") {
+      consumeLiteral("false");
+      return;
+    }
+    if (token === "n") {
+      consumeLiteral("null");
+      return;
+    }
+    parseNumber();
+  };
+
+  parseValue(0);
+  skipWhitespace();
+  if (index !== raw.length) throw new Error("Trailing JSON content");
+  return JSON.parse(raw) as unknown;
 }
 
 function firstNonBlankLineIndex(lines: readonly string[]): number {
