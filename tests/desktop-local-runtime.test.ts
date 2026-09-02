@@ -347,6 +347,35 @@ describe("desktop local model runtime", () => {
     await expect(synthesis).rejects.toThrow("rejected");
   });
 
+  it("fails an active VAD stream if the supervised speech worker restarts between frames", async () => {
+    const token = "f".repeat(64);
+    const runtime = fixtureManager("speech-restart-boundary", "speech", "fixture-speech-1", token);
+    await runtime.start("speech-restart-boundary");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-restart-boundary",
+      "speech",
+      token
+    );
+    const vad = new ManagedSileroVadRuntime(client, "/verified/silero.onnx");
+
+    await expect(vad.score({
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      streamId: "stream-restart-boundary",
+      modelPath: "/verified/silero.onnx"
+    })).resolves.toBe(0.875);
+
+    await runtime.restart("speech-restart-boundary");
+
+    await expect(vad.score({
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      streamId: "stream-restart-boundary",
+      modelPath: "/verified/silero.onnx"
+    })).rejects.toThrow("restarted during an active VAD stream");
+  });
+
   it("recovers through LocalRuntimeManager after a worker dies during inference", async () => {
     const root = temporaryRoot("desktop-model-restart-");
     const marker = join(root, "crashed.once");
