@@ -3,7 +3,7 @@ import {
   RendererPresentationNotExposedError,
   type AudioPlayer
 } from "../renderer-client.js";
-import { BrowserAudioPlayback } from "./playback.js";
+import type { BrowserAudioPlayback } from "./playback.js";
 import { AudioInfrastructureError } from "./types.js";
 
 export interface ResolvedAudioSource {
@@ -49,7 +49,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
       readonly onCompleted: () => void | Promise<void>;
     };
   }): Promise<void> {
-    if (this.disposed) {
+    if (this.isDisposed()) {
       throw new RendererPresentationNotExposedError(
         "Audio playback adapter is disposed"
       );
@@ -77,11 +77,11 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
 
       if (
         controller.signal.aborted
-        || this.disposed
+        || this.isDisposed()
         || epoch !== this.resolutionEpoch
         || this.pendingResolutions.get(input.deliveryId) !== controller
       ) {
-        releaseResolved?.();
+        releaseResolved();
         throw new RendererPresentationNotExposedError(
           "Audio delivery was cancelled before physical playback admission"
         );
@@ -107,7 +107,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
           }
         });
       } catch (error) {
-        releaseResolved?.();
+        releaseResolved();
         if (isDefinitelyNotEnqueued(error)) {
           throw new RendererPresentationNotExposedError(
             "Audio playback was rejected before queue admission",
@@ -125,11 +125,11 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
       void handle.result.then(
         () => {
           this.options.onSpeakingChanged?.(false);
-          releaseOwnedSource?.();
+          releaseOwnedSource();
         },
         () => {
           this.options.onSpeakingChanged?.(false);
-          releaseOwnedSource?.();
+          releaseOwnedSource();
         }
       );
 
@@ -146,7 +146,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
         this.pendingResolutions.delete(input.deliveryId);
       }
       if (resolved !== undefined && controller.signal.aborted) {
-        releaseResolved?.();
+        releaseResolved();
       }
       if (error instanceof RendererPresentationNotExposedError) throw error;
       if (controller.signal.aborted) {
@@ -197,6 +197,10 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
     this.playback.dispose();
   }
 
+  private isDisposed(): boolean {
+    return this.disposed;
+  }
+
   private abortPendingResolutions(): void {
     for (const controller of this.pendingResolutions.values()) {
       controller.abort();
@@ -205,7 +209,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
   }
 }
 
-function validateResolvedSource(value: ResolvedAudioSource): void {
+function validateResolvedSource(value: unknown): asserts value is ResolvedAudioSource {
   if (
     typeof value !== "object"
     || value === null
