@@ -30,7 +30,8 @@ Every endpoint:
 - snapshots a bounded exact HTTP-loopback Origin allowlist at construction;
 - requires the exact configured browser Origin and local client-token capability;
 - uses strict request identities, bounded body bytes/chunks, and bounded HTTP connection concurrency;
-- rejects sequence gaps/duplicates and stream/session mismatches;
+- rejects sequence gaps/duplicates and stream/session/request mismatches;
+- returns only application-admitted worker events, bound to the exact triggering frame/flush request;
 - exposes no filesystem path;
 - has explicit cancellation, bounded request/header/keep-alive deadlines, and a bounded server-side idle lease.
 
@@ -81,7 +82,9 @@ The order is deliberate: authority changes before physical interruption.
 
 Barge-in also invalidates the browser's existing renderer-stream connection. This is an ordering barrier for commands that may already have been written to the old SSE socket but not yet processed by the browser. The old consumer stops processing buffered delivery blocks after abort; the replacement connection attaches only after the old consumer settles and server-side disconnect classification completes. Cancelled or `POSSIBLY_EXPOSED` output is therefore not replayed.
 
-The server closes the complementary write-side race as well: after `DeliveryCoordinator.reconnect()` persists `DELIVERING`, renderer transport re-reads the authoritative atom immediately before the synchronous physical SSE write. If `beginUtterance()` invalidated the delivery during that await boundary, no stale command is written.
+The server closes the complementary write-side race as well: after `DeliveryCoordinator.reconnect()` persists `DELIVERING`, renderer transport re-reads the authoritative atom immediately before the synchronous physical SSE write. If `beginUtterance()` invalidated the delivery during that await boundary, no stale command is written. A pre-write exception also clears the connection-local sent-ID memo, so a durable `DELIVERING` transition can be physically retried instead of being falsely short-circuited as already sent.
+
+Renderer attachment is itself an authenticated bounded loopback trust boundary: its security configuration is snapshotted, Origins must be exact HTTP loopback origins, attach bodies are byte/chunk bounded and fatal-UTF-8 decoded, and request/header deadlines plus connection limits prevent stalled attach work from expanding without bound.
 
 `beginUtterance()` retains the frozen semantics:
 
@@ -99,10 +102,15 @@ A final transcript is accepted only when all of these still match:
 
 - current authoritative session;
 - current speech stream;
+- exact triggering frame/flush request identity;
 - worker utterance identity;
 - application-created authoritative utterance identity;
 - exact finalized `SourceAudioBasis`;
 - active integration token/epoch.
+
+Before worker invocation, the application snapshots the admitted PCM bytes into its own bounded ledger and passes the worker an independent copy. A finalized basis is accepted only if its sequence range, sample rate, sample count, timestamps, and SHA-256 exactly match those application-owned admitted bytes. A worker cannot make mutated PCM authoritative merely by returning a self-consistent forged basis.
+
+Only events that survive application admission are returned to the browser. Duplicate onset for the same admitted utterance does not produce a second barge-in. If an onset has already committed `beginUtterance()` and a later callback in the same worker batch is semantically inconsistent, the response still contains that admitted onset plus a sanitized terminal worker error so physical playback is interrupted; the invalid finalization/transcript never reaches authority.
 
 The admitted path is:
 
@@ -178,7 +186,7 @@ The reference commits to session, generation, source delivery, text hash, synthe
 
 PCM/WAV bytes live only in a bounded process-local `EphemeralAudioAssetStore`. The browser resolves the logical reference through the authenticated voice transport, creates a temporary Blob URL, and `QueuedRendererAudioPlayer` revokes that URL when playback settles or is cancelled.
 
-The server-side copy is one-shot and removed when transferred to the browser. Browser resolution and physical-playback start each have bounded deadlines, pre-playback resolution concurrency is capped, and late cancellation-ignoring resolvers have any returned temporary resource reclaimed.
+The server-side copy is one-shot and removed when transferred to the browser. Browser resolution and physical-playback start each have bounded deadlines, pre-playback resolution concurrency is capped, and late cancellation-ignoring resolvers have any returned temporary resource reclaimed. Because voice-v1 TTS has a 120-second hard output ceiling, started playback also has a conservative 130-second completion watchdog: if the browser emits `playing` but never `ended`, the item is interrupted/reclaimed without fabricating a `COMPLETED` acknowledgement.
 
 ## Crash and reconnect behavior
 
@@ -190,7 +198,11 @@ On restart/reconnect:
 - `DELIVERING` without durable exposure acknowledgement is recovered as `POSSIBLY_EXPOSED`;
 - a queued AUDIO atom whose ephemeral asset is missing is cancelled before physical start;
 - a DELIVERING AUDIO command whose asset is missing is classified `POSSIBLY_EXPOSED`;
+- same-connection AUDIO publication remains idempotent after the one-shot asset has already been transferred;
+- terminal sessions reject/close renderer attachment rather than recreating a delivery channel;
 - V1 does not regenerate a missing queued asset automatically.
+
+Recovered semantic transcript history deduplicates TEXT+AUDIO when the corresponding TEXT delivery has a persisted exposure acknowledgement. If TEXT never received a persisted exposure acknowledgement but derived AUDIO did, the AUDIO exposure is retained as the single interviewer history entry rather than erasing user-heard output.
 
 That last rule is conservative: regeneration may be added only when authoritative semantics can prove a new physical start is safe.
 
@@ -238,4 +250,4 @@ The deterministic voice E2E covers the complete integration sequence:
 11. new Turn commit;
 12. normal `ServerTurnOrchestrator` execution.
 
-Additional focused adversarial coverage verifies false onset, empty transcripts, origin/authentication rejection, frame-size limits, sequence gaps and duplicates, dropped PCM transport cancellation, late cancellation-ignoring STT suppression, max-duration frame carry, late uncancelled TTS rejection, acknowledged-AUDIO barge-in semantics, bounded audio resolution/start hangs, malformed temporary-resource cleanup, buffered renderer-command suppression after barge-in, and the authority race between `DELIVERY_STARTED` persistence and physical SSE write. Existing audio lifecycle, renderer crash, speech-worker, VAD/STT, TTS, delivery crash/reconnect, and property suites remain part of the full CI gate.
+Additional focused adversarial coverage verifies false onset, no-playback and repeated barge-in, empty transcripts, duplicate worker onset, same-batch post-onset callback failure, stale trailing onset suppression, worker stream/request cross-wiring, browser response stream/request cross-wiring, exact admitted-PCM tampering, origin/authentication rejection, malformed UTF-8, frame-size limits, sequence gaps and duplicates, dropped PCM transport cancellation, late cancellation-ignoring STT suppression, max-duration frame carry inside the browser queue budget, late uncancelled TTS rejection, multimodal disclosure-ledger semantics, acknowledged-AUDIO barge-in semantics, bounded audio resolution/start/completion hangs, malformed temporary-resource cleanup, renderer security-config mutation, buffered renderer-command suppression after barge-in, durable pre-write retry, stalled renderer backpressure, terminal renderer closure/recovery behavior, AUDIO-only persisted-history recovery, and the authority race between `DELIVERY_STARTED` persistence and physical SSE write. Existing audio lifecycle, renderer crash, speech-worker, VAD/STT, TTS, delivery crash/reconnect, and property suites remain part of the full CI gate.
