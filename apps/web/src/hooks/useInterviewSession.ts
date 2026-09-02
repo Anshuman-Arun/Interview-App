@@ -88,6 +88,7 @@ export interface UseInterviewSessionResult {
   readonly sessionId: SessionId | null;
   readonly isConnected: boolean;
   readonly isSessionStarted: boolean;
+  readonly isPaused: boolean;
   readonly isStreaming: boolean;
   readonly sessionStatus: SessionStatus;
   readonly availableSessions: readonly StoredSessionSummary[];
@@ -116,6 +117,8 @@ export interface UseInterviewSessionResult {
   ) => Promise<SessionHistoryReadResponse>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
   readonly recoverSession: (sessionId: SessionId) => Promise<SessionStatus | null>;
+  readonly pauseSession: () => void;
+  readonly resumePausedSession: () => Promise<void>;
   readonly completeSession: (summary?: string) => Promise<void>;
   readonly archiveSession: (reason?: string) => Promise<void>;
   readonly whiteboardSync: AuthoritativeBoardSyncSnapshot;
@@ -325,6 +328,7 @@ export function useInterviewSession(
   );
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isSessionStarted, setIsSessionStarted] = useState<boolean>(false);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("CREATED");
   const [availableSessions, setAvailableSessions] = useState<readonly StoredSessionSummary[]>([]);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
@@ -882,6 +886,7 @@ export function useInterviewSession(
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(true);
+        setIsPaused(false);
         setSessionStatus("ACTIVE");
         setProblem(problemView);
         setTranscript([]);
@@ -947,6 +952,7 @@ export function useInterviewSession(
           sessionMutationAdmissionRef.current = false;
           setSessionId(targetSessionId);
           setIsSessionStarted(summary.started);
+          setIsPaused(false);
           setSessionStatus(summary.status);
           setSequence(summary.sequence);
           setContextEpoch(summary.contextEpoch);
@@ -970,6 +976,7 @@ export function useInterviewSession(
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(response.started);
+        setIsPaused(false);
         setSessionStatus(response.status);
         setSequence(response.sequence);
         setContextEpoch(response.contextEpoch);
@@ -1019,6 +1026,80 @@ export function useInterviewSession(
       synchronizeWhiteboardFor
     ]
   );
+
+  const pauseSession = useCallback((): void => {
+    if (
+      sessionId === null
+      || sessionStatus !== "ACTIVE"
+      || !isSessionStarted
+      || isPaused
+    ) {
+      return;
+    }
+    // This is intentionally a local presentation pause. The authoritative
+    // session remains ACTIVE and recoverable; mutation and delivery authority
+    // are revoked before the route can leave the interview.
+    sessionTransitionEpochRef.current += 1;
+    sessionMutationAdmissionRef.current = false;
+    void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    stopRendererTransport();
+    setIsPaused(true);
+  }, [
+    isPaused,
+    isSessionStarted,
+    sessionId,
+    sessionStatus,
+    stopRendererTransport,
+    voiceIntegration.voiceControls
+  ]);
+
+  const resumePausedSession = useCallback(async (): Promise<void> => {
+    if (
+      sessionId === null
+      || sessionStatus !== "ACTIVE"
+      || !isSessionStarted
+      || !isPaused
+    ) {
+      return;
+    }
+    const targetSessionId = sessionId;
+    const transitionEpoch = sessionTransitionEpochRef.current + 1;
+    sessionTransitionEpochRef.current = transitionEpoch;
+    setError(null);
+    try {
+      await synchronizeWhiteboardFor(targetSessionId);
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+      const coordinator = boardSyncRef.current;
+      if (
+        options.whiteboardAdapter !== undefined
+        && (
+          boardSyncSessionRef.current !== targetSessionId
+          || coordinator === null
+          || coordinator.snapshot().status !== "SYNCED"
+        )
+      ) {
+        throw new Error("Whiteboard authority could not be verified before resuming");
+      }
+      sessionMutationAdmissionRef.current = true;
+      setIsPaused(false);
+      launchRendererStream(targetSessionId);
+    } catch (err) {
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+      sessionMutationAdmissionRef.current = false;
+      setIsPaused(true);
+      const message = err instanceof Error ? err.message : "Failed to resume interview";
+      setError(message);
+      throw err;
+    }
+  }, [
+    isPaused,
+    isSessionStarted,
+    launchRendererStream,
+    options.whiteboardAdapter,
+    sessionId,
+    sessionStatus,
+    synchronizeWhiteboardFor
+  ]);
 
   const synchronizeWhiteboard = useCallback(async (): Promise<void> => {
     if (
@@ -1101,6 +1182,7 @@ export function useInterviewSession(
     resetBoardSync();
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
+    setIsPaused(false);
     setSessionStatus(status);
   }, [
     resetBoardSync,
@@ -1115,6 +1197,7 @@ export function useInterviewSession(
     // last authoritative status we observed; isSessionStarted=false means no
     // live mutation/renderer authority is currently attached.
     setIsSessionStarted(false);
+    setIsPaused(false);
     resetBoardSync();
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
@@ -1148,6 +1231,7 @@ export function useInterviewSession(
       }
       if (summary.started && summary.status === "ACTIVE") {
         sessionMutationAdmissionRef.current = true;
+        setIsPaused(false);
         setSessionStatus("ACTIVE");
         launchRendererStream(targetSessionId);
         const message = originalError instanceof Error
@@ -1417,6 +1501,7 @@ export function useInterviewSession(
     sessionId,
     isConnected,
     isSessionStarted,
+    isPaused,
     sessionStatus,
     availableSessions,
     isStreaming,
@@ -1437,6 +1522,8 @@ export function useInterviewSession(
     readSessionHistory,
     startSession,
     recoverSession,
+    pauseSession,
+    resumePausedSession,
     completeSession,
     archiveSession,
     whiteboardSync,
