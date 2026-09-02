@@ -1,26 +1,12 @@
 /**
- * Windows-only bootstrap used by SupervisedProcessRunner.
+ * Windows-only trusted process bootstrap components.
  *
- * The bootstrap creates the provider suspended, assigns it to a Job Object
- * configured with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, and only then resumes it.
- * The Job handle is held only by the bootstrap process, so terminating or
- * crashing the bootstrap closes the handle and the kernel terminates every
- * process that remains in the job.
+ * The C# helper is compiled once by the application, then each one-shot
+ * PowerShell bootstrap verifies and loads the exact compiled bytes before
+ * using the helper to create the provider suspended inside a kill-on-close
+ * Job Object. Provider input is never part of the helper source.
  */
-export const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw`
-$ErrorActionPreference = 'Stop'
-
-$configJson = $env:INTERVIEW_SUPERVISED_CONFIG_JSON
-if ([string]::IsNullOrWhiteSpace($configJson)) {
-  exit 191
-}
-Remove-Item Env:INTERVIEW_SUPERVISED_CONFIG_JSON -ErrorAction SilentlyContinue
-Remove-Item Env:INTERVIEW_SUPERVISED_BOOTSTRAP -ErrorAction SilentlyContinue
-
-$config = $configJson | ConvertFrom-Json
-$configJson = $null
-
-$source = @'
+export const WINDOWS_JOB_SUPERVISOR_CSHARP_SOURCE = String.raw`
 using System;
 using System.IO;
 using System.Security.Cryptography;
@@ -436,9 +422,85 @@ public static class InterviewJobSupervisor
         }
     }
 }
-'@
+`;
 
-Add-Type -TypeDefinition $source -Language CSharp
+export const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw`
+$ErrorActionPreference = 'Stop'
+
+$configJson = $env:INTERVIEW_SUPERVISED_CONFIG_JSON
+$assemblyPath = $env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH
+$assemblySha256 = $env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256
+if (
+  [string]::IsNullOrWhiteSpace($configJson)
+  -or [string]::IsNullOrWhiteSpace($assemblyPath)
+  -or [string]::IsNullOrWhiteSpace($assemblySha256)
+) {
+  exit 191
+}
+Remove-Item Env:INTERVIEW_SUPERVISED_CONFIG_JSON -ErrorAction SilentlyContinue
+Remove-Item Env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256 -ErrorAction SilentlyContinue
+Remove-Item Env:INTERVIEW_SUPERVISED_BOOTSTRAP -ErrorAction SilentlyContinue
+
+$config = $configJson | ConvertFrom-Json
+$configJson = $null
+
+$stream = New-Object System.IO.FileStream(
+  $assemblyPath,
+  [System.IO.FileMode]::Open,
+  [System.IO.FileAccess]::Read,
+  [System.IO.FileShare]::Read
+)
+try {
+  if ($stream.Length -le 0 -or $stream.Length -gt 5242880) {
+    exit 190
+  }
+
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $digest = $sha.ComputeHash($stream)
+  }
+  finally {
+    $sha.Dispose()
+  }
+  $actualSha256 = ([System.BitConverter]::ToString($digest)).Replace("-", "").ToLowerInvariant()
+  if (-not [string]::Equals(
+    $actualSha256,
+    $assemblySha256,
+    [System.StringComparison]::OrdinalIgnoreCase
+  )) {
+    exit 190
+  }
+
+  $stream.Position = 0
+  $bytes = New-Object byte[] ([int]$stream.Length)
+  $offset = 0
+  while ($offset -lt $bytes.Length) {
+    $read = $stream.Read($bytes, $offset, $bytes.Length - $offset)
+    if ($read -le 0) {
+      exit 190
+    }
+    $offset += $read
+  }
+}
+finally {
+  $stream.Dispose()
+}
+
+try {
+  $assembly = [System.Reflection.Assembly]::Load($bytes)
+  $supervisorType = $assembly.GetType("InterviewJobSupervisor", $true, $false)
+  $runMethod = $supervisorType.GetMethod(
+    "Run",
+    [System.Reflection.BindingFlags]::Public -bor [System.Reflection.BindingFlags]::Static
+  )
+  if ($null -eq $runMethod) {
+    exit 190
+  }
+}
+catch {
+  exit 190
+}
 
 $allowed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($name in $config.environmentKeys) {
@@ -457,12 +519,12 @@ foreach ($argument in $config.arguments) {
 $currentDirectory = if ($null -eq $config.cwd) { $null } else { [string]$config.cwd }
 
 try {
-  $exitCode = [InterviewJobSupervisor]::Run(
-    [string]$config.executable,
-    [string[]]$arguments,
-    $currentDirectory,
-    [string]$config.expectedSha256
-  )
+  $invokeArguments = New-Object object[] 4
+  $invokeArguments[0] = [string]$config.executable
+  $invokeArguments[1] = [string[]]$arguments
+  $invokeArguments[2] = $currentDirectory
+  $invokeArguments[3] = [string]$config.expectedSha256
+  $exitCode = [int]$runMethod.Invoke($null, $invokeArguments)
   exit $exitCode
 }
 catch {
