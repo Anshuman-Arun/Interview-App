@@ -268,7 +268,7 @@ describe("production quant runtime integration", () => {
         mode: "QUANT_RESEARCH",
         scenario,
         interventionPolicy: "BALANCED"
-      } as InterviewSessionConfiguration), 404, "NOT_FOUND");
+      }), 404, "NOT_FOUND");
       expect(registry.hasSession(sessionId)).toBe(false);
       expect(store.eventCount(sessionId)).toBe(0);
     }
