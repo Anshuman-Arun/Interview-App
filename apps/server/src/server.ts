@@ -4,9 +4,11 @@ import { SqliteEventStore } from "../../../packages/persistence/src/index.js";
 import { SessionRuntimeRegistry } from "../../../packages/interview-engine/src/index.js";
 import type { LocalTransportSecurity } from "../../../packages/domain/src/index.js";
 import { LocalInterviewTransportRuntime } from "./local-interview-transport-runtime.js";
+import type { VoiceRuntimeConfiguration } from "./voice-runtime.js";
 
 const DEFAULT_COMMAND_PORT = 43123;
 const DEFAULT_RENDERER_STREAM_PORT = 43124;
+const DEFAULT_VOICE_PORT = 43125;
 const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000"];
 
 function generateSecureToken(): string {
@@ -17,6 +19,8 @@ export interface ServerConfig {
   readonly host?: "127.0.0.1" | "::1";
   readonly commandPort?: number;
   readonly rendererStreamPort?: number;
+  readonly voicePort?: number;
+  readonly voiceRuntime?: VoiceRuntimeConfiguration;
   readonly clientToken?: string;
   readonly allowedOrigins?: readonly string[];
   readonly databasePath?: string;
@@ -26,6 +30,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
   const host = config.host ?? "127.0.0.1";
   const commandPort = config.commandPort ?? (process.env["COMMAND_PORT"] ? parseInt(process.env["COMMAND_PORT"], 10) : DEFAULT_COMMAND_PORT);
   const rendererStreamPort = config.rendererStreamPort ?? (process.env["RENDERER_STREAM_PORT"] ? parseInt(process.env["RENDERER_STREAM_PORT"], 10) : DEFAULT_RENDERER_STREAM_PORT);
+  const voicePort = config.voicePort ?? (process.env["VOICE_PORT"] ? parseInt(process.env["VOICE_PORT"], 10) : DEFAULT_VOICE_PORT);
   const clientToken = config.clientToken ?? process.env["INTERVIEW_CLIENT_TOKEN"] ?? generateSecureToken();
   const rawOrigins = config.allowedOrigins ?? (process.env["CLIENT_ORIGIN"] ? [process.env["CLIENT_ORIGIN"], ...DEFAULT_ALLOWED_ORIGINS] : DEFAULT_ALLOWED_ORIGINS);
   const allowedOrigins = new Set(rawOrigins);
@@ -45,7 +50,9 @@ export async function createAndStartServer(config: ServerConfig = {}) {
     registry,
     store,
     commandPort,
-    rendererStreamPort
+    rendererStreamPort,
+    voicePort,
+    ...(config.voiceRuntime === undefined ? {} : { voiceRuntime: config.voiceRuntime })
   });
 
   let bound: Awaited<ReturnType<LocalInterviewTransportRuntime["start"]>>;
@@ -78,6 +85,8 @@ async function main() {
   console.log(`  Host:                  ${instance.bound.command.host}`);
   console.log(`  Command Endpoint:      ${instance.bound.command.url}/v1/commands`);
   console.log(`  Renderer Stream:       ${instance.bound.rendererStream.streamUrl}`);
+  console.log(`  Voice Transport:       ${instance.bound.voice.url}`);
+  console.log(`  Voice Models:          ${configHasVoiceRuntime(instance.runtime) ? "injected runtime configured" : "not configured (transport fails closed)"}`);
   console.log(`  Allowed Origins:       ${String(instance.security.allowedOrigins.size)} configured`);
   console.log("  Database:              local SQLite");
   console.log("--------------------------------------------------");
@@ -104,4 +113,8 @@ if (process.argv[1] && (process.argv[1].endsWith("server.ts") || process.argv[1]
     console.error("Fatal error starting interview server.");
     process.exit(1);
   });
+}
+
+function configHasVoiceRuntime(runtime: LocalInterviewTransportRuntime): boolean {
+  return runtime.voiceInput !== undefined && runtime.voiceSynthesis !== undefined;
 }
