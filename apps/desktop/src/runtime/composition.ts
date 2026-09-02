@@ -303,7 +303,7 @@ export class DesktopLocalRuntimeComposition {
   }
 
   private async startSpeech(signal?: AbortSignal): Promise<void> {
-    const readiness = await this.inspectAssets(SPEECH_ASSETS);
+    const readiness = await this.inspectAssets(SPEECH_ASSETS, signal);
     if (readiness !== "READY") {
       this.speechStatus = readiness === "MISSING_ASSET"
         ? missingAsset("SPEECH_ASSET_MISSING")
@@ -377,7 +377,7 @@ export class DesktopLocalRuntimeComposition {
   }
 
   private async startTts(signal?: AbortSignal): Promise<void> {
-    const readiness = await this.inspectAssets(TTS_ASSETS);
+    const readiness = await this.inspectAssets(TTS_ASSETS, signal);
     if (readiness !== "READY") {
       this.ttsStatus = readiness === "MISSING_ASSET"
         ? missingAsset("TTS_ASSET_MISSING")
@@ -491,11 +491,13 @@ export class DesktopLocalRuntimeComposition {
   }
 
   private async inspectAssets(
-    assets: readonly DesktopRuntimeAsset[]
+    assets: readonly DesktopRuntimeAsset[],
+    signal?: AbortSignal
   ): Promise<"READY" | "MISSING_ASSET" | "FAILED"> {
     let missing = false;
     for (const asset of assets) {
-      const inspection = await this.assetManager.inspect(asset.manifest);
+      if (abortRequested(signal)) throw abortError();
+      const inspection = await this.assetManager.inspect(asset.manifest, signal);
       if (inspection.status === "NOT_PRESENT") {
         missing = true;
         continue;
