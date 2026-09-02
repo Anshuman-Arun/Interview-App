@@ -205,17 +205,14 @@ export class ServerTurnOrchestrator {
       throw new Error("Orchestration cancellation signal initialization failed");
     }
 
-    let record: InFlightOrchestration;
     const completion = this.executeOrchestration(
       input,
       cancellationSignal,
       () => requested
     ).finally(() => {
-      if (this.inFlight.get(key) === record) {
-        this.inFlight.delete(key);
-      }
+      this.inFlight.delete(key);
     });
-    record = {
+    const record: InFlightOrchestration = {
       input,
       completion,
       signalCancellation
