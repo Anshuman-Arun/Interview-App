@@ -28,8 +28,10 @@ const VOICE_AUDIO_PREFIX = "/v1/voice/audio/";
 const MAX_CONTROL_BYTES = 4 * 1024;
 const MAX_FRAME_BYTES = Math.ceil(48_000 * (MAX_SPEECH_FRAME_DURATION_MS / 1_000)) * 4;
 const DEFAULT_MAX_FRAME_REQUESTS = 8;
+const MAX_REQUEST_BODY_CHUNKS = 128;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
+const LOOPBACK_ORIGIN_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const ALLOWED_REQUEST_HEADERS: ReadonlySet<string> = new Set([
   "content-type",
   "x-interview-client-token",
@@ -522,7 +524,15 @@ function validateSecurity(security: LocalTransportSecurity): void {
   }
   for (const origin of security.allowedOrigins) {
     const parsed = new URL(origin);
-    if (parsed.origin !== origin) throw new Error("Voice allowed origins must be exact URL origins");
+    if (
+      parsed.origin !== origin
+      || parsed.protocol !== "http:"
+      || !LOOPBACK_ORIGIN_HOSTS.has(parsed.hostname)
+      || parsed.username.length > 0
+      || parsed.password.length > 0
+    ) {
+      throw new Error("Voice allowed origins must be exact HTTP loopback origins");
+    }
   }
 }
 
@@ -582,7 +592,12 @@ async function readBinaryBody(
 ): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   let total = 0;
+  let chunkCount = 0;
   for await (const chunk of request) {
+    chunkCount += 1;
+    if (chunkCount > MAX_REQUEST_BODY_CHUNKS) {
+      throw new VoiceHttpError(413, "BODY_TOO_FRAGMENTED", "Voice request body exceeds its chunk bound");
+    }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
     total += buffer.byteLength;
     if (total > maximumBytes) {
