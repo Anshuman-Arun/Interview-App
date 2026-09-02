@@ -175,6 +175,8 @@ interface WindowsSupervisorAssemblyLease {
 
 const SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES =
   new Map<string, WindowsSupervisorAssemblyEntry>();
+const WINDOWS_SUPERVISOR_TEMP_DIRECTORIES = new Set<string>();
+let windowsSupervisorExitCleanupInstalled = false;
 
 type PendingFailure =
   | "SPAWN_FAILED"
@@ -931,6 +933,25 @@ export class SupervisedProcessRunner {
   }
 }
 
+function registerWindowsSupervisorTempDirectory(
+  directory: string
+): void {
+  WINDOWS_SUPERVISOR_TEMP_DIRECTORIES.add(directory);
+  if (windowsSupervisorExitCleanupInstalled) return;
+  windowsSupervisorExitCleanupInstalled = true;
+  process.once("exit", () => {
+    for (const candidate of WINDOWS_SUPERVISOR_TEMP_DIRECTORIES) {
+      try {
+        rmSync(candidate, { recursive: true, force: true });
+      } catch {
+        // Process-exit cleanup is best effort. Every use revalidates the
+        // helper bytes before execution.
+      }
+    }
+    WINDOWS_SUPERVISOR_TEMP_DIRECTORIES.clear();
+  });
+}
+
 function acquireSharedWindowsSupervisorAssembly(
   powershell: string,
   temporaryRoot: string,
@@ -1180,14 +1201,7 @@ async function compileWindowsSupervisorAssembly(
       removeAbortSignalListener(signal, forwardAbort);
     }
 
-    process.once("exit", () => {
-      try {
-        rmSync(directory, { recursive: true, force: true });
-      } catch {
-        // Process exit cleanup is best effort; per-turn hash verification
-        // prevents stale helper bytes from becoming trusted execution input.
-      }
-    });
+    registerWindowsSupervisorTempDirectory(directory);
     succeeded = true;
     return Object.freeze({
       path: canonical,
