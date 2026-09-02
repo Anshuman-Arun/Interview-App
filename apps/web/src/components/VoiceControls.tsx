@@ -13,7 +13,7 @@ export function VoiceControls({
   state,
   controls,
   disabled
-}: VoiceControlsProps): React.JSX.Element {
+}: VoiceControlsProps) {
   const canUseMicrophone = !disabled
     && state.permission !== "UNSUPPORTED";
 
