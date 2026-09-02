@@ -1152,6 +1152,12 @@ describe("production quant runtime integration", () => {
     expect(completedSerialized).not.toContain("generatedParameters");
     expect(completedSerialized).not.toContain("hiddenModel");
 
+    const countAfterTerminal = store.eventCount(researchSession);
+    expect(QuantResearchStateResponseSchema.parse(
+      await responseJson(await post(firstCommand))
+    ).state).toEqual(first);
+    expect(store.eventCount(researchSession)).toBe(countAfterTerminal);
+
     await expectProtocolError(post({
       protocolVersion: 1,
       type: "SUBMIT_QUANT_RESEARCH_ACTION",
