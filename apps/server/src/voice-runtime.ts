@@ -587,6 +587,38 @@ export class VoiceInputCoordinator {
     await this.discardCapturingUtterance(context, "Speech stream cancelled");
   }
 
+  public async cancelSession(sessionIdInput: SessionId): Promise<void> {
+    const sessionId = SessionIdSchema.parse(sessionIdInput);
+    const streamId = this.sessionStreams.get(sessionId);
+    if (streamId === undefined) return;
+    const context = this.streams.get(streamId);
+    if (context === undefined || context.sessionId !== sessionId) {
+      this.sessionStreams.delete(sessionId);
+      return;
+    }
+
+    // Revoke application admission before awaiting fallible worker
+    // cancellation. Any late worker callback fails the current-context checks.
+    context.active = false;
+    this.releaseStreamBinding(context);
+
+    try {
+      await this.speechWorker.cancel({
+        protocolVersion: 1,
+        type: "CANCEL_SPEECH",
+        requestId: newRequestId(),
+        streamId
+      });
+    } catch {
+      // The authoritative integration binding is already revoked.
+    }
+
+    await this.discardCapturingUtterance(
+      context,
+      "Authoritative session became terminal"
+    );
+  }
+
   public async shutdown(): Promise<void> {
     const contexts = [...this.streams.values()];
     for (const context of contexts) {
