@@ -500,7 +500,6 @@ interface AdmittedPcmLedgerFrame {
   readonly sequence: number;
   readonly timestampMs: number;
   readonly sampleRate: SpeechSampleRate;
-  readonly channels: 1;
   readonly frameSamples: number;
   readonly bytes: Uint8Array;
 }
@@ -908,7 +907,6 @@ export class VoiceInputCoordinator {
       sequence: envelope.sequence,
       timestampMs: envelope.timestampMs,
       sampleRate: envelope.sampleRate,
-      channels: 1,
       frameSamples: envelope.frameSamples,
       bytes
     });
@@ -951,7 +949,6 @@ export class VoiceInputCoordinator {
       if (
         frame.sequence !== expectedSequence
         || frame.sampleRate !== basis.sampleRate
-        || frame.channels !== basis.channels
       ) {
         throw new Error("Finalized speech audio basis does not match admitted PCM frame metadata");
       }
