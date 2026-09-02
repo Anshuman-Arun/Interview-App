@@ -11,7 +11,8 @@ import {
   ScriptedVadBackend,
   SpeechWorkerCore,
   TtsWorkerCore,
-  type RecognizerAudioInput
+  type RecognizerAudioInput,
+  type VadBackend
 } from "../packages/local-compute/src/index.js";
 import {
   TurnCoordinator
@@ -326,6 +327,83 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(finalState.turns[committedTurnId]?.studentText)
       .toBe("I would first isolate the symmetric case.");
     expect(presentedTexts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("cancels an in-flight speech stream when the PCM transport is dropped", async () => {
+    let enterVad!: () => void;
+    const vadEntered = new Promise<void>((resolve) => {
+      enterVad = resolve;
+    });
+    let observeVadAbort!: () => void;
+    const vadAborted = new Promise<void>((resolve) => {
+      observeVadAbort = resolve;
+    });
+    const blockingVad: VadBackend = {
+      classify: async (_frame, signal) => {
+        enterVad();
+        return new Promise((resolve, reject) => {
+          if (signal?.aborted === true) {
+            observeVadAbort();
+            reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            return;
+          }
+          const onAbort = (): void => {
+            observeVadAbort();
+            reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+          };
+          signal?.addEventListener("abort", onAbort, { once: true });
+          void resolve;
+        });
+      }
+    };
+    const speechWorker = new SpeechWorkerCore({
+      vadBackend: blockingVad,
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: authenticatedFetch()
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const voiceClient = new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: authenticatedFetch()
+    });
+    const speech = await voiceClient.openStream(sessionId);
+    const controller = new AbortController();
+    const pendingFrame = speech.sendFrame(microphoneFrame(0.8), controller.signal);
+    await vadEntered;
+
+    controller.abort();
+    await expect(pendingFrame).rejects.toBeDefined();
+    await vadAborted;
+    await waitFor(
+      () => speechWorker.getActiveStreamCount() === 0,
+      "dropped speech transport cancellation"
+    );
+    expect(Object.keys(server.registry.get(sessionId).getState().utterances)).toHaveLength(0);
   });
 
   it("does not barge in on a false VAD onset", async () => {
