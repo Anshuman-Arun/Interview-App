@@ -447,7 +447,7 @@ export const QuantTradingResultEventSchema = z.object({
   noiseFlowCount: NonnegativeSafeIntegerSchema,
   adverseSelectionPnL: QuantTradingFiniteNumberSchema,
   accountingInvariantHolds: z.boolean(),
-  objectiveScore: QuantTradingFiniteNumberSchema
+  objectiveScore: z.number().int().min(0).max(100)
 }).strict();
 export type QuantTradingResultEvent = z.infer<typeof QuantTradingResultEventSchema>;
 
