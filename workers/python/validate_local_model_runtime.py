@@ -65,6 +65,10 @@ def main() -> int:
         getattr(ort, "__version__", None) == EXPECTED_DISTRIBUTIONS["onnxruntime"],
         "onnxruntime runtime version mismatch",
     )
+    require(
+        "CPUExecutionProvider" in ort.get_available_providers(),
+        "onnxruntime CPUExecutionProvider is unavailable",
+    )
     require(hasattr(ModelArch, "TINY"), "Moonshine ModelArch.TINY is unavailable")
 
     transcriber_parameters = inspect.signature(Transcriber).parameters
