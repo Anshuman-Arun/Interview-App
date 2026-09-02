@@ -213,14 +213,9 @@ export class ProviderCoordinator {
         outcome = await this.consumeOneProposal(record, input, compilation.value.context);
       }
     } finally {
-      if (this.cancellationRequested(record.generationId)) {
-        // Authoritative cancellation must not wait for a provider that ignores
-        // or hangs during close. The guarded session still receives a best-effort
-        // close request, but application progress is independent of acknowledgement.
-        void session.close().catch(() => undefined);
-      } else {
-        await session.close().catch(() => undefined);
-      }
+      // Provider session cleanup is not an authority or delivery gate. An
+      // uncooperative close() must not suppress an already-admitted outcome.
+      void session.close().catch(() => undefined);
     }
     if (this.cancellationRequested(record.generationId)) {
       outcome = await this.finishCancellation(record);
@@ -264,8 +259,10 @@ export class ProviderCoordinator {
         }
         if (raced.kind === "ERROR") {
           if (this.cancellationRequested(record.generationId)) {
+            this.requestIteratorReturn(iterator);
             return await this.finishCancellation(record);
           }
+          this.requestIteratorReturn(iterator);
           await this.supersedeIfPossible(record.generationId, "Provider stream failed");
           return failed(
             record.generationId,
@@ -284,6 +281,7 @@ export class ProviderCoordinator {
         const state = this.writer.getState();
         const generation = state.generations[record.generationId];
         if (generation === undefined) {
+          this.requestIteratorReturn(iterator);
           return {
             status: "REJECTED",
             generationId: record.generationId,
@@ -312,8 +310,10 @@ export class ProviderCoordinator {
           });
         } catch {
           if (this.cancellationRequested(record.generationId)) {
+            this.requestIteratorReturn(iterator);
             return await this.finishCancellation(record);
           }
+          this.requestIteratorReturn(iterator);
           await this.supersedeIfPossible(
             record.generationId,
             "Provider proposal admission failed"
@@ -326,15 +326,18 @@ export class ProviderCoordinator {
         }
 
         if (this.cancellationRequested(record.generationId)) {
+          this.requestIteratorReturn(iterator);
           return await this.finishCancellation(record);
         }
         if (!result.accepted) {
+          this.requestIteratorReturn(iterator);
           return {
             status: "REJECTED",
             generationId: record.generationId,
             reason: result.reason ?? "Provider proposal was rejected"
           };
         }
+        this.requestIteratorReturn(iterator);
         return {
           status: "ACCEPTED",
           generationId: record.generationId,
@@ -365,7 +368,7 @@ export class ProviderCoordinator {
         void Promise.resolve(cleanup).catch(() => undefined);
       }
     } catch {
-      // Iterator cleanup is best effort after authoritative cancellation.
+      // Iterator cleanup is best effort and never an authority/delivery gate.
     }
   }
 
