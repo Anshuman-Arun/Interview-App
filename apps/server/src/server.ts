@@ -1,7 +1,10 @@
 import path from "node:path";
 import process from "node:process";
 import { SqliteEventStore } from "../../../packages/persistence/src/index.js";
-import {\n  SessionRuntimeRegistry,\n  type VisionInferenceBackend\n} from "../../../packages/interview-engine/src/index.js";
+import {
+  SessionRuntimeRegistry,
+  type VisionInferenceBackend
+} from "../../../packages/interview-engine/src/index.js";
 import type { LocalTransportSecurity } from "../../../packages/domain/src/index.js";
 import { LocalInterviewTransportRuntime } from "./local-interview-transport-runtime.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
@@ -26,6 +29,7 @@ export interface ServerConfig {
   readonly allowedOrigins?: readonly string[];
   readonly databasePath?: string;
   readonly providerRuntimeResolver?: ProviderRuntimeResolver;
+  readonly visionBackend?: VisionInferenceBackend;
 }
 
 export async function createAndStartServer(config: ServerConfig = {}) {
@@ -65,7 +69,8 @@ export async function createAndStartServer(config: ServerConfig = {}) {
       ...(config.voiceRuntime === undefined ? {} : { voiceRuntime: config.voiceRuntime }),
       ...(config.providerRuntimeResolver === undefined
         ? {}
-        : { providerRuntimeResolver: config.providerRuntimeResolver })
+        : { providerRuntimeResolver: config.providerRuntimeResolver }),
+      ...(config.visionBackend === undefined ? {} : { visionBackend: config.visionBackend })
     });
     bound = await runtime.start();
   } catch (error) {
@@ -120,7 +125,8 @@ async function main() {
   console.log("  Server is ready for authenticated client connections.");
 
   const handleShutdown = async (signal: string) => {
-    console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+    console.log(`
+Received ${signal}. Shutting down gracefully...`);
     try {
       await instance.stop();
       console.log("Server stopped successfully.");
