@@ -253,7 +253,7 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
   }
   if (
     typeof serializedContext !== "string"
-    || Buffer.byteLength(serializedContext, "utf8") > MAX_CONTEXT_BYTES
+    || new TextEncoder().encode(serializedContext).byteLength > MAX_CONTEXT_BYTES
   ) {
     throw new AntigravityCliAdapterError("INVALID_CONTEXT");
   }
