@@ -27,6 +27,7 @@ import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const DEFAULT_MAX_CONNECTIONS = 4;
 const DEFAULT_MAX_CONNECTIONS_PER_SESSION = 1;
+const RENDERER_DRAIN_TIMEOUT_MS = 2_000;
 
 export interface RendererStreamServerOptions {
   readonly security: LocalTransportSecurity;
@@ -352,7 +353,25 @@ export class RendererStreamServer {
         return { outcome: "NO_CLIENT", deliveryId };
       }
 
-      connection.response.write(wire);
+      let acceptedWithoutBackpressure: boolean;
+      try {
+        acceptedWithoutBackpressure = connection.response.write(wire);
+      } catch {
+        await new DeliveryCoordinator(writer).markPossiblyExposed(
+          deliveryId,
+          "Renderer write failed after physical delivery became uncertain"
+        );
+        this.removeConnection(connection);
+        return {
+          outcome: "NOT_DELIVERABLE",
+          deliveryId,
+          status: "POSSIBLY_EXPOSED"
+        };
+      }
+      if (!acceptedWithoutBackpressure) {
+        const drained = await waitForRendererDrain(connection.response);
+        if (!drained) this.removeConnection(connection);
+      }
       return { outcome: "SENT", deliveryId, status: "DELIVERING" };
     } catch (error) {
       if (writer.getState().deliveries[deliveryId]?.status !== "DELIVERING") {
@@ -712,6 +731,29 @@ function sendJsonError(
   }
   response.writeHead(error.status, headers);
   response.end(json);
+}
+
+function waitForRendererDrain(response: ServerResponse): Promise<boolean> {
+  if (rendererConnectionClosed(response)) return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (drained: boolean): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      response.off("drain", onDrain);
+      response.off("close", onClose);
+      response.off("error", onError);
+      resolve(drained);
+    };
+    const onDrain = (): void => finish(true);
+    const onClose = (): void => finish(false);
+    const onError = (): void => finish(false);
+    const timer = setTimeout(() => finish(false), RENDERER_DRAIN_TIMEOUT_MS);
+    response.once("drain", onDrain);
+    response.once("close", onClose);
+    response.once("error", onError);
+  });
 }
 
 function rendererConnectionClosed(response: ServerResponse): boolean {
