@@ -92,6 +92,26 @@ describe("supervised one-shot process execution", () => {
     expect(result.stderrBytes).toBe(0);
   });
 
+  it("round-trips hostile argument boundaries without shell or quoting reinterpretation", async () => {
+    const runtime = runner();
+    const argumentsToRoundTrip = [
+      "",
+      "plain",
+      "contains spaces",
+      'embedded"quote',
+      "trailing\\",
+      'slashes\\\\before"quote',
+      "& | ; $(not-a-shell)",
+      '{"type":"object","properties":{"x":{"type":"string"}}}'
+    ];
+    const result = await runtime.execute(request([
+      FIXTURE,
+      "echo-args",
+      ...argumentsToRoundTrip
+    ]));
+    expect(JSON.parse(result.stdout)).toEqual(argumentsToRoundTrip);
+  });
+
   it("fails closed for missing, symlinked, accessor-backed, and malformed executable requests", async () => {
     const missing = new SupervisedProcessRunner([{
       id: "missing",
