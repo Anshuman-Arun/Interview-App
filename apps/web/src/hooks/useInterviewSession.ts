@@ -589,6 +589,20 @@ export function useInterviewSession(
   }, [attachRendererStream]);
   rendererRestartRef.current = launchRendererStream;
 
+  const stopRendererTransport = useCallback((): void => {
+    rendererLaunchEpochRef.current += 1;
+    if (abortControllerRef.current !== null) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    rendererClientRef.current = null;
+    rendererAudioPlayerRef.current?.dispose();
+    rendererAudioPlayerRef.current = null;
+    setIsSpeaking(false);
+    setIsStreaming(false);
+    setIsConnected(false);
+  }, []);
+
   const startSession = useCallback(
     async (customSessionId?: SessionId): Promise<void> => {
       setError(null);
@@ -673,7 +687,8 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.completeSession(sessionId, summary);
-        rendererAudioPlayerRef.current?.cancelAll();
+        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+        stopRendererTransport();
         setSessionStatus("COMPLETED");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to complete session";
@@ -681,7 +696,7 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, getCommandClient]
+    [getCommandClient, sessionId, stopRendererTransport, voiceIntegration.voiceControls]
   );
 
   const archiveSession = useCallback(
@@ -691,7 +706,8 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.archiveSession(sessionId, reason);
-        rendererAudioPlayerRef.current?.cancelAll();
+        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+        stopRendererTransport();
         setSessionStatus("ARCHIVED");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to archive session";
@@ -699,7 +715,7 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, getCommandClient]
+    [getCommandClient, sessionId, stopRendererTransport, voiceIntegration.voiceControls]
   );
 
   const submitTypedInput = useCallback(
@@ -833,18 +849,8 @@ export function useInterviewSession(
 
   const disconnect = useCallback((): void => {
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
-    rendererLaunchEpochRef.current += 1;
-    if (abortControllerRef.current !== null) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    rendererClientRef.current = null;
-    rendererAudioPlayerRef.current?.dispose();
-    rendererAudioPlayerRef.current = null;
-    setIsSpeaking(false);
-    setIsStreaming(false);
-    setIsConnected(false);
-  }, [voiceIntegration.voiceControls]);
+    stopRendererTransport();
+  }, [stopRendererTransport, voiceIntegration.voiceControls]);
 
   const clearError = useCallback((): void => {
     setError(null);
