@@ -17,6 +17,7 @@ import {
 } from "../packages/domain/src/index.js";
 import {
   QuantResearchAuthoritativeSnapshotEventSchema,
+  QuantTradingResultEventSchema,
   type SessionState
 } from "../packages/events/src/index.js";
 import {
@@ -1750,6 +1751,53 @@ describe("adversarial quant lifecycle invariants", () => {
       expect(() => SessionWriter.open(store, sessionId))
         .toThrow(/cannot complete with unresolved candidate input/u);
     } finally {
+      store.close();
+    }
+  });
+
+  it("rejects impossible Trading terminal-result cross-field combinations at the event schema", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const trading = new QuantTradingSessionCoordinator(writer);
+    try {
+      await trading.initializeConfigured(
+        tradingConfiguration(),
+        61_616,
+        createCommandEnvelope({ sessionId, producer: "quant-schema-test" })
+      );
+      let state = trading.getPublicState();
+      while (state.actionRequired) {
+        state = (await trading.applyAction(
+          { type: "PASS" },
+          state.currentRound,
+          createCommandEnvelope({ sessionId, producer: "quant-schema-test" })
+        )).value;
+      }
+      const result = writer.getState().quantTrading?.result;
+      if (result === undefined) throw new Error("Expected persisted Trading result");
+      expect(QuantTradingResultEventSchema.parse(result)).toEqual(result);
+
+      expect(QuantTradingResultEventSchema.safeParse({
+        ...result,
+        completionStatus: "RISK_STOPPED",
+        riskBreaches: []
+      }).success).toBe(false);
+      expect(QuantTradingResultEventSchema.safeParse({
+        ...result,
+        roundsCompleted: result.plannedRounds - 1
+      }).success).toBe(false);
+      expect(QuantTradingResultEventSchema.safeParse({
+        ...result,
+        tradeCount: result.tradeCount + 1
+      }).success).toBe(false);
+      expect(QuantTradingResultEventSchema.safeParse({
+        ...result,
+        informedFlowCount: result.roundsCompleted,
+        noiseFlowCount: result.roundsCompleted
+      }).success).toBe(false);
+    } finally {
+      await writer.close();
       store.close();
     }
   });
