@@ -195,7 +195,7 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
           this.operations.cancelTurn,
           this.operations.receiver,
           [generationId]
-        ) as unknown;
+        );
       } catch {
         rawResult = { semantics: "NONE" };
       }
@@ -239,7 +239,7 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
         this.operations.sendTurn,
         this.operations.receiver,
         [input]
-      ) as AsyncIterable<InterviewerProposal>;
+      );
       for await (const candidate of stream) {
         if (this.cancelled.has(input.generationId) || this.closed) return;
         const parsed = InterviewerProposalSchema.safeParse(candidate);
