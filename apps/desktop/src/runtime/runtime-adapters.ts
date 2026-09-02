@@ -6,7 +6,7 @@ import {
   type MoonshineRuntime,
   type SileroVadRuntime
 } from "../../../../packages/local-compute/src/index.js";
-import { ManagedModelWorkerClient } from "./managed-worker-client.js";
+import type { ManagedModelWorkerClient } from "./managed-worker-client.js";
 
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
 const MOONSHINE_RECOGNIZER_VERSION = "tiny-en-35d84fc0eb2d7451";
