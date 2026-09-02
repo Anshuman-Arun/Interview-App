@@ -17,7 +17,7 @@ export {
   type ReplayTimelineOptions
 } from "./timeline.js";
 export * from "./types.js";
-export { validateKnownReplayPrefix } from "./validation.js";
 
 export * from "./read-api.js";
+export { assertReplayPrefixValidForRecovery } from "./recovery-validation.js";
 
