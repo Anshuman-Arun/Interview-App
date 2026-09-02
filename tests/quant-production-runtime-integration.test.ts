@@ -133,6 +133,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId,
+      expectedRound: request.round,
       action: {
         type: "QUOTE",
         quote: {
@@ -149,6 +150,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId,
+      expectedRound: request.round,
       action: {
         type: "QUOTE",
         quote: {
@@ -165,6 +167,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId,
+      expectedRound: request.round,
       action: {
         type: "QUOTE",
         quote: {
@@ -181,6 +184,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId,
+      expectedRound: request.round,
       action: {
         type: "PASS",
         marketOutcome: { filled: true },
@@ -193,6 +197,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId,
+      expectedRound: request.round,
       action: {
         type: "QUOTE",
         quote: {
@@ -266,6 +271,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION" as const,
       requestId: actionRequestId,
       sessionId,
+      expectedRound: initial.currentRound,
       action: { type: "PASS" as const }
     };
     const first = QuantTradingStateResponseSchema.parse(
@@ -277,6 +283,16 @@ describe("production quant runtime integration", () => {
       await responseJson(await post(passCommand))
     );
     expect(duplicate.state).toEqual(first.state);
+    expect(store.eventCount(sessionId)).toBe(eventCountAfterFirst);
+
+    await expectProtocolError(post({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_TRADING_ACTION",
+      requestId: newRequestId(),
+      sessionId,
+      expectedRound: initial.currentRound,
+      action: { type: "PASS" }
+    }), 409, "CONFLICT");
     expect(store.eventCount(sessionId)).toBe(eventCountAfterFirst);
 
     await expectProtocolError(post({
@@ -367,6 +383,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId,
+      expectedRound: state.currentRound,
       action: { type: "PASS" }
     }), 409, "CONFLICT");
 
@@ -406,6 +423,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId: researchSession,
+      expectedRound: 1,
       action: { type: "PASS" }
     }), 409, "CONFLICT");
 
@@ -416,6 +434,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId: oxfordSession,
+      expectedRound: 1,
       action: { type: "PASS" }
     }), 409, "CONFLICT");
 
@@ -631,18 +650,18 @@ describe("Quant Trading coordinator isolation and replay determinism", () => {
       expect(left.getPublicState()).toEqual(right.getPublicState());
 
       await Promise.all([
-        left.applyAction({ type: "PASS" }, createCommandEnvelope({
+        left.applyAction({ type: "PASS" }, 1, createCommandEnvelope({
           sessionId: leftId,
           producer: "quant-runtime-test"
         })),
-        right.applyAction({ type: "PASS" }, createCommandEnvelope({
+        right.applyAction({ type: "PASS" }, 1, createCommandEnvelope({
           sessionId: rightId,
           producer: "quant-runtime-test"
         }))
       ]);
       expect(left.getPublicState()).toEqual(right.getPublicState());
 
-      await left.applyAction({ type: "PASS" }, createCommandEnvelope({
+      await left.applyAction({ type: "PASS" }, 2, createCommandEnvelope({
         sessionId: leftId,
         producer: "quant-runtime-test"
       }));
@@ -670,6 +689,7 @@ describe("Quant Trading coordinator isolation and replay determinism", () => {
       );
       await coordinator.applyAction(
         { type: "PASS" },
+        1,
         createCommandEnvelope({ sessionId, producer: "quant-runtime-test" })
       );
 
