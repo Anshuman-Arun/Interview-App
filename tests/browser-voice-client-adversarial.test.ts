@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { newDeliveryId, newSessionId } from "../packages/domain/src/index.js";
 import {
   BrowserVoiceClient,
-  BrowserVoiceStream
+  BrowserVoiceStream,
+  deriveDefaultVoiceBaseUrl
 } from "../apps/web/src/voice-client.js";
 import type { AudioFrame } from "../apps/web/src/audio/types.js";
 
@@ -20,6 +21,15 @@ function frame(sampleRate: number, sampleCount = 1): AudioFrame {
 }
 
 describe("browser voice client adversarial boundaries", () => {
+  it("derives an exact localhost voice origin without weakening loopback validation", () => {
+    expect(deriveDefaultVoiceBaseUrl("http://localhost:43123"))
+      .toBe("http://localhost:43125");
+    expect(() => new BrowserVoiceClient({
+      baseUrl: "http://example.com:43125",
+      authenticatedFetch: fetch
+    })).toThrow(/loopback origin/u);
+  });
+
   it("rejects pathological resampling sizes before issuing a transport request", async () => {
     const authenticatedFetch = vi.fn<typeof fetch>();
     const client = new BrowserVoiceClient({
