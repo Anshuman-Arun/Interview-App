@@ -789,6 +789,7 @@ describe("application whiteboard vision integration", () => {
     harness.sessions.setTurnRecoveryDelegate({
       recoverPendingTurns: async () => {
         turnRecoverySawEvidence = Object.keys(harness.writer.getState().studentEvidence).length === 1;
+        return "COMPLETE" as const;
       }
     });
     const resumedCoordinator = new WhiteboardVisionCoordinator({

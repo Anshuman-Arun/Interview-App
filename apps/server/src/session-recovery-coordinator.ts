@@ -13,8 +13,12 @@ import {
   type SessionWriter
 } from "../../../packages/interview-engine/src/index.js";
 
+export type TurnRecoveryDisposition = "COMPLETE" | "RETRYABLE" | "DEFERRED";
+
 export interface TurnRecoveryDelegate {
-  readonly recoverPendingTurns: (sessionId: SessionId) => Promise<void>;
+  readonly recoverPendingTurns: (
+    sessionId: SessionId
+  ) => Promise<TurnRecoveryDisposition>;
 }
 
 export interface VisionEvidenceRecoveryDelegate {
@@ -27,6 +31,7 @@ export interface VisionEvidenceRecoveryDelegate {
  */
 export class SessionRecoveryCoordinator {
   private readonly recoveries = new Map<SessionId, Promise<readonly DeliveryId[]>>();
+  private readonly retryableTurnRecoveries = new Set<SessionId>();
   private delegate: TurnRecoveryDelegate | undefined;
   private visionEvidenceDelegate: VisionEvidenceRecoveryDelegate | undefined;
 
@@ -48,13 +53,22 @@ export class SessionRecoveryCoordinator {
 
     const events = this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
     const state = replaySession(sessionId, events);
-    const queuedContent = new Map<DeliveryId, { readonly text: string }>();
+    const queuedContent = new Map<DeliveryId, {
+      readonly text: string;
+      readonly generationId: string;
+      readonly medium: "TEXT" | "AUDIO";
+    }>();
+    const exposedSemanticKeys = new Set<string>();
     const history: SessionHistoryEntry[] = [];
     for (const event of events) {
       if (event.type === "DELIVERY_QUEUED") {
         const content = event.payload.atom.content;
         if (content.medium === "TEXT" || content.medium === "AUDIO") {
-          queuedContent.set(event.payload.atom.deliveryId, { text: content.text });
+          queuedContent.set(event.payload.atom.deliveryId, {
+            text: content.text,
+            generationId: event.payload.atom.generationId,
+            medium: content.medium
+          });
         }
         continue;
       }
@@ -83,14 +97,18 @@ export class SessionRecoveryCoordinator {
         content !== undefined
         && (current?.status === "EXPOSED" || current?.status === "COMPLETED")
       ) {
-        history.push(SessionHistoryEntrySchema.parse({
-          role: "INTERVIEWER",
-          sequence: event.sequence,
-          occurredAt: event.wallTime,
-          deliveryId: event.payload.deliveryId,
-          text: content.text,
-          status: current.status
-        }));
+        const semanticKey = semanticDeliveryKey(content.generationId, content.text);
+        if (!exposedSemanticKeys.has(semanticKey)) {
+          exposedSemanticKeys.add(semanticKey);
+          history.push(SessionHistoryEntrySchema.parse({
+            role: "INTERVIEWER",
+            sequence: event.sequence,
+            occurredAt: event.wallTime,
+            deliveryId: event.payload.deliveryId,
+            text: content.text,
+            status: current.status
+          }));
+        }
       }
     }
     return history;
@@ -119,6 +137,17 @@ export class SessionRecoveryCoordinator {
     return this.registry.getAsync(sessionId);
   }
 
+  public retryPendingTurnRecovery(
+    sessionId: SessionId
+  ): Promise<readonly DeliveryId[]> {
+    if (!this.retryableTurnRecoveries.has(sessionId)) {
+      return this.ensureRecovered(sessionId);
+    }
+    this.retryableTurnRecoveries.delete(sessionId);
+    this.recoveries.delete(sessionId);
+    return this.ensureRecovered(sessionId);
+  }
+
   public ensureRecovered(sessionId: SessionId): Promise<readonly DeliveryId[]> {
     if (!this.hasSession(sessionId)) {
       return Promise.reject(new Error("Session not found in authoritative event stream"));
@@ -134,7 +163,16 @@ export class SessionRecoveryCoordinator {
         await this.visionEvidenceDelegate.recoverPendingVisionEvidence(sessionId);
       }
       if (this.delegate !== undefined) {
-        await this.delegate.recoverPendingTurns(sessionId);
+        const disposition = await this.delegate.recoverPendingTurns(sessionId);
+        if (disposition === "DEFERRED") {
+          this.retryableTurnRecoveries.delete(sessionId);
+          throw new Error("Turn recovery was deferred during provider shutdown");
+        }
+        if (disposition === "RETRYABLE") {
+          this.retryableTurnRecoveries.add(sessionId);
+        } else {
+          this.retryableTurnRecoveries.delete(sessionId);
+        }
       }
       return deliveryIds;
     })();
@@ -147,4 +185,8 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function semanticDeliveryKey(generationId: string, text: string): string {
+  return `${generationId}\u0000${text}`;
 }
