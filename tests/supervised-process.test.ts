@@ -260,6 +260,21 @@ describe("supervised one-shot process execution", () => {
     }))).rejects.toMatchObject({ code: "EXECUTABLE_UNSAFE" });
   });
 
+  it("does not start a process for an already-cancelled request", async () => {
+    const runtime = runner();
+    const controller = new AbortController();
+    controller.abort();
+    let started = false;
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      signal: controller.signal,
+      onProcessStart: () => {
+        started = true;
+      }
+    }))).rejects.toMatchObject({ code: "EXECUTION_CANCELLED" });
+    expect(started).toBe(false);
+  });
+
   it("kills hung executions on timeout and explicit cancellation", async () => {
     const runtime = runner();
 
