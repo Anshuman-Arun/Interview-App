@@ -242,8 +242,10 @@ export class SupervisedProcessRunner {
     const forwardAbort = (): void => {
       controller.abort(new SupervisedProcessError("EXECUTION_CANCELLED"));
     };
-    if (externalSignal !== undefined && abortSignalAborted(externalSignal)) forwardAbort();
-    else addAbortSignalListener(externalSignal, forwardAbort);
+    if (externalSignal !== undefined) {
+      if (abortSignalAborted(externalSignal)) forwardAbort();
+      else addAbortSignalListener(externalSignal, forwardAbort);
+    }
 
     const trackedRequest = Object.freeze({
       ...request,
@@ -254,13 +256,12 @@ export class SupervisedProcessRunner {
     this.activeOperations.add(operation);
 
     let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    let interruptionError =
+      new SupervisedProcessError("EXECUTION_CANCELLED");
     let removeInterruptListener = (): void => undefined;
     const interrupted = new Promise<never>((_resolve, reject) => {
       const onInterrupt = (): void => {
-        const reason: unknown = controller.signal.reason;
-        reject(reason instanceof SupervisedProcessError
-          ? reason
-          : new SupervisedProcessError("EXECUTION_CANCELLED"));
+        reject(interruptionError);
       };
       removeInterruptListener = () => {
         removeAbortSignalListener(controller.signal, onInterrupt);
@@ -269,7 +270,8 @@ export class SupervisedProcessRunner {
       else addAbortSignalListener(controller.signal, onInterrupt);
     });
     deadlineTimer = setTimeout(() => {
-      controller.abort(new SupervisedProcessError("EXECUTION_TIMEOUT"));
+      interruptionError = new SupervisedProcessError("EXECUTION_TIMEOUT");
+      controller.abort(interruptionError);
     }, request.timeoutMs);
     const publicOperation = Promise.race([operation, interrupted]);
 
