@@ -641,12 +641,12 @@ describe("desktop secure bootstrap", () => {
     expect(DESKTOP_ZOOM_CHANNEL).toBe("interview-desktop:set-zoom");
     expect(DESKTOP_ZOOM_CHANGED_CHANNEL).toBe("interview-desktop:zoom-changed");
     expect(DESKTOP_MIN_ZOOM_FACTOR).toBe(0.25);
-    expect(DESKTOP_MAX_ZOOM_FACTOR).toBe(3);
-    for (const factor of [0.25, 0.5, 1, 1.13, 2, 3]) {
+    expect(DESKTOP_MAX_ZOOM_FACTOR).toBe(5);
+    for (const factor of [0.25, 0.5, 1, 1.13, 2, 3, 5]) {
       expect(isDesktopZoomFactor(factor)).toBe(true);
     }
     expect(isDesktopZoomFactor(0.249)).toBe(false);
-    expect(isDesktopZoomFactor(3.001)).toBe(false);
+    expect(isDesktopZoomFactor(5.001)).toBe(false);
     expect(isDesktopZoomFactor(Number.NaN)).toBe(false);
     expect(isDesktopZoomFactor(Number.POSITIVE_INFINITY)).toBe(false);
     expect(isDesktopZoomFactor("1")).toBe(false);
@@ -662,7 +662,7 @@ describe("desktop secure bootstrap", () => {
     expect(preload).toContain("setZoomFactor");
     expect(preload).toContain("onZoomFactorChanged");
     expect(preload).toContain("const MIN_ZOOM_FACTOR = 0.25");
-    expect(preload).toContain("const MAX_ZOOM_FACTOR = 3");
+    expect(preload).toContain("const MAX_ZOOM_FACTOR = 5");
     expect(preload).toContain("Number.isFinite(value)");
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
