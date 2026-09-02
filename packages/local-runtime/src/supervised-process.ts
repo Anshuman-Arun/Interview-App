@@ -11,13 +11,14 @@ import {
   snapshotParentEnvironmentRecord
 } from "./environment.js";
 import type { LocalEnvironmentDefinition } from "./types.js";
-import { WINDOWS_JOB_SUPERVISOR_ENCODED_COMMAND } from "./windows-job-supervisor.js";
+import { WINDOWS_JOB_SUPERVISOR_SCRIPT } from "./windows-job-supervisor.js";
 
 const MAX_EXECUTABLES = 32;
 const MAX_ARGUMENTS = 64;
 const MAX_ARGUMENT_BYTES = 128 * 1024;
 const MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS = 24_000;
-const MAX_WINDOWS_SUPERVISOR_COMMAND_LINE_CHARACTERS = 31_500;
+const MAX_WINDOWS_SUPERVISOR_COMMAND_LINE_CHARACTERS = 4_096;
+const MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS = 30_000;
 const MAX_STDIN_BYTES = 256 * 1024;
 const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_STDERR_BYTES = 512 * 1024;
@@ -594,8 +595,8 @@ export class SupervisedProcessRunner {
       "-NoLogo",
       "-NoProfile",
       "-NonInteractive",
-      "-EncodedCommand",
-      WINDOWS_JOB_SUPERVISOR_ENCODED_COMMAND
+      "-Command",
+      "& ([ScriptBlock]::Create($env:INTERVIEW_SUPERVISED_BOOTSTRAP))"
     ]);
     const commandCharacters =
       powershell.length + 1 + args.reduce(
@@ -611,6 +612,14 @@ export class SupervisedProcessRunner {
       if (typeof value === "string") supervisorEnvironment[key] = value;
     }
     supervisorEnvironment.INTERVIEW_SUPERVISED_CONFIG = configPath;
+    supervisorEnvironment.INTERVIEW_SUPERVISED_BOOTSTRAP =
+      WINDOWS_JOB_SUPERVISOR_SCRIPT;
+    if (
+      windowsEnvironmentBlockCharacters(supervisorEnvironment)
+      > MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS
+    ) {
+      throw new SupervisedProcessError("INVALID_REQUEST");
+    }
 
     return Object.freeze({
       executable: powershell,
@@ -1067,6 +1076,20 @@ function windowsCommandLineWithinBudget(
     if (upperBound > MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS) return false;
   }
   return upperBound <= MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS;
+}
+
+function windowsEnvironmentBlockCharacters(
+  environment: NodeJS.ProcessEnv
+): number {
+  let characters = 1;
+  for (const [key, value] of Object.entries(environment)) {
+    if (typeof value !== "string") continue;
+    characters += key.length + 1 + value.length + 1;
+    if (characters > MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS) {
+      return characters;
+    }
+  }
+  return characters;
 }
 
 function windowsPowerShellExecutablePath(
