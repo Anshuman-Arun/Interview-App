@@ -10,7 +10,9 @@ export function ProductFrame({
   kicker,
   onNavigate,
   children,
-  aside
+  aside,
+  notice,
+  onDismissNotice
 }: {
   readonly activePage: ProductPageId | null;
   readonly title: string;
@@ -18,6 +20,8 @@ export function ProductFrame({
   readonly onNavigate: (page: ProductPageId) => void;
   readonly children: ReactNode;
   readonly aside?: ReactNode;
+  readonly notice?: string | null;
+  readonly onDismissNotice?: (() => void) | undefined;
 }) {
   const items: readonly { id: ProductPageId; label: string; index: string }[] = [
     { id: "home", label: "Home", index: "01" },
@@ -72,6 +76,21 @@ export function ProductFrame({
           </div>
           {aside}
         </header>
+        {notice !== undefined && notice !== null && (
+          <div className="product-frame__notice" role="status">
+            <span>NOTICE</span>
+            <p>{notice}</p>
+            {onDismissNotice !== undefined && (
+              <button
+                type="button"
+                onClick={onDismissNotice}
+                aria-label="Dismiss notice"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
         <main className="product-frame__content">{children}</main>
       </div>
     </div>

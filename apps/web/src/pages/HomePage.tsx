@@ -58,6 +58,7 @@ export function HomePage({
                 type="button"
                 className="expressive-home__primary"
                 onClick={onStartInterview}
+                data-testid="start-session-btn"
               >
                 Enter interview
                 <span aria-hidden="true">↗</span>

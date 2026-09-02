@@ -180,3 +180,36 @@
     padding: 0 14px 24px;
   }
 }
+
+.product-frame__notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 32%, var(--border-subtle));
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.product-frame__notice > span {
+  font: 700 6.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.product-frame__notice p {
+  margin: 0;
+  font: 520 8.5px/1.35 var(--font-ui);
+}
+
+.product-frame__notice button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: 500 13px/1 var(--font-ui);
+}

@@ -22,6 +22,8 @@ export function ProductPageRouter({
   onReview,
   onRefreshSessions,
   connection,
+  notice,
+  onDismissNotice,
   renderReview
 }: {
   readonly route: Exclude<ProductRoute, { readonly page: "interview" }>;
@@ -40,6 +42,8 @@ export function ProductPageRouter({
     readonly locked: boolean;
     readonly onSaveBaseUrl: (baseUrl: string) => void;
   };
+  readonly notice?: string | null;
+  readonly onDismissNotice?: (() => void) | undefined;
   readonly renderReview: (
     sessionId: SessionId,
     view: ReviewView
@@ -117,6 +121,8 @@ export function ProductPageRouter({
       title={title}
       kicker={kicker}
       onNavigate={onNavigatePage}
+      notice={notice}
+      onDismissNotice={onDismissNotice}
     >
       {content}
     </ProductFrame>
