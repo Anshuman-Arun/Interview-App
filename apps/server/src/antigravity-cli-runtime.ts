@@ -74,21 +74,29 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     });
   }
 
-  const runner = new SupervisedProcessRunner([{
-    id: ANTIGRAVITY_EXECUTABLE_ID,
-    executable: defaultAntigravityCliExecutablePath("win32"),
-    environment: antigravityEnvironment(),
-    isolatedWorkingDirectory: true,
-    isolatedHomeFiles: {
-      ".gemini/antigravity-cli/settings.json": ANTIGRAVITY_SUPERVISED_SETTINGS_JSON,
-      ".gemini/config/agents/interview-realizer/agent.md":
-        ANTIGRAVITY_REALIZER_AGENT_MARKDOWN
-    }
-  }]);
+  let runner: SupervisedProcessRunner | undefined;
+
+  const getRunner = (): SupervisedProcessRunner => {
+    if (runner !== undefined) return runner;
+    const created = new SupervisedProcessRunner([{
+      id: ANTIGRAVITY_EXECUTABLE_ID,
+      executable: defaultAntigravityCliExecutablePath("win32"),
+      environment: antigravityEnvironment(),
+      isolatedWorkingDirectory: true,
+      isolatedHomeFiles: {
+        ".gemini/antigravity-cli/settings.json":
+          ANTIGRAVITY_SUPERVISED_SETTINGS_JSON,
+        ".gemini/config/agents/interview-realizer/agent.md":
+          ANTIGRAVITY_REALIZER_AGENT_MARKDOWN
+      }
+    }]);
+    runner = created;
+    return created;
+  };
 
   const executor: SupervisedCliExecutor = Object.freeze({
     execute: async (request: SupervisedCliExecutionRequest) => {
-      return await runner.execute({
+      return await getRunner().execute({
         executableId: ANTIGRAVITY_EXECUTABLE_ID,
         args: request.args,
         stdin: request.stdin,
@@ -108,12 +116,15 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
         selection.providerId === ANTIGRAVITY_CLI_PROVIDER_ID
         && selection.modelId === ANTIGRAVITY_CLI_MODEL_ID
       ) {
+        // Acquire only for the selected provider. Construction failures are
+        // allowed to be retried later and must not affect unrelated providers.
+        getRunner();
         return runtime;
       }
       return undefined;
     },
     async drain(): Promise<void> {
-      await runner.drain();
+      if (runner !== undefined) await runner.drain();
     }
   });
 }
