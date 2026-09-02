@@ -534,6 +534,19 @@ describe("production quant runtime integration", () => {
     expect(completed.status).toBe("COMPLETE");
     expect(completed.acceptedActionCount).toBe(2);
 
+    await expectProtocolError(post({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_RESEARCH_ACTION",
+      requestId: newRequestId(),
+      sessionId: researchSession,
+      expectedActionCount: completed.acceptedActionCount,
+      action: {
+        actionId: "model-choice-after-completion",
+        kind: "CHOOSE_OPTION",
+        option: "LINEAR"
+      }
+    }), 409, "CONFLICT");
+
     const tradingStillInitial = QuantTradingStateResponseSchema.parse(
       await responseJson(await getQuantState(tradingSession))
     ).state;
