@@ -249,7 +249,11 @@ function snapshotGeminiFactoryRuntime(value: unknown): GeminiProviderFactoryRunt
   try {
     descriptors = Object.getOwnPropertyDescriptors(value);
     symbols = Object.getOwnPropertySymbols(value);
-    prototype = Object.getPrototypeOf(value);
+    const prototypeCandidate: unknown = Object.getPrototypeOf(value);
+    if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+      return invalidGeminiRuntime();
+    }
+    prototype = prototypeCandidate;
   } catch {
     return invalidGeminiRuntime();
   }
