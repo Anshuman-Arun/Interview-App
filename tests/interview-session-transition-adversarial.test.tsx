@@ -222,7 +222,7 @@ describe("interview session transition authority", () => {
     rendered.container.remove();
   });
 
-  it("ignores a stale whiteboard synchronization that finishes after session replacement", async () => {
+  it("refuses session replacement while initial whiteboard synchronization is pending", async () => {
     const firstSession = newSessionId();
     const secondSession = newSessionId();
     let releaseFirstBoardState: (() => void) | undefined;
@@ -230,6 +230,7 @@ describe("interview session transition authority", () => {
     const firstBoardStateSeen = new Promise<void>((resolve) => {
       markFirstBoardStateSeen = resolve;
     });
+    let startCalls = 0;
 
     const fetchImpl: typeof fetch = async (input, init = {}) => {
       const url = typeof input === "string"
@@ -264,6 +265,7 @@ describe("interview session transition authority", () => {
       if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
 
       if (command.type === "START_SESSION") {
+        startCalls += 1;
         return jsonResponse({
           protocolVersion: 1,
           requestId: command.requestId,
@@ -282,34 +284,20 @@ describe("interview session transition authority", () => {
           }
         }, 500);
       }
-      if (command.type === "GET_BOARD_STATE") {
-        if (command.sessionId === firstSession) {
-          markFirstBoardStateSeen?.();
-          return new Promise<Response>((resolve) => {
-            releaseFirstBoardState = () => resolve(jsonResponse({
-              protocolVersion: 1,
-              requestId: command.requestId,
-              ok: true,
-              type: "BOARD_STATE",
-              sessionId: firstSession,
-              boardRevision: 1,
-              shapeAuthorityKnown: true,
-              shapeRevisions: []
-            }));
-          });
-        }
-        if (command.sessionId === secondSession) {
-          return jsonResponse({
+      if (command.type === "GET_BOARD_STATE" && command.sessionId === firstSession) {
+        markFirstBoardStateSeen?.();
+        return new Promise<Response>((resolve) => {
+          releaseFirstBoardState = () => resolve(jsonResponse({
             protocolVersion: 1,
             requestId: command.requestId,
             ok: true,
             type: "BOARD_STATE",
-            sessionId: secondSession,
-            boardRevision: 2,
+            sessionId: firstSession,
+            boardRevision: 1,
             shapeAuthorityKnown: true,
             shapeRevisions: []
-          });
-        }
+          }));
+        });
       }
       throw new Error(`Unexpected command type: ${String(command.type)}`);
     };
@@ -323,14 +311,11 @@ describe("interview session transition authority", () => {
       await firstBoardStateSeen;
     });
 
-    await act(async () => {
-      await rendered.current().startSession(secondSession);
-    });
-    expect(rendered.current().sessionId).toBe(secondSession);
-    expect(rendered.current().whiteboardSync).toMatchObject({
-      status: "SYNCED",
-      authoritativeRevision: 2
-    });
+    await expect(rendered.current().startSession(secondSession))
+      .rejects.toThrow("Cannot start a new session while an active session is attached or awaiting recovery");
+    expect(startCalls).toBe(1);
+    expect(rendered.current().sessionId).toBe(firstSession);
+    expect(rendered.current().whiteboardSync.status).toBe("PENDING");
 
     if (releaseFirstBoardState === undefined) {
       throw new Error("First board-state request was not deferred");
@@ -340,10 +325,10 @@ describe("interview session transition authority", () => {
       await firstStart;
     });
 
-    expect(rendered.current().sessionId).toBe(secondSession);
+    expect(rendered.current().sessionId).toBe(firstSession);
     expect(rendered.current().whiteboardSync).toMatchObject({
       status: "SYNCED",
-      authoritativeRevision: 2
+      authoritativeRevision: 1
     });
 
     act(() => rendered.current().disconnect());
