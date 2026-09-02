@@ -99,7 +99,7 @@ function handshakeMetadata(status: LocalComponentStatus): {
   readonly port: number;
 } {
   const metadata = status.handshake?.metadata;
-  if (metadata === undefined || metadata === null || typeof metadata !== "object") {
+  if (metadata === undefined) {
     throw new Error("Managed local model worker did not report bounded metadata");
   }
   const workerType = status.handshake?.workerType;
