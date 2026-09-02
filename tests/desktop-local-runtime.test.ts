@@ -293,6 +293,58 @@ describe("desktop local model runtime", () => {
     })).rejects.toThrow("rejected");
   });
 
+  it("drops a cancelled Moonshine request while it is queued behind native inference", async () => {
+    const token = "7".repeat(64);
+    const runtime = fixtureManager(
+      "speech-stt-queue-fixture",
+      "speech",
+      "fixture-speech-1",
+      token,
+      "delayed-stt"
+    );
+    await runtime.start("speech-stt-queue-fixture");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-stt-queue-fixture",
+      "speech",
+      token
+    );
+    const adapter = new ManagedMoonshineRuntime(client, "/verified/moonshine");
+    const firstRequestId = SpeechRequestIdSchema.parse("stt-queued-first");
+    const secondRequestId = SpeechRequestIdSchema.parse("stt-queued-second");
+    const pcmBytes = new Uint8Array(new Float32Array([0, 0.1, 0]).buffer);
+
+    const first = adapter.transcribe({
+      requestId: firstRequestId,
+      utteranceId: SpeechUtteranceIdSchema.parse("utterance-first"),
+      pcmBytes,
+      sampleRate: 16_000,
+      modelPath: "/verified/moonshine"
+    });
+    await waitForStatus(runtime, "speech-stt-queue-fixture", (status) =>
+      status.stdout.lines.includes(`STT_STARTED:${firstRequestId}`)
+    );
+
+    const controller = new AbortController();
+    const second = adapter.transcribe({
+      requestId: secondRequestId,
+      utteranceId: SpeechUtteranceIdSchema.parse("utterance-second"),
+      pcmBytes,
+      sampleRate: 16_000,
+      modelPath: "/verified/moonshine",
+      signal: controller.signal
+    });
+    controller.abort();
+
+    await expect(first).resolves.toEqual({
+      text: "fixture transcript",
+      confidence: 0.9
+    });
+    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    expect(runtime.getStatus("speech-stt-queue-fixture").stdout.lines)
+      .not.toContain(`STT_STARTED:${secondRequestId}`);
+  });
+
   it("adapts supervised Kokoro PCM without permitting semantic regeneration", async () => {
     const token = "c".repeat(64);
     const runtime = fixtureManager("tts-fixture", "tts", "fixture-tts-1", token);
