@@ -13,6 +13,7 @@ import {
   type UtteranceId
 } from "../../../packages/domain/src/index.js";
 import {
+  MAX_SPEECH_BUFFERED_PCM_BYTES,
   MAX_SPEECH_CONCURRENT_STREAMS,
   SourceAudioBasisSchema,
   SpeechPcmFrameEnvelopeSchema,
@@ -495,6 +496,15 @@ export class VoiceSynthesisCoordinator {
   }
 }
 
+interface AdmittedPcmLedgerFrame {
+  readonly sequence: number;
+  readonly timestampMs: number;
+  readonly sampleRate: SpeechSampleRate;
+  readonly channels: 1;
+  readonly frameSamples: number;
+  readonly bytes: Uint8Array;
+}
+
 interface VoiceStreamContext {
   readonly sessionId: SessionId;
   readonly streamId: SpeechStreamId;
@@ -506,6 +516,8 @@ interface VoiceStreamContext {
   authoritativeUtteranceId: UtteranceId | undefined;
   workerUtteranceId: UtteranceId | undefined;
   finalizedBasis: SourceAudioBasis | undefined;
+  pcmLedger: AdmittedPcmLedgerFrame[];
+  pcmLedgerBytes: number;
   idleTimer: ReturnType<typeof setTimeout> | undefined;
 }
 
@@ -576,6 +588,8 @@ export class VoiceInputCoordinator {
       authoritativeUtteranceId: undefined,
       workerUtteranceId: undefined,
       finalizedBasis: undefined,
+      pcmLedger: [],
+      pcmLedgerBytes: 0,
       idleTimer: undefined
     };
     this.streams.set(streamId, context);
@@ -607,6 +621,7 @@ export class VoiceInputCoordinator {
     try {
       const events = await this.speechWorker.submitFrame(envelope, payload);
       if (!this.isCurrent(context, token)) return { events: [], terminal: true };
+      this.recordAdmittedPcmFrame(context, envelope, payload);
       context.expectedSequence += 1;
       return await this.applyEvents(context, token, events);
     } finally {
@@ -794,7 +809,10 @@ export class VoiceInputCoordinator {
         ) {
           throw new Error("Finalized speech audio basis escaped its admitted stream frontier");
         }
+        this.validateFinalizedAudioBasis(context, basis);
         context.finalizedBasis = basis;
+        context.pcmLedger = [];
+        context.pcmLedgerBytes = 0;
         continue;
       }
 
@@ -871,6 +889,95 @@ export class VoiceInputCoordinator {
       terminal,
       ...(commit === undefined ? {} : { commit })
     };
+  }
+
+  private recordAdmittedPcmFrame(
+    context: VoiceStreamContext,
+    envelope: SpeechPcmFrameEnvelope,
+    payload: Uint8Array
+  ): void {
+    if (
+      !(payload instanceof Uint8Array)
+      || payload.byteLength !== envelope.frameSamples * Float32Array.BYTES_PER_ELEMENT
+      || payload.byteLength > MAX_SPEECH_BUFFERED_PCM_BYTES
+    ) {
+      throw new Error("Admitted PCM frame cannot be represented in the bounded application ledger");
+    }
+    const bytes = Uint8Array.prototype.slice.call(payload) as Uint8Array;
+    context.pcmLedger.push({
+      sequence: envelope.sequence,
+      timestampMs: envelope.timestampMs,
+      sampleRate: envelope.sampleRate,
+      channels: 1,
+      frameSamples: envelope.frameSamples,
+      bytes
+    });
+    context.pcmLedgerBytes += bytes.byteLength;
+
+    while (
+      context.pcmLedgerBytes > MAX_SPEECH_BUFFERED_PCM_BYTES
+      && context.pcmLedger.length > 0
+    ) {
+      const removed = context.pcmLedger.shift();
+      if (removed !== undefined) {
+        context.pcmLedgerBytes -= removed.bytes.byteLength;
+      }
+    }
+    if (
+      context.pcmLedgerBytes < 0
+      || context.pcmLedgerBytes > MAX_SPEECH_BUFFERED_PCM_BYTES
+    ) {
+      throw new Error("Application PCM ledger exceeded its hard bound");
+    }
+  }
+
+  private validateFinalizedAudioBasis(
+    context: VoiceStreamContext,
+    basis: SourceAudioBasis
+  ): void {
+    const frames = context.pcmLedger.filter((frame) =>
+      frame.sequence >= basis.firstSequence
+      && frame.sequence <= basis.lastSequence
+    );
+    const expectedFrameCount = basis.lastSequence - basis.firstSequence + 1;
+    if (frames.length !== expectedFrameCount || frames.length === 0) {
+      throw new Error("Finalized speech audio basis references PCM outside the admitted bounded ledger");
+    }
+
+    const hash = createHash("sha256");
+    let sampleCount = 0;
+    let expectedSequence = basis.firstSequence;
+    for (const frame of frames) {
+      if (
+        frame.sequence !== expectedSequence
+        || frame.sampleRate !== basis.sampleRate
+        || frame.channels !== basis.channels
+      ) {
+        throw new Error("Finalized speech audio basis does not match admitted PCM frame metadata");
+      }
+      expectedSequence += 1;
+      sampleCount += frame.frameSamples;
+      if (!Number.isSafeInteger(sampleCount)) {
+        throw new Error("Finalized speech audio basis sample count overflowed its bound");
+      }
+      hash.update(frame.bytes);
+    }
+
+    const first = frames[0];
+    const last = frames.at(-1);
+    if (first === undefined || last === undefined) {
+      throw new Error("Finalized speech audio basis is empty");
+    }
+    const expectedEndTimestampMs =
+      last.timestampMs + last.frameSamples / last.sampleRate * 1_000;
+    if (
+      sampleCount !== basis.sampleCount
+      || first.timestampMs !== basis.startTimestampMs
+      || Math.abs(expectedEndTimestampMs - basis.endTimestampMs) > 0.001
+      || hash.digest("hex") !== basis.pcmSha256
+    ) {
+      throw new Error("Finalized speech audio basis does not match the exact admitted PCM bytes");
+    }
   }
 
   private requireActiveStream(sessionId: SessionId, streamId: SpeechStreamId): VoiceStreamContext {
