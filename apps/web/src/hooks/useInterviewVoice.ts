@@ -105,6 +105,8 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
   const mountedRef = useRef(true);
   const microphoneEnabledRef = useRef(false);
   const selectedInputRef = useRef<string | undefined>(undefined);
+  const inputDeviceSwitchEpochRef = useRef(0);
+  const inputDeviceSwitchPendingRef = useRef(false);
   const optionsRef = useRef(options);
   const observedSessionIdRef = useRef<SessionId | null>(options.sessionId);
   optionsRef.current = options;
@@ -132,7 +134,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     await cancelStreamBounded(stream);
   }, []);
 
-  const disableMicrophone = useCallback(async (): Promise<void> => {
+  const stopMicrophone = useCallback(async (): Promise<void> => {
     const nextEpoch = epochRef.current + 1;
     epochRef.current = nextEpoch;
     microphoneEnabledRef.current = false;
@@ -150,6 +152,15 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
       cancelCurrentStream()
     ]);
   }, [cancelCurrentStream]);
+
+  const disableMicrophone = useCallback(async (): Promise<void> => {
+    // Explicit/session-driven disable owns the lifecycle over any pending
+    // input-device switch and must prevent that switch from resurrecting the
+    // microphone after teardown completes.
+    inputDeviceSwitchEpochRef.current += 1;
+    inputDeviceSwitchPendingRef.current = false;
+    await stopMicrophone();
+  }, [stopMicrophone]);
 
   const failVoiceCycle = useCallback((reason: string, permissionState?: VoicePermissionState): void => {
     safelySetError(reason);
@@ -363,7 +374,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
   }, [enqueueFrame, failVoiceCycle, safelySetError]);
 
   const enableMicrophone = useCallback(async (): Promise<void> => {
-    if (microphoneEnabledRef.current) return;
+    if (microphoneEnabledRef.current || inputDeviceSwitchPendingRef.current) return;
     await startCapture(selectedInputRef.current);
   }, [startCapture]);
 
@@ -371,10 +382,35 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     const normalized = normalizeDeviceId(deviceId);
     selectedInputRef.current = normalized;
     if (mountedRef.current) setInputDeviceId(normalized);
-    if (!microphoneEnabledRef.current) return;
-    await disableMicrophone();
-    await startCapture(normalized);
-  }, [disableMicrophone, startCapture]);
+
+    const shouldRestart =
+      microphoneEnabledRef.current || inputDeviceSwitchPendingRef.current;
+    if (!shouldRestart) return;
+
+    inputDeviceSwitchPendingRef.current = true;
+    const switchEpoch = inputDeviceSwitchEpochRef.current + 1;
+    inputDeviceSwitchEpochRef.current = switchEpoch;
+
+    // Use the internal stop primitive here: the public disable operation
+    // intentionally invalidates all pending switches.
+    await stopMicrophone();
+
+    if (
+      inputDeviceSwitchEpochRef.current !== switchEpoch
+      || selectedInputRef.current !== normalized
+      || !mountedRef.current
+      || !optionsRef.current.sessionActive
+      || optionsRef.current.sessionId === null
+    ) return;
+
+    try {
+      await startCapture(normalized);
+    } finally {
+      if (inputDeviceSwitchEpochRef.current === switchEpoch) {
+        inputDeviceSwitchPendingRef.current = false;
+      }
+    }
+  }, [startCapture, stopMicrophone]);
 
   const selectOutputDevice = useCallback((deviceId: string | undefined): void => {
     const normalized = normalizeDeviceId(deviceId);
@@ -452,6 +488,8 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
 
   useEffect(() => () => {
     mountedRef.current = false;
+    inputDeviceSwitchEpochRef.current += 1;
+    inputDeviceSwitchPendingRef.current = false;
     epochRef.current += 1;
     microphoneEnabledRef.current = false;
     frameQueueRef.current.length = 0;
