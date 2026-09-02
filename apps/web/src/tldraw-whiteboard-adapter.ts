@@ -271,6 +271,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     if (editor !== null) {
       this.detachedPageShapes = editor
         .getCurrentPageShapes()
+        .filter((shape) => !isTransientIncompleteStudentStroke(shape))
         .map((shape) => globalThis.structuredClone(shape));
     }
     this.editor = null;
@@ -982,6 +983,14 @@ function annotationCreatedAtMs(shape: TLShapeRecord | undefined): number {
   if (typeof raw !== "string") return Number.NEGATIVE_INFINITY;
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+function isTransientIncompleteStudentStroke(shape: TLShapeRecord): boolean {
+  const layer = shape.meta?.["layer"];
+  const studentOwned = layer === "STUDENT" || layer === undefined;
+  return studentOwned
+    && (shape.type === "draw" || shape.type === "highlight")
+    && shape.props?.["isComplete"] === false;
 }
 
 function readShapeRevision(value: unknown, shapeId: string): number {
