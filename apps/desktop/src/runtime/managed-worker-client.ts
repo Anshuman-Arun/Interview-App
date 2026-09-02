@@ -8,6 +8,13 @@ const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
 const MAX_JSON_RESPONSE_CHUNKS = 1_024;
 const MAX_CONSECUTIVE_UNCERTAIN_RECYCLES = 2;
 
+export class ManagedWorkerTransportError extends Error {
+  public constructor(cause: unknown) {
+    super("Managed local model worker transport failed before a trusted response", { cause });
+    this.name = "ManagedWorkerTransportError";
+  }
+}
+
 export class ManagedWorkerRequestTimeoutError extends Error {
   public constructor() {
     super("Managed local model worker request exceeded its runtime deadline");
@@ -95,24 +102,39 @@ export class ManagedModelWorkerClient {
       controller.abort(timeoutReason);
     }, timeoutMs);
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        redirect: "error",
-        cache: "no-store",
-        headers: {
-          "authorization": `Bearer ${this.token}`,
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal
-      });
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          redirect: "error",
+          cache: "no-store",
+          headers: {
+            "authorization": `Bearer ${this.token}`,
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        throw new ManagedWorkerTransportError(error);
+      }
       if (response.redirected || (response.status >= 300 && response.status < 400)) {
         throw new Error("Managed local model worker attempted an HTTP redirect");
       }
-      const bytes = await readBoundedBody(
-        response,
-        options.maxResponseBytes ?? MAX_JSON_RESPONSE_BYTES
-      );
+      let bytes: Uint8Array;
+      try {
+        bytes = await readBoundedBody(
+          response,
+          options.maxResponseBytes ?? MAX_JSON_RESPONSE_BYTES
+        );
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        if (error instanceof TypeError) {
+          throw new ManagedWorkerTransportError(error);
+        }
+        throw error;
+      }
       let parsed: unknown;
       try {
         parsed = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
