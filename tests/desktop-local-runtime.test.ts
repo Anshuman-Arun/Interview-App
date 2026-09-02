@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   SpeechRequestIdSchema,
-  SpeechUtteranceIdSchema
+  SpeechUtteranceIdSchema,
+  TtsRequestIdSchema
 } from "../packages/local-compute/src/index.js";
 import {
   LocalRuntimeManager,
@@ -142,7 +143,9 @@ describe("desktop local model runtime", () => {
       configPath: "/verified/config.json"
     });
 
+    const requestId = TtsRequestIdSchema.parse("tts-request-1");
     const result = await session.synthesize({
+      requestId,
       text: "Exact admitted text.",
       voice: "kokoro_af_heart",
       language: "en-US",
@@ -155,6 +158,7 @@ describe("desktop local model runtime", () => {
     expect(result.samples[1]).toBeCloseTo(0.05, 6);
     expect(result.samples[2]).toBeCloseTo(-0.05, 6);
     expect(result.samples[3]).toBe(0);
+    await expect(session.cancel?.(requestId)).resolves.toBeUndefined();
   });
 
   it("recovers through LocalRuntimeManager after a worker dies during inference", async () => {
