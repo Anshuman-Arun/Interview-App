@@ -170,6 +170,64 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
+  it("accepts an observation about a subset of shapes while preserving the complete request dependency basis", async () => {
+    const harness = await startedBoardSession();
+    await harness.turns.commitBoardMutation({
+      baseBoardRevision: BoardRevisionSchema.parse(1),
+      added: [{
+        id: "shape:graph-label",
+        type: "text",
+        bounds: { x: 110, y: 0, width: 30, height: 30 },
+        text: "K6",
+        revision: 1,
+        createdAt: 1,
+        lastModifiedAt: 1
+      }],
+      updated: [],
+      deleted: []
+    });
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "The main graph shape encodes the relationship model.",
+      confidence: 0.94,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend
+    });
+
+    try {
+      const request = upload(harness.sessionId, {
+        sourceBoardRevision: BoardRevisionSchema.parse(2),
+        region: {
+          regionId: "region-graph",
+          bounds: { x: -10, y: -10, width: 170, height: 140 },
+          relevantShapeIds: ["shape:graph-label", "shape:graph-model"]
+        },
+        relevantShapeRevisions: [
+          { shapeId: "shape:graph-label", expectedRevision: 1 },
+          { shapeId: "shape:graph-model", expectedRevision: 1 }
+        ]
+      });
+      const result = await coordinator.process(request);
+      expect(result.status).toBe("ACCEPTED");
+
+      const accepted = harness.writer.getState()
+        .visionRequests[request.requestId]?.acceptedObservation;
+      expect(accepted?.sourceRelevantShapeIds).toEqual([
+        "shape:graph-label",
+        "shape:graph-model"
+      ]);
+      expect(accepted?.observation.relevantShapeIds).toEqual([
+        "shape:graph-model"
+      ]);
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
   it("accepts a low-confidence observation without promoting it to authoritative evidence", async () => {
     const harness = await startedBoardSession();
     const backend = new DeterministicFakeVisionBackend([{
