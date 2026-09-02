@@ -39,6 +39,10 @@ const POLICY_KEYS = new Set([
   "maximumDataUse",
   "billingVerificationMaxAgeMs"
 ]);
+const MAX_ADAPTER_VERSION_CHARACTERS = 256;
+const MAX_ENFORCEMENT_MECHANISM_CHARACTERS = 2_048;
+const MAX_VERIFIED_AT_CHARACTERS = 64;
+
 const BILLING_VERIFICATION_KEYS = new Set([
   "billingClass",
   "enforcementMechanism",
@@ -209,11 +213,28 @@ function readProviderDataUse(capabilities: unknown): DataUsePolicy {
 
 function snapshotBillingVerification(value: unknown): unknown {
   if (value === undefined) return undefined;
-  return snapshotExactDataRecord(
+  const snapshot = snapshotExactDataRecord(
     value,
     BILLING_VERIFICATION_KEYS,
     "INVALID_BILLING_VERIFICATION"
   );
+  const enforcementMechanism = snapshot.enforcementMechanism;
+  const verifiedAt = snapshot.verifiedAt;
+  const adapterVersion = snapshot.adapterVersion;
+  if (
+    typeof enforcementMechanism !== "string"
+    || enforcementMechanism.length > MAX_ENFORCEMENT_MECHANISM_CHARACTERS
+    || typeof verifiedAt !== "string"
+    || verifiedAt.length > MAX_VERIFIED_AT_CHARACTERS
+    || typeof adapterVersion !== "string"
+    || adapterVersion.length > MAX_ADAPTER_VERSION_CHARACTERS
+  ) {
+    throw new ProviderPolicyError(
+      "INVALID_BILLING_VERIFICATION",
+      "Billing verification is malformed"
+    );
+  }
+  return snapshot;
 }
 
 function snapshotExactDataRecordMember(
@@ -313,7 +334,10 @@ function invalidPolicy(): ProviderPolicyError {
 }
 
 function assertAdapterVersion(adapterVersion: string): void {
-  if (adapterVersion.trim().length === 0) {
+  if (
+    adapterVersion.trim().length === 0
+    || adapterVersion.length > MAX_ADAPTER_VERSION_CHARACTERS
+  ) {
     throw new ProviderPolicyError(
       "INVALID_ADAPTER_VERSION",
       "Provider adapter version must be non-empty"
