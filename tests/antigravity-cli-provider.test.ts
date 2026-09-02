@@ -300,6 +300,14 @@ describe("Antigravity CLI one-turn protocol", () => {
       ),
       antigravityStream().replace(
         '"permission_mode":"request-review"',
+        '"permission_mode":"always-proceed","permission_mode":"request-review"'
+      ),
+      antigravityStream().replace(
+        '"permission_mode":"request-review"',
+        '"permissi\\u006fn_mode":"always-proceed","permission_mode":"request-review"'
+      ),
+      antigravityStream().replace(
+        '"permission_mode":"request-review"',
         '"permission_mode":"proceed-in-sandbox"'
       ),
       antigravityStream().replace(
