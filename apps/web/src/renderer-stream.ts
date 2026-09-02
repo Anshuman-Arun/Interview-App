@@ -49,7 +49,7 @@ export async function consumeAuthenticatedRendererStream(
   try {
     response = await fetchImpl(options.streamUrl, requestInit);
   } catch (error) {
-    if (options.signal?.aborted === true) return;
+    if (isSignalAborted(options.signal)) return;
     throw error;
   }
 
@@ -65,7 +65,7 @@ export async function consumeAuthenticatedRendererStream(
   try {
     for (;;) {
       const chunk = await reader.read();
-      if (options.signal?.aborted === true) return;
+      if (isSignalAborted(options.signal)) return;
       if (chunk.done) break;
       buffer += decoder.decode(chunk.value, { stream: true });
       if (byteLength(buffer) > MAX_RENDERER_STREAM_MESSAGE_BYTES * 2) {
@@ -76,9 +76,9 @@ export async function consumeAuthenticatedRendererStream(
       while (boundary !== undefined) {
         const block = buffer.slice(0, boundary.index);
         buffer = buffer.slice(boundary.index + boundary.length);
-        if (options.signal?.aborted === true) return;
+        if (isSignalAborted(options.signal)) return;
         if (block.length > 0) await handleSseBlock(block, renderer);
-        if (options.signal?.aborted === true) return;
+        if (isSignalAborted(options.signal)) return;
         boundary = findEventBoundary(buffer);
       }
     }
@@ -88,7 +88,7 @@ export async function consumeAuthenticatedRendererStream(
       throw new Error("Renderer stream ended with an incomplete event");
     }
   } catch (error) {
-    if (options.signal?.aborted === true) return;
+    if (isSignalAborted(options.signal)) return;
     if (error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted") || error.message.includes("terminated"))) {
       return;
     }
@@ -188,4 +188,8 @@ function findEventBoundary(buffer: string): { readonly index: number; readonly l
 
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
+}
+
+function isSignalAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }
