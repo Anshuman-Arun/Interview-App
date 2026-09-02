@@ -256,11 +256,25 @@ export class SupervisedProcessRunner {
     let stderrBytes = 0;
     let pendingFailure: PendingFailure | undefined;
     let cleanupStarted: Promise<boolean> | undefined;
+    let signalContainmentFailure: (() => void) | undefined;
+    const containmentFailure = new Promise<void>((resolve) => {
+      signalContainmentFailure = resolve;
+    });
     let settled = false;
 
     const requestCleanup = (failure: PendingFailure): void => {
       if (pendingFailure === undefined) pendingFailure = failure;
-      cleanupStarted ??= terminateProcessTree(child, this.platform);
+      if (cleanupStarted !== undefined) return;
+      cleanupStarted = terminateProcessTree(child, this.platform).then((cleaned) => {
+        if (!cleaned) {
+          pendingFailure = "PROCESS_TREE_CLEANUP_FAILED";
+          child.stdin.destroy();
+          child.stdout.destroy();
+          child.stderr.destroy();
+          signalContainmentFailure?.();
+        }
+        return cleaned;
+      });
     };
 
     child.stdout.on("data", (value: Buffer) => {
@@ -317,7 +331,14 @@ export class SupervisedProcessRunner {
         child.stdin.destroy();
       }
 
-      const exit = await closePromise;
+      const closeOutcome = await Promise.race([
+        closePromise.then((exit) => ({ kind: "CLOSE" as const, exit })),
+        containmentFailure.then(() => ({ kind: "CONTAINMENT_FAILURE" as const }))
+      ]);
+      if (closeOutcome.kind === "CONTAINMENT_FAILURE") {
+        throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+      }
+      const exit = closeOutcome.exit;
       if (cleanupStarted !== undefined) {
         const cleaned = await cleanupStarted;
         if (!cleaned) {
@@ -1014,7 +1035,13 @@ async function terminateProcessTree(
       return true;
     }
     const forced = await runTaskkill(pid, true, TREE_FORCE_MS);
-    return forced && await waitForChildExit(child, TREE_FORCE_MS);
+    if (forced && await waitForChildExit(child, TREE_FORCE_MS)) return true;
+    try {
+      child.kill();
+    } catch {
+      // The root may already have exited. Tree containment is still unverified.
+    }
+    return false;
   }
 
   signalPosixGroup(child, "SIGTERM");
