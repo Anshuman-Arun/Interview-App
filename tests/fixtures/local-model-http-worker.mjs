@@ -43,6 +43,10 @@ const server = http.createServer((request, response) => {
       send(response, 200, { text: "fixture transcript", confidence: 0.9 });
       return;
     }
+    if (component === "tts" && request.url === "/v1/tts/cancel") {
+      send(response, 200, { accepted: typeof body.requestId === "string" });
+      return;
+    }
     if (component === "tts" && request.url === "/v1/tts") {
       const samples = new Float32Array([0, 0.05, -0.05, 0]);
       const pcm = Buffer.alloc(samples.length * 4);
