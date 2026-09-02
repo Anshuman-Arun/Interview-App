@@ -93,18 +93,12 @@ export class SupervisedCliReasoningProvider implements ReasoningProvider {
     this.name = parsedProviderId.data;
     this.adapterVersion = snapshot.adapterVersion;
     this.capabilities = snapshotValidatedModelCapabilities(parsedCapabilities.data);
-    const verifyBillingSafety =
+    this.billingVerifier =
       snapshot.verifyBillingSafety as SupervisedCliProviderDefinition["verifyBillingSafety"];
-    const snapshotTurnInput =
+    this.turnInputSnapshotter =
       snapshot.snapshotTurnInput as SupervisedCliProviderDefinition["snapshotTurnInput"];
-    const executeTurn =
+    this.turnExecutor =
       snapshot.executeTurn as SupervisedCliProviderDefinition["executeTurn"];
-    this.billingVerifier = (input) =>
-      verifyBillingSafety.call(definition, input);
-    this.turnInputSnapshotter = (input) =>
-      snapshotTurnInput.call(definition, input);
-    this.turnExecutor = (input, runtime) =>
-      executeTurn.call(definition, input, runtime);
     Object.freeze(this);
   }
 
