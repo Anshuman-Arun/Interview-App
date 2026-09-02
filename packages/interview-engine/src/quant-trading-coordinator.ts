@@ -344,10 +344,10 @@ export class QuantTradingSessionCoordinator {
         engine.submitAction(action);
         evidence = persistedRoundEvidence(engine.advance());
       } catch (error) {
-        if (error instanceof RangeError) {
+        if (error instanceof RangeError && action.type === "QUOTE") {
           throw new QuantTraderActionError(
-            "INVALID_ACTION",
-            "Candidate action exceeds bounded Quant Trading arithmetic"
+            "INVALID_QUOTE",
+            "Candidate quote exceeds bounded Quant Trading arithmetic"
           );
         }
         throw error;
