@@ -779,11 +779,9 @@ export class VoiceInputCoordinator {
     const admittedEvents: SpeechWorkerEvent[] = [];
     let commit: VoiceInputCommit | undefined;
     let terminal = false;
-    let currentRequestId: string | undefined;
 
     try {
       for (const event of validatedEvents) {
-        currentRequestId = event.requestId;
       if (!this.isCurrent(context, token)) break;
       if (
         event.streamId !== context.streamId
@@ -943,7 +941,6 @@ export class VoiceInputCoordinator {
 
       if (
         !onsetWasAdmitted
-        || currentRequestId === undefined
         || utteranceId === undefined
         || utteranceStatus !== "CAPTURING"
       ) {
@@ -959,7 +956,7 @@ export class VoiceInputCoordinator {
       admittedEvents.push(SpeechWorkerEventSchema.parse({
         protocolVersion: 1,
         type: "SPEECH_WORKER_ERROR",
-        requestId: currentRequestId,
+        requestId: expectedRequestId,
         streamId: context.streamId,
         code: "INTERNAL_ERROR",
         message: "Speech worker emitted an inconsistent callback after admitted onset"
