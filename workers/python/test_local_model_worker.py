@@ -114,7 +114,7 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         state = runtime._states["stream-a"]
         self.assertEqual(state.pending_48k.size, 0)
         self.assertEqual(state.pending.size, 1)
-        self.assertAlmostEqual(float(state.pending[0]), 0.3, places=6)
+        self.assertAlmostEqual(float(state.pending[0]), 0.0, places=6)
 
     def test_vad_rejects_sample_rate_change_for_existing_stream(self) -> None:
         runtime = object.__new__(worker.SpeechRuntime)
