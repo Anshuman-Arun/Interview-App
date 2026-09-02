@@ -47,10 +47,9 @@ const ABORT_SIGNAL_ADD_EVENT_LISTENER_INTRINSIC =
   AbortSignal.prototype.addEventListener;
 const ABORT_SIGNAL_REMOVE_EVENT_LISTENER_INTRINSIC =
   AbortSignal.prototype.removeEventListener;
-/* eslint-enable @typescript-eslint/unbound-method */
-// eslint-disable-next-line @typescript-eslint/unbound-method -- Captured getter is invoked only through Reflect.apply.
 const ABORT_SIGNAL_ABORTED_GETTER_INTRINSIC =
   Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 export type SupervisedProcessErrorCode =
   | "INVALID_DEFINITION"
