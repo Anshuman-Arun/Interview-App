@@ -112,6 +112,64 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("does not cache shutdown-cancelled pending-turn recovery across restart", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const registry = new SessionRuntimeRegistry(store);
+    let firstResolutionEntered: (() => void) | undefined;
+    const entered = new Promise<void>((resolve) => {
+      firstResolutionEntered = resolve;
+    });
+    let configurationCalls = 0;
+    const sessions = new SessionRecoveryCoordinator(registry, store);
+    const orchestrator = new ServerTurnOrchestrator(
+      sessions,
+      () => undefined,
+      undefined,
+      new ProviderRuntimeResolver({
+        configurationSource: {
+          async resolveConfiguration() {
+            configurationCalls += 1;
+            if (configurationCalls === 1) {
+              firstResolutionEntered?.();
+              return await new Promise<never>(() => {
+                // The cancelled first recovery remains detached. A restart must
+                // be able to make a fresh recovery attempt without waiting.
+              });
+            }
+            return undefined;
+          }
+        }
+      })
+    );
+    sessions.setTurnRecoveryDelegate(orchestrator);
+
+    try {
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      await turns.startSession(sixPeopleProblem);
+      await turns.commitInput(STUDENT_TEXT);
+
+      const recovery = sessions.ensureRecovered(sessionId);
+      await entered;
+      orchestrator.requestCancellationForShutdown();
+
+      await expect(recovery).rejects.toThrow(/deferred during provider shutdown/u);
+      expect(Object.values(writer.getState().generations)).toEqual([]);
+
+      orchestrator.resumeAfterShutdown();
+      await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+
+      expect(configurationCalls).toBe(2);
+      expect(Object.values(writer.getState().generations)).toEqual([
+        expect.objectContaining({ provider: "mock-model", status: "VALIDATED" })
+      ]);
+    } finally {
+      await registry.closeAll();
+      store.close();
+    }
+  });
+
   it("graceful shutdown aborts active Gemini I/O without waiting for provider acknowledgement", async () => {
     const store = new SqliteEventStore(":memory:");
     const registry = new SessionRuntimeRegistry(store);
