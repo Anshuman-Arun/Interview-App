@@ -126,6 +126,38 @@ describe("authenticated renderer stream transport", () => {
     expect(visible).toEqual([firstDeliveryId]);
   });
 
+  it("snapshots the renderer origin allowlist against post-construction mutation", async () => {
+    const origins = new Set([CLIENT_ORIGIN]);
+    const isolated = new RendererStreamServer({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: origins,
+        clientToken: CLIENT_TOKEN
+      },
+      sessions
+    });
+    origins.add("http://attacker.invalid");
+    const address = await isolated.start();
+    try {
+      const response = await fetch(address.streamUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://attacker.invalid",
+          "x-interview-client-token": CLIENT_TOKEN
+        },
+        body: JSON.stringify({
+          protocolVersion: 1,
+          type: "ATTACH_RENDERER_STREAM",
+          sessionId: newSessionId()
+        })
+      });
+      expect(response.status).toBe(403);
+    } finally {
+      await isolated.stop();
+    }
+  });
+
   it("rejects malformed transport tokens before either HTTP server can start", () => {
     for (const clientToken of [
       12345 as never,
@@ -709,6 +741,15 @@ describe("authenticated renderer stream transport", () => {
     });
     expect(malformed.status).toBe(400);
     expect(RendererStreamErrorResponseSchema.parse(await malformed.json() as unknown).error.code).toBe("INVALID_STREAM_REQUEST");
+
+    const malformedUtf8 = await fetch(streamAddress.streamUrl, {
+      method: "POST",
+      headers: authenticatedHeaders(),
+      body: new Uint8Array([0xc3, 0x28])
+    });
+    expect(malformedUtf8.status).toBe(400);
+    expect(RendererStreamErrorResponseSchema.parse(await malformedUtf8.json() as unknown).error.code)
+      .toBe("INVALID_STREAM_REQUEST");
 
     const oversized = await fetch(streamAddress.streamUrl, {
       method: "POST",
