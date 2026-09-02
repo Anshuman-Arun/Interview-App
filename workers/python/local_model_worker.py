@@ -241,6 +241,8 @@ class SileroState:
         self.state = np_module.zeros((2, 1, 128), dtype=np_module.float32)
         self.context = np_module.zeros((1, SILERO_CONTEXT_16K), dtype=np_module.float32)
         self.pending = np_module.empty((0,), dtype=np_module.float32)
+        self.pending_48k = np_module.empty((0,), dtype=np_module.float32)
+        self.input_sample_rate: int | None = None
         self.last_probability = 0.0
 
 
@@ -267,7 +269,8 @@ class SpeechRuntime:
         self._transcriber = Transcriber(str(moonshine_model_root), model_arch=ModelArch.TINY)
         self._np = np
         self._states: OrderedDict[str, SileroState] = OrderedDict()
-        self._lock = threading.Lock()
+        self._vad_lock = threading.Lock()
+        self._stt_lock = threading.Lock()
         self.runtime_version = (
             f"moonshine-voice/{MOONSHINE_VERSION};onnxruntime/{ONNXRUNTIME_VERSION}"
         )
@@ -288,16 +291,31 @@ class SpeechRuntime:
         samples = self._np.frombuffer(raw, dtype="<f4").astype(self._np.float32, copy=True)
         if not self._np.isfinite(samples).all():
             raise ProtocolError(400, "INVALID_PCM")
-        if sample_rate == 48_000:
-            samples = samples[::3]
-
-        with self._lock:
+        with self._vad_lock:
             state = self._states.pop(stream_id, None)
             if state is None:
                 state = SileroState(self._np)
+            if state.input_sample_rate is None:
+                state.input_sample_rate = int(sample_rate)
+            elif state.input_sample_rate != int(sample_rate):
+                raise ProtocolError(400, "STREAM_SAMPLE_RATE_CHANGED")
             self._states[stream_id] = state
             while len(self._states) > MAX_VAD_STREAMS:
                 self._states.popitem(last=False)
+
+            if sample_rate == 48_000:
+                source = self._np.concatenate((state.pending_48k, samples))
+                usable = (source.size // 3) * 3
+                if usable > 0:
+                    # A stateful three-sample box filter before 3:1 decimation
+                    # avoids resetting phase at frame boundaries and suppresses
+                    # the worst high-frequency aliasing without another runtime.
+                    samples = source[:usable].reshape(-1, 3).mean(axis=1).astype(
+                        self._np.float32, copy=False
+                    )
+                else:
+                    samples = self._np.empty((0,), dtype=self._np.float32)
+                state.pending_48k = source[usable:].copy()
 
             state.pending = self._np.concatenate((state.pending, samples))
             while state.pending.size >= SILERO_WINDOW_16K:
@@ -337,10 +355,14 @@ class SpeechRuntime:
         if samples.size / int(sample_rate) > 60.001:
             raise ProtocolError(413, "AUDIO_TOO_LONG")
 
-        with self._lock:
+        if not self._stt_lock.acquire(blocking=False):
+            raise ProtocolError(429, "STT_BUSY")
+        try:
             transcript = self._transcriber.transcribe_without_streaming(
                 samples.tolist(), sample_rate=int(sample_rate)
             )
+        finally:
+            self._stt_lock.release()
 
         lines = list(getattr(transcript, "lines", []) or [])
         text = "\n".join(
@@ -431,7 +453,9 @@ class TtsRuntime:
         if speed != 1.0:
             raise ProtocolError(400, "UNSUPPORTED_TTS_SPEED")
 
-        with self._synthesis_lock:
+        if not self._synthesis_lock.acquire(blocking=False):
+            raise ProtocolError(429, "TTS_BUSY")
+        try:
             with self._state_lock:
                 if self._current_request_id is not None:
                     raise ProtocolError(409, "TTS_BUSY")
@@ -469,6 +493,8 @@ class TtsRuntime:
                 with self._state_lock:
                     self._current_request_id = None
                     self._cancelled_request_ids.discard(request_id)
+        finally:
+            self._synthesis_lock.release()
 
         raw = pcm.tobytes(order="C")
         encoded = base64.b64encode(raw).decode("ascii")
