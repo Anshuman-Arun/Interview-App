@@ -17,6 +17,7 @@ import {
   SourceAudioBasisSchema,
   SpeechPcmFrameEnvelopeSchema,
   SpeechStreamIdSchema,
+  SpeechWorkerEventSchema,
   TTS_LIMITS,
   TtsLanguageSchema,
   TtsModelIdentitySchema,
@@ -47,6 +48,7 @@ import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 const MAX_EPHEMERAL_AUDIO_ASSETS = 32;
 const MAX_EPHEMERAL_AUDIO_BYTES = 32 * 1024 * 1024;
 const VOICE_STREAM_IDLE_TIMEOUT_MS = 5_000;
+const MAX_VOICE_WORKER_EVENTS_PER_OPERATION = 64;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
 
 export interface VoiceTtsRuntimeConfiguration {
@@ -695,10 +697,17 @@ export class VoiceInputCoordinator {
     token: object,
     events: readonly SpeechWorkerEvent[]
   ): Promise<VoiceIngressResult> {
+    if (
+      !Array.isArray(events)
+      || events.length > MAX_VOICE_WORKER_EVENTS_PER_OPERATION
+    ) {
+      throw new Error("Speech worker emitted an invalid or excessive event batch");
+    }
+    const validatedEvents = events.map((event) => SpeechWorkerEventSchema.parse(event));
     let commit: VoiceInputCommit | undefined;
     let terminal = false;
 
-    for (const event of events) {
+    for (const event of validatedEvents) {
       if (!this.isCurrent(context, token)) break;
       if (event.streamId !== context.streamId) {
         throw new Error("Speech worker callback escaped its bound stream");
@@ -834,7 +843,7 @@ export class VoiceInputCoordinator {
     }
 
     return {
-      events: [...events],
+      events: validatedEvents,
       terminal,
       ...(commit === undefined ? {} : { commit })
     };
