@@ -243,7 +243,7 @@ export class AuthoritativeBoardSyncCoordinator {
       this.reason = undefined;
     } finally {
       this.draining = false;
-      if (this.pending.length > 0 && this.status !== "UNSYNCHRONIZED") {
+      if (this.pending.length > 0) {
         void this.drain();
       }
     }
