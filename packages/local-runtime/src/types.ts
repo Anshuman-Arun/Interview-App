@@ -20,6 +20,8 @@ export interface LocalComponentHandshake {
 export interface LocalExpectedHandshake {
   readonly componentVersion?: string;
   readonly protocolVersion?: string | number;
+  readonly modelVersionOrHash?: string;
+  readonly capabilities?: readonly string[];
 }
 
 export type LocalReadinessDecision =
