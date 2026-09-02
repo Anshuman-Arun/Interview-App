@@ -145,6 +145,7 @@ export const SubmitQuantTradingActionCommandSchema = ProtocolCommandBaseSchema.e
 
 export const SubmitQuantResearchActionCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("SUBMIT_QUANT_RESEARCH_ACTION"),
+  expectedActionCount: z.number().int().min(0).max(64),
   action: QuantResearchCandidateActionSchema
 }).strict();
 
