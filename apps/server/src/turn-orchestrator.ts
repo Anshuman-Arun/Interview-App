@@ -79,8 +79,7 @@ export class ServerTurnOrchestrator {
    * prevented from delivering late output.
    */
   public async cancelSupersededGenerations(
-    sessionId: SessionId,
-    reason = "Authoritative state superseded provider execution"
+    sessionId: SessionId
   ): Promise<void> {
     const writer = this.sessions.getWriter(sessionId);
     const state = writer.getState();
@@ -96,8 +95,10 @@ export class ServerTurnOrchestrator {
       ) {
         continue;
       }
-      await record.coordinator.cancelGeneration(record.generationId, reason)
-        .catch(() => undefined);
+      await record.coordinator.cancelGeneration(
+        record.generationId,
+        "Authoritative state superseded provider execution"
+      ).catch(() => undefined);
     }
   }
 
