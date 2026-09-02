@@ -360,6 +360,55 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("fails safely when a newer turn commits while provider runtime resolution is in flight", async () => {
+    const harness = createHarness();
+    try {
+      const first = await startConfiguredTurn(harness, MOCK_SELECTION);
+      let enteredResolve: (() => void) | undefined;
+      let releaseResolve: (() => void) | undefined;
+      const entered = new Promise<void>((resolve) => {
+        enteredResolve = resolve;
+      });
+      const release = new Promise<void>((resolve) => {
+        releaseResolve = resolve;
+      });
+      const resolver = new ProviderRuntimeResolver({
+        configurationSource: {
+          async resolveConfiguration() {
+            enteredResolve?.();
+            await release;
+            return undefined;
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        harness.sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+
+      const orchestration = orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: first.turnId,
+        inputEpisodeId: first.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+      await entered;
+
+      const turns = new TurnCoordinator(harness.writer);
+      const newer = await turns.commitInput("I have a newer argument for the problem.");
+      releaseResolve?.();
+
+      await expect(orchestration).resolves.toBeUndefined();
+      expect(Object.keys(harness.writer.getState().generations)).toHaveLength(0);
+      expect(harness.writer.getState().lastCommittedInputSequence)
+        .toBe(harness.writer.getState().turns[newer.turnId]?.committedSequence);
+    } finally {
+      await harness.close();
+    }
+  });
+
   it("keeps simultaneous sessions isolated when they select different providers", async () => {
     const store = new SqliteEventStore(":memory:");
     const registry = new SessionRuntimeRegistry(store);
