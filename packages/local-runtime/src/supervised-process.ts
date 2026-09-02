@@ -74,11 +74,19 @@ export interface SupervisedProcessRunnerOptions {
   readonly platform?: NodeJS.Platform;
 }
 
-interface RegisteredExecutable {
+interface ExecutableDefinitionSnapshot {
   readonly id: string;
   readonly executable: string;
   readonly fixedArgs: readonly string[];
   readonly environment?: LocalEnvironmentDefinition;
+  readonly isolatedWorkingDirectory: boolean;
+}
+
+interface RegisteredExecutable {
+  readonly id: string;
+  readonly executable: string;
+  readonly fixedArgs: readonly string[];
+  readonly environment: NodeJS.ProcessEnv;
   readonly isolatedWorkingDirectory: boolean;
 }
 
@@ -116,7 +124,23 @@ export class SupervisedProcessRunner {
       if (this.definitions.has(snapshot.id)) {
         throw new SupervisedProcessError("INVALID_DEFINITION");
       }
-      this.definitions.set(snapshot.id, snapshot);
+      let environment: NodeJS.ProcessEnv;
+      try {
+        environment = buildLocalEnvironment(
+          snapshot.environment,
+          this.parentEnvironment,
+          this.platform
+        ).environment;
+      } catch {
+        throw new SupervisedProcessError("INVALID_DEFINITION");
+      }
+      this.definitions.set(snapshot.id, Object.freeze({
+        id: snapshot.id,
+        executable: snapshot.executable,
+        fixedArgs: snapshot.fixedArgs,
+        environment,
+        isolatedWorkingDirectory: snapshot.isolatedWorkingDirectory
+      }));
     }
   }
 
@@ -135,17 +159,12 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
-    const builtEnvironment = buildLocalEnvironment(
-      definition.environment,
-      this.parentEnvironment,
-      this.platform
-    );
     const workingDirectory = definition.isolatedWorkingDirectory
       ? await createIsolatedWorkingDirectory()
       : undefined;
 
     try {
-      return await this.runChild(definition, request, before, builtEnvironment.environment, workingDirectory);
+      return await this.runChild(definition, request, before, definition.environment, workingDirectory);
     } finally {
       if (workingDirectory !== undefined) {
         await rm(workingDirectory, { recursive: true, force: true }).catch(() => undefined);
@@ -303,7 +322,7 @@ export class SupervisedProcessRunner {
 function snapshotExecutableDefinition(
   input: SupervisedExecutableDefinition,
   platform: NodeJS.Platform
-): RegisteredExecutable {
+): ExecutableDefinitionSnapshot {
   const record = inspectPlainRecord(input, new Set([
     "id", "executable", "fixedArgs", "environment", "isolatedWorkingDirectory"
   ]), "INVALID_DEFINITION");
