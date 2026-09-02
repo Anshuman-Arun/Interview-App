@@ -45,13 +45,11 @@ describe("supervised Antigravity runtime profile", () => {
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("tools: []");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("mainAgent: true");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("subagent: false");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
-      'commandExecutionPolicy: "off"'
-    );
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("mcpServers: []");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("skills: []");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("plugins: []");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("run_command");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("invoke_subagent");
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("commandExecutionPolicy:");
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("mcpServers:");
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("skills:");
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("plugins:");
   });
 });
