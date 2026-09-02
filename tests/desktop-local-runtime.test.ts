@@ -72,6 +72,16 @@ describe("desktop local model runtime", () => {
   });
 
 
+  it("honors cancellation before stale runtime-view cleanup", async () => {
+    const root = temporaryRoot("desktop-runtime-view-cleanup-cancel-");
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      cleanupStaleRuntimeAssetViews(root, controller.signal)
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("does not delete a runtime view owned by this exact desktop process instance", async () => {
     const root = temporaryRoot("desktop-runtime-view-owner-");
     const manager = new ModelAssetManager({
