@@ -48,6 +48,53 @@ describe("utterance and multimodal InputEpisode lifecycle", () => {
     }
   });
 
+  it("keeps terminal session transitions behind active input episodes", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const writer = new SessionRuntimeRegistry(store).get(newSessionId());
+      const turns = new TurnCoordinator(writer);
+      await turns.startSession(sixPeopleProblem);
+
+      const utteranceId = await turns.beginUtterance();
+      const finalized = await turns.finalizeUtterance({
+        utteranceId,
+        text: "This finalized speech still needs a committed turn."
+      });
+
+      await expect(turns.completeSession()).rejects.toThrow(/input episode is active/u);
+      await expect(turns.archiveSession()).rejects.toThrow(/input episode is active/u);
+      expect(writer.getState().status).toBe("ACTIVE");
+      expect(writer.getState().inputEpisodes[finalized.inputEpisodeId]?.status).toBe("ACTIVE");
+
+      await turns.commitInputEpisode(finalized.inputEpisodeId);
+      await expect(turns.completeSession()).resolves.toMatchObject({ completed: true });
+      expect(writer.getState().status).toBe("COMPLETED");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("discards capturing utterances when a terminal transition wins first", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const writer = new SessionRuntimeRegistry(store).get(newSessionId());
+      const turns = new TurnCoordinator(writer);
+      await turns.startSession(sixPeopleProblem);
+
+      const utteranceId = await turns.beginUtterance();
+      await turns.completeSession();
+
+      expect(writer.getState().status).toBe("COMPLETED");
+      expect(writer.getState().utterances[utteranceId]?.status).toBe("DISCARDED");
+      await expect(turns.finalizeUtterance({
+        utteranceId,
+        text: "late transcript"
+      })).rejects.toThrow();
+    } finally {
+      store.close();
+    }
+  });
+
   it("cancels a queued delivery and conservatively marks an in-flight delivery on speech onset", async () => {
     const queuedHarness = await createCoreHarness();
     try {
