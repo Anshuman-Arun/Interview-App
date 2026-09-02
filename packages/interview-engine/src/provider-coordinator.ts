@@ -236,11 +236,6 @@ export class ProviderCoordinator {
     },
     context: unknown
   ): Promise<ProviderGenerationOutcome> {
-    let iterator: AsyncIterator<InterviewerProposal> | undefined;
-    let nextOperation: (() => Promise<IteratorResult<InterviewerProposal>>) | undefined;
-    let returnOperation:
-      ((value?: unknown) => Promise<IteratorResult<InterviewerProposal>>) | undefined;
-
     try {
       const stream = record.session?.sendTurn({
         context,
@@ -251,28 +246,10 @@ export class ProviderCoordinator {
         return failed(record.generationId, "NO_PROPOSAL", "NO_PROPOSAL");
       }
 
-      const iteratorCandidate = stream[Symbol.asyncIterator]();
-      if (typeof iteratorCandidate !== "object" || iteratorCandidate === null) {
-        throw new Error("Provider stream iterator is malformed");
-      }
-      iterator = iteratorCandidate;
+      const iterator = stream[Symbol.asyncIterator]();
 
-      const rawNext: unknown = iterator.next;
-      const rawReturn: unknown = iterator.return;
-      if (typeof rawNext !== "function") {
-        throw new Error("Provider stream iterator next operation is malformed");
-      }
-      nextOperation = () => Reflect.apply(rawNext, iterator, []) as Promise<IteratorResult<InterviewerProposal>>;
-      if (rawReturn !== undefined) {
-        if (typeof rawReturn !== "function") {
-          throw new Error("Provider stream iterator return operation is malformed");
-        }
-        returnOperation = (value?: unknown) =>
-          Reflect.apply(rawReturn, iterator, [value]) as Promise<IteratorResult<InterviewerProposal>>;
-      }
-
-      while (true) {
-        const next = Promise.resolve(nextOperation()).then(
+      for (;;) {
+        const next = Promise.resolve(iterator.next()).then(
           (result) => ({ kind: "NEXT" as const, result }),
           (error: unknown) => ({ kind: "ERROR" as const, error })
         );
@@ -282,12 +259,12 @@ export class ProviderCoordinator {
         ]);
 
         if (raced.kind === "CANCELLED") {
-          this.requestIteratorReturn(returnOperation);
-          return this.finishCancellation(record);
+          this.requestIteratorReturn(iterator);
+          return await this.finishCancellation(record);
         }
         if (raced.kind === "ERROR") {
           if (this.cancellationRequested(record.generationId)) {
-            return this.finishCancellation(record);
+            return await this.finishCancellation(record);
           }
           await this.supersedeIfPossible(record.generationId, "Provider stream failed");
           return failed(
@@ -299,8 +276,8 @@ export class ProviderCoordinator {
         if (raced.result.done === true) break;
 
         if (this.cancellationRequested(record.generationId)) {
-          this.requestIteratorReturn(returnOperation);
-          return this.finishCancellation(record);
+          this.requestIteratorReturn(iterator);
+          return await this.finishCancellation(record);
         }
 
         const proposal = raced.result.value;
@@ -335,7 +312,7 @@ export class ProviderCoordinator {
           });
         } catch {
           if (this.cancellationRequested(record.generationId)) {
-            return this.finishCancellation(record);
+            return await this.finishCancellation(record);
           }
           await this.supersedeIfPossible(
             record.generationId,
@@ -349,7 +326,7 @@ export class ProviderCoordinator {
         }
 
         if (this.cancellationRequested(record.generationId)) {
-          return this.finishCancellation(record);
+          return await this.finishCancellation(record);
         }
         if (!result.accepted) {
           return {
@@ -366,26 +343,27 @@ export class ProviderCoordinator {
       }
     } catch (error) {
       if (this.cancellationRequested(record.generationId)) {
-        return this.finishCancellation(record);
+        return await this.finishCancellation(record);
       }
       await this.supersedeIfPossible(record.generationId, "Provider stream failed");
       return failed(record.generationId, "PROVIDER_STREAM", safeProviderFailureCode(error));
     }
 
     if (this.cancellationRequested(record.generationId)) {
-      return this.finishCancellation(record);
+      return await this.finishCancellation(record);
     }
     await this.supersedeIfPossible(record.generationId, "Provider returned no proposal");
     return failed(record.generationId, "NO_PROPOSAL", "NO_PROPOSAL");
   }
 
   private requestIteratorReturn(
-    returnOperation:
-      ((value?: unknown) => Promise<IteratorResult<InterviewerProposal>>) | undefined
+    iterator: AsyncIterator<InterviewerProposal>
   ): void {
-    if (returnOperation === undefined) return;
     try {
-      void Promise.resolve(returnOperation()).catch(() => undefined);
+      const cleanup = iterator.return?.();
+      if (cleanup !== undefined) {
+        void Promise.resolve(cleanup).catch(() => undefined);
+      }
     } catch {
       // Iterator cleanup is best effort after authoritative cancellation.
     }
