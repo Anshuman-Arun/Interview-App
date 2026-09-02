@@ -642,7 +642,7 @@ export const App: React.FC = () => {
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-500 flex items-center gap-3">
-                        <span>Problem: {s.problemId ?? "Configured session"}</span>
+                        <span>{hasActiveInterview ? "Session record" : `Problem: ${s.problemId ?? "Configured session"}`}</span>
                         <span>•</span>
                         <span>Events: {s.eventCount}</span>
                         <span>•</span>
@@ -657,7 +657,8 @@ export const App: React.FC = () => {
                           : s.status === "ACTIVE"
                             ? () => void handleRecoverSession(s.sessionId)
                           : (
-                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
+                              !hasActiveInterview
+                              && (s.status === "COMPLETED" || s.status === "ARCHIVED")
                               && isSessionIdAddressableForRead(s.sessionId)
                             )
                             ? () => openHistoricalReview(s.sessionId)
@@ -675,7 +676,8 @@ export const App: React.FC = () => {
                         || (
                           s.status !== "ACTIVE"
                           && (
-                          (s.status !== "COMPLETED" && s.status !== "ARCHIVED")
+                            hasActiveInterview
+                            || (s.status !== "COMPLETED" && s.status !== "ARCHIVED")
                             || !isSessionIdAddressableForRead(s.sessionId)
                           )
                         )
