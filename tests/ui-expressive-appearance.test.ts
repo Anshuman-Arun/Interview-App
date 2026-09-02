@@ -18,7 +18,7 @@ describe("expressive UI appearance foundations", () => {
     expect(normalizeAppearance({ zoomPercent: 113 }).zoomPercent).toBe(113);
     expect(normalizeAppearance({ zoomPercent: 10 }).zoomPercent)
       .toBe(MIN_INTERFACE_ZOOM_PERCENT);
-    expect(normalizeAppearance({ zoomPercent: 500 }).zoomPercent)
+    expect(normalizeAppearance({ zoomPercent: 900 }).zoomPercent)
       .toBe(MAX_INTERFACE_ZOOM_PERCENT);
     expect(normalizeAppearance({ scale: "xl" }).zoomPercent).toBe(125);
     expect(normalizeAppearance({ theme: "unknown" })).toEqual(DEFAULT_APPEARANCE);
