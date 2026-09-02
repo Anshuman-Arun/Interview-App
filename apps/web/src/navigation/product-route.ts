@@ -27,10 +27,22 @@ function safeDecode(value: string): string | null {
 
 export function parseProductRoute(hash: string): ProductRoute {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
-  const normalized = raw.startsWith("/") ? raw.slice(1) : raw;
-  if (normalized.length === 0) return DEFAULT_PRODUCT_ROUTE;
+  if (raw.length === 0 || raw === "/") return DEFAULT_PRODUCT_ROUTE;
 
-  const parts = normalized.split("/").filter(Boolean);
+  // Product hashes are deliberately canonical. Do not normalize repeated,
+  // missing, or trailing separators into a different valid route.
+  if (!raw.startsWith("/")) return DEFAULT_PRODUCT_ROUTE;
+  const normalized = raw.slice(1);
+  if (
+    normalized.length === 0
+    || normalized.startsWith("/")
+    || normalized.endsWith("/")
+    || normalized.includes("//")
+  ) {
+    return DEFAULT_PRODUCT_ROUTE;
+  }
+
+  const parts = normalized.split("/");
   const head = parts[0];
 
   if (head === "interview" && parts.length === 1) {
