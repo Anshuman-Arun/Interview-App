@@ -26,7 +26,7 @@ export class ManagedModelWorkerClient {
   }
 
   public async postJson(
-    pathname: "/v1/vad" | "/v1/stt" | "/v1/tts",
+    pathname: "/v1/vad" | "/v1/stt" | "/v1/tts" | "/v1/tts/cancel",
     body: unknown,
     options: {
       readonly signal?: AbortSignal;
