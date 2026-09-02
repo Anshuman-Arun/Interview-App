@@ -621,7 +621,12 @@ describe("production provider runtime resolution", () => {
         .toHaveLength(0);
 
       credentialAvailable = true;
+      // Ordinary reads/attaches remain coalesced and do not repeatedly dispatch
+      // a provider that previously failed runtime recovery.
       await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+      expect(fetchCalls).toBe(0);
+
+      await expect(sessions.retryPendingTurnRecovery(sessionId)).resolves.toEqual([]);
 
       const recovered = sessions.getWriter(sessionId).getState();
       expect(fetchCalls).toBe(1);
@@ -708,6 +713,9 @@ describe("production provider runtime resolution", () => {
       expect(JSON.stringify(store.load(sessionId))).not.toContain(secret);
 
       await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+      expect(fetchCalls).toBe(1);
+
+      await expect(sessions.retryPendingTurnRecovery(sessionId)).resolves.toEqual([]);
       const recovered = sessions.getWriter(sessionId).getState();
       expect(fetchCalls).toBe(2);
       expect(Object.values(recovered.generations).some(
