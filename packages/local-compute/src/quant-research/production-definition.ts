@@ -3,10 +3,11 @@ import {
   QUANT_RESEARCH_RNG_VERSION,
   QUANT_RESEARCH_VERSION,
   parseQuantResearchDefinition,
+  QuantResearchError,
   type QuantResearchFamily,
   type QuantResearchScenarioDefinition
 } from "./types.js";
-import { QuantResearchEngine, QuantResearchError } from "./engine.js";
+import { QuantResearchEngine } from "./engine.js";
 
 function definitionForSeed(
   family: QuantResearchFamily,
