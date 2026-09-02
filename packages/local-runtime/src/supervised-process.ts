@@ -230,8 +230,10 @@ export class SupervisedProcessRunner {
 
     const controller = new AbortController();
     const externalSignal = request.signal;
-    const forwardAbort = (): void => controller.abort();
-    if (externalSignal?.aborted) controller.abort();
+    const forwardAbort = (): void => {
+      controller.abort(new SupervisedProcessError("EXECUTION_CANCELLED"));
+    };
+    if (externalSignal?.aborted) forwardAbort();
     else externalSignal?.addEventListener("abort", forwardAbort, { once: true });
 
     const trackedRequest = Object.freeze({
@@ -243,16 +245,28 @@ export class SupervisedProcessRunner {
     this.activeOperations.add(operation);
 
     let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
-    const deadline = new Promise<never>((_resolve, reject) => {
-      deadlineTimer = setTimeout(() => {
-        controller.abort();
-        reject(new SupervisedProcessError("EXECUTION_TIMEOUT"));
-      }, request.timeoutMs);
+    let removeInterruptListener = (): void => undefined;
+    const interrupted = new Promise<never>((_resolve, reject) => {
+      const onInterrupt = (): void => {
+        const reason: unknown = controller.signal.reason;
+        reject(reason instanceof SupervisedProcessError
+          ? reason
+          : new SupervisedProcessError("EXECUTION_CANCELLED"));
+      };
+      removeInterruptListener = () => {
+        controller.signal.removeEventListener("abort", onInterrupt);
+      };
+      if (controller.signal.aborted) onInterrupt();
+      else controller.signal.addEventListener("abort", onInterrupt, { once: true });
     });
-    const publicOperation = Promise.race([operation, deadline]);
+    deadlineTimer = setTimeout(() => {
+      controller.abort(new SupervisedProcessError("EXECUTION_TIMEOUT"));
+    }, request.timeoutMs);
+    const publicOperation = Promise.race([operation, interrupted]);
 
     const cleanup = (): void => {
       if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+      removeInterruptListener();
       externalSignal?.removeEventListener("abort", forwardAbort);
       this.activeControllers.delete(controller);
       this.activeOperations.delete(operation);
