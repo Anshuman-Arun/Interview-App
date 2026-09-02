@@ -60,6 +60,19 @@ describe("expressive product integration invariants", () => {
     expect(hook).toContain("throw err");
   });
 
+  it("routes ambiguous multiple-ACTIVE state to explicit session selection", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const start = app.indexOf("if (activeSessions.length > 1)");
+    const end = app.indexOf("const existingActive = activeSessions[0]", start);
+    const branch = app.slice(start, end);
+
+    expect(branch).toContain('navigate({ page: "sessions" })');
+    expect(branch).not.toContain("setShowSessionsModal(true)");
+  });
+
   it("prefers a stored ACTIVE session over starting a second interview", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
