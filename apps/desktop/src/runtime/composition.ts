@@ -138,7 +138,7 @@ export class DesktopLocalRuntimeComposition {
 
   public async installVoiceAssets(signal?: AbortSignal): Promise<void> {
     for (const asset of DESKTOP_LOCAL_MODEL_ASSETS) {
-      if (signal?.aborted === true) throw abortError();
+      if (abortRequested(signal)) throw abortError();
       await this.assetManager.install(asset.manifest, signal);
     }
   }
@@ -194,7 +194,7 @@ export class DesktopLocalRuntimeComposition {
       this.ttsStatus = failed("ASSET_CACHE_UNSAFE");
       return;
     }
-    if (signal?.aborted === true) return;
+    if (abortRequested(signal)) return;
 
     const workerAvailable = await this.workerScriptIsSafe();
     if (!workerAvailable) {
@@ -238,7 +238,7 @@ export class DesktopLocalRuntimeComposition {
         : failed("SPEECH_ASSET_INVALID");
       return;
     }
-    if (signal?.aborted === true) return;
+    if (abortRequested(signal)) return;
     this.speechView = await materializeRuntimeAssetView({
       manager: this.assetManager,
       assets: SPEECH_ASSETS,
@@ -295,7 +295,7 @@ export class DesktopLocalRuntimeComposition {
       );
     } catch (error) {
       await this.runtimeManager.stop(SPEECH_COMPONENT_ID).catch(() => undefined);
-      this.speechStatus = signal?.aborted === true
+      this.speechStatus = abortRequested(signal)
         ? unavailable("START_CANCELLED")
         : failed(error instanceof ModelAssetError ? "ASSET_FAILURE" : "WORKER_START_FAILED");
       throw error;
@@ -310,7 +310,7 @@ export class DesktopLocalRuntimeComposition {
         : failed("TTS_ASSET_INVALID");
       return;
     }
-    if (signal?.aborted === true) return;
+    if (abortRequested(signal)) return;
     this.ttsView = await materializeRuntimeAssetView({
       manager: this.assetManager,
       assets: TTS_ASSETS,
@@ -359,7 +359,7 @@ export class DesktopLocalRuntimeComposition {
       );
     } catch (error) {
       await this.runtimeManager.stop(TTS_COMPONENT_ID).catch(() => undefined);
-      this.ttsStatus = signal?.aborted === true
+      this.ttsStatus = abortRequested(signal)
         ? unavailable("START_CANCELLED")
         : failed(error instanceof ModelAssetError ? "ASSET_FAILURE" : "WORKER_START_FAILED");
       throw error;
@@ -407,10 +407,11 @@ export class DesktopLocalRuntimeComposition {
         kind: "STDOUT_JSON",
         evaluate: (message) => {
           if (!isRecord(message) || message["ready"] !== true) return false;
+          const handshake = message["handshake"] as LocalComponentStatus["handshake"];
           return {
             ready: true,
             detail: `${input.component} model worker ready`,
-            handshake: message["handshake"] as LocalComponentStatus["handshake"]
+            ...(handshake === undefined ? {} : { handshake })
           };
         }
       },
@@ -509,6 +510,10 @@ function unavailable(reasonCode: string, modelIdentity?: string): DesktopRuntime
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function abortRequested(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }
 
 function abortError(): Error {
