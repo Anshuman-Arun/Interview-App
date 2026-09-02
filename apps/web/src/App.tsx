@@ -235,7 +235,7 @@ export const App: React.FC = () => {
     e.preventDefault();
     if (
       session.isTransportManaged
-      || (session.isSessionStarted && session.sessionStatus === "ACTIVE")
+      || (session.sessionId !== null && session.sessionStatus === "ACTIVE")
       || sessionEntryPendingRef.current
       || sessionTerminalPendingRef.current
     ) {
@@ -400,7 +400,13 @@ export const App: React.FC = () => {
         connection={{
           managed: session.isTransportManaged,
           baseUrl: session.baseUrl,
-          locked: hasActiveInterview || sessionEntryPending || sessionTerminalPending,
+          locked:
+            (
+              session.sessionId !== null
+              && session.sessionStatus === "ACTIVE"
+            )
+            || sessionEntryPending
+            || sessionTerminalPending,
           onSaveBaseUrl: session.setBaseUrl
         }}
         notice={session.error}
