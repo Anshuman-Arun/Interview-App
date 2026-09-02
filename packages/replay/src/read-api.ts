@@ -596,6 +596,7 @@ const SAFE_REPLAY_SUMMARY_BY_KIND = {
   VISION_REQUESTED: "Vision verification requested",
   VISION_RESULT_ACCEPTED: "Vision result accepted",
   VISION_EVIDENCE_BRIDGE_DECIDED: "Vision evidence bridge decision recorded",
+  VISION_EVIDENCE_BRIDGE_COMPLETED: "Vision evidence bridge completed",
   VISION_RESULT_DISCARDED: "Vision result discarded",
   LOCAL_COMPUTE_REQUESTED: "Local compute requested",
   LOCAL_COMPUTE_RESULT_ACCEPTED: "Local compute result accepted",
