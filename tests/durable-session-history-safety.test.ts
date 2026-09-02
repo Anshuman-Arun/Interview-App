@@ -113,6 +113,41 @@ describe("durable presentation history safety", () => {
     harness.store.close();
   });
 
+  it("preserves a derived audio exposure when the source text never received an exposure acknowledgement", async () => {
+    const harness = await createCoreHarness();
+    const recovery = new SessionRecoveryCoordinator(
+      new SessionRuntimeRegistry(harness.store),
+      harness.store
+    );
+    const source = await authorizeSafeProbe(harness);
+    const deliveries = new DeliveryCoordinator(harness.writer);
+
+    await deliveries.markStarted(source.deliveryId);
+
+    const audio = await harness.turns.queueAudioDeliveryFromValidatedText({
+      sourceDeliveryId: source.deliveryId,
+      generationId: source.generationId,
+      text: harness.safeProbe,
+      textSha256: createHash("sha256").update(harness.safeProbe, "utf8").digest("hex"),
+      audioRef: `audio_v1_${"b".repeat(64)}`
+    });
+    if (audio === undefined) throw new Error("Expected derived audio delivery");
+    await deliveries.markStarted(audio.deliveryId);
+    await deliveries.acknowledgeExposed(audio.deliveryId);
+    await deliveries.acknowledgeCompleted(audio.deliveryId);
+
+    const interviewer = interviewerHistory(recovery, harness.sessionId);
+    expect(interviewer).toHaveLength(1);
+    expect(interviewer[0]).toEqual(expect.objectContaining({
+      role: "INTERVIEWER",
+      deliveryId: audio.deliveryId,
+      text: harness.safeProbe,
+      status: "COMPLETED"
+    }));
+
+    harness.store.close();
+  });
+
   it("orders interviewer history at physical exposure rather than queue time", async () => {
     const harness = await createCoreHarness();
     const recovery = new SessionRecoveryCoordinator(
