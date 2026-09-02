@@ -21,7 +21,8 @@ export class ManagedModelWorkerClient {
     private readonly manager: LocalRuntimeManager,
     private readonly componentId: string,
     private readonly workerType: "speech" | "tts",
-    private readonly token: string
+    private readonly token: string,
+    private readonly lifecycleSignal?: AbortSignal
   ) {
     if (!/^[0-9a-f]{64}$/u.test(token)) throw new Error("Invalid managed worker token");
   }
@@ -118,9 +119,25 @@ export class ManagedModelWorkerClient {
     }
   }
 
-  public recycleAfterUncertainRequest(): Promise<void> {
+  public recycleAfterUncertainRequest(expectedWorkerInstance: string): Promise<void> {
+    if (this.lifecycleSignal?.aborted === true) return Promise.resolve();
+    let currentWorkerInstance: string;
+    try {
+      currentWorkerInstance = this.workerInstanceIdentity();
+    } catch {
+      return Promise.resolve();
+    }
+    if (currentWorkerInstance !== expectedWorkerInstance) return Promise.resolve();
     if (this.recyclePromise !== undefined) return this.recyclePromise;
-    const operation = this.manager.restart(this.componentId).then(() => undefined);
+
+    const operation = (async (): Promise<void> => {
+      await this.manager.stop(this.componentId);
+      if (this.lifecycleSignal?.aborted === true) return;
+      await this.manager.start(
+        this.componentId,
+        this.lifecycleSignal === undefined ? {} : { signal: this.lifecycleSignal }
+      );
+    })();
     this.recyclePromise = operation;
     void operation.finally(() => {
       if (this.recyclePromise === operation) this.recyclePromise = undefined;
