@@ -532,6 +532,52 @@ describe("production quant runtime integration", () => {
     expect(store.eventCount(sessionId)).toBe(terminalEventCount);
   });
 
+  it("admits only one of two simultaneous Trading actions bound to the same round", async () => {
+    const sessionId = newSessionId();
+    await expectStatus(postStart(sessionId, tradingConfiguration()), 200);
+    const initial = QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state;
+
+    const responses = await Promise.all([
+      post({
+        protocolVersion: 1,
+        type: "SUBMIT_QUANT_TRADING_ACTION",
+        requestId: newRequestId(),
+        sessionId,
+        expectedRound: initial.currentRound,
+        action: { type: "PASS" }
+      }),
+      post({
+        protocolVersion: 1,
+        type: "SUBMIT_QUANT_TRADING_ACTION",
+        requestId: newRequestId(),
+        sessionId,
+        expectedRound: initial.currentRound,
+        action: { type: "PASS" }
+      })
+    ]);
+    const decoded = await Promise.all(responses.map(async (response) => ({
+      status: response.status,
+      body: await responseJson(response)
+    })));
+    expect(decoded.map((item) => item.status).sort((left, right) => left - right))
+      .toEqual([200, 409]);
+
+    const success = decoded.find((item) => item.status === 200);
+    const conflict = decoded.find((item) => item.status === 409);
+    if (success === undefined || conflict === undefined) {
+      throw new Error("Expected one admitted Trading action and one stale conflict");
+    }
+    expect(QuantTradingStateResponseSchema.parse(success.body).state.currentRound).toBe(2);
+    expect(ProtocolErrorResponseSchema.parse(conflict.body).error.code).toBe("CONFLICT");
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state.currentRound).toBe(2);
+    expect(store.load(sessionId).filter((event) => event.type === "QUANT_TRADING_ACTION_ACCEPTED"))
+      .toHaveLength(1);
+  });
+
   it("routes Quant Research structured actions through the existing deterministic coordinator with mode isolation", async () => {
     const researchSession = newSessionId();
     const tradingSession = newSessionId();
