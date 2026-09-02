@@ -494,6 +494,10 @@ export class WhiteboardVisionCoordinator {
     if (request.evidenceBridge.decision === "NO_PROPOSAL") {
       return { completed: true, evidenceCommittedCount: 0 };
     }
+    const acceptedObservation = request.acceptedObservation;
+    if (acceptedObservation === undefined) {
+      return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
+    }
 
     const evidenceResult = await turn.processEvidenceProposal({
       envelope: createCommandEnvelope({
@@ -503,7 +507,7 @@ export class WhiteboardVisionCoordinator {
         correlationId: visionRequestId
       }),
       proposal: request.evidenceBridge.proposal,
-      requiredBoardRevision: request.acceptedObservation.admittedAtBoardRevision
+      requiredBoardRevision: acceptedObservation.admittedAtBoardRevision
     });
     return {
       completed: true,

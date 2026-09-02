@@ -1133,7 +1133,7 @@ describe("Real tldraw mounted browser integration", () => {
         expect(reconnectDuplicate.duplicate).toBe(true);
       });
 
-      expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(2));
+      expect(authoritativeRevision).toBe(BoardRevisionSchema.parse(2));
       expect(bridge.getShape(studentId)).toEqual(studentBeforeOverlay);
       expect(adapter.getCanvasSnapshot().aiAnnotations)
         .toEqual(annotationAfterFirstDelivery);
@@ -1141,9 +1141,7 @@ describe("Real tldraw mounted browser integration", () => {
         "ACK_DELIVERY_EXPOSED",
         "ACK_DELIVERY_COMPLETED"
       ]);
-      expect(store.load(sessionId)
-        .filter((event) => event.type === "BOARD_PATCH_COMMITTED"))
-        .toHaveLength(2);
+      expect(committedMutationCount).toBe(2);
     } finally {
       sync.reset();
       await act(async () => {
