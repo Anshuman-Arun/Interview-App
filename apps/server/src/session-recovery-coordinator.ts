@@ -17,6 +17,10 @@ export interface TurnRecoveryDelegate {
   readonly recoverPendingTurns: (sessionId: SessionId) => Promise<void>;
 }
 
+export interface VisionEvidenceRecoveryDelegate {
+  readonly recoverPendingVisionEvidence: (sessionId: SessionId) => Promise<void>;
+}
+
 /**
  * Process-lifetime recovery ownership shared by every transport adapter.
  * A session is recovered at most once successfully in one application runtime.
@@ -24,6 +28,7 @@ export interface TurnRecoveryDelegate {
 export class SessionRecoveryCoordinator {
   private readonly recoveries = new Map<SessionId, Promise<readonly DeliveryId[]>>();
   private delegate: TurnRecoveryDelegate | undefined;
+  private visionEvidenceDelegate: VisionEvidenceRecoveryDelegate | undefined;
 
   public constructor(
     private readonly registry: SessionRuntimeRegistry,
@@ -95,6 +100,17 @@ export class SessionRecoveryCoordinator {
     this.delegate = delegate;
   }
 
+  public setVisionEvidenceRecoveryDelegate(
+    delegate: VisionEvidenceRecoveryDelegate
+  ): () => void {
+    this.visionEvidenceDelegate = delegate;
+    return () => {
+      if (this.visionEvidenceDelegate === delegate) {
+        this.visionEvidenceDelegate = undefined;
+      }
+    };
+  }
+
   public getWriter(sessionId: SessionId): SessionWriter {
     return this.registry.get(sessionId);
   }
@@ -114,6 +130,9 @@ export class SessionRecoveryCoordinator {
     const recovery = (async () => {
       const writer = await this.getWriterAsync(sessionId);
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
+      if (this.visionEvidenceDelegate !== undefined) {
+        await this.visionEvidenceDelegate.recoverPendingVisionEvidence(sessionId);
+      }
       if (this.delegate !== undefined) {
         await this.delegate.recoverPendingTurns(sessionId);
       }
