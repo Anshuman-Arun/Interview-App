@@ -641,13 +641,16 @@ export class VoiceInputCoordinator {
       throw new Error("PCM sequence does not match the next admitted stream sequence");
     }
 
+    const admittedFrame = this.snapshotAdmittedPcmFrame(envelope, payload);
+    const workerPayload = Uint8Array.prototype.slice.call(admittedFrame.bytes) as Uint8Array;
+
     context.operationInFlight = true;
     this.clearIdleLease(context);
     const token = context.token;
     try {
-      const events = await this.speechWorker.submitFrame(envelope, payload);
+      const events = await this.speechWorker.submitFrame(envelope, workerPayload);
       if (!this.isCurrent(context, token)) return { events: [], terminal: true };
-      this.recordAdmittedPcmFrame(context, envelope, payload);
+      this.recordAdmittedPcmFrame(context, admittedFrame);
       context.expectedSequence += 1;
       return await this.applyEvents(context, token, events);
     } finally {
@@ -917,11 +920,10 @@ export class VoiceInputCoordinator {
     };
   }
 
-  private recordAdmittedPcmFrame(
-    context: VoiceStreamContext,
+  private snapshotAdmittedPcmFrame(
     envelope: SpeechPcmFrameEnvelope,
     payload: Uint8Array
-  ): void {
+  ): AdmittedPcmLedgerFrame {
     if (
       !(payload instanceof Uint8Array)
       || payload.byteLength !== envelope.frameSamples * Float32Array.BYTES_PER_ELEMENT
@@ -929,15 +931,21 @@ export class VoiceInputCoordinator {
     ) {
       throw new Error("Admitted PCM frame cannot be represented in the bounded application ledger");
     }
-    const bytes = Uint8Array.prototype.slice.call(payload) as Uint8Array;
-    context.pcmLedger.push({
+    return {
       sequence: envelope.sequence,
       timestampMs: envelope.timestampMs,
       sampleRate: envelope.sampleRate,
       frameSamples: envelope.frameSamples,
-      bytes
-    });
-    context.pcmLedgerBytes += bytes.byteLength;
+      bytes: Uint8Array.prototype.slice.call(payload) as Uint8Array
+    };
+  }
+
+  private recordAdmittedPcmFrame(
+    context: VoiceStreamContext,
+    frame: AdmittedPcmLedgerFrame
+  ): void {
+    context.pcmLedger.push(frame);
+    context.pcmLedgerBytes += frame.bytes.byteLength;
 
     while (
       context.pcmLedgerBytes > MAX_SPEECH_BUFFERED_PCM_BYTES
