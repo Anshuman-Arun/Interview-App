@@ -278,7 +278,10 @@ export class SupervisedProcessRunner {
       this.platform === "win32"
       && this.pinnedIdentities.get(definition.id)?.contentSha256 === undefined
     ) {
-      const contentSha256 = await sha256Executable(definition.executable);
+      const contentSha256 = await sha256Executable(
+        definition.executable,
+        request.signal
+      );
       const afterHash = await inspectExecutable(definition.executable, this.platform);
       if (!sameExecutableIdentity(before, afterHash, this.platform)) {
         throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
@@ -568,8 +571,14 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
+    if (request.signal?.aborted) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
     const powershell = windowsPowerShellExecutablePath(environment);
     const identity = await inspectExecutable(powershell, "win32");
+    if (request.signal?.aborted) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
     if (this.windowsSupervisorIdentity === undefined) {
       this.windowsSupervisorIdentity = identity;
     } else if (
@@ -590,6 +599,9 @@ export class SupervisedProcessRunner {
       encoding: "utf8",
       flag: "wx"
     });
+    if (request.signal?.aborted) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
 
     const args = Object.freeze([
       "-NoLogo",
@@ -1053,16 +1065,44 @@ function tryInspectExecutableSync(
   }
 }
 
-async function sha256Executable(executable: string): Promise<string> {
+async function sha256Executable(
+  executable: string,
+  signal: AbortSignal | undefined
+): Promise<string> {
+  if (signal?.aborted) {
+    throw new SupervisedProcessError("EXECUTION_CANCELLED");
+  }
   const hash = createHash("sha256");
+  const stream = createReadStream(executable);
+  const onAbort = (): void => {
+    stream.destroy();
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
   try {
-    const stream = createReadStream(executable);
     for await (const chunk of stream) {
+      if (signal?.aborted) {
+        throw new SupervisedProcessError("EXECUTION_CANCELLED");
+      }
       hash.update(chunk);
     }
+    if (signal?.aborted) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
     return hash.digest("hex");
-  } catch {
+  } catch (error) {
+    if (
+      error instanceof SupervisedProcessError
+      && error.code === "EXECUTION_CANCELLED"
+    ) {
+      throw error;
+    }
+    if (signal?.aborted) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    stream.destroy();
   }
 }
 
