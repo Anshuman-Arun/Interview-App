@@ -134,6 +134,74 @@ describe("Real tldraw mounted browser integration", () => {
     container.remove();
   });
 
+  it("restores real tldraw shapes after a route-style unmount and remount", async () => {
+    const container = document.createElement("div");
+    container.style.width = "800px";
+    container.style.height = "600px";
+    document.body.appendChild(container);
+
+    const adapter = new TldrawWhiteboardAdapter();
+    const normalizedChanges: NormalizedStudentShapeChange[] = [];
+    const handle = createWhiteboardCanvasMount({
+      adapter,
+      onNormalizedBoardChange: (change) => {
+        normalizedChanges.push(change);
+      }
+    });
+
+    await act(async () => {
+      handle.mount(container);
+    });
+
+    let studentId = "";
+    await act(async () => {
+      const student = adapter.createStudentShape({
+        id: "shape:pause_remount_student",
+        type: "geo",
+        x: 72,
+        y: 88,
+        props: { geo: "rectangle", text: "survives pause" }
+      });
+      studentId = student.id;
+      await adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        targetShapeId: student.id,
+        expectedShapeRevision: 1,
+        annotationPurpose: "pause remount continuity"
+      });
+    });
+
+    const revisionBefore = adapter.getBoardRevision();
+    const idsBefore = adapter.getEditor()
+      ?.getCurrentPageShapes()
+      .map((shape) => shape.id)
+      .sort() ?? [];
+    normalizedChanges.length = 0;
+
+    await act(async () => {
+      handle.unmount();
+    });
+    expect(adapter.getEditor()).toBeNull();
+
+    await act(async () => {
+      handle.mount(container);
+    });
+
+    const remounted = requireRealTldrawBridge(handle);
+    expect(adapter.getEditor()).toBe(remounted);
+    expect(adapter.getBoardRevision()).toBe(revisionBefore);
+    expect(remounted.getCurrentPageShapes().map((shape) => shape.id).sort())
+      .toEqual(idsBefore);
+    expect(remounted.getShape(studentId)?.props?.["text"]).toBe("survives pause");
+    expect(normalizedChanges).toHaveLength(0);
+
+    await act(async () => {
+      handle.unmount();
+    });
+    container.remove();
+  });
+
   it("exercises real DOM pointer and user events on the mounted canvas", async () => {
     const container = document.createElement("div");
     container.style.width = "800px";
