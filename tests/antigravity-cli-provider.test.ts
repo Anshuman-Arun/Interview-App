@@ -398,6 +398,56 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("acknowledges local-process cancellation without waiting for executor settlement", async () => {
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let releaseExecution: (() => void) | undefined;
+    let abortObserved = false;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        request.onProcessStart();
+        markStarted?.();
+        return await new Promise<SupervisedCliExecutionResult>((_resolve, reject) => {
+          const onAbort = (): void => {
+            abortObserved = true;
+            releaseExecution = () => reject(new Error("released-after-cancel"));
+          };
+          if (request.signal.aborted) onAbort();
+          else request.signal.addEventListener("abort", onAbort, { once: true });
+        });
+      })
+    );
+    const session = await provider.createSession();
+    const input = turnInput({ turn: "nonblocking-cancel" });
+    const completion = collectProposals(session.sendTurn(input));
+    await started;
+    if (session.cancelTurn === undefined) {
+      throw new Error("Antigravity session must support cancellation");
+    }
+
+    const cancellation = session.cancelTurn(input.generationId);
+    const winner = await Promise.race([
+      cancellation.then((value) => ({ kind: "CANCELLED" as const, value })),
+      new Promise<{ readonly kind: "TIMEOUT" }>((resolve) => {
+        setTimeout(() => resolve({ kind: "TIMEOUT" }), 100);
+      })
+    ]);
+    expect(winner).toEqual({
+      kind: "CANCELLED",
+      value: {
+        semantics: "INTERRUPT_LOCAL_PROCESS",
+        signalSent: true
+      }
+    });
+    expect(abortObserved).toBe(true);
+
+    releaseExecution?.();
+    await expect(completion).rejects.toBeInstanceOf(AntigravityCliAdapterError);
+    await session.close();
+  });
+
   it("interrupts the supervised local process on generation cancellation without persistent-session reuse", async () => {
     let firstStarted: (() => void) | undefined;
     const started = new Promise<void>((resolve) => {
