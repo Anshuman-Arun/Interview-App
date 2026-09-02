@@ -963,9 +963,9 @@ function snapshotBytes(input: Uint8Array): Uint8Array {
 
 function validateTtsAssemblyConsistency(
   plan: ReturnType<typeof planTtsRequest>,
-  sampleRate: ReturnType<typeof TtsSampleRateSchema.parse>,
+  sampleRate: TtsSampleRate,
   begin: NonNullable<TtsAssembly["begin"]>,
-  chunks: readonly TtsAssembly["chunks"][number][],
+  chunks: ReadonlyArray<TtsAssembly["chunks"][number]>,
   end: NonNullable<TtsAssembly["end"]>
 ): void {
   if (
