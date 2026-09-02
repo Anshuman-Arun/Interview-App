@@ -44,7 +44,7 @@ export interface BoundLocalInterviewTransport {
   readonly voice: BoundVoiceTransportAddress;
 }
 
-/** Composition root for the two authenticated browser transports. */
+/** Composition root for the authenticated command, renderer, and voice transports. */
 export class LocalInterviewTransportRuntime {
   public readonly sessions: SessionRecoveryCoordinator;
   public readonly orchestrator: ServerTurnOrchestrator;
@@ -203,12 +203,13 @@ export class LocalInterviewTransportRuntime {
       failures.push(error);
     }
     try {
-      await Promise.all([...this.voiceDeliveryOperations]);
+      await this.voiceSynthesis?.cancelAll();
+      await this.voiceSynthesis?.shutdown();
     } catch (error) {
       failures.push(error);
     }
     try {
-      await this.voiceSynthesis?.shutdown();
+      await Promise.all([...this.voiceDeliveryOperations]);
     } catch (error) {
       failures.push(error);
     }
@@ -273,16 +274,13 @@ export class LocalInterviewTransportRuntime {
   private scheduleVoiceDelivery(
     sessionId: Parameters<VoiceSynthesisCoordinator["synthesizeSentTextDelivery"]>[0],
     deliveryId: Parameters<VoiceSynthesisCoordinator["synthesizeSentTextDelivery"]>[1]
-  ): Promise<void> {
-    if (this.voiceDeliveryShutdown || this.voiceSynthesis === undefined) {
-      return Promise.resolve();
-    }
+  ): void {
+    if (this.voiceDeliveryShutdown || this.voiceSynthesis === undefined) return;
     const operation = this.handleVoiceDelivery(sessionId, deliveryId);
     this.voiceDeliveryOperations.add(operation);
     void operation.finally(() => {
       this.voiceDeliveryOperations.delete(operation);
     }).catch(() => undefined);
-    return operation;
   }
 
   private async handleVoiceDelivery(
