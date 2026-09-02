@@ -213,19 +213,42 @@ export class VoiceTransportServer {
     const body = await readBody(request, MAX_CONTROL_BYTES);
     const parsed = OpenStreamSchema.safeParse(parseJson(body));
     if (!parsed.success) throw new VoiceHttpError(400, "INVALID_CONTROL", "Voice stream request is invalid");
+    let transportDropped = false;
+    const markTransportDropped = (): void => {
+      if (!response.writableEnded) transportDropped = true;
+    };
+    const onResponseClose = (): void => {
+      if (!response.writableEnded) markTransportDropped();
+    };
+    request.once("aborted", markTransportDropped);
+    response.once("close", onResponseClose);
     try {
-      await coordinator.openStream(parsed.data.sessionId, parsed.data.streamId, parsed.data.sampleRate);
-    } catch (error) {
-      throw classifyCoordinatorError(error);
+      try {
+        await coordinator.openStream(parsed.data.sessionId, parsed.data.streamId, parsed.data.sampleRate);
+      } catch (error) {
+        if (transportDropped) return;
+        throw classifyCoordinatorError(error);
+      }
+      if (transportDropped || response.destroyed) {
+        await coordinator.cancelStream(
+          parsed.data.sessionId,
+          parsed.data.streamId,
+          newRequestId()
+        ).catch(() => undefined);
+        return;
+      }
+      sendJson(response, 200, {
+        protocolVersion: 1,
+        ok: true,
+        type: "VOICE_STREAM_OPENED",
+        sessionId: parsed.data.sessionId,
+        streamId: parsed.data.streamId,
+        sampleRate: parsed.data.sampleRate
+      }, origin);
+    } finally {
+      request.off("aborted", markTransportDropped);
+      response.off("close", onResponseClose);
     }
-    sendJson(response, 200, {
-      protocolVersion: 1,
-      ok: true,
-      type: "VOICE_STREAM_OPENED",
-      sessionId: parsed.data.sessionId,
-      streamId: parsed.data.streamId,
-      sampleRate: parsed.data.sampleRate
-    }, origin);
   }
 
   private async handleFrame(
@@ -354,24 +377,46 @@ export class VoiceTransportServer {
       return;
     }
 
-    let result: VoiceIngressResult;
-    try {
-      result = await coordinator.flush(
+    let transportDropped = false;
+    const cancelDroppedStream = (): void => {
+      if (transportDropped || response.writableEnded) return;
+      transportDropped = true;
+      void coordinator.cancelStream(
         parsed.data.sessionId,
         parsed.data.streamId,
-        parsed.data.requestId
-      );
-    } catch (error) {
-      throw classifyCoordinatorError(error);
+        newRequestId()
+      ).catch(() => undefined);
+    };
+    const onResponseClose = (): void => {
+      if (!response.writableEnded) cancelDroppedStream();
+    };
+    request.once("aborted", cancelDroppedStream);
+    response.once("close", onResponseClose);
+    try {
+      let result: VoiceIngressResult;
+      try {
+        result = await coordinator.flush(
+          parsed.data.sessionId,
+          parsed.data.streamId,
+          parsed.data.requestId
+        );
+      } catch (error) {
+        if (transportDropped) return;
+        throw classifyCoordinatorError(error);
+      }
+      if (transportDropped || response.destroyed) return;
+      sendJson(response, 200, {
+        protocolVersion: 1,
+        ok: true,
+        type: "VOICE_FLUSH_RESULT",
+        events: result.events,
+        terminal: result.terminal,
+        ...(result.commit === undefined ? {} : { commit: result.commit })
+      }, origin);
+    } finally {
+      request.off("aborted", cancelDroppedStream);
+      response.off("close", onResponseClose);
     }
-    sendJson(response, 200, {
-      protocolVersion: 1,
-      ok: true,
-      type: "VOICE_FLUSH_RESULT",
-      events: result.events,
-      terminal: result.terminal,
-      ...(result.commit === undefined ? {} : { commit: result.commit })
-    }, origin);
   }
 
   private handleAudioAsset(
