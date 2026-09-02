@@ -221,6 +221,49 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
+  it("restores iterator cleanup and does not gate an accepted proposal on hanging session close", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      let iteratorClosed: (() => void) | undefined;
+      const iteratorClosedPromise = new Promise<void>((resolve) => {
+        iteratorClosed = resolve;
+      });
+      let closeStarted: (() => void) | undefined;
+      const closeStartedPromise = new Promise<void>((resolve) => {
+        closeStarted = resolve;
+      });
+      const never = new Promise<never>(() => {
+        // Intentionally unresolved provider cleanup.
+      });
+      const provider = testProvider(async () => ({
+        async *sendTurn() {
+          try {
+            yield PROPOSAL;
+            await never;
+          } finally {
+            iteratorClosed?.();
+          }
+        },
+        async close() {
+          closeStarted?.();
+          await never;
+        }
+      }));
+
+      const execution = await harness.coordinator.start(startInput(harness, provider));
+      const outcome = await execution.completion;
+
+      expect(outcome.status).toBe("ACCEPTED");
+      await expect(iteratorClosedPromise).resolves.toBeUndefined();
+      await expect(closeStartedPromise).resolves.toBeUndefined();
+      expect(harness.writer.getState().generations[execution.generationId]?.status)
+        .toBe("VALIDATED");
+      expect(Object.values(harness.writer.getState().deliveries)).toHaveLength(1);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("fails before provider use when new evidence makes the stored pedagogical action stale", async () => {
     const harness = await coordinatorHarness();
     try {
@@ -379,7 +422,7 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
-  it("resolves as cancelled when cancellation races provider-session close after proposal admission", async () => {
+  it("keeps authoritative cancellation effective while provider close remains pending", async () => {
     const harness = await coordinatorHarness();
     try {
       let signalCloseStarted: (() => void) | undefined;
@@ -400,7 +443,7 @@ describe("application-owned ProviderCoordinator", () => {
       releaseClose?.();
       const outcome = await execution.completion;
 
-      expect(outcome.status).toBe("CANCELLED");
+      expect(outcome.status).toBe("ACCEPTED");
       expect(harness.writer.getState().generations[execution.generationId]?.status).toBe("SUPERSEDED");
       expect(Object.values(harness.writer.getState().deliveries)).toHaveLength(1);
       expect(Object.values(harness.writer.getState().deliveries)[0]?.status).toBe("CANCELLED");
