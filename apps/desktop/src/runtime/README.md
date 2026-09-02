@@ -64,7 +64,10 @@ Install the application-owned model manifests explicitly with:
 pnpm setup:desktop-models
 ```
 
-The latter invokes the existing `ModelAssetManager` downloader. It uses fixed
+This is a one-shot bootstrap: after all manifests are verified and published it
+exits successfully instead of opening the interview UI. The command fails if
+another Interview App instance is already running. It invokes the existing
+`ModelAssetManager` downloader. It uses fixed
 HTTPS source URLs, exact expected byte lengths and SHA-256 digests, bounded
 redirects/timeouts/cache size, disk-space checks, staging, verification, and
 atomic publication. It does not accept a model- or renderer-provided path or
