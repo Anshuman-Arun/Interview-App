@@ -135,6 +135,9 @@ export class SupervisedProcessRunner {
   private readonly platform: NodeJS.Platform;
   private readonly pinnedIdentities = new Map<string, ExecutableIdentity>();
   private readonly quarantinedExecutableIds = new Set<string>();
+  private readonly activeControllers = new Set<AbortController>();
+  private readonly activeOperations = new Set<Promise<SupervisedProcessExecutionResult>>();
+  private draining: Promise<void> | undefined;
 
   public constructor(
     definitions: readonly SupervisedExecutableDefinition[],
@@ -181,10 +184,64 @@ export class SupervisedProcessRunner {
     }
   }
 
-  public async execute(
+  public execute(
     input: SupervisedProcessExecutionRequest
   ): Promise<SupervisedProcessExecutionResult> {
     const request = snapshotExecutionRequest(input);
+    if (this.draining !== undefined) {
+      return Promise.reject(new SupervisedProcessError("EXECUTION_CANCELLED"));
+    }
+
+    const controller = new AbortController();
+    const externalSignal = request.signal;
+    const forwardAbort = (): void => controller.abort();
+    if (externalSignal?.aborted) controller.abort();
+    else externalSignal?.addEventListener("abort", forwardAbort, { once: true });
+
+    const trackedRequest = Object.freeze({
+      ...request,
+      signal: controller.signal
+    });
+    this.activeControllers.add(controller);
+    const operation = this.executeSnapshot(trackedRequest);
+    this.activeOperations.add(operation);
+
+    const cleanup = (): void => {
+      externalSignal?.removeEventListener("abort", forwardAbort);
+      this.activeControllers.delete(controller);
+      this.activeOperations.delete(operation);
+    };
+    void operation.then(cleanup, cleanup);
+    return operation;
+  }
+
+  public drain(): Promise<void> {
+    if (this.draining !== undefined) return this.draining;
+    const operation = this.drainActiveOperations();
+    this.draining = operation;
+    const clear = (): void => {
+      if (this.draining === operation) this.draining = undefined;
+    };
+    void operation.then(clear, clear);
+    return operation;
+  }
+
+  private async drainActiveOperations(): Promise<void> {
+    for (const controller of this.activeControllers) controller.abort();
+    const operations = [...this.activeOperations];
+    const results = await Promise.allSettled(operations);
+    if (results.some(
+      (result) =>
+        result.status === "rejected"
+        && isProcessTreeCleanupError(result.reason)
+    )) {
+      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+    }
+  }
+
+  private async executeSnapshot(
+    request: ReturnType<typeof snapshotExecutionRequest>
+  ): Promise<SupervisedProcessExecutionResult> {
     const definition = this.definitions.get(request.executableId);
     if (definition === undefined) throw new SupervisedProcessError("UNKNOWN_EXECUTABLE");
     if (this.quarantinedExecutableIds.has(definition.id)) {
