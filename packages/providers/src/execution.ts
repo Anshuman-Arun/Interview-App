@@ -40,6 +40,7 @@ export type ProviderExecutionErrorCode =
   | "MISSING_BILLING_VERIFIER"
   | "BILLING_VERIFICATION_FAILED"
   | "SESSION_CREATION_FAILED"
+  | "INVALID_TURN_INPUT"
   | "PROVIDER_STREAM_FAILED"
   | "INVALID_PROVIDER_OUTPUT"
   | "INVALID_CANCELLATION_RESULT"
@@ -343,7 +344,7 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
     try {
       snapshot = snapshotReasoningTurnInput(input);
     } catch {
-      return rejectedProviderTurn("INVALID_PROVIDER_OUTPUT");
+      return rejectedProviderTurn("INVALID_TURN_INPUT");
     }
     return this.iterateTurn(snapshot);
   }
@@ -815,6 +816,7 @@ function providerExecutionErrorMessage(code: ProviderExecutionErrorCode): string
     case "MISSING_BILLING_VERIFIER": return "Provider billing verifier is unavailable";
     case "BILLING_VERIFICATION_FAILED": return "Provider billing verification failed";
     case "SESSION_CREATION_FAILED": return "Provider session creation failed";
+    case "INVALID_TURN_INPUT": return "Provider turn input failed validation";
     case "PROVIDER_STREAM_FAILED": return "Provider stream failed";
     case "INVALID_PROVIDER_OUTPUT": return "Provider output failed validation";
     case "INVALID_CANCELLATION_RESULT": return "Provider cancellation result failed validation";
