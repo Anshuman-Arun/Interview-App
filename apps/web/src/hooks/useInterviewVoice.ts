@@ -64,7 +64,6 @@ export interface UseInterviewVoiceOptions {
 export interface UseInterviewVoiceResult {
   readonly voice: InterviewVoiceState;
   readonly voiceControls: InterviewVoiceControls;
-  readonly resolveAudioSource: BrowserVoiceClient["resolveAudioSource"];
 }
 
 export function useInterviewVoice(options: UseInterviewVoiceOptions): UseInterviewVoiceResult {
@@ -377,19 +376,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
       selectInputDevice,
       selectOutputDevice,
       refreshAudioDevices
-    },
-    resolveAudioSource: useCallback((
-      audioRef: string,
-      deliveryId: Parameters<BrowserVoiceClient["resolveAudioSource"]>[2],
-      signal: AbortSignal
-    ) => {
-      const sessionId = optionsRef.current.sessionId;
-      const client = clientRef.current;
-      if (sessionId === null || client === null) {
-        return Promise.reject(new Error("Voice audio source is not bound to an active session"));
-      }
-      return client.resolveAudioSource(sessionId, audioRef, deliveryId, signal);
-    }, [])
+    }
   };
 }
 
