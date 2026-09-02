@@ -95,6 +95,7 @@ export class DesktopLocalRuntimeComposition {
   private ttsWorker: TtsWorkerCore | undefined;
   private startPromise: Promise<void> | undefined;
   private stopPromise: Promise<void> | undefined;
+  private readonly lifecycleAbort = new AbortController();
   private stopping = false;
   private stopped = false;
 
@@ -125,7 +126,10 @@ export class DesktopLocalRuntimeComposition {
       return Promise.reject(new Error("Desktop local runtime cannot start after shutdown"));
     }
     if (this.startPromise !== undefined) return this.startPromise;
-    const operation = this.startOptionalCapabilities(options.signal);
+    const signal = options.signal === undefined
+      ? this.lifecycleAbort.signal
+      : AbortSignal.any([this.lifecycleAbort.signal, options.signal]);
+    const operation = this.startOptionalCapabilities(signal);
     this.startPromise = operation;
     return operation;
   }
@@ -150,6 +154,7 @@ export class DesktopLocalRuntimeComposition {
     if (this.stopPromise !== undefined) return this.stopPromise;
 
     this.stopping = true;
+    this.lifecycleAbort.abort();
     const operation = this.performStopWorkers();
     this.stopPromise = operation;
     void operation.finally(() => {
@@ -160,6 +165,15 @@ export class DesktopLocalRuntimeComposition {
 
   private async performStopWorkers(): Promise<void> {
     const failures: unknown[] = [];
+    // Join startup after aborting it before touching the manager. Otherwise an
+    // early materialization/inspection continuation could register a worker
+    // after stopAll() had already returned.
+    if (this.startPromise !== undefined) {
+      await this.startPromise.catch((error: unknown) => {
+        if (!isAbortError(error)) failures.push(error);
+      });
+    }
+
     const coreShutdowns = [
       this.speechWorker?.shutdown(),
       this.ttsWorker?.shutdown()
@@ -620,6 +634,10 @@ function unavailable(reasonCode: string, modelIdentity?: string): DesktopRuntime
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function abortRequested(signal: AbortSignal | undefined): boolean {
