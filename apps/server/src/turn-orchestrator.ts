@@ -39,6 +39,14 @@ interface ActiveProviderExecution {
   readonly coordinator: ProviderCoordinator;
 }
 
+interface InFlightOrchestration {
+  readonly input: TurnOrchestrationInput;
+  readonly completion: Promise<TurnOrchestrationDisposition>;
+  readonly cancellationSignal: Promise<void>;
+  readonly signalCancellation: () => void;
+  readonly cancellationRequested: () => boolean;
+}
+
 function usesDeterministicMockRealization(
   configuration: {
     readonly providerSelection?: {
@@ -54,7 +62,7 @@ function usesDeterministicMockRealization(
 
 export class ServerTurnOrchestrator {
   private readonly validator: DisclosureValidator;
-  private readonly inFlight = new Map<string, Promise<TurnOrchestrationDisposition>>();
+  private readonly inFlight = new Map<string, InFlightOrchestration>();
   private readonly activeProviderExecutions = new Map<GenerationId, ActiveProviderExecution>();
 
   public constructor(
@@ -77,9 +85,15 @@ export class ServerTurnOrchestrator {
    * This never waits for a fallible provider to acknowledge cancellation, so
    * new authoritative work cannot be blocked by an uncooperative remote.
    */
-  public requestCancellationForSupersededGenerations(
+  public requestCancellationForSupersededWork(
     sessionId: SessionId
   ): void {
+    for (const orchestration of this.inFlight.values()) {
+      if (orchestration.input.sessionId === sessionId) {
+        orchestration.signalCancellation();
+      }
+    }
+
     const writer = this.sessions.getWriter(sessionId);
     const state = writer.getState();
     const records = Array.from(this.activeProviderExecutions.values())
@@ -102,7 +116,9 @@ export class ServerTurnOrchestrator {
   }
 
   public async waitForAll(): Promise<void> {
-    await Promise.all(Array.from(this.inFlight.values()));
+    await Promise.all(
+      Array.from(this.inFlight.values()).map((record) => record.completion)
+    );
   }
 
   public async recoverPendingTurns(
@@ -167,29 +183,56 @@ export class ServerTurnOrchestrator {
   private async orchestrateTurnWithDisposition(
     input: TurnOrchestrationInput
   ): Promise<TurnOrchestrationDisposition> {
-    // A new authoritative turn normally arrives after commitInput has already
-    // superseded old generations. Reconcile physical execution before starting
-    // more provider work.
-    this.requestCancellationForSupersededGenerations(input.sessionId);
-
     const key = `${input.sessionId}:${input.turnId}`;
     const existing = this.inFlight.get(key);
     if (existing !== undefined) {
-      return existing;
+      return existing.completion;
     }
 
-    const orchestration = this.executeOrchestration(input).finally(() => {
-      if (this.inFlight.get(key) === orchestration) {
+    // A new authoritative turn normally arrives after commitInput has already
+    // superseded old generations. Cancel older resolver/provider work locally
+    // before beginning this turn, but never wait for remote acknowledgement.
+    this.requestCancellationForSupersededWork(input.sessionId);
+
+    let requested = false;
+    let signalCancellation: (() => void) | undefined;
+    const cancellationSignal = new Promise<void>((resolve) => {
+      signalCancellation = () => {
+        if (requested) return;
+        requested = true;
+        resolve();
+      };
+    });
+    if (signalCancellation === undefined) {
+      throw new Error("Orchestration cancellation signal initialization failed");
+    }
+
+    let record: InFlightOrchestration;
+    const completion = this.executeOrchestration(
+      input,
+      cancellationSignal,
+      () => requested
+    ).finally(() => {
+      if (this.inFlight.get(key) === record) {
         this.inFlight.delete(key);
       }
     });
+    record = {
+      input,
+      completion,
+      cancellationSignal,
+      signalCancellation,
+      cancellationRequested: () => requested
+    };
 
-    this.inFlight.set(key, orchestration);
-    return orchestration;
+    this.inFlight.set(key, record);
+    return completion;
   }
 
   private async executeOrchestration(
-    input: TurnOrchestrationInput
+    input: TurnOrchestrationInput,
+    cancellationSignal: Promise<void>,
+    cancellationRequested: () => boolean
   ): Promise<TurnOrchestrationDisposition> {
     const writer = this.sessions.getWriter(input.sessionId);
 
@@ -240,17 +283,27 @@ export class ServerTurnOrchestrator {
     // 3. Resolve the authoritative provider/model through the application-owned
     // runtime boundary and the existing provider control plane. Raw runtime
     // errors never escape; recovery receives only a stable retry disposition.
-    let runtimeResolution: Awaited<ReturnType<ProviderRuntimeResolver["resolve"]>>;
-    try {
-      runtimeResolution = await this.providerRuntime.resolve({
-        ...(composition.configuration.providerSelection === undefined
-          ? {}
-          : { selection: composition.configuration.providerSelection }),
-        ...(mockProposal === undefined ? {} : { mockProposal })
-      });
-    } catch {
+    const runtimeOpening = this.providerRuntime.resolve({
+      ...(composition.configuration.providerSelection === undefined
+        ? {}
+        : { selection: composition.configuration.providerSelection }),
+      ...(mockProposal === undefined ? {} : { mockProposal })
+    }).then(
+      (resolution) => ({ kind: "RESOLVED" as const, resolution }),
+      () => ({ kind: "FAILED" as const })
+    );
+
+    const runtimeResult = await Promise.race([
+      runtimeOpening,
+      cancellationSignal.then(() => ({ kind: "CANCELLED" as const }))
+    ]);
+    if (runtimeResult.kind === "CANCELLED" || cancellationRequested()) {
+      return "COMPLETE";
+    }
+    if (runtimeResult.kind === "FAILED") {
       return "RETRYABLE_PROVIDER_RUNTIME";
     }
+    const runtimeResolution = runtimeResult.resolution;
 
     // 4. ProviderCoordinator owns policy/billing admission, context compilation,
     // provider execution, proposal admission, and delivery validation.
@@ -282,6 +335,12 @@ export class ServerTurnOrchestrator {
       // Close the race where authoritative invalidation happens between
       // startGeneration and registration in activeProviderExecutions.
       this.requestCancellationIfSuperseded(activeRecord);
+      if (cancellationRequested()) {
+        void coordinator.cancelGeneration(
+          execution.generationId,
+          "Authoritative state superseded provider execution"
+        ).catch(() => undefined);
+      }
 
       const outcome = await execution.completion;
       if (outcome.status === "FAILED") {
