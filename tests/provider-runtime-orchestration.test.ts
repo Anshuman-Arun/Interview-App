@@ -540,10 +540,10 @@ describe("production provider runtime resolution", () => {
       const generation = Object.values(harness.writer.getState().generations)[0];
       expect(generation?.status).toBe("SUPERSEDED");
 
-      await orchestrator.cancelSupersededGenerations(harness.sessionId);
+      orchestrator.requestCancellationForSupersededGenerations(harness.sessionId);
+      await expect(orchestration).resolves.toBeUndefined();
       expect(aborted).toBe(true);
       expect(signalRef?.aborted).toBe(true);
-      await expect(orchestration).resolves.toBeUndefined();
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
     } finally {
       await harness.close();
