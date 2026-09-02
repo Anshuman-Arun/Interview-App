@@ -384,8 +384,11 @@ export class QuantResearchCoordinator {
         }];
         const result = canonicalEventResult(engine);
         if (result.status === "COMPLETE") {
-          if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
-            throw new Error("Cannot complete Quant Research while an input episode is active");
+          if (
+            Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")
+            || Object.values(state.utterances).some((utterance) => utterance.status === "CAPTURING")
+          ) {
+            throw new Error("Cannot complete Quant Research while candidate input is unresolved");
           }
           drafts.unshift(...terminalInvalidationDrafts(
             state,
