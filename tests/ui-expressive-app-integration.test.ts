@@ -240,10 +240,28 @@ describe("expressive product integration invariants", () => {
     );
 
     expect(hook).toContain("deriveDefaultRendererStreamUrl(candidate)");
-    expect(hook).toContain("Command server URL must be an exact HTTP loopback origin with a usable port");
+    expect(hook).toContain("deriveDefaultVoiceBaseUrl(candidate)");
+    expect(hook).toContain("Command server URL must be an exact HTTP loopback origin with usable renderer and voice ports");
     expect(hook).toContain("if (normalized === baseUrl) return");
     expect(app).toContain("setInputUrl(session.baseUrl)");
     expect(app).toContain("[session.baseUrl]");
+  });
+
+  it("keeps ambiguous and superseded terminal outcomes fail-closed", () => {
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(hook).toContain("client.getSessionSummary(targetSessionId)");
+    expect(hook).toContain("TerminalSessionOutcomeUnknownError");
+    expect(hook).toContain("TerminalSessionTransitionSupersededError");
+    expect(app).toContain("error instanceof TerminalSessionOutcomeUnknownError");
+    expect(app).toContain("error instanceof TerminalSessionTransitionSupersededError");
   });
 
   it("fails closed for live interaction states and validates manual recovery", () => {
