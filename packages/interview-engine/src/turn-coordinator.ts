@@ -1012,14 +1012,22 @@ export class TurnCoordinator {
     ) {
       throw new Error("TTS source text is invalid or exceeds the bounded realization size");
     }
-    if (!/^[0-9a-f]{64}$/u.test(input.textSha256)) {
+    if (
+      typeof input.textSha256 !== "string"
+      || input.textSha256.length !== 64
+      || !/^[0-9a-f]{64}$/u.test(input.textSha256)
+    ) {
       throw new Error("TTS source text hash is malformed");
     }
     const computedTextSha256 = createHash("sha256").update(input.text, "utf8").digest("hex");
     if (computedTextSha256 !== input.textSha256) {
       throw new Error("TTS source text hash does not match the exact realization text");
     }
-    if (!/^audio_v1_[0-9a-f]{64}$/u.test(input.audioRef) || input.audioRef.length > 80) {
+    if (
+      typeof input.audioRef !== "string"
+      || input.audioRef.length !== 73
+      || !/^audio_v1_[0-9a-f]{64}$/u.test(input.audioRef)
+    ) {
       throw new Error("TTS audio reference is malformed");
     }
 
