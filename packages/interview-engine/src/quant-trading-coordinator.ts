@@ -25,6 +25,7 @@ import {
   QuantStudentActionSchema,
   QuantTraderScenarioFamilySchema,
   createQuantTraderScenario,
+  type QuantRoundEvidence,
   type QuantTraderInterviewEngine,
   type QuantTraderScenarioResult
 } from "../../local-compute/src/index.js";
@@ -43,8 +44,7 @@ function jsonDataEqual(left: unknown, right: unknown): boolean {
 }
 
 function terminalResultEvent(
-  result: QuantTraderScenarioResult,
-  terminalMarketEvents: readonly unknown[]
+  result: QuantTraderScenarioResult
 ): QuantTradingResultEvent {
   return QuantTradingResultEventSchema.parse({
     family: result.family,
@@ -65,9 +65,17 @@ function terminalResultEvent(
     noiseFlowCount: result.noiseFlowCount,
     adverseSelectionPnL: result.adverseSelectionPnL,
     accountingInvariantHolds: result.accountingInvariantHolds,
-    objectiveScore: result.objectiveScore,
-    terminalMarketEvents
+    objectiveScore: result.objectiveScore
   });
+}
+
+function persistedRoundEvidence(evidence: QuantRoundEvidence): QuantTradingRoundEvidenceEvent {
+  const {
+    studentAction: _studentAction,
+    marketStateAfterAction: _marketStateAfterAction,
+    ...semanticEvidence
+  } = evidence;
+  return QuantTradingRoundEvidenceEventSchema.parse(semanticEvidence);
 }
 
 function publicRound(evidence: QuantTradingRoundEvidenceEvent) {
@@ -162,12 +170,20 @@ function reconstructQuantTradingEngine(
     seed: persisted.definition.seed
   });
 
-  for (const persistedRound of persisted.rounds) {
+  if (persisted.actions.length !== persisted.rounds.length) {
+    throw new Error("Persisted Quant Trading action and round histories are misaligned");
+  }
+
+  for (const [index, persistedRound] of persisted.rounds.entries()) {
     if (engine.getState().status !== "ACTIVE") {
       throw new Error("Persisted Quant Trading history continues after deterministic completion");
     }
-    engine.submitAction(QuantStudentActionSchema.parse(persistedRound.studentAction));
-    const recomputed = QuantTradingRoundEvidenceEventSchema.parse(engine.advance());
+    const persistedAction = persisted.actions[index];
+    if (persistedAction === undefined) {
+      throw new Error("Persisted Quant Trading round is missing its accepted action");
+    }
+    engine.submitAction(QuantStudentActionSchema.parse(persistedAction));
+    const recomputed = persistedRoundEvidence(engine.advance());
     if (!jsonDataEqual(recomputed, persistedRound)) {
       throw new Error("Persisted Quant Trading round outcome does not match deterministic replay");
     }
@@ -175,10 +191,7 @@ function reconstructQuantTradingEngine(
 
   const engineTerminal = engine.getState().status !== "ACTIVE";
   if (engineTerminal) {
-    const recomputedResult = terminalResultEvent(
-      engine.getResult(),
-      engine.getState().currentRoundEvents
-    );
+    const recomputedResult = terminalResultEvent(engine.getResult());
     if (persisted.result === undefined || !jsonDataEqual(recomputedResult, persisted.result)) {
       throw new Error("Persisted Quant Trading terminal result does not match deterministic replay");
     }
@@ -299,7 +312,7 @@ export class QuantTradingSessionCoordinator {
       }
       const { configuration, engine } = reconstructQuantTradingEngine(state);
       engine.submitAction(action);
-      const evidence = QuantTradingRoundEvidenceEventSchema.parse(engine.advance());
+      const evidence = persistedRoundEvidence(engine.advance());
       const drafts: EventDraft[] = [
         {
           source: "USER",
@@ -314,10 +327,7 @@ export class QuantTradingSessionCoordinator {
       ];
 
       if (engine.getState().status !== "ACTIVE") {
-        const result = terminalResultEvent(
-          engine.getResult(),
-          engine.getState().currentRoundEvents
-        );
+        const result = terminalResultEvent(engine.getResult());
         const completedAt = new Date().toISOString();
         drafts.push(
           {
