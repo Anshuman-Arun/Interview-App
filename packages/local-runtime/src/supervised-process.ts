@@ -224,7 +224,16 @@ export class SupervisedProcessRunner {
   public execute(
     input: SupervisedProcessExecutionRequest
   ): Promise<SupervisedProcessExecutionResult> {
-    const request = snapshotExecutionRequest(input);
+    let request: ReturnType<typeof snapshotExecutionRequest>;
+    try {
+      request = snapshotExecutionRequest(input);
+    } catch (error) {
+      return Promise.reject(
+        error instanceof SupervisedProcessError
+          ? error
+          : new SupervisedProcessError("INVALID_REQUEST")
+      );
+    }
     if (this.containmentCompromised) {
       return Promise.reject(
         new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED")
