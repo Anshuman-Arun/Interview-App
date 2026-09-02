@@ -48,14 +48,7 @@ export class SessionRecoveryCoordinator {
       readonly generationId: string;
       readonly medium: "TEXT" | "AUDIO";
     }>();
-    const exposedTextKeys = new Set(
-      Object.values(state.deliveries).flatMap((delivery) =>
-        delivery.content.medium === "TEXT"
-        && (delivery.status === "EXPOSED" || delivery.status === "COMPLETED")
-          ? [semanticDeliveryKey(delivery.generationId, delivery.content.text)]
-          : []
-      )
-    );
+    const exposedSemanticKeys = new Set<string>();
     const history: SessionHistoryEntry[] = [];
     for (const event of events) {
       if (event.type === "DELIVERY_QUEUED") {
@@ -94,10 +87,9 @@ export class SessionRecoveryCoordinator {
         content !== undefined
         && (current?.status === "EXPOSED" || current?.status === "COMPLETED")
       ) {
-        const derivedAudioDuplicate =
-          content.medium === "AUDIO"
-          && exposedTextKeys.has(semanticDeliveryKey(content.generationId, content.text));
-        if (!derivedAudioDuplicate) {
+        const semanticKey = semanticDeliveryKey(content.generationId, content.text);
+        if (!exposedSemanticKeys.has(semanticKey)) {
+          exposedSemanticKeys.add(semanticKey);
           history.push(SessionHistoryEntrySchema.parse({
             role: "INTERVIEWER",
             sequence: event.sequence,
