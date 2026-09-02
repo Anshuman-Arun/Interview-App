@@ -15,6 +15,7 @@ import {
   type ProviderSecretResolver
 } from "../../../packages/providers/src/index.js";
 
+const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 const RUNTIME_CONFIGURATION_KEYS = new Set([
   "enabled",
   "reasoning",
@@ -26,6 +27,7 @@ const POLICY_KEYS = new Set([
   "maximumDataUse",
   "billingVerificationMaxAgeMs"
 ]);
+const SELECTION_KEYS = new Set(["providerId", "modelId"]);
 
 export const DEFAULT_PROVIDER_SELECTION: ProviderSelectionReference = Object.freeze({
   providerId: "mock-model",
@@ -85,30 +87,52 @@ export class ProviderRuntimeResolutionError extends Error {
   }
 }
 
+type RuntimeSourceOperation = (selection: ProviderSelectionReference) => unknown;
+
+interface CapturedRuntimeSourceOperation {
+  readonly receiver: object;
+  readonly operation: RuntimeSourceOperation;
+}
+
 export class ProviderRuntimeResolver {
   private readonly registry: ProviderRegistry;
-  private readonly configurationSource: ProviderRuntimeConfigurationSource | undefined;
-  private readonly adapterRuntimeSource: ProviderAdapterRuntimeSource | undefined;
+  private readonly configurationOperation: CapturedRuntimeSourceOperation | undefined;
+  private readonly adapterRuntimeOperation: CapturedRuntimeSourceOperation | undefined;
   private readonly secretResolver: ProviderSecretResolver | undefined;
-  private readonly policySource: ProviderRuntimePolicySource | undefined;
+  private readonly policyOperation: CapturedRuntimeSourceOperation | undefined;
 
   public constructor(options: ProviderRuntimeResolverOptions = {}) {
     this.registry = options.registry ?? registerBuiltInProviders();
-    this.configurationSource = options.configurationSource;
-    this.adapterRuntimeSource = options.adapterRuntimeSource;
+    this.configurationOperation = captureRuntimeSourceOperation(
+      options.configurationSource,
+      "resolveConfiguration",
+      "RUNTIME_CONFIGURATION_FAILED"
+    );
+    this.adapterRuntimeOperation = captureRuntimeSourceOperation(
+      options.adapterRuntimeSource,
+      "resolveRuntime",
+      "RUNTIME_DEPENDENCY_FAILED"
+    );
     this.secretResolver = options.secretResolver;
-    this.policySource = options.policySource;
+    this.policyOperation = captureRuntimeSourceOperation(
+      options.policySource,
+      "resolvePolicy",
+      "POLICY_RESOLUTION_FAILED"
+    );
   }
 
   public async resolve(input: {
     readonly selection?: ProviderSelectionReference;
     readonly mockProposal?: InterviewerProposal;
   }): Promise<ProviderRuntimeResolution> {
-    const selection = input.selection ?? DEFAULT_PROVIDER_SELECTION;
+    const selection = snapshotProviderSelection(input.selection);
 
     let runtimeConfiguration: unknown;
     try {
-      runtimeConfiguration = await this.configurationSource?.resolveConfiguration(selection);
+      runtimeConfiguration = await invokeRuntimeSource(
+        this.configurationOperation,
+        selection
+      );
     } catch {
       throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
     }
@@ -125,6 +149,18 @@ export class ProviderRuntimeResolver {
       throw controlPlaneResolutionError(error);
     }
 
+    // Resolve and validate the application safety policy before touching
+    // adapter-specific runtime dependencies or credential material.
+    let rawPolicy: unknown;
+    try {
+      rawPolicy = this.policyOperation === undefined
+        ? DEFAULT_PROVIDER_RUNTIME_POLICY
+        : await invokeRuntimeSource(this.policyOperation, selection);
+    } catch {
+      throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
+    }
+    const policy = snapshotProviderPolicy(rawPolicy);
+
     let runtime: unknown;
     if (selection.providerId === "mock-model" && selection.modelId === "mock-default") {
       if (input.mockProposal === undefined) {
@@ -133,7 +169,7 @@ export class ProviderRuntimeResolver {
       runtime = Object.freeze({ proposal: input.mockProposal });
     } else {
       try {
-        runtime = await this.adapterRuntimeSource?.resolveRuntime(selection);
+        runtime = await invokeRuntimeSource(this.adapterRuntimeOperation, selection);
       } catch {
         throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
       }
@@ -151,16 +187,6 @@ export class ProviderRuntimeResolver {
       throw controlPlaneResolutionError(error);
     }
 
-    let rawPolicy: unknown;
-    try {
-      rawPolicy = this.policySource === undefined
-        ? DEFAULT_PROVIDER_RUNTIME_POLICY
-        : await this.policySource.resolvePolicy(selection);
-    } catch {
-      throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
-    }
-    const policy = snapshotProviderPolicy(rawPolicy);
-
     return Object.freeze({
       providerId: resolved.provider.id,
       modelId: resolved.model.id,
@@ -168,6 +194,79 @@ export class ProviderRuntimeResolver {
       policy
     });
   }
+}
+
+function captureRuntimeSourceOperation(
+  source: object | undefined,
+  key: string,
+  errorCode:
+    | "RUNTIME_CONFIGURATION_FAILED"
+    | "RUNTIME_DEPENDENCY_FAILED"
+    | "POLICY_RESOLUTION_FAILED"
+): CapturedRuntimeSourceOperation | undefined {
+  if (source === undefined) return undefined;
+
+  let current: object | null = source;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) break;
+
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      throw new ProviderRuntimeResolutionError(errorCode);
+    }
+    if (descriptor !== undefined) {
+      if (!("value" in descriptor) || typeof descriptor.value !== "function") {
+        throw new ProviderRuntimeResolutionError(errorCode);
+      }
+      return Object.freeze({
+        receiver: source,
+        operation: descriptor.value as RuntimeSourceOperation
+      });
+    }
+
+    try {
+      const prototypeCandidate: unknown = Object.getPrototypeOf(current);
+      if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+        throw new ProviderRuntimeResolutionError(errorCode);
+      }
+      current = prototypeCandidate;
+    } catch {
+      throw new ProviderRuntimeResolutionError(errorCode);
+    }
+  }
+
+  throw new ProviderRuntimeResolutionError(errorCode);
+}
+
+async function invokeRuntimeSource(
+  operation: CapturedRuntimeSourceOperation | undefined,
+  selection: ProviderSelectionReference
+): Promise<unknown> {
+  if (operation === undefined) return undefined;
+  return await REFLECT_APPLY_INTRINSIC(
+    operation.operation,
+    operation.receiver,
+    [selection]
+  ) as unknown;
+}
+
+function snapshotProviderSelection(
+  value: ProviderSelectionReference | undefined
+): ProviderSelectionReference {
+  if (value === undefined) return DEFAULT_PROVIDER_SELECTION;
+  const snapshot = snapshotPlainOwnDataRecord(
+    value,
+    SELECTION_KEYS,
+    "MALFORMED_CONFIGURATION"
+  );
+  const providerId = snapshot.providerId;
+  const modelId = snapshot.modelId;
+  if (typeof providerId !== "string" || typeof modelId !== "string") {
+    throw new ProviderRuntimeResolutionError("MALFORMED_CONFIGURATION");
+  }
+  return Object.freeze({ providerId, modelId });
 }
 
 function composeProviderConfiguration(
@@ -193,81 +292,34 @@ function snapshotRuntimeConfiguration(value: unknown): {
   readonly credentialRef?: unknown;
 } {
   if (value === undefined) return Object.freeze({});
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
-  }
-
-  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
-  let symbols: readonly symbol[];
-  let prototype: object | null;
-  try {
-    descriptors = Object.getOwnPropertyDescriptors(value);
-    symbols = Object.getOwnPropertySymbols(value);
-    const prototypeCandidate: unknown = Object.getPrototypeOf(value);
-    if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
-      throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
-    }
-    prototype = prototypeCandidate;
-  } catch {
-    throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
-  }
-  if (
-    symbols.length !== 0
-    || (prototype !== Object.prototype && prototype !== null)
-  ) {
-    throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
-  }
-
-  const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-  for (const key of Object.keys(descriptors)) {
-    if (!RUNTIME_CONFIGURATION_KEYS.has(key)) {
-      throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
-    }
-    const descriptor = descriptors[key];
-    if (
-      descriptor === undefined
-      || descriptor.enumerable !== true
-      || !("value" in descriptor)
-    ) {
-      throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
-    }
-    output[key] = descriptor.value;
-  }
-  return Object.freeze(output);
+  return snapshotPlainOwnDataRecord(
+    value,
+    RUNTIME_CONFIGURATION_KEYS,
+    "RUNTIME_CONFIGURATION_FAILED"
+  );
 }
 
 function snapshotProviderPolicy(value: unknown): ProviderPolicy {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
-  }
+  const descriptors = inspectPlainOwnDataRecord(
+    value,
+    POLICY_KEYS,
+    "POLICY_RESOLUTION_FAILED"
+  );
 
-  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
-  let symbols: readonly symbol[];
-  let prototype: object | null;
-  try {
-    descriptors = Object.getOwnPropertyDescriptors(value);
-    symbols = Object.getOwnPropertySymbols(value);
-    const prototypeCandidate: unknown = Object.getPrototypeOf(value);
-    if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
-      throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
-    }
-    prototype = prototypeCandidate;
-  } catch {
-    throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
-  }
-  if (
-    symbols.length !== 0
-    || (prototype !== Object.prototype && prototype !== null)
-    || Object.keys(descriptors).some((key) => !POLICY_KEYS.has(key))
-  ) {
-    throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
-  }
-
-  const allowMeteredUsage = readPolicyDataProperty(descriptors, "allowMeteredUsage");
-  const maximumDataUse = readPolicyDataProperty(descriptors, "maximumDataUse");
-  const billingVerificationMaxAgeMs = readPolicyDataProperty(
+  const allowMeteredUsage = readRequiredDataProperty(
     descriptors,
-    "billingVerificationMaxAgeMs"
+    "allowMeteredUsage",
+    "POLICY_RESOLUTION_FAILED"
+  );
+  const maximumDataUse = readRequiredDataProperty(
+    descriptors,
+    "maximumDataUse",
+    "POLICY_RESOLUTION_FAILED"
+  );
+  const billingVerificationMaxAgeMs = readRequiredDataProperty(
+    descriptors,
+    "billingVerificationMaxAgeMs",
+    "POLICY_RESOLUTION_FAILED"
   );
   const parsedDataUse = DataUsePolicySchema.safeParse(maximumDataUse);
   if (
@@ -287,17 +339,76 @@ function snapshotProviderPolicy(value: unknown): ProviderPolicy {
   });
 }
 
-function readPolicyDataProperty(
+function snapshotPlainOwnDataRecord(
+  value: unknown,
+  allowedKeys: ReadonlySet<string>,
+  errorCode: ProviderRuntimeResolutionErrorCode
+): Readonly<Record<string, unknown>> {
+  const descriptors = inspectPlainOwnDataRecord(value, allowedKeys, errorCode);
+  const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const key of Object.keys(descriptors)) {
+    const descriptor = descriptors[key];
+    if (descriptor === undefined || !("value" in descriptor)) {
+      throw new ProviderRuntimeResolutionError(errorCode);
+    }
+    output[key] = descriptor.value;
+  }
+  return Object.freeze(output);
+}
+
+function inspectPlainOwnDataRecord(
+  value: unknown,
+  allowedKeys: ReadonlySet<string>,
+  errorCode: ProviderRuntimeResolutionErrorCode
+): Readonly<Record<string, PropertyDescriptor>> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ProviderRuntimeResolutionError(errorCode);
+  }
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  let prototype: object | null;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+    const prototypeCandidate: unknown = Object.getPrototypeOf(value);
+    if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+      throw new ProviderRuntimeResolutionError(errorCode);
+    }
+    prototype = prototypeCandidate;
+  } catch {
+    throw new ProviderRuntimeResolutionError(errorCode);
+  }
+
+  if (
+    symbols.length !== 0
+    || (prototype !== Object.prototype && prototype !== null)
+  ) {
+    throw new ProviderRuntimeResolutionError(errorCode);
+  }
+
+  for (const key of Object.keys(descriptors)) {
+    const descriptor = descriptors[key];
+    if (
+      !allowedKeys.has(key)
+      || descriptor === undefined
+      || descriptor.enumerable !== true
+      || !("value" in descriptor)
+    ) {
+      throw new ProviderRuntimeResolutionError(errorCode);
+    }
+  }
+  return descriptors;
+}
+
+function readRequiredDataProperty(
   descriptors: Readonly<Record<string, PropertyDescriptor>>,
-  key: string
+  key: string,
+  errorCode: ProviderRuntimeResolutionErrorCode
 ): unknown {
   const descriptor = descriptors[key];
-  if (
-    descriptor === undefined
-    || descriptor.enumerable !== true
-    || !("value" in descriptor)
-  ) {
-    throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
+  if (descriptor === undefined || !("value" in descriptor)) {
+    throw new ProviderRuntimeResolutionError(errorCode);
   }
   return descriptor.value;
 }
