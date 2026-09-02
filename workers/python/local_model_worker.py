@@ -733,20 +733,37 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def monitor_parent_stdin(server: Any, stream: Any) -> None:
+def monitor_parent_stdin(
+    server_holder: dict[str, Any],
+    stream: Any,
+    exit_process: Any = os._exit,
+) -> None:
     try:
         for line in stream:
             if line.rstrip("\r\n") == "shutdown":
-                return
+                break
     finally:
-        # EOF means the supervising desktop process closed/died. The worker is
-        # application-owned and must not survive as an orphan merely because it
-        # did not receive the graceful command first.
+        # Start monitoring before any heavyweight model/runtime initialization.
+        # If supervision disappears before the HTTP server exists, terminate the
+        # worker immediately instead of waiting for model loading to finish.
+        server = server_holder.get("server")
+        if server is None:
+            exit_process(0)
+            return
         server.shutdown()
 
 
 def main() -> int:
     args = parse_args()
+    server_holder: dict[str, Any] = {}
+    monitor = threading.Thread(
+        target=monitor_parent_stdin,
+        args=(server_holder, sys.stdin),
+        name="desktop-worker-stdin",
+        daemon=True,
+    )
+    monitor.start()
+
     require_runtime_environment()
     token = require_worker_token()
     runtime: Any
@@ -786,13 +803,7 @@ def main() -> int:
     server = WorkerServer(("127.0.0.1", 0), Handler, token=token, component=args.component, runtime=runtime)
     port = int(server.server_address[1])
 
-    monitor = threading.Thread(
-        target=monitor_parent_stdin,
-        args=(server, sys.stdin),
-        name="desktop-worker-stdin",
-        daemon=True,
-    )
-    monitor.start()
+    server_holder["server"] = server
     ready = {
         "ready": True,
         "detail": f"{args.component} local model worker ready",
