@@ -496,6 +496,16 @@ export const QuantTradingResultEventSchema = z.object({
       message: "Risk-stopped Quant Trading result requires a recorded risk breach"
     });
   }
+  const latestPossibleBreachRound = value.completionStatus === "RISK_STOPPED"
+    ? Math.min(value.plannedRounds, value.roundsCompleted + 1)
+    : value.roundsCompleted;
+  if (value.riskBreaches.some((breach) => breach.round > latestPossibleBreachRound)) {
+    context.addIssue({
+      code: "custom",
+      path: ["riskBreaches"],
+      message: "Quant Trading risk breach cannot occur beyond terminal round progress"
+    });
+  }
 });
 export type QuantTradingResultEvent = z.infer<typeof QuantTradingResultEventSchema>;
 
