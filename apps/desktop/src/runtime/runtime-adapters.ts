@@ -113,8 +113,27 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
 
     this.transcriptionReservations += 1;
     this.activeRequestIds.add(input.requestId);
-    const operation = this.transcriptionTail.then(async () => {
+
+    let nativeLaneEntered = false;
+    let removeQueuedAbortListener: (() => void) | undefined;
+    const queuedAbort = input.signal === undefined
+      ? undefined
+      : new Promise<never>((_resolve, reject) => {
+          const listener = (): void => {
+            if (!nativeLaneEntered) reject(abortError());
+          };
+          removeQueuedAbortListener = () => {
+            input.signal?.removeEventListener("abort", listener);
+          };
+          input.signal.addEventListener("abort", listener, { once: true });
+          if (input.signal.aborted) listener();
+        });
+
+    const scheduled = this.transcriptionTail.then(async () => {
       if (abortRequested(input.signal)) throw abortError();
+      nativeLaneEntered = true;
+      removeQueuedAbortListener?.();
+      removeQueuedAbortListener = undefined;
 
       const workerInstance = this.client.workerInstanceIdentity();
       const timeoutRecovery: { promise?: Promise<void> } = {};
@@ -175,14 +194,21 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
         input.signal?.removeEventListener("abort", onAbort);
       }
     });
-    this.transcriptionTail = operation.then(
+    this.transcriptionTail = scheduled.then(
       () => undefined,
       () => undefined
     );
-    return operation.finally(() => {
+    const releaseReservation = (): void => {
+      removeQueuedAbortListener?.();
+      removeQueuedAbortListener = undefined;
       this.activeRequestIds.delete(input.requestId);
       this.transcriptionReservations = Math.max(0, this.transcriptionReservations - 1);
-    });
+    };
+    void scheduled.then(releaseReservation, releaseReservation);
+
+    return queuedAbort === undefined
+      ? scheduled
+      : Promise.race([scheduled, queuedAbort]);
   }
 }
 
