@@ -1009,20 +1009,19 @@ export class TurnCoordinator {
       ) {
         throw new Error("Vision evidence bridge proposal is not awaiting completion");
       }
-      if (request.evidenceBridge.interpreterFingerprint !== interpreterFingerprint) {
+      const bridge = request.evidenceBridge;
+      const resultEventId = request.resultEventId;
+      if (bridge.interpreterFingerprint !== interpreterFingerprint) {
         throw new Error("Vision evidence bridge completion fingerprint changed after decision");
       }
       const proposalWasAdmitted = state.evidenceProposals.some((candidate) =>
-        canonicalJson(candidate) === canonicalJson(request.evidenceBridge?.status === "DECIDED"
-          && request.evidenceBridge.decision === "PROPOSAL"
-          ? request.evidenceBridge.proposal
-          : undefined)
+        canonicalJson(candidate) === canonicalJson(bridge.proposal)
       );
       if (!proposalWasAdmitted) {
         throw new Error("Vision evidence bridge completion requires an evidence admission attempt");
       }
       const authoritativeCommitted = Object.values(state.evidenceHistory).some((records) =>
-        records.some((record) => record.value.evidenceEventIds.includes(request.resultEventId as EventId))
+        records.some((record) => record.value.evidenceEventIds.includes(resultEventId))
       );
       if (authoritativeCommitted !== evidenceCommitted) {
         throw new Error("Vision evidence bridge completion does not match authoritative evidence state");
