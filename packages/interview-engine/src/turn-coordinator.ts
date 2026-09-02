@@ -902,8 +902,15 @@ export class TurnCoordinator {
     });
   }
 
-  public async processEvidenceProposal(input: { readonly envelope: CommandEnvelope; readonly proposal: EvidenceProposal }): Promise<z.infer<typeof EvidenceProcessedResultSchema>> {
+  public async processEvidenceProposal(input: {
+    readonly envelope: CommandEnvelope;
+    readonly proposal: EvidenceProposal;
+    readonly requiredBoardRevision?: BoardRevision;
+  }): Promise<z.infer<typeof EvidenceProcessedResultSchema>> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    const requiredBoardRevision = input.requiredBoardRevision === undefined
+      ? undefined
+      : BoardRevisionSchema.parse(input.requiredBoardRevision);
     if (!evidenceProposalWithinAdmissionBounds(input.proposal)) {
       throw new Error("Evidence proposal exceeds the bounded admission input size");
     }
@@ -911,9 +918,20 @@ export class TurnCoordinator {
     const key = evidenceKeyToString(proposal.key);
     const result = await this.writer.execute(envelope, {
       operation: "PROCESS_EVIDENCE_PROPOSAL",
-      payload: { proposal }
+      payload: {
+        proposal,
+        ...(requiredBoardRevision === undefined
+          ? {}
+          : { requiredBoardRevision })
+      }
     }, EvidenceProcessedResultSchema, (state) => {
       const reasons: string[] = [];
+      if (
+        requiredBoardRevision !== undefined
+        && state.boardRevision !== requiredBoardRevision
+      ) {
+        reasons.push("Evidence board freshness precondition no longer holds");
+      }
       if (state.problem?.id !== proposal.key.problemId) reasons.push("Evidence is scoped to a different problem");
       const knownEventIds = new Set(state.eventIds);
       if (!proposal.evidenceEventIds.every((eventId) => knownEventIds.has(eventId))) {

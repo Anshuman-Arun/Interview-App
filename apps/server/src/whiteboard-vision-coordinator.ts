@@ -295,7 +295,8 @@ export class WhiteboardVisionCoordinator {
             producer: "vision-evidence",
             correlationId: upload.requestId
           }),
-          proposal
+          proposal,
+          requiredBoardRevision: accepted.admittedAtBoardRevision
         });
         if (evidenceResult.committed) evidenceCommittedCount = 1;
       }
