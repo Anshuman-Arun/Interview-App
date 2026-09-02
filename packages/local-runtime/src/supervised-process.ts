@@ -1206,14 +1206,12 @@ async function sha256Executable(
   }
   const hash = createHash("sha256");
   const stream = createReadStream(executable);
-  let timedOut = false;
   const onAbort = (): void => {
-    stream.destroy();
+    stream.destroy(new SupervisedProcessError("EXECUTION_CANCELLED"));
   };
   signal.addEventListener("abort", onAbort, { once: true });
   const timer = setTimeout(() => {
-    timedOut = true;
-    stream.destroy();
+    stream.destroy(new SupervisedProcessError("EXECUTION_TIMEOUT"));
   }, EXECUTABLE_HASH_TIMEOUT_MS);
   try {
     for await (const chunk of stream) {
@@ -1223,21 +1221,9 @@ async function sha256Executable(
       }
       hash.update(chunkValue);
     }
-    if (timedOut) {
-      throw new SupervisedProcessError("EXECUTION_TIMEOUT");
-    }
-    if (signal.aborted) {
-      throw new SupervisedProcessError("EXECUTION_CANCELLED");
-    }
     return hash.digest("hex");
   } catch (error) {
     if (error instanceof SupervisedProcessError) throw error;
-    if (timedOut) {
-      throw new SupervisedProcessError("EXECUTION_TIMEOUT");
-    }
-    if (signal.aborted) {
-      throw new SupervisedProcessError("EXECUTION_CANCELLED");
-    }
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
   } finally {
     clearTimeout(timer);
@@ -1275,8 +1261,13 @@ function waitForOperationOrAbort(
       if (settled) return;
       settled = true;
       signal.removeEventListener("abort", onAbort);
-      if (error === undefined) resolve();
-      else reject(error);
+      if (error === undefined) {
+        resolve();
+      } else {
+        reject(error instanceof Error
+          ? error
+          : new SupervisedProcessError("EXECUTABLE_UNSAFE"));
+      }
     };
     const onAbort = (): void => {
       finish(new SupervisedProcessError("EXECUTION_CANCELLED"));
