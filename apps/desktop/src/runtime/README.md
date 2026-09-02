@@ -40,6 +40,11 @@ Python packages. Missing assets produce `MISSING_ASSET`; a missing/incompatible
 Python runtime produces `UNAVAILABLE` or `FAILED`. Typed interviews remain
 usable.
 
+Optional local-model initialization has a 60-second **total desktop startup
+budget**. If speech/TTS cannot reach an admitted usable state within that
+budget, startup cancellation tears down any partial runtime and the typed
+application continues instead of waiting for the per-worker timeout sequence.
+
 The supported production interpreter is **CPython 3.12 or 3.13**. The
 requirements file pins the complete dependency graph used by the worker, not
 only Moonshine/ONNX Runtime. Install it explicitly from wheels:
@@ -231,3 +236,22 @@ Do not claim this real-device evidence until it has actually been performed.
 The current production Python worker is validated on Windows x86-64 and Ubuntu
 x86-64. Upstream Moonshine 0.1.5 also publishes Linux ARM64 and macOS ARM64
 wheels, but those paths are not claimed production-validated by this PR.
+
+
+## Packaged executable boundary
+
+This repository currently builds the Electron runtime with TypeScript but does
+not yet contain an Electron Builder/Forge packaging configuration or an
+`extraResources` stage. The packaged-path branch intentionally resolves the
+worker as:
+
+```text
+<process.resourcesPath>/workers/python/local_model_worker.py
+```
+
+A future installer/package step must copy the production worker (and any
+installation/bootstrap metadata it needs) into that exact application-owned
+resource location. CI in this PR validates production-mode Electron startup and
+the real worker code, but it does **not** produce or validate a self-contained
+packaged executable. Do not interpret `app.isPackaged` path support as proof
+that an installer already bundles the worker.

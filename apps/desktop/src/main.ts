@@ -34,6 +34,8 @@ import {
   createSecureWebPreferences
 } from "./window-config.js";
 
+const OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS = 60_000;
+
 let localRuntime: DesktopLocalRuntimeComposition | undefined;
 const startupAbort = new AbortController();
 const backend = new DesktopBackendController(async (config) =>
@@ -121,7 +123,11 @@ async function startDesktop(): Promise<void> {
       throw error;
     }
   }
-  await runtime.start({ signal: startupAbort.signal });
+  const optionalRuntimeSignal = AbortSignal.any([
+    startupAbort.signal,
+    AbortSignal.timeout(OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS)
+  ]);
+  await runtime.start({ signal: optionalRuntimeSignal });
   if (shuttingDown || startupAbort.signal.aborted) return;
 
   if (mode === "production") {
