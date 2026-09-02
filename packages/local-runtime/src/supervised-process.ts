@@ -311,18 +311,37 @@ export class SupervisedProcessRunner {
       this.platform === "win32"
       && this.pinnedIdentities.get(definition.id)?.contentSha256 === undefined
     ) {
-      const contentSha256 = await sha256Executable(
-        definition.executable,
-        request.signal
-      );
-      const afterHash = await inspectExecutable(definition.executable, this.platform);
-      if (!sameExecutableIdentity(before, afterHash, this.platform)) {
-        throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+      let initialization = this.identityInitializations.get(definition.id);
+      if (initialization === undefined) {
+        initialization = this.initializeWindowsExecutableIdentity(
+          definition,
+          before
+        );
+        this.identityInitializations.set(definition.id, initialization);
+        const captured = initialization;
+        void captured.finally(() => {
+          if (this.identityInitializations.get(definition.id) === captured) {
+            this.identityInitializations.delete(definition.id);
+          }
+        }).catch(() => undefined);
       }
-      this.pinnedIdentities.set(definition.id, Object.freeze({
-        ...afterHash,
-        contentSha256
-      }));
+      await waitForOperationOrAbort(initialization, request.signal);
+    }
+
+    const pinnedAfterInitialization = this.pinnedIdentities.get(definition.id);
+    const currentIdentity = await inspectExecutable(
+      definition.executable,
+      this.platform
+    );
+    if (
+      pinnedAfterInitialization === undefined
+      || !sameExecutableIdentity(
+        pinnedAfterInitialization,
+        currentIdentity,
+        this.platform
+      )
+    ) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
     if (request.signal?.aborted) {
@@ -381,6 +400,26 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("SPAWN_FAILED");
     }
     return result;
+  }
+
+  private async initializeWindowsExecutableIdentity(
+    definition: RegisteredExecutable,
+    baseline: ExecutableIdentity
+  ): Promise<void> {
+    const contentSha256 = await sha256Executable(definition.executable);
+    const afterHash = await inspectExecutable(definition.executable, "win32");
+    const pinned = this.pinnedIdentities.get(definition.id);
+    if (
+      pinned === undefined
+      || !sameExecutableIdentity(pinned, baseline, "win32")
+      || !sameExecutableIdentity(baseline, afterHash, "win32")
+    ) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+    this.pinnedIdentities.set(definition.id, Object.freeze({
+      ...afterHash,
+      contentSha256
+    }));
   }
 
   private async runChild(
