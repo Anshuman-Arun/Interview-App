@@ -16,7 +16,7 @@ A later EvidenceInterpreter may use an accepted observation together with transc
 
 VisionInferenceRequest is protocol version 1 and binds request/session identity, source BoardRevision, a bounded region, relevant shape IDs, optional per-shape revision bindings, requested observation kind, and a VisionSnapshotBasis.
 
-VisionSnapshotBasis contains snapshotId, SHA-256 snapshotHash, preprocessingVersion, and sourceBoardRevision. Image bytes are intentionally absent. A future preprocessing adapter owns image payload transport while satisfying this semantic identity seam.
+VisionSnapshotBasis contains snapshotId, SHA-256 snapshotHash, preprocessingVersion, and sourceBoardRevision. Image bytes are intentionally absent from this semantic object. Application preprocessing adapters may bind a validated, in-memory image payload to backend execution separately; that payload is ephemeral and is never part of semantic request identity, events, replay state, or diagnostics.
 
 All request/result schemas are strict. Identity and provenance strings are validated without silent whitespace normalization. Unknown fields, non-finite or extreme coordinates, out-of-range region extents, unsafe revisions, malformed or oversized request/session/region/shape IDs, duplicate/partial revision dependencies, excessive arrays, malformed confidence, control-bearing backend metadata, and oversized interpretation text are rejected. The same bounded request-ID schema is applied to callback and cancellation lookups before manager cache access.
 
@@ -39,7 +39,7 @@ UNKNOWN never becomes fresh.
 
 ## Backend seam
 
-VisionInferenceBackend exposes bounded application-owned provenance plus analyze(request, { signal }). AbortSignal is a cancellation request only; the application does not claim that provider compute stopped.
+VisionInferenceBackend exposes bounded application-owned provenance plus analyze(request, executionOptions). executionOptions always carries AbortSignal and may carry an ephemeral validated imagePayload whose digest is bound to request.snapshotBasis.snapshotHash. AbortSignal is a cancellation request only; the application does not claim that provider compute stopped.
 
 DeterministicFakeVisionBackend is provided for tests. No Gemini, local model, provider-control-plane, or OCR wiring is included.
 
@@ -61,7 +61,7 @@ Diagnostics contain only bounded IDs/revisions/counts/backend identifiers and st
 
 ## Integration seams
 
-Future preprocessing PR: construct VisionInferenceRequest from its snapshot output and keep image payload private to the backend adapter keyed by snapshotId/hash. No image decoding or resizing belongs here.
+Application preprocessing integration: construct VisionInferenceRequest from validated snapshot metadata and keep the prepared image payload private to backend execution, bound by snapshot hash. Raw payload bytes must not be serialized into the semantic request or persisted event stream. No image decoding or resizing belongs in semantic admission.
 
 Future real tldraw PR: implement the manager's request-scoped authority resolver by atomically snapshotting the current authoritative BoardRevision and, when available, current states for every relevant source shape. To keep an observation valid after a broader board revision changes, the same snapshot operation must also classify the bounded region COMPATIBLE only when no added/deleted/moved content invalidated it. If those narrow proofs are unavailable, omit them and the subsystem conservatively requires the exact BoardRevision.
 

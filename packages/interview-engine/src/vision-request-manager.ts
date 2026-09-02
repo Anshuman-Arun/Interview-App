@@ -19,7 +19,10 @@ import {
   assessVisionRequestFreshness,
   type VisionAuthorityView
 } from "./vision-admission.js";
-import type { VisionInferenceBackend } from "./vision-inference.js";
+import type {
+  VisionInferenceBackend,
+  VisionInferenceImagePayload
+} from "./vision-inference.js";
 
 const ManagerOptionsSchema = z.object({
   maxInFlight: z.number().int().positive().max(64).default(8),
@@ -97,6 +100,26 @@ function cloneRequest(request: VisionInferenceRequest): VisionInferenceRequest {
 
 function cloneOutcome(outcome: VisionAdmissionResult): VisionAdmissionResult {
   return VisionAdmissionResultSchema.parse(outcome);
+}
+
+function imagePayloadMatchesRequest(
+  payload: VisionInferenceImagePayload,
+  request: VisionInferenceRequest
+): boolean {
+  try {
+    const metadata = payload.metadata;
+    return metadata.mimeType === "image/png"
+      && Number.isSafeInteger(metadata.width)
+      && metadata.width > 0
+      && Number.isSafeInteger(metadata.height)
+      && metadata.height > 0
+      && Number.isSafeInteger(metadata.byteSize)
+      && metadata.byteSize > 0
+      && metadata.contentDigest === request.snapshotBasis.snapshotHash
+      && typeof payload.readBytes === "function";
+  } catch {
+    return false;
+  }
 }
 
 export class VisionRequestManager {
@@ -221,7 +244,11 @@ export class VisionRequestManager {
     }
   }
 
-  public submit(requestInput: unknown, backend: VisionInferenceBackend): Promise<VisionAdmissionResult> {
+  public submit(
+    requestInput: unknown,
+    backend: VisionInferenceBackend,
+    imagePayload?: VisionInferenceImagePayload
+  ): Promise<VisionAdmissionResult> {
     let provenance: VisionBackendProvenance;
     let analyze: VisionInferenceBackend["analyze"];
     try {
@@ -230,6 +257,13 @@ export class VisionRequestManager {
     } catch {
       const request = VisionInferenceRequestSchema.parse(requestInput);
       return Promise.resolve(rejected(request.requestId, "BACKEND_ERROR"));
+    }
+
+    if (imagePayload !== undefined) {
+      const request = VisionInferenceRequestSchema.parse(requestInput);
+      if (!imagePayloadMatchesRequest(imagePayload, request)) {
+        return Promise.resolve(rejected(request.requestId, "SNAPSHOT_MISMATCH"));
+      }
     }
 
     const registration = this.register(requestInput, provenance);
@@ -257,7 +291,10 @@ export class VisionRequestManager {
       try {
         const backendRequest = VisionInferenceRequestSchema.parse(entry.request);
         entry.backendStarted = true;
-        rawResult = await analyze(backendRequest, { signal: entry.controller.signal }).finally(() => {
+        rawResult = await analyze(backendRequest, {
+          signal: entry.controller.signal,
+          ...(imagePayload === undefined ? {} : { imagePayload })
+        }).finally(() => {
           entry.backendSettled = true;
           this.releaseExecutionSlot(entry);
         });

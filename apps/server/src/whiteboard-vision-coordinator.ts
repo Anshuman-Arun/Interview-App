@@ -30,7 +30,8 @@ import {
 } from "../../../packages/interview-engine/src/index.js";
 import {
   createValidatedImageSnapshot,
-  prepareVisionBatch
+  prepareVisionBatch,
+  type PreparedVisionImageRequest
 } from "../../../packages/vision/src/index.js";
 import type { SessionState, VisionRequestState } from "../../../packages/events/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
@@ -143,10 +144,13 @@ export class WhiteboardVisionCoordinator {
     const state = writer.getState();
     const persistedRequest = state.visionRequests[upload.requestId];
     let snapshotBasis: VisionSnapshotBasis | undefined;
+    let preparedImageRequest: PreparedVisionImageRequest | undefined;
 
     if (persistedRequest !== undefined) {
       try {
-        snapshotBasis = prepareSnapshotBasis(upload);
+        const prepared = prepareSnapshot(upload);
+        snapshotBasis = prepared.snapshotBasis;
+        preparedImageRequest = prepared.imageRequest;
       } catch {
         return this.remember(upload.requestId, fingerprint, rejected(
           upload,
@@ -251,7 +255,9 @@ export class WhiteboardVisionCoordinator {
 
     if (snapshotBasis === undefined) {
       try {
-        snapshotBasis = prepareSnapshotBasis(upload);
+        const prepared = prepareSnapshot(upload);
+        snapshotBasis = prepared.snapshotBasis;
+        preparedImageRequest = prepared.imageRequest;
       } catch {
         return this.remember(upload.requestId, fingerprint, rejected(
           upload,
@@ -336,7 +342,18 @@ export class WhiteboardVisionCoordinator {
         "RESOURCE_LIMIT"
       ));
     }
-    const admissionPromise = manager.submit(request, this.backend);
+    if (preparedImageRequest === undefined) {
+      await turn.discardVisionRequest(upload.requestId, "INVALID_IMAGE");
+      return this.remember(upload.requestId, fingerprint, rejected(
+        upload,
+        "INVALID_IMAGE"
+      ));
+    }
+    const admissionPromise = manager.submit(
+      request,
+      this.backend,
+      preparedImageRequest.payload
+    );
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const outcome = await Promise.race([
       admissionPromise.then((admission) => ({
@@ -745,9 +762,14 @@ function sameStringSet(
   return leftSorted.every((value, index) => value === rightSorted[index]);
 }
 
-function prepareSnapshotBasis(
+interface PreparedWhiteboardSnapshot {
+  readonly snapshotBasis: VisionSnapshotBasis;
+  readonly imageRequest: PreparedVisionImageRequest;
+}
+
+function prepareSnapshot(
   upload: WhiteboardVisionSnapshotUpload
-): VisionSnapshotBasis {
+): PreparedWhiteboardSnapshot {
   const bytes = decodeBoundedBase64(upload.pngBase64);
   const snapshot = createValidatedImageSnapshot({
     snapshotId: upload.snapshotId,
@@ -764,7 +786,7 @@ function prepareSnapshotBasis(
     maxHeight: MAX_WHITEBOARD_VISION_DIMENSION,
     maxPixels: MAX_WHITEBOARD_VISION_PIXELS
   });
-  prepareVisionBatch(
+  const batch = prepareVisionBatch(
     [snapshot],
     "whiteboard-observation",
     {
@@ -775,11 +797,23 @@ function prepareSnapshotBasis(
     },
     "FAIL"
   );
+  const imageRequest = batch.requests[0];
+  if (
+    imageRequest === undefined
+    || batch.requests.length !== 1
+    || batch.truncated
+    || imageRequest.contentDigest !== snapshot.metadata.contentDigest
+  ) {
+    throw new Error("Whiteboard snapshot preprocessing did not produce one exact image payload");
+  }
   return {
-    snapshotId: snapshot.metadata.snapshotId,
-    snapshotHash: snapshot.metadata.contentDigest,
-    preprocessingVersion: PREPROCESSING_VERSION,
-    sourceBoardRevision: upload.sourceBoardRevision
+    snapshotBasis: {
+      snapshotId: snapshot.metadata.snapshotId,
+      snapshotHash: snapshot.metadata.contentDigest,
+      preprocessingVersion: PREPROCESSING_VERSION,
+      sourceBoardRevision: upload.sourceBoardRevision
+    },
+    imageRequest
   };
 }
 

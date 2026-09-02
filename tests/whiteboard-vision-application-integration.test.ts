@@ -251,6 +251,47 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
+  it("binds the validated snapshot payload privately to backend execution", async () => {
+    const harness = await startedBoardSession();
+    const fake = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "The image payload is available to inference.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    let observedBytes: Buffer | undefined;
+    let observedDigest: string | undefined;
+    const backend: VisionInferenceBackend = {
+      provenance: fake.provenance,
+      analyze: async (request, options) => {
+        if (options.imagePayload === undefined) {
+          throw new Error("Whiteboard inference did not receive its validated image payload");
+        }
+        observedDigest = options.imagePayload.metadata.contentDigest;
+        observedBytes = Buffer.from(options.imagePayload.readBytes());
+        return fake.analyze(request, { signal: options.signal });
+      }
+    };
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      const result = await coordinator.process(request);
+      expect(result.status).toBe("ACCEPTED");
+      expect(observedBytes).toEqual(Buffer.from(request.pngBase64, "base64"));
+
+      const persisted = harness.writer.getState().visionRequests[request.requestId];
+      expect(persisted?.snapshotBasis?.snapshotHash).toBe(observedDigest);
+      expect(JSON.stringify(persisted)).not.toContain(request.pngBase64);
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
   it("accepts an observation about a subset of shapes while preserving the complete request dependency basis", async () => {
     const harness = await startedBoardSession();
     await harness.turns.commitBoardMutation({
