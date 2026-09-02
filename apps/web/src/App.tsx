@@ -92,6 +92,7 @@ export const App: React.FC = () => {
       || sessionEntryPendingRef.current
     ) return;
     sessionTerminalPendingRef.current = true;
+    whiteboardAdapter.setReadOnly(true);
     setSessionTerminalPending(true);
     try {
       await session.voiceControls.disableMicrophone().catch(() => undefined);
@@ -102,6 +103,7 @@ export const App: React.FC = () => {
         view: "evaluation"
       });
     } catch {
+      whiteboardAdapter.setReadOnly(false);
       // Error handled in session.error
     } finally {
       sessionTerminalPendingRef.current = false;
@@ -117,6 +119,7 @@ export const App: React.FC = () => {
       || sessionEntryPendingRef.current
     ) return;
     sessionTerminalPendingRef.current = true;
+    whiteboardAdapter.setReadOnly(true);
     setSessionTerminalPending(true);
     try {
       await session.voiceControls.disableMicrophone().catch(() => undefined);
@@ -127,6 +130,7 @@ export const App: React.FC = () => {
         view: "evaluation"
       });
     } catch {
+      whiteboardAdapter.setReadOnly(false);
       // Error handled in session.error
     } finally {
       sessionTerminalPendingRef.current = false;
