@@ -47,6 +47,7 @@ export class AuthoritativeBoardSyncCoordinator {
   private readonly pending: PendingMutation[] = [];
   private readonly recentFingerprints: string[] = [];
   private draining = false;
+  private lifecycleEpoch = 0;
 
   public constructor(
     private readonly client: Pick<BrowserCommandClient, "commitBoardMutation" | "getBoardState">
@@ -77,6 +78,7 @@ export class AuthoritativeBoardSyncCoordinator {
   }
 
   public reset(): void {
+    this.lifecycleEpoch += 1;
     this.rejectPending(new Error("Whiteboard authority synchronization was reset"));
     this.sessionId = undefined;
     this.authoritativeRevision = undefined;
@@ -89,10 +91,13 @@ export class AuthoritativeBoardSyncCoordinator {
     sessionId: SessionId,
     localShapes: readonly StudentShape[]
   ): Promise<AuthoritativeBoardSyncSnapshot> {
+    const epoch = this.lifecycleEpoch + 1;
+    this.lifecycleEpoch = epoch;
     if (localShapes.length > MAX_AUTHORITATIVE_BOARD_SHAPES) {
       return this.failClosed("Local whiteboard exceeds the authoritative shape limit");
     }
     const state = await this.client.getBoardState(sessionId);
+    if (epoch !== this.lifecycleEpoch) return this.snapshot();
     this.sessionId = sessionId;
 
     if (!state.shapeAuthorityKnown) {
@@ -181,6 +186,7 @@ export class AuthoritativeBoardSyncCoordinator {
 
   private async drain(): Promise<void> {
     if (this.draining || this.status === "UNSYNCHRONIZED") return;
+    const epoch = this.lifecycleEpoch;
     this.draining = true;
     try {
       while (this.pending.length > 0) {
@@ -209,6 +215,7 @@ export class AuthoritativeBoardSyncCoordinator {
             );
             break;
           } catch (error) {
+            if (epoch !== this.lifecycleEpoch) return;
             if (entry.attempts >= MAX_TRANSPORT_ATTEMPTS) {
               this.failClosed(
                 "Whiteboard mutation acknowledgement is unknown after transport failure",
@@ -218,6 +225,7 @@ export class AuthoritativeBoardSyncCoordinator {
             }
           }
         }
+        if (epoch !== this.lifecycleEpoch) return;
 
         if (!response.committed) {
           this.authoritativeRevision = response.boardRevision;
@@ -230,6 +238,7 @@ export class AuthoritativeBoardSyncCoordinator {
         rememberFingerprint(this.recentFingerprints, entry.fingerprint);
         entry.resolve();
       }
+      if (epoch !== this.lifecycleEpoch) return;
       this.status = "SYNCED";
       this.reason = undefined;
     } finally {
@@ -238,6 +247,7 @@ export class AuthoritativeBoardSyncCoordinator {
   }
 
   private failClosed(reason: string, cause?: Error): AuthoritativeBoardSyncSnapshot {
+    this.lifecycleEpoch += 1;
     this.status = "UNSYNCHRONIZED";
     this.reason = reason;
     this.rejectPending(cause ?? new Error(reason));
