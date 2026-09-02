@@ -71,6 +71,8 @@ function readyDecision(message: unknown) {
     handshake: {
       ...(typeof value.componentVersion === "string" ? { componentVersion: value.componentVersion } : {}),
       ...(typeof value.protocolVersion === "number" ? { protocolVersion: value.protocolVersion } : {}),
+      ...(typeof value.workerType === "string" ? { workerType: value.workerType } : {}),
+      ...(typeof value.runtimeVersion === "string" ? { runtimeVersion: value.runtimeVersion } : {}),
       ...(typeof value.modelVersionOrHash === "string"
         ? { modelVersionOrHash: value.modelVersionOrHash }
         : {}),
@@ -250,10 +252,27 @@ describe("local worker lifecycle manager", () => {
       .rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
     expect(wrongModel.getStatus("wrong-model")).not.toHaveProperty("pid");
 
+    const wrongRuntime = manager();
+    wrongRuntime.register(definition("wrong-runtime", "ready", {
+      expectedHandshake: {
+        protocolVersion: 1,
+        workerType: "fixture",
+        runtimeVersion: "fixture-runtime-2",
+        modelVersionOrHash: "fixture-model-1",
+        capabilities: ["FIXTURE"]
+      },
+      terminationTimeoutMs: 300
+    }));
+    await expect(wrongRuntime.start("wrong-runtime"))
+      .rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
+    expect(wrongRuntime.getStatus("wrong-runtime")).not.toHaveProperty("pid");
+
     const wrongCapability = manager();
     wrongCapability.register(definition("wrong-capability", "ready", {
       expectedHandshake: {
         protocolVersion: 1,
+        workerType: "fixture",
+        runtimeVersion: "fixture-runtime-1",
         modelVersionOrHash: "fixture-model-1",
         capabilities: ["FIXTURE", "EXTRA"]
       },
