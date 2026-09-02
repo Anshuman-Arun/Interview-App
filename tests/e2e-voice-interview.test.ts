@@ -28,6 +28,7 @@ import {
   type BrowserAudioElementLike
 } from "../apps/web/src/audio/index.js";
 import { BrowserVoiceClient } from "../apps/web/src/voice-client.js";
+import { applyAdmittedVoiceFrameResult } from "../apps/web/src/hooks/useInterviewVoice.js";
 import {
   consumeAuthenticatedRendererStream,
   createLoopbackAcknowledgementSender
@@ -285,8 +286,13 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     const afterOnset = writer.getState();
     expect(afterOnset.generations[oldGeneration.generationId]?.status).toBe("SUPERSEDED");
 
-    audioPlayer.interruptCurrent();
-    audioPlayer.clearQueued();
+    applyAdmittedVoiceFrameResult(onset, {
+      interruptPlaybackForBargeIn: () => {
+        audioPlayer?.interruptCurrent();
+        audioPlayer?.clearQueued();
+      },
+      onVoiceCommit: () => undefined
+    });
     expect(elements[0]?.pauseCount).toBeGreaterThanOrEqual(1);
 
     const lateAudio = await new TurnCoordinator(writer).queueAudioDeliveryFromValidatedText({
