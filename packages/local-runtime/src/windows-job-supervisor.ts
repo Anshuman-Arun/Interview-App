@@ -1,5 +1,3 @@
-import { Buffer } from "node:buffer";
-
 /**
  * Windows-only bootstrap used by SupervisedProcessRunner.
  *
@@ -9,7 +7,7 @@ import { Buffer } from "node:buffer";
  * crashing the bootstrap closes the handle and the kernel terminates every
  * process that remains in the job.
  */
-const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw`
+export const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
 
 $configPath = $env:INTERVIEW_SUPERVISED_CONFIG
@@ -385,8 +383,3 @@ catch {
   exit 192
 }
 `;
-
-export const WINDOWS_JOB_SUPERVISOR_ENCODED_COMMAND = Buffer.from(
-  WINDOWS_JOB_SUPERVISOR_SCRIPT,
-  "utf16le"
-).toString("base64");
