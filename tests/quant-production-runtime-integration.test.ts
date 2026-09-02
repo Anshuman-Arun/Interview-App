@@ -1399,6 +1399,58 @@ describe("adversarial quant lifecycle invariants", () => {
     }
   });
 
+  it("rejects Research initialization that disagrees with persisted configured family", () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    try {
+      const definition = createProductionQuantResearchDefinition("BAYESIAN_UPDATING", 7_777);
+      const engine = new QuantResearchEngine(definition);
+      const requestId = newRequestId();
+      store.appendIdempotent({
+        sessionId,
+        requestId,
+        causationId: requestId,
+        correlationId: requestId,
+        elapsedMs: 0,
+        expectedPriorSequence: 0,
+        commandFingerprint: "6".repeat(64),
+        drafts: [
+          {
+            source: "APPLICATION",
+            type: "SESSION_STARTED",
+            payload: {
+              startedAt: new Date().toISOString(),
+              configuration: researchConfiguration("MODEL_COMPARISON")
+            }
+          },
+          {
+            source: "APPLICATION",
+            type: "PROBLEM_PRESENTED",
+            payload: {
+              problemId: definition.family,
+              problemVersion: definition.version,
+              prompt: engine.getState().prompt
+            }
+          },
+          {
+            source: "APPLICATION",
+            type: "QUANT_RESEARCH_SCENARIO_INITIALIZED",
+            payload: {
+              definition,
+              authoritativeSnapshot: engine.getAuthoritativePersistenceSnapshot()
+            }
+          }
+        ],
+        result: { injected: true }
+      });
+
+      expect(() => SessionWriter.open(store, sessionId))
+        .toThrow(/Quant Research initialization does not match/);
+    } finally {
+      store.close();
+    }
+  });
+
   it("rejects schema-valid Research stage corruption during recovery", async () => {
     const store = new SqliteEventStore(":memory:");
     const sessionId = newSessionId();
