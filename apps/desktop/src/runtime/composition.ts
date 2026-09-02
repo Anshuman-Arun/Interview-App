@@ -709,17 +709,24 @@ async function resolvePythonExecutable(
     }
   }
 
-  for (const executable of candidates.slice(0, 256)) {
+  for (const executableCandidate of candidates.slice(0, 256)) {
     try {
-      const resolved = await realpath(executable);
-      const metadata = await lstat(resolved);
-      if (!metadata.isFile() || metadata.isSymbolicLink()) continue;
+      const executable = path.resolve(executableCandidate);
+      const launcherMetadata = await lstat(executable);
+      const target = launcherMetadata.isSymbolicLink()
+        ? await realpath(executable)
+        : executable;
+      const targetMetadata = await lstat(target);
+      if (!targetMetadata.isFile() || targetMetadata.isSymbolicLink()) continue;
       if (platform !== "win32") {
-        await access(resolved, fsConstants.X_OK);
-      } else if (path.extname(resolved).toLowerCase() !== ".exe") {
+        await access(executable, fsConstants.X_OK);
+      } else if (path.extname(executable).toLowerCase() !== ".exe") {
         continue;
       }
-      return resolved;
+      // Preserve the inspected launcher path rather than replacing it with the
+      // symlink target. POSIX virtualenv launchers commonly symlink to the base
+      // interpreter; spawning the target would bypass pyvenv.cfg discovery.
+      return executable;
     } catch {
       continue;
     }
