@@ -339,7 +339,13 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
   ) {}
 
   public sendTurn(input: ReasoningTurnInput): AsyncIterable<InterviewerProposal> {
-    return this.iterateTurn(input);
+    let snapshot: ReasoningTurnInput;
+    try {
+      snapshot = snapshotReasoningTurnInput(input);
+    } catch {
+      return rejectedProviderTurn("INVALID_PROVIDER_OUTPUT");
+    }
+    return this.iterateTurn(snapshot);
   }
 
   public async cancelTurn(generationId: GenerationId): Promise<ProviderCancellationReport> {
@@ -427,6 +433,64 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
       throw new ProviderExecutionError("PROVIDER_STREAM_FAILED");
     }
   }
+}
+
+function snapshotReasoningTurnInput(
+  value: unknown
+): ReasoningTurnInput {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
+    throw new Error("Reasoning turn input is invalid");
+  }
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error("Reasoning turn input is invalid");
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const allowed = new Set(["generationId", "context"]);
+  if (Object.keys(descriptors).some((key) => !allowed.has(key))) {
+    throw new Error("Reasoning turn input has unknown fields");
+  }
+
+  const generationDescriptor = descriptors["generationId"];
+  const contextDescriptor = descriptors["context"];
+  if (
+    generationDescriptor === undefined
+    || generationDescriptor.enumerable !== true
+    || !("value" in generationDescriptor)
+    || contextDescriptor === undefined
+    || contextDescriptor.enumerable !== true
+    || !("value" in contextDescriptor)
+  ) {
+    throw new Error("Reasoning turn input must contain own data properties");
+  }
+  const generationId = GenerationIdSchema.safeParse(generationDescriptor.value);
+  if (!generationId.success) throw new Error("Reasoning generation ID is invalid");
+
+  return Object.freeze({
+    generationId: generationId.data,
+    context: contextDescriptor.value
+  });
+}
+
+function rejectedProviderTurn(
+  code: ProviderExecutionErrorCode
+): AsyncIterable<InterviewerProposal> {
+  const error = new ProviderExecutionError(code);
+  return Object.freeze({
+    [Symbol.asyncIterator](): AsyncIterator<InterviewerProposal> {
+      return Object.freeze({
+        next(): Promise<IteratorResult<InterviewerProposal>> {
+          return Promise.reject(error);
+        }
+      });
+    }
+  });
 }
 
 function snapshotUntrustedModelCapabilities(
