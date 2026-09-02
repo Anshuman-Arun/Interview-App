@@ -310,6 +310,7 @@ export function useInterviewSession(
   const abortControllerRef = useRef<AbortController | null>(null);
   const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
   const rendererLaunchEpochRef = useRef(0);
+  const sessionTransitionEpochRef = useRef(0);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
   const rendererAudioPlayerRef = useRef<QueuedRendererAudioPlayer | null>(null);
@@ -603,25 +604,43 @@ export function useInterviewSession(
     setIsConnected(false);
   }, []);
 
+  const beginSessionTransition = useCallback(async (): Promise<number> => {
+    const transitionEpoch = sessionTransitionEpochRef.current + 1;
+    sessionTransitionEpochRef.current = transitionEpoch;
+
+    // Session replacement is an authority boundary, not merely a React state
+    // change. Revoke the old renderer synchronously and begin bounded
+    // microphone teardown before any fallible replacement command can yield.
+    stopRendererTransport();
+    await voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    return transitionEpoch;
+  }, [stopRendererTransport, voiceIntegration.voiceControls]);
+
   const startSession = useCallback(
     async (customSessionId?: SessionId): Promise<void> => {
       setError(null);
       const targetSessionId =
         customSessionId ??
         SessionIdSchema.parse(`session_${globalThis.crypto.randomUUID()}`);
+      const transitionEpoch = await beginSessionTransition();
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
 
       try {
         const client = getCommandClient();
         await client.startSession(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let problemView: InterviewProblemPublicView | null = null;
         try {
           const context = await client.getInterviewSessionContext(targetSessionId);
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
           problemView = context.problem ?? null;
         } catch {
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
           // The authoritative start already succeeded. A read-model/context
           // failure must not make the caller retry session creation.
           setError("Session started, but session context could not be loaded");
         }
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
         }
@@ -633,6 +652,7 @@ export function useInterviewSession(
 
         launchRendererStream(targetSessionId);
       } catch (err) {
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let msg = "Failed to start interview session";
         if (err instanceof BrowserCommandProtocolError) {
           msg = `Command error [${err.code}]: HTTP ${String(err.status)}`;
@@ -643,16 +663,20 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, launchRendererStream]
+    [beginSessionTransition, getCommandClient, launchRendererStream, sessionId]
   );
 
   const recoverSession = useCallback(
     async (targetSessionId: SessionId): Promise<void> => {
       setError(null);
+      const transitionEpoch = await beginSessionTransition();
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
       try {
         const client = getCommandClient();
         const context = await client.getInterviewSessionContext(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         const response = await client.resumeSession(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
         }
@@ -671,6 +695,7 @@ export function useInterviewSession(
           stopRendererTransport();
         }
       } catch (err) {
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         let msg = "Failed to recover session";
         if (err instanceof BrowserCommandProtocolError) {
           msg = `Recovery error [${err.code}]: HTTP ${String(err.status)}`;
@@ -681,12 +706,13 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, launchRendererStream]
+    [beginSessionTransition, getCommandClient, launchRendererStream, sessionId, stopRendererTransport]
   );
 
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
       if (sessionId === null) return;
+      sessionTransitionEpochRef.current += 1;
       setError(null);
       try {
         const client = getCommandClient();
@@ -706,6 +732,7 @@ export function useInterviewSession(
   const archiveSession = useCallback(
     async (reason?: string): Promise<void> => {
       if (sessionId === null) return;
+      sessionTransitionEpochRef.current += 1;
       setError(null);
       try {
         const client = getCommandClient();
@@ -852,6 +879,7 @@ export function useInterviewSession(
   );
 
   const disconnect = useCallback((): void => {
+    sessionTransitionEpochRef.current += 1;
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
   }, [stopRendererTransport, voiceIntegration.voiceControls]);
@@ -862,6 +890,7 @@ export function useInterviewSession(
 
   useEffect(() => {
     return () => {
+      sessionTransitionEpochRef.current += 1;
       rendererLaunchEpochRef.current += 1;
       rendererRestartRef.current = null;
       if (abortControllerRef.current !== null) {
