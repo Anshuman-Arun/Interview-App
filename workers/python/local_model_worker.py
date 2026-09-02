@@ -15,6 +15,7 @@ import hashlib
 import json
 import math
 import os
+import platform
 import stat
 import sys
 import threading
@@ -237,6 +238,8 @@ def verify_asset_tree(
 
 def require_runtime_environment() -> None:
     interpreter = sys.version_info[:2]
+    if platform.python_implementation() != "CPython":
+        raise RuntimeError("desktop local model runtime requires CPython")
     if not (MIN_PYTHON <= interpreter < MAX_PYTHON_EXCLUSIVE):
         raise RuntimeError("desktop local model runtime requires CPython 3.12 or 3.13")
     for distribution, expected in EXPECTED_DISTRIBUTIONS.items():
