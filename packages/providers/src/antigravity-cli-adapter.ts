@@ -116,7 +116,11 @@ const INTERVIEWER_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
 );
 
 const InitEventSchema = z.looseObject({
-  event: z.literal("init")
+  event: z.literal("init"),
+  init: z.looseObject({
+    permission_mode: z.string().min(1),
+    model: z.string().min(1)
+  })
 });
 
 const StepUpdateEventSchema = z.looseObject({
@@ -180,7 +184,7 @@ export function createAntigravityCliReasoningProvider(
       return {
         billingClass: "UNKNOWN",
         enforcementMechanism:
-          "Antigravity account quota and AI-credit overage state are not application-enforced",
+          "Isolated CLI settings disable AI-credit fallback, but account-side incremental billing is not independently verified",
         verifiedAt: now.toISOString(),
         adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
         spendImpossible: false
@@ -217,7 +221,7 @@ export function createAntigravityCliReasoningProvider(
       if (result.exitCode !== 0) {
         throw new AntigravityCliAdapterError("PROCESS_FAILED");
       }
-      return parseAntigravityStream(result.stdout);
+      return parseAntigravityStream(result.stdout, modelId);
     }
   });
 }
@@ -276,7 +280,10 @@ function createSingleTurnInput(input: ReasoningTurnInput): string {
   }) + "\n";
 }
 
-function parseAntigravityStream(stdout: string): InterviewerProposal {
+function parseAntigravityStream(
+  stdout: string,
+  expectedModelId: string
+): InterviewerProposal {
   const lines = stdout.split(/\r?\n/u);
   let sawInit = false;
   let sawResult = false;
@@ -296,7 +303,12 @@ function parseAntigravityStream(stdout: string): InterviewerProposal {
 
     const init = InitEventSchema.safeParse(event);
     if (init.success) {
-      if (sawInit || index !== firstNonBlankLineIndex(lines)) {
+      if (
+        sawInit
+        || index !== firstNonBlankLineIndex(lines)
+        || init.data.init.model !== expectedModelId
+        || init.data.init.permission_mode === "always-proceed"
+      ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
       sawInit = true;
