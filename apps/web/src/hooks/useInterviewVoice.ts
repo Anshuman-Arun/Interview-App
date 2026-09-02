@@ -19,7 +19,12 @@ import {
   type BrowserVoiceStream
 } from "../voice-client.js";
 
-const MAX_PENDING_MICROPHONE_FRAMES = 8;
+// Capture emits 2,048-sample frames at 48 kHz (~42.7 ms). The speech worker
+// performs final STT inline, so a sub-second queue can falsely trip
+// backpressure during an otherwise healthy local recognition. Sixty-four
+// frames remains tightly bounded (~2.73 s / ~0.5 MiB of Float32 PCM) while
+// bridging realistic local STT latency.
+const MAX_PENDING_MICROPHONE_FRAMES = 64;
 const VOICE_CANCEL_TIMEOUT_MS = 1_000;
 
 export type VoicePermissionState =
