@@ -288,6 +288,36 @@ describe("desktop local model runtime", () => {
     });
   });
 
+  it("does not degrade to typed-only mode when worker cleanup is unverified", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-unsafe-cleanup-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      speechStatus: { state: string; reasonCode?: string };
+      startSpeech(signal?: AbortSignal): Promise<void>;
+      startTts(signal?: AbortSignal): Promise<void>;
+    };
+    mutable.startSpeech = async () => {
+      mutable.speechStatus = {
+        state: "FAILED",
+        reasonCode: "WORKER_CLEANUP_FAILED"
+      };
+      throw new Error("synthetic unsafe worker cleanup");
+    };
+    mutable.startTts = async () => undefined;
+
+    await expect(composition.start()).rejects.toThrow(
+      "process tree could not be safely cleaned"
+    );
+    expect(composition.voiceRuntime).toBeUndefined();
+  });
+
   it("keeps typed desktop startup usable when production model assets are absent", async () => {
     const appDataRoot = temporaryRoot("desktop-local-models-");
     const composition = new DesktopLocalRuntimeComposition({
