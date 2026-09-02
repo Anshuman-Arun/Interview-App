@@ -287,7 +287,7 @@ function assertSessionInventoryMatchesState(
 function isLegacyUninitializedQuantSessionState(
   state: Readonly<ReturnType<SessionWriter["getState"]>>
 ): boolean {
-  if (!state.started || state.status !== "ACTIVE") return false;
+  if (!state.started) return false;
   if (state.problem !== undefined || state.quantTrading !== undefined || state.quantResearch !== undefined) {
     return false;
   }
