@@ -1,5 +1,6 @@
 import { types as utilTypes } from "node:util";
 import {
+  GenerationIdSchema,
   InterviewerProposalSchema,
   ModelCapabilitiesSchema,
   ProviderCancellationReportSchema,
