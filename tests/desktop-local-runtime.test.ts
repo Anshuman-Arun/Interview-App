@@ -145,8 +145,10 @@ describe("desktop local model runtime", () => {
       args: ["--component", "speech"]
     });
 
-    expect(definition.args[0]).toBe("-I");
-    expect(definition.args[1]).toBe(PRODUCTION_WORKER);
+    const args = definition.args;
+    if (args === undefined) throw new Error("Expected production worker arguments");
+    expect(args[0]).toBe("-I");
+    expect(args[1]).toBe(PRODUCTION_WORKER);
   });
 
   it("keeps typed desktop startup usable when production model assets are absent", async () => {
