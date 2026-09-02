@@ -17,6 +17,7 @@ import {
   MAX_SPEECH_CONCURRENT_STREAMS,
   SourceAudioBasisSchema,
   SpeechPcmFrameEnvelopeSchema,
+  SpeechRequestIdSchema,
   SpeechStreamIdSchema,
   SpeechWorkerEventSchema,
   TTS_LIMITS,
@@ -653,7 +654,7 @@ export class VoiceInputCoordinator {
       if (!this.isCurrent(context, token)) return { events: [], terminal: true };
       this.recordAdmittedPcmFrame(context, admittedFrame);
       context.expectedSequence += 1;
-      return await this.applyEvents(context, token, events);
+      return await this.applyEvents(context, token, envelope.requestId, events);
     } finally {
       if (this.isCurrent(context, token)) {
         context.operationInFlight = false;
@@ -669,6 +670,7 @@ export class VoiceInputCoordinator {
   ): Promise<VoiceIngressResult> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const streamId = SpeechStreamIdSchema.parse(streamIdInput);
+    const boundedRequestId = SpeechRequestIdSchema.parse(requestId);
     const context = this.requireActiveStream(sessionId, streamId);
     if (context.operationInFlight) {
       throw new Error("Speech stream already has an operation in flight");
@@ -680,11 +682,11 @@ export class VoiceInputCoordinator {
       const events = await this.speechWorker.flush({
         protocolVersion: 1,
         type: "FLUSH_SPEECH",
-        requestId,
+        requestId: boundedRequestId,
         streamId
       });
       if (!this.isCurrent(context, token)) return { events: [], terminal: true };
-      return await this.applyEvents(context, token, events);
+      return await this.applyEvents(context, token, boundedRequestId, events);
     } finally {
       if (this.isCurrent(context, token)) {
         context.operationInFlight = false;
@@ -764,6 +766,7 @@ export class VoiceInputCoordinator {
   private async applyEvents(
     context: VoiceStreamContext,
     token: object,
+    expectedRequestId: string,
     events: readonly SpeechWorkerEvent[]
   ): Promise<VoiceIngressResult> {
     if (
@@ -782,8 +785,11 @@ export class VoiceInputCoordinator {
       for (const event of validatedEvents) {
         currentRequestId = event.requestId;
       if (!this.isCurrent(context, token)) break;
-      if (event.streamId !== context.streamId) {
-        throw new Error("Speech worker callback escaped its bound stream");
+      if (
+        event.streamId !== context.streamId
+        || event.requestId !== expectedRequestId
+      ) {
+        throw new Error("Speech worker callback escaped its bound stream/request");
       }
 
       if (event.type === "SPEECH_STARTED") {
