@@ -18,6 +18,7 @@ import {
 import {
   QuantResearchAuthoritativeSnapshotEventSchema,
   QuantTradingResultEventSchema,
+  QuantTradingRoundEvidenceEventSchema,
   type SessionState
 } from "../packages/events/src/index.js";
 import {
@@ -1210,6 +1211,119 @@ describe("production quant runtime integration", () => {
       body
     });
   }
+});
+
+describe("adversarial persisted Trading fill semantics", () => {
+  function informedFillEvidence() {
+    const engine = createQuantTraderScenario({
+      family: "ADVERSE_SELECTION",
+      seed: 1,
+      rounds: 1,
+      fairValue: 100,
+      tickSize: 1,
+      informedTraderProbability: 1,
+      noiseTraderProbability: 0
+    });
+    engine.submitQuote({ bidPrice: 95, bidSize: 2, askPrice: 99, askSize: 2 });
+    const evidence = engine.advance();
+    return QuantTradingRoundEvidenceEventSchema.parse({
+      round: evidence.round,
+      fairValue: evidence.fairValue,
+      marketEvents: evidence.marketEvents,
+      orderFlowType: evidence.orderFlowType,
+      ...(evidence.incomingMarketSide === undefined
+        ? {}
+        : { incomingMarketSide: evidence.incomingMarketSide }),
+      studentFills: evidence.studentFills,
+      portfolio: evidence.portfolio,
+      riskBreached: evidence.riskBreached,
+      ...(evidence.riskReason === undefined ? {} : { riskReason: evidence.riskReason }),
+      accountingInvariantHolds: evidence.accountingInvariantHolds,
+      rngDrawCount: evidence.rngDrawCount
+    });
+  }
+
+  it("rejects a persisted Trading fill whose side agrees with the incoming market order", () => {
+    const evidence = informedFillEvidence();
+    expect(evidence.incomingMarketSide).toBe("BUY");
+    expect(evidence.studentFills).toHaveLength(1);
+    const fill = evidence.studentFills[0];
+    if (fill === undefined) throw new Error("Expected deterministic student fill");
+
+    expect(QuantTradingRoundEvidenceEventSchema.safeParse({
+      ...evidence,
+      studentFills: [{ ...fill, side: "BUY" }]
+    }).success).toBe(false);
+  });
+
+  it("rejects a persisted PASS round that reuses otherwise valid fill evidence", () => {
+    const evidence = informedFillEvidence();
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    try {
+      const startRequestId = newRequestId();
+      store.appendIdempotent({
+        sessionId,
+        requestId: startRequestId,
+        causationId: startRequestId,
+        correlationId: startRequestId,
+        elapsedMs: 0,
+        expectedPriorSequence: 0,
+        commandFingerprint: "5".repeat(64),
+        drafts: [
+          {
+            source: "APPLICATION",
+            type: "SESSION_STARTED",
+            payload: {
+              startedAt: new Date().toISOString(),
+              configuration: tradingConfiguration("ADVERSE_SELECTION")
+            }
+          },
+          {
+            source: "APPLICATION",
+            type: "QUANT_TRADING_SCENARIO_INITIALIZED",
+            payload: {
+              definition: {
+                family: "ADVERSE_SELECTION",
+                version: QUANT_TRADER_SCENARIO_VERSION,
+                seed: 1
+              }
+            }
+          }
+        ],
+        result: { injected: true }
+      });
+
+      const roundRequestId = newRequestId();
+      store.appendIdempotent({
+        sessionId,
+        requestId: roundRequestId,
+        causationId: roundRequestId,
+        correlationId: roundRequestId,
+        elapsedMs: 10,
+        expectedPriorSequence: 2,
+        commandFingerprint: "6".repeat(64),
+        drafts: [
+          {
+            source: "USER",
+            type: "QUANT_TRADING_ACTION_ACCEPTED",
+            payload: { action: { type: "PASS" } }
+          },
+          {
+            source: "APPLICATION",
+            type: "QUANT_TRADING_ROUND_RESOLVED",
+            payload: { evidence }
+          }
+        ],
+        result: { injected: true }
+      });
+
+      expect(() => SessionWriter.open(store, sessionId))
+        .toThrow(/PASS action cannot produce student fills/u);
+    } finally {
+      store.close();
+    }
+  });
 });
 
 describe("adversarial quant lifecycle invariants", () => {
