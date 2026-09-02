@@ -21,7 +21,11 @@ import {
   ManagedMoonshineRuntime,
   ManagedSileroVadRuntime
 } from "../apps/desktop/src/runtime/runtime-adapters.js";
-import { cleanupStaleRuntimeAssetViews } from "../apps/desktop/src/runtime/runtime-asset-view.js";
+import {
+  cleanupStaleRuntimeAssetViews,
+  materializeRuntimeAssetView
+} from "../apps/desktop/src/runtime/runtime-asset-view.js";
+import { ModelAssetManager } from "../packages/model-assets/src/index.js";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/local-model-http-worker.mjs", import.meta.url));
 const PRODUCTION_WORKER = fileURLToPath(
@@ -64,14 +68,33 @@ describe("desktop local model runtime", () => {
   });
 
 
-  it("does not delete a verified runtime view owned by this live desktop process", async () => {
+  it("does not delete a runtime view owned by this exact desktop process instance", async () => {
     const root = temporaryRoot("desktop-runtime-view-owner-");
-    const liveView = join(root, `run-${String(process.pid)}-live`);
-    mkdirSync(liveView, { recursive: true });
+    const manager = new ModelAssetManager({
+      rootDir: temporaryRoot("desktop-runtime-view-assets-"),
+      maxArtifactBytes: 1024,
+      maxCacheBytes: 4096
+    });
+    const liveView = await materializeRuntimeAssetView({
+      manager,
+      assets: [],
+      baseRoot: root
+    });
 
     await cleanupStaleRuntimeAssetViews(root);
 
-    expect(existsSync(liveView)).toBe(true);
+    expect(existsSync(liveView.root)).toBe(true);
+    await liveView.dispose();
+  });
+
+  it("deletes an orphaned runtime view even when its PID has been reused", async () => {
+    const root = temporaryRoot("desktop-runtime-view-pid-reuse-");
+    const orphan = join(root, `run-${String(process.pid)}-${"0".repeat(32)}-orphan`);
+    mkdirSync(orphan, { recursive: true });
+
+    await cleanupStaleRuntimeAssetViews(root);
+
+    expect(existsSync(orphan)).toBe(false);
   });
 
   it("keeps typed desktop startup usable when production model assets are absent", async () => {
