@@ -16,6 +16,9 @@ import {
   InMemoryTldrawEditor,
   TldrawWhiteboardAdapter
 } from "../apps/web/src/tldraw-whiteboard-adapter.js";
+import type {
+  NormalizedStudentShapeChange
+} from "../apps/web/src/whiteboard/normalized-board.js";
 
 const BASE_URL = "http://127.0.0.1:43123";
 const OTHER_BASE_URL = "http://127.0.0.1:44123";
@@ -970,6 +973,164 @@ describe("interview session transition authority", () => {
     await expect(rendered.current().submitTypedInput("must remain closed"))
       .rejects.toThrow("Cannot submit input without an active session");
 
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
+  it("does not let a stale board-mutation completion overwrite a newer session sync state", async () => {
+    const firstSession = newSessionId();
+    const secondSession = newSessionId();
+    let markMutationSeen: (() => void) | undefined;
+    const mutationSeen = new Promise<void>((resolve) => {
+      markMutationSeen = resolve;
+    });
+    let releaseMutation: (() => void) | undefined;
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = (): void => {
+            const error = new Error("renderer stream aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (init.signal?.aborted === true) {
+            abort();
+            return;
+          }
+          init.signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+
+      const expectedCommandUrl = `${BASE_URL}/v1/commands`;
+      const expectedMutationUrl = `${BASE_URL}/v1/whiteboard-mutations`;
+      if (url !== expectedCommandUrl && url !== expectedMutationUrl) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") throw new Error("Command body must be JSON text");
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+        readonly sessionId?: SessionId;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
+
+      if (command.type === "START_SESSION") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_STARTED",
+          sessionId: command.sessionId
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Context intentionally unavailable"
+          }
+        }, 500);
+      }
+      if (command.type === "GET_BOARD_STATE") {
+        const revision = command.sessionId === secondSession ? 2 : 1;
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "BOARD_STATE",
+          sessionId: command.sessionId,
+          boardRevision: revision,
+          shapeAuthorityKnown: true,
+          shapeRevisions: []
+        });
+      }
+      if (command.type === "COMMIT_BOARD_MUTATION") {
+        if (command.sessionId !== firstSession) {
+          throw new Error("Only the first session mutation should be deferred");
+        }
+        markMutationSeen?.();
+        return new Promise<Response>((resolve) => {
+          releaseMutation = () => resolve(jsonResponse({
+            protocolVersion: 1,
+            requestId: command.requestId,
+            ok: true,
+            type: "BOARD_MUTATION_COMMITTED",
+            sessionId: firstSession,
+            committed: true,
+            boardRevision: 2
+          }));
+        });
+      }
+
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const adapter = new TldrawWhiteboardAdapter(new InMemoryTldrawEditor());
+    const rendered = renderHook(fetchImpl, adapter);
+    await act(async () => {
+      await rendered.current().startSession(firstSession);
+    });
+    expect(rendered.current().whiteboardSync).toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: 1
+    });
+
+    const change: NormalizedStudentShapeChange = {
+      source: "EDITOR",
+      added: [{
+        id: "shape:stale-session-mutation",
+        type: "rectangle",
+        bounds: { x: 10, y: 10, width: 20, height: 20 },
+        revision: 1,
+        createdAt: "2026-09-02T15:00:00.000Z",
+        lastModifiedAt: "2026-09-02T15:00:00.000Z"
+      }],
+      updated: [],
+      deleted: []
+    };
+
+    let pendingMutation: Promise<void> | undefined;
+    await act(async () => {
+      pendingMutation = rendered.current().submitWhiteboardMutation(change);
+      await mutationSeen;
+    });
+    expect(rendered.current().whiteboardSync.status).toBe("PENDING");
+
+    await act(async () => {
+      await rendered.current().startSession(secondSession);
+    });
+    expect(rendered.current().sessionId).toBe(secondSession);
+    expect(rendered.current().whiteboardSync).toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: 2
+    });
+
+    if (releaseMutation === undefined) {
+      throw new Error("First-session board mutation was not deferred");
+    }
+    releaseMutation();
+    await act(async () => {
+      await pendingMutation?.catch(() => undefined);
+      await Promise.resolve();
+    });
+
+    expect(rendered.current().sessionId).toBe(secondSession);
+    expect(rendered.current().whiteboardSync).toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: 2
+    });
+
+    act(() => rendered.current().disconnect());
     await act(async () => {
       rendered.root.unmount();
     });
