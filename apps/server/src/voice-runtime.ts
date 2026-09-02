@@ -197,7 +197,7 @@ interface TtsAssembly {
 
 export class VoiceSynthesisCoordinator {
   private readonly activeBySession = new Map<SessionId, Set<string>>();
-  private readonly inFlightSourceDeliveries = new Set<DeliveryId>();
+  private readonly inFlightSourceDeliveries = new Map<SessionId, Set<DeliveryId>>();
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
@@ -215,8 +215,11 @@ export class VoiceSynthesisCoordinator {
   ): Promise<DeliveryAtom | undefined> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const sourceDeliveryId = DeliveryIdSchema.parse(sourceDeliveryIdInput);
-    if (this.inFlightSourceDeliveries.has(sourceDeliveryId)) return undefined;
-    this.inFlightSourceDeliveries.add(sourceDeliveryId);
+    const inFlightForSession =
+      this.inFlightSourceDeliveries.get(sessionId) ?? new Set<DeliveryId>();
+    if (inFlightForSession.has(sourceDeliveryId)) return undefined;
+    inFlightForSession.add(sourceDeliveryId);
+    this.inFlightSourceDeliveries.set(sessionId, inFlightForSession);
 
     let registeredAudioRef: string | undefined;
     try {
@@ -363,7 +366,11 @@ export class VoiceSynthesisCoordinator {
       if (registeredAudioRef !== undefined) this.assets.remove(registeredAudioRef);
       return undefined;
     } finally {
-      this.inFlightSourceDeliveries.delete(sourceDeliveryId);
+      const inFlightForSession = this.inFlightSourceDeliveries.get(sessionId);
+      inFlightForSession?.delete(sourceDeliveryId);
+      if (inFlightForSession?.size === 0) {
+        this.inFlightSourceDeliveries.delete(sessionId);
+      }
     }
   }
 
