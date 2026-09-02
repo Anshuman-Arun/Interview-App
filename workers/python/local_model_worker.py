@@ -62,6 +62,7 @@ MAX_TTS_TEXT_CHARS = 4_000
 MAX_TTS_SECONDS = 60
 MAX_TTS_CANCELLATION_TOMBSTONES = 256
 MAX_VAD_STREAMS = 64
+MAX_SPEECH_NATIVE_RESERVATIONS = 4
 SILERO_WINDOW_16K = 512
 SILERO_CONTEXT_16K = 64
 
@@ -312,7 +313,9 @@ class SpeechRuntime:
         self._np = np
         self._states: OrderedDict[str, SileroState] = OrderedDict()
         self._vad_lock = threading.Lock()
+        self._vad_slots = threading.BoundedSemaphore(MAX_SPEECH_NATIVE_RESERVATIONS)
         self._stt_lock = threading.Lock()
+        self._stt_slots = threading.BoundedSemaphore(MAX_SPEECH_NATIVE_RESERVATIONS)
         self.runtime_version = (
             f"moonshine-voice/{MOONSHINE_VERSION};"
             f"onnxruntime/{ONNXRUNTIME_VERSION};deps/{PYTHON_DEPENDENCY_LOCK_VERSION}"
@@ -334,52 +337,57 @@ class SpeechRuntime:
         samples = self._np.frombuffer(raw, dtype="<f4").astype(self._np.float32, copy=True)
         if not self._np.isfinite(samples).all():
             raise ProtocolError(400, "INVALID_PCM")
-        with self._vad_lock:
-            state = self._states.pop(stream_id, None)
-            if state is None:
-                state = SileroState(self._np)
-            if state.input_sample_rate is None:
-                state.input_sample_rate = int(sample_rate)
-            elif state.input_sample_rate != int(sample_rate):
-                raise ProtocolError(400, "STREAM_SAMPLE_RATE_CHANGED")
-            self._states[stream_id] = state
-            while len(self._states) > MAX_VAD_STREAMS:
-                self._states.popitem(last=False)
+        if not self._vad_slots.acquire(blocking=False):
+            raise ProtocolError(429, "VAD_BUSY")
+        try:
+            with self._vad_lock:
+                state = self._states.pop(stream_id, None)
+                if state is None:
+                    state = SileroState(self._np)
+                if state.input_sample_rate is None:
+                    state.input_sample_rate = int(sample_rate)
+                elif state.input_sample_rate != int(sample_rate):
+                    raise ProtocolError(400, "STREAM_SAMPLE_RATE_CHANGED")
+                self._states[stream_id] = state
+                while len(self._states) > MAX_VAD_STREAMS:
+                    self._states.popitem(last=False)
 
-            if sample_rate == 48_000:
-                source = self._np.concatenate((state.pending_48k, samples))
-                usable = (source.size // 3) * 3
-                if usable > 0:
-                    # Match Silero v6.2.1's official 48 kHz preprocessing
-                    # (x[:, ::3]) while preserving decimation phase across
-                    # arbitrary HTTP frame boundaries.
-                    samples = source[:usable:3].astype(
-                        self._np.float32, copy=False
+                if sample_rate == 48_000:
+                    source = self._np.concatenate((state.pending_48k, samples))
+                    usable = (source.size // 3) * 3
+                    if usable > 0:
+                        # Match Silero v6.2.1's official 48 kHz preprocessing
+                        # (x[:, ::3]) while preserving decimation phase across
+                        # arbitrary HTTP frame boundaries.
+                        samples = source[:usable:3].astype(
+                            self._np.float32, copy=False
+                        )
+                    else:
+                        samples = self._np.empty((0,), dtype=self._np.float32)
+                    state.pending_48k = source[usable:].copy()
+
+                state.pending = self._np.concatenate((state.pending, samples))
+                while state.pending.size >= SILERO_WINDOW_16K:
+                    window = state.pending[:SILERO_WINDOW_16K]
+                    state.pending = state.pending[SILERO_WINDOW_16K:]
+                    model_input = self._np.concatenate((state.context, window.reshape(1, -1)), axis=1)
+                    output, recurrent = self._silero.run(
+                        None,
+                        {
+                            "input": model_input,
+                            "state": state.state,
+                            "sr": self._np.array(16_000, dtype="int64"),
+                        },
                     )
-                else:
-                    samples = self._np.empty((0,), dtype=self._np.float32)
-                state.pending_48k = source[usable:].copy()
-
-            state.pending = self._np.concatenate((state.pending, samples))
-            while state.pending.size >= SILERO_WINDOW_16K:
-                window = state.pending[:SILERO_WINDOW_16K]
-                state.pending = state.pending[SILERO_WINDOW_16K:]
-                model_input = self._np.concatenate((state.context, window.reshape(1, -1)), axis=1)
-                output, recurrent = self._silero.run(
-                    None,
-                    {
-                        "input": model_input,
-                        "state": state.state,
-                        "sr": self._np.array(16_000, dtype="int64"),
-                    },
-                )
-                state.state = recurrent
-                state.context = model_input[:, -SILERO_CONTEXT_16K:]
-                probability = float(self._np.asarray(output).reshape(-1)[-1])
-                if not math.isfinite(probability):
-                    raise RuntimeError("Silero returned non-finite probability")
-                state.last_probability = min(1.0, max(0.0, probability))
-            return {"speechProbability": state.last_probability}
+                    state.state = recurrent
+                    state.context = model_input[:, -SILERO_CONTEXT_16K:]
+                    probability = float(self._np.asarray(output).reshape(-1)[-1])
+                    if not math.isfinite(probability):
+                        raise RuntimeError("Silero returned non-finite probability")
+                    state.last_probability = min(1.0, max(0.0, probability))
+                return {"speechProbability": state.last_probability}
+        finally:
+            self._vad_slots.release()
 
     def transcribe(self, body: dict[str, Any]) -> dict[str, Any]:
         request_id = body.get("requestId")
@@ -399,14 +407,18 @@ class SpeechRuntime:
             raise ProtocolError(413, "AUDIO_TOO_LONG")
 
         # The application may admit multiple authoritative speech streams.
-        # Moonshine's batch transcriber is single-lane, so serialize admitted
-        # requests instead of rejecting a concurrent final transcript as busy.
-        # Runtime cancellation remains truthfully unsupported once native
-        # inference begins; late results are suppressed by SpeechWorkerCore.
-        with self._stt_lock:
-            transcript = self._transcriber.transcribe_without_streaming(
-                samples.tolist(), sample_rate=int(sample_rate)
-            )
+        # Bound the number of HTTP handlers allowed to wait for the one native
+        # batch lane. A hung native call must not turn repeated client timeouts
+        # into unbounded blocked Python threads.
+        if not self._stt_slots.acquire(blocking=False):
+            raise ProtocolError(429, "STT_BUSY")
+        try:
+            with self._stt_lock:
+                transcript = self._transcriber.transcribe_without_streaming(
+                    samples.tolist(), sample_rate=int(sample_rate)
+                )
+        finally:
+            self._stt_slots.release()
 
         lines = list(getattr(transcript, "lines", []) or [])
         text = "\n".join(
