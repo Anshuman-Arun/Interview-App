@@ -775,8 +775,11 @@ export class VoiceInputCoordinator {
     const admittedEvents: SpeechWorkerEvent[] = [];
     let commit: VoiceInputCommit | undefined;
     let terminal = false;
+    let currentRequestId: string | undefined;
 
-    for (const event of validatedEvents) {
+    try {
+      for (const event of validatedEvents) {
+        currentRequestId = event.requestId;
       if (!this.isCurrent(context, token)) break;
       if (event.streamId !== context.streamId) {
         throw new Error("Speech worker callback escaped its bound stream");
@@ -921,6 +924,39 @@ export class VoiceInputCoordinator {
         await this.terminateContext(context);
         admittedEvents.push(event);
       }
+    }
+
+    } catch (error) {
+      const onsetWasAdmitted = admittedEvents.some((event) => event.type === "SPEECH_STARTED");
+      const utteranceId = context.authoritativeUtteranceId;
+      const writer = this.sessions.getWriter(context.sessionId);
+      const utteranceStatus = utteranceId === undefined
+        ? undefined
+        : writer.getState().utterances[utteranceId]?.status;
+
+      if (
+        !onsetWasAdmitted
+        || currentRequestId === undefined
+        || utteranceId === undefined
+        || utteranceStatus !== "CAPTURING"
+      ) {
+        throw error;
+      }
+
+      await this.discardCapturingUtterance(
+        context,
+        "Speech worker emitted an inconsistent callback after admitted onset"
+      );
+      terminal = true;
+      await this.terminateContext(context);
+      admittedEvents.push(SpeechWorkerEventSchema.parse({
+        protocolVersion: 1,
+        type: "SPEECH_WORKER_ERROR",
+        requestId: currentRequestId,
+        streamId: context.streamId,
+        code: "INTERNAL_ERROR",
+        message: "Speech worker emitted an inconsistent callback after admitted onset"
+      }));
     }
 
     return {
