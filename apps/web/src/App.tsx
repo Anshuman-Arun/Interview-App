@@ -634,7 +634,11 @@ export const App: React.FC = () => {
                 <div className="flex-1 relative bg-slate-100/50">
                   <WhiteboardCanvas
                     adapter={whiteboardAdapter}
-                    readOnly={!session.isSessionStarted || session.sessionStatus !== "ACTIVE"}
+                    readOnly={
+                      !session.isSessionStarted
+                      || session.sessionStatus !== "ACTIVE"
+                      || session.whiteboardSync.status === "UNSYNCHRONIZED"
+                    }
                     onEditorMount={handleWhiteboardEditorMount}
                     onNormalizedBoardChange={(change) => {
                       void session.submitWhiteboardMutation(change).catch(() => {
