@@ -113,6 +113,8 @@ describe("expressive product integration invariants", () => {
     expect(app).not.toContain("{session.problem.category}");
     expect(problem).not.toContain("problem.topics");
     expect(problem).not.toContain("problem.category");
+    expect(problem).not.toContain("problem.difficulty");
+    expect(app).not.toContain("session.problem.difficulty");
   });
 
   it("keeps the native tldraw toolbar local and starts on Pencil", () => {
@@ -163,7 +165,7 @@ describe("expressive product integration invariants", () => {
     );
 
     expect(app).toContain("sessionEntryPendingRef.current");
-    expect(app).toContain("if (sessionEntryPendingRef.current) return");
+    expect(app).toContain("sessionEntryPendingRef.current || sessionTerminalPendingRef.current");
     expect(app).toContain("setSessionEntryPending(true)");
     expect(app).toContain("setSessionEntryPending(false)");
   });
@@ -192,6 +194,23 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain('s.status === "ACTIVE" && s.sessionId === session.sessionId');
     expect(app).toContain("s.sessionId === session.sessionId");
     expect(app).toContain("|| sessionTerminalPending");
+  });
+
+  it("validates browser transport settings before changing the live endpoint", () => {
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(hook).toContain("deriveDefaultRendererStreamUrl(candidate)");
+    expect(hook).toContain("Command server URL must be an exact HTTP loopback origin with a usable port");
+    expect(hook).toContain("if (normalized === baseUrl) return");
+    expect(app).toContain("setInputUrl(session.baseUrl)");
+    expect(app).toContain("[session.baseUrl]");
   });
 
   it("styles Whiteboard and Details from actual tab selection state", () => {
