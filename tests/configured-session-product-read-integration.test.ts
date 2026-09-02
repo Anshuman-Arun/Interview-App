@@ -11,6 +11,7 @@ import {
   QUANT_TRADER_SCENARIO_VERSION
 } from "../packages/local-compute/src/index.js";
 import {
+  QuantTradingSessionCoordinator,
   TurnCoordinator,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
@@ -173,7 +174,19 @@ describe("configured session product-read integration", () => {
       });
 
       await command.startConfiguredSession(sessionId, configuration);
-      await command.completeSession(sessionId);
+      const trading = new QuantTradingSessionCoordinator(server.registry.get(sessionId));
+      let tradingState = trading.getPublicState();
+      while (tradingState.actionRequired) {
+        tradingState = (await trading.applyAction(
+          { type: "PASS" },
+          tradingState.currentRound,
+          createCommandEnvelope({
+            sessionId,
+            producer: "configured-read-integration-test"
+          })
+        )).value;
+      }
+      expect(tradingState.status).toBe("COMPLETED");
       const beforeReads = server.store.eventCount(sessionId);
 
       const evaluation = await reads.getEvaluation(sessionId);
