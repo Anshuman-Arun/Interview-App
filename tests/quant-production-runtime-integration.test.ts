@@ -275,11 +275,11 @@ describe("production quant runtime integration", () => {
       await expect(turns.completeSession(createCommandEnvelope({
         sessionId: legacy.sessionId,
         producer: "legacy-quant-fixture"
-      }))).rejects.toThrow(/Legacy Quant session is read-only/u);
+      }))).rejects.toThrow(/Cannot extend legacy Quant session/u);
       await expect(turns.commitInput("must not mutate legacy quant", createCommandEnvelope({
         sessionId: legacy.sessionId,
         producer: "legacy-quant-fixture"
-      }))).rejects.toThrow(/Legacy Quant session is read-only/u);
+      }))).rejects.toThrow(/Cannot extend legacy Quant session/u);
       expect(store.eventCount(legacy.sessionId)).toBe(countBeforeRejectedWrites);
     }
 
@@ -321,6 +321,10 @@ describe("production quant runtime integration", () => {
         requestId: newRequestId(),
         sessionId: legacy.sessionId
       }), 409, "CONFLICT");
+      await expectProtocolError(postStart(
+        legacy.sessionId,
+        legacy.sessionId === activeTrading ? tradingConfiguration() : researchConfiguration()
+      ), 409, "CONFLICT");
       expect(store.eventCount(legacy.sessionId)).toBe(countBefore);
     }
 
