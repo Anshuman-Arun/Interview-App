@@ -146,7 +146,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
         this.pendingResolutions.delete(input.deliveryId);
       }
       if (resolved !== undefined && controller.signal.aborted) {
-        releaseResolved();
+        releaseResolved?.();
       }
       if (error instanceof RendererPresentationNotExposedError) throw error;
       if (controller.signal.aborted) {
@@ -210,13 +210,17 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
 }
 
 function validateResolvedSource(value: unknown): asserts value is ResolvedAudioSource {
+  if (typeof value !== "object" || value === null) {
+    throw new Error("Resolved audio source is invalid");
+  }
+  const record = value as Record<string, unknown>;
+  const source = record["source"];
+  const release = record["release"];
   if (
-    typeof value !== "object"
-    || value === null
-    || typeof value.source !== "string"
-    || value.source.length === 0
-    || value.source.length > 16_384
-    || (value.release !== undefined && typeof value.release !== "function")
+    typeof source !== "string"
+    || source.length === 0
+    || source.length > 16_384
+    || (release !== undefined && typeof release !== "function")
   ) {
     throw new Error("Resolved audio source is invalid");
   }
