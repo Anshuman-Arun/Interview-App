@@ -197,6 +197,13 @@ describe("Real tldraw mounted browser integration", () => {
     expect(normalizedChanges).toHaveLength(0);
 
     await act(async () => {
+      remounted.getNativeEditor().undo();
+    });
+    expect(remounted.getShape(studentId)).toBeDefined();
+    expect(remounted.getCurrentPageShapes().map((shape) => shape.id).sort())
+      .toEqual(idsBefore);
+
+    await act(async () => {
       handle.unmount();
     });
     container.remove();
