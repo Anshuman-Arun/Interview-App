@@ -572,7 +572,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       || this.localBoardRevision < 0
       || this.localBoardRevision >= Number.MAX_SAFE_INTEGER
     ) {
-      throw new Error("Local whiteboard revision mirror cannot exceed Number.MAX_SAFE_INTEGER");
+      throw new Error("Local whiteboard BoardRevision mirror cannot exceed Number.MAX_SAFE_INTEGER");
     }
   }
 
