@@ -14,7 +14,7 @@ import type { LocalEnvironmentDefinition } from "./types.js";
 import { WINDOWS_JOB_SUPERVISOR_SCRIPT } from "./windows-job-supervisor.js";
 
 const MAX_EXECUTABLES = 32;
-const MAX_ACTIVE_EXECUTIONS = 8;
+const MAX_ACTIVE_EXECUTIONS = 4;
 const MAX_ARGUMENTS = 64;
 const MAX_ARGUMENT_BYTES = 128 * 1024;
 const MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS = 24_000;
