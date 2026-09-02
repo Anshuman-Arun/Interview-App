@@ -228,6 +228,161 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
+  it("keeps vision evidence across unrelated out-of-region edits but invalidates it when a supporting shape revision changes", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "The graph representation is present.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      evidenceInterpreter: progressInterpreter()
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      const admitted = await coordinator.process(request);
+      expect(admitted.status).toBe("ACCEPTED");
+
+      const key = evidenceKeyToString({
+        problemId: sixPeopleProblem.id,
+        subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+        dimension: "PROGRESS"
+      });
+      expect(harness.writer.getState().studentEvidence[key]?.value).toBe("PROGRESSING");
+
+      const outside = await harness.turns.commitBoardMutation({
+        baseBoardRevision: BoardRevisionSchema.parse(1),
+        added: [{
+          id: "shape:outside-region",
+          type: "rectangle",
+          bounds: { x: 500, y: 500, width: 20, height: 20 },
+          revision: 1,
+          createdAt: 1,
+          lastModifiedAt: 1
+        }],
+        updated: [],
+        deleted: []
+      });
+      expect(outside).toMatchObject({
+        committed: true,
+        boardRevision: BoardRevisionSchema.parse(2)
+      });
+      expect(harness.writer.getState().studentEvidence[key]?.value).toBe("PROGRESSING");
+
+      const supportingChange = await harness.turns.commitBoardMutation({
+        baseBoardRevision: BoardRevisionSchema.parse(2),
+        added: [],
+        updated: [{
+          beforeRevision: 1,
+          shape: graphShape(2, 20)
+        }],
+        deleted: []
+      });
+      expect(supportingChange).toMatchObject({
+        committed: true,
+        boardRevision: BoardRevisionSchema.parse(3)
+      });
+      const state = harness.writer.getState();
+      expect(state.studentEvidence[key]).toBeUndefined();
+      expect(state.evidenceHistory[key]?.at(-1)).toMatchObject({
+        status: "STALE",
+        invalidationReason: "Authoritative whiteboard changed the supporting vision basis"
+      });
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("invalidates vision evidence when region membership changes even if all previously bound shapes are untouched", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "The graph representation is present.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      evidenceInterpreter: progressInterpreter()
+    });
+
+    try {
+      await coordinator.process(upload(harness.sessionId));
+      const key = evidenceKeyToString({
+        problemId: sixPeopleProblem.id,
+        subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+        dimension: "PROGRESS"
+      });
+      expect(harness.writer.getState().studentEvidence[key]).toBeDefined();
+
+      await harness.turns.commitBoardMutation({
+        baseBoardRevision: BoardRevisionSchema.parse(1),
+        added: [{
+          id: "shape:new-region-member",
+          type: "text",
+          bounds: { x: 15, y: 15, width: 15, height: 15 },
+          text: "new",
+          revision: 1,
+          createdAt: 1,
+          lastModifiedAt: 1
+        }],
+        updated: [],
+        deleted: []
+      });
+
+      expect(harness.writer.getState().studentEvidence[key]).toBeUndefined();
+      expect(harness.writer.getState().evidenceHistory[key]?.at(-1)?.status)
+        .toBe("STALE");
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("invalidates all vision-derived evidence when a summary-only board patch destroys shape authority", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "The graph representation is present.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      evidenceInterpreter: progressInterpreter()
+    });
+
+    try {
+      await coordinator.process(upload(harness.sessionId));
+      const key = evidenceKeyToString({
+        problemId: sixPeopleProblem.id,
+        subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+        dimension: "PROGRESS"
+      });
+      expect(harness.writer.getState().studentEvidence[key]).toBeDefined();
+
+      await harness.turns.commitBoardPatch("legacy summary-only board update");
+
+      const state = harness.writer.getState();
+      expect(state.boardShapeAuthorityKnown).toBe(false);
+      expect(state.studentEvidence[key]).toBeUndefined();
+      expect(state.evidenceHistory[key]?.at(-1)).toMatchObject({
+        status: "STALE",
+        invalidationReason: "Whiteboard shape authority became unknown after a summary-only board update"
+      });
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
   it("accepts a low-confidence observation without promoting it to authoritative evidence", async () => {
     const harness = await startedBoardSession();
     const backend = new DeterministicFakeVisionBackend([{
