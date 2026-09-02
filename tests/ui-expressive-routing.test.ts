@@ -47,7 +47,7 @@ describe("expressive product routing", () => {
     }
   });
 
-  it("route-locks an active interview to the live workspace", () => {
+  it("route-locks live interviews while allowing a paused interview to go Home", () => {
     expect(routeForActiveInterview({ page: "home" }, true))
       .toEqual({ page: "interview" });
     expect(routeForActiveInterview({ page: "sessions" }, true))
@@ -55,6 +55,15 @@ describe("expressive product routing", () => {
     expect(routeForActiveInterview({ page: "interview" }, true))
       .toEqual({ page: "interview" });
     expect(routeForActiveInterview({ page: "home" }, false))
+      .toEqual({ page: "home" });
+
+    expect(routeForActiveInterview({ page: "home" }, true, true))
+      .toEqual({ page: "home" });
+    expect(routeForActiveInterview({ page: "interview" }, true, true))
+      .toEqual({ page: "interview" });
+    expect(routeForActiveInterview({ page: "sessions" }, true, true))
+      .toEqual({ page: "home" });
+    expect(routeForActiveInterview({ page: "settings" }, true, true))
       .toEqual({ page: "home" });
   });
 
