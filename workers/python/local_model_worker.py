@@ -59,6 +59,7 @@ MAX_TRANSCRIPT_CHARS = 20_000
 MAX_WORDS = 1_000
 MAX_TTS_TEXT_CHARS = 4_000
 MAX_TTS_SECONDS = 60
+MAX_TTS_CANCELLATION_TOMBSTONES = 256
 MAX_VAD_STREAMS = 64
 SILERO_WINDOW_16K = 512
 SILERO_CONTEXT_16K = 64
@@ -458,7 +459,7 @@ class TtsRuntime:
         self._synthesis_lock = threading.Lock()
         self._state_lock = threading.Lock()
         self._current_request_id: str | None = None
-        self._cancelled_request_ids: set[str] = set()
+        self._cancelled_request_ids: OrderedDict[str, None] = OrderedDict()
         self.runtime_version = (
             f"moonshine-voice/{MOONSHINE_VERSION};deps/{PYTHON_DEPENDENCY_LOCK_VERSION}"
         )
@@ -495,10 +496,12 @@ class TtsRuntime:
             raise ProtocolError(429, "TTS_BUSY")
         try:
             with self._state_lock:
+                if request_id in self._cancelled_request_ids:
+                    self._cancelled_request_ids.pop(request_id, None)
+                    raise ProtocolError(409, "CANCELLED")
                 if self._current_request_id is not None:
                     raise ProtocolError(409, "TTS_BUSY")
                 self._current_request_id = request_id
-                self._cancelled_request_ids.discard(request_id)
 
             chunks: list[Any] = []
             frame_count = 0
@@ -530,7 +533,7 @@ class TtsRuntime:
             finally:
                 with self._state_lock:
                     self._current_request_id = None
-                    self._cancelled_request_ids.discard(request_id)
+                    self._cancelled_request_ids.pop(request_id, None)
         finally:
             self._synthesis_lock.release()
 
@@ -551,19 +554,24 @@ class TtsRuntime:
         if not isinstance(request_id, str) or not (1 <= len(request_id) <= 128):
             raise ProtocolError(400, "INVALID_REQUEST_ID")
 
-        # Keep the request identity stable across the native cancellation call.
-        # Without this lock, a just-completed request could clear itself and a
-        # following request could begin before cancel_stream() executes.
+        # Cancellation may beat the synthesis HTTP handler even though the
+        # TypeScript request manager has already marked the model call in flight.
+        # Tombstone the exact request so a later handler cannot start Moonshine.
         with self._state_lock:
+            self._cancelled_request_ids.pop(request_id, None)
+            self._cancelled_request_ids[request_id] = None
+            while len(self._cancelled_request_ids) > MAX_TTS_CANCELLATION_TOMBSTONES:
+                self._cancelled_request_ids.popitem(last=False)
+
             if self._current_request_id != request_id:
-                return {"accepted": False}
-            self._cancelled_request_ids.add(request_id)
+                return {"accepted": True}
+
             # Moonshine explicitly documents cancel_stream() as safe for
             # barge-in from another thread while stream() is producing chunks.
             try:
                 self._tts.cancel_stream()
             except Exception:
-                self._cancelled_request_ids.discard(request_id)
+                self._cancelled_request_ids.pop(request_id, None)
                 raise
         return {"accepted": True}
 
