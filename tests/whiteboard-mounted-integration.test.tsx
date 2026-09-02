@@ -320,10 +320,7 @@ describe("Real tldraw mounted browser integration", () => {
         x: 20,
         y: 30,
         props: {
-          segments: [{
-            type: "free",
-            points: [{ x: 0, y: 0, z: 0.5 }]
-          }],
+          segments: [],
           color: "black",
           fill: "none",
           dash: "draw",
@@ -340,21 +337,15 @@ describe("Real tldraw mounted browser integration", () => {
     expect(adapter.getBoardRevision()).toBe(0);
     expect(changes).toHaveLength(0);
 
-    for (let pointCount = 2; pointCount <= 80; pointCount += 1) {
+    // Simulate the many store writes that one pointer gesture produces. The
+    // exact draw-path encoding belongs to tldraw; authority only cares that
+    // the shape remains an incomplete freehand gesture until pointer-up.
+    for (let sample = 1; sample <= 80; sample += 1) {
       await act(async () => {
         editor.updateShapes([{
           id,
           type: "draw",
-          props: {
-            segments: [{
-              type: "free",
-              points: Array.from({ length: pointCount }, (_, index) => ({
-                x: index,
-                y: index / 2,
-                z: 0.5
-              }))
-            }]
-          }
+          x: 20 + sample
         }]);
       });
     }
@@ -376,7 +367,7 @@ describe("Real tldraw mounted browser integration", () => {
     expect(changes[0]?.source).toBe("EDITOR");
     expect(changes[0]?.added).toHaveLength(1);
     expect(changes[0]?.added[0]?.id).toBe(id);
-    expect(changes[0]?.added[0]?.shapeRevision).toBe(1);
+    expect(changes[0]?.added[0]?.revision).toBe(1);
     expect(changes[0]?.updated).toHaveLength(0);
     expect(changes[0]?.deleted).toHaveLength(0);
 
