@@ -26,6 +26,7 @@ export interface AudioMediaStreamLike {
 export interface AudioMediaDevicesLike {
   getUserMedia?(constraints: MediaStreamConstraints): Promise<AudioMediaStreamLike>;
   enumerateDevices?(): Promise<readonly AudioMediaDeviceInfoLike[]>;
+  getSupportedConstraints?(): MediaTrackSupportedConstraints;
   addEventListener?(type: "devicechange", listener: () => void): void;
   removeEventListener?(type: "devicechange", listener: () => void): void;
 }
