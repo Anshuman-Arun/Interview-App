@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   MAX_VISION_OBSERVATIONS,
@@ -102,23 +103,54 @@ function cloneOutcome(outcome: VisionAdmissionResult): VisionAdmissionResult {
   return VisionAdmissionResultSchema.parse(outcome);
 }
 
-function imagePayloadMatchesRequest(
+function prepareImagePayloadForExecution(
   payload: VisionInferenceImagePayload,
   request: VisionInferenceRequest
-): boolean {
+): VisionInferenceImagePayload | undefined {
   try {
     const metadata = payload.metadata;
-    return metadata.mimeType === "image/png"
-      && Number.isSafeInteger(metadata.width)
-      && metadata.width > 0
-      && Number.isSafeInteger(metadata.height)
-      && metadata.height > 0
-      && Number.isSafeInteger(metadata.byteSize)
-      && metadata.byteSize > 0
-      && metadata.contentDigest === request.snapshotBasis.snapshotHash
-      && typeof payload.readBytes === "function";
+    const mimeType = metadata.mimeType;
+    const width = metadata.width;
+    const height = metadata.height;
+    const byteSize = metadata.byteSize;
+    const contentDigest = metadata.contentDigest;
+    const readBytes = payload.readBytes;
+    if (
+      mimeType !== "image/png"
+      || !Number.isSafeInteger(width)
+      || width <= 0
+      || !Number.isSafeInteger(height)
+      || height <= 0
+      || !Number.isSafeInteger(byteSize)
+      || byteSize <= 0
+      || contentDigest !== request.snapshotBasis.snapshotHash
+      || typeof readBytes !== "function"
+    ) {
+      return undefined;
+    }
+
+    const rawBytes = readBytes.call(payload);
+    if (!(rawBytes instanceof Uint8Array) || rawBytes.byteLength !== byteSize) {
+      return undefined;
+    }
+    const bytes = Uint8Array.from(rawBytes);
+    if (createHash("sha256").update(bytes).digest("hex") !== contentDigest) {
+      return undefined;
+    }
+
+    const stableMetadata = Object.freeze({
+      mimeType,
+      width,
+      height,
+      byteSize,
+      contentDigest
+    });
+    return Object.freeze({
+      metadata: stableMetadata,
+      readBytes: () => Uint8Array.from(bytes)
+    });
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -259,9 +291,11 @@ export class VisionRequestManager {
       return Promise.resolve(rejected(request.requestId, "BACKEND_ERROR"));
     }
 
+    let executionImagePayload: VisionInferenceImagePayload | undefined;
     if (imagePayload !== undefined) {
       const request = VisionInferenceRequestSchema.parse(requestInput);
-      if (!imagePayloadMatchesRequest(imagePayload, request)) {
+      executionImagePayload = prepareImagePayloadForExecution(imagePayload, request);
+      if (executionImagePayload === undefined) {
         return Promise.resolve(rejected(request.requestId, "SNAPSHOT_MISMATCH"));
       }
     }
@@ -293,7 +327,9 @@ export class VisionRequestManager {
         entry.backendStarted = true;
         rawResult = await analyze(backendRequest, {
           signal: entry.controller.signal,
-          ...(imagePayload === undefined ? {} : { imagePayload })
+          ...(executionImagePayload === undefined
+            ? {}
+            : { imagePayload: executionImagePayload })
         }).finally(() => {
           entry.backendSettled = true;
           this.releaseExecutionSlot(entry);

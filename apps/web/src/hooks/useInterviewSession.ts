@@ -933,7 +933,6 @@ export function useInterviewSession(
         resetBoardSync();
         void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
         stopRendererTransport();
-        resetBoardSync();
         setSessionStatus("COMPLETED");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to complete session";
@@ -961,7 +960,6 @@ export function useInterviewSession(
         resetBoardSync();
         void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
         stopRendererTransport();
-        resetBoardSync();
         setSessionStatus("ARCHIVED");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to archive session";
