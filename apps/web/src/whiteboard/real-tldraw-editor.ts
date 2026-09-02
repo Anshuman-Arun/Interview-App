@@ -611,7 +611,7 @@ export class RealTldrawEditorBridge implements TldrawEditor {
     const shapeMeta = withoutAdapterMutationToken(metadata(shape.meta));
     const layer = effectiveNativeLayer(shape);
     const origin = originForLayer(layer);
-    const now = new Date().toISOString();
+    const legacyTimestamp = "1970-01-01T00:00:00.000Z";
     const meta = {
       ...shapeMeta,
       layer,
@@ -619,8 +619,8 @@ export class RealTldrawEditorBridge implements TldrawEditor {
       shapeRevision: shapeMeta["shapeRevision"] === undefined
         ? 1
         : shapeMeta["shapeRevision"],
-      createdAt: stringMeta(shapeMeta["createdAt"], now),
-      lastModifiedAt: stringMeta(shapeMeta["lastModifiedAt"], now)
+      createdAt: stringMeta(shapeMeta["createdAt"], legacyTimestamp),
+      lastModifiedAt: stringMeta(shapeMeta["lastModifiedAt"], legacyTimestamp)
     };
 
     return {

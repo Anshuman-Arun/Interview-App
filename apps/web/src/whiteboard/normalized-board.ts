@@ -30,7 +30,7 @@ export function isStudentOwnedShape(shape: TLShapeRecord): boolean {
 export function normalizeStudentShape(
   shape: TLShapeRecord,
   bounds: TLShapeBounds,
-  now: number = Date.now()
+  now: number = 0
 ): StudentShape | null {
   if (!isStudentOwnedShape(shape)) return null;
 
