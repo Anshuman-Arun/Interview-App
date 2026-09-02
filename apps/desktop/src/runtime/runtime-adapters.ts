@@ -112,7 +112,9 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
         });
         return parseTtsResult(result);
       },
-      cancel: async (requestId): Promise<void> => {
+      cancel: async (
+        requestId: Parameters<NonNullable<KokoroRuntimeSession["cancel"]>>[0]
+      ): Promise<void> => {
         const result = await this.client.postJson("/v1/tts/cancel", {
           requestId
         }, {
