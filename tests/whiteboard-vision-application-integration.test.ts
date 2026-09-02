@@ -14,6 +14,7 @@ import {
   RuleBasedVisionEvidenceInterpreter,
   SessionRuntimeRegistry,
   TurnCoordinator,
+  createCommandEnvelope,
   decidePedagogicalPolicy,
   type VisionInferenceBackend
 } from "../packages/interview-engine/src/index.js";
@@ -284,6 +285,69 @@ describe("application whiteboard vision integration", () => {
       const replay = await coordinator.process(original);
       expect(replay).toEqual(first);
       expect(backend.analyzeCallCount).toBe(1);
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("refuses vision-derived evidence when the board changes after observation admission but before evidence commit", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "Current graph model.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      const visionResult = await coordinator.process(request);
+      expect(visionResult.status).toBe("ACCEPTED");
+
+      const acceptedRequest = harness.writer.getState().visionRequests[request.requestId];
+      const eventId = acceptedRequest?.resultEventId;
+      const admittedAtBoardRevision =
+        acceptedRequest?.acceptedObservation?.admittedAtBoardRevision;
+      if (eventId === undefined || admittedAtBoardRevision === undefined) {
+        throw new Error("Expected persisted accepted vision provenance");
+      }
+
+      await harness.turns.commitBoardMutation({
+        baseBoardRevision: BoardRevisionSchema.parse(1),
+        added: [],
+        updated: [{
+          beforeRevision: 1,
+          shape: graphShape(2, 20)
+        }],
+        deleted: []
+      });
+
+      const evidence = await harness.turns.processEvidenceProposal({
+        envelope: createCommandEnvelope({
+          sessionId: harness.sessionId,
+          producer: "vision-evidence-race"
+        }),
+        proposal: {
+          key: {
+            problemId: sixPeopleProblem.id,
+            subject: { kind: "MILESTONE", milestoneId: "model-relations" },
+            dimension: "PROGRESS"
+          },
+          proposedValue: "PROGRESSING",
+          inferenceConfidence: 0.95,
+          evidenceEventIds: [eventId]
+        },
+        requiredBoardRevision: admittedAtBoardRevision
+      });
+
+      expect(evidence.committed).toBe(false);
+      expect(evidence.reason).toMatch(/board freshness/u);
+      expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
       coordinator.shutdown();
       harness.store.close();
