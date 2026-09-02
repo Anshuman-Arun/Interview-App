@@ -20,6 +20,7 @@ export function ProductPageRouter({
   currentSessionId,
   activeProblemTitle,
   canReview,
+  sessionEntryPending,
   onNavigatePage,
   onEnterInterview,
   onResume,
@@ -39,6 +40,7 @@ export function ProductPageRouter({
   readonly currentSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
   readonly canReview: (session: StoredSessionSummary) => boolean;
+  readonly sessionEntryPending: boolean;
   readonly onNavigatePage: (page: ProductPageId) => void;
   readonly onEnterInterview: () => void;
   readonly onResume: (sessionId: SessionId) => void;
@@ -84,6 +86,7 @@ export function ProductPageRouter({
           onOpenSessions={() => onNavigatePage("sessions")}
           onOpenSettings={() => onNavigatePage("settings")}
           canReview={canReview}
+          sessionEntryPending={sessionEntryPending}
           onReview={(sessionId) => onReview(sessionId, "evaluation")}
         />
       );

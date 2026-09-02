@@ -449,11 +449,6 @@ body {
   color: var(--text-secondary) !important;
 }
 
-.app-header [data-testid="sessions-btn"]::first-letter,
-.app-header [data-testid="settings-btn"]::first-letter {
-  font-size: 0;
-}
-
 .app-header [data-testid="settings-btn"] {
   border-color: var(--border-subtle) !important;
   background: transparent !important;
@@ -584,11 +579,6 @@ body {
 
 .panel-tabs button[data-testid="tab-whiteboard"] {
   color: var(--text-primary) !important;
-}
-
-.panel-tabs button[data-testid="tab-whiteboard"]::first-letter,
-.panel-tabs button[data-testid="tab-formulation"]::first-letter {
-  font-size: 0;
 }
 
 .panel-tabs > .text-\[11px\] {
@@ -1032,4 +1022,15 @@ summary:focus-visible {
 
 @media (min-width: 768px) {
   .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.expressive-home__primary:disabled,
+.expressive-home__active button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.app-header button:disabled,
+.fixed.inset-0.z-50 button:disabled {
+  cursor: not-allowed;
 }

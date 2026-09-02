@@ -42,6 +42,8 @@ export const App: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const historyAbortRef = useRef<AbortController | null>(null);
+  const sessionEntryPendingRef = useRef(false);
+  const [sessionEntryPending, setSessionEntryPending] = useState(false);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -54,7 +56,10 @@ export const App: React.FC = () => {
 
   const [inputUrl, setInputUrl] = useState(session.baseUrl);
 
-  const handleStartSession = async () => {
+  const handleStartSession = async (): Promise<void> => {
+    if (sessionEntryPendingRef.current) return;
+    sessionEntryPendingRef.current = true;
+    setSessionEntryPending(true);
     try {
       const storedSessions = await session.fetchAvailableSessions();
       const existingActive = storedSessions.find(
@@ -69,6 +74,9 @@ export const App: React.FC = () => {
       navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
+    } finally {
+      sessionEntryPendingRef.current = false;
+      setSessionEntryPending(false);
     }
   };
 
@@ -121,12 +129,18 @@ export const App: React.FC = () => {
   };
 
   const handleRecoverSession = async (targetSessionId: SessionId): Promise<void> => {
+    if (sessionEntryPendingRef.current) return;
+    sessionEntryPendingRef.current = true;
+    setSessionEntryPending(true);
     try {
       await session.recoverSession(targetSessionId);
       setShowSessionsModal(false);
       navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
+    } finally {
+      sessionEntryPendingRef.current = false;
+      setSessionEntryPending(false);
     }
   };
 
@@ -268,6 +282,7 @@ export const App: React.FC = () => {
           && isSessionIdAddressableForRead(storedSession.sessionId)
         }
         onNavigatePage={navigateProductPage}
+        sessionEntryPending={sessionEntryPending}
         onEnterInterview={() => {
           void handleStartSession();
         }}
@@ -461,9 +476,10 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handleStartSession()}
+                    disabled={sessionEntryPending}
                     className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors"
                   >
-                    + Start New Interview Session
+                    {sessionEntryPending ? "Opening interview…" : "+ Start New Interview Session"}
                   </button>
                 )}
                 <button

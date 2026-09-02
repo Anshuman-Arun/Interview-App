@@ -13,7 +13,8 @@ export function HomePage({
   onOpenSessions,
   onOpenSettings,
   canReview,
-  onReview
+  onReview,
+  sessionEntryPending
 }: {
   readonly activeSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
@@ -24,6 +25,7 @@ export function HomePage({
   readonly onOpenSettings: () => void;
   readonly canReview: (session: StoredSessionSummary) => boolean;
   readonly onReview: (sessionId: SessionId) => void;
+  readonly sessionEntryPending: boolean;
 }) {
   const recent = [...sessions]
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
@@ -58,9 +60,10 @@ export function HomePage({
                 type="button"
                 className="expressive-home__primary"
                 onClick={onStartInterview}
+                disabled={sessionEntryPending}
                 data-testid="start-session-btn"
               >
-                Enter interview
+                {sessionEntryPending ? "Opening room…" : "Enter interview"}
                 <span aria-hidden="true">↗</span>
               </button>
             ) : (
@@ -68,8 +71,9 @@ export function HomePage({
                 type="button"
                 className="expressive-home__primary"
                 onClick={() => onResumeInterview(activeSessionId)}
+                disabled={sessionEntryPending}
               >
-                Return to room
+                {sessionEntryPending ? "Opening room…" : "Return to room"}
                 <span aria-hidden="true">↗</span>
               </button>
             )}
@@ -118,8 +122,12 @@ export function HomePage({
             <strong>{activeProblemTitle ?? "Interview in progress"}</strong>
             <p>An active room already exists. Resume it before starting anything else.</p>
           </div>
-          <button type="button" onClick={() => onResumeInterview(activeSessionId)}>
-            Resume
+          <button
+            type="button"
+            disabled={sessionEntryPending}
+            onClick={() => onResumeInterview(activeSessionId)}
+          >
+            {sessionEntryPending ? "Opening…" : "Resume"}
           </button>
         </section>
       )}

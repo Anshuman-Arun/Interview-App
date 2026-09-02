@@ -133,6 +133,30 @@ describe("expressive product integration invariants", () => {
     expect(css).not.toContain("height: 50% !important");
   });
 
+  it("does not hide first letters now that emoji prefixes are gone", () => {
+    const css = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
+      "utf8"
+    );
+
+    expect(css).not.toContain('[data-testid="sessions-btn"]::first-letter');
+    expect(css).not.toContain('[data-testid="settings-btn"]::first-letter');
+    expect(css).not.toContain('[data-testid="tab-whiteboard"]::first-letter');
+    expect(css).not.toContain('[data-testid="tab-formulation"]::first-letter');
+  });
+
+  it("serializes product entry actions before creating or recovering sessions", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain("sessionEntryPendingRef.current");
+    expect(app).toContain("if (sessionEntryPendingRef.current) return");
+    expect(app).toContain("setSessionEntryPending(true)");
+    expect(app).toContain("setSessionEntryPending(false)");
+  });
+
   it("does not add expensive decorative effects", () => {
     for (const file of STYLE_FILES) {
       const css = fs.readFileSync(path.resolve(process.cwd(), file), "utf8");
