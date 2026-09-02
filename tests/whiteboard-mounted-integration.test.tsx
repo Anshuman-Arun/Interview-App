@@ -989,7 +989,7 @@ describe("Real tldraw mounted browser integration", () => {
           protocolVersion: 1,
           ok: true,
           type: "BOARD_STATE",
-          requestId: options.requestId ?? newRequestId(),
+          requestId: options?.requestId ?? newRequestId(),
           sessionId,
           boardRevision: state.boardRevision,
           shapeAuthorityKnown: state.boardShapeAuthorityKnown,
@@ -999,7 +999,7 @@ describe("Real tldraw mounted browser integration", () => {
         };
       },
       commitBoardMutation: async (_targetSessionId, mutation, options) => {
-        const requestId = options.requestId ?? newRequestId();
+        const requestId = options?.requestId ?? newRequestId();
         const committed = await turns.commitBoardMutation(
           mutation,
           createCommandEnvelope({

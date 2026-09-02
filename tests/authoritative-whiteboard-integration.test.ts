@@ -369,7 +369,7 @@ describe("browser authoritative board synchronization", () => {
           []
         ),
       commitBoardMutation: async (targetSessionId, _mutation, options) => {
-        const requestId = options.requestId ?? newRequestId();
+        const requestId = options?.requestId ?? newRequestId();
         if (targetSessionId === firstSessionId) {
           oldRequestId = requestId;
           return oldAck.promise;
