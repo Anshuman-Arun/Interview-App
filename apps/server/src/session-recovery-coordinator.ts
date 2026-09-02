@@ -61,8 +61,15 @@ export class SessionRecoveryCoordinator {
     const trusted: StoredSessionSummary[] = [];
     for (const summary of summaries) {
       const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
+      const eventFamilyIsQuant = eventsIdentifyQuantSession(events);
 
-      const state = replaySession(summary.sessionId, events);
+      let state: ReturnType<typeof replaySession>;
+      try {
+        state = replaySession(summary.sessionId, events);
+      } catch (error) {
+        if (eventFamilyIsQuant) continue;
+        throw error;
+      }
       if (!isQuantSessionState(state)) {
         trusted.push(summary);
         continue;
@@ -258,6 +265,20 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function eventsIdentifyQuantSession(events: readonly SessionEvent[]): boolean {
+  return events.some((event) =>
+    (
+      event.type === "SESSION_STARTED"
+      && (
+        event.payload.configuration?.mode === "QUANT_TRADING"
+        || event.payload.configuration?.mode === "QUANT_RESEARCH"
+      )
+    )
+    || event.type.startsWith("QUANT_TRADING_")
+    || event.type.startsWith("QUANT_RESEARCH_")
+  );
 }
 
 function sanitizedQuantInventorySummary(
