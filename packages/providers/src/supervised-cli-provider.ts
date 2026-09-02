@@ -53,7 +53,7 @@ export interface SupervisedCliProviderDefinition {
 
 interface ActiveExecution {
   readonly controller: AbortController;
-  processStarted: boolean;
+  processActive: boolean;
   completion?: Promise<unknown>;
 }
 
@@ -112,7 +112,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     }
     const record: ActiveExecution = {
       controller: new AbortController(),
-      processStarted: false
+      processActive: false
     };
     this.active.set(snapshot.generationId, record);
     return this.iterateTurn(snapshot, record);
@@ -125,13 +125,14 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     if (record === undefined) {
       return { semantics: "INTERRUPT_LOCAL_PROCESS", signalSent: false };
     }
+    const signalSent = record.processActive;
     record.controller.abort();
     if (record.completion !== undefined) {
       await record.completion.catch(() => undefined);
     }
     return {
       semantics: "INTERRUPT_LOCAL_PROCESS",
-      signalSent: record.processStarted
+      signalSent
     };
   }
 
@@ -162,17 +163,27 @@ class SupervisedCliReasoningSession implements ReasoningSession {
       return;
     }
 
-    const completion = Promise.resolve().then(async () => {
+    const execution = Promise.resolve().then(async () => {
       if (record.controller.signal.aborted || this.closed) {
         throw new Error("Supervised CLI execution was cancelled before start");
       }
       return await this.executeTurn(input, {
         signal: record.controller.signal,
         onProcessStart: () => {
-          record.processStarted = true;
+          record.processActive = true;
         }
       });
     });
+    const completion = execution.then(
+      (proposal) => {
+        record.processActive = false;
+        return proposal;
+      },
+      (error: unknown) => {
+        record.processActive = false;
+        throw error;
+      }
+    );
     record.completion = completion;
 
     try {
