@@ -48,11 +48,13 @@ describe("supervised Antigravity runtime profile", () => {
     "isolates Antigravity acquisition failure from other providers and retries cleanly",
     () => {
       const source = createApplicationProviderAdapterRuntimeSource();
-      const originalSystemRoot = process.env.SystemRoot;
-      const originalUpperSystemRoot = process.env.SYSTEMROOT;
+      const originalSystemRoot: string | undefined =
+        process.env["SystemRoot"];
+      const originalUpperSystemRoot: string | undefined =
+        process.env["SYSTEMROOT"];
       try {
-        process.env.SystemRoot = "\\\\hostile-server\\share\\Windows";
-        process.env.SYSTEMROOT = "\\\\hostile-server\\share\\Windows";
+        process.env["SystemRoot"] = "\\\\hostile-server\\share\\Windows";
+        process.env["SYSTEMROOT"] = "\\\\hostile-server\\share\\Windows";
 
         expect(source.resolveRuntime({
           providerId: "mock-model",
@@ -63,10 +65,10 @@ describe("supervised Antigravity runtime profile", () => {
           modelId: ANTIGRAVITY_CLI_MODEL_ID
         })).toThrow();
       } finally {
-        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
-        else process.env.SystemRoot = originalSystemRoot;
-        if (originalUpperSystemRoot === undefined) delete process.env.SYSTEMROOT;
-        else process.env.SYSTEMROOT = originalUpperSystemRoot;
+        if (originalSystemRoot === undefined) delete process.env["SystemRoot"];
+        else process.env["SystemRoot"] = originalSystemRoot;
+        if (originalUpperSystemRoot === undefined) delete process.env["SYSTEMROOT"];
+        else process.env["SYSTEMROOT"] = originalUpperSystemRoot;
       }
 
       expect(source.resolveRuntime({
