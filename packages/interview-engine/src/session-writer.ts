@@ -2,7 +2,7 @@ import type {
   CommandEnvelope,
   CommandIdentity,
   CommandResult,
-  type RequestId,
+  RequestId,
   SessionId,
   StoredSessionSummary
 } from "../../domain/src/index.js";
