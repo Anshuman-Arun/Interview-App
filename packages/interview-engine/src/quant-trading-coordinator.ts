@@ -23,7 +23,6 @@ import {
 import {
   QUANT_TRADER_SCENARIO_VERSION,
   QuantStudentActionSchema,
-  QuantTraderActionError,
   QuantTraderScenarioFamilySchema,
   createQuantTraderScenario,
   type QuantRoundEvidence,
