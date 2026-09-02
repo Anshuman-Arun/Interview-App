@@ -239,6 +239,24 @@ describe("configured session product-read integration", () => {
       await command.startConfiguredSession(sessionId, configuration);
       const healthySessionId = newSessionId();
       await command.startConfiguredSession(healthySessionId, configuration);
+      const reducerInvalidSessionId = newSessionId();
+      await command.startConfiguredSession(reducerInvalidSessionId, configuration);
+      const forgedTerminalRequestId = newRequestId();
+      server.store.appendIdempotent({
+        sessionId: reducerInvalidSessionId,
+        requestId: forgedTerminalRequestId,
+        causationId: forgedTerminalRequestId,
+        correlationId: forgedTerminalRequestId,
+        elapsedMs: 10,
+        expectedPriorSequence: server.store.eventCount(reducerInvalidSessionId),
+        commandFingerprint: "9".repeat(64),
+        drafts: [{
+          source: "APPLICATION",
+          type: "SESSION_COMPLETED",
+          payload: { completedAt: new Date().toISOString() }
+        }],
+        result: { injected: true }
+      });
 
       const trading = new QuantTradingSessionCoordinator(server.registry.get(sessionId));
       await trading.applyAction(
@@ -270,6 +288,7 @@ describe("configured session product-read integration", () => {
 
       const listed = await command.listSessions();
       expect(listed.some((item) => item.sessionId === sessionId)).toBe(false);
+      expect(listed.some((item) => item.sessionId === reducerInvalidSessionId)).toBe(false);
       expect(listed.find((item) => item.sessionId === healthySessionId)).toMatchObject({
         sessionId: healthySessionId,
         status: "ACTIVE"
