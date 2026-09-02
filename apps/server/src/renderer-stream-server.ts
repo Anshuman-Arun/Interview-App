@@ -370,7 +370,10 @@ export class RendererStreamServer {
       }
       if (!acceptedWithoutBackpressure) {
         const drained = await waitForRendererDrain(connection.response);
-        if (!drained) this.removeConnection(connection);
+        if (!drained) {
+          if (!connection.response.destroyed) connection.response.destroy();
+          this.removeConnection(connection);
+        }
       }
       return { outcome: "SENT", deliveryId, status: "DELIVERING" };
     } catch (error) {
