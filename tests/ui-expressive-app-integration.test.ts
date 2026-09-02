@@ -107,6 +107,7 @@ describe("expressive product integration invariants", () => {
     expect(app).not.toContain("<SessionReviewModal");
     expect(hook).toContain("const pauseSession = useCallback");
     expect(hook).toContain("sessionMutationAdmissionRef.current = false");
+    expect(hook).toContain("stopVisionScheduling()");
     expect(hook).toContain("stopRendererTransport()");
   });
 
