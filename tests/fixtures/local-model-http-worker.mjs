@@ -8,6 +8,8 @@ const token = process.env.INTERVIEW_LOCAL_WORKER_TOKEN;
 if (!token || !/^[0-9a-f]{64}$/u.test(token)) throw new Error("fixture token required");
 
 let shuttingDown = false;
+let activeTtsRequestId = null;
+let activeTtsResponse = null;
 const server = http.createServer((request, response) => {
   if (request.headers.authorization !== `Bearer ${token}`) {
     send(response, 401, { error: "UNAUTHORIZED" });
@@ -44,10 +46,26 @@ const server = http.createServer((request, response) => {
       return;
     }
     if (component === "tts" && request.url === "/v1/tts/cancel") {
-      send(response, 200, { accepted: typeof body.requestId === "string" });
+      const accepted =
+        typeof body.requestId === "string"
+        && body.requestId === activeTtsRequestId
+        && activeTtsResponse !== null;
+      const synthesisResponse = activeTtsResponse;
+      activeTtsRequestId = null;
+      activeTtsResponse = null;
+      send(response, 200, { accepted });
+      if (accepted && synthesisResponse !== null) {
+        setImmediate(() => send(synthesisResponse, 409, { error: "CANCELLED" }));
+      }
       return;
     }
     if (component === "tts" && request.url === "/v1/tts") {
+      if (behavior === "blocking-tts") {
+        activeTtsRequestId = body.requestId ?? null;
+        activeTtsResponse = response;
+        console.log(`TTS_STARTED:${String(activeTtsRequestId)}`);
+        return;
+      }
       const samples = new Float32Array([0, 0.05, -0.05, 0]);
       const pcm = Buffer.alloc(samples.length * 4);
       for (let index = 0; index < samples.length; index += 1) {
