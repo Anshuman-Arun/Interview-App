@@ -151,6 +151,7 @@ export class SupervisedProcessRunner {
   private readonly definitions = new Map<string, RegisteredExecutable>();
   private readonly parentEnvironment: NodeJS.ProcessEnv;
   private readonly platform: NodeJS.Platform;
+  private readonly temporaryRoot: string;
   private readonly pinnedIdentities = new Map<string, ExecutableIdentity>();
   private readonly quarantinedExecutableIds = new Set<string>();
   private readonly identityInitializations = new Map<string, Promise<void>>();
@@ -170,6 +171,9 @@ export class SupervisedProcessRunner {
       "INVALID_DEFINITION"
     );
     this.platform = process.platform;
+    this.temporaryRoot = this.platform === "win32"
+      ? trustedWindowsTemporaryRoot()
+      : tmpdir();
     this.parentEnvironment = snapshotParentEnvironmentRecord(
       (optionRecord.parentEnvironment as NodeJS.ProcessEnv | undefined) ?? process.env
     );
@@ -374,7 +378,11 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("INVALID_REQUEST");
     }
 
-    const isolation = await createExecutionIsolation(definition, this.platform);
+    const isolation = await createExecutionIsolation(
+      definition,
+      this.platform,
+      this.temporaryRoot
+    );
     const expectedIdentity = this.pinnedIdentities.get(definition.id);
     if (expectedIdentity === undefined) {
       await cleanupExecutionIsolation(isolation);
@@ -1305,6 +1313,34 @@ function windowsSystem32ExecutablePath(
     : win32Path.join(system32, executable);
 }
 
+function trustedWindowsTemporaryRoot(): string {
+  const configured = win32Path.normalize(tmpdir());
+  if (
+    configured.length === 0
+    || !win32Path.isAbsolute(configured)
+    || configured.startsWith("\\\\")
+  ) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+
+  try {
+    const info = lstatSync(configured, { bigint: true });
+    const canonical = realpathSync(configured);
+    if (
+      !info.isDirectory()
+      || info.isSymbolicLink()
+      || normalizeWindowsIdentityPath(configured)
+        !== normalizeWindowsIdentityPath(canonical)
+    ) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+  } catch (error) {
+    if (error instanceof SupervisedProcessError) throw error;
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+  return configured;
+}
+
 function normalizeWindowsIdentityPath(value: string): string {
   let normalized = win32Path.resolve(value).replaceAll("/", "\\");
   if (normalized.toLowerCase().startsWith("\\\\?\\unc\\")) {
@@ -1334,7 +1370,8 @@ function sameExecutableIdentity(
 
 async function createExecutionIsolation(
   definition: RegisteredExecutable,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  temporaryRoot: string
 ): Promise<ExecutionIsolation> {
   let workingDirectory: string | undefined;
   let homeDirectory: string | undefined;
@@ -1345,7 +1382,9 @@ async function createExecutionIsolation(
     }
 
     if (definition.isolatedHomeFiles !== undefined) {
-      homeDirectory = await mkdtemp(path.join(tmpdir(), "interview-provider-home-"));
+      homeDirectory = await mkdtemp(
+        path.join(temporaryRoot, "interview-provider-home-")
+      );
       if (platform !== "win32") await chmod(homeDirectory, 0o700);
       await populateIsolatedHome(
         homeDirectory,
@@ -1366,7 +1405,7 @@ async function createExecutionIsolation(
     }
 
     if (definition.isolatedWorkingDirectory) {
-      workingDirectory = await createIsolatedWorkingDirectory();
+      workingDirectory = await createIsolatedWorkingDirectory(temporaryRoot);
     }
 
     return Object.freeze({
@@ -1457,8 +1496,12 @@ async function cleanupExecutionIsolation(
   }
 }
 
-async function createIsolatedWorkingDirectory(): Promise<string> {
-  const directory = await mkdtemp(path.join(tmpdir(), "interview-provider-"));
+async function createIsolatedWorkingDirectory(
+  temporaryRoot: string
+): Promise<string> {
+  const directory = await mkdtemp(
+    path.join(temporaryRoot, "interview-provider-")
+  );
   if (process.platform !== "win32") {
     await chmod(directory, 0o700);
   }
