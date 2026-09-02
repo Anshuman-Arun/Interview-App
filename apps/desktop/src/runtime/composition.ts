@@ -215,6 +215,14 @@ export class DesktopLocalRuntimeComposition {
           failures.push(error);
         }
       }
+
+      try {
+        // Retry cleanup of any failed materialization that never produced a
+        // tracked RuntimeAssetView. Actively owned views remain protected.
+        await cleanupStaleRuntimeAssetViews(this.runtimeViewsRoot);
+      } catch (error) {
+        failures.push(error);
+      }
     }
 
     this.voiceRuntime = undefined;
