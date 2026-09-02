@@ -2696,6 +2696,45 @@ describe("local worker lifecycle manager", () => {
     }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
   });
 
+  it("rejects hostile expected capability arrays without executing traps or getters", () => {
+    const runtime = manager();
+    let proxyTraps = 0;
+    const proxied = new Proxy(["FIXTURE"], {
+      ownKeys: (target) => {
+        proxyTraps += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        proxyTraps += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      }
+    });
+    expect(() => runtime.register(definition("proxied-expected-capabilities", "ready", {
+      expectedHandshake: {
+        capabilities: proxied
+      }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(proxyTraps).toBe(0);
+
+    let getterCalls = 0;
+    const accessorCapabilities: string[] = [];
+    Object.defineProperty(accessorCapabilities, "0", {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        getterCalls += 1;
+        return "FIXTURE";
+      }
+    });
+    accessorCapabilities.length = 1;
+    expect(() => runtime.register(definition("accessor-expected-capabilities", "ready", {
+      expectedHandshake: {
+        capabilities: accessorCapabilities
+      }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(getterCalls).toBe(0);
+  });
+
   it("rejects contradictory output bounds and effectively unbounded retry counts", () => {
     const runtime = manager();
 
