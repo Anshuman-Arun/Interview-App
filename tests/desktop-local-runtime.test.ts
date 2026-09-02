@@ -15,7 +15,10 @@ import {
   type LocalComponentDefinition
 } from "../packages/local-runtime/src/index.js";
 import { DesktopLocalRuntimeComposition } from "../apps/desktop/src/runtime/composition.js";
-import { ManagedModelWorkerClient } from "../apps/desktop/src/runtime/managed-worker-client.js";
+import {
+  ManagedModelWorkerClient,
+  ManagedWorkerRequestTimeoutError
+} from "../apps/desktop/src/runtime/managed-worker-client.js";
 import {
   ManagedKokoroRuntime,
   ManagedMoonshineRuntime,
@@ -327,6 +330,65 @@ describe("desktop local model runtime", () => {
     );
     await expect(composition.stopWorkers()).resolves.toBeUndefined();
     expect(disposeCalls).toBe(2);
+  });
+
+  it("recycles the exact supervised worker after an internal model request deadline", async () => {
+    const token = "6".repeat(64);
+    const runtime = fixtureManager("speech-timeout-recycle", "speech", "fixture-speech-1", token);
+    await runtime.start("speech-timeout-recycle");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-timeout-recycle",
+      "speech",
+      token
+    );
+    const workerInstance = client.workerInstanceIdentity();
+    let recycledInstance: string | undefined;
+    const mutable = client as unknown as {
+      postJson(): Promise<unknown>;
+      recycleAfterUncertainRequest(expectedWorkerInstance: string): Promise<void>;
+    };
+    mutable.postJson = async () => {
+      throw new ManagedWorkerRequestTimeoutError();
+    };
+    mutable.recycleAfterUncertainRequest = async (expectedWorkerInstance) => {
+      recycledInstance = expectedWorkerInstance;
+    };
+
+    const vad = new ManagedSileroVadRuntime(client, "/verified/silero.onnx");
+    await expect(vad.score({
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      streamId: "stream-timeout-recycle",
+      modelPath: "/verified/silero.onnx"
+    })).rejects.toBeInstanceOf(ManagedWorkerRequestTimeoutError);
+    expect(recycledInstance).toBe(workerInstance);
+  });
+
+  it("does not respawn a timed-out model worker after desktop lifecycle abort", async () => {
+    const token = "5".repeat(64);
+    const runtime = fixtureManager("speech-timeout-shutdown", "speech", "fixture-speech-1", token);
+    await runtime.start("speech-timeout-shutdown");
+    const lifecycle = new AbortController();
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-timeout-shutdown",
+      "speech",
+      token,
+      lifecycle.signal
+    );
+    const workerInstance = client.workerInstanceIdentity();
+    const before = runtime.getStatus("speech-timeout-shutdown");
+
+    lifecycle.abort();
+    await expect(
+      client.recycleAfterUncertainRequest(workerInstance)
+    ).resolves.toBeUndefined();
+
+    const after = runtime.getStatus("speech-timeout-shutdown");
+    expect(after.state).toBe("READY");
+    expect(after.pid).toBe(before.pid);
+    expect(after.readyAt).toBe(before.readyAt);
   });
 
   it("authenticates a supervised loopback speech worker and preserves bounded adapter output", async () => {
