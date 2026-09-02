@@ -22,6 +22,12 @@ export interface RendererStreamConsumerOptions {
   readonly signal?: AbortSignal;
 }
 
+export class RendererStreamConnectionError extends Error {
+  public constructor(public readonly status: number) {
+    super(`Renderer stream connection failed with HTTP ${String(status)}`);
+  }
+}
+
 export interface LoopbackAcknowledgementSenderOptions {
   readonly commandUrl: string;
   readonly authenticatedFetch: FetchLike;
@@ -56,7 +62,7 @@ export async function consumeAuthenticatedRendererStream(
     throw error;
   }
 
-  if (!response.ok) throw new Error("Renderer stream connection failed");
+  if (!response.ok) throw new RendererStreamConnectionError(response.status);
   const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
   if (contentType !== "text/event-stream") throw new Error("Renderer stream returned an invalid content type");
   if (response.body === null) throw new Error("Renderer stream response has no body");
