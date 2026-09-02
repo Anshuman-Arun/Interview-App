@@ -72,13 +72,11 @@ export function snapshotValidatedModelCapabilities(
     sessionSurvivesClientAbort: capabilities.sessionSurvivesClientAbort,
     sessionSurvivesProviderCancel: capabilities.sessionSurvivesProviderCancel,
     usageReporting: capabilities.usageReporting,
-    ...(reasoningLevels === undefined
-      ? {}
-      : {
-          get reasoningLevels() {
-            return [...reasoningLevels];
-          }
-        }),
+    get reasoningLevels() {
+      return reasoningLevels === undefined
+        ? undefined
+        : [...reasoningLevels];
+    },
     dataUse: capabilities.dataUse
   };
   return Object.freeze(snapshot);
