@@ -243,8 +243,12 @@ export class DesktopLocalRuntimeComposition {
   private async startOptionalCapabilities(signal?: AbortSignal): Promise<void> {
     try {
       await this.assetManager.cleanupTemporary(signal);
-      await cleanupStaleRuntimeAssetViews(this.runtimeViewsRoot);
-    } catch {
+      await cleanupStaleRuntimeAssetViews(this.runtimeViewsRoot, signal);
+    } catch (error) {
+      if (abortRequested(signal) || isAbortError(error)) {
+        this.markPendingCapabilitiesCancelled();
+        return;
+      }
       this.speechStatus = failed("ASSET_CACHE_UNSAFE");
       this.ttsStatus = failed("ASSET_CACHE_UNSAFE");
       return;
