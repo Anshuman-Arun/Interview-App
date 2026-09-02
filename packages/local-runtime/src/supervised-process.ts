@@ -485,7 +485,7 @@ export class SupervisedProcessRunner {
     const requestCleanup = (failure: PendingFailure): void => {
       if (pendingFailure === undefined) pendingFailure = failure;
       signalFailureRequested?.();
-      cleanupStarted ??= terminateProcessTree(child, this.platform);
+      cleanupStarted ??= terminateProcessTree(child, this.platform, launchEnvironment);
     };
 
     const throwPendingFailure = async (): Promise<never> => {
@@ -619,7 +619,7 @@ export class SupervisedProcessRunner {
     } catch (error) {
       if (error instanceof SupervisedProcessError) {
         if (isProcessAlive(child)) {
-          const cleaned = await terminateProcessTree(child, this.platform);
+          const cleaned = await terminateProcessTree(child, this.platform, launchEnvironment);
           if (!cleaned) {
             throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
           }
@@ -627,7 +627,7 @@ export class SupervisedProcessRunner {
         throw error;
       }
       if (isProcessAlive(child)) {
-        const cleaned = await terminateProcessTree(child, this.platform);
+        const cleaned = await terminateProcessTree(child, this.platform, launchEnvironment);
         if (!cleaned) {
           throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
         }
@@ -1232,6 +1232,19 @@ function windowsEnvironmentBlockCharacters(
 function windowsPowerShellExecutablePath(
   environment: NodeJS.ProcessEnv
 ): string {
+  const system32 = windowsSystem32ExecutablePath(environment);
+  return win32Path.join(
+    system32,
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe"
+  );
+}
+
+function windowsSystem32ExecutablePath(
+  environment: NodeJS.ProcessEnv,
+  executable?: string
+): string {
   let systemRoot: string | undefined;
   for (const [key, value] of Object.entries(environment)) {
     if (key.toUpperCase() !== "SYSTEMROOT" || typeof value !== "string") continue;
@@ -1258,13 +1271,10 @@ function windowsPowerShellExecutablePath(
   ) {
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
   }
-  return win32Path.join(
-    normalizedRoot,
-    "System32",
-    "WindowsPowerShell",
-    "v1.0",
-    "powershell.exe"
-  );
+  const system32 = win32Path.join(normalizedRoot, "System32");
+  return executable === undefined
+    ? system32
+    : win32Path.join(system32, executable);
 }
 
 function normalizeWindowsIdentityPath(value: string): string {
@@ -1484,7 +1494,8 @@ function isProcessAlive(child: ChildProcessWithoutNullStreams): boolean {
 
 async function terminateProcessTree(
   child: ChildProcessWithoutNullStreams,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  environment?: NodeJS.ProcessEnv
 ): Promise<boolean> {
   const pid = child.pid;
   if (pid === undefined) {
@@ -1497,6 +1508,12 @@ async function terminateProcessTree(
   }
 
   if (platform === "win32") {
+    if (environment !== undefined) {
+      const treeKilled = await runWindowsTaskkill(pid, environment);
+      if (treeKilled && await waitForChildExit(child, TREE_FORCE_MS)) {
+        return true;
+      }
+    }
     try {
       child.kill();
     } catch {
@@ -1509,6 +1526,54 @@ async function terminateProcessTree(
   if (await waitForPosixGroupExit(pid, TREE_GRACE_MS)) return true;
   signalPosixGroup(child, "SIGKILL");
   return await waitForPosixGroupExit(pid, TREE_FORCE_MS);
+}
+
+async function runWindowsTaskkill(
+  pid: number,
+  environment: NodeJS.ProcessEnv
+): Promise<boolean> {
+  let executable: string;
+  try {
+    executable = windowsSystem32ExecutablePath(environment, "taskkill.exe");
+  } catch {
+    return false;
+  }
+
+  let task: ReturnType<typeof spawn>;
+  try {
+    task = spawn(
+      executable,
+      ["/PID", String(pid), "/T", "/F"],
+      {
+        env: environment,
+        shell: false,
+        windowsHide: true,
+        stdio: "ignore"
+      }
+    );
+  } catch {
+    return false;
+  }
+
+  return await new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (success: boolean): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(success);
+    };
+    task.once("error", () => finish(false));
+    task.once("close", (code) => finish(code === 0));
+    const timer = setTimeout(() => {
+      try {
+        task.kill();
+      } catch {
+        // The trusted helper may already have exited.
+      }
+      finish(false);
+    }, TREE_FORCE_MS);
+  });
 }
 
 async function waitForChildExit(
