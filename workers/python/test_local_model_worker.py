@@ -109,6 +109,9 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         runtime._silero = _FakeSilero()
         runtime._states = OrderedDict()
         runtime._vad_lock = threading.Lock()
+        runtime._vad_slots = threading.BoundedSemaphore(
+            worker.MAX_SPEECH_NATIVE_RESERVATIONS
+        )
 
         first = runtime.score_vad({
             "streamId": "stream-a",
@@ -137,6 +140,9 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         runtime._silero = _FakeSilero()
         runtime._states = OrderedDict()
         runtime._vad_lock = threading.Lock()
+        runtime._vad_slots = threading.BoundedSemaphore(
+            worker.MAX_SPEECH_NATIVE_RESERVATIONS
+        )
 
         runtime.score_vad({
             "streamId": "stream-a",
@@ -156,6 +162,9 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         runtime = object.__new__(worker.SpeechRuntime)
         runtime._np = np
         runtime._stt_lock = threading.Lock()
+        runtime._stt_slots = threading.BoundedSemaphore(
+            worker.MAX_SPEECH_NATIVE_RESERVATIONS
+        )
         runtime._transcriber = _FakeTranscriber()
         runtime._stt_lock.acquire()
         completed = threading.Event()
