@@ -99,7 +99,7 @@ export interface UseInterviewSessionResult {
     signal?: AbortSignal
   ) => Promise<SessionHistoryReadResponse>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
-  readonly recoverSession: (sessionId: SessionId) => Promise<void>;
+  readonly recoverSession: (sessionId: SessionId) => Promise<SessionStatus | null>;
   readonly completeSession: (summary?: string) => Promise<void>;
   readonly archiveSession: (reason?: string) => Promise<void>;
   readonly whiteboardSync: AuthoritativeBoardSyncSnapshot;
@@ -898,16 +898,16 @@ export function useInterviewSession(
   );
 
   const recoverSession = useCallback(
-    async (targetSessionId: SessionId): Promise<void> => {
+    async (targetSessionId: SessionId): Promise<SessionStatus | null> => {
       setError(null);
       const transitionEpoch = await beginSessionTransition();
-      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
       try {
         const client = getCommandClient();
         const context = await client.getInterviewSessionContext(targetSessionId);
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         const response = await client.resumeSession(targetSessionId);
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
           resetBoardSync();
@@ -924,14 +924,14 @@ export function useInterviewSession(
         try {
           await synchronizeWhiteboardFor(targetSessionId);
         } catch {
-          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
           setWhiteboardSync({
             status: "UNSYNCHRONIZED",
             pendingMutationCount: 0,
             reason: "Recovered whiteboard does not have a verified local revision correspondence"
           });
         }
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (response.status === "ACTIVE") {
           sessionMutationAdmissionRef.current = true;
           launchRendererStream(targetSessionId);
@@ -939,8 +939,9 @@ export function useInterviewSession(
           sessionMutationAdmissionRef.current = false;
           stopRendererTransport();
         }
+        return response.status;
       } catch (err) {
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         let msg = "Failed to recover session";
         if (err instanceof BrowserCommandProtocolError) {
           msg = `Recovery error [${err.code}]: HTTP ${String(err.status)}`;
