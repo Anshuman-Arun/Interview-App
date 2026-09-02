@@ -21,6 +21,8 @@ const MAX_EXECUTION_MS = 5 * 60_000;
 const MAX_ISOLATED_HOME_FILES = 16;
 const MAX_ISOLATED_HOME_FILE_BYTES = 64 * 1024;
 const MAX_ISOLATED_HOME_TOTAL_BYTES = 128 * 1024;
+const MAX_ISOLATED_HOME_PATH_BYTES = 1_024;
+const MAX_ISOLATED_HOME_PATH_SEGMENTS = 32;
 const TREE_GRACE_MS = 250;
 const TREE_FORCE_MS = 1_000;
 
@@ -513,12 +515,14 @@ function snapshotIsolatedHomeFiles(
       || relativePath.includes("\\")
       || relativePath.startsWith("/")
       || relativePath.includes("\0")
+      || Buffer.byteLength(relativePath, "utf8") > MAX_ISOLATED_HOME_PATH_BYTES
     ) {
       throw new SupervisedProcessError("INVALID_DEFINITION");
     }
     const segments = relativePath.split("/");
     if (
-      segments.some((segment) =>
+      segments.length > MAX_ISOLATED_HOME_PATH_SEGMENTS
+      || segments.some((segment) =>
         segment.length === 0
         || segment === "."
         || segment === ".."
@@ -547,6 +551,17 @@ function snapshotIsolatedHomeFiles(
       ? -1
       : left.relativePath > right.relativePath ? 1 : 0
   );
+  for (let index = 1; index < output.length; index += 1) {
+    const previous = output[index - 1];
+    const current = output[index];
+    if (
+      previous !== undefined
+      && current !== undefined
+      && current.relativePath.startsWith(previous.relativePath + "/")
+    ) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+  }
   return Object.freeze(output);
 }
 
@@ -815,11 +830,15 @@ async function createExecutionIsolation(
       ...(homeDirectory === undefined ? {} : { homeDirectory })
     });
   } catch (error) {
-    await cleanupExecutionIsolation({
-      environment: Object.freeze(Object.create(null) as NodeJS.ProcessEnv),
-      ...(workingDirectory === undefined ? {} : { workingDirectory }),
-      ...(homeDirectory === undefined ? {} : { homeDirectory })
-    }).catch(() => undefined);
+    try {
+      await cleanupExecutionIsolation({
+        environment: Object.freeze(Object.create(null) as NodeJS.ProcessEnv),
+        ...(workingDirectory === undefined ? {} : { workingDirectory }),
+        ...(homeDirectory === undefined ? {} : { homeDirectory })
+      });
+    } catch {
+      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+    }
     if (error instanceof SupervisedProcessError) throw error;
     throw new SupervisedProcessError("INVALID_DEFINITION");
   }
