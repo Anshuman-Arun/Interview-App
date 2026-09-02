@@ -145,10 +145,6 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     this.active.clear();
   }
 
-  private isClosed(): boolean {
-    return this.closed;
-  }
-
   private async *iterateTurn(
     input: ReasoningTurnInput,
     record: ActiveExecution
@@ -185,7 +181,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
 
     try {
       const proposal = await completion;
-      if (record.controller.signal.aborted || this.isClosed()) return;
+      if (record.controller.signal.aborted) return;
       yield proposal;
     } finally {
       if (this.active.get(input.generationId) === record) {
@@ -203,7 +199,7 @@ function snapshotReasoningTurnInput(input: unknown): ReasoningTurnInput {
   ) {
     throw new Error("Supervised CLI turn input is invalid");
   }
-  const prototype = Object.getPrototypeOf(input);
+  const prototype: unknown = Object.getPrototypeOf(input);
   if (prototype !== Object.prototype && prototype !== null) {
     throw new Error("Supervised CLI turn input is invalid");
   }
@@ -229,9 +225,10 @@ function snapshotReasoningTurnInput(input: unknown): ReasoningTurnInput {
   ) {
     throw new Error("Supervised CLI turn input is invalid");
   }
+  const contextValue: unknown = context.value;
   return Object.freeze({
     generationId: generationId.data,
-    context: context.value
+    context: contextValue
   });
 }
 
