@@ -25,7 +25,7 @@
     "test:desktop": "vitest run tests/desktop-electron-bootstrap.test.ts tests/desktop-electron-adversarial.test.ts tests/desktop-hook-bootstrap.test.tsx tests/desktop-local-runtime.test.ts",
     "dev:desktop": "pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js",
     "start:desktop": "pnpm build:web && pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production",
-    "setup:desktop-models": "pnpm build:web && pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production --install-local-models",
+    "setup:desktop-models": "pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production --install-local-models",
     "security:public": "node scripts/check-public-release.mjs",
     "test:e2e:voice": "vitest run tests/e2e-voice-interview.test.ts"
   },
