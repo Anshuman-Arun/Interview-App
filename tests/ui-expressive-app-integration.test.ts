@@ -306,6 +306,20 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain('session.whiteboardSync.status === "UNSYNCHRONIZED"');
   });
 
+  it("clears detached canvas state when the command endpoint authority changes", () => {
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+    const setBaseStart = hook.indexOf("const setBaseUrl = useCallback");
+    const clientStart = hook.indexOf("const getCommandClient = useCallback", setBaseStart);
+    const setBase = hook.slice(setBaseStart, clientStart);
+
+    expect(setBase).toContain("options.whiteboardAdapter?.resetForNewSession()");
+    expect(setBase.indexOf("options.whiteboardAdapter?.resetForNewSession()"))
+      .toBeLessThan(setBase.indexOf("setSessionId(null)"));
+  });
+
   it("validates browser transport settings before changing the live endpoint", () => {
     const hook = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
