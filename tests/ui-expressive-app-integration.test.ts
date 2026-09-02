@@ -157,16 +157,30 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("setSessionEntryPending(false)");
   });
 
-  it("serializes terminal session actions and manual recovery", () => {
+  it("serializes entry and terminal session transitions against each other", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
 
     expect(app).toContain("sessionTerminalPendingRef.current");
-    expect(app).toContain("if (targetSessionId === null || sessionTerminalPendingRef.current) return");
-    expect(app).toContain("disabled={sessionTerminalPending}");
-    expect(app).toContain("if (!recoverySessionInput.trim() || sessionEntryPendingRef.current) return");
+    expect(app).toContain("sessionEntryPendingRef.current || sessionTerminalPendingRef.current");
+    expect(app).toContain("|| sessionEntryPendingRef.current");
+    expect(app).toContain("|| sessionTerminalPendingRef.current");
+    expect(app).toContain("disabled={sessionTerminalPending || sessionEntryPending}");
+    expect(app).toContain("disabled={sessionEntryPending || sessionTerminalPending}");
+  });
+
+  it("does not recover the already-current ACTIVE session from the live Sessions overlay", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain("session.sessionId === targetSessionId");
+    expect(app).toContain('s.status === "ACTIVE" && s.sessionId === session.sessionId');
+    expect(app).toContain("s.sessionId === session.sessionId");
+    expect(app).toContain("|| sessionTerminalPending");
   });
 
   it("styles Whiteboard and Details from actual tab selection state", () => {
