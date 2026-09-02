@@ -83,7 +83,6 @@ function persistedRoundEvidence(evidence: QuantRoundEvidence): QuantTradingRound
     studentFills: evidence.studentFills,
     portfolio: evidence.portfolio,
     riskBreached: evidence.riskBreached,
-    ...(evidence.riskReason === undefined ? {} : { riskReason: evidence.riskReason }),
     accountingInvariantHolds: evidence.accountingInvariantHolds,
     rngDrawCount: evidence.rngDrawCount
   });
