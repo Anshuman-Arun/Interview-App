@@ -18,6 +18,7 @@ import {
 } from "../packages/delivery/src/index.js";
 import {
   SessionRuntimeRegistry,
+  TurnCoordinator,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
@@ -336,6 +337,69 @@ describe("authenticated renderer stream transport", () => {
 
     replacementController.abort();
     await replacementConsumer;
+  });
+
+  it("does not physically write a delivery invalidated after DELIVERING admission", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const visible: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, {
+      medium: "TEXT",
+      text: "must not cross the barge-in authority boundary"
+    });
+    const turns = new TurnCoordinator(writer);
+    const originalExecute = writer.execute.bind(writer);
+    let injectedInvalidation = false;
+    const executeSpy = vi.spyOn(writer, "execute").mockImplementation(
+      (async (...args: Parameters<typeof writer.execute>) => {
+        const result = await originalExecute(...args);
+        const identity = args[1];
+        if (!injectedInvalidation && identity.operation === "RECONNECT_DELIVERY") {
+          injectedInvalidation = true;
+          await turns.beginUtterance();
+        }
+        return result;
+      }) as typeof writer.execute
+    );
+
+    const published = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+    expect(injectedInvalidation).toBe(true);
+    expect(published).toEqual({
+      outcome: "NOT_DELIVERABLE",
+      deliveryId: atom.deliveryId,
+      status: "POSSIBLY_EXPOSED"
+    });
+    await Promise.resolve();
+    expect(visible).toEqual([]);
+    expect(deliveryLifecycle(store.load(sessionId), atom.deliveryId)).toEqual([
+      "DELIVERY_QUEUED",
+      "DELIVERY_STARTED",
+      "DELIVERY_POSSIBLY_EXPOSED"
+    ]);
+
+    executeSpy.mockRestore();
+    controller.abort();
+    await consumer;
   });
 
   it("serializes concurrent publication attempts without duplicating visible output", async () => {
