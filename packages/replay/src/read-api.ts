@@ -1752,7 +1752,9 @@ export function projectSessionReplayReadModel(
       (entry) => entry.quantTrading !== undefined || entry.quantResearch !== undefined
     )
     || history.timeline.issues.some(
-      (issue) => issue.code === "SPECIALIZED_DOMAIN_VALIDATION_REQUIRED"
+      (issue) =>
+        issue.code === "SPECIALIZED_DOMAIN_VALIDATION_REQUIRED"
+        && issue.eventType?.startsWith("QUANT_") === true
     );
 
   return SessionReplayReadModelSchema.parse({
