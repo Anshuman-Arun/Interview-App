@@ -297,6 +297,120 @@ describe("production provider runtime resolution", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("captures runtime source operations without invoking accessors and snapshots provider identity before awaits", async () => {
+    let sourceGetterCalls = 0;
+    const hostileSource = Object.defineProperty({}, "resolveConfiguration", {
+      enumerable: true,
+      get() {
+        sourceGetterCalls += 1;
+        throw new Error("runtime source getter must not execute");
+      }
+    });
+
+    expect(() => new ProviderRuntimeResolver({
+      configurationSource: hostileSource as never
+    })).toThrow(expect.objectContaining({ code: "RUNTIME_CONFIGURATION_FAILED" }));
+    expect(sourceGetterCalls).toBe(0);
+
+    let enteredResolve: (() => void) | undefined;
+    let releaseResolve: (() => void) | undefined;
+    const entered = new Promise<void>((resolve) => {
+      enteredResolve = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseResolve = resolve;
+    });
+    const mutableSelection = {
+      providerId: "mock-model",
+      modelId: "mock-default"
+    };
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        async resolveConfiguration() {
+          enteredResolve?.();
+          await release;
+          return undefined;
+        }
+      }
+    });
+
+    const pending = resolver.resolve({
+      selection: mutableSelection,
+      mockProposal: safeProbeProposal()
+    });
+    await entered;
+    mutableSelection.providerId = "gemini-api";
+    mutableSelection.modelId = "gemini-2.5-flash";
+    releaseResolve?.();
+
+    await expect(pending).resolves.toMatchObject({
+      providerId: "mock-model",
+      modelId: "mock-default",
+      provider: { name: "mock-model" }
+    });
+  });
+
+  it("resolves and validates policy before adapter runtime or credential material", async () => {
+    let adapterRuntimeCalls = 0;
+    let secretCalls = 0;
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: credentialReferenceSource(),
+      secretResolver: {
+        async resolveSecret() {
+          secretCalls += 1;
+          return "runtime-secret-must-not-be-read";
+        }
+      },
+      adapterRuntimeSource: {
+        resolveRuntime() {
+          adapterRuntimeCalls += 1;
+          return {};
+        }
+      },
+      policySource: {
+        resolvePolicy() {
+          throw new Error("Authorization: Bearer policy-source-secret");
+        }
+      }
+    });
+
+    await expect(resolver.resolve({ selection: GEMINI_SELECTION }))
+      .rejects.toMatchObject({ code: "POLICY_RESOLUTION_FAILED" });
+    expect(adapterRuntimeCalls).toBe(0);
+    expect(secretCalls).toBe(0);
+  });
+
+  it("rejects malformed runtime credentials before constructing a Gemini adapter", async () => {
+    for (const malformedSecret of [
+      "header-safe-prefix\nInjected: value",
+      "x".repeat(4_097)
+    ]) {
+      const resolver = new ProviderRuntimeResolver({
+        configurationSource: credentialReferenceSource(),
+        secretResolver: {
+          async resolveSecret() {
+            return malformedSecret;
+          }
+        },
+        adapterRuntimeSource: {
+          resolveRuntime() {
+            return {
+              fetchImpl: async () => new Response("must not be reached")
+            };
+          }
+        },
+        policySource: {
+          resolvePolicy() {
+            return REMOTE_NO_METERED_POLICY;
+          }
+        }
+      });
+
+      await expect(resolver.resolve({ selection: GEMINI_SELECTION }))
+        .rejects.toMatchObject({ code: "CREDENTIAL_RESOLUTION_FAILED" });
+    }
+  });
+
   it("fails closed when a selected credentialed provider has no secret resolver", async () => {
     const resolver = new ProviderRuntimeResolver({
       configurationSource: credentialReferenceSource(),
@@ -355,6 +469,261 @@ describe("production provider runtime resolution", () => {
       .rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
     expect(getterCalls).toBe(0);
     expect(secretCalls).toBe(0);
+  });
+
+  it("physically aborts Gemini work after authoritative generation supersession", async () => {
+    const harness = createHarness();
+    try {
+      const committed = await startConfiguredTurn(harness, GEMINI_SELECTION);
+      let fetchStartedResolve: (() => void) | undefined;
+      const fetchStarted = new Promise<void>((resolve) => {
+        fetchStartedResolve = resolve;
+      });
+      let aborted = false;
+      let signalRef: AbortSignal | undefined;
+      const resolver = new ProviderRuntimeResolver({
+        configurationSource: credentialReferenceSource(),
+        secretResolver: {
+          async resolveSecret() {
+            return "runtime-only-cancellation-secret";
+          }
+        },
+        adapterRuntimeSource: {
+          resolveRuntime() {
+            return {
+              fetchImpl: async (_url: RequestInfo | URL, init?: RequestInit) => {
+                signalRef = init?.signal ?? undefined;
+                fetchStartedResolve?.();
+                return await new Promise<Response>((_resolve, reject) => {
+                  signalRef?.addEventListener("abort", () => {
+                    aborted = true;
+                    const error = new Error("aborted");
+                    error.name = "AbortError";
+                    reject(error);
+                  });
+                });
+              },
+              billingVerificationFactory: (now: Date) => ({
+                billingClass: "VERIFIED_FREE_ONLY" as const,
+                enforcementMechanism: "deterministic test-only technical no-spend proof",
+                verifiedAt: now.toISOString(),
+                adapterVersion: "1.0.0",
+                spendImpossible: true
+              })
+            };
+          }
+        },
+        policySource: {
+          resolvePolicy() {
+            return REMOTE_NO_METERED_POLICY;
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        harness.sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+
+      const orchestration = orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+      await fetchStarted;
+
+      await new TurnCoordinator(harness.writer).commitInput(
+        "I am replacing that argument with a newer one."
+      );
+      const generation = Object.values(harness.writer.getState().generations)[0];
+      expect(generation?.status).toBe("SUPERSEDED");
+
+      await orchestrator.cancelSupersededGenerations(harness.sessionId);
+      expect(aborted).toBe(true);
+      expect(signalRef?.aborted).toBe(true);
+      await expect(orchestration).resolves.toBeUndefined();
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("retries restart recovery after missing credentials become available without changing provider identity", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    let registry = new SessionRuntimeRegistry(store);
+    try {
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      await turns.startConfiguredSession({
+        configuration: configuredOxford(GEMINI_SELECTION),
+        problem: sixPeopleProblem
+      });
+      const committed = await turns.commitInput(STUDENT_TEXT);
+      const request = await turns.selectAction(committed.turnId, sixPeopleProblem);
+      const proposal = realizeProblemInterviewerProposal(
+        sixPeopleProblem,
+        STUDENT_TEXT,
+        request
+      );
+
+      await registry.closeAll();
+      registry = new SessionRuntimeRegistry(store);
+      const sessions = new SessionRecoveryCoordinator(registry, store);
+      let credentialAvailable = false;
+      let fetchCalls = 0;
+      const resolver = new ProviderRuntimeResolver({
+        configurationSource: credentialReferenceSource(),
+        secretResolver: {
+          async resolveSecret() {
+            return credentialAvailable ? "runtime-only-recovery-key" : undefined;
+          }
+        },
+        adapterRuntimeSource: {
+          resolveRuntime() {
+            return {
+              fetchImpl: async () => {
+                fetchCalls += 1;
+                return new Response(createGeminiResponse(proposal), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" }
+                });
+              },
+              billingVerificationFactory: (now: Date) => ({
+                billingClass: "VERIFIED_FREE_ONLY" as const,
+                enforcementMechanism: "deterministic test-only technical no-spend proof",
+                verifiedAt: now.toISOString(),
+                adapterVersion: "1.0.0",
+                spendImpossible: true
+              })
+            };
+          }
+        },
+        policySource: {
+          resolvePolicy() {
+            return REMOTE_NO_METERED_POLICY;
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+      sessions.setTurnRecoveryDelegate(orchestrator);
+
+      await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+      expect(fetchCalls).toBe(0);
+      expect(Object.keys(sessions.getWriter(sessionId).getState().generations))
+        .toHaveLength(0);
+
+      credentialAvailable = true;
+      await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+
+      const recovered = sessions.getWriter(sessionId).getState();
+      expect(fetchCalls).toBe(1);
+      expect(recovered.configuration?.providerSelection).toEqual(GEMINI_SELECTION);
+      expect(Object.values(recovered.generations)).toEqual([
+        expect.objectContaining({ provider: "gemini-api", status: "VALIDATED" })
+      ]);
+    } finally {
+      await registry.closeAll();
+      store.close();
+    }
+  });
+
+  it("retries restart recovery after a provider stream crash without persisting raw provider errors", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    let registry = new SessionRuntimeRegistry(store);
+    const secret = "runtime-only-stream-recovery-secret";
+    try {
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      await turns.startConfiguredSession({
+        configuration: configuredOxford(GEMINI_SELECTION),
+        problem: sixPeopleProblem
+      });
+      const committed = await turns.commitInput(STUDENT_TEXT);
+      const request = await turns.selectAction(committed.turnId, sixPeopleProblem);
+      const proposal = realizeProblemInterviewerProposal(
+        sixPeopleProblem,
+        STUDENT_TEXT,
+        request
+      );
+
+      await registry.closeAll();
+      registry = new SessionRuntimeRegistry(store);
+      const sessions = new SessionRecoveryCoordinator(registry, store);
+      let fetchCalls = 0;
+      const resolver = new ProviderRuntimeResolver({
+        configurationSource: credentialReferenceSource(),
+        secretResolver: {
+          async resolveSecret() {
+            return secret;
+          }
+        },
+        adapterRuntimeSource: {
+          resolveRuntime() {
+            return {
+              fetchImpl: async () => {
+                fetchCalls += 1;
+                if (fetchCalls === 1) {
+                  throw new Error(`network failed with Authorization: Bearer ${secret}`);
+                }
+                return new Response(createGeminiResponse(proposal), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" }
+                });
+              },
+              billingVerificationFactory: (now: Date) => ({
+                billingClass: "VERIFIED_FREE_ONLY" as const,
+                enforcementMechanism: "deterministic test-only technical no-spend proof",
+                verifiedAt: now.toISOString(),
+                adapterVersion: "1.0.0",
+                spendImpossible: true
+              })
+            };
+          }
+        },
+        policySource: {
+          resolvePolicy() {
+            return REMOTE_NO_METERED_POLICY;
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+      sessions.setTurnRecoveryDelegate(orchestrator);
+
+      await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+      expect(fetchCalls).toBe(1);
+      expect(JSON.stringify(store.load(sessionId))).not.toContain(secret);
+
+      await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+      const recovered = sessions.getWriter(sessionId).getState();
+      expect(fetchCalls).toBe(2);
+      expect(Object.values(recovered.generations).some(
+        (generation) => generation.provider === "mock-model"
+      )).toBe(false);
+      expect(Object.values(recovered.generations).filter(
+        (generation) => generation.provider === "gemini-api"
+      )).toEqual([
+        expect.objectContaining({ status: "SUPERSEDED" }),
+        expect.objectContaining({ status: "VALIDATED" })
+      ]);
+      expect(JSON.stringify(store.load(sessionId))).not.toContain(secret);
+    } finally {
+      await registry.closeAll();
+      store.close();
+    }
   });
 
   it("re-resolves the exact configured provider/model after restart and regenerates only through that selection", async () => {
