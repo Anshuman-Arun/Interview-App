@@ -3,7 +3,6 @@ import type {
   SessionId,
   TurnId
 } from "../../../packages/domain/src/index.js";
-import { MockModelAdapter } from "../../../packages/providers/src/index.js";
 import {
   ClosedWorldDisclosureAnalyzer,
   DisclosureValidator,
@@ -13,6 +12,7 @@ import {
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
+import { ProviderRuntimeResolver } from "./provider-runtime.js";
 import {
   getReviewedProblemRealizationTexts,
   realizeProblemInterviewerProposal
@@ -25,7 +25,7 @@ export interface TurnOrchestrationInput {
   readonly studentText: string;
 }
 
-function permitsCurrentMockExecution(
+function usesDeterministicMockRealization(
   configuration: {
     readonly providerSelection?: {
       readonly providerId: string;
@@ -45,7 +45,8 @@ export class ServerTurnOrchestrator {
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
     private readonly getRendererStreamServer: () => RendererStreamServer | undefined,
-    validator?: DisclosureValidator
+    validator?: DisclosureValidator,
+    private readonly providerRuntime: ProviderRuntimeResolver = new ProviderRuntimeResolver()
   ) {
     this.validator = validator ?? new DisclosureValidator(
       new ClosedWorldDisclosureAnalyzer(getReviewedProblemRealizationTexts())
@@ -82,8 +83,6 @@ export class ServerTurnOrchestrator {
     if (composition.mode !== "OXFORD_MATHEMATICS") {
       return;
     }
-    const canExecuteCurrentProvider = permitsCurrentMockExecution(composition.configuration);
-
     const turns = new TurnCoordinator(writer);
 
     for (const [turnId, turn] of Object.entries(state.turns)) {
@@ -114,7 +113,7 @@ export class ServerTurnOrchestrator {
           )
       );
 
-      if (canExecuteCurrentProvider && !hasValidatedGeneration && !hasDeliveries) {
+      if (!hasValidatedGeneration && !hasDeliveries) {
         await this.orchestrateTurn({
           sessionId,
           turnId: turnId as TurnId,
@@ -152,11 +151,6 @@ export class ServerTurnOrchestrator {
     if (composition.mode !== "OXFORD_MATHEMATICS") {
       return;
     }
-    if (!permitsCurrentMockExecution(composition.configuration)) {
-      // Real provider resolution/execution is intentionally deferred. Never
-      // silently substitute the mock adapter for an authoritative selection.
-      return;
-    }
     const problem = composition.problem;
     const turns = new TurnCoordinator(writer);
 
@@ -166,27 +160,41 @@ export class ServerTurnOrchestrator {
       return;
     }
 
-    // 2. Realize only wording/content already authorized by application policy
-    const proposal = realizeProblemInterviewerProposal(
-      problem,
-      authoritativeTurn.studentText,
-      realizationRequest
-    );
+    // 2. Keep deterministic problem-specific realization only for the mock provider.
+    // Real providers receive the application-selected action through compiled context
+    // and remain fallible realization engines.
+    const mockProposal = usesDeterministicMockRealization(composition.configuration)
+      ? realizeProblemInterviewerProposal(
+          problem,
+          authoritativeTurn.studentText,
+          realizationRequest
+        )
+      : undefined;
 
-    // 3. MockModelAdapter with zero metered spend
-    const provider = new MockModelAdapter({ proposal });
+    // 3. Resolve the authoritative provider/model through the application-owned
+    // runtime boundary and the existing provider control plane. Runtime resolution
+    // failures are intentionally silent here: no raw provider/configuration errors
+    // are persisted, exposed, or replaced with mock execution.
+    let runtimeResolution;
+    try {
+      runtimeResolution = await this.providerRuntime.resolve({
+        ...(composition.configuration.providerSelection === undefined
+          ? {}
+          : { selection: composition.configuration.providerSelection }),
+        ...(mockProposal === undefined ? {} : { mockProposal })
+      });
+    } catch {
+      return;
+    }
 
-    // 4. ProviderCoordinator initiates generation, compiles context, and validates proposal
+    // 4. ProviderCoordinator owns policy/billing admission, context compilation,
+    // provider execution, proposal admission, and delivery validation.
     const coordinator = new ProviderCoordinator(writer);
     const execution = await coordinator.start({
       inputEpisodeId: authoritativeTurn.inputEpisodeId,
       turnId: authoritativeTurn.turnId,
-      provider,
-      policy: {
-        allowMeteredUsage: false,
-        maximumDataUse: "LOCAL_ONLY",
-        billingVerificationMaxAgeMs: 60_000
-      },
+      provider: runtimeResolution.provider,
+      policy: runtimeResolution.policy,
       problem,
       validator: this.validator
     });
