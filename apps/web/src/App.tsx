@@ -28,8 +28,6 @@ import "./styles/transcript.css";
 
 export const App: React.FC = () => {
   const { resolvedTheme } = useAppearance();
-  const [showSettings, setShowSettings] = useState(false);
-  const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [compactPane, setCompactPane] =
     useState<"interview" | "whiteboard">("interview");
@@ -51,17 +49,12 @@ export const App: React.FC = () => {
   });
   const { route, navigate } = useProductNavigation();
 
-  const [inputUrl, setInputUrl] = useState(session.baseUrl);
   const recoverySessionParse = SessionIdSchema.safeParse(recoverySessionInput.trim());
   const recoverySessionId = recoverySessionParse.success
     ? recoverySessionParse.data
     : null;
   const recoverySessionInputInvalid =
     recoverySessionInput.trim().length > 0 && recoverySessionId === null;
-
-  useEffect(() => {
-    setInputUrl(session.baseUrl);
-  }, [session.baseUrl]);
 
   const handleStartSession = async (): Promise<void> => {
     if (sessionEntryPendingRef.current || sessionTerminalPendingRef.current) return;
@@ -73,14 +66,12 @@ export const App: React.FC = () => {
         (storedSession) => storedSession.status === "ACTIVE"
       );
       if (activeSessions.length > 1) {
-        setShowSessionsModal(false);
         navigate({ page: "sessions" });
         return;
       }
       const existingActive = activeSessions[0];
       if (existingActive !== undefined) {
         const recoveredStatus = await session.recoverSession(existingActive.sessionId);
-        setShowSessionsModal(false);
         navigate(
           recoveredStatus === "ACTIVE"
             ? { page: "interview" }
@@ -89,7 +80,6 @@ export const App: React.FC = () => {
         return;
       }
       await session.startSession();
-      setShowSessionsModal(false);
       navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
@@ -163,7 +153,6 @@ export const App: React.FC = () => {
 
   const openHistoricalReview = (targetSessionId: SessionId): void => {
     if (session.isSessionStarted && session.sessionStatus === "ACTIVE") return;
-    setShowSessionsModal(false);
     navigate({
       page: "review",
       sessionId: targetSessionId,
@@ -182,7 +171,6 @@ export const App: React.FC = () => {
     try {
       const recoveredStatus = await session.recoverSession(targetSessionId);
       if (recoveredStatus === null) return;
-      setShowSessionsModal(false);
       navigate(
         recoveredStatus === "ACTIVE"
           ? { page: "interview" }
@@ -234,7 +222,6 @@ export const App: React.FC = () => {
     try {
       const recoveredStatus = await session.recoverSession(recoverySessionId);
       if (recoveredStatus === null) return;
-      setShowSessionsModal(false);
       navigate(
         recoveredStatus === "ACTIVE"
           ? { page: "interview" }
@@ -250,21 +237,6 @@ export const App: React.FC = () => {
       sessionEntryPendingRef.current = false;
       setSessionEntryPending(false);
     }
-  };
-
-  const handleSaveSettings = (e: React.SyntheticEvent): void => {
-    e.preventDefault();
-    if (
-      session.isTransportManaged
-      || (session.sessionId !== null && session.sessionStatus === "ACTIVE")
-      || sessionEntryPendingRef.current
-      || sessionTerminalPendingRef.current
-    ) {
-      setShowSettings(false);
-      return;
-    }
-    session.setBaseUrl(inputUrl.trim());
-    setShowSettings(false);
   };
 
   const refreshStoredSessions = useCallback((): void => {
@@ -289,23 +261,7 @@ export const App: React.FC = () => {
       });
   }, [session.fetchAvailableSessions, session.readSessionHistory]);
 
-  const openSessionsModal = (): void => {
-    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
-      historyAbortRef.current?.abort();
-      historyAbortRef.current = null;
-      setHistoryRead(null);
-      setHistoryLoading(false);
-      setHistoryError(null);
-      void session.fetchAvailableSessions();
-    } else {
-      refreshStoredSessions();
-    }
-    setShowSessionsModal(true);
-  };
-
   const navigateProductPage = useCallback((page: ProductPageId): void => {
-    setShowSettings(false);
-    setShowSessionsModal(false);
     navigate({ page });
   }, [navigate]);
 
@@ -389,19 +345,6 @@ export const App: React.FC = () => {
     session.isPaused,
     session.pauseSession
   ]);
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case "ACTIVE":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200";
-      case "COMPLETED":
-        return "bg-blue-50 text-blue-700 border-blue-200";
-      case "ARCHIVED":
-        return "bg-slate-100 text-slate-600 border-slate-200";
-      default:
-        return "bg-amber-50 text-amber-700 border-amber-200";
-    }
-  };
 
   if (displayRoute.page !== "interview") {
     return (
@@ -562,264 +505,6 @@ export const App: React.FC = () => {
           )}
         </div>
       </header>
-
-      {/* Settings Modal / Drawer */}
-      {showSettings && hasActiveInterview && !session.isTransportManaged && (
-        <div className="settings-drawer bg-slate-800 text-white px-6 py-4 border-b border-slate-700 flex items-center justify-between gap-6 shrink-0 shadow-md">
-          <form onSubmit={handleSaveSettings} className="flex flex-wrap items-center gap-4 flex-1">
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">
-                Loopback Command URL · locked during active interview
-              </label>
-              <input
-                type="text"
-                value={inputUrl}
-                onChange={(e) => setInputUrl(e.target.value)}
-                disabled
-                aria-disabled="true"
-                className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono w-56 focus:outline-none focus:border-indigo-400"
-                placeholder="http://127.0.0.1:43123"
-              />
-            </div>
-
-            <div className="flex items-end gap-2 pt-4">
-              <button
-                type="submit"
-                disabled
-                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold"
-              >
-                Locked
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowSettings(false)}
-                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs"
-              >
-                Close
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Sessions Management Modal */}
-      {showSessionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div
-            className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden border border-slate-200"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="stored-sessions-title"
-          >
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-2">
-                <span id="stored-sessions-title" className="text-base font-bold text-slate-900">Stored Interview Sessions</span>
-                <span className="text-xs text-slate-500 font-mono">
-                  ({session.availableSessions.length})
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSessionsModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
-                aria-label="Close stored sessions"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-4 overflow-y-auto flex-1 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                {hasActiveInterview ? (
-                  <span className="text-[11px] text-slate-500">
-                    Current interview is active. End or archive it before starting or reviewing another session.
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void handleStartSession()}
-                    disabled={sessionEntryPending || sessionTerminalPending}
-                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors"
-                  >
-                    {sessionEntryPending ? "Opening interview…" : "+ Start New Interview Session"}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (hasActiveInterview) {
-                      void session.fetchAvailableSessions();
-                    } else {
-                      refreshStoredSessions();
-                    }
-                  }}
-                  className="text-xs text-slate-500 hover:text-slate-700 underline"
-                >
-                  Refresh List
-                </button>
-              </div>
-
-              {!hasActiveInterview ? (
-                historyLoading && historyRead === null ? (
-                  <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
-                    Loading grounded history…
-                  </div>
-                ) : historyError !== null && historyRead === null ? (
-                  <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-                    {historyError}
-                  </div>
-                ) : null
-              ) : null}
-
-              {!hasActiveInterview && historyRead !== null ? (
-                <section
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-3"
-                  data-testid="longitudinal-history-panel"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-bold text-slate-900">Grounded history</h3>
-                    <span className="text-[10px] text-slate-500">
-                      {historyRead.longitudinal.includedSessionCount} bounded session projection(s)
-                    </span>
-                  </div>
-                  {historyRead.longitudinal.evaluationStatistics.some(
-                    (item) => item.average.compositeScore !== null
-                  ) ? (
-                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {historyRead.longitudinal.evaluationStatistics
-                        .filter((item) => item.average.compositeScore !== null)
-                        .slice(0, 4)
-                        .map((item) => (
-                          <div
-                            key={`${item.problemId}:${item.problemVersion}`}
-                            className="rounded border border-slate-200 bg-white p-2 text-[11px]"
-                          >
-                            <div className="font-mono text-[10px] text-slate-500 break-all">
-                              {item.problemId} @ {item.problemVersion}
-                            </div>
-                            <div className="mt-1 font-semibold text-slate-800">
-                              Composite average: {item.average.compositeScore}
-                            </div>
-                            <div className="text-slate-500">
-                              {item.scoredSessionCount["compositeScore"]} scored / {item.sessionCount} evaluated
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-[11px] text-slate-500">
-                      No supported cross-session score trend is currently grounded.
-                    </p>
-                  )}
-                  {historyRead.longitudinal.improvement.length > 0 ? (
-                    <div className="mt-2 text-[11px] text-slate-600">
-                      {historyRead.longitudinal.improvement.slice(0, 3).map((item) => (
-                        <div key={`${item.fromSessionId}:${item.toSessionId}`}>
-                          Exact-problem composite change:{" "}
-                          {item.compositeScoreDelta > 0 ? "+" : ""}
-                          {item.compositeScoreDelta}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  {historyRead.longitudinal.sessionTruncation.truncated ? (
-                    <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
-                      {historyRead.longitudinal.sessionTruncation.remainingCount} session(s) are outside the current grounded aggregate coverage.
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-[10px] text-slate-400">
-                    Comparisons require exact problem ID and version. Unsupported dimensions remain excluded.
-                  </p>
-                </section>
-              ) : null}
-
-              {session.availableSessions.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-xs">
-                  No local sessions found. Start a new session to begin.
-                </div>
-              ) : (
-                session.availableSessions.map((s) => (
-                  <div
-                    key={s.sessionId}
-                    className="p-3 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors flex items-center justify-between bg-white shadow-2xs"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-slate-900">{s.sessionId}</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(s.status)}`}>
-                          {s.status}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 flex items-center gap-3">
-                        <span>{hasActiveInterview ? "Session record" : `Problem: ${s.problemId ?? "Configured session"}`}</span>
-                        <span>•</span>
-                        <span>Events: {s.eventCount}</span>
-                        <span>•</span>
-                        <span>Updated: {new Date(s.updatedAt).toLocaleTimeString()}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={
-                        s.status === "ACTIVE" && s.sessionId === session.sessionId
-                          ? undefined
-                          : s.status === "ACTIVE"
-                            ? () => void handleRecoverSession(s.sessionId)
-                          : (
-                              !hasActiveInterview
-                              && (s.status === "COMPLETED" || s.status === "ARCHIVED")
-                              && isSessionIdAddressableForRead(s.sessionId)
-                            )
-                            ? () => openHistoricalReview(s.sessionId)
-                            : undefined
-                      }
-                      disabled={
-                        (
-                          s.status === "ACTIVE"
-                          && (
-                            hasActiveInterview
-                            || sessionEntryPending
-                            || sessionTerminalPending
-                          )
-                        )
-                        || (
-                          s.status !== "ACTIVE"
-                          && (
-                            hasActiveInterview
-                            || (s.status !== "COMPLETED" && s.status !== "ARCHIVED")
-                            || !isSessionIdAddressableForRead(s.sessionId)
-                          )
-                        )
-                      }
-                      className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
-                        s.status === "ACTIVE"
-                          ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
-                          : (
-                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
-                              && isSessionIdAddressableForRead(s.sessionId)
-                            )
-                            ? "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
-                            : "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                      }`}
-                    >
-                      {s.sessionId === session.sessionId && s.status === "ACTIVE"
-                        ? "Current"
-                        : s.status === "ACTIVE"
-                          ? "Resume"
-                          : (
-                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
-                              && isSessionIdAddressableForRead(s.sessionId)
-                            )
-                            ? "Review"
-                            : "Unavailable"}
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <div
         className="compact-workspace-tabs"
