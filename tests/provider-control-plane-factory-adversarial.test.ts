@@ -2422,6 +2422,38 @@ describe("adapter factory adversarial boundary", () => {
     })).rejects.toMatchObject({ code: "CREDENTIAL_RESOLUTION_FAILED" });
   });
 
+  it("returns immutable validated capability snapshots from adapter factories", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: GEMINI_CONFIGURATION
+    });
+    const adapter = await resolveAdapterFactory(resolved).createAdapter({
+      resolved,
+      secretResolver: {
+        async resolveSecret() {
+          return "runtime-only-capability-test-key";
+        }
+      }
+    });
+
+    expect(Object.isFrozen(adapter.capabilities)).toBe(true);
+    expect(adapter.capabilities.dataUse)
+      .toBe("REMOTE_MAY_BE_USED_FOR_IMPROVEMENT");
+    expect(Reflect.set(adapter.capabilities, "dataUse", "LOCAL_ONLY")).toBe(false);
+    expect(adapter.capabilities.dataUse)
+      .toBe("REMOTE_MAY_BE_USED_FOR_IMPROVEMENT");
+
+    expect(() => adapter.capabilities.inputModalities.add("image")).toThrow(TypeError);
+    expect(() => adapter.capabilities.inputModalities.delete("text")).toThrow(TypeError);
+    expect(() => adapter.capabilities.inputModalities.clear()).toThrow(TypeError);
+    expect(() => Set.prototype.add.call(
+      adapter.capabilities.inputModalities,
+      "image"
+    )).toThrow(TypeError);
+    expect([...adapter.capabilities.inputModalities]).toEqual(["text"]);
+  });
+
   it("does not expose resolved Gemini credentials through returned adapter own state", async () => {
     const registry = registerBuiltInProviders();
     const resolved = resolveProviderConfiguration({
