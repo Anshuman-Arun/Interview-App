@@ -256,6 +256,8 @@ describe("expressive product integration invariants", () => {
     expect(hookComplete).toContain("voiceControls.disableMicrophone()");
     expect(app).toContain("retryDisabled={sessionEntryPending || sessionTerminalPending}");
     expect(app).toContain("|| sessionTerminalPending");
+    expect(app).toContain('session.whiteboardSync.status === "UNINITIALIZED"');
+    expect(app).toContain('session.whiteboardSync.status === "UNSYNCHRONIZED"');
   });
 
   it("validates browser transport settings before changing the live endpoint", () => {
