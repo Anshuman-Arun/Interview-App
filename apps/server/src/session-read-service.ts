@@ -174,7 +174,7 @@ function summaryFromAuthoritativeEvents(
 
   return {
     sessionId,
-    ...(state.problem === undefined
+    ...(state.problem === undefined || isDeterministicQuantState(state)
       ? {}
       : {
           problemId: state.problem.id,
