@@ -9,9 +9,11 @@ import {
   newSessionId
 } from "../packages/domain/src/index.js";
 import {
+  QUANT_RESEARCH_VERSION,
   QUANT_TRADER_SCENARIO_VERSION
 } from "../packages/local-compute/src/index.js";
 import {
+  QuantResearchCoordinator,
   QuantTradingSessionCoordinator,
   TurnCoordinator,
   createCommandEnvelope
@@ -153,6 +155,63 @@ describe("configured session product-read integration", () => {
     } finally {
       if (server !== undefined) await server.stop();
       fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps Quant Research metrics deterministic without routing them into the Oxford evaluator", async () => {
+    let server: StartedServer | undefined;
+    try {
+      server = await startServer(":memory:");
+      const command = commandClient(server);
+      const reads = readClient(server);
+      const sessionId = newSessionId();
+      const configuration = InterviewSessionConfigurationSchema.parse({
+        configurationVersion: 1,
+        mode: "QUANT_RESEARCH",
+        scenario: {
+          id: "MODEL_COMPARISON",
+          version: QUANT_RESEARCH_VERSION
+        },
+        interventionPolicy: "BALANCED"
+      });
+
+      await command.startConfiguredSession(sessionId, configuration);
+      const research = new QuantResearchCoordinator(server.registry.get(sessionId));
+      const first = await research.applyActionAtExpectedCount({
+        actionId: "read-model-first",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }, 0, createCommandEnvelope({
+        sessionId,
+        producer: "configured-read-integration-test"
+      }));
+      await research.applyActionAtExpectedCount({
+        actionId: "read-model-second",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }, first.value.state.acceptedActionCount, createCommandEnvelope({
+        sessionId,
+        producer: "configured-read-integration-test"
+      }));
+
+      const quant = await command.getQuantSessionState(sessionId);
+      expect(quant.type).toBe("QUANT_RESEARCH_STATE");
+      if (quant.type !== "QUANT_RESEARCH_STATE") {
+        throw new Error("Expected Quant Research state");
+      }
+      expect(quant.state.status).toBe("COMPLETE");
+      expect(quant.state.completion?.overallScore).toEqual(expect.any(Number));
+
+      const evaluation = await reads.getEvaluation(sessionId);
+      expect(evaluation).toMatchObject({
+        available: false,
+        reason: "EXACT_PROBLEM_UNAVAILABLE"
+      });
+      const history = await reads.getHistory();
+      expect(history.sessions.find((item) => item.sessionId === sessionId)?.evaluation)
+        .toBeUndefined();
+    } finally {
+      if (server !== undefined) await server.stop();
     }
   });
 
