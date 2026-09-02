@@ -1653,7 +1653,11 @@ async function inspectExecutable(
     }
     const configured = path.resolve(executable);
     const actual = path.resolve(canonicalPath);
-    if (platform !== "win32" && configured !== actual) {
+    const sameConfiguredPath = platform === "win32"
+      ? normalizeWindowsIdentityPath(configured)
+        === normalizeWindowsIdentityPath(actual)
+      : configured === actual;
+    if (!sameConfiguredPath) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
     return Object.freeze({
@@ -1685,9 +1689,11 @@ function tryInspectExecutableSync(
     ) return undefined;
     const configured = path.resolve(executable);
     const actual = path.resolve(canonicalPath);
-    if (platform !== "win32" && configured !== actual) {
-      return undefined;
-    }
+    const sameConfiguredPath = platform === "win32"
+      ? normalizeWindowsIdentityPath(configured)
+        === normalizeWindowsIdentityPath(actual)
+      : configured === actual;
+    if (!sameConfiguredPath) return undefined;
     return Object.freeze({
       device: info.dev,
       inode: info.ino,
