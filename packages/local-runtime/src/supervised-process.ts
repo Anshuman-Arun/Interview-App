@@ -122,6 +122,7 @@ interface ExecutionIsolation {
 interface ExecutableIdentity {
   readonly device: bigint;
   readonly inode: bigint;
+  readonly linkCount: bigint;
   readonly size: bigint;
   readonly modifiedNanoseconds: bigint;
   readonly canonicalPath: string;
@@ -267,6 +268,9 @@ export class SupervisedProcessRunner {
     }
 
     const before = await inspectExecutable(definition.executable, this.platform);
+    if (this.platform === "win32" && before.linkCount !== 1n) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
     const pinned = this.pinnedIdentities.get(definition.id);
     if (pinned === undefined) {
       this.pinnedIdentities.set(definition.id, before);
@@ -1043,6 +1047,7 @@ async function inspectExecutable(
     return Object.freeze({
       device: info.dev,
       inode: info.ino,
+      linkCount: info.nlink,
       size: info.size,
       modifiedNanoseconds: info.mtimeNs,
       canonicalPath: actual
@@ -1074,6 +1079,7 @@ function tryInspectExecutableSync(
     return Object.freeze({
       device: info.dev,
       inode: info.ino,
+      linkCount: info.nlink,
       size: info.size,
       modifiedNanoseconds: info.mtimeNs,
       canonicalPath: actual
@@ -1205,6 +1211,7 @@ function sameExecutableIdentity(
   return samePath
     && left.device === right.device
     && left.inode === right.inode
+    && left.linkCount === right.linkCount
     && left.size === right.size
     && left.modifiedNanoseconds === right.modifiedNanoseconds;
 }
