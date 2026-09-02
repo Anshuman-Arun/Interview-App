@@ -31,6 +31,69 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       expect(adapter.getEditor()).toBeNull();
     });
 
+    it("preserves the current page across a temporary editor detach and remount", async () => {
+      const firstEditor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(firstEditor);
+
+      const student = adapter.createStudentShape({
+        id: "shape:pause_student",
+        type: "geo",
+        x: 40,
+        y: 50,
+        props: { w: 90, h: 60, text: "keep me" }
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        targetShapeId: student.id,
+        expectedShapeRevision: 1,
+        annotationPurpose: "pause continuity"
+      });
+      const revisionBeforeDetach = adapter.getBoardRevision();
+      const shapeIdsBeforeDetach = firstEditor
+        .getCurrentPageShapes()
+        .map((shape) => shape.id)
+        .sort();
+
+      adapter.detachEditor();
+      expect(adapter.getEditor()).toBeNull();
+
+      const remountedEditor = new InMemoryTldrawEditor();
+      adapter.attachEditor(remountedEditor);
+
+      expect(adapter.getBoardRevision()).toBe(revisionBeforeDetach);
+      expect(
+        remountedEditor.getCurrentPageShapes().map((shape) => shape.id).sort()
+      ).toEqual(shapeIdsBeforeDetach);
+      expect(remountedEditor.getShape(student.id)?.props?.["text"]).toBe("keep me");
+      expect(
+        remountedEditor
+          .getCurrentPageShapes()
+          .some((shape) => shape.meta?.["layer"] === "AI_ANNOTATION")
+      ).toBe(true);
+    });
+
+    it("does not restore a detached canvas after a genuine new-session reset", () => {
+      const firstEditor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(firstEditor);
+      adapter.createStudentShape({
+        id: "shape:old_session",
+        type: "geo",
+        x: 1,
+        y: 2,
+        props: { text: "old" }
+      });
+
+      adapter.detachEditor();
+      adapter.resetForNewSession();
+
+      const nextEditor = new InMemoryTldrawEditor();
+      adapter.attachEditor(nextEditor);
+
+      expect(nextEditor.getCurrentPageShapes()).toEqual([]);
+      expect(adapter.getBoardRevision()).toBe(0);
+    });
+
     it("throws when calling operations without an attached editor", async () => {
       const adapter = new TldrawWhiteboardAdapter();
       const action: BoardAction = {
