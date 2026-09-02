@@ -32,6 +32,7 @@ import {
   MAX_VISION_REGION_SHAPES,
   NormalizedBoardMutationSchema,
   VisionBoundsSchema,
+  VisionEvidenceInterpreterFingerprintSchema,
   VisionRequestedObservationKindSchema,
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
@@ -417,8 +418,23 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   event("VISION_RESULT_ACCEPTED", z.object({
     visionRequestId: RequestIdSchema,
     observation: BoardObservationSchema,
-    admission: AcceptedBoardObservationSchema.optional()
+    admission: AcceptedBoardObservationSchema.optional(),
+    evidenceInterpreterFingerprint: VisionEvidenceInterpreterFingerprintSchema.nullable().optional()
   }).strict()),
+  event("VISION_EVIDENCE_BRIDGE_DECIDED", z.object({
+    visionRequestId: RequestIdSchema,
+    interpreterFingerprint: VisionEvidenceInterpreterFingerprintSchema,
+    decision: z.enum(["NO_PROPOSAL", "PROPOSAL"]),
+    proposal: EvidenceProposalSchema.optional()
+  }).strict().superRefine((value, context) => {
+    if ((value.decision === "PROPOSAL") !== (value.proposal !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: ["proposal"],
+        message: "Vision evidence bridge proposal must match its decision"
+      });
+    }
+  })),
   event("VISION_RESULT_DISCARDED", z.object({
     visionRequestId: RequestIdSchema,
     reason: z.string().min(1).max(240)
