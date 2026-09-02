@@ -983,7 +983,7 @@ describe("Real tldraw mounted browser integration", () => {
 
     type SyncClient = ConstructorParameters<typeof AuthoritativeBoardSyncCoordinator>[0];
     const syncClient: SyncClient = {
-      getBoardState: async (_targetSessionId, options = {}) => {
+      getBoardState: async (_targetSessionId, options) => {
         const state = writer.getState();
         return {
           protocolVersion: 1,
@@ -998,7 +998,7 @@ describe("Real tldraw mounted browser integration", () => {
             .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
         };
       },
-      commitBoardMutation: async (_targetSessionId, mutation, options = {}) => {
+      commitBoardMutation: async (_targetSessionId, mutation, options) => {
         const requestId = options.requestId ?? newRequestId();
         const committed = await turns.commitBoardMutation(
           mutation,

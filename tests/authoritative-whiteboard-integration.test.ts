@@ -368,7 +368,7 @@ describe("browser authoritative board synchronization", () => {
           BoardRevisionSchema.parse(0),
           []
         ),
-      commitBoardMutation: async (targetSessionId, _mutation, options = {}) => {
+      commitBoardMutation: async (targetSessionId, _mutation, options) => {
         const requestId = options.requestId ?? newRequestId();
         if (targetSessionId === firstSessionId) {
           oldRequestId = requestId;

@@ -229,17 +229,26 @@ export class WhiteboardVisionCoordinator {
       requestedObservationKind: upload.requestedObservationKind
     });
     const manager = this.managerFor(upload.sessionId);
-    let timedOut = false;
     const admissionPromise = manager.submit(request, this.backend);
-    const timeout = setTimeout(() => {
-      const cancellation = manager.cancel(upload.requestId);
-      timedOut = cancellation.cancelled;
-    }, this.backendTimeoutMs);
-    const admission = await admissionPromise.finally(() => {
-      clearTimeout(timeout);
-    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const outcome = await Promise.race([
+      admissionPromise.then((admission) => ({
+        kind: "ADMISSION" as const,
+        admission
+      })),
+      new Promise<{ readonly kind: "TIMEOUT" }>((resolve) => {
+        timeout = setTimeout(() => {
+          manager.cancel(upload.requestId);
+          resolve({ kind: "TIMEOUT" });
+        }, this.backendTimeoutMs);
+      })
+    ]);
+    if (timeout !== undefined) clearTimeout(timeout);
+    const admission = outcome.kind === "ADMISSION"
+      ? outcome.admission
+      : await admissionPromise;
     if (!admission.accepted) {
-      const reason = timedOut ? "BACKEND_TIMEOUT" : admission.reason;
+      const reason = outcome.kind === "TIMEOUT" ? "BACKEND_TIMEOUT" : admission.reason;
       await turn.discardVisionRequest(upload.requestId, reason);
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,

@@ -262,8 +262,8 @@ describe("application whiteboard vision integration", () => {
       confidence: 0.99,
       relevantShapeIds: ["shape:graph-model"]
     }]);
-    const started = deferred<void>();
-    const release = deferred<void>();
+    const started = deferred<undefined>();
+    const release = deferred<undefined>();
     const ignoringBackend: VisionInferenceBackend = {
       provenance: fake.provenance,
       analyze: async (request) => {
