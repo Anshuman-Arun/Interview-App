@@ -1038,6 +1038,11 @@ export function useInterviewSession(
 
   const failClosedUnknownTerminalOutcome = useCallback((): never => {
     sessionMutationAdmissionRef.current = false;
+    // Detach from the last-known ACTIVE lifecycle instead of route-locking the
+    // UI into a state that cannot be recovered. sessionStatus remains the
+    // last authoritative status we observed; isSessionStarted=false means no
+    // live mutation/renderer authority is currently attached.
+    setIsSessionStarted(false);
     resetBoardSync();
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
