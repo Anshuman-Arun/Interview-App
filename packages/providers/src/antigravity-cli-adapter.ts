@@ -116,7 +116,7 @@ const INTERVIEWER_PROPOSAL_JSON_SCHEMA = Object.freeze({
     }
   ]
 });
-const INTERVIEWER_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
+export const ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA
 );
 const INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL = serializeBoundedPlainJson(
@@ -220,7 +220,7 @@ export function createAntigravityCliReasoningProvider(
             "--output-format",
             "stream-json",
             "--json-schema",
-            INTERVIEWER_PROPOSAL_SCHEMA_ARGUMENT,
+            ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
             "--model",
             modelId,
             "--agent",
