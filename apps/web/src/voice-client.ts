@@ -15,7 +15,8 @@ import {
 import type { ResolvedAudioSource } from "./audio/renderer-adapter.js";
 import type { AudioFrame } from "./audio/types.js";
 
-const MAX_VOICE_RESPONSE_CHARS = 512 * 1024;
+const MAX_VOICE_RESPONSE_BYTES = 512 * 1024;
+const FAILED_OPEN_CANCEL_TIMEOUT_MS = 1_000;
 const MAX_WAV_ASSET_BYTES = 8 * 1024 * 1024;
 const TARGET_SPEECH_SAMPLE_RATE = 48_000 as const;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
@@ -132,13 +133,21 @@ export class BrowserVoiceClient {
   public async openStream(sessionIdInput: SessionId, signal?: AbortSignal): Promise<BrowserVoiceStream> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const streamId = `speech_stream_${globalThis.crypto.randomUUID()}`;
-    await this.requestJson("/v1/voice/streams", {
-      protocolVersion: 1,
-      sessionId,
-      streamId,
-      sampleRate: TARGET_SPEECH_SAMPLE_RATE
-    }, signal);
-    return new BrowserVoiceStream(this, sessionId, streamId);
+    try {
+      await this.requestJson("/v1/voice/streams", {
+        protocolVersion: 1,
+        sessionId,
+        streamId,
+        sampleRate: TARGET_SPEECH_SAMPLE_RATE
+      }, signal);
+      return new BrowserVoiceStream(this, sessionId, streamId);
+    } catch (error) {
+      // The server may have accepted the stream even if the success response
+      // was lost locally. Retire the known identity with an independent,
+      // bounded cancellation before exposing the failure to the hook.
+      await this.bestEffortCancelFailedOpen(sessionId, streamId);
+      throw error;
+    }
   }
 
   public async resolveAudioSource(
@@ -176,10 +185,15 @@ export class BrowserVoiceClient {
         throw new Error("Audio asset declared size is outside the browser bound");
       }
     }
-    const blob = await response.blob();
-    if (blob.size <= 0 || blob.size > MAX_WAV_ASSET_BYTES) {
+    const audioBytes = await readBoundedResponseBytes(
+      response,
+      MAX_WAV_ASSET_BYTES,
+      "Audio asset"
+    );
+    if (audioBytes.byteLength === 0) {
       throw new Error("Audio asset body is outside the browser bound");
     }
+    const blob = new Blob([audioBytes], { type: "audio/wav" });
     const urlFactory = globalThis.URL;
     if (
       typeof urlFactory.createObjectURL !== "function"
@@ -337,15 +351,70 @@ async function parseVoiceFrameResponse(response: Response): Promise<BrowserVoice
 }
 
 async function parseBoundedJson(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (text.length > MAX_VOICE_RESPONSE_CHARS) {
-    throw new Error("Voice transport response exceeds the browser bound");
+  const bytes = await readBoundedResponseBytes(
+    response,
+    MAX_VOICE_RESPONSE_BYTES,
+    "Voice transport response"
+  );
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error("Voice transport response is not valid UTF-8");
   }
   try {
     return JSON.parse(text) as unknown;
   } catch {
     throw new Error("Voice transport response is not valid JSON");
   }
+}
+
+async function readBoundedResponseBytes(
+  response: Response,
+  maximumBytes: number,
+  label: string
+): Promise<Uint8Array> {
+  const declared = response.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(declared)) {
+      throw new Error(`${label} declared size is malformed`);
+    }
+    const parsed = Number(declared);
+    if (!Number.isSafeInteger(parsed) || parsed > maximumBytes) {
+      throw new Error(`${label} declared size exceeds the browser bound`);
+    }
+  }
+  if (response.body === null) throw new Error(`${label} has no response body`);
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      total += chunk.value.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(`${label} body exceeds the browser bound`);
+      }
+      chunks.push(chunk.value);
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Reader cleanup must not obscure the bounded response result.
+    }
+  }
+
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
 }
 
 function safeProtocolMessage(value: unknown): string | undefined {
