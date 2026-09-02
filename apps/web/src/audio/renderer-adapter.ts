@@ -33,15 +33,41 @@ export interface QueuedRendererAudioPlayerOptions {
  */
 export class QueuedRendererAudioPlayer implements AudioPlayer {
   private readonly pendingResolutions = new Map<DeliveryId, AbortController>();
+  private readonly resolveAudioSource: QueuedRendererAudioPlayerOptions["resolveAudioSource"];
+  private readonly onSpeakingChanged: QueuedRendererAudioPlayerOptions["onSpeakingChanged"];
   private resolutionEpoch = 0;
   private disposed = false;
   private outputDeviceId: string | undefined;
 
   public constructor(
     private readonly playback: BrowserAudioPlayback,
-    private readonly options: QueuedRendererAudioPlayerOptions = {}
+    options: QueuedRendererAudioPlayerOptions = {}
   ) {
-    this.outputDeviceId = normalizeOutputDeviceId(options.outputDeviceId);
+    if (typeof options !== "object" || options === null) {
+      throw new AudioInfrastructureError("INVALID_REQUEST", "Audio renderer options are invalid");
+    }
+    let resolver: unknown;
+    let speakingObserver: unknown;
+    let outputDeviceId: unknown;
+    try {
+      resolver = Reflect.get(options, "resolveAudioSource");
+      speakingObserver = Reflect.get(options, "onSpeakingChanged");
+      outputDeviceId = Reflect.get(options, "outputDeviceId");
+    } catch {
+      throw new AudioInfrastructureError("INVALID_REQUEST", "Audio renderer options could not be inspected");
+    }
+    if (resolver !== undefined && typeof resolver !== "function") {
+      throw new AudioInfrastructureError("INVALID_REQUEST", "Audio source resolver is not callable");
+    }
+    if (speakingObserver !== undefined && typeof speakingObserver !== "function") {
+      throw new AudioInfrastructureError("INVALID_REQUEST", "Speaking observer is not callable");
+    }
+    this.resolveAudioSource = resolver as QueuedRendererAudioPlayerOptions["resolveAudioSource"];
+    this.onSpeakingChanged = speakingObserver as QueuedRendererAudioPlayerOptions["onSpeakingChanged"];
+    if (outputDeviceId !== undefined && typeof outputDeviceId !== "string") {
+      throw new AudioInfrastructureError("INVALID_REQUEST", "Audio output device identifier is invalid");
+    }
+    this.outputDeviceId = normalizeOutputDeviceId(outputDeviceId);
   }
 
   public async playAudio(input: {
@@ -77,7 +103,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
     let resolved: ResolvedAudioSource | undefined;
     let releaseResolved: (() => void) | undefined;
     try {
-      const resolver = this.options.resolveAudioSource;
+      const resolver = this.resolveAudioSource;
       if (resolver === undefined) {
         resolved = { source: input.audioRef };
       } else {
@@ -131,11 +157,11 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
             : { outputDeviceId: this.outputDeviceId }),
           callbacks: {
             onStarted: async () => {
-              this.options.onSpeakingChanged?.(true);
+              this.notifySpeaking(true);
               await input.callbacks.onStarted();
             },
             onCompleted: async () => {
-              this.options.onSpeakingChanged?.(false);
+              this.notifySpeaking(false);
               await input.callbacks.onCompleted();
             }
           }
@@ -158,11 +184,11 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
       const releaseOwnedSource = releaseResolved;
       void handle.result.then(
         () => {
-          this.options.onSpeakingChanged?.(false);
+          this.notifySpeaking(false);
           releaseOwnedSource();
         },
         () => {
-          this.options.onSpeakingChanged?.(false);
+          this.notifySpeaking(false);
           releaseOwnedSource();
         }
       );
@@ -218,7 +244,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
 
   public interruptCurrent(): void {
     this.playback.interruptCurrent();
-    this.options.onSpeakingChanged?.(false);
+    this.notifySpeaking(false);
   }
 
   public clearQueued(): void {
@@ -231,7 +257,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
     this.resolutionEpoch += 1;
     this.abortPendingResolutions();
     this.playback.cancelAll();
-    this.options.onSpeakingChanged?.(false);
+    this.notifySpeaking(false);
   }
 
   public dispose(): void {
@@ -239,6 +265,17 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
     this.disposed = true;
     this.cancelAll();
     this.playback.dispose();
+  }
+
+  private notifySpeaking(speaking: boolean): void {
+    const observer = this.onSpeakingChanged;
+    if (observer === undefined) return;
+    try {
+      observer(speaking);
+    } catch {
+      // UI status is observational only. It must never change physical
+      // exposure/completion acknowledgement semantics.
+    }
   }
 
   private isDisposed(): boolean {
