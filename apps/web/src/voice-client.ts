@@ -82,7 +82,7 @@ export class BrowserVoiceStream {
       sequence: this.sequence,
       timestampMs: this.timestampMs,
       samples,
-      signal
+      ...(signal === undefined ? {} : { signal })
     });
     this.sequence += 1;
     this.timestampMs += samples.length / TARGET_SPEECH_SAMPLE_RATE * 1_000;
