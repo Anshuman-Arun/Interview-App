@@ -364,7 +364,7 @@ export class SupervisedProcessRunner {
 }
 
 function snapshotExecutableDefinitions(
-  value: readonly SupervisedExecutableDefinition[],
+  value: unknown,
   platform: NodeJS.Platform
 ): readonly ExecutableDefinitionSnapshot[] {
   if (
@@ -1078,24 +1078,26 @@ function runTaskkill(pid: number, force: boolean, timeoutMs: number): Promise<bo
     }
 
     let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const finish = (success: boolean): void => {
+    const settle = (success: boolean): void => {
       if (settled) return;
       settled = true;
-      if (timer !== undefined) clearTimeout(timer);
       resolve(success);
     };
-    task.once("error", () => finish(false));
-    task.once("close", (code) => finish(code === 0));
-    timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       try {
         task.kill();
       } catch {
         // The helper may already have exited.
       }
       task.unref();
-      finish(false);
+      settle(false);
     }, timeoutMs);
+    const finish = (success: boolean): void => {
+      clearTimeout(timer);
+      settle(success);
+    };
+    task.once("error", () => finish(false));
+    task.once("close", (code) => finish(code === 0));
   });
 }
 
