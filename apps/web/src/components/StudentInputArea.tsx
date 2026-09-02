@@ -21,21 +21,32 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
 }) => {
   const [draftText, setDraftText] = useState("");
   const [showPreview, setShowPreview] = useState(true);
+  const [localSubmitting, setLocalSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const submissionPendingRef = useRef(false);
 
   const charCount = draftText.length;
   const isTooLong = charCount > MAX_INPUT_CHARS;
   const isEmpty = draftText.trim().length === 0;
-  const canSubmit = !isEmpty && !isTooLong && !disabled && !isSubmitting;
+  const submissionLocked = isSubmitting || localSubmitting;
+  const canSubmit =
+    !isEmpty && !isTooLong && !disabled && !submissionLocked;
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submissionPendingRef.current) return;
+
     const textToSend = draftText.trim();
+    submissionPendingRef.current = true;
+    setLocalSubmitting(true);
     setDraftText("");
+
     try {
       await onSubmit(textToSend);
     } catch {
-      setDraftText(textToSend);
+      setDraftText((current) => current.length === 0 ? textToSend : current);
+    } finally {
+      submissionPendingRef.current = false;
+      setLocalSubmitting(false);
     }
   }, [canSubmit, draftText, onSubmit]);
 
@@ -83,7 +94,7 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
         value={draftText}
         onChange={(event) => setDraftText(event.target.value)}
         onKeyDown={handleKeyDown}
-        disabled={disabled || isSubmitting}
+        disabled={disabled || submissionLocked}
         placeholder={placeholder}
         rows={3}
         className="reasoning-composer__textarea"
@@ -127,7 +138,7 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
           }
           data-testid="submit-reasoning-btn"
         >
-          {isSubmitting ? "Sending..." : "Submit Reasoning"}
+          {submissionLocked ? "Sending..." : "Submit Reasoning"}
         </button>
       </div>
     </div>
