@@ -307,7 +307,10 @@ function parseAntigravityStream(
         sawInit
         || index !== firstNonBlankLineIndex(lines)
         || init.data.init.model !== expectedModelId
-        || init.data.init.permission_mode === "always-proceed"
+        || (
+          init.data.init.permission_mode !== "strict"
+          && init.data.init.permission_mode !== "request-review"
+        )
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
