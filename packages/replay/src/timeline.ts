@@ -225,8 +225,6 @@ function entryForKnownEvent(
       quantTrading = {
         phase: "ROUND_RESOLVED",
         round: event.payload.evidence.round,
-        fillCount: event.payload.evidence.studentFills.length,
-        riskBreached: event.payload.evidence.riskBreached,
         specializedValidationRequired: true
       };
       break;
@@ -235,7 +233,6 @@ function entryForKnownEvent(
         phase: "COMPLETED",
         family: event.payload.result.family,
         version: event.payload.result.version,
-        completionStatus: event.payload.result.completionStatus,
         roundsCompleted: event.payload.result.roundsCompleted,
         specializedValidationRequired: true
       };
