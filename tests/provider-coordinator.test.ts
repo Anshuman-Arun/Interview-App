@@ -106,6 +106,38 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
+  it("completes authoritative cancellation while provider session creation never resolves", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      let signalSessionCreation: (() => void) | undefined;
+      const sessionCreationStarted = new Promise<void>((resolve) => {
+        signalSessionCreation = resolve;
+      });
+      const never = new Promise<ReasoningSession>(() => undefined);
+      const provider = testProvider(async () => {
+        signalSessionCreation?.();
+        return await never;
+      });
+
+      const execution = await harness.coordinator.start(startInput(harness, provider));
+      await sessionCreationStarted;
+      await harness.coordinator.cancelGeneration(
+        execution.generationId,
+        "student barge-in during provider admission"
+      );
+
+      await expect(execution.completion).resolves.toEqual({
+        status: "CANCELLED",
+        generationId: execution.generationId
+      });
+      expect(harness.writer.getState().generations[execution.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("completes authoritative cancellation even when provider stream, cancel, and close never resolve", async () => {
     const harness = await coordinatorHarness();
     try {
