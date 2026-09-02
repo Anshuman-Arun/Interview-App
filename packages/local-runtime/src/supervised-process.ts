@@ -808,18 +808,38 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
-    const assemblyEntry = getSharedWindowsSupervisorAssembly(
+    let assemblyEntry = getSharedWindowsSupervisorAssembly(
       identity.canonicalPath,
       this.temporaryRoot,
       environment
     );
     this.windowsSupervisorAssemblyEntry = assemblyEntry;
-    const assembly = await waitForOperationOrAbort(
+    let assembly = await waitForOperationOrAbort(
       assemblyEntry.promise,
       request.signal
     );
     if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
+    if (!await verifyWindowsSupervisorAssembly(assembly, request.signal)) {
+      invalidateSharedWindowsSupervisorAssembly(
+        identity.canonicalPath,
+        this.temporaryRoot,
+        assemblyEntry
+      );
+      assemblyEntry = getSharedWindowsSupervisorAssembly(
+        identity.canonicalPath,
+        this.temporaryRoot,
+        environment
+      );
+      this.windowsSupervisorAssemblyEntry = assemblyEntry;
+      assembly = await waitForOperationOrAbort(
+        assemblyEntry.promise,
+        request.signal
+      );
+      if (!await verifyWindowsSupervisorAssembly(assembly, request.signal)) {
+        throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+      }
     }
 
     const configuration = JSON.stringify({
@@ -879,8 +899,7 @@ function getSharedWindowsSupervisorAssembly(
   temporaryRoot: string,
   environment: NodeJS.ProcessEnv
 ): WindowsSupervisorAssemblyEntry {
-  const key =
-    `${normalizeWindowsIdentityPath(powershell)}\n${normalizeWindowsIdentityPath(temporaryRoot)}`;
+  const key = windowsSupervisorAssemblyKey(powershell, temporaryRoot);
   const existing = SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key);
   if (existing !== undefined) return existing;
 
@@ -899,6 +918,70 @@ function getSharedWindowsSupervisorAssembly(
     }
   });
   return entry;
+}
+
+function windowsSupervisorAssemblyKey(
+  powershell: string,
+  temporaryRoot: string
+): string {
+  return `${normalizeWindowsIdentityPath(powershell)}\n${normalizeWindowsIdentityPath(temporaryRoot)}`;
+}
+
+function invalidateSharedWindowsSupervisorAssembly(
+  powershell: string,
+  temporaryRoot: string,
+  entry: WindowsSupervisorAssemblyEntry
+): void {
+  const key = windowsSupervisorAssemblyKey(powershell, temporaryRoot);
+  if (SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key) === entry) {
+    SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.delete(key);
+  }
+}
+
+async function verifyWindowsSupervisorAssembly(
+  assembly: WindowsSupervisorAssembly,
+  signal: AbortSignal | undefined
+): Promise<boolean> {
+  const controller = new AbortController();
+  const forwardAbort = (): void => controller.abort();
+  if (signal !== undefined) {
+    if (abortSignalAborted(signal)) {
+      forwardAbort();
+    } else {
+      addAbortSignalListener(signal, forwardAbort);
+    }
+  }
+  try {
+    const [info, canonical] = await Promise.all([
+      lstat(assembly.path, { bigint: true }),
+      realpath(assembly.path)
+    ]);
+    if (
+      !info.isFile()
+      || info.isSymbolicLink()
+      || info.nlink !== 1n
+      || info.size <= 0n
+      || info.size > BigInt(MAX_WINDOWS_SUPERVISOR_ASSEMBLY_BYTES)
+      || normalizeWindowsIdentityPath(assembly.path)
+        !== normalizeWindowsIdentityPath(canonical)
+    ) {
+      return false;
+    }
+    const digest = await sha256Executable(canonical, controller.signal);
+    return digest === assembly.sha256;
+  } catch (error) {
+    if (
+      error instanceof SupervisedProcessError
+      && error.code === "EXECUTION_CANCELLED"
+    ) {
+      throw error;
+    }
+    return false;
+  } finally {
+    if (signal !== undefined) {
+      removeAbortSignalListener(signal, forwardAbort);
+    }
+  }
 }
 
 async function compileWindowsSupervisorAssembly(
