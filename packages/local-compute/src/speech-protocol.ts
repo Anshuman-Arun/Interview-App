@@ -22,6 +22,7 @@ export const MAX_SPEECH_VAD_TIMEOUT_MS = 5_000;
 export const SPEECH_VAD_TIMEOUT_ABORT_REASON = "speech-vad-timeout" as const;
 export const DEFAULT_SPEECH_RECOGNIZER_TIMEOUT_MS = 30_000;
 export const MAX_SPEECH_RECOGNIZER_TIMEOUT_MS = 60_000;
+export const SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON = "speech-recognizer-timeout" as const;
 export const DEFAULT_SPEECH_CANCELLATION_TIMEOUT_MS = 500;
 export const MAX_SPEECH_CANCELLATION_TIMEOUT_MS = 2_000;
 
