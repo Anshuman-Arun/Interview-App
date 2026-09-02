@@ -47,28 +47,30 @@ export class SessionRecoveryCoordinator {
     for (const summary of summaries) {
       const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
       const state = replaySession(summary.sessionId, events);
-      const isQuant =
-        state.configuration?.mode === "QUANT_TRADING"
-        || state.configuration?.mode === "QUANT_RESEARCH"
-        || state.quantTrading !== undefined
-        || state.quantResearch !== undefined;
-      if (!isQuant) continue;
+      if (!isQuantSessionState(state)) continue;
 
       // The SQLite session index is a rebuildable convenience projection. Do not
       // let schema-valid but semantically forged deterministic Quant history be
       // advertised as a trusted ACTIVE/COMPLETED inventory entry.
-      assertReplayPrefixValidForRecovery(summary.sessionId, events);
-      resolveSessionStateComposition(state);
-      if (
-        summary.status !== state.status
-        || summary.sequence !== state.sequence
-        || summary.eventCount !== events.length
-        || summary.problemId !== state.problem?.id
-        || summary.problemVersion !== state.problem?.version
-        || summary.createdAt !== events[0]?.wallTime
-        || summary.updatedAt !== events.at(-1)?.wallTime
-      ) {
-        throw new Error("Quant session inventory does not match authoritative state");
+      try {
+        assertReplayPrefixValidForRecovery(summary.sessionId, events);
+        resolveSessionStateComposition(state);
+        if (
+          summary.status !== state.status
+          || summary.sequence !== state.sequence
+          || summary.eventCount !== events.length
+          || summary.problemId !== state.problem?.id
+          || summary.problemVersion !== state.problem?.version
+          || summary.createdAt !== events[0]?.wallTime
+          || summary.updatedAt !== events.at(-1)?.wallTime
+        ) {
+          throw new Error("Quant session inventory does not match authoritative state");
+        }
+      } catch {
+        // Persisted-history validation failures are server-authority failures,
+        // not candidate command conflicts, even when the deterministic engine
+        // happens to report them with an action-shaped error type.
+        throw new Error("Authoritative quant session inventory validation failed");
       }
     }
     return summaries;
@@ -193,9 +195,20 @@ export class SessionRecoveryCoordinator {
       // require generic event provenance/transition validation: unlike the older
       // Oxford recovery fixtures, their production event family has no legacy
       // recovery-only histories that intentionally bypass replay projection.
-      const composition = resolveSessionStateComposition(writer.getState());
-      if (composition.mode !== "OXFORD_MATHEMATICS") {
-        assertReplayPrefixValidForRecovery(sessionId, this.registry.loadEvents(sessionId));
+      const state = writer.getState();
+      let composition: ReturnType<typeof resolveSessionStateComposition>;
+      try {
+        composition = resolveSessionStateComposition(state);
+        if (composition.mode !== "OXFORD_MATHEMATICS") {
+          assertReplayPrefixValidForRecovery(sessionId, this.registry.loadEvents(sessionId));
+        }
+      } catch (error) {
+        if (isQuantSessionState(state)) {
+          // Never let corrupted persisted deterministic history masquerade as a
+          // malformed/stale candidate action at the HTTP error boundary.
+          throw new Error("Authoritative quant session recovery validation failed");
+        }
+        throw error;
       }
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.visionEvidenceDelegate !== undefined) {
@@ -224,6 +237,13 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function isQuantSessionState(state: Readonly<ReturnType<SessionWriter["getState"]>>): boolean {
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH"
+    || state.quantTrading !== undefined
+    || state.quantResearch !== undefined;
 }
 
 function semanticDeliveryKey(generationId: string, text: string): string {
