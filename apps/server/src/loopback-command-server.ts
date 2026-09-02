@@ -60,6 +60,7 @@ export interface LoopbackCommandServerOptions {
   readonly sessions: SessionRecoveryCoordinator;
   readonly reads?: SessionReadService;
   readonly orchestrator?: ServerTurnOrchestrator;
+  readonly productionRuntime?: ProductionSessionRuntime;
   readonly whiteboardVision?: WhiteboardVisionCoordinator;
   readonly onSessionTerminal?: (sessionId: SessionId) => void | Promise<void>;
   readonly port?: number;
@@ -83,7 +84,7 @@ class ProtocolHttpError extends Error {
 
 export class LoopbackCommandServer {
   private readonly server: Server;
-  private readonly productionRuntime = new ProductionSessionRuntime();
+  private readonly productionRuntime: ProductionSessionRuntime;
   private boundAddress: BoundLoopbackAddress | undefined;
 
   public constructor(private readonly options: LoopbackCommandServerOptions) {
@@ -102,6 +103,7 @@ export class LoopbackCommandServer {
       const parsed = new URL(origin);
       if (parsed.origin !== origin) throw new Error("Allowed origins must be exact URL origins without paths");
     }
+    this.productionRuntime = options.productionRuntime ?? new ProductionSessionRuntime();
     this.server = createServer((request, response) => {
       void this.handle(request, response);
     });
