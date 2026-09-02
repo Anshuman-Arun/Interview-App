@@ -271,6 +271,22 @@ export class BrowserVoiceClient {
     }, signal);
   }
 
+  private async bestEffortCancelFailedOpen(
+    sessionId: SessionId,
+    streamId: string
+  ): Promise<void> {
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), FAILED_OPEN_CANCEL_TIMEOUT_MS);
+    try {
+      await this.cancel(sessionId, streamId, controller.signal);
+    } catch {
+      // The server-side idle lease and transport-drop cleanup remain the final
+      // fail-closed backstops if this independent cancellation cannot arrive.
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
+  }
+
   private async requestJson(path: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
     const response = await this.requestJsonResponse(path, body, signal);
     return parseBoundedJson(response);
