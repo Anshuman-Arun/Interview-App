@@ -115,8 +115,7 @@ export const QuantTradingQuoteRequestPublicSchema = z.object({
 
 const QuantTradingRiskBreachPublicSchema = z.object({
   round: PositiveSafeIntegerSchema.max(256),
-  source: z.enum(["FAIR_VALUE_UPDATE", "POST_ROUND"]),
-  reason: z.string().min(1).max(240)
+  source: z.enum(["FAIR_VALUE_UPDATE", "POST_ROUND"])
 }).strict();
 
 export const QuantTradingTerminalMetricsSchema = z.object({
