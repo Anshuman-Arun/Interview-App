@@ -336,6 +336,7 @@ describe("production quant runtime integration", () => {
           type: "SUBMIT_QUANT_TRADING_ACTION",
           requestId: newRequestId(),
           sessionId,
+          expectedRound: state.currentRound,
           action: { type: "PASS" }
         }))
       ).state;
