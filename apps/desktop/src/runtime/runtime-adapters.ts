@@ -116,21 +116,22 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
 
     let nativeLaneEntered = false;
     let removeQueuedAbortListener: (() => void) | undefined;
-    const queuedAbort = input.signal === undefined
+    const signal = input.signal;
+    const queuedAbort = signal === undefined
       ? undefined
       : new Promise<never>((_resolve, reject) => {
           const listener = (): void => {
             if (!nativeLaneEntered) reject(abortError());
           };
           removeQueuedAbortListener = () => {
-            input.signal?.removeEventListener("abort", listener);
+            signal.removeEventListener("abort", listener);
           };
-          input.signal.addEventListener("abort", listener, { once: true });
-          if (input.signal.aborted) listener();
+          signal.addEventListener("abort", listener, { once: true });
+          if (signal.aborted) listener();
         });
 
     const scheduled = this.transcriptionTail.then(async () => {
-      if (abortRequested(input.signal)) throw abortError();
+      if (abortRequested(signal)) throw abortError();
       nativeLaneEntered = true;
       removeQueuedAbortListener?.();
       removeQueuedAbortListener = undefined;
@@ -138,13 +139,13 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
       const workerInstance = this.client.workerInstanceIdentity();
       const timeoutRecovery: { promise?: Promise<void> } = {};
       const onAbort = (): void => {
-        if (input.signal?.reason !== SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON) return;
+        if (signal?.reason !== SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON) return;
         timeoutRecovery.promise ??=
           this.client.recycleAfterUncertainRequest(workerInstance);
       };
 
-      input.signal?.addEventListener("abort", onAbort, { once: true });
-      if (abortRequested(input.signal)) onAbort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (abortRequested(signal)) onAbort();
 
       let outcome:
         | { readonly ok: true; readonly value: unknown }
@@ -191,7 +192,7 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
         if (!outcome.ok) throw outcome.error;
         return outcome.value;
       } finally {
-        input.signal?.removeEventListener("abort", onAbort);
+        signal?.removeEventListener("abort", onAbort);
       }
     });
     this.transcriptionTail = scheduled.then(
