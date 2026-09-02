@@ -11,7 +11,7 @@ import {
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
-import { ProviderRuntimeResolver } from "./provider-runtime.js";
+import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 
 export interface LocalInterviewTransportRuntimeOptions {
