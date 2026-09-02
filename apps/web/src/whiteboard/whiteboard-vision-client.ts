@@ -41,7 +41,7 @@ export class WhiteboardVisionClient {
     let lastError: unknown;
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      if (signal?.aborted === true) throw new Error("Whiteboard vision request was aborted");
+      if (isAborted(signal)) throw new Error("Whiteboard vision request was aborted");
       try {
         const response = await this.#fetchImpl(this.#endpoint, {
           method: "POST",
@@ -80,7 +80,7 @@ export class WhiteboardVisionClient {
         }
         return result;
       } catch (error) {
-        if (signal?.aborted === true) throw new Error("Whiteboard vision request was aborted");
+        if (isAborted(signal)) throw new Error("Whiteboard vision request was aborted");
         lastError = error;
       }
     }
@@ -109,4 +109,9 @@ function exactLoopbackOrigin(value: string): string {
     throw new Error("Whiteboard vision base URL must be an exact HTTP loopback origin");
   }
   return parsed.origin;
+}
+
+
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }

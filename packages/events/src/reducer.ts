@@ -1,7 +1,12 @@
 import { evidenceKeyToString, generationBasesEqual, isDisclosedStatus } from "../../domain/src/index.js";
 import type { DeliveryAtom, DisclosureId } from "../../domain/src/index.js";
 import type { SessionEvent } from "./schemas.js";
-import { initialSessionState, type GenerationState, type SessionState } from "./state.js";
+import {
+  initialSessionState,
+  type GenerationState,
+  type SessionState,
+  type VisionRequestState
+} from "./state.js";
 
 function assertSequence(state: SessionState, event: SessionEvent): void {
   if (event.sessionId !== state.sessionId) throw new Error("Event session does not match state session");
@@ -246,9 +251,35 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       };
       break;
     }
-    case "VISION_REQUESTED":
-      next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...event.payload, status: "PENDING" } } };
+    case "VISION_REQUESTED": {
+      const request: VisionRequestState = {
+        visionRequestId: event.payload.visionRequestId,
+        sourceBoardRevision: event.payload.sourceBoardRevision,
+        regionId: event.payload.regionId,
+        relevantShapeIds: [...event.payload.relevantShapeIds],
+        ...(event.payload.snapshotBasis === undefined
+          ? {}
+          : { snapshotBasis: event.payload.snapshotBasis }),
+        ...(event.payload.relevantShapeRevisions === undefined
+          ? {}
+          : { relevantShapeRevisions: [...event.payload.relevantShapeRevisions] }),
+        ...(event.payload.regionBounds === undefined
+          ? {}
+          : { regionBounds: event.payload.regionBounds }),
+        ...(event.payload.requestedObservationKind === undefined
+          ? {}
+          : { requestedObservationKind: event.payload.requestedObservationKind }),
+        status: "PENDING"
+      };
+      next = {
+        ...state,
+        visionRequests: {
+          ...state.visionRequests,
+          [event.payload.visionRequestId]: request
+        }
+      };
       break;
+    }
     case "VISION_RESULT_ACCEPTED": {
       const request = state.visionRequests[event.payload.visionRequestId];
       if (request === undefined || request.status !== "PENDING") throw new Error("Vision request is not pending");
