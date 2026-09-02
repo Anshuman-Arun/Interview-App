@@ -365,6 +365,18 @@ describe("Antigravity CLI one-turn protocol", () => {
           conversation_id: "fake-conversation",
           step_index: 1,
           state: "DONE",
+          step_type: "checkpoint"
+        }
+      }]).replace(
+        '"step_type":"checkpoint"',
+        '"step_type":"checkpoint","duration_seconds":1e9999'
+      ),
+      antigravityStream(PROPOSAL, [{
+        event: "step_update",
+        step_update: {
+          conversation_id: "fake-conversation",
+          step_index: 1,
+          state: "DONE",
           step_type: "unexpected-step"
         }
       }]),
