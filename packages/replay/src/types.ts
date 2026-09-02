@@ -155,6 +155,20 @@ export interface ReplayRevisionDetail {
   readonly contextEpoch?: number;
 }
 
+export interface ReplayQuantTradingDetail {
+  readonly phase: "INITIALIZED" | "ACTION_ACCEPTED" | "ROUND_RESOLVED" | "COMPLETED";
+  readonly family?: string;
+  readonly version?: string;
+  readonly round?: number;
+  readonly actionType?: "QUOTE" | "PASS";
+  readonly fillCount?: number;
+  readonly riskBreached?: boolean;
+  readonly completionStatus?: "COMPLETED" | "RISK_STOPPED";
+  readonly roundsCompleted?: number;
+  readonly objectiveScore?: number;
+  readonly specializedValidationRequired: true;
+}
+
 export interface ReplayQuantResearchDetail {
   readonly phase: "INITIALIZED" | "ACTION_ACCEPTED" | "COMPLETED";
   readonly family?: string;
@@ -188,6 +202,7 @@ export interface ReplayTimelineEntry {
   readonly verification?: ReplayVerificationDetail;
   readonly policy?: ReplayPolicyDetail;
   readonly revisions?: ReplayRevisionDetail;
+  readonly quantTrading?: ReplayQuantTradingDetail;
   readonly quantResearch?: ReplayQuantResearchDetail;
   readonly unknown?: {
     readonly eventType: string;
