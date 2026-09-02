@@ -134,6 +134,7 @@ export class SupervisedProcessRunner {
   private readonly parentEnvironment: NodeJS.ProcessEnv;
   private readonly platform: NodeJS.Platform;
   private readonly pinnedIdentities = new Map<string, ExecutableIdentity>();
+  private readonly quarantinedExecutableIds = new Set<string>();
 
   public constructor(
     definitions: readonly SupervisedExecutableDefinition[],
@@ -186,6 +187,9 @@ export class SupervisedProcessRunner {
     const request = snapshotExecutionRequest(input);
     const definition = this.definitions.get(request.executableId);
     if (definition === undefined) throw new SupervisedProcessError("UNKNOWN_EXECUTABLE");
+    if (this.quarantinedExecutableIds.has(definition.id)) {
+      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+    }
     if (request.signal?.aborted) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
@@ -220,8 +224,18 @@ export class SupervisedProcessRunner {
         isolation.environment,
         isolation.workingDirectory
       );
+    } catch (error) {
+      if (isProcessTreeCleanupError(error)) {
+        this.quarantinedExecutableIds.add(definition.id);
+      }
+      throw error;
     } finally {
-      await cleanupExecutionIsolation(isolation);
+      try {
+        await cleanupExecutionIsolation(isolation);
+      } catch {
+        this.quarantinedExecutableIds.add(definition.id);
+        throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+      }
     }
   }
 
@@ -1206,6 +1220,13 @@ function runTaskkill(pid: number, force: boolean, timeoutMs: number): Promise<bo
     task.once("error", () => finish(false));
     task.once("close", (code) => finish(code === 0));
   });
+}
+
+function isProcessTreeCleanupError(
+  error: unknown
+): error is SupervisedProcessError {
+  return error instanceof SupervisedProcessError
+    && error.code === "PROCESS_TREE_CLEANUP_FAILED";
 }
 
 function supervisedProcessErrorMessage(code: SupervisedProcessErrorCode): string {
