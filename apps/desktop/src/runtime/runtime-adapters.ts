@@ -93,7 +93,9 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
       supportedVoices: Object.freeze(["kokoro_af_heart"]),
       supportedLanguages: Object.freeze(["en-US"] as const),
       supportedSampleRates: Object.freeze([24_000] as const),
-      synthesize: async (input): Promise<KokoroRuntimeSynthesisResult> => {
+      synthesize: async (
+        input: Parameters<KokoroRuntimeSession["synthesize"]>[0]
+      ): Promise<KokoroRuntimeSynthesisResult> => {
         const result = await this.client.postJson("/v1/tts", {
           text: input.text,
           voice: input.voice,
