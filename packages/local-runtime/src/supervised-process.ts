@@ -135,6 +135,7 @@ interface ExecutionIsolation {
   readonly environment: NodeJS.ProcessEnv;
   readonly workingDirectory?: string;
   readonly homeDirectory?: string;
+  readonly controlDirectory?: string;
 }
 
 interface ExecutableIdentity {
@@ -152,6 +153,7 @@ interface WindowsSupervisorLaunch {
   readonly args: readonly string[];
   readonly environment: NodeJS.ProcessEnv;
   readonly identity: ExecutableIdentity;
+  readonly bootstrapStdin: string;
 }
 
 interface WindowsSupervisorAssembly {
@@ -512,7 +514,8 @@ export class SupervisedProcessRunner {
         request,
         expectedIdentity,
         isolation.environment,
-        isolation.workingDirectory
+        isolation.workingDirectory,
+        isolation.controlDirectory
       );
     } catch (error) {
       failed = true;
@@ -572,12 +575,14 @@ export class SupervisedProcessRunner {
     request: ReturnType<typeof snapshotExecutionRequest>,
     before: ExecutableIdentity,
     environment: NodeJS.ProcessEnv,
-    workingDirectory: string | undefined
+    workingDirectory: string | undefined,
+    controlDirectory: string | undefined
   ): Promise<SupervisedProcessExecutionResult> {
     let launchExecutable = definition.executable;
     let launchArgs: readonly string[] = [...definition.fixedArgs, ...request.args];
     let launchEnvironment = environment;
     let launchIdentity = before;
+    let launchStdin = request.stdin;
 
     if (this.platform === "win32") {
       const launch = await this.prepareWindowsSupervisorLaunch(
@@ -585,12 +590,14 @@ export class SupervisedProcessRunner {
         request,
         before,
         environment,
-        workingDirectory
+        workingDirectory,
+        controlDirectory
       );
       launchExecutable = launch.executable;
       launchArgs = launch.args;
       launchEnvironment = launch.environment;
       launchIdentity = launch.identity;
+      launchStdin = launch.bootstrapStdin;
     }
 
     if (request.signal !== undefined && abortSignalAborted(request.signal)) {
@@ -722,7 +729,7 @@ export class SupervisedProcessRunner {
       }
 
       const stdinOutcome = await Promise.race([
-        writeBoundedStdin(child, request.stdin).then(() => "WRITTEN" as const),
+        writeBoundedStdin(child, launchStdin).then(() => "WRITTEN" as const),
         failureRequested.then(() => "FAILED" as const)
       ]);
       if (stdinOutcome === "FAILED") {
@@ -793,9 +800,13 @@ export class SupervisedProcessRunner {
     request: ReturnType<typeof snapshotExecutionRequest>,
     expectedIdentity: ExecutableIdentity,
     environment: NodeJS.ProcessEnv,
-    workingDirectory: string | undefined
+    workingDirectory: string | undefined,
+    controlDirectory: string | undefined
   ): Promise<WindowsSupervisorLaunch> {
-    if (expectedIdentity.contentSha256 === undefined) {
+    if (
+      expectedIdentity.contentSha256 === undefined
+      || controlDirectory === undefined
+    ) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
@@ -849,11 +860,24 @@ export class SupervisedProcessRunner {
       }
     }
 
+    const stdinBytes = Buffer.from(request.stdin, "utf8");
+    if (stdinBytes.byteLength > MAX_STDIN_BYTES) {
+      throw new SupervisedProcessError("INVALID_REQUEST");
+    }
+    const stdinPath = path.join(controlDirectory, "stdin.bin");
+    await writeFile(stdinPath, stdinBytes, { flag: "wx" });
+    const stdinSha256 = createHash("sha256")
+      .update(stdinBytes)
+      .digest("hex");
+
     const configuration = JSON.stringify({
       executable: expectedIdentity.canonicalPath,
       arguments: [...definition.fixedArgs, ...request.args],
       cwd: workingDirectory ?? null,
       expectedSha256: expectedIdentity.contentSha256,
+      stdinPath,
+      stdinBytes: stdinBytes.byteLength,
+      stdinSha256,
       environmentKeys: Object.keys(environment)
     });
     if (request.signal !== undefined && abortSignalAborted(request.signal)) {
@@ -896,7 +920,8 @@ export class SupervisedProcessRunner {
       executable: identity.canonicalPath,
       args,
       environment: Object.freeze(supervisorEnvironment),
-      identity
+      identity,
+      bootstrapStdin: ""
     });
   }
 }
@@ -1898,7 +1923,13 @@ async function createExecutionIsolation(
 ): Promise<ExecutionIsolation> {
   let workingDirectory: string | undefined;
   let homeDirectory: string | undefined;
+  let controlDirectory: string | undefined;
   try {
+    if (platform === "win32") {
+      controlDirectory = await mkdtemp(
+        path.join(temporaryRoot, "interview-provider-control-")
+      );
+    }
     const environment = Object.create(null) as NodeJS.ProcessEnv;
     for (const [key, value] of Object.entries(definition.environment)) {
       if (typeof value === "string") environment[key] = value;
@@ -1934,14 +1965,16 @@ async function createExecutionIsolation(
     return Object.freeze({
       environment: Object.freeze(environment),
       ...(workingDirectory === undefined ? {} : { workingDirectory }),
-      ...(homeDirectory === undefined ? {} : { homeDirectory })
+      ...(homeDirectory === undefined ? {} : { homeDirectory }),
+      ...(controlDirectory === undefined ? {} : { controlDirectory })
     });
   } catch (error) {
     try {
       await cleanupExecutionIsolation({
         environment: Object.freeze(Object.create(null) as NodeJS.ProcessEnv),
         ...(workingDirectory === undefined ? {} : { workingDirectory }),
-        ...(homeDirectory === undefined ? {} : { homeDirectory })
+        ...(homeDirectory === undefined ? {} : { homeDirectory }),
+        ...(controlDirectory === undefined ? {} : { controlDirectory })
       });
     } catch {
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
@@ -2015,6 +2048,18 @@ async function cleanupExecutionIsolation(
   if (isolation.homeDirectory !== undefined) {
     try {
       await rm(isolation.homeDirectory, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 50
+      });
+    } catch {
+      failed = true;
+    }
+  }
+  if (isolation.controlDirectory !== undefined) {
+    try {
+      await rm(isolation.controlDirectory, {
         recursive: true,
         force: true,
         maxRetries: 3,
