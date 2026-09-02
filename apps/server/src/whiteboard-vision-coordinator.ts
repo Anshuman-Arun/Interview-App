@@ -36,6 +36,11 @@ interface ResponseTombstone {
   readonly response: WhiteboardVisionSnapshotResponse;
 }
 
+interface InFlightResponse {
+  readonly fingerprint: string;
+  readonly promise: Promise<WhiteboardVisionSnapshotResponse>;
+}
+
 export interface WhiteboardVisionCoordinatorOptions {
   readonly sessions: SessionRecoveryCoordinator;
   readonly backend?: VisionInferenceBackend;
@@ -50,6 +55,7 @@ export class WhiteboardVisionCoordinator {
   private readonly backendTimeoutMs: number;
   private readonly managers = new Map<SessionId, VisionRequestManager>();
   private readonly tombstones = new Map<string, ResponseTombstone>();
+  private readonly inFlight = new Map<string, InFlightResponse>();
 
   public constructor(options: WhiteboardVisionCoordinatorOptions) {
     this.sessions = options.sessions;
@@ -66,6 +72,29 @@ export class WhiteboardVisionCoordinator {
   }
 
   public async process(
+    input: unknown
+  ): Promise<WhiteboardVisionSnapshotResponse> {
+    const upload = WhiteboardVisionSnapshotUploadSchema.parse(input);
+    const fingerprint = uploadFingerprint(upload);
+    const active = this.inFlight.get(upload.requestId);
+    if (active !== undefined) {
+      return active.fingerprint === fingerprint
+        ? active.promise
+        : rejected(upload, "CONFLICTING_REQUEST_ID");
+    }
+
+    const promise = this.processRequest(upload);
+    this.inFlight.set(upload.requestId, { fingerprint, promise });
+    try {
+      return await promise;
+    } finally {
+      if (this.inFlight.get(upload.requestId)?.promise === promise) {
+        this.inFlight.delete(upload.requestId);
+      }
+    }
+  }
+
+  private async processRequest(
     input: unknown
   ): Promise<WhiteboardVisionSnapshotResponse> {
     const upload = WhiteboardVisionSnapshotUploadSchema.parse(input);
