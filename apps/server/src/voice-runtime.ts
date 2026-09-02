@@ -249,6 +249,8 @@ interface TtsAssembly {
   begin: Extract<TtsOutgoingMessage, { readonly type: "AUDIO_BEGIN" }> | undefined;
   chunks: Array<Extract<TtsOutgoingMessage, { readonly type: "AUDIO_CHUNK" }>>;
   end: Extract<TtsOutgoingMessage, { readonly type: "AUDIO_END" }> | undefined;
+  totalChunkBytes: number;
+  totalChunkFrames: number;
 }
 
 export class VoiceSynthesisCoordinator {
@@ -317,7 +319,13 @@ export class VoiceSynthesisCoordinator {
         outputFormat: "PCM_F32LE"
       });
       const plan = planTtsRequest(request);
-      const assembly: TtsAssembly = { begin: undefined, chunks: [], end: undefined };
+      const assembly: TtsAssembly = {
+        begin: undefined,
+        chunks: [],
+        end: undefined,
+        totalChunkBytes: 0,
+        totalChunkFrames: 0
+      };
       this.rememberActive(sessionId, request.requestId);
 
       try {
@@ -349,14 +357,30 @@ export class VoiceSynthesisCoordinator {
             if (message.sequence !== assembly.chunks.length + 1 || message.chunkIndex !== assembly.chunks.length) {
               throw new Error("TTS chunk sequence is discontinuous");
             }
+            const nextBytes = assembly.totalChunkBytes + message.byteLength;
+            const nextFrames = assembly.totalChunkFrames + message.frameCount;
+            if (
+              !Number.isSafeInteger(nextBytes)
+              || nextBytes > TTS_LIMITS.maxPcmBytes
+              || !Number.isSafeInteger(nextFrames)
+              || nextFrames > Math.floor(TTS_LIMITS.maxPcmBytes / Float32Array.BYTES_PER_ELEMENT)
+            ) {
+              throw new Error("TTS chunk stream exceeds the aggregate PCM bound");
+            }
+            assembly.totalChunkBytes = nextBytes;
+            assembly.totalChunkFrames = nextFrames;
             assembly.chunks.push(message);
             return;
           }
           if (assembly.begin === undefined || assembly.end !== undefined) {
             throw new Error("TTS end arrived outside the admitted audio stream");
           }
-          if (message.sequence !== assembly.chunks.length + 1) {
-            throw new Error("TTS end sequence is discontinuous");
+          if (
+            message.sequence !== assembly.chunks.length + 1
+            || message.totalBytes !== assembly.totalChunkBytes
+            || message.totalFrames !== assembly.totalChunkFrames
+          ) {
+            throw new Error("TTS end summary does not match the admitted chunk aggregate");
           }
           assembly.end = message;
         });
