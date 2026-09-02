@@ -275,12 +275,13 @@ async function runWithWorkerRecycleOnTimeout<T>(
   client: ManagedModelWorkerClient,
   operation: () => Promise<T>
 ): Promise<T> {
+  const workerInstance = client.workerInstanceIdentity();
   try {
     return await operation();
   } catch (error) {
     if (!(error instanceof ManagedWorkerRequestTimeoutError)) throw error;
     try {
-      await client.recycleAfterUncertainRequest();
+      await client.recycleAfterUncertainRequest(workerInstance);
     } catch (recycleError) {
       throw new AggregateError(
         [error, recycleError],
