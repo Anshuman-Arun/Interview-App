@@ -938,28 +938,37 @@ async function compileWindowsSupervisorAssembly(
       stdio: ["pipe", "pipe", "pipe"]
     });
     child.stdin.end();
+    child.stdout.resume();
+    child.stderr.resume();
 
     const close = waitForClose(child);
+    let removeAbortListener = (): void => undefined;
     const abortRequested = new Promise<"ABORT">((resolve) => {
       const onAbort = (): void => resolve("ABORT");
-      addAbortSignalListener(signal, onAbort);
-      void close.finally(() => {
-        removeAbortSignalListener(signal, onAbort);
-      });
+      if (abortSignalAborted(signal)) {
+        onAbort();
+      } else {
+        addAbortSignalListener(signal, onAbort);
+        removeAbortListener = () => {
+          removeAbortSignalListener(signal, onAbort);
+        };
+      }
     });
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let resolveTimeout = (): void => undefined;
     const timedOut = new Promise<"TIMEOUT">((resolve) => {
-      timeout = setTimeout(
-        () => resolve("TIMEOUT"),
-        WINDOWS_SUPERVISOR_COMPILE_TIMEOUT_MS
-      );
+      resolveTimeout = () => resolve("TIMEOUT");
     });
+    const timeout = setTimeout(
+      resolveTimeout,
+      WINDOWS_SUPERVISOR_COMPILE_TIMEOUT_MS
+    );
     const outcome = await Promise.race([
       close.then((result) => ({ kind: "CLOSE" as const, result })),
       abortRequested.then(() => ({ kind: "ABORT" as const })),
       timedOut.then(() => ({ kind: "TIMEOUT" as const }))
     ]);
-    if (timeout !== undefined) clearTimeout(timeout);
+    clearTimeout(timeout);
+    removeAbortListener();
 
     if (outcome.kind !== "CLOSE") {
       const cleaned = await terminateProcessTree(
