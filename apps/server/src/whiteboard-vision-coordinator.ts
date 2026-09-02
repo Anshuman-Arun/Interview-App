@@ -29,6 +29,8 @@ const MAX_RESPONSE_TOMBSTONES = 64;
 const MAX_SNAPSHOT_WIDTH = 4096;
 const MAX_SNAPSHOT_HEIGHT = 4096;
 const MAX_SNAPSHOT_PIXELS = 8 * 1024 * 1024;
+const DEFAULT_BACKEND_TIMEOUT_MS = 15_000;
+const MAX_BACKEND_TIMEOUT_MS = 120_000;
 
 interface ResponseTombstone {
   readonly fingerprint: string;
@@ -39,12 +41,14 @@ export interface WhiteboardVisionCoordinatorOptions {
   readonly sessions: SessionRecoveryCoordinator;
   readonly backend?: VisionInferenceBackend;
   readonly evidenceInterpreter?: VisionEvidenceInterpreter;
+  readonly backendTimeoutMs?: number;
 }
 
 export class WhiteboardVisionCoordinator {
   private readonly sessions: SessionRecoveryCoordinator;
   private readonly backend: VisionInferenceBackend | undefined;
   private readonly evidenceInterpreter: VisionEvidenceInterpreter | undefined;
+  private readonly backendTimeoutMs: number;
   private readonly managers = new Map<SessionId, VisionRequestManager>();
   private readonly tombstones = new Map<string, ResponseTombstone>();
 
@@ -52,6 +56,14 @@ export class WhiteboardVisionCoordinator {
     this.sessions = options.sessions;
     this.backend = options.backend;
     this.evidenceInterpreter = options.evidenceInterpreter;
+    this.backendTimeoutMs = options.backendTimeoutMs ?? DEFAULT_BACKEND_TIMEOUT_MS;
+    if (
+      !Number.isSafeInteger(this.backendTimeoutMs)
+      || this.backendTimeoutMs < 1
+      || this.backendTimeoutMs > MAX_BACKEND_TIMEOUT_MS
+    ) {
+      throw new RangeError("Whiteboard vision backend timeout is outside its bounded range");
+    }
   }
 
   public async process(
@@ -217,12 +229,23 @@ export class WhiteboardVisionCoordinator {
       requestedObservationKind: upload.requestedObservationKind
     });
     const manager = this.managerFor(upload.sessionId);
-    const admission = await manager.submit(request, this.backend);
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      const cancellation = manager.cancel(upload.requestId);
+      timedOut = cancellation.cancelled;
+    }, this.backendTimeoutMs);
+    let admission;
+    try {
+      admission = await manager.submit(request, this.backend);
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!admission.accepted) {
-      await turn.discardVisionRequest(upload.requestId, admission.reason);
+      const reason = timedOut ? "BACKEND_TIMEOUT" : admission.reason;
+      await turn.discardVisionRequest(upload.requestId, reason);
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
-        admission.reason
+        reason
       ));
     }
 

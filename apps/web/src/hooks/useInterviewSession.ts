@@ -643,14 +643,17 @@ export function useInterviewSession(
     if (sessionId === null || sessionStatus !== "ACTIVE") return;
     const coordinator = getBoardSyncCoordinator(sessionId);
     const scheduler = getVisionScheduler(sessionId);
-    scheduler?.record(change);
     if (coordinator.snapshot().status === "UNINITIALIZED") {
+      scheduler?.record(change);
       await synchronizeWhiteboardFor(sessionId);
       scheduler?.wake();
       return;
     }
     try {
+      // Begin the authoritative mutation request before cancelling/replacing
+      // any vision work so the server can supersede stale inference promptly.
       const pending = coordinator.submit(change);
+      scheduler?.record(change);
       setWhiteboardSync(coordinator.snapshot());
       await pending;
       setWhiteboardSync(coordinator.snapshot());

@@ -152,8 +152,8 @@ export class WhiteboardVisionScheduler {
       const bounds = VisionBoundsSchema.safeParse(dirty.bounds);
       if (
         !bounds.success
-        || bounds.data.width > MAX_VISION_REGION_DIMENSION
-        || bounds.data.height > MAX_VISION_REGION_DIMENSION
+        || bounds.data.width > Math.min(MAX_VISION_REGION_DIMENSION, MAX_EXPORT_DIMENSION)
+        || bounds.data.height > Math.min(MAX_VISION_REGION_DIMENSION, MAX_EXPORT_DIMENSION)
         || bounds.data.width * bounds.data.height > MAX_DIRTY_REGION_AREA
       ) return;
 
