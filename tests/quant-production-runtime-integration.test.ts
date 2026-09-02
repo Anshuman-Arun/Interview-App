@@ -257,6 +257,75 @@ describe("production quant runtime integration", () => {
     expect(store.eventCount(sessionId)).toBe(0);
   });
 
+  it("enforces the hard position limit through the authenticated production command path", async () => {
+    await server.stop();
+    await registry.closeAll();
+    registry = new SessionRuntimeRegistry(store);
+    sessions = recoveryCoordinator(registry);
+    server = commandServer(
+      sessions,
+      new ProductionSessionRuntime({ seedSource: () => 7 })
+    );
+    address = await server.start();
+
+    const sessionId = newSessionId();
+    await expectStatus(postStart(sessionId, tradingConfiguration("RISK_MANAGEMENT")), 200);
+    const initial = QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state;
+    expect(initial.quoteRequest).toMatchObject({
+      round: 1,
+      fairValue: 100,
+      tickSize: 0.5,
+      maxQuoteSize: 4,
+      hardPositionLimit: true,
+      maxPosition: 4
+    });
+
+    const afterFill = QuantTradingStateResponseSchema.parse(
+      await responseJson(await post({
+        protocolVersion: 1,
+        type: "SUBMIT_QUANT_TRADING_ACTION",
+        requestId: newRequestId(),
+        sessionId,
+        expectedRound: initial.currentRound,
+        action: {
+          type: "QUOTE",
+          quote: {
+            bidPrice: 99,
+            bidSize: 1,
+            askPrice: 99.5,
+            askSize: 4
+          }
+        }
+      }))
+    ).state;
+    expect(afterFill.portfolio.position).toBe(-4);
+    expect(afterFill.currentRound).toBe(2);
+
+    const countBeforeHardLimit = store.eventCount(sessionId);
+    await expectProtocolError(post({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_TRADING_ACTION",
+      requestId: newRequestId(),
+      sessionId,
+      expectedRound: afterFill.currentRound,
+      action: {
+        type: "QUOTE",
+        quote: {
+          bidPrice: 99,
+          bidSize: 1,
+          askPrice: 99.5,
+          askSize: 1
+        }
+      }
+    }), 400, "INVALID_COMMAND");
+    expect(store.eventCount(sessionId)).toBe(countBeforeHardLimit);
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state).toEqual(afterFill);
+  });
+
   it("rejects unsupported Quant Research family/version before session authority is created", async () => {
     for (const scenario of [
       { id: "MODEL_COMPARISON", version: "0.0.0" },
@@ -1495,14 +1564,18 @@ function recoveryCoordinator(registry: SessionRuntimeRegistry): SessionRecoveryC
   return sessions;
 }
 
-function commandServer(sessions: SessionRecoveryCoordinator): LoopbackCommandServer {
+function commandServer(
+  sessions: SessionRecoveryCoordinator,
+  productionRuntime?: ProductionSessionRuntime
+): LoopbackCommandServer {
   return new LoopbackCommandServer({
     security: {
       host: "127.0.0.1",
       allowedOrigins: new Set([CLIENT_ORIGIN]),
       clientToken: CLIENT_TOKEN
     },
-    sessions
+    sessions,
+    ...(productionRuntime === undefined ? {} : { productionRuntime })
   });
 }
 
