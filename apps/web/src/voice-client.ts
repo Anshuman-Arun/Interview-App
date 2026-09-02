@@ -377,7 +377,11 @@ function exactLoopbackOrigin(value: string): string {
   const parsed = new URL(value);
   if (
     parsed.protocol !== "http:"
-    || (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "[::1]")
+    || (
+      parsed.hostname !== "127.0.0.1"
+      && parsed.hostname !== "localhost"
+      && parsed.hostname !== "[::1]"
+    )
     || parsed.username.length > 0
     || parsed.password.length > 0
     || parsed.pathname !== "/"
