@@ -138,8 +138,8 @@ function reconstructEngine(state: Readonly<SessionState>): QuantResearchEngine {
     if (recomputedResult.status === "COMPLETE") {
       throw new Error("Quant Research completion event is missing from authoritative history");
     }
-    if (state.status === "COMPLETED") {
-      throw new Error("Session is completed without a persisted Quant Research completion result");
+    if (state.status === "COMPLETED" || state.status === "ARCHIVED") {
+      throw new Error("Terminal session is missing a persisted Quant Research completion result");
     }
   } else {
     const storedResult = QuantResearchResultEventSchema.parse(persisted.result);
