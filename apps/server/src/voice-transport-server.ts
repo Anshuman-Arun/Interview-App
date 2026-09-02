@@ -31,6 +31,7 @@ const DEFAULT_MAX_FRAME_REQUESTS = 8;
 const VOICE_HTTP_REQUEST_TIMEOUT_MS = 5_000;
 const VOICE_HTTP_HEADERS_TIMEOUT_MS = 5_000;
 const VOICE_HTTP_KEEP_ALIVE_TIMEOUT_MS = 5_000;
+const VOICE_HTTP_MAX_CONNECTIONS = 32;
 const MAX_REQUEST_BODY_CHUNKS = 128;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
 const MAX_CLIENT_TOKEN_CHARACTERS = 256;
@@ -119,6 +120,7 @@ export class VoiceTransportServer {
     this.server.requestTimeout = VOICE_HTTP_REQUEST_TIMEOUT_MS;
     this.server.headersTimeout = VOICE_HTTP_HEADERS_TIMEOUT_MS;
     this.server.keepAliveTimeout = VOICE_HTTP_KEEP_ALIVE_TIMEOUT_MS;
+    this.server.maxConnections = VOICE_HTTP_MAX_CONNECTIONS;
   }
 
   public async start(): Promise<BoundVoiceTransportAddress> {
