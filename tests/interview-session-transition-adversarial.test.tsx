@@ -1137,4 +1137,31 @@ describe("interview session transition authority", () => {
     rendered.container.remove();
   });
 
+  it("does not let hook callers replace an already-established ACTIVE session", async () => {
+    const currentSession = newSessionId();
+    const otherSession = newSessionId();
+    const harness = makeFetchHarness([]);
+    const rendered = renderHook(harness.fetchImpl);
+
+    await act(async () => {
+      await rendered.current().startSession(currentSession);
+    });
+    expect(rendered.current().sessionId).toBe(currentSession);
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+
+    await expect(rendered.current().startSession(otherSession))
+      .rejects.toThrow("Cannot start a new session while an interview is active");
+    await expect(rendered.current().recoverSession(otherSession))
+      .rejects.toThrow("Cannot replace an active interview with another session");
+
+    expect(rendered.current().sessionId).toBe(currentSession);
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+
+    act(() => rendered.current().disconnect());
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
 });
