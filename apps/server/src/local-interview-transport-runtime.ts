@@ -47,6 +47,14 @@ export class LocalInterviewTransportRuntime {
   private readonly registry: SessionRuntimeRegistry;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
+    if (
+      options.orchestrator !== undefined
+      && options.providerRuntimeResolver !== undefined
+    ) {
+      throw new Error(
+        "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
+      );
+    }
     this.registry = options.registry;
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
     this.orchestrator =
