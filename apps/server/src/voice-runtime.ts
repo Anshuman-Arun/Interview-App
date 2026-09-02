@@ -271,7 +271,6 @@ export class VoiceSynthesisCoordinator {
             if (
               assembly.begin !== undefined
               || message.normalizedTextHash !== plan.normalizedTextHash
-              || message.sequence !== 0
             ) {
               throw new Error("TTS begin metadata does not match the admitted synthesis");
             }
@@ -546,7 +545,7 @@ export class VoiceInputCoordinator {
         streamId
       });
       if (!this.isCurrent(context, token)) return { events: [], terminal: true };
-      return this.applyEvents(context, token, events);
+      return await this.applyEvents(context, token, events);
     } finally {
       if (this.isCurrent(context, token)) {
         context.operationInFlight = false;
@@ -962,7 +961,6 @@ function sameAudioBasis(left: SourceAudioBasis, rightInput: SourceAudioBasis): b
     && left.startTimestampMs === right.startTimestampMs
     && left.endTimestampMs === right.endTimestampMs
     && left.sampleRate === right.sampleRate
-    && left.channels === right.channels
     && left.sampleCount === right.sampleCount
     && left.pcmSha256 === right.pcmSha256;
 }
