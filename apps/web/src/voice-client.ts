@@ -307,6 +307,9 @@ export class BrowserVoiceClient {
       throw new Error("Voice frame PCM is outside the bounded transport shape");
     }
     const payload = encodeF32Le(input.samples);
+    const requestId = SpeechRequestIdSchema.parse(
+      `request_${globalThis.crypto.randomUUID()}`
+    );
     const response = await this.authenticatedFetch(
       `${this.baseUrl}/v1/voice/frames`,
       {
@@ -315,7 +318,7 @@ export class BrowserVoiceClient {
           "content-type": "application/octet-stream",
           "x-interview-session-id": sessionId,
           "x-speech-stream-id": streamId,
-          "x-speech-request-id": `request_${globalThis.crypto.randomUUID()}`,
+          "x-speech-request-id": requestId,
           "x-speech-sequence": String(input.sequence),
           "x-speech-sample-rate": String(TARGET_SPEECH_SAMPLE_RATE),
           "x-speech-frame-samples": String(input.samples.length),
@@ -326,7 +329,12 @@ export class BrowserVoiceClient {
         ...(input.signal === undefined ? {} : { signal: input.signal })
       }
     );
-    return parseVoiceFrameResponse(response);
+    return parseVoiceFrameResponse(
+      response,
+      "VOICE_FRAME_RESULT",
+      streamId,
+      requestId
+    );
   }
 
   public async flush(
@@ -336,13 +344,21 @@ export class BrowserVoiceClient {
   ): Promise<BrowserVoiceFrameResult> {
     const boundedSessionId = SessionIdSchema.parse(sessionId);
     const boundedStreamId = SpeechStreamIdSchema.parse(streamId);
+    const requestId = SpeechRequestIdSchema.parse(
+      `request_${globalThis.crypto.randomUUID()}`
+    );
     const response = await this.requestJsonResponse("/v1/voice/flush", {
       protocolVersion: 1,
       sessionId: boundedSessionId,
       streamId: boundedStreamId,
-      requestId: `request_${globalThis.crypto.randomUUID()}`
+      requestId
     }, signal);
-    return parseVoiceFrameResponse(response);
+    return parseVoiceFrameResponse(
+      response,
+      "VOICE_FLUSH_RESULT",
+      boundedStreamId,
+      requestId
+    );
   }
 
   public async cancel(
@@ -448,7 +464,12 @@ function exactLoopbackOrigin(value: string): string {
   return parsed.origin;
 }
 
-async function parseVoiceFrameResponse(response: Response): Promise<BrowserVoiceFrameResult> {
+async function parseVoiceFrameResponse(
+  response: Response,
+  expectedType: "VOICE_FRAME_RESULT" | "VOICE_FLUSH_RESULT",
+  expectedStreamId: string,
+  expectedRequestId: string
+): Promise<BrowserVoiceFrameResult> {
   if (!response.ok) {
     const parsed = await parseBoundedJson(response);
     throw new Error(
@@ -457,6 +478,27 @@ async function parseVoiceFrameResponse(response: Response): Promise<BrowserVoice
     );
   }
   const parsed = VoiceFrameResponseSchema.parse(await parseBoundedJson(response));
+  if (
+    parsed.type !== expectedType
+    || parsed.events.some((event) =>
+      event.streamId !== expectedStreamId
+      || event.requestId !== expectedRequestId
+    )
+  ) {
+    throw new Error("Voice transport response did not match the admitted stream/request");
+  }
+  if (
+    parsed.commit !== undefined
+    && (
+      !parsed.terminal
+      || !parsed.events.some((event) =>
+        event.type === "TRANSCRIPT_CANDIDATE"
+        && event.candidate.text === parsed.commit?.text
+      )
+    )
+  ) {
+    throw new Error("Voice commit response does not match its admitted transcript event");
+  }
   return {
     events: parsed.events,
     terminal: parsed.terminal,
