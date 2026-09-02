@@ -175,7 +175,7 @@ export class ServerTurnOrchestrator {
     // runtime boundary and the existing provider control plane. Runtime resolution
     // failures are intentionally silent here: no raw provider/configuration errors
     // are persisted, exposed, or replaced with mock execution.
-    let runtimeResolution;
+    let runtimeResolution: Awaited<ReturnType<ProviderRuntimeResolver["resolve"]>>;
     try {
       runtimeResolution = await this.providerRuntime.resolve({
         ...(composition.configuration.providerSelection === undefined
