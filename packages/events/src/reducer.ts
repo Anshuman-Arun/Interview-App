@@ -834,10 +834,17 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "PROBLEM_STATE_REVISION_CHANGED":
       next = { ...state, problemStateRevision: event.payload.problemStateRevision, contextEpoch: event.payload.contextEpoch };
       break;
-    case "SESSION_COMPLETED":
+    case "SESSION_COMPLETED": {
+      const isQuantSession =
+        state.configuration?.mode === "QUANT_TRADING"
+        || state.configuration?.mode === "QUANT_RESEARCH"
+        || state.quantTrading !== undefined
+        || state.quantResearch !== undefined;
+      if (isQuantSession && state.status !== "ACTIVE") {
+        throw new Error("Quant sessions can complete only from active state");
+      }
       if (
-        (state.configuration?.mode === "QUANT_TRADING"
-          || state.configuration?.mode === "QUANT_RESEARCH")
+        isQuantSession
         && (
           Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")
           || Object.values(state.utterances).some((utterance) => utterance.status === "CAPTURING")
@@ -846,13 +853,19 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         throw new Error("Quant sessions cannot complete with unresolved candidate input");
       }
       if (
-        state.configuration?.mode === "QUANT_TRADING"
+        (
+          state.configuration?.mode === "QUANT_TRADING"
+          || state.quantTrading !== undefined
+        )
         && state.quantTrading?.result === undefined
       ) {
         throw new Error("Quant Trading sessions complete only after deterministic scenario completion");
       }
       if (
-        state.configuration?.mode === "QUANT_RESEARCH"
+        (
+          state.configuration?.mode === "QUANT_RESEARCH"
+          || state.quantResearch !== undefined
+        )
         && state.quantResearch?.result === undefined
       ) {
         throw new Error("Quant Research sessions complete only after deterministic scenario completion");
@@ -864,6 +877,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         ...(event.payload.summary ? { completionSummary: event.payload.summary } : {})
       };
       break;
+    }
     case "SESSION_ARCHIVED":
       if (
         (
