@@ -963,6 +963,56 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     )).toBe(true);
   });
 
+  it("closes the live renderer transport when terminal authority commits", async () => {
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: voiceRuntime([0])
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+
+    const controller = new AbortController();
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: server.bound.rendererStream.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer).catch(() => undefined);
+
+    await waitFor(
+      () => server?.runtime.rendererStreamServer.activeConnectionCount() === 1,
+      "renderer connection before terminal completion"
+    );
+
+    await commandClient.completeSession(sessionId);
+    await waitFor(
+      () => server?.runtime.rendererStreamServer.activeConnectionCount() === 0,
+      "renderer connection closure after terminal completion"
+    );
+
+    controller.abort();
+    await consumer;
+  });
+
   it("does not barge in on a false VAD onset", async () => {
     server = await createAndStartServer({
       host: "127.0.0.1",
