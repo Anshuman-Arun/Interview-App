@@ -6,8 +6,9 @@ import {
   type QuantResearchFamily,
   type QuantResearchScenarioDefinition
 } from "./types.js";
+import { QuantResearchEngine, QuantResearchError } from "./engine.js";
 
-export function createProductionQuantResearchDefinition(
+function definitionForSeed(
   family: QuantResearchFamily,
   seed: number
 ): QuantResearchScenarioDefinition {
@@ -82,4 +83,36 @@ export function createProductionQuantResearchDefinition(
         }
       });
   }
+}
+
+
+const MAX_PRODUCTION_SEED_PROBES = 1_024;
+
+export function createProductionQuantResearchDefinition(
+  family: QuantResearchFamily,
+  initialSeed: number
+): QuantResearchScenarioDefinition {
+  if (!Number.isSafeInteger(initialSeed) || initialSeed < 0 || initialSeed > 0xffff_ffff) {
+    throw new RangeError("Quant Research production seed must be a uint32");
+  }
+
+  for (let offset = 0; offset < MAX_PRODUCTION_SEED_PROBES; offset += 1) {
+    const candidateSeed = (initialSeed + offset) >>> 0;
+    const definition = definitionForSeed(family, candidateSeed);
+    try {
+      // Production definitions are admitted only if their generated deterministic
+      // variant passes the engine's semantic non-degeneracy checks.
+      new QuantResearchEngine(definition);
+      return definition;
+    } catch (error) {
+      if (!(error instanceof QuantResearchError) || error.code !== "INVALID_DEFINITION") {
+        throw error;
+      }
+    }
+  }
+
+  throw new QuantResearchError(
+    "INVALID_DEFINITION",
+    "No runnable deterministic production scenario was found in the bounded seed probe"
+  );
 }
