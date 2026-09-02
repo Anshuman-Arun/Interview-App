@@ -37,6 +37,8 @@ import {
   type AuthoritativeBoardSyncSnapshot
 } from "../whiteboard/authoritative-board-sync.js";
 import type { NormalizedStudentShapeChange } from "../whiteboard/normalized-board.js";
+import { WhiteboardVisionClient } from "../whiteboard/whiteboard-vision-client.js";
+import { WhiteboardVisionScheduler } from "../whiteboard/vision-scheduler.js";
 import type { TranscriptItem } from "../components/TranscriptFeed.js";
 
 export interface UseInterviewSessionOptions {
@@ -299,6 +301,8 @@ export function useInterviewSession(
   const rendererClientRef = useRef<RendererClient | null>(null);
   const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
   const boardSyncSessionRef = useRef<SessionId | null>(null);
+  const visionSchedulerRef = useRef<WhiteboardVisionScheduler | null>(null);
+  const visionSchedulerSessionRef = useRef<SessionId | null>(null);
   const fetchImpl = useMemo(
     () => options.fetchImpl ?? globalThis.fetch.bind(globalThis),
     [options.fetchImpl]
@@ -308,6 +312,16 @@ export function useInterviewSession(
     headers.set("x-interview-client-token", authenticationHeaderValue);
     return fetchImpl(input, { ...init, headers });
   }, [authenticationHeaderValue, fetchImpl]);
+
+  const resetBoardSync = useCallback((): void => {
+    visionSchedulerRef.current?.dispose();
+    visionSchedulerRef.current = null;
+    visionSchedulerSessionRef.current = null;
+    boardSyncRef.current?.reset();
+    boardSyncRef.current = null;
+    boardSyncSessionRef.current = null;
+    setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
+  }, []);
 
   const setBaseUrl = useCallback((url: string): void => {
     if (desktopBootstrap !== undefined) {
@@ -327,13 +341,6 @@ export function useInterviewSession(
     });
   }, [baseUrl, desktopBootstrap, fetchImpl]);
 
-  const resetBoardSync = useCallback((): void => {
-    boardSyncRef.current?.reset();
-    boardSyncRef.current = null;
-    boardSyncSessionRef.current = null;
-    setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
-  }, []);
-
   const getBoardSyncCoordinator = useCallback((
     targetSessionId: SessionId
   ): AuthoritativeBoardSyncCoordinator => {
@@ -348,6 +355,43 @@ export function useInterviewSession(
     return boardSyncRef.current;
   }, [getCommandClient]);
 
+  const getVisionScheduler = useCallback((
+    targetSessionId: SessionId
+  ): WhiteboardVisionScheduler | undefined => {
+    const adapter = options.whiteboardAdapter;
+    if (adapter === undefined || adapter.getEditor() === null) return undefined;
+    if (
+      visionSchedulerRef.current !== null
+      && visionSchedulerSessionRef.current === targetSessionId
+    ) {
+      return visionSchedulerRef.current;
+    }
+    visionSchedulerRef.current?.dispose();
+    const authority = getBoardSyncCoordinator(targetSessionId);
+    const client = new WhiteboardVisionClient({
+      baseUrl,
+      authenticationHeaderValue,
+      fetchImpl
+    });
+    const scheduler = new WhiteboardVisionScheduler({
+      sessionId: targetSessionId,
+      getAuthoritativeRevision: () => authority.currentAuthoritativeRevision(),
+      getStudentShapes: () => adapter.getNormalizedStudentShapes(),
+      captureRegion: (shapeIds, bounds) =>
+        adapter.exportStudentRegionPng(shapeIds, bounds),
+      submit: (upload, signal) => client.submit(upload, signal)
+    });
+    visionSchedulerRef.current = scheduler;
+    visionSchedulerSessionRef.current = targetSessionId;
+    return scheduler;
+  }, [
+    authenticationHeaderValue,
+    baseUrl,
+    fetchImpl,
+    getBoardSyncCoordinator,
+    options.whiteboardAdapter
+  ]);
+
   const synchronizeWhiteboardFor = useCallback(async (
     targetSessionId: SessionId
   ): Promise<void> => {
@@ -359,7 +403,12 @@ export function useInterviewSession(
       adapter.getNormalizedStudentShapes()
     );
     setWhiteboardSync(snapshot);
-  }, [getBoardSyncCoordinator, options.whiteboardAdapter]);
+    getVisionScheduler(targetSessionId)?.wake();
+  }, [
+    getBoardSyncCoordinator,
+    getVisionScheduler,
+    options.whiteboardAdapter
+  ]);
 
   const getSessionReadClient = useCallback((): BrowserSessionReadClient => {
     return new BrowserSessionReadClient({
@@ -593,8 +642,11 @@ export function useInterviewSession(
   ): Promise<void> => {
     if (sessionId === null || sessionStatus !== "ACTIVE") return;
     const coordinator = getBoardSyncCoordinator(sessionId);
+    const scheduler = getVisionScheduler(sessionId);
+    scheduler?.record(change);
     if (coordinator.snapshot().status === "UNINITIALIZED") {
       await synchronizeWhiteboardFor(sessionId);
+      scheduler?.wake();
       return;
     }
     try {
@@ -602,12 +654,14 @@ export function useInterviewSession(
       setWhiteboardSync(coordinator.snapshot());
       await pending;
       setWhiteboardSync(coordinator.snapshot());
+      scheduler?.wake();
     } catch (error) {
       setWhiteboardSync(coordinator.snapshot());
       throw error;
     }
   }, [
     getBoardSyncCoordinator,
+    getVisionScheduler,
     sessionId,
     sessionStatus,
     synchronizeWhiteboardFor
@@ -797,6 +851,9 @@ export function useInterviewSession(
         abortControllerRef.current = null;
       }
       rendererClientRef.current = null;
+      visionSchedulerRef.current?.dispose();
+      visionSchedulerRef.current = null;
+      visionSchedulerSessionRef.current = null;
       boardSyncRef.current?.reset();
       boardSyncRef.current = null;
       boardSyncSessionRef.current = null;
