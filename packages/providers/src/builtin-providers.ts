@@ -21,6 +21,7 @@ const registerProviderDefinitions = ProviderRegistry.prototype.registerMany;
 const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneError;
 
 const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
+const GEMINI_RUNTIME_KEYS = new Set(["fetchImpl", "billingVerificationFactory"]);
 const PROPOSAL_KEYS = Object.freeze([
   "realizedAction",
   "claimedDisclosureLevel",
@@ -224,6 +225,66 @@ const MockProviderFactoryRuntimeSchema = z.object({
 }).strict();
 export type MockProviderFactoryRuntime = z.infer<typeof MockProviderFactoryRuntimeSchema>;
 
+export interface GeminiProviderFactoryRuntime {
+  readonly fetchImpl?: typeof fetch;
+  readonly billingVerificationFactory?: (now: Date) => unknown;
+}
+
+function invalidGeminiRuntime(): never {
+  throw new ProviderControlPlaneError(
+    "INVALID_FACTORY_INPUT",
+    "Gemini provider factory runtime is malformed"
+  );
+}
+
+function snapshotGeminiFactoryRuntime(value: unknown): GeminiProviderFactoryRuntime {
+  if (value === undefined) return Object.freeze({});
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return invalidGeminiRuntime();
+  }
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  let prototype: object | null;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+    prototype = Object.getPrototypeOf(value);
+  } catch {
+    return invalidGeminiRuntime();
+  }
+  if (
+    symbols.length !== 0
+    || (prototype !== Object.prototype && prototype !== null)
+  ) {
+    return invalidGeminiRuntime();
+  }
+
+  const output: {
+    fetchImpl?: typeof fetch;
+    billingVerificationFactory?: (now: Date) => unknown;
+  } = {};
+  for (const key of Object.keys(descriptors)) {
+    if (!setHas(GEMINI_RUNTIME_KEYS, key)) return invalidGeminiRuntime();
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined
+      || descriptor.enumerable !== true
+      || !("value" in descriptor)
+      || typeof descriptor.value !== "function"
+    ) {
+      return invalidGeminiRuntime();
+    }
+    if (key === "fetchImpl") {
+      output.fetchImpl = descriptor.value as typeof fetch;
+    } else if (key === "billingVerificationFactory") {
+      output.billingVerificationFactory =
+        descriptor.value as (now: Date) => unknown;
+    }
+  }
+  return Object.freeze(output);
+}
+
 const mockFactory: ProviderAdapterFactoryDefinition = {
   id: "mock-model-adapter-factory",
   createAdapter(input) {
@@ -242,6 +303,7 @@ const mockFactory: ProviderAdapterFactoryDefinition = {
 const geminiFactory: ProviderAdapterFactoryDefinition = {
   id: "gemini-api-adapter-factory",
   async createAdapter(input) {
+    const runtime = snapshotGeminiFactoryRuntime(input.runtime);
     const reference = input.resolved.configuration.credentialRef;
     if (reference === undefined || input.secretResolver === undefined) {
       throw new ProviderControlPlaneError(
@@ -283,7 +345,11 @@ const geminiFactory: ProviderAdapterFactoryDefinition = {
 
     return new GeminiApiAdapter({
       apiKey: resolvedSecret,
-      model: input.resolved.model.adapterModelId ?? input.resolved.model.id
+      model: input.resolved.model.adapterModelId ?? input.resolved.model.id,
+      ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
+      ...(runtime.billingVerificationFactory === undefined
+        ? {}
+        : { billingVerificationFactory: runtime.billingVerificationFactory })
     });
   }
 };
