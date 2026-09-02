@@ -117,6 +117,7 @@ const ALLOWED_SOURCES = {
   BOARD_PATCH_COMMITTED: ["USER"],
   VISION_REQUESTED: ["APPLICATION"],
   VISION_RESULT_ACCEPTED: ["WORKER"],
+  VISION_EVIDENCE_BRIDGE_DECIDED: ["APPLICATION"],
   VISION_RESULT_DISCARDED: ["APPLICATION"],
   LOCAL_COMPUTE_REQUESTED: ["APPLICATION"],
   LOCAL_COMPUTE_RESULT_ACCEPTED: ["APPLICATION"],
@@ -182,6 +183,7 @@ const POST_TERMINAL_ALLOWED_EVENT_TYPE_VALUES = [
   "PROBLEM_PRESENTED",
   "UTTERANCE_DISCARDED",
   "VISION_RESULT_ACCEPTED",
+  "VISION_EVIDENCE_BRIDGE_DECIDED",
   "VISION_RESULT_DISCARDED",
   "LOCAL_COMPUTE_REQUESTED",
   "LOCAL_COMPUTE_RESULT_ACCEPTED",
@@ -805,6 +807,18 @@ export function validateKnownReplayPrefix(
             || !request.relevantShapeIds.every((shapeId) =>
               observation.relevantShapeIds.includes(shapeId)
             )
+          ) fail();
+          break;
+        }
+
+        case "VISION_EVIDENCE_BRIDGE_DECIDED": {
+          assertBoundedIdentifier(event.payload.visionRequestId);
+          const request = state.visionRequests[event.payload.visionRequestId];
+          if (
+            request === undefined
+            || request.status !== "ACCEPTED"
+            || request.evidenceBridge?.status !== "PENDING"
+            || request.evidenceBridge.interpreterFingerprint !== event.payload.interpreterFingerprint
           ) fail();
           break;
         }
