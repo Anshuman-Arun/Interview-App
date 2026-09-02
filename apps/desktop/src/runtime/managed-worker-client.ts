@@ -17,7 +17,12 @@ export class ManagedModelWorkerClient {
   }
 
   public runtimeVersion(): string {
-    return handshakeMetadata(this.readyStatus()).runtimeVersion;
+    const status = this.readyStatus();
+    const runtimeVersion = status.handshake?.runtimeVersion;
+    if (typeof runtimeVersion !== "string" || runtimeVersion.length === 0 || runtimeVersion.length > 256) {
+      throw new Error("Managed local model worker did not report a bounded runtime version");
+    }
+    return runtimeVersion;
   }
 
   public async postJson(
@@ -97,8 +102,8 @@ function handshakeMetadata(status: LocalComponentStatus): {
   if (metadata === undefined || metadata === null || typeof metadata !== "object") {
     throw new Error("Managed local model worker did not report bounded metadata");
   }
-  const workerType = metadata["workerType"];
-  const runtimeVersion = metadata["runtimeVersion"];
+  const workerType = status.handshake?.workerType;
+  const runtimeVersion = status.handshake?.runtimeVersion;
   const port = metadata["port"];
   if ((workerType !== "speech" && workerType !== "tts")
       || typeof runtimeVersion !== "string"
