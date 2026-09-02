@@ -149,6 +149,7 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
         releaseResolved?.();
       }
       if (error instanceof RendererPresentationNotExposedError) throw error;
+      if (error instanceof AudioInfrastructureError) throw error;
       if (controller.signal.aborted) {
         throw new RendererPresentationNotExposedError(
           "Audio delivery was cancelled before physical playback started",
@@ -259,7 +260,6 @@ function isDefinitelyNotEnqueued(error: unknown): boolean {
   return error instanceof AudioInfrastructureError
     && (
       error.code === "INVALID_REQUEST"
-      || error.code === "DUPLICATE_ID"
       || error.code === "QUEUE_FULL"
       || error.code === "DISPOSED"
     );
