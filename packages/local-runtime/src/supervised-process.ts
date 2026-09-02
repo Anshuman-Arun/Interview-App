@@ -425,7 +425,7 @@ export class SupervisedProcessRunner {
     if (
       this.platform === "win32"
       && !windowsCommandLineWithinBudget(
-        definition.executable,
+        pinnedAfterInitialization.canonicalPath,
         [...definition.fixedArgs, ...request.args]
       )
     ) {
@@ -502,7 +502,7 @@ export class SupervisedProcessRunner {
     signal: AbortSignal
   ): Promise<void> {
     const contentSha256 = await sha256Executable(
-      definition.executable,
+      baseline.canonicalPath,
       signal
     );
     const afterHash = await inspectExecutable(definition.executable, "win32");
@@ -769,7 +769,7 @@ export class SupervisedProcessRunner {
     }
 
     const configuration = JSON.stringify({
-      executable: definition.executable,
+      executable: expectedIdentity.canonicalPath,
       arguments: [...definition.fixedArgs, ...request.args],
       cwd: workingDirectory ?? null,
       expectedSha256: expectedIdentity.contentSha256,
@@ -810,7 +810,7 @@ export class SupervisedProcessRunner {
     }
 
     return Object.freeze({
-      executable: powershell,
+      executable: identity.canonicalPath,
       args,
       environment: Object.freeze(supervisorEnvironment),
       identity
@@ -1260,12 +1260,7 @@ async function inspectExecutable(
     }
     const configured = path.resolve(executable);
     const actual = path.resolve(canonicalPath);
-    if (
-      platform === "win32"
-        ? normalizeWindowsIdentityPath(configured)
-          !== normalizeWindowsIdentityPath(actual)
-        : configured !== actual
-    ) {
+    if (platform !== "win32" && configured !== actual) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
     return Object.freeze({
@@ -1297,12 +1292,7 @@ function tryInspectExecutableSync(
     ) return undefined;
     const configured = path.resolve(executable);
     const actual = path.resolve(canonicalPath);
-    if (
-      platform === "win32"
-        ? normalizeWindowsIdentityPath(configured)
-          !== normalizeWindowsIdentityPath(actual)
-        : configured !== actual
-    ) {
+    if (platform !== "win32" && configured !== actual) {
       return undefined;
     }
     return Object.freeze({
