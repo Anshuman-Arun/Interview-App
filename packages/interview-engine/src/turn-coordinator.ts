@@ -1294,7 +1294,12 @@ export class TurnCoordinator {
       }
       for (const entry of mutation.updated) {
         const existing = resultingShapes[entry.shape.id];
-        if (existing === undefined || existing.revision !== entry.beforeRevision) {
+        if (
+          existing === undefined
+          || existing.revision !== entry.beforeRevision
+          || entry.shape.createdAt !== existing.createdAt
+          || entry.shape.lastModifiedAt < existing.lastModifiedAt
+        ) {
           return {
             drafts: [],
             result: {

@@ -308,6 +308,14 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
 
       if (admission !== undefined) {
         if (
+          request.snapshotBasis === undefined
+          || request.relevantShapeRevisions === undefined
+          || request.regionBounds === undefined
+          || request.requestedObservationKind === undefined
+        ) {
+          throw new Error("Accepted vision admission requires complete persisted request provenance");
+        }
+        if (
           admission.requestId !== event.payload.visionRequestId
           || admission.sessionId !== state.sessionId
           || admission.admittedAtBoardRevision !== state.boardRevision

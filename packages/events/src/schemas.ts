@@ -401,6 +401,18 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
         });
       }
     }
+    const extendedProvenanceCount = [
+      request.snapshotBasis,
+      request.relevantShapeRevisions,
+      request.regionBounds,
+      request.requestedObservationKind
+    ].filter((value) => value !== undefined).length;
+    if (extendedProvenanceCount !== 0 && extendedProvenanceCount !== 4) {
+      context.addIssue({
+        code: "custom",
+        message: "Vision request extended provenance must be either complete or absent for legacy replay"
+      });
+    }
   })),
   event("VISION_RESULT_ACCEPTED", z.object({
     visionRequestId: RequestIdSchema,
