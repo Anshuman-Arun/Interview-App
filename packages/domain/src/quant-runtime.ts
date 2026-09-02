@@ -113,6 +113,12 @@ export const QuantTradingQuoteRequestPublicSchema = z.object({
   maxPosition: PositiveSafeIntegerSchema
 }).strict();
 
+const QuantTradingRiskBreachPublicSchema = z.object({
+  round: PositiveSafeIntegerSchema.max(256),
+  source: z.enum(["FAIR_VALUE_UPDATE", "POST_ROUND"]),
+  reason: z.string().min(1).max(240)
+}).strict();
+
 export const QuantTradingTerminalMetricsSchema = z.object({
   completionStatus: z.enum(["COMPLETED", "RISK_STOPPED"]),
   plannedRounds: PositiveSafeIntegerSchema.max(256),
@@ -123,10 +129,32 @@ export const QuantTradingTerminalMetricsSchema = z.object({
   averageSpread: z.number().refine((value) => Number.isFinite(value) && value >= 0),
   quoteParticipationRate: z.number().min(0).max(1),
   riskBreachCount: NonnegativeSafeIntegerSchema,
+  lastRiskBreach: QuantTradingRiskBreachPublicSchema.optional(),
   adverseSelectionPnL: FiniteNumberSchema,
   accountingInvariantHolds: z.boolean(),
   objectiveScore: z.number().int().min(0).max(100)
-}).strict();
+}).strict().superRefine((value, context) => {
+  if ((value.riskBreachCount === 0) !== (value.lastRiskBreach === undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["lastRiskBreach"],
+      message: "Quant Trading last risk breach presence must match the breach count"
+    });
+  }
+  if (
+    value.lastRiskBreach !== undefined
+    && value.lastRiskBreach.round > Math.min(
+      value.plannedRounds,
+      value.roundsCompleted + (value.completionStatus === "RISK_STOPPED" ? 1 : 0)
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["lastRiskBreach", "round"],
+      message: "Quant Trading last risk breach cannot occur beyond terminal progress"
+    });
+  }
+});
 
 export const QuantTradingPublicStateSchema = z.object({
   mode: z.literal("QUANT_TRADING"),
