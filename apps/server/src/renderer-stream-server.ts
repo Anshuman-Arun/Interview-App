@@ -35,6 +35,8 @@ export interface RendererStreamServerOptions {
   readonly maxConnections?: number;
   readonly maxConnectionsPerSession?: number;
   readonly maxMessageBytes?: number;
+  readonly audioAssetAvailable?: (sessionId: SessionId, audioRef: string) => boolean;
+  readonly onDeliverySent?: (sessionId: SessionId, deliveryId: DeliveryId) => void | Promise<void>;
 }
 
 export interface BoundRendererStreamAddress {
@@ -221,9 +223,18 @@ export class RendererStreamServer {
     }
     const sessionId = RendererStreamSessionIdSchema.parse(sessionIdInput);
     const deliveryId = RendererStreamDeliveryIdSchema.parse(deliveryIdInput);
-    return this.serializePublication(sessionId, async () =>
+    const result = await this.serializePublication(sessionId, async () =>
       this.publishDeliveryNow(sessionId, deliveryId)
     );
+    if (result.outcome === "SENT" && this.options.onDeliverySent !== undefined) {
+      try {
+        await this.options.onDeliverySent(sessionId, deliveryId);
+      } catch {
+        // Post-publication work such as TTS may fail closed without changing
+        // the already-authoritative delivery transition.
+      }
+    }
+    return result;
   }
 
   private async publishDeliveryNow(
@@ -246,6 +257,32 @@ export class RendererStreamServer {
 
     if (atom.status !== "QUEUED" && atom.status !== "DELIVERING") {
       return { outcome: "NOT_DELIVERABLE", deliveryId, status: atom.status };
+    }
+
+    if (
+      atom.content.medium === "AUDIO"
+      && (
+        this.options.audioAssetAvailable === undefined
+        || !safelyCheckAudioAsset(
+          this.options.audioAssetAvailable,
+          sessionId,
+          atom.content.audioRef
+        )
+      )
+    ) {
+      const deliveries = new DeliveryCoordinator(writer);
+      if (atom.status === "QUEUED") {
+        await deliveries.cancelBeforeExposure(
+          deliveryId,
+          "Ephemeral audio asset is unavailable before physical delivery"
+        );
+        return { outcome: "NOT_DELIVERABLE", deliveryId, status: "CANCELLED" };
+      }
+      await deliveries.markPossiblyExposed(
+        deliveryId,
+        "Audio delivery began but its ephemeral asset is unavailable for safe replay"
+      );
+      return { outcome: "NOT_DELIVERABLE", deliveryId, status: "POSSIBLY_EXPOSED" };
     }
 
     if (atom.status === "DELIVERING" && connection.sentDeliveryIds.has(deliveryId)) {
@@ -654,4 +691,16 @@ function sendJsonError(
   }
   response.writeHead(error.status, headers);
   response.end(json);
+}
+
+function safelyCheckAudioAsset(
+  check: (sessionId: SessionId, audioRef: string) => boolean,
+  sessionId: SessionId,
+  audioRef: string
+): boolean {
+  try {
+    return check(sessionId, audioRef) === true;
+  } catch {
+    return false;
+  }
 }
