@@ -392,14 +392,15 @@ class SpeechRuntime:
         if samples.size / int(sample_rate) > 60.001:
             raise ProtocolError(413, "AUDIO_TOO_LONG")
 
-        if not self._stt_lock.acquire(blocking=False):
-            raise ProtocolError(429, "STT_BUSY")
-        try:
+        # The application may admit multiple authoritative speech streams.
+        # Moonshine's batch transcriber is single-lane, so serialize admitted
+        # requests instead of rejecting a concurrent final transcript as busy.
+        # Runtime cancellation remains truthfully unsupported once native
+        # inference begins; late results are suppressed by SpeechWorkerCore.
+        with self._stt_lock:
             transcript = self._transcriber.transcribe_without_streaming(
                 samples.tolist(), sample_rate=int(sample_rate)
             )
-        finally:
-            self._stt_lock.release()
 
         lines = list(getattr(transcript, "lines", []) or [])
         text = "\n".join(
