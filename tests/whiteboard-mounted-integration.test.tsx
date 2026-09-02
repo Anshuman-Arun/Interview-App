@@ -1086,7 +1086,7 @@ describe("Real tldraw mounted browser integration", () => {
       const renderer = new RendererClient({
         sessionId,
         acknowledgementSender: {
-          send: (command) => {
+          send: async (command) => {
             acknowledgements.push(command);
           }
         },
