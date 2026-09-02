@@ -86,6 +86,7 @@ export interface UseInterviewSessionResult {
   readonly isTransportManaged: boolean;
   readonly setBaseUrl: (url: string) => void;
   readonly fetchAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
+  readonly fetchAvailableSessionsStrict: () => Promise<readonly StoredSessionSummary[]>;
   readonly readSessionEvaluation: (
     sessionId: SessionId,
     signal?: AbortSignal
@@ -538,16 +539,32 @@ export function useInterviewSession(
     return getSessionReadClient().getHistory(signal);
   }, [getSessionReadClient]);
 
+  const listAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
+    const client = getCommandClient();
+    const sessions = await client.listSessions();
+    setAvailableSessions(sessions);
+    return sessions;
+  }, [getCommandClient]);
+
   const fetchAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
     try {
-      const client = getCommandClient();
-      const sessions = await client.listSessions();
-      setAvailableSessions(sessions);
-      return sessions;
+      return await listAvailableSessions();
     } catch {
       return [];
     }
-  }, [getCommandClient]);
+  }, [listAvailableSessions]);
+
+  const fetchAvailableSessionsStrict = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
+    try {
+      return await listAvailableSessions();
+    } catch (err) {
+      const message = err instanceof Error
+        ? err.message
+        : "Failed to verify stored sessions";
+      setError(message);
+      throw err;
+    }
+  }, [listAvailableSessions]);
 
   const attachRendererStream = useCallback(
     async (targetSessionId: SessionId): Promise<void> => {
@@ -1154,6 +1171,7 @@ export function useInterviewSession(
     isTransportManaged: desktopBootstrap !== undefined,
     setBaseUrl,
     fetchAvailableSessions,
+    fetchAvailableSessionsStrict,
     readSessionEvaluation,
     readSessionReplay,
     readSessionHistory,
