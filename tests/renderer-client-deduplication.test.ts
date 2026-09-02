@@ -274,8 +274,9 @@ describe("renderer DeliveryId deduplication", () => {
     await client.handleMessage(message);
     await waitFor(() => {
       const snapshot = client.snapshot()[0];
-      return snapshot?.exposedAcknowledged === true
-        && snapshot.completedAcknowledged === true;
+      return snapshot !== undefined
+        && snapshot.exposedAcknowledged
+        && snapshot.completedAcknowledged;
     });
 
     expect(visible).toEqual([message.command.deliveryId]);
