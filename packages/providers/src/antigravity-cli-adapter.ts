@@ -399,8 +399,7 @@ function captureExecutor(
   }
   const operation = descriptor.value as SupervisedCliExecutor["execute"];
   return async (request: Parameters<SupervisedCliExecutor["execute"]>[0]) => {
-    return await REFLECT_APPLY_INTRINSIC(operation, executor, [request]) as
-      SupervisedCliExecutionResult;
+    return await REFLECT_APPLY_INTRINSIC(operation, executor, [request]);
   };
 }
 
