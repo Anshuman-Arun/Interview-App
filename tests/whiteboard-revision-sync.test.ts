@@ -89,7 +89,7 @@ describe("TldrawWhiteboardAdapter board revision authority", () => {
     const before = editor.getShape("shape:overflow-update");
 
     expect(() => adapter.updateStudentShape("shape:overflow-update", { x: 99 }))
-      .toThrow(/revision mirror cannot exceed Number\.MAX_SAFE_INTEGER/u);
+      .toThrow(/BoardRevision mirror cannot exceed Number\.MAX_SAFE_INTEGER/u);
     expect(editor.getShape("shape:overflow-update")).toEqual(before);
   });
 
