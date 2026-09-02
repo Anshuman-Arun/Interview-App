@@ -111,6 +111,27 @@ describe("expressive product integration invariants", () => {
     expect(hook).toContain("stopRendererTransport()");
   });
 
+  it("mounts the paused canvas read-only before restoring renderer and input authority", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const adapter = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/tldraw-whiteboard-adapter.ts"),
+      "utf8"
+    );
+
+    expect(app).toContain("resumeMountPendingRef.current = true");
+    expect(app).toContain('navigate({ page: "interview" })');
+    expect(app).toContain("resumeFinalizeInFlightRef.current");
+    expect(app).toContain("session.resumePausedSession()");
+    expect(app.indexOf('navigate({ page: "interview" })'))
+      .toBeLessThan(app.indexOf("session.resumePausedSession()"));
+    expect(app).toContain("session.isPaused && !resumeMountPending");
+    expect(adapter).toContain("detachedPageShapes");
+    expect(adapter).toContain("globalThis.structuredClone(shape)");
+  });
+
   it("route-locks live ACTIVE interviews while permitting an explicit paused Home", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
