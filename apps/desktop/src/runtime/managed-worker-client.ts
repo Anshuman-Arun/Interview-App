@@ -14,6 +14,16 @@ export class ManagedWorkerRequestTimeoutError extends Error {
   }
 }
 
+export class ManagedWorkerResponseError extends Error {
+  public constructor(
+    public readonly statusCode: number,
+    public readonly workerErrorCode?: string
+  ) {
+    super(`Managed local model worker rejected the request with status ${String(statusCode)}`);
+    this.name = "ManagedWorkerResponseError";
+  }
+}
+
 export class ManagedModelWorkerClient {
   private recyclePromise: Promise<void> | undefined;
 
@@ -95,12 +105,17 @@ export class ManagedModelWorkerClient {
         response,
         options.maxResponseBytes ?? MAX_JSON_RESPONSE_BYTES
       );
-      if (!response.ok) throw new Error("Managed local model worker rejected the request");
       let parsed: unknown;
       try {
         parsed = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
       } catch {
         throw new Error("Managed local model worker returned invalid JSON");
+      }
+      if (!response.ok) {
+        throw new ManagedWorkerResponseError(
+          response.status,
+          readWorkerErrorCode(parsed)
+        );
       }
       return parsed;
     } catch (error) {
@@ -156,6 +171,19 @@ export class ManagedModelWorkerClient {
     }
     return status;
   }
+}
+
+function readWorkerErrorCode(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(value, "error");
+  if (descriptor === undefined || !("value" in descriptor)) return undefined;
+  const code = descriptor.value;
+  return typeof code === "string"
+    && code.length > 0
+    && code.length <= 128
+    && /^[A-Z0-9_]+$/u.test(code)
+    ? code
+    : undefined;
 }
 
 function handshakeMetadata(status: LocalComponentStatus): {
