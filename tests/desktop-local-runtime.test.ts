@@ -495,14 +495,12 @@ describe("desktop local model runtime", () => {
       .not.toContain(`TTS_STARTED:${secondRequestId}`);
 
     if (session.cancel === undefined) throw new Error("Expected Kokoro runtime cancellation");
+    await session.cancel(secondRequestId);
     await session.cancel(firstRequestId);
     await expect(first).rejects.toThrow("rejected");
-    await waitForStatus(runtime, "tts-serialize-fixture", (status) =>
-      status.stdout.lines.includes(`TTS_STARTED:${secondRequestId}`)
-    );
-
-    await session.cancel(secondRequestId);
-    await expect(second).rejects.toThrow("rejected");
+    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    expect(runtime.getStatus("tts-serialize-fixture").stdout.lines)
+      .not.toContain(`TTS_STARTED:${secondRequestId}`);
   });
 
   it("recovers through LocalRuntimeManager after a worker dies during inference", async () => {
