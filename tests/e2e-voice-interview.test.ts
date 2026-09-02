@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   newSessionId,
+  newUtteranceId,
   type DeliveryId,
   type SessionId
 } from "../packages/domain/src/index.js";
@@ -11,6 +12,7 @@ import {
   DeterministicFakeRecognizer,
   DeterministicFakeSpeechSynthesizer,
   ScriptedVadBackend,
+  SpeechPcmFrameEnvelopeSchema,
   SpeechWorkerCore,
   TtsWorkerCore,
   type RecognizerAudioInput,
@@ -96,6 +98,33 @@ class ControlledAudioElement implements BrowserAudioElementLike {
 
   public emit(type: "playing" | "ended" | "error"): void {
     for (const listener of [...(this.listeners.get(type) ?? [])]) listener();
+  }
+}
+
+class TerminalThenStaleOnsetWorker extends SpeechWorkerCore {
+  public override async submitFrame(
+    envelopeInput: unknown,
+    _payload: unknown,
+    _heuristicsInput: unknown = {}
+  ): Promise<readonly SpeechWorkerEvent[]> {
+    const envelope = SpeechPcmFrameEnvelopeSchema.parse(envelopeInput);
+    return [
+      {
+        protocolVersion: 1,
+        type: "UTTERANCE_DISCARDED",
+        requestId: envelope.requestId,
+        streamId: envelope.streamId,
+        reason: "NO_SPEECH_TIMEOUT"
+      },
+      {
+        protocolVersion: 1,
+        type: "SPEECH_STARTED",
+        requestId: envelope.requestId,
+        streamId: envelope.streamId,
+        utteranceId: newUtteranceId(),
+        atTimestampMs: envelope.timestampMs
+      }
+    ];
   }
 }
 
@@ -680,6 +709,61 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.values(state.utterances).every(
       (utterance) => utterance.status !== "CAPTURING"
     )).toBe(true);
+  });
+
+  it("does not expose trailing worker onset events after a terminal event revoked the stream", async () => {
+    const speechWorker = new TerminalThenStaleOnsetWorker({
+      vadBackend: new ScriptedVadBackend([0]),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const speech = await new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: fetchWithAuth
+    }).openStream(sessionId);
+
+    const result = await speech.sendFrame(microphoneFrame(0));
+    expect(result.terminal).toBe(true);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]?.type).toBe("UTTERANCE_DISCARDED");
+    expect(result.events.some((event) => event.type === "SPEECH_STARTED")).toBe(false);
+
+    let interrupted = 0;
+    applyAdmittedVoiceFrameResult(result, {
+      interruptPlaybackForBargeIn: () => {
+        interrupted += 1;
+      },
+      onVoiceCommit: () => undefined
+    });
+    expect(interrupted).toBe(0);
+    expect(Object.keys(server.registry.get(sessionId).getState().utterances)).toHaveLength(0);
   });
 
   it("rejects worker-mutated PCM even when the worker basis is internally consistent", async () => {
