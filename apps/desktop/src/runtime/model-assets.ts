@@ -17,7 +17,7 @@ export const SILERO_SOURCE_REVISION = "7e30209a3e901f9842f81b225f3e93d8199902b1"
 export const SPEECH_WORKER_MODEL_IDENTITY =
   `moonshine-tiny-en@${MOONSHINE_ASSET_REVISION}+silero-v6.2.1@${SILERO_SOURCE_REVISION}`;
 export const TTS_WORKER_MODEL_IDENTITY =
-  `kokoro-af-heart@${MOONSHINE_ASSET_REVISION}`;
+  `kokoro-af-heart+${MOONSHINE_ASSET_REVISION}`;
 
 const MOONSHINE_ASSET_REPOSITORY =
   "https://huggingface.co/moonshine-ai/moonshine-voice-assets";
