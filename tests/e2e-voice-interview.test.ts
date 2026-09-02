@@ -107,6 +107,8 @@ class TerminalThenStaleOnsetWorker extends SpeechWorkerCore {
     _payload: unknown,
     _heuristicsInput: unknown = {}
   ): Promise<readonly SpeechWorkerEvent[]> {
+    void _payload;
+    void _heuristicsInput;
     const envelope = SpeechPcmFrameEnvelopeSchema.parse(envelopeInput);
     return [
       {
