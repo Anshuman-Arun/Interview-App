@@ -65,17 +65,31 @@ export class BrowserVoiceStream {
 
   public async sendFrame(frame: AudioFrame, signal?: AbortSignal): Promise<BrowserVoiceFrameResult> {
     if (this.closed) throw new Error("Voice stream is closed");
-    if (frame.channelCount !== 1 || frame.samples.length < 1) {
-      throw new Error("Voice transport accepts mono microphone frames only");
+    if (
+      frame.channelCount !== 1
+      || !(frame.samples instanceof Float32Array)
+      || frame.samples.length < 1
+    ) {
+      throw new Error("Voice transport accepts non-empty mono Float32 microphone frames only");
     }
     if (!Number.isFinite(frame.sampleRate) || frame.sampleRate <= 0) {
       throw new Error("Microphone frame sample rate is invalid");
     }
-
-    const samples = resampleMono(frame.samples, frame.sampleRate, TARGET_SPEECH_SAMPLE_RATE);
-    if (samples.length < 1 || samples.length > TARGET_SPEECH_SAMPLE_RATE / 10) {
+    const targetLength = resampledLength(
+      frame.samples.length,
+      frame.sampleRate,
+      TARGET_SPEECH_SAMPLE_RATE
+    );
+    if (targetLength < 1 || targetLength > TARGET_SPEECH_SAMPLE_RATE / 10) {
       throw new Error("Microphone frame exceeds the bounded speech duration");
     }
+
+    const samples = resampleMono(
+      frame.samples,
+      frame.sampleRate,
+      TARGET_SPEECH_SAMPLE_RATE,
+      targetLength
+    );
     const result = await this.client.sendFrame({
       sessionId: this.sessionId,
       streamId: this.streamId,
@@ -355,13 +369,25 @@ function encodeF32Le(samples: Float32Array): ArrayBuffer {
   return buffer;
 }
 
+function resampledLength(
+  sampleCount: number,
+  sourceRate: number,
+  targetRate: number
+): number {
+  const scaled = sampleCount * targetRate / sourceRate;
+  if (!Number.isFinite(scaled) || scaled > Number.MAX_SAFE_INTEGER) {
+    throw new Error("Microphone frame resampling size is invalid");
+  }
+  return Math.max(1, Math.round(scaled));
+}
+
 function resampleMono(
   samples: Float32Array,
   sourceRate: number,
-  targetRate: number
+  targetRate: number,
+  targetLength: number
 ): Float32Array {
   if (sourceRate === targetRate) return new Float32Array(samples);
-  const targetLength = Math.max(1, Math.round(samples.length * targetRate / sourceRate));
   const output = new Float32Array(targetLength);
   if (samples.length === 1) {
     output.fill(samples[0] ?? 0);
