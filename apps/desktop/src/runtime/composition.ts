@@ -197,6 +197,7 @@ export class DesktopLocalRuntimeComposition {
       failures.push(error);
     }
 
+    let staleCleanupSucceeded = true;
     if (processTreesStopped) {
       // Once the process trees are verified gone, the core objects can no longer
       // issue useful work. Clear them even if a later filesystem cleanup fails.
@@ -225,13 +226,14 @@ export class DesktopLocalRuntimeComposition {
         // tracked RuntimeAssetView. Actively owned views remain protected.
         await cleanupStaleRuntimeAssetViews(this.runtimeViewsRoot);
       } catch (error) {
+        staleCleanupSucceeded = false;
         failures.push(error);
       }
     }
 
     this.voiceRuntime = undefined;
     const runtimeViewsDisposed = this.ttsView === undefined && this.speechView === undefined;
-    this.stopped = processTreesStopped && runtimeViewsDisposed;
+    this.stopped = processTreesStopped && runtimeViewsDisposed && staleCleanupSucceeded;
     // A failed process-tree stop or failed view deletion is a shutdown state,
     // not permission to return to start(). A later stopWorkers() may retry it.
     this.stopping = !this.stopped;
