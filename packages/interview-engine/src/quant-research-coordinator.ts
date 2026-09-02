@@ -26,6 +26,7 @@ import {
 } from "../../local-compute/src/index.js";
 import { createCommandEnvelope } from "./envelopes.js";
 import type { SessionWriter } from "./session-writer.js";
+import { terminalInvalidationDrafts } from "./turn-coordinator.js";
 
 const StartedResultSchema = z.object({ started: z.literal(true) }).strict();
 
@@ -169,21 +170,22 @@ export class QuantResearchCoordinator {
     definitionInput: unknown,
     commandEnvelope?: CommandEnvelope
   ) {
+    return this.initializeConfiguredWithDefinitionFactory(
+      configurationInput,
+      () => definitionInput,
+      commandEnvelope
+    );
+  }
+
+  public initializeConfiguredWithDefinitionFactory(
+    configurationInput: Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_RESEARCH" }>,
+    definitionFactory: () => unknown,
+    commandEnvelope?: CommandEnvelope
+  ) {
     const configuration = InterviewSessionConfigurationSchema.parse(configurationInput);
     if (configuration.mode !== "QUANT_RESEARCH") {
       throw new Error("Quant Research initialization requires Quant Research configuration");
     }
-    const definition = parseQuantResearchDefinition(definitionInput);
-    if (
-      definition.family !== configuration.scenario.id
-      || definition.version !== configuration.scenario.version
-    ) {
-      throw new Error("Quant Research definition does not match configured scenario identity");
-    }
-    const engine = new QuantResearchEngine(definition);
-    const publicState = engine.getState();
-    const authoritativeSnapshot = canonicalEventSnapshot(engine);
-    const eventDefinition = QuantResearchScenarioDefinitionEventSchema.parse(definition);
     const envelope = CommandEnvelopeSchema.parse(
       commandEnvelope ?? createCommandEnvelope({
         sessionId: this.writer.sessionId,
@@ -203,6 +205,18 @@ export class QuantResearchCoordinator {
       StartedResultSchema,
       (state) => {
         if (state.started) throw new Error("Session already started");
+
+        const definition = parseQuantResearchDefinition(definitionFactory());
+        if (
+          definition.family !== configuration.scenario.id
+          || definition.version !== configuration.scenario.version
+        ) {
+          throw new Error("Quant Research definition does not match configured scenario identity");
+        }
+        const engine = new QuantResearchEngine(definition);
+        const publicState = engine.getState();
+        const authoritativeSnapshot = canonicalEventSnapshot(engine);
+        const eventDefinition = QuantResearchScenarioDefinitionEventSchema.parse(definition);
         const drafts: EventDraft[] = [
           {
             source: "APPLICATION",
@@ -317,6 +331,29 @@ export class QuantResearchCoordinator {
   }
 
   public applyAction(actionInput: unknown, commandEnvelope?: CommandEnvelope) {
+    return this.applyActionInternal(actionInput, undefined, commandEnvelope);
+  }
+
+  public applyActionAtExpectedCount(
+    actionInput: unknown,
+    expectedActionCount: number,
+    commandEnvelope?: CommandEnvelope
+  ) {
+    if (
+      !Number.isSafeInteger(expectedActionCount)
+      || expectedActionCount < 0
+      || expectedActionCount > 64
+    ) {
+      throw new RangeError("Quant Research expected action count must be between 0 and 64");
+    }
+    return this.applyActionInternal(actionInput, expectedActionCount, commandEnvelope);
+  }
+
+  private applyActionInternal(
+    actionInput: unknown,
+    expectedActionCount: number | undefined,
+    commandEnvelope?: CommandEnvelope
+  ) {
     const action = parseQuantResearchAction(actionInput);
     const eventAction = QuantResearchActionEventSchema.parse(action);
     const envelope = CommandEnvelopeSchema.parse(commandEnvelope ?? createCommandEnvelope({
@@ -328,12 +365,21 @@ export class QuantResearchCoordinator {
       envelope,
       {
         operation: "APPLY_QUANT_RESEARCH_ACTION",
-        payload: { action: eventAction }
+        payload: {
+          action: eventAction,
+          ...(expectedActionCount === undefined ? {} : { expectedActionCount })
+        }
       },
       QuantResearchCoordinatorOutcomeSchema,
       (state) => {
         assertSessionAvailable(state);
         const engine = reconstructEngine(state);
+        if (
+          expectedActionCount !== undefined
+          && engine.getState().acceptedActionCount !== expectedActionCount
+        ) {
+          throw new Error("Cannot apply Quant Research action to stale scenario progress");
+        }
         engine.applyAction(action);
 
         const drafts: EventDraft[] = [{
@@ -343,6 +389,13 @@ export class QuantResearchCoordinator {
         }];
         const result = canonicalEventResult(engine);
         if (result.status === "COMPLETE") {
+          if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
+            throw new Error("Cannot complete Quant Research while an input episode is active");
+          }
+          drafts.unshift(...terminalInvalidationDrafts(
+            state,
+            "Deterministic Quant Research scenario completed"
+          ));
           drafts.push({
             source: "APPLICATION",
             type: "QUANT_RESEARCH_SCENARIO_COMPLETED",
