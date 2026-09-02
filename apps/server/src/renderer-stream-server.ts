@@ -329,6 +329,29 @@ export class RendererStreamServer {
         return { outcome: "MESSAGE_TOO_LARGE", deliveryId, status: reconnected.status };
       }
 
+      // reconnect() persists DELIVERING before this transport performs the
+      // physical write. Another authority transition (notably
+      // beginUtterance()) may run while reconnect() is awaited. Re-read the
+      // authoritative atom with no further await before response.write(), so a
+      // delivery invalidated in that gap can never begin physical exposure.
+      const beforePhysicalWrite = writer.getState().deliveries[deliveryId];
+      if (beforePhysicalWrite === undefined) {
+        connection.sentDeliveryIds.delete(deliveryId);
+        throw new Error("Renderer delivery disappeared before physical write");
+      }
+      if (beforePhysicalWrite.status !== "DELIVERING") {
+        connection.sentDeliveryIds.delete(deliveryId);
+        return {
+          outcome: "NOT_DELIVERABLE",
+          deliveryId,
+          status: beforePhysicalWrite.status
+        };
+      }
+      if (connection.response.destroyed || connection.response.writableEnded) {
+        this.removeConnection(connection);
+        return { outcome: "NO_CLIENT", deliveryId };
+      }
+
       connection.response.write(wire);
       return { outcome: "SENT", deliveryId, status: "DELIVERING" };
     } catch (error) {
