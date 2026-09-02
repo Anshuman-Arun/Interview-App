@@ -74,7 +74,7 @@ describe("TldrawWhiteboardAdapter board revision authority", () => {
       x: 1,
       y: 2,
       props: { geo: "rectangle", w: 10, h: 10 }
-    })).toThrow(/BoardRevision/u);
+    })).toThrow(/revision mirror cannot exceed Number\.MAX_SAFE_INTEGER/u);
     expect(editor.getShape("shape:overflow-create")).toBeUndefined();
 
     (adapter as unknown as { localBoardRevision: number }).localBoardRevision = 0;
@@ -89,7 +89,7 @@ describe("TldrawWhiteboardAdapter board revision authority", () => {
     const before = editor.getShape("shape:overflow-update");
 
     expect(() => adapter.updateStudentShape("shape:overflow-update", { x: 99 }))
-      .toThrow(/BoardRevision/u);
+      .toThrow(/revision mirror cannot exceed Number\.MAX_SAFE_INTEGER/u);
     expect(editor.getShape("shape:overflow-update")).toEqual(before);
   });
 

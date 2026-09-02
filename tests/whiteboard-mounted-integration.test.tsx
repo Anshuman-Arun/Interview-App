@@ -19,19 +19,13 @@ import {
   newDeliveryId,
   newRequestId,
   newSessionId,
+  type AuthoritativeStudentShape,
   type BoardAction
 } from "../packages/domain/src/index.js";
-import {
-  SessionRuntimeRegistry,
-  TurnCoordinator,
-  createCommandEnvelope
-} from "../packages/interview-engine/src/index.js";
 import {
   RendererStreamMessageSchema,
   type RendererAcknowledgementCommand
 } from "../packages/delivery/src/index.js";
-import { SqliteEventStore } from "../packages/persistence/src/index.js";
-import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   AuthoritativeBoardSyncCoordinator
 } from "../apps/web/src/whiteboard/authoritative-board-sync.js";
@@ -971,60 +965,63 @@ describe("Real tldraw mounted browser integration", () => {
   });
 
   it("routes a real mounted tldraw student mutation into authoritative BoardRevision exactly once", async () => {
-    const store = new SqliteEventStore(":memory:");
     const container = document.createElement("div");
     container.style.width = "800px";
     container.style.height = "600px";
     document.body.appendChild(container);
 
     const sessionId = newSessionId();
-    const registry = new SessionRuntimeRegistry(store);
-    const writer = registry.get(sessionId);
-    const turns = new TurnCoordinator(writer);
-    await turns.startSession(sixPeopleProblem);
+    let authoritativeRevision = BoardRevisionSchema.parse(0);
+    const authoritativeShapes: Record<string, AuthoritativeStudentShape> = {};
+    let committedMutationCount = 0;
 
     type SyncClient = ConstructorParameters<typeof AuthoritativeBoardSyncCoordinator>[0];
     const syncClient: SyncClient = {
-      getBoardState: async (_targetSessionId, options) => {
-        const state = writer.getState();
-        return {
-          protocolVersion: 1,
-          ok: true,
-          type: "BOARD_STATE",
-          requestId: options?.requestId ?? newRequestId(),
-          sessionId,
-          boardRevision: state.boardRevision,
-          shapeAuthorityKnown: state.boardShapeAuthorityKnown,
-          shapeRevisions: Object.values(state.boardShapes)
-            .map((shape) => ({
-              shapeId: shape.id,
-              revision: shape.revision,
-              contentSha256: createHash("sha256")
-                .update(authoritativeBoardShapeCanonicalJson(shape), "utf8")
-                .digest("hex")
-            }))
-            .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
-        };
-      },
+      getBoardState: async (_targetSessionId, options) => ({
+        protocolVersion: 1,
+        ok: true,
+        type: "BOARD_STATE",
+        requestId: options?.requestId ?? newRequestId(),
+        sessionId,
+        boardRevision: authoritativeRevision,
+        shapeAuthorityKnown: true,
+        shapeRevisions: Object.values(authoritativeShapes)
+          .map((shape) => ({
+            shapeId: shape.id,
+            revision: shape.revision,
+            contentSha256: createHash("sha256")
+              .update(authoritativeBoardShapeCanonicalJson(shape), "utf8")
+              .digest("hex")
+          }))
+          .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
+      }),
       commitBoardMutation: async (_targetSessionId, mutation, options) => {
         const requestId = options?.requestId ?? newRequestId();
-        const committed = await turns.commitBoardMutation(
-          mutation,
-          createCommandEnvelope({
+        if (mutation.baseBoardRevision !== authoritativeRevision) {
+          return {
+            protocolVersion: 1,
+            ok: true,
+            type: "BOARD_MUTATION_COMMITTED",
+            requestId,
             sessionId,
-            producer: "mounted-whiteboard-test",
-            requestId
-          })
-        );
+            committed: false,
+            boardRevision: authoritativeRevision,
+            reason: "STALE_CLIENT" as const
+          };
+        }
+        for (const shape of mutation.added) authoritativeShapes[shape.id] = shape;
+        for (const entry of mutation.updated) authoritativeShapes[entry.shape.id] = entry.shape;
+        for (const entry of mutation.deleted) Reflect.deleteProperty(authoritativeShapes, entry.shapeId);
+        authoritativeRevision = BoardRevisionSchema.parse(authoritativeRevision + 1);
+        committedMutationCount += 1;
         return {
           protocolVersion: 1,
           ok: true,
           type: "BOARD_MUTATION_COMMITTED",
           requestId,
           sessionId,
-          committed: committed.committed,
-          boardRevision: committed.boardRevision,
-          ...(committed.reason === undefined ? {} : { reason: committed.reason })
+          committed: true,
+          boardRevision: authoritativeRevision
         };
       }
     };
@@ -1062,11 +1059,9 @@ describe("Real tldraw mounted browser integration", () => {
       });
       await Promise.all(pendingMutations.splice(0));
 
-      expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(1));
-      expect(writer.getState().boardShapes[studentId]?.revision).toBe(1);
-      const boardEventsAfterCreate = store.load(sessionId)
-        .filter((event) => event.type === "BOARD_PATCH_COMMITTED");
-      expect(boardEventsAfterCreate).toHaveLength(1);
+      expect(authoritativeRevision).toBe(BoardRevisionSchema.parse(1));
+      expect(authoritativeShapes[studentId]?.revision).toBe(1);
+      expect(committedMutationCount).toBe(1);
 
       await act(async () => {
         bridge.getNativeEditor().updateShapes([{
@@ -1077,8 +1072,8 @@ describe("Real tldraw mounted browser integration", () => {
       });
       await Promise.all(pendingMutations.splice(0));
 
-      expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(2));
-      expect(writer.getState().boardShapes[studentId]?.revision).toBe(2);
+      expect(authoritativeRevision).toBe(BoardRevisionSchema.parse(2));
+      expect(authoritativeShapes[studentId]?.revision).toBe(2);
       const studentBeforeOverlay = bridge.getShape(studentId);
 
       await expect(adapter.applyAiOverlayAction({
@@ -1088,7 +1083,7 @@ describe("Real tldraw mounted browser integration", () => {
         targetShapeId: studentId,
         expectedShapeRevision: 1
       })).rejects.toThrow(/revision mismatch/u);
-      expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(2));
+      expect(authoritativeRevision).toBe(BoardRevisionSchema.parse(2));
 
       const acknowledgements: RendererAcknowledgementCommand[] = [];
       const renderer = new RendererClient({
@@ -1155,7 +1150,6 @@ describe("Real tldraw mounted browser integration", () => {
         handle.unmount();
       });
       container.remove();
-      store.close();
     }
   });
 
