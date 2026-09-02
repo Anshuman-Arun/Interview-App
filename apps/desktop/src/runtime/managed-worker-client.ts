@@ -81,10 +81,9 @@ export class ManagedModelWorkerClient {
     const controller = new AbortController();
     const unlink = linkAbort(options.signal, controller);
     const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-    let timedOut = false;
+    const timeoutReason = Object.freeze({ type: "managed-worker-timeout" });
     const timer = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
+      controller.abort(timeoutReason);
     }, timeoutMs);
     try {
       const response = await fetch(url, {
@@ -119,7 +118,7 @@ export class ManagedModelWorkerClient {
       }
       return parsed;
     } catch (error) {
-      if (timedOut) {
+      if (controller.signal.reason === timeoutReason) {
         throw new ManagedWorkerRequestTimeoutError();
       }
       if (controller.signal.aborted) {
@@ -177,7 +176,7 @@ function readWorkerErrorCode(value: unknown): string | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   const descriptor = Object.getOwnPropertyDescriptor(value, "error");
   if (descriptor === undefined || !("value" in descriptor)) return undefined;
-  const code = descriptor.value;
+  const code = descriptor.value as unknown;
   return typeof code === "string"
     && code.length > 0
     && code.length <= 128
