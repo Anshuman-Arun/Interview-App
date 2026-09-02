@@ -1,3 +1,4 @@
+import { types as utilTypes } from "node:util";
 import {
   InterviewerProposalSchema,
   ModelCapabilitiesSchema,
@@ -52,7 +53,11 @@ export async function openProviderExecutionSession(input: {
   readonly now?: Date;
 }): Promise<ProviderExecutionSession> {
   const providerValue: unknown = input.provider;
-  if (typeof providerValue !== "object" || providerValue === null) {
+  if (
+    typeof providerValue !== "object"
+    || providerValue === null
+    || utilTypes.isProxy(providerValue)
+  ) {
     throw new ProviderExecutionError("INVALID_PROVIDER_IDENTITY");
   }
 
@@ -200,7 +205,11 @@ function snapshotReasoningSessionOperations(
   session: ReasoningSession
 ): ReasoningSessionOperations {
   const sessionValue: unknown = session;
-  if (typeof sessionValue !== "object" || sessionValue === null) {
+  if (
+    typeof sessionValue !== "object"
+    || sessionValue === null
+    || utilTypes.isProxy(sessionValue)
+  ) {
     throw new ProviderExecutionError("SESSION_CREATION_FAILED");
   }
   const sendTurn = readReasoningSessionOperation(sessionValue, "sendTurn", true);
