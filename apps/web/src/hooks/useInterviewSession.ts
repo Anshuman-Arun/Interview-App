@@ -425,8 +425,9 @@ export function useInterviewSession(
     const candidate = url.trim();
     try {
       deriveDefaultRendererStreamUrl(candidate);
+      deriveDefaultVoiceBaseUrl(candidate);
     } catch {
-      setError("Command server URL must be an exact HTTP loopback origin with a usable port");
+      setError("Command server URL must be an exact HTTP loopback origin with usable renderer and voice ports");
       return;
     }
 
