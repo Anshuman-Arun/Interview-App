@@ -453,7 +453,7 @@ export class DesktopLocalRuntimeComposition {
       return failed("WORKER_STATUS_UNAVAILABLE");
     }
     if (worker.state === "READY") {
-      const runtimeVersion = worker.handshake?.metadata?.["runtimeVersion"];
+      const runtimeVersion = worker.handshake?.runtimeVersion;
       return Object.freeze({
         ...base,
         ...(typeof runtimeVersion === "string" ? { runtimeVersion } : {})
