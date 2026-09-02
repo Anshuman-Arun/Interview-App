@@ -44,10 +44,10 @@ export class SessionRecoveryCoordinator {
 
   public listSessions(): readonly StoredSessionSummary[] {
     const summaries = this.store?.listSessions() ?? this.registry.listSessions();
-    for (const summary of summaries) {
+    return summaries.map((summary): StoredSessionSummary => {
       const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
       const state = replaySession(summary.sessionId, events);
-      if (!isQuantSessionState(state)) continue;
+      if (!isQuantSessionState(state)) return summary;
 
       // The SQLite session index is a rebuildable convenience projection. Do not
       // let schema-valid but semantically forged deterministic Quant history be
@@ -72,8 +72,20 @@ export class SessionRecoveryCoordinator {
         // happens to report them with an action-shaped error type.
         throw new Error("Authoritative quant session inventory validation failed");
       }
-    }
-    return summaries;
+
+      // Quant Research persists a synthetic PROBLEM_PRESENTED only so generic
+      // replay can retain chronology. LIST_SESSIONS has no mode discriminator,
+      // so exposing that identity as problemId/problemVersion would make it
+      // indistinguishable from an Oxford problem to legacy consumers.
+      return {
+        sessionId: summary.sessionId,
+        status: summary.status,
+        sequence: summary.sequence,
+        createdAt: summary.createdAt,
+        updatedAt: summary.updatedAt,
+        eventCount: summary.eventCount
+      };
+    });
   }
 
   public hasSession(sessionId: SessionId): boolean {
