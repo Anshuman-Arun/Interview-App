@@ -25,12 +25,25 @@ export class ManagedModelWorkerClient {
     return runtimeVersion;
   }
 
-  public restartCount(): number {
-    const restartCount = this.readyStatus().restartCount;
-    if (!Number.isSafeInteger(restartCount) || restartCount < 0) {
-      throw new Error("Managed local model worker reported an invalid restart count");
+  public workerInstanceIdentity(): string {
+    const status = this.readyStatus();
+    const pid = status.pid;
+    const startedAt = status.startedAt;
+    const readyAt = status.readyAt;
+    const restartCount = status.restartCount;
+    if (!Number.isSafeInteger(pid)
+        || (pid as number) <= 0
+        || typeof startedAt !== "string"
+        || startedAt.length === 0
+        || startedAt.length > 64
+        || typeof readyAt !== "string"
+        || readyAt.length === 0
+        || readyAt.length > 64
+        || !Number.isSafeInteger(restartCount)
+        || restartCount < 0) {
+      throw new Error("Managed local model worker reported an invalid instance identity");
     }
-    return restartCount;
+    return `${String(pid)}:${String(restartCount)}:${startedAt}:${readyAt}`;
   }
 
   public async postJson(
