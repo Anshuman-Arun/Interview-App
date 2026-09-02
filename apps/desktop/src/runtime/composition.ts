@@ -145,6 +145,10 @@ export class DesktopLocalRuntimeComposition {
   }
 
   public async installVoiceAssets(signal?: AbortSignal): Promise<void> {
+    if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
+      throw new Error("Local model installation is unavailable on this platform");
+    }
+    await this.assetManager.cleanupTemporary(signal);
     for (const asset of DESKTOP_LOCAL_MODEL_ASSETS) {
       if (abortRequested(signal)) throw abortError();
       await this.assetManager.install(asset.manifest, signal);
@@ -238,7 +242,7 @@ export class DesktopLocalRuntimeComposition {
 
   private async startOptionalCapabilities(signal?: AbortSignal): Promise<void> {
     try {
-      await this.assetManager.cleanupTemporary();
+      await this.assetManager.cleanupTemporary(signal);
       await cleanupStaleRuntimeAssetViews(this.runtimeViewsRoot);
     } catch {
       this.speechStatus = failed("ASSET_CACHE_UNSAFE");
