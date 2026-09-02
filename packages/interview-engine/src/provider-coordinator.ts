@@ -10,6 +10,7 @@ import {
   type GenerationId,
   type InputEpisodeId,
   type InterviewProblem,
+  type InterviewerProposal,
   type ProviderCancellationReport,
   type ProviderPolicy,
   type ReasoningProvider,
