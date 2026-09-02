@@ -9,6 +9,7 @@ import {
 } from "../../../packages/domain/src/index.js";
 import {
   MAX_SPEECH_FRAME_DURATION_MS,
+  PcmAdmissionError,
   SpeechPcmFrameEnvelopeSchema,
   SpeechRequestIdSchema,
   SpeechSampleRateSchema,
@@ -804,6 +805,18 @@ function sendJson(
 
 function classifyCoordinatorError(error: unknown): VoiceHttpError {
   if (error instanceof VoiceHttpError) return error;
+  if (error instanceof PcmAdmissionError) {
+    switch (error.code) {
+      case "INVALID_FRAME":
+        return new VoiceHttpError(400, "INVALID_FRAME", "PCM frame failed application admission");
+      case "OUT_OF_ORDER_FRAME":
+        return new VoiceHttpError(409, "FRAME_CONFLICT", "PCM frame order conflicts with the speech stream");
+      case "STREAM_CONFLICT":
+        return new VoiceHttpError(409, "STREAM_CONFLICT", "PCM frame conflicts with the bound speech stream");
+      case "RESOURCE_LIMIT":
+        return new VoiceHttpError(413, "RESOURCE_LIMIT", "PCM frame or stream exceeds the bounded speech resource limit");
+    }
+  }
   const message = error instanceof Error ? error.message : "";
   if (
     message.includes("sequence")
