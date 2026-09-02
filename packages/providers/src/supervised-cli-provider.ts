@@ -162,9 +162,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
       if (controller.signal.aborted || this.closed) return;
       yield proposal;
     } finally {
-      if (this.active.get(input.generationId) === record) {
-        this.active.delete(input.generationId);
-      }
+      this.active.delete(input.generationId);
     }
   }
 }
