@@ -89,6 +89,7 @@ export interface TldrawEditor {
   getShape: (id: string) => TLShapeRecord | undefined;
   getCurrentPageShapes: () => readonly TLShapeRecord[];
   createShapes: (shapes: readonly TLShapePartialRecord[]) => void;
+  restoreShapes?: (shapes: readonly TLShapePartialRecord[]) => void;
   deleteShapes: (ids: readonly string[]) => void;
   updateShapes: (shapes: readonly TLShapePartialRecord[]) => void;
   setReadOnly?: (readOnly: boolean) => void;
@@ -257,7 +258,12 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
 
     try {
       if (detached.length > 0) {
-        editor.createShapes(detached.map((shape) => globalThis.structuredClone(shape)));
+        const restored = detached.map((shape) => globalThis.structuredClone(shape));
+        if (editor.restoreShapes !== undefined) {
+          editor.restoreShapes(restored);
+        } else {
+          editor.createShapes(restored);
+        }
       }
       this.detachedPageShapes = null;
     } catch (error) {
