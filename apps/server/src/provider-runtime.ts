@@ -283,6 +283,9 @@ function captureRuntimeSourceOperation(
   let current: object | null = source;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
     if (current === Object.prototype) break;
+    if (utilTypes.isProxy(current)) {
+      throw new ProviderRuntimeResolutionError(errorCode);
+    }
 
     let descriptor: PropertyDescriptor | undefined;
     try {
@@ -324,6 +327,9 @@ function captureOptionalRuntimeDrainOperation(
   let current: object | null = source;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
     if (current === Object.prototype) break;
+    if (utilTypes.isProxy(current)) {
+      throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+    }
     let descriptor: PropertyDescriptor | undefined;
     try {
       descriptor = Object.getOwnPropertyDescriptor(current, "drain");
