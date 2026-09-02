@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { newDeliveryId, newSessionId } from "../packages/domain/src/index.js";
+import { newDeliveryId, newSessionId, newUtteranceId } from "../packages/domain/src/index.js";
 import {
   BrowserVoiceClient,
   BrowserVoiceStream,
@@ -133,6 +133,71 @@ describe("browser voice client adversarial boundaries", () => {
     const client = new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch });
     await expect(client.openStream(newSessionId())).rejects.toThrow();
     expect(requestedStreamId).toMatch(/^speech_stream_/u);
+  });
+
+  it("rejects a frame response whose event escapes the admitted stream identity", async () => {
+    const expectedStreamId = "speech_stream_expected_response_identity";
+    const authenticatedFetch: typeof fetch = async (input, init = {}) => {
+      if (!requestUrl(input).endsWith("/v1/voice/frames")) {
+        throw new Error("Unexpected frame-response identity test request");
+      }
+      const headers = new Headers(init.headers);
+      const requestId = headers.get("x-speech-request-id");
+      if (requestId === null) throw new Error("Expected speech request identity header");
+      return new Response(JSON.stringify({
+        protocolVersion: 1,
+        ok: true,
+        type: "VOICE_FRAME_RESULT",
+        events: [{
+          protocolVersion: 1,
+          type: "SPEECH_STARTED",
+          requestId,
+          streamId: "speech_stream_cross_wired",
+          utteranceId: newUtteranceId(),
+          atTimestampMs: 0
+        }],
+        terminal: false
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    };
+
+    const client = new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch });
+    const stream = new BrowserVoiceStream(client, newSessionId(), expectedStreamId);
+    await expect(stream.sendFrame(frame(48_000, 4_800)))
+      .rejects.toThrow(/stream\/request/u);
+  });
+
+  it("rejects a frame response whose event escapes the admitted request identity", async () => {
+    const expectedStreamId = "speech_stream_expected_request_identity";
+    const authenticatedFetch: typeof fetch = async (input) => {
+      if (!requestUrl(input).endsWith("/v1/voice/frames")) {
+        throw new Error("Unexpected frame-response request identity test request");
+      }
+      return new Response(JSON.stringify({
+        protocolVersion: 1,
+        ok: true,
+        type: "VOICE_FRAME_RESULT",
+        events: [{
+          protocolVersion: 1,
+          type: "SPEECH_STARTED",
+          requestId: "request_cross_wired",
+          streamId: expectedStreamId,
+          utteranceId: newUtteranceId(),
+          atTimestampMs: 0
+        }],
+        terminal: false
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    };
+
+    const client = new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch });
+    const stream = new BrowserVoiceStream(client, newSessionId(), expectedStreamId);
+    await expect(stream.sendFrame(frame(48_000, 4_800)))
+      .rejects.toThrow(/stream\/request/u);
   });
 
   it("allows a bounded retry to retire a stream after the first cancel transport attempt fails", async () => {
