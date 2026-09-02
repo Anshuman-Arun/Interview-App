@@ -31,8 +31,7 @@ function readonlyInputModalities(
   if (setHas(source, "text")) setAdd(target, "text");
   if (setHas(source, "image")) setAdd(target, "image");
 
-  let proxy: Set<InputModality>;
-  proxy = new Proxy(target, {
+  const proxy: Set<InputModality> = new Proxy(target, {
     get(set, key) {
       if (key === "add" || key === "delete" || key === "clear") {
         return immutableSetMutation;
