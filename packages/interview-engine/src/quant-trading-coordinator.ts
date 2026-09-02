@@ -346,19 +346,8 @@ export class QuantTradingSessionCoordinator {
       if (engine.getState().currentRound !== expectedRound) {
         throw new Error("Cannot apply Quant Trading action to a stale round");
       }
-      let evidence: QuantTradingRoundEvidenceEvent;
-      try {
-        engine.submitAction(action);
-        evidence = persistedRoundEvidence(engine.advance());
-      } catch (error) {
-        if (error instanceof RangeError && action.type === "QUOTE") {
-          throw new QuantTraderActionError(
-            "INVALID_QUOTE",
-            "Candidate quote exceeds bounded Quant Trading arithmetic"
-          );
-        }
-        throw error;
-      }
+      engine.submitAction(action);
+      const evidence = persistedRoundEvidence(engine.advance());
       const drafts: EventDraft[] = [
         {
           source: "USER",
