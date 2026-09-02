@@ -104,6 +104,80 @@ describe("desktop local model runtime", () => {
     });
   });
 
+  it("coalesces concurrent composition shutdown instead of double-closing worker cores", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-stop-coalesce-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    let shutdownCalls = 0;
+    let releaseShutdown: (() => void) | undefined;
+    const shutdownGate = new Promise<void>((resolve) => {
+      releaseShutdown = resolve;
+    });
+    const mutable = composition as unknown as {
+      speechWorker?: { shutdown(): Promise<void> };
+    };
+    mutable.speechWorker = {
+      shutdown: async () => {
+        shutdownCalls += 1;
+        await shutdownGate;
+      }
+    };
+
+    const first = composition.stopWorkers();
+    const second = composition.stopWorkers();
+    expect(second).toBe(first);
+    await Promise.resolve();
+    expect(shutdownCalls).toBe(1);
+    releaseShutdown?.();
+    await expect(first).resolves.toBeUndefined();
+    expect(shutdownCalls).toBe(1);
+  });
+
+  it("retains and retries a runtime view whose deletion failed during shutdown", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-stop-view-retry-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    let disposeCalls = 0;
+    const mutable = composition as unknown as {
+      speechView?: {
+        readonly root: string;
+        readonly paths: ReadonlyMap<string, string>;
+        dispose(): Promise<void>;
+      };
+    };
+    mutable.speechView = {
+      root: temporaryRoot("desktop-stop-view-"),
+      paths: new Map(),
+      dispose: async () => {
+        disposeCalls += 1;
+        if (disposeCalls === 1) throw new Error("synthetic view cleanup failure");
+      }
+    };
+
+    await expect(composition.stopWorkers()).rejects.toThrow(
+      "Desktop local model runtime shutdown failed"
+    );
+    expect(disposeCalls).toBe(1);
+
+    await expect(composition.start()).rejects.toThrow(
+      "Desktop local runtime cannot start after shutdown"
+    );
+    await expect(composition.stopWorkers()).resolves.toBeUndefined();
+    expect(disposeCalls).toBe(2);
+  });
+
   it("authenticates a supervised loopback speech worker and preserves bounded adapter output", async () => {
     const token = "a".repeat(64);
     const runtime = fixtureManager("speech-fixture", "speech", "fixture-speech-1", token);
