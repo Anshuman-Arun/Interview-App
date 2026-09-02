@@ -733,6 +733,18 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def monitor_parent_stdin(server: Any, stream: Any) -> None:
+    try:
+        for line in stream:
+            if line.rstrip("\r\n") == "shutdown":
+                return
+    finally:
+        # EOF means the supervising desktop process closed/died. The worker is
+        # application-owned and must not survive as an orphan merely because it
+        # did not receive the graceful command first.
+        server.shutdown()
+
+
 def main() -> int:
     args = parse_args()
     require_runtime_environment()
@@ -774,16 +786,12 @@ def main() -> int:
     server = WorkerServer(("127.0.0.1", 0), Handler, token=token, component=args.component, runtime=runtime)
     port = int(server.server_address[1])
 
-    def stdin_monitor() -> None:
-        try:
-            for line in sys.stdin:
-                if line.rstrip("\r\n") == "shutdown":
-                    server.shutdown()
-                    return
-        except Exception:
-            return
-
-    monitor = threading.Thread(target=stdin_monitor, name="desktop-worker-stdin", daemon=True)
+    monitor = threading.Thread(
+        target=monitor_parent_stdin,
+        args=(server, sys.stdin),
+        name="desktop-worker-stdin",
+        daemon=True,
+    )
     monitor.start()
     ready = {
         "ready": True,
