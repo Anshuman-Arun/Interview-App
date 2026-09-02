@@ -1399,6 +1399,57 @@ describe("adversarial quant lifecycle invariants", () => {
     }
   });
 
+  it("rejects a second persisted Quant completion transition during replay", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const trading = new QuantTradingSessionCoordinator(writer);
+    try {
+      await trading.initializeConfigured(
+        tradingConfiguration(),
+        8_888,
+        createCommandEnvelope({ sessionId, producer: "quant-terminal-replay-test" })
+      );
+      let state = trading.getPublicState();
+      while (state.actionRequired) {
+        state = (await trading.applyAction(
+          { type: "PASS" },
+          state.currentRound,
+          createCommandEnvelope({ sessionId, producer: "quant-terminal-replay-test" })
+        )).value;
+      }
+      expect(writer.getState().status).toBe("COMPLETED");
+      await writer.close();
+
+      const duplicateRequestId = newRequestId();
+      const priorSequence = store.eventCount(sessionId);
+      store.appendIdempotent({
+        sessionId,
+        requestId: duplicateRequestId,
+        causationId: duplicateRequestId,
+        correlationId: duplicateRequestId,
+        elapsedMs: 0,
+        expectedPriorSequence: priorSequence,
+        commandFingerprint: "8".repeat(64),
+        drafts: [{
+          source: "APPLICATION",
+          type: "SESSION_COMPLETED",
+          payload: {
+            completedAt: new Date().toISOString(),
+            summary: "forged duplicate completion"
+          }
+        }],
+        result: { injected: true }
+      });
+
+      expect(() => SessionWriter.open(store, sessionId))
+        .toThrow(/Quant sessions can complete only from active state/u);
+    } finally {
+      if (!writer.isClosed()) await writer.close();
+      store.close();
+    }
+  });
+
   it("rejects Research initialization that disagrees with persisted configured family", () => {
     const store = new SqliteEventStore(":memory:");
     const sessionId = newSessionId();
