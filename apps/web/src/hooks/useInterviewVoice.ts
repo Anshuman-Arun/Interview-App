@@ -148,8 +148,18 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     void disableMicrophone();
   }, [disableMicrophone, safelySetError]);
 
-  const processFrameResult = useCallback((result: Awaited<ReturnType<BrowserVoiceStream["sendFrame"]>>, epoch: number): void => {
-    if (epoch !== epochRef.current || !microphoneEnabledRef.current) return;
+  const processFrameResult = useCallback((
+    result: Awaited<ReturnType<BrowserVoiceStream["sendFrame"]>>,
+    epoch: number,
+    sourceSessionId: SessionId
+  ): void => {
+    if (!isVoiceContextCurrent(
+      epochRef.current,
+      microphoneEnabledRef.current,
+      epoch,
+      optionsRef.current.sessionId,
+      sourceSessionId
+    )) return;
     // The server emits SPEECH_STARTED only after beginUtterance() commits the
     // authoritative invalidation. The same bridge used by tests performs the
     // physical interruption only after that authority transition.
@@ -177,15 +187,29 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
         }
 
         let stream = streamRef.current;
+        if (stream !== null && stream.sessionId !== sessionId) {
+          streamRef.current = null;
+          await cancelStreamBounded(stream);
+          return;
+        }
         if (stream === null || stream.isClosed) {
           try {
             stream = await client.openStream(sessionId);
           } catch (openError) {
-            if (epoch !== epochRef.current) return;
+            if (
+              epoch !== epochRef.current
+              || optionsRef.current.sessionId !== sessionId
+            ) return;
             failVoiceCycle(safeVoiceError(openError));
             return;
           }
-          if (!isVoiceEpochCurrent(epochRef.current, microphoneEnabledRef.current, epoch)) {
+          if (!isVoiceContextCurrent(
+            epochRef.current,
+            microphoneEnabledRef.current,
+            epoch,
+            optionsRef.current.sessionId,
+            sessionId
+          )) {
             await cancelStreamBounded(stream);
             return;
           }
@@ -196,9 +220,12 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
         if (frame === undefined) continue;
         try {
           const result = await stream.sendFrame(frame);
-          processFrameResult(result, epoch);
+          processFrameResult(result, epoch, stream.sessionId);
         } catch (frameError) {
-          if (epoch !== epochRef.current) return;
+          if (
+            epoch !== epochRef.current
+            || optionsRef.current.sessionId !== stream.sessionId
+          ) return;
           failVoiceCycle(safeVoiceError(frameError));
           return;
         }
@@ -253,20 +280,32 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
         frameSize: 2_048,
         onFrame: (frame) => enqueueFrame(frame, epoch),
         onError: (captureError) => {
-          if (epoch !== epochRef.current) return;
+          if (
+            epoch !== epochRef.current
+            || optionsRef.current.sessionId !== sessionId
+          ) return;
           failVoiceCycle(
             captureError.message,
             captureError.code === "PERMISSION_DENIED" ? "DENIED" : "ERROR"
           );
         }
       });
-      if (!isVoiceEpochCurrent(epochRef.current, microphoneEnabledRef.current, epoch)) return;
+      if (!isVoiceContextCurrent(
+        epochRef.current,
+        microphoneEnabledRef.current,
+        epoch,
+        optionsRef.current.sessionId,
+        sessionId
+      )) return;
       if (mountedRef.current) {
         setPermission("GRANTED");
         setListening(true);
       }
     } catch (captureError) {
-      if (epoch !== epochRef.current) return;
+      if (
+        epoch !== epochRef.current
+        || optionsRef.current.sessionId !== sessionId
+      ) return;
       const classified = classifyCaptureError(captureError);
       if (mountedRef.current) setPermission(classified.permission);
       failVoiceCycle(classified.message);
@@ -449,10 +488,14 @@ async function cancelStreamBounded(stream: BrowserVoiceStream): Promise<void> {
 }
 
 
-function isVoiceEpochCurrent(
+function isVoiceContextCurrent(
   currentEpoch: number,
   microphoneEnabled: boolean,
-  expectedEpoch: number
+  expectedEpoch: number,
+  currentSessionId: SessionId | null,
+  expectedSessionId: SessionId
 ): boolean {
-  return currentEpoch === expectedEpoch && microphoneEnabled;
+  return currentEpoch === expectedEpoch
+    && microphoneEnabled
+    && currentSessionId === expectedSessionId;
 }
