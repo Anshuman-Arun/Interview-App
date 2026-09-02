@@ -382,6 +382,27 @@ describe("Antigravity CLI one-turn protocol", () => {
         ...PROPOSAL,
         speechText: undefined,
         boardActions: undefined
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: "x".repeat(12_001)
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        claimedDisclosureIds: Array.from(
+          { length: 129 },
+          (_, index) => `disclosure-${String(index)}`
+        )
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: [{
+          operation: "write_text",
+          layer: "AI_ANNOTATION",
+          content: "x".repeat(8_001),
+          annotationPurpose: "bounded annotation"
+        }]
       })
     ];
 
