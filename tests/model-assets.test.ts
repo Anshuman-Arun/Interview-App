@@ -81,6 +81,25 @@ describe("local model asset manager", () => {
     }
   });
 
+  it("honors cancellation on read-only installed-artifact integrity APIs", async () => {
+    const root = await newRoot();
+    const manager = managerFor(root);
+    const payload = Buffer.from("cancelled-read-only-inspection");
+    const manifest = manifestFor(payload, "https://example.test/cancelled-inspection.bin");
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(manager.inspect(manifest, controller.signal)).rejects.toMatchObject({
+      code: "CANCELLED"
+    });
+    await expect(
+      manager.verifyInstalledArtifact(manifest, controller.signal)
+    ).rejects.toMatchObject({ code: "CANCELLED" });
+    await expect(manager.getInstalledPath(manifest, controller.signal)).rejects.toMatchObject({
+      code: "CANCELLED"
+    });
+  });
+
   it("rejects inherited and accessor-backed manifest data without invoking getters", () => {
     const payload = Buffer.from("prototype-manifest");
     const manifest = manifestFor(payload, "https://example.test/prototype.bin");
