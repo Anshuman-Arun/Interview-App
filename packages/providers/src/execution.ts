@@ -14,12 +14,24 @@ import {
   type ReasoningTurnInput
 } from "../../domain/src/index.js";
 import { assertProviderPermitted, preflightProviderPolicy } from "./policy.js";
-import { snapshotValidatedModelCapabilities } from "./runtime-capabilities.js";
+import {
+  isValidatedModelCapabilitiesSnapshot,
+  snapshotValidatedModelCapabilities
+} from "./runtime-capabilities.js";
 
 const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 const MAX_PROVIDER_OUTPUT_DEPTH = 32;
 const MAX_PROVIDER_OUTPUT_NODES = 10_000;
 const MAX_PROVIDER_OUTPUT_TEXT_CHARACTERS = 1_000_000;
+const REFLECT_GET_OWN_PROPERTY_DESCRIPTOR_INTRINSIC =
+  Object.getOwnPropertyDescriptor;
+const REFLECT_GET_OWN_PROPERTY_DESCRIPTORS_INTRINSIC =
+  Object.getOwnPropertyDescriptors;
+/* eslint-disable @typescript-eslint/unbound-method -- Captured intrinsics are invoked only through Reflect.apply. */
+const SET_HAS_INTRINSIC = Set.prototype.has;
+const SET_SIZE_GETTER_INTRINSIC =
+  Object.getOwnPropertyDescriptor(Set.prototype, "size")?.get;
+/* eslint-enable @typescript-eslint/unbound-method */
 
 export type ProviderExecutionErrorCode =
   | "INVALID_PROVIDER_IDENTITY"
@@ -73,13 +85,29 @@ export async function openProviderExecutionSession(input: {
   const adapterVersion = parseProviderIdentity(
     readProviderMember(providerValue, "adapterVersion", "INVALID_PROVIDER_IDENTITY")
   );
-  const capabilitiesResult = ModelCapabilitiesSchema.safeParse(
-    readProviderMember(providerValue, "capabilities", "INVALID_PROVIDER_CAPABILITIES")
+  const rawCapabilities = readProviderMember(
+    providerValue,
+    "capabilities",
+    "INVALID_PROVIDER_CAPABILITIES"
   );
-  if (!capabilitiesResult.success) {
-    throw new ProviderExecutionError("INVALID_PROVIDER_CAPABILITIES");
+  let capabilities: ModelCapabilities;
+  if (isValidatedModelCapabilitiesSnapshot(rawCapabilities)) {
+    capabilities = snapshotValidatedModelCapabilities(rawCapabilities);
+  } else {
+    let capabilitySnapshot: unknown;
+    try {
+      capabilitySnapshot = snapshotUntrustedModelCapabilities(rawCapabilities);
+    } catch {
+      throw new ProviderExecutionError("INVALID_PROVIDER_CAPABILITIES");
+    }
+    const capabilitiesResult = ModelCapabilitiesSchema.safeParse(
+      capabilitySnapshot
+    );
+    if (!capabilitiesResult.success) {
+      throw new ProviderExecutionError("INVALID_PROVIDER_CAPABILITIES");
+    }
+    capabilities = snapshotValidatedModelCapabilities(capabilitiesResult.data);
   }
-  const capabilities = snapshotValidatedModelCapabilities(capabilitiesResult.data);
 
   const createSessionCandidate = readProviderMember(
     providerValue,
@@ -374,6 +402,176 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
       throw new ProviderExecutionError("PROVIDER_STREAM_FAILED");
     }
   }
+}
+
+function snapshotUntrustedModelCapabilities(
+  value: unknown
+): unknown {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
+    throw new Error("Provider capabilities are not plain data");
+  }
+
+  let prototype: object | null;
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  try {
+    const rawPrototype: unknown = Object.getPrototypeOf(value);
+    if (rawPrototype !== null && typeof rawPrototype !== "object") {
+      throw new Error("Invalid capabilities prototype");
+    }
+    prototype = rawPrototype;
+    descriptors = REFLECT_APPLY_INTRINSIC(
+      REFLECT_GET_OWN_PROPERTY_DESCRIPTORS_INTRINSIC,
+      Object,
+      [value]
+    ) as Readonly<Record<string, PropertyDescriptor>>;
+    symbols = Object.getOwnPropertySymbols(value);
+  } catch {
+    throw new Error("Provider capabilities inspection failed");
+  }
+  if (
+    (prototype !== Object.prototype && prototype !== null)
+    || symbols.length !== 0
+  ) {
+    throw new Error("Provider capabilities are not plain data");
+  }
+
+  const required = [
+    "inputModalities",
+    "textStreaming",
+    "structuredOutput",
+    "persistentSession",
+    "resumableSession",
+    "cancellation",
+    "sessionSurvivesClientAbort",
+    "sessionSurvivesProviderCancel",
+    "usageReporting",
+    "dataUse"
+  ] as const;
+  const allowed = new Set<string>([...required, "reasoningLevels"]);
+  if (Object.keys(descriptors).some((key) => !allowed.has(key))) {
+    throw new Error("Provider capabilities have unknown fields");
+  }
+
+  const readData = (key: string, optional = false): unknown => {
+    const descriptor = descriptors[key];
+    if (descriptor === undefined) {
+      if (optional) return undefined;
+      throw new Error("Provider capability field is missing");
+    }
+    if (descriptor.enumerable !== true || !("value" in descriptor)) {
+      throw new Error("Provider capability field is accessor-backed");
+    }
+    return descriptor.value;
+  };
+
+  const rawModalities = readData("inputModalities");
+  if (
+    typeof rawModalities !== "object"
+    || rawModalities === null
+    || utilTypes.isProxy(rawModalities)
+    || Object.getPrototypeOf(rawModalities) !== Set.prototype
+    || SET_SIZE_GETTER_INTRINSIC === undefined
+  ) {
+    throw new Error("Provider input modalities are invalid");
+  }
+  const modalitySize: unknown = REFLECT_APPLY_INTRINSIC(
+    SET_SIZE_GETTER_INTRINSIC,
+    rawModalities,
+    []
+  );
+  const hasText = REFLECT_APPLY_INTRINSIC(
+    SET_HAS_INTRINSIC,
+    rawModalities,
+    ["text"]
+  ) === true;
+  const hasImage = REFLECT_APPLY_INTRINSIC(
+    SET_HAS_INTRINSIC,
+    rawModalities,
+    ["image"]
+  ) === true;
+  const knownSize = Number(hasText) + Number(hasImage);
+  if (
+    typeof modalitySize !== "number"
+    || !Number.isSafeInteger(modalitySize)
+    || modalitySize !== knownSize
+  ) {
+    throw new Error("Provider input modalities contain unknown values");
+  }
+
+  const reasoningLevelsRaw = readData("reasoningLevels", true);
+  let reasoningLevels: unknown = undefined;
+  if (reasoningLevelsRaw !== undefined) {
+    if (
+      typeof reasoningLevelsRaw !== "object"
+      || reasoningLevelsRaw === null
+      || utilTypes.isProxy(reasoningLevelsRaw)
+      || !Array.isArray(reasoningLevelsRaw)
+      || Object.getPrototypeOf(reasoningLevelsRaw) !== Array.prototype
+    ) {
+      throw new Error("Provider reasoning levels are invalid");
+    }
+    const levelDescriptors = REFLECT_APPLY_INTRINSIC(
+      REFLECT_GET_OWN_PROPERTY_DESCRIPTORS_INTRINSIC,
+      Object,
+      [reasoningLevelsRaw]
+    ) as Readonly<Record<string, PropertyDescriptor>>;
+    const length = REFLECT_APPLY_INTRINSIC(
+      REFLECT_GET_OWN_PROPERTY_DESCRIPTOR_INTRINSIC,
+      Object,
+      [reasoningLevelsRaw, "length"]
+    )?.value as unknown;
+    if (
+      typeof length !== "number"
+      || !Number.isSafeInteger(length)
+      || length < 0
+      || length > 128
+    ) {
+      throw new Error("Provider reasoning levels are invalid");
+    }
+    const levels: string[] = [];
+    const levelKeys = new Set<string>(["length"]);
+    for (let index = 0; index < length; index += 1) {
+      const key = String(index);
+      levelKeys.add(key);
+      const descriptor = levelDescriptors[key];
+      if (
+        descriptor === undefined
+        || descriptor.enumerable !== true
+        || !("value" in descriptor)
+        || typeof descriptor.value !== "string"
+      ) {
+        throw new Error("Provider reasoning levels are invalid");
+      }
+      levels.push(descriptor.value);
+    }
+    if (Object.keys(levelDescriptors).some((key) => !levelKeys.has(key))) {
+      throw new Error("Provider reasoning levels have side properties");
+    }
+    reasoningLevels = levels;
+  }
+
+  return {
+    inputModalities: new Set([
+      ...(hasText ? ["text" as const] : []),
+      ...(hasImage ? ["image" as const] : [])
+    ]),
+    textStreaming: readData("textStreaming"),
+    structuredOutput: readData("structuredOutput"),
+    persistentSession: readData("persistentSession"),
+    resumableSession: readData("resumableSession"),
+    cancellation: readData("cancellation"),
+    sessionSurvivesClientAbort: readData("sessionSurvivesClientAbort"),
+    sessionSurvivesProviderCancel: readData("sessionSurvivesProviderCancel"),
+    usageReporting: readData("usageReporting"),
+    ...(reasoningLevels === undefined ? {} : { reasoningLevels }),
+    dataUse: readData("dataUse")
+  };
 }
 
 function snapshotUntrustedProviderData(value: unknown): unknown {
