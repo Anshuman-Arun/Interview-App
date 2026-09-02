@@ -7,6 +7,7 @@ import {
   newRequestId,
   newSessionId
 } from "../packages/domain/src/index.js";
+import { normalizeStudentShape } from "../apps/web/src/whiteboard/normalized-board.js";
 import {
   SessionEventSchema,
   initialSessionState,
@@ -109,6 +110,36 @@ describe("authoritative whiteboard and vision runtime contracts", () => {
       requestedObservationKind: "ANY",
       pngBase64: "AAAA"
     }).success).toBe(false);
+  });
+
+  it("normalizes metadata-free legacy student shapes deterministically", () => {
+    const legacyShape = {
+      id: "shape:legacy",
+      type: "geo",
+      x: 10,
+      y: 20,
+      props: { geo: "rectangle", w: 30, h: 40 },
+      meta: {}
+    };
+    const bounds = {
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+      minX: 10,
+      minY: 20,
+      maxX: 40,
+      maxY: 60
+    };
+
+    const first = normalizeStudentShape(legacyShape, bounds);
+    const second = normalizeStudentShape(legacyShape, bounds);
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({
+      createdAt: 0,
+      lastModifiedAt: 0,
+      revision: 1
+    });
   });
 
   it("rejects duplicate board-state shape identities", () => {
