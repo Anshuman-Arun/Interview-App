@@ -491,6 +491,8 @@ describe("production quant runtime integration", () => {
     expect(stoppedSerialized).not.toContain("stop-loss");
     expect(stoppedSerialized).not.toContain("threshold");
     expect(stoppedSerialized).not.toContain("max drawdown");
+    expect(registry.get(sessionId).getState().quantTrading?.rounds[0]?.riskReason)
+      .toContain("stop-loss threshold");
     expect(stopped.completion?.riskBreachCount).toBe(1);
     expect(registry.get(sessionId).getState().status).toBe("COMPLETED");
   });
