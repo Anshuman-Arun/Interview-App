@@ -619,9 +619,15 @@ export class VoiceInputCoordinator {
           break;
         }
         const authoritativeUtteranceId = await new TurnCoordinator(writer).beginUtterance();
-        if (!this.isCurrent(context, token)) break;
         context.workerUtteranceId = event.utteranceId;
         context.authoritativeUtteranceId = authoritativeUtteranceId;
+        if (!this.isCurrent(context, token)) {
+          await this.discardCapturingUtterance(
+            context,
+            "Speech stream ceased before admitted onset could remain authoritative"
+          );
+          break;
+        }
 
         // Authority changes before physical interruption/cancellation signals are
         // allowed to propagate. Provider/TTS cancellation may fail without
@@ -678,15 +684,12 @@ export class VoiceInputCoordinator {
           throw new Error("Transcript arrived without an admitted authoritative utterance");
         }
         const turns = new TurnCoordinator(writer);
-        const finalized = await turns.finalizeUtterance({
+        const finalized = await turns.finalizeAndCommitUtterance({
           utteranceId: authoritativeId,
           text: candidate.text
         });
-        if (!this.isCurrent(context, token)) break;
-        const turnId = await turns.commitInputEpisode(finalized.inputEpisodeId);
-        if (!this.isCurrent(context, token)) break;
 
-        const turn = writer.getState().turns[turnId];
+        const turn = writer.getState().turns[finalized.turnId];
         if (
           turn === undefined
           || turn.inputEpisodeId !== finalized.inputEpisodeId
@@ -696,12 +699,12 @@ export class VoiceInputCoordinator {
         }
         commit = {
           inputEpisodeId: finalized.inputEpisodeId,
-          turnId,
+          turnId: finalized.turnId,
           text: candidate.text
         };
         void this.orchestrator.orchestrateTurn({
           sessionId: context.sessionId,
-          turnId,
+          turnId: finalized.turnId,
           inputEpisodeId: finalized.inputEpisodeId,
           studentText: candidate.text
         }).catch(() => {
