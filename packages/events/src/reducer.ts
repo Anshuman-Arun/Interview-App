@@ -185,7 +185,6 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       const result = event.payload.result;
       if (
         result.family !== quantTrading.definition.family
-        || result.version !== quantTrading.definition.version
         || result.seed !== quantTrading.definition.seed
         || result.roundsCompleted !== quantTrading.rounds.length
         || result.tradeCount !== result.finalPortfolio.tradeCount
