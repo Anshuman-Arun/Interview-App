@@ -332,6 +332,34 @@ describe("supervised one-shot process execution", () => {
     }))).rejects.toMatchObject({ code: "EXECUTABLE_UNSAFE" });
   });
 
+  it.runIf(process.platform === "win32")(
+    "serializes simultaneous first-use content pinning without cross-request corruption",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "supervised-concurrent-pin-"));
+      temporaryRoots.push(root);
+      const executable = join(root, "node.exe");
+      copyFileSync(process.execPath, executable);
+      const runtime = new SupervisedProcessRunner([{
+        id: "concurrent-pin",
+        executable,
+        isolatedWorkingDirectory: true
+      }]);
+
+      const [first, second] = await Promise.all([
+        runtime.execute(request([FIXTURE, "echo"], {
+          executableId: "concurrent-pin",
+          stdin: "first"
+        })),
+        runtime.execute(request([FIXTURE, "echo"], {
+          executableId: "concurrent-pin",
+          stdin: "second"
+        }))
+      ]);
+
+      expect([first.stdout, second.stdout].sort()).toEqual(["first", "second"]);
+    }
+  );
+
   it("does not start a process for an already-cancelled request", async () => {
     const runtime = runner();
     const controller = new AbortController();
