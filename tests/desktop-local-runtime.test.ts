@@ -1129,6 +1129,15 @@ function temporaryRoot(prefix: string): string {
   return root;
 }
 
+async function waitForCondition(predicate: () => boolean): Promise<void> {
+  const deadline = performance.now() + 5_000;
+  while (performance.now() < deadline) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
+  expect(predicate()).toBe(true);
+}
+
 async function waitForStatus(
   runtime: LocalRuntimeManager,
   componentId: string,
