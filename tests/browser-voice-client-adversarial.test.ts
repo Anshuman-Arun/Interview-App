@@ -352,6 +352,63 @@ describe("browser voice client adversarial boundaries", () => {
       .rejects.toThrow(/stream\/request/u);
   });
 
+  it("serializes frame and flush while allowing cancellation to preempt an in-flight frame", async () => {
+    let releaseFrame: ((response: Response) => void) | undefined;
+    let heldFrameInit: RequestInit | undefined;
+    let flushRequests = 0;
+    let cancelRequests = 0;
+    const streamId = "speech_stream_control_serialization";
+    const authenticatedFetch: typeof fetch = async (input, init = {}) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/v1/voice/frames")) {
+        heldFrameInit = init;
+        return new Promise<Response>((resolve) => {
+          releaseFrame = resolve;
+        });
+      }
+      if (url.endsWith("/v1/voice/flush")) {
+        flushRequests += 1;
+        throw new Error("Flush must not reach transport while a frame is in flight");
+      }
+      if (url.endsWith("/v1/voice/cancel")) {
+        cancelRequests += 1;
+        return new Response(JSON.stringify({
+          protocolVersion: 1,
+          ok: true,
+          type: "VOICE_STREAM_CANCELLED",
+          streamId
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      throw new Error("Unexpected browser voice control-serialization request");
+    };
+    const stream = new BrowserVoiceStream(
+      new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch }),
+      newSessionId(),
+      streamId
+    );
+
+    const inFlightFrame = stream.sendFrame(frame(48_000, 4_800));
+    await Promise.resolve();
+    expect(heldFrameInit).toBeDefined();
+
+    await expect(stream.flush()).rejects.toThrow(/overlapping frame\/flush/u);
+    expect(flushRequests).toBe(0);
+
+    await expect(stream.cancel()).resolves.toBeUndefined();
+    expect(cancelRequests).toBe(1);
+    expect(stream.isClosed).toBe(true);
+
+    if (heldFrameInit === undefined || releaseFrame === undefined) {
+      throw new Error("Expected held frame transport request");
+    }
+    releaseFrame(admittedFrameResponse(heldFrameInit));
+    await expect(inFlightFrame).resolves.toMatchObject({ terminal: false });
+    expect(stream.isClosed).toBe(true);
+  });
+
   it("allows a bounded retry to retire a stream after the first cancel transport attempt fails", async () => {
     let cancelAttempts = 0;
     const streamId = "speech_stream_retry_cancel";
