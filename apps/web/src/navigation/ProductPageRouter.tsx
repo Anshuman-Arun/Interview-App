@@ -21,6 +21,9 @@ export function ProductPageRouter({
   onResume,
   onReview,
   onRefreshSessions,
+  history,
+  historyLoading,
+  historyError,
   connection,
   notice,
   onDismissNotice,
@@ -36,6 +39,9 @@ export function ProductPageRouter({
   readonly onResume: (sessionId: SessionId) => void;
   readonly onReview: (sessionId: SessionId, view: ReviewView) => void;
   readonly onRefreshSessions: () => void;
+  readonly history: import("../../../../packages/replay/src/index.js").SessionHistoryReadResponse | null;
+  readonly historyLoading: boolean;
+  readonly historyError: string | null;
   readonly connection?: {
     readonly managed: boolean;
     readonly baseUrl: string;
@@ -85,6 +91,9 @@ export function ProductPageRouter({
           onResume={onResume}
           onReview={(sessionId) => onReview(sessionId, "evaluation")}
           onRefresh={onRefreshSessions}
+          history={history}
+          historyLoading={historyLoading}
+          historyError={historyError}
         />
       );
       break;

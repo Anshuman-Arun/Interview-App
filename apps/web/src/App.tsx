@@ -257,6 +257,9 @@ export const App: React.FC = () => {
           });
         }}
         onRefreshSessions={refreshStoredSessions}
+        history={historyRead}
+        historyLoading={historyLoading}
+        historyError={historyError}
         connection={{
           managed: session.isTransportManaged,
           baseUrl: session.baseUrl,

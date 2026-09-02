@@ -207,3 +207,48 @@
     grid-template-columns: 1fr;
   }
 }
+
+.expressive-settings__connection form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.expressive-settings__connection input {
+  min-height: 31px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: 500 8.5px/1 var(--font-mono);
+}
+
+.expressive-settings__connection input:focus {
+  border-color: var(--accent);
+}
+
+.expressive-settings__connection input:disabled {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.expressive-settings__connection button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.expressive-settings__managed {
+  display: grid;
+  gap: 5px;
+}
+
+.expressive-settings__managed > span {
+  color: var(--success);
+  font: 650 7px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

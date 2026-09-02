@@ -3,6 +3,9 @@ import type {
   SessionId,
   StoredSessionSummary
 } from "../../../../packages/domain/src/index.js";
+import type {
+  SessionHistoryReadResponse
+} from "../../../../packages/replay/src/index.js";
 import "./SessionsPage.css";
 
 type Filter = "ALL" | "ACTIVE" | "COMPLETED" | "ARCHIVED";
@@ -13,7 +16,10 @@ export function SessionsPage({
   canReview,
   onResume,
   onReview,
-  onRefresh
+  onRefresh,
+  history,
+  historyLoading,
+  historyError
 }: {
   readonly sessions: readonly StoredSessionSummary[];
   readonly currentSessionId: SessionId | null;
@@ -21,6 +27,9 @@ export function SessionsPage({
   readonly onResume: (sessionId: SessionId) => void;
   readonly onReview: (sessionId: SessionId) => void;
   readonly onRefresh: () => void;
+  readonly history: SessionHistoryReadResponse | null;
+  readonly historyLoading: boolean;
+  readonly historyError: string | null;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
@@ -62,6 +71,57 @@ export function SessionsPage({
           A ledger, not a dashboard. Resume work, inspect finished sessions,
           and keep exact problem/version history separate.
         </p>
+      </section>
+
+      <section className="expressive-sessions__history" data-testid="longitudinal-history-panel">
+        <header>
+          <span>GROUND TRUTH</span>
+          <strong>Longitudinal read</strong>
+          <small>
+            {history === null
+              ? historyLoading
+                ? "reading…"
+                : historyError ?? "no grounded aggregate yet"
+              : `${String(history.longitudinal.includedSessionCount)} bounded session projection(s)`}
+          </small>
+        </header>
+
+        {history !== null ? (
+          <>
+            <div className="expressive-sessions__history-stats">
+              {history.longitudinal.evaluationStatistics
+                .filter((item) => item.average.compositeScore !== null)
+                .slice(0, 4)
+                .map((item) => (
+                  <article key={`${item.problemId}:${item.problemVersion}`}>
+                    <code>{item.problemId} @ {item.problemVersion}</code>
+                    <strong>{item.average.compositeScore}</strong>
+                    <span>
+                      {item.scoredSessionCount["compositeScore"]} scored / {item.sessionCount} evaluated
+                    </span>
+                  </article>
+                ))}
+            </div>
+
+            {history.longitudinal.improvement.length > 0 && (
+              <div className="expressive-sessions__improvement">
+                {history.longitudinal.improvement.slice(0, 3).map((item) => (
+                  <span key={`${item.fromSessionId}:${item.toSessionId}`}>
+                    exact-problem Δ {item.compositeScoreDelta > 0 ? "+" : ""}
+                    {item.compositeScoreDelta}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {history.longitudinal.sessionTruncation.truncated && (
+              <p>
+                {history.longitudinal.sessionTruncation.remainingCount} session(s)
+                sit outside this bounded aggregate.
+              </p>
+            )}
+          </>
+        ) : null}
       </section>
 
       <section className="expressive-sessions__toolbar">

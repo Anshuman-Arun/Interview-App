@@ -242,3 +242,103 @@
     display: none;
   }
 }
+
+.expressive-sessions__history {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.expressive-sessions__history > header {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.expressive-sessions__history > header > span {
+  color: var(--accent);
+  font: 650 7px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.expressive-sessions__history > header > strong {
+  color: var(--text-primary);
+  font: 620 10px/1.25 var(--font-display);
+}
+
+.expressive-sessions__history > header > small {
+  color: var(--text-muted);
+  font: 450 7.5px/1.35 var(--font-ui);
+}
+
+.expressive-sessions__history-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.expressive-sessions__history-stats article {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 9px;
+  border-left: 2px solid var(--border-default);
+  background: var(--surface-raised);
+}
+
+.expressive-sessions__history-stats code {
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 450 6.5px/1.3 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expressive-sessions__history-stats strong {
+  color: var(--text-primary);
+  font: 650 19px/1 var(--font-display);
+}
+
+.expressive-sessions__history-stats span,
+.expressive-sessions__improvement span,
+.expressive-sessions__history > p {
+  color: var(--text-muted);
+  font: 500 7px/1.35 var(--font-ui);
+}
+
+.expressive-sessions__improvement {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.expressive-sessions__improvement span {
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+}
+
+.expressive-sessions__history > p {
+  grid-column: 2;
+  margin: 6px 0 0;
+  color: var(--warning);
+}
+
+@media (max-width: 900px) {
+  .expressive-sessions__history {
+    grid-template-columns: 1fr;
+  }
+
+  .expressive-sessions__history-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expressive-sessions__improvement,
+  .expressive-sessions__history > p {
+    grid-column: 1;
+  }
+}

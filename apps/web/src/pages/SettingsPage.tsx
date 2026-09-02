@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type {
   BorderStyle,
   CornerStyle,
@@ -18,6 +19,12 @@ export function SettingsPage({
     readonly onSaveBaseUrl: (baseUrl: string) => void;
   };
 }) {
+  const [draftBaseUrl, setDraftBaseUrl] = useState(connection?.baseUrl ?? "");
+
+  useEffect(() => {
+    setDraftBaseUrl(connection?.baseUrl ?? "");
+  }, [connection?.baseUrl]);
+
   const {
     settings,
     setTheme,
@@ -180,14 +187,34 @@ export function SettingsPage({
             </div>
           </div>
           <div className="expressive-settings__control expressive-settings__connection">
-            <code>{connection.baseUrl}</code>
-            {!connection.managed && !connection.locked && (
-              <button
-                type="button"
-                onClick={() => connection.onSaveBaseUrl(connection.baseUrl)}
+            {connection.managed ? (
+              <div className="expressive-settings__managed">
+                <span>Desktop managed</span>
+                <code>{connection.baseUrl}</code>
+              </div>
+            ) : (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (connection.locked) return;
+                  connection.onSaveBaseUrl(draftBaseUrl.trim());
+                }}
               >
-                Apply
-              </button>
+                <input
+                  type="url"
+                  value={draftBaseUrl}
+                  onChange={(event) => setDraftBaseUrl(event.target.value)}
+                  disabled={connection.locked}
+                  aria-label="Loopback command URL"
+                  placeholder="http://127.0.0.1:43123"
+                />
+                <button
+                  type="submit"
+                  disabled={connection.locked || draftBaseUrl.trim().length === 0}
+                >
+                  Apply
+                </button>
+              </form>
             )}
           </div>
         </section>
