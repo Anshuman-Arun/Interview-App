@@ -87,6 +87,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
   const microphoneEnabledRef = useRef(false);
   const selectedInputRef = useRef<string | undefined>(undefined);
   const optionsRef = useRef(options);
+  const observedSessionIdRef = useRef<SessionId | null>(options.sessionId);
   optionsRef.current = options;
   selectedInputRef.current = inputDeviceId;
   microphoneEnabledRef.current = microphoneEnabled;
@@ -339,6 +340,18 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
   }, [refreshAudioDevices]);
 
   useEffect(() => {
+    const previousSessionId = observedSessionIdRef.current;
+    observedSessionIdRef.current = options.sessionId;
+    if (
+      previousSessionId !== options.sessionId
+      && (microphoneEnabledRef.current || streamRef.current !== null)
+    ) {
+      // Session replacement is an authority boundary. Invalidate the local
+      // epoch immediately so late STT/frame callbacks from the old session
+      // cannot reach the newly selected session.
+      void disableMicrophone();
+      return;
+    }
     if (options.sessionActive && options.sessionId !== null) return;
     if (microphoneEnabledRef.current || streamRef.current !== null) {
       void disableMicrophone();
