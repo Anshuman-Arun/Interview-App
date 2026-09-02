@@ -249,12 +249,15 @@ export const App: React.FC = () => {
         onResume={(sessionId) => {
           void handleRecoverSession(sessionId);
         }}
-        onReview={(sessionId, view) => {
-          navigate({
-            page: "review",
-            sessionId,
-            view
-          });
+        onReview={(sessionId, view, options) => {
+          navigate(
+            {
+              page: "review",
+              sessionId,
+              view
+            },
+            options
+          );
         }}
         onRefreshSessions={refreshStoredSessions}
         history={historyRead}

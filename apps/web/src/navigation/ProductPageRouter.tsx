@@ -37,7 +37,11 @@ export function ProductPageRouter({
   readonly onNavigatePage: (page: ProductPageId) => void;
   readonly onEnterInterview: () => void;
   readonly onResume: (sessionId: SessionId) => void;
-  readonly onReview: (sessionId: SessionId, view: ReviewView) => void;
+  readonly onReview: (
+    sessionId: SessionId,
+    view: ReviewView,
+    options?: { readonly replace?: boolean }
+  ) => void;
   readonly onRefreshSessions: () => void;
   readonly history: import("../../../../packages/replay/src/index.js").SessionHistoryReadResponse | null;
   readonly historyLoading: boolean;
@@ -115,7 +119,9 @@ export function ProductPageRouter({
         <ReviewPageShell
           sessionId={route.sessionId}
           view={route.view}
-          onViewChange={(view) => onReview(route.sessionId, view)}
+          onViewChange={(view) =>
+            onReview(route.sessionId, view, { replace: true })
+          }
           onBack={() => onNavigatePage("sessions")}
           evaluation={renderReview(route.sessionId, "evaluation")}
           replay={renderReview(route.sessionId, "replay")}

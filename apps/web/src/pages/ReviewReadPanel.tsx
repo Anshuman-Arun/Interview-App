@@ -37,6 +37,21 @@ export function ReviewReadPanel({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setEvaluation(null);
+    setReplay(null);
+    setError(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (view === "evaluation" && evaluation !== null) {
+      setLoading(false);
+      return;
+    }
+    if (view === "replay" && replay !== null) {
+      setLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     setError(null);
     setLoading(true);
@@ -68,7 +83,14 @@ export function ReviewReadPanel({
       });
 
     return () => controller.abort();
-  }, [readEvaluation, readReplay, sessionId, view]);
+  }, [
+    evaluation,
+    readEvaluation,
+    readReplay,
+    replay,
+    sessionId,
+    view
+  ]);
 
   if (loading) {
     return (

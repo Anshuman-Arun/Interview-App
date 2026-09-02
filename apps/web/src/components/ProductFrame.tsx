@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { BrandMark } from "./BrandMark.js";
 import "./ProductFrame.css";
 
@@ -23,6 +23,12 @@ export function ProductFrame({
   readonly notice?: string | null;
   readonly onDismissNotice?: (() => void) | undefined;
 }) {
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [title]);
+
   const items: readonly { id: ProductPageId; label: string; index: string }[] = [
     { id: "home", label: "Home", index: "01" },
     { id: "sessions", label: "Sessions", index: "02" },
@@ -72,7 +78,7 @@ export function ProductFrame({
         <header className="product-frame__header">
           <div>
             <span className="product-frame__kicker">{kicker}</span>
-            <h1>{title}</h1>
+            <h1 ref={headingRef} tabIndex={-1}>{title}</h1>
           </div>
           {aside}
         </header>

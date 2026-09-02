@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import type { SessionId } from "../../../../packages/domain/src/index.js";
 import "./ReviewPageShell.css";
 
@@ -19,6 +19,20 @@ export function ReviewPageShell({
   readonly evaluation: ReactNode;
   readonly replay: ReactNode;
 }) {
+  const evaluationRef = useRef<HTMLButtonElement | null>(null);
+  const replayRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const next: ReviewView = view === "evaluation" ? "replay" : "evaluation";
+    onViewChange(next);
+    queueMicrotask(() => {
+      if (next === "evaluation") evaluationRef.current?.focus();
+      else replayRef.current?.focus();
+    });
+  };
+
   return (
     <div className="expressive-review">
       <header className="expressive-review__hero">
@@ -32,18 +46,28 @@ export function ReviewPageShell({
 
       <div className="expressive-review__tabs" role="tablist" aria-label="Review view">
         <button
+          ref={evaluationRef}
+          id="review-tab-evaluation"
           type="button"
           role="tab"
           aria-selected={view === "evaluation"}
+          aria-controls="review-panel"
+          tabIndex={view === "evaluation" ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => onViewChange("evaluation")}
         >
           <span>01</span>
           Evaluation
         </button>
         <button
+          ref={replayRef}
+          id="review-tab-replay"
           type="button"
           role="tab"
           aria-selected={view === "replay"}
+          aria-controls="review-panel"
+          tabIndex={view === "replay" ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => onViewChange("replay")}
         >
           <span>02</span>
@@ -51,7 +75,14 @@ export function ReviewPageShell({
         </button>
       </div>
 
-      <section className="expressive-review__content" role="tabpanel">
+      <section
+        id="review-panel"
+        className="expressive-review__content"
+        role="tabpanel"
+        aria-labelledby={
+          view === "evaluation" ? "review-tab-evaluation" : "review-tab-replay"
+        }
+      >
         {view === "evaluation" ? evaluation : replay}
       </section>
     </div>
