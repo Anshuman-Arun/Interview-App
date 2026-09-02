@@ -216,7 +216,8 @@ describe("expressive product integration invariants", () => {
     );
 
     expect(app).toContain('(session.isSessionStarted && session.sessionStatus === "ACTIVE")');
-    expect(app).toContain('s.status === "ACTIVE"');
+    expect(app).toContain('storedSession.status === "ACTIVE"');
+    expect(app).toContain("activeSessions");
     expect(app).toContain("hasActiveInterview");
     expect(app).toContain("|| sessionTerminalPending");
   });
@@ -277,13 +278,20 @@ describe("expressive product integration invariants", () => {
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
+    const settings = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/pages/SettingsPage.tsx"),
+      "utf8"
+    );
 
     expect(hook).toContain("deriveDefaultRendererStreamUrl(candidate)");
     expect(hook).toContain("deriveDefaultVoiceBaseUrl(candidate)");
     expect(hook).toContain("Command server URL must be an exact HTTP loopback origin with usable renderer and voice ports");
     expect(hook).toContain("if (normalized === baseUrl) return");
-    expect(app).toContain("setInputUrl(session.baseUrl)");
-    expect(app).toContain("[session.baseUrl]");
+    expect(settings).toContain('const [draftBaseUrl, setDraftBaseUrl]');
+    expect(settings).toContain('setDraftBaseUrl(connection?.baseUrl ?? "")');
+    expect(settings).toContain("[connection?.baseUrl]");
+    expect(app).toContain("onSaveBaseUrl: session.setBaseUrl");
+    expect(app).not.toContain("setInputUrl(session.baseUrl)");
   });
 
   it("keeps ambiguous and superseded terminal outcomes fail-closed", () => {
