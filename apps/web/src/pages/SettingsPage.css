@@ -77,8 +77,7 @@
   min-width: 0;
 }
 
-.expressive-settings__segments,
-.expressive-settings__scale {
+.expressive-settings__segments {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
@@ -90,7 +89,6 @@
 }
 
 .expressive-settings__segments button,
-.expressive-settings__scale button,
 .expressive-settings__chips button {
   min-height: 30px;
   border: 1px solid transparent;
@@ -103,7 +101,6 @@
 }
 
 .expressive-settings__segments button[aria-pressed="true"],
-.expressive-settings__scale button[aria-pressed="true"],
 .expressive-settings__chips button[aria-pressed="true"] {
   border-color: var(--border-default);
   background: var(--surface-panel);
@@ -129,10 +126,15 @@
 
 .expressive-settings__swatches button[aria-pressed="true"]::after {
   position: absolute;
-  inset: -5px;
-  border: 1px solid var(--text-primary);
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  background: var(--surface-panel);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-primary) 22%, transparent);
   content: "";
+  transform: translate(-50%, -50%);
 }
 
 .expressive-settings__range {
@@ -251,4 +253,77 @@
   font: 650 7px/1 var(--font-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+
+.expressive-settings__zoom {
+  display: grid;
+  gap: 10px;
+}
+
+.expressive-settings__zoom-stepper {
+  display: grid;
+  grid-template-columns: 34px minmax(82px, 1fr) 34px auto;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.expressive-settings__zoom-stepper > button,
+.expressive-settings__zoom-stepper label {
+  min-height: 32px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+}
+
+.expressive-settings__zoom-stepper > button {
+  cursor: pointer;
+  font: 600 10px/1 var(--font-ui);
+}
+
+.expressive-settings__zoom-stepper > button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.expressive-settings__zoom-stepper > button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.expressive-settings__zoom-stepper label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font: 600 9px/1 var(--font-mono);
+}
+
+.expressive-settings__zoom-stepper label input {
+  width: 52px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: right;
+  font: inherit;
+  appearance: textfield;
+}
+
+.expressive-settings__zoom-stepper label input::-webkit-inner-spin-button,
+.expressive-settings__zoom-stepper label input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.expressive-settings__zoom-stepper .expressive-settings__zoom-reset {
+  padding: 0 10px;
+  font-size: 8px;
+}
+
+.expressive-settings__zoom > input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
 }

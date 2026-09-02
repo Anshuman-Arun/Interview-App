@@ -90,24 +90,35 @@ describe("expressive product integration invariants", () => {
     expect(home).toContain("Return to room");
   });
 
-  it("does not offer a second session from the ACTIVE-session overlay", () => {
+  it("keeps live navigation focused and uses Home as a non-terminal pause", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
-    expect(app).toContain("Current interview is active. End or archive it before starting or reviewing another session.");
-    expect(app).toContain("hasActiveInterview");
-    expect(app).toContain("!hasActiveInterview");
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+
+    expect(app).toContain("session.pauseSession()");
+    expect(app).toContain('navigateProductPage("home")');
+    expect(app).toContain("session.resumePausedSession()");
+    expect(app).not.toContain("Stored Interview Sessions");
     expect(app).not.toContain("<SessionReviewModal");
+    expect(hook).toContain("const pauseSession = useCallback");
+    expect(hook).toContain("sessionMutationAdmissionRef.current = false");
+    expect(hook).toContain("stopVisionScheduling()");
+    expect(hook).toContain("stopRendererTransport()");
   });
 
-  it("route-locks ACTIVE interviews to the live workspace", () => {
+  it("route-locks live ACTIVE interviews while permitting an explicit paused Home", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
 
-    expect(app).toContain("routeForActiveInterview(route, hasActiveInterview)");
+    expect(app).toContain("routeForActiveInterview(");
+    expect(app).toContain("session.isPaused");
     expect(app).toContain('navigate({ page: "interview" }, { replace: true })');
     expect(app).toContain("<ProductPageRouter");
     expect(app).toContain('data-compact-pane={compactPane}');
@@ -206,23 +217,22 @@ describe("expressive product integration invariants", () => {
     );
 
     expect(app).toContain('(session.isSessionStarted && session.sessionStatus === "ACTIVE")');
-    expect(app).toContain('s.status === "ACTIVE"');
+    expect(app).toContain('storedSession.status === "ACTIVE"');
+    expect(app).toContain("activeSessions");
     expect(app).toContain("hasActiveInterview");
     expect(app).toContain("|| sessionTerminalPending");
   });
 
-  it("does not read or render longitudinal review data inside a live interview", () => {
+  it("does not mount history or review UI inside the focused live workspace", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
 
-    expect(app).toContain("!hasActiveInterview && historyRead !== null");
-    expect(app).toContain("!hasActiveInterview ? (");
-    expect(app).toContain("historyLoading && historyRead === null");
-    expect(app).toContain('if (session.isSessionStarted && session.sessionStatus === "ACTIVE")');
-    expect(app).toContain('hasActiveInterview ? "Session record"');
-    expect(app).toContain("Problem metadata is intentionally hidden during the live interview.");
+    expect(app).toContain('if (displayRoute.page !== "interview")');
+    expect(app).toContain("<ProductPageRouter");
+    expect(app).not.toContain("Stored Interview Sessions");
+    expect(app).not.toContain("Grounded history");
     expect(app).not.toContain("<SessionReviewModal");
   });
 
@@ -269,13 +279,20 @@ describe("expressive product integration invariants", () => {
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
+    const settings = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/pages/SettingsPage.tsx"),
+      "utf8"
+    );
 
     expect(hook).toContain("deriveDefaultRendererStreamUrl(candidate)");
     expect(hook).toContain("deriveDefaultVoiceBaseUrl(candidate)");
     expect(hook).toContain("Command server URL must be an exact HTTP loopback origin with usable renderer and voice ports");
     expect(hook).toContain("if (normalized === baseUrl) return");
-    expect(app).toContain("setInputUrl(session.baseUrl)");
-    expect(app).toContain("[session.baseUrl]");
+    expect(settings).toContain('const [draftBaseUrl, setDraftBaseUrl]');
+    expect(settings).toContain('setDraftBaseUrl(connection?.baseUrl ?? "")');
+    expect(settings).toContain("[connection?.baseUrl]");
+    expect(app).toContain("onSaveBaseUrl: session.setBaseUrl");
+    expect(app).not.toContain("setInputUrl(session.baseUrl)");
   });
 
   it("keeps ambiguous and superseded terminal outcomes fail-closed", () => {
@@ -302,31 +319,24 @@ describe("expressive product integration invariants", () => {
     );
 
     expect(app).toContain('session.sessionStatus !== "ACTIVE"');
+    expect(app).toContain("session.isPaused");
     expect(app).toContain("const recoverySessionParse = SessionIdSchema.safeParse");
     expect(app).toContain("recoverySessionId === null");
     expect(app).toContain("aria-invalid={recoverySessionInputInvalid}");
-    expect(app).toContain('role="dialog"');
-    expect(app).toContain('aria-modal="true"');
-    expect(app).toContain('aria-label="Close stored sessions"');
-    expect(app).toContain('setActiveTab("whiteboard")');
     expect(app).toContain('setCompactPane("whiteboard")');
   });
 
-  it("styles Whiteboard and Details from actual tab selection state", () => {
+  it("keeps one focused whiteboard surface instead of an empty Details inspector", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
-    const css = fs.readFileSync(
-      path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
-      "utf8"
-    );
 
-    expect(app).toContain('role="tablist"');
-    expect(app).toContain('aria-selected={activeTab === "whiteboard"}');
-    expect(app).toContain('aria-selected={activeTab === "formulation"}');
-    expect(css).toContain('.panel-tabs button[aria-selected="true"]');
-    expect(css).not.toContain('button[data-testid="tab-whiteboard"] {');
+    expect(app).toContain('data-testid="tab-whiteboard"');
+    expect(app).toContain("<WhiteboardCanvas");
+    expect(app).not.toContain("Session Context");
+    expect(app).not.toContain("Problem metadata is intentionally hidden during the live interview.");
+    expect(app).not.toContain('activeTab === "formulation"');
   });
 
   it("does not add expensive decorative effects", () => {

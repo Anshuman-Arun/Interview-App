@@ -646,14 +646,19 @@ describe("Adversarial Test Suite 3: Full Oxford Ramsey R(3,3) Multi-Turn Socrati
 
     expect(transcriptMarkup).toContain("Student (You)");
     expect(transcriptMarkup).toContain("Socratic Interviewer");
-    expect(transcriptMarkup).toContain("Turn: " + t1Commit.turnId);
-    expect(transcriptMarkup).toContain("Turn: " + t2Commit.turnId);
-    expect(transcriptMarkup).toContain("Turn: " + t3Commit.turnId);
-    expect(transcriptMarkup).toContain("Turn: " + t4Commit.turnId);
-    expect(transcriptMarkup).toContain("Delivery: " + t1TextDeliveryId);
-    expect(transcriptMarkup).toContain("Delivery: " + t2TextDeliveryId);
-    expect(transcriptMarkup).toContain("Delivery: " + t3TextDeliveryId);
-    expect(transcriptMarkup).toContain("Delivery: " + t4TextDeliveryId);
+    // Internal authority identifiers remain in application state but are not
+    // product-facing transcript chrome.
+    expect(transcriptItems.some((item) => item.turnId === t1Commit.turnId)).toBe(true);
+    expect(transcriptItems.some((item) => item.turnId === t2Commit.turnId)).toBe(true);
+    expect(transcriptItems.some((item) => item.turnId === t3Commit.turnId)).toBe(true);
+    expect(transcriptItems.some((item) => item.turnId === t4Commit.turnId)).toBe(true);
+    expect(transcriptItems.some((item) => item.deliveryId === t1TextDeliveryId)).toBe(true);
+    expect(transcriptItems.some((item) => item.deliveryId === t2TextDeliveryId)).toBe(true);
+    expect(transcriptItems.some((item) => item.deliveryId === t3TextDeliveryId)).toBe(true);
+    expect(transcriptItems.some((item) => item.deliveryId === t4TextDeliveryId)).toBe(true);
+    expect(transcriptMarkup).not.toContain("Turn:");
+    expect(transcriptMarkup).not.toContain("Episode:");
+    expect(transcriptMarkup).not.toContain("Delivery:");
     expect(transcriptMarkup).toContain("katex");
     expect(transcriptMarkup).toContain("R(3,3)");
 

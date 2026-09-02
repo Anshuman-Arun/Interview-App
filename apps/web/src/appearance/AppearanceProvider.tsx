@@ -15,7 +15,6 @@ import {
   type AppearanceSettings,
   type BorderStyle,
   type CornerStyle,
-  type InterfaceScale,
   type ResolvedTheme,
   type ThemeMode
 } from "./appearance.js";
@@ -27,20 +26,13 @@ interface DesktopAppearanceBridge {
   ) => (() => void);
 }
 
-const SCALE_FACTORS: Record<InterfaceScale, number> = {
-  s: 0.875,
-  m: 1,
-  l: 1.125,
-  xl: 1.25
-};
-
 interface AppearanceContextValue {
   readonly settings: AppearanceSettings;
   readonly resolvedTheme: ResolvedTheme;
   readonly setTheme: (theme: ThemeMode) => void;
   readonly setAccent: (accent: AccentName) => void;
   readonly setAccentIntensity: (accentIntensity: number) => void;
-  readonly setScale: (scale: InterfaceScale) => void;
+  readonly setZoomPercent: (zoomPercent: number) => void;
   readonly setCorners: (corners: CornerStyle) => void;
   readonly setBorders: (borders: BorderStyle) => void;
   readonly reset: () => void;
@@ -86,15 +78,14 @@ export function AppearanceProvider({
     if (bridge?.onZoomFactorChanged === undefined) return;
 
     return bridge.onZoomFactorChanged((factor) => {
-      const nextScale = (Object.entries(SCALE_FACTORS) as Array<
-        [InterfaceScale, number]
-      >).find(([, candidate]) => candidate === factor)?.[0];
-      if (nextScale === undefined) return;
-      setSettings((current) =>
-        current.scale === nextScale
+      if (!Number.isFinite(factor)) return;
+      const zoomPercent = Math.round(factor * 100);
+      setSettings((current) => {
+        const normalized = normalizeAppearance({ ...current, zoomPercent });
+        return current.zoomPercent === normalized.zoomPercent
           ? current
-          : { ...current, scale: nextScale }
-      );
+          : normalized;
+      });
     });
   }, []);
 
@@ -103,7 +94,7 @@ export function AppearanceProvider({
     root.dataset["theme"] = resolveTheme(settings.theme, prefersDark);
     root.dataset["themeMode"] = settings.theme;
     root.dataset["accent"] = settings.accent;
-    root.dataset["scale"] = settings.scale;
+    root.dataset["zoom"] = String(settings.zoomPercent);
     root.dataset["corners"] = settings.corners;
     root.dataset["borders"] = settings.borders;
     root.style.setProperty("--accent-wash", `${String(settings.accentIntensity)}%`);
@@ -123,20 +114,20 @@ export function AppearanceProvider({
     const bridge = (globalThis as typeof globalThis & {
       readonly interviewDesktop?: DesktopAppearanceBridge;
     }).interviewDesktop;
-    const scaleFactor = SCALE_FACTORS[settings.scale];
+    const zoomFactor = settings.zoomPercent / 100;
 
     if (bridge?.setZoomFactor !== undefined) {
       root.style.removeProperty("font-size");
       try {
-        bridge.setZoomFactor(scaleFactor);
+        bridge.setZoomFactor(zoomFactor);
         return;
       } catch {
         // Desktop zoom is presentation-only. Fallback keeps browser UI usable.
       }
     }
 
-    root.style.fontSize = `${String(16 * scaleFactor)}px`;
-  }, [settings.scale]);
+    root.style.fontSize = `${String(16 * zoomFactor)}px`;
+  }, [settings.zoomPercent]);
 
   const patch = useCallback((next: Partial<AppearanceSettings>): void => {
     setSettings((current) => normalizeAppearance({ ...current, ...next }));
@@ -150,7 +141,7 @@ export function AppearanceProvider({
     setTheme: (theme) => patch({ theme }),
     setAccent: (accent) => patch({ accent }),
     setAccentIntensity: (accentIntensity) => patch({ accentIntensity }),
-    setScale: (scale) => patch({ scale }),
+    setZoomPercent: (zoomPercent) => patch({ zoomPercent }),
     setCorners: (corners) => patch({ corners }),
     setBorders: (borders) => patch({ borders }),
     reset: () => setSettings(DEFAULT_APPEARANCE)
