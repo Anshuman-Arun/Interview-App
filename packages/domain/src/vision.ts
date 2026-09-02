@@ -3,6 +3,8 @@ import { RequestIdSchema, SessionIdSchema } from "./ids.js";
 import { BoardRevisionSchema } from "./revisions.js";
 
 export const VISION_PROTOCOL_VERSION = 1 as const;
+export const VisionEvidenceInterpreterFingerprintSchema = z.string().regex(/^[0-9a-f]{64}$/u);
+export type VisionEvidenceInterpreterFingerprint = z.infer<typeof VisionEvidenceInterpreterFingerprintSchema>;
 export const MAX_VISION_ID_LENGTH = 160;
 export const MAX_VISION_REGION_SHAPES = 64;
 export const MAX_VISION_OBSERVATIONS = 16;
