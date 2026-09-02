@@ -160,11 +160,13 @@ Production composition defaults only to
 `workers/python/local_model_worker.py`. There is no environment variable that
 switches packaged production to a fake model.
 
-CI uses the separate
-`tests/fixtures/local-model-http-worker.mjs` deterministic worker and does
-not download real weights. Tests exercise authentication, handshake binding,
-bounded adapter output, cancellation, crash/restart behavior, missing assets,
-and Python source syntax.
+CI installs only the pinned Python runtime wheels and runs
+`validate_local_model_runtime.py` to catch package/version/API drift on both
+Ubuntu and Windows. It does not download model weights. Runtime integration
+still uses the separate `tests/fixtures/local-model-http-worker.mjs`
+deterministic worker. Tests exercise authentication, handshake binding, bounded
+adapter output, active cancellation, platform-specific crash handling, missing
+assets, and Python source syntax.
 
 ## Shutdown and recovery
 
@@ -185,10 +187,18 @@ The manager first requests stdin shutdown, then uses its existing bounded
 termination/force-cleanup path. A process-tree cleanup failure is surfaced;
 runtime views are not removed as though shutdown had succeeded.
 
-Unexpected ready-worker crashes use the manager's finite restart policy. A
-restart must identify the exact same runtime/model/capabilities; the client
-discovers the new loopback port from the newly admitted handshake. No recovery
-path silently selects a different model version.
+After an unexpected ready-worker crash, recovery is allowed only when
+`LocalRuntimeManager` can verify cleanup of the old owned process tree. On
+POSIX, verified cleanup can use the finite restart policy; every replacement
+must re-admit the exact same runtime/model/capabilities and the client discovers
+the new loopback port from that fresh handshake.
+
+Windows is deliberately stricter after a root process has already disappeared:
+`taskkill /T` can no longer prove that an unknown descendant did not survive.
+That state is reported as `TERMINATION_FAILED` and automatic restart is
+suppressed. Normal app-requested shutdown still begins while the root worker is
+alive, so the existing tree-aware termination path remains available. This is a
+fail-closed security property, not a retry timeout.
 
 ## Manual verification
 
@@ -199,7 +209,8 @@ separately after installing the pinned dependencies/assets:
 2. speak through a complete utterance and verify final Moonshine transcript;
 3. trigger interviewer TTS and verify 24 kHz mono playback;
 4. barge in during TTS and verify playback/model synthesis cancellation;
-5. kill each worker once and confirm bounded restart with unchanged identity;
+5. on Windows, kill a worker root unexpectedly and confirm the capability fails
+   closed with no automatic restart after tree verification becomes impossible;
 6. quit during active STT/TTS and confirm no worker process tree survives;
 7. corrupt one cached/runtime-view model file and confirm the worker never
    reaches trusted readiness.
