@@ -1207,7 +1207,9 @@ async function sha256Executable(
   const hash = createHash("sha256");
   const stream = createReadStream(executable);
   let timedOut = false;
-  const onAbort = (): void => stream.destroy();
+  const onAbort = (): void => {
+    stream.destroy();
+  };
   signal.addEventListener("abort", onAbort, { once: true });
   const timer = setTimeout(() => {
     timedOut = true;
