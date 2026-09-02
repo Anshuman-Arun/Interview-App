@@ -56,7 +56,15 @@ export const App: React.FC = () => {
 
   const handleStartSession = async () => {
     try {
-      await session.startSession();
+      const storedSessions = await session.fetchAvailableSessions();
+      const existingActive = storedSessions.find(
+        (storedSession) => storedSession.status === "ACTIVE"
+      );
+      if (existingActive !== undefined) {
+        await session.recoverSession(existingActive.sessionId);
+      } else {
+        await session.startSession();
+      }
       setShowSessionsModal(false);
       navigate({ page: "interview" });
     } catch {

@@ -37,6 +37,18 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain('session.whiteboardSync.status === "UNSYNCHRONIZED"');
   });
 
+  it("rechecks stored authority before every start attempt", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain("const storedSessions = await session.fetchAvailableSessions()");
+    expect(app).toContain('storedSession.status === "ACTIVE"');
+    expect(app).toContain("await session.recoverSession(existingActive.sessionId)");
+    expect(app).toContain("await session.startSession()");
+  });
+
   it("prefers a stored ACTIVE session over starting a second interview", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
