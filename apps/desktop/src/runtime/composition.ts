@@ -274,17 +274,31 @@ export class DesktopLocalRuntimeComposition {
     } catch {
       speechFailed = true;
     }
+
     let ttsFailed = false;
-    try {
-      await this.startTts(signal);
-    } catch {
-      ttsFailed = true;
+    if (abortRequested(signal)) {
+      if (this.ttsStatus.reasonCode === "NOT_STARTED") {
+        this.ttsStatus = unavailable("START_CANCELLED");
+      }
+    } else {
+      try {
+        await this.startTts(signal);
+      } catch {
+        ttsFailed = true;
+      }
     }
-    if (speechFailed && this.speechStatus.state === "UNAVAILABLE") {
-      this.speechStatus = failed("WORKER_START_FAILED");
-    }
-    if (ttsFailed && this.ttsStatus.state === "UNAVAILABLE") {
-      this.ttsStatus = failed("WORKER_START_FAILED");
+
+    if (!abortRequested(signal)) {
+      if (speechFailed
+          && this.speechStatus.state === "UNAVAILABLE"
+          && this.speechStatus.reasonCode !== "START_CANCELLED") {
+        this.speechStatus = failed("WORKER_START_FAILED");
+      }
+      if (ttsFailed
+          && this.ttsStatus.state === "UNAVAILABLE"
+          && this.ttsStatus.reasonCode !== "START_CANCELLED") {
+        this.ttsStatus = failed("WORKER_START_FAILED");
+      }
     }
     const speechReady = this.speechWorker !== undefined
       && this.liveStatus(SPEECH_COMPONENT_ID, this.speechStatus).state === "READY";
