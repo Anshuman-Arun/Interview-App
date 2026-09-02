@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 const [mode = "echo", ...args] = process.argv.slice(2);
 
@@ -50,6 +51,27 @@ switch (mode) {
     process.stdin.resume();
     setInterval(() => undefined, 1_000);
     break;
+  case "inspect-isolation": {
+    collectStdin(() => {
+      const relativeFile = args[0];
+      if (!relativeFile) throw new Error("relative file required");
+      const home = process.platform === "win32"
+        ? process.env.USERPROFILE
+        : process.env.HOME;
+      if (!home) throw new Error("isolated home unavailable");
+      const target = path.join(home, ...relativeFile.split("/"));
+      const marker = path.join(home, ".fixture-mutation");
+      const payload = {
+        home,
+        cwd: process.cwd(),
+        configuredContent: readFileSync(target, "utf8"),
+        mutationExisted: existsSync(marker)
+      };
+      writeFileSync(marker, "created", "utf8");
+      process.stdout.write(JSON.stringify(payload), () => process.exit(0));
+    });
+    break;
+  }
   case "tree-hang": {
     ignoreTermination();
     const pidFile = args[0];
