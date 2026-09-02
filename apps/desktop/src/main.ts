@@ -58,6 +58,12 @@ let shutdownComplete = false;
 let shutdownPromise: Promise<void> | undefined;
 
 if (!app.requestSingleInstanceLock()) {
+  if (process.argv.includes("--install-local-models")) {
+    console.error(
+      "Local model setup requires the running Interview App instance to be closed."
+    );
+    process.exitCode = 1;
+  }
   app.quit();
 } else {
   app.on("second-instance", () => {
