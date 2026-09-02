@@ -298,6 +298,7 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
 }
 
 async function failStartup(message: string): Promise<void> {
+  process.exitCode = 1;
   if (!app.isReady()) {
     app.quit();
     return;
