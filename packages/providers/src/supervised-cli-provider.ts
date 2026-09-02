@@ -42,6 +42,9 @@ export interface SupervisedCliProviderDefinition {
   readonly verifyBillingSafety: (
     input: { readonly now: Date }
   ) => Promise<unknown>;
+  readonly snapshotTurnInput: (
+    input: ReasoningTurnInput
+  ) => ReasoningTurnInput;
   readonly executeTurn: (
     input: ReasoningTurnInput,
     runtime: {
@@ -63,6 +66,8 @@ export class SupervisedCliReasoningProvider implements ReasoningProvider {
   public readonly adapterVersion: string;
   public readonly capabilities: ModelCapabilities;
   private readonly billingVerifier: SupervisedCliProviderDefinition["verifyBillingSafety"];
+  private readonly turnInputSnapshotter:
+    SupervisedCliProviderDefinition["snapshotTurnInput"];
   private readonly turnExecutor: SupervisedCliProviderDefinition["executeTurn"];
 
   public constructor(definition: SupervisedCliProviderDefinition) {
@@ -74,6 +79,7 @@ export class SupervisedCliReasoningProvider implements ReasoningProvider {
       || definition.adapterVersion.trim().length === 0
       || !parsedCapabilities.success
       || typeof definition.verifyBillingSafety !== "function"
+      || typeof definition.snapshotTurnInput !== "function"
       || typeof definition.executeTurn !== "function"
     ) {
       throw new Error("Supervised CLI provider definition is invalid");
@@ -82,6 +88,7 @@ export class SupervisedCliReasoningProvider implements ReasoningProvider {
     this.adapterVersion = definition.adapterVersion;
     this.capabilities = snapshotValidatedModelCapabilities(parsedCapabilities.data);
     this.billingVerifier = definition.verifyBillingSafety;
+    this.turnInputSnapshotter = definition.snapshotTurnInput;
     this.turnExecutor = definition.executeTurn;
     Object.freeze(this);
   }
@@ -93,7 +100,10 @@ export class SupervisedCliReasoningProvider implements ReasoningProvider {
   }
 
   public async createSession(): Promise<ReasoningSession> {
-    return new SupervisedCliReasoningSession(this.turnExecutor);
+    return new SupervisedCliReasoningSession(
+      this.turnExecutor,
+      this.turnInputSnapshotter
+    );
   }
 }
 
@@ -102,12 +112,24 @@ class SupervisedCliReasoningSession implements ReasoningSession {
   private closed = false;
 
   public constructor(
-    private readonly executeTurn: SupervisedCliProviderDefinition["executeTurn"]
+    private readonly executeTurn: SupervisedCliProviderDefinition["executeTurn"],
+    private readonly snapshotTurnInput:
+      SupervisedCliProviderDefinition["snapshotTurnInput"]
   ) {}
 
   public sendTurn(input: ReasoningTurnInput): AsyncIterable<InterviewerProposal> {
     if (this.closed) throw new Error("Supervised CLI session is closed");
-    const snapshot = snapshotReasoningTurnInput(input);
+
+    let snapshot: ReasoningTurnInput;
+    try {
+      const outerSnapshot = snapshotReasoningTurnInput(input);
+      snapshot = snapshotReasoningTurnInput(
+        this.snapshotTurnInput(outerSnapshot)
+      );
+    } catch (error) {
+      return rejectedTurn(error);
+    }
+
     if (this.active.has(snapshot.generationId)) {
       throw new Error("Generation already has an active supervised CLI execution");
     }
@@ -194,6 +216,12 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     }
   }
 }
+async function *rejectedTurn(
+  error: unknown
+): AsyncIterable<InterviewerProposal> {
+  throw error;
+}
+
 function snapshotReasoningTurnInput(input: unknown): ReasoningTurnInput {
   if (
     typeof input !== "object"
