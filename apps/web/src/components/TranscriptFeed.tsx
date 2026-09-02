@@ -19,12 +19,14 @@ export interface TranscriptItem {
 export interface TranscriptFeedProps {
   readonly items: readonly TranscriptItem[];
   readonly onRetry?: (itemId: string) => void | Promise<void>;
+  readonly retryDisabled?: boolean;
   readonly className?: string;
 }
 
 export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   items,
   onRetry,
+  retryDisabled = false,
   className = ""
 }) => {
   const feedEndRef = useRef<HTMLDivElement | null>(null);
@@ -114,7 +116,10 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
                       {onRetry !== undefined && (
                         <button
                           type="button"
-                          onClick={() => void onRetry(item.id)}
+                          disabled={retryDisabled}
+                          onClick={() => {
+                            if (!retryDisabled) void onRetry(item.id);
+                          }}
                         >
                           Retry
                         </button>
