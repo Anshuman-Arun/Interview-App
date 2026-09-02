@@ -378,6 +378,37 @@ export const QuantTradingRoundEvidenceEventSchema = z.object({
       message: "Quant Trading risk reason must match breach state"
     });
   }
+  if (value.marketEvents.some((event) => event.round !== value.round)) {
+    context.addIssue({
+      code: "custom",
+      path: ["marketEvents"],
+      message: "Quant Trading market updates must belong to the resolved round"
+    });
+  }
+  if (
+    value.orderFlowType === "NO_TRADE"
+    && (value.incomingMarketSide !== undefined || value.studentFills.length !== 0)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["orderFlowType"],
+      message: "No-trade rounds cannot contain an incoming side or fills"
+    });
+  }
+  if (value.orderFlowType === "NOISE" && value.incomingMarketSide === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["incomingMarketSide"],
+      message: "Noise flow must record its incoming market side"
+    });
+  }
+  if (value.incomingMarketSide === undefined && value.studentFills.length !== 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["studentFills"],
+      message: "Student fills require an incoming market side"
+    });
+  }
 });
 export type QuantTradingRoundEvidenceEvent = z.infer<typeof QuantTradingRoundEvidenceEventSchema>;
 
