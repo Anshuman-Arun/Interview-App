@@ -48,7 +48,11 @@ export class SessionRecoveryCoordinator {
     for (const event of events) {
       if (event.type === "DELIVERY_QUEUED") {
         const content = event.payload.atom.content;
-        if (content.medium === "TEXT" || content.medium === "AUDIO") {
+        // AUDIO deliveries are derived physical presentations of an already
+        // admitted TEXT delivery in voice v1. Durable transcript history is
+        // semantic conversation history, so recording AUDIO here would
+        // duplicate the same interviewer utterance after recovery.
+        if (content.medium === "TEXT") {
           queuedContent.set(event.payload.atom.deliveryId, { text: content.text });
         }
         continue;
