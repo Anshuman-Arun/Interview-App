@@ -24,6 +24,10 @@ import {
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
+  projectSessionHistory,
+  projectSessionReplayReadModel
+} from "../packages/replay/src/index.js";
+import {
   LoopbackCommandServer,
   ServerTurnOrchestrator,
   SessionRecoveryCoordinator
@@ -85,7 +89,16 @@ describe("production quant runtime integration", () => {
 
   it("keeps Quant Trading protocol state bounded while rejecting forged and invalid market actions", async () => {
     const sessionId = newSessionId();
-    await expectStatus(postStart(sessionId, tradingConfiguration()), 200);
+    const configuration = tradingConfiguration();
+    const startRequestId = newRequestId();
+    await expectStatus(postStart(sessionId, configuration, startRequestId), 200);
+    const seedAfterStart = registry.get(sessionId).getState().quantTrading?.definition.seed;
+    const eventCountAfterStart = store.eventCount(sessionId);
+    expect(seedAfterStart).toEqual(expect.any(Number));
+
+    await expectStatus(postStart(sessionId, configuration, startRequestId), 200);
+    expect(store.eventCount(sessionId)).toBe(eventCountAfterStart);
+    expect(registry.get(sessionId).getState().quantTrading?.definition.seed).toBe(seedAfterStart);
 
     const initial = QuantTradingStateResponseSchema.parse(
       await responseJson(await post({
@@ -328,6 +341,21 @@ describe("production quant runtime integration", () => {
     ]);
     expect(new Set(terminalEvents.map((event) => event.causationId)).size).toBe(1);
     expect(new Set(terminalEvents.map((event) => event.correlationId)).size).toBe(1);
+
+    const history = projectSessionHistory(store.load(sessionId));
+    const tradingTimeline = history.timeline.entries.filter(
+      (entry) => entry.kind.startsWith("QUANT_TRADING_")
+    );
+    expect(tradingTimeline.some((entry) => entry.kind === "QUANT_TRADING_SCENARIO_COMPLETED"))
+      .toBe(true);
+    const replayRead = projectSessionReplayReadModel(history);
+    expect(replayRead.entries.some((entry) => entry.kind === "QUANT_TRADING_ROUND_RESOLVED"))
+      .toBe(true);
+    const serializedReplay = JSON.stringify(replayRead);
+    expect(serializedReplay).not.toContain('"seed"');
+    expect(serializedReplay).not.toContain("orderFlowType");
+    expect(serializedReplay).not.toContain("incomingMarketSide");
+    expect(serializedReplay).not.toContain("counterparty");
 
     await expectProtocolError(post({
       protocolVersion: 1,
