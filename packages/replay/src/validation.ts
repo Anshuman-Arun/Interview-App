@@ -1286,6 +1286,11 @@ export function validateKnownReplayPrefix(
           if (
             (state.status !== "ACTIVE" && state.status !== "COMPLETED")
             || !terminalStateIsSettled(state)
+            || (
+              (state.configuration?.mode === "QUANT_TRADING"
+                || state.configuration?.mode === "QUANT_RESEARCH")
+              && state.status !== "COMPLETED"
+            )
           ) fail();
           break;
 
@@ -1308,6 +1313,14 @@ export function validateKnownReplayPrefix(
         state.started
         && state.problem === undefined
         && state.configuration?.mode !== "QUANT_TRADING"
+      )
+      || (
+        state.configuration?.mode === "QUANT_TRADING"
+        && state.quantTrading === undefined
+      )
+      || (
+        state.configuration?.mode === "QUANT_RESEARCH"
+        && state.quantResearch === undefined
       )
       || pendingNext !== undefined
       || requiredFollowUps.length > 0
