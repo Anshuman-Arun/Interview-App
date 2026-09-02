@@ -238,10 +238,12 @@ export class BrowserVoiceClient {
       }
     );
     if (!response.ok) {
+      await cancelResponseBody(response);
       throw new Error(`Audio asset resolution failed with HTTP ${String(response.status)}`);
     }
     const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
     if (contentType !== "audio/wav") {
+      await cancelResponseBody(response);
       throw new Error("Audio asset response has an unexpected content type");
     }
     const declared = response.headers.get("content-length");
@@ -251,10 +253,12 @@ export class BrowserVoiceClient {
         || declared.length > 16
         || !/^[1-9][0-9]*$/u.test(declared)
       ) {
+        await cancelResponseBody(response);
         throw new Error("Audio asset declared size is malformed");
       }
       const parsed = Number(declared);
       if (!Number.isSafeInteger(parsed) || parsed > MAX_WAV_ASSET_BYTES) {
+        await cancelResponseBody(response);
         throw new Error("Audio asset declared size is outside the browser bound");
       }
     }
@@ -516,6 +520,7 @@ async function parseVoiceFrameResponse(
 async function parseBoundedJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
   if (contentType !== "application/json") {
+    await cancelResponseBody(response);
     throw new Error("Voice transport response has an unexpected content type");
   }
   const bytes = await readBoundedResponseBytes(
@@ -537,6 +542,14 @@ async function parseBoundedJson(response: Response): Promise<unknown> {
   }
 }
 
+async function cancelResponseBody(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // Rejection cleanup is best-effort and must not replace the admission error.
+  }
+}
+
 async function readBoundedResponseBytes(
   response: Response,
   maximumBytes: number,
@@ -551,10 +564,12 @@ async function readBoundedResponseBytes(
       || declared.length > 16
       || !/^(?:0|[1-9][0-9]*)$/u.test(declared)
     ) {
+      await cancelResponseBody(response);
       throw new Error(`${label} declared size is malformed`);
     }
     const parsed = Number(declared);
     if (!Number.isSafeInteger(parsed) || parsed > maximumBytes) {
+      await cancelResponseBody(response);
       throw new Error(`${label} declared size exceeds the browser bound`);
     }
     declaredBytes = parsed;
