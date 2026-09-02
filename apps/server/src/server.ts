@@ -72,7 +72,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
     let cleanupFailure: unknown;
     if (runtime !== undefined) {
       try {
-        await startedRuntime.stop();
+        await runtime.stop();
       } catch (cleanupError) {
         cleanupFailure = cleanupError;
       }
@@ -102,7 +102,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
     databasePath,
     bound,
     async stop() {
-      await runtime.stop();
+      await startedRuntime.stop();
       store.close();
     }
   };
