@@ -130,6 +130,12 @@ export class SessionWriter {
         if (prior.commandFingerprint !== commandFingerprint) throw new RequestIdConflictError();
         return { duplicate: true, value: resultSchema.parse(prior.result), appendedEventCount: 0 };
       }
+      if (isLegacyUninitializedQuantState(this.state)) {
+        // Pre-runtime Quant streams have no persisted seed/definition from which
+        // deterministic authority can be reconstructed. They remain replayable
+        // for migration compatibility, but no current command may extend them.
+        throw new Error("Legacy Quant session is read-only and cannot accept new commands");
+      }
       const transition = handler(this.state);
       const validatedResult = resultSchema.parse(transition.result);
       const elapsedMs = this.elapsedOffset + Math.max(0, Date.now() - this.openedAt);
@@ -158,6 +164,13 @@ export class SessionWriter {
     this.tail = outcome.then(() => undefined, () => undefined);
     return outcome;
   }
+}
+
+function isLegacyUninitializedQuantState(state: Readonly<SessionState>): boolean {
+  if (!state.started || state.problem !== undefined) return false;
+  if (state.quantTrading !== undefined || state.quantResearch !== undefined) return false;
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH";
 }
 
 type SessionRuntimeEntry =
