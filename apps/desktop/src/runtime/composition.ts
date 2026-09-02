@@ -519,7 +519,7 @@ export class DesktopLocalRuntimeComposition {
     return {
       id: input.componentId,
       executable: this.pythonExecutable,
-      args: [this.workerScriptPath, ...input.args],
+      args: ["-I", this.workerScriptPath, ...input.args],
       cwd: path.dirname(this.workerScriptPath),
       environment: {
         secrets: {
