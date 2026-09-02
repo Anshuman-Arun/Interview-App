@@ -149,8 +149,12 @@ export class VoiceTransportServer {
     try {
       if (request.method === "OPTIONS") {
         this.authorizeOrigin(origin);
-        assertValidPreflight(request);
-        sendPreflight(response, origin);
+        const allowedMethod = allowedPreflightMethod(request.url);
+        if (allowedMethod === undefined) {
+          throw new VoiceHttpError(404, "NOT_FOUND", "Voice endpoint not found");
+        }
+        assertValidPreflight(request, allowedMethod);
+        sendPreflight(response, origin, allowedMethod);
         return;
       }
 
@@ -521,10 +525,34 @@ function constantTimeEquals(received: string, expected: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-function assertValidPreflight(request: IncomingMessage): void {
+function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | undefined {
+  if (
+    rawUrl === VOICE_OPEN_PATH
+    || rawUrl === VOICE_FRAME_PATH
+    || rawUrl === VOICE_FLUSH_PATH
+    || rawUrl === VOICE_CANCEL_PATH
+  ) {
+    return "POST";
+  }
+  if (rawUrl === undefined || rawUrl.includes("?") || rawUrl.includes("#")) return undefined;
+  const encodedRef = rawUrl.slice(VOICE_AUDIO_PREFIX.length);
+  if (!rawUrl.startsWith(VOICE_AUDIO_PREFIX) || encodedRef.length === 0) return undefined;
+  let audioRef: string;
+  try {
+    audioRef = decodeURIComponent(encodedRef);
+  } catch {
+    return undefined;
+  }
+  return AUDIO_REF_PATTERN.test(audioRef) ? "GET" : undefined;
+}
+
+function assertValidPreflight(
+  request: IncomingMessage,
+  allowedMethod: "GET" | "POST"
+): void {
   const requestedMethod = headerValue(request, "access-control-request-method")?.trim().toUpperCase();
-  if (requestedMethod !== "POST" && requestedMethod !== "GET") {
-    throw new VoiceHttpError(400, "INVALID_PREFLIGHT", "Voice preflight method is not allowed");
+  if (requestedMethod !== allowedMethod) {
+    throw new VoiceHttpError(400, "INVALID_PREFLIGHT", "Voice preflight method does not match the endpoint");
   }
   const requestedHeaders = headerValue(request, "access-control-request-headers");
   if (requestedHeaders === undefined || requestedHeaders.trim().length === 0) return;
@@ -536,11 +564,15 @@ function assertValidPreflight(request: IncomingMessage): void {
   }
 }
 
-function sendPreflight(response: ServerResponse, origin: string | undefined): void {
+function sendPreflight(
+  response: ServerResponse,
+  origin: string | undefined,
+  allowedMethod: "GET" | "POST"
+): void {
   if (origin === undefined) throw new Error("Authorized voice preflight is missing Origin");
   response.writeHead(204, {
     "access-control-allow-origin": origin,
-    "access-control-allow-methods": "GET, POST",
+    "access-control-allow-methods": allowedMethod,
     "access-control-allow-headers": CORS_ALLOW_HEADERS,
     "access-control-max-age": "300",
     "cache-control": "no-store",
