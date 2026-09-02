@@ -260,6 +260,10 @@ export class RendererStreamServer {
       return { outcome: "NOT_DELIVERABLE", deliveryId, status: atom.status };
     }
 
+    if (atom.status === "DELIVERING" && connection.sentDeliveryIds.has(deliveryId)) {
+      return { outcome: "SENT", deliveryId, status: "DELIVERING" };
+    }
+
     if (
       atom.content.medium === "AUDIO"
       && this.options.audioAssetAvailable !== undefined
@@ -282,10 +286,6 @@ export class RendererStreamServer {
         "Audio delivery began but its ephemeral asset is unavailable for safe replay"
       );
       return { outcome: "NOT_DELIVERABLE", deliveryId, status: "POSSIBLY_EXPOSED" };
-    }
-
-    if (atom.status === "DELIVERING" && connection.sentDeliveryIds.has(deliveryId)) {
-      return { outcome: "SENT", deliveryId, status: "DELIVERING" };
     }
 
     const previewCommand = RendererStreamDeliveryCommandSchema.parse({
