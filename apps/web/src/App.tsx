@@ -10,6 +10,7 @@ import { WhiteboardCanvas } from "./components/WhiteboardCanvas.js";
 import { TldrawWhiteboardAdapter } from "./tldraw-whiteboard-adapter.js";
 import {
   TerminalSessionOutcomeUnknownError,
+  TerminalSessionTransitionSupersededError,
   useInterviewSession
 } from "./hooks/useInterviewSession.js";
 import type { SessionHistoryReadResponse } from "../../../packages/replay/src/index.js";
@@ -117,7 +118,10 @@ export const App: React.FC = () => {
         view: "evaluation"
       });
     } catch (error) {
-      if (!(error instanceof TerminalSessionOutcomeUnknownError)) {
+      if (
+        !(error instanceof TerminalSessionOutcomeUnknownError)
+        && !(error instanceof TerminalSessionTransitionSupersededError)
+      ) {
         whiteboardAdapter.setReadOnly(false);
       }
       // Error handled in session.error
@@ -146,7 +150,10 @@ export const App: React.FC = () => {
         view: "evaluation"
       });
     } catch (error) {
-      if (!(error instanceof TerminalSessionOutcomeUnknownError)) {
+      if (
+        !(error instanceof TerminalSessionOutcomeUnknownError)
+        && !(error instanceof TerminalSessionTransitionSupersededError)
+      ) {
         whiteboardAdapter.setReadOnly(false);
       }
       // Error handled in session.error
