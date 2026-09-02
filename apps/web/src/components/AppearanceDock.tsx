@@ -13,7 +13,11 @@ const SCALES: readonly InterfaceScale[] = ["s", "m", "l", "xl"];
 const CORNERS: readonly CornerStyle[] = ["square", "soft", "round", "generous"];
 const BORDERS: readonly BorderStyle[] = ["quiet", "regular", "strong", "contrast"];
 
-export function AppearanceDock() {
+export function AppearanceDock({
+  compact = false
+}: {
+  readonly compact?: boolean;
+}) {
   const {
     settings,
     setTheme,
@@ -26,10 +30,16 @@ export function AppearanceDock() {
   } = useAppearance();
 
   return (
-    <details className="appearance-dock">
+    <details
+      className={
+        compact
+          ? "appearance-dock appearance-dock--compact"
+          : "appearance-dock"
+      }
+    >
       <summary className="appearance-dock__trigger" aria-label="Appearance settings">
         <span aria-hidden="true" className="appearance-dock__trigger-mark">Aa</span>
-        <span>Appearance</span>
+        {!compact && <span>Appearance</span>}
       </summary>
 
       <div className="appearance-dock__panel">

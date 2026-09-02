@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SessionIdSchema, type SessionId } from "../../../packages/domain/src/index.js";
+import { AppearanceDock } from "./components/AppearanceDock.js";
 import { BrandMark } from "./components/BrandMark.js";
 import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
@@ -335,6 +336,8 @@ export const App: React.FC = () => {
               </button>
             </div>
           )}
+
+          <AppearanceDock compact />
 
           <button
             type="button"

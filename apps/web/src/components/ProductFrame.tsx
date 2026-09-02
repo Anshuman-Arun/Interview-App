@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { AppearanceDock } from "./AppearanceDock.js";
 import { BrandMark } from "./BrandMark.js";
 import "./ProductFrame.css";
 
@@ -80,7 +81,10 @@ export function ProductFrame({
             <span className="product-frame__kicker">{kicker}</span>
             <h1 ref={headingRef} tabIndex={-1}>{title}</h1>
           </div>
-          {aside}
+          <div className="product-frame__header-actions">
+            {aside}
+            <AppearanceDock />
+          </div>
         </header>
         {notice !== undefined && notice !== null && (
           <div className="product-frame__notice" role="status">
