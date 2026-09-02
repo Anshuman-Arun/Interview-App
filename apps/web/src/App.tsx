@@ -70,10 +70,16 @@ export const App: React.FC = () => {
         (storedSession) => storedSession.status === "ACTIVE"
       );
       if (existingActive !== undefined) {
-        await session.recoverSession(existingActive.sessionId);
-      } else {
-        await session.startSession();
+        const recoveredStatus = await session.recoverSession(existingActive.sessionId);
+        setShowSessionsModal(false);
+        navigate(
+          recoveredStatus === "ACTIVE"
+            ? { page: "interview" }
+            : { page: "sessions" }
+        );
+        return;
       }
+      await session.startSession();
       setShowSessionsModal(false);
       navigate({ page: "interview" });
     } catch {
@@ -157,9 +163,18 @@ export const App: React.FC = () => {
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
     try {
-      await session.recoverSession(targetSessionId);
+      const recoveredStatus = await session.recoverSession(targetSessionId);
+      if (recoveredStatus === null) return;
       setShowSessionsModal(false);
-      navigate({ page: "interview" });
+      navigate(
+        recoveredStatus === "ACTIVE"
+          ? { page: "interview" }
+          : {
+              page: "review",
+              sessionId: targetSessionId,
+              view: "evaluation"
+            }
+      );
     } catch {
       // Error handled in session.error
     } finally {
@@ -178,9 +193,18 @@ export const App: React.FC = () => {
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
     try {
-      await session.recoverSession(recoverySessionId);
+      const recoveredStatus = await session.recoverSession(recoverySessionId);
+      if (recoveredStatus === null) return;
       setShowSessionsModal(false);
-      navigate({ page: "interview" });
+      navigate(
+        recoveredStatus === "ACTIVE"
+          ? { page: "interview" }
+          : {
+              page: "review",
+              sessionId: recoverySessionId,
+              view: "evaluation"
+            }
+      );
     } catch {
       // Error handled in session.error
     } finally {
@@ -553,14 +577,16 @@ export const App: React.FC = () => {
                 </button>
               </div>
 
-              {!hasActiveInterview && historyLoading && historyRead === null ? (
-                <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
-                  Loading grounded history…
-                </div>
-              ) : historyError !== null && historyRead === null ? (
-                <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-                  {historyError}
-                </div>
+              {!hasActiveInterview ? (
+                historyLoading && historyRead === null ? (
+                  <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                    Loading grounded history…
+                  </div>
+                ) : historyError !== null && historyRead === null ? (
+                  <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                    {historyError}
+                  </div>
+                ) : null
               ) : null}
 
               {!hasActiveInterview && historyRead !== null ? (
