@@ -16,13 +16,13 @@ describe("expressive UI appearance foundations", () => {
     expect(normalizeAppearance({ theme: "unknown" })).toEqual(DEFAULT_APPEARANCE);
   });
 
-  it("suppresses live problem topic spoilers without changing problem data", () => {
-    const css = fs.readFileSync(
-      path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
+  it("does not render live problem category or topic spoilers", () => {
+    const source = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/ProblemCard.tsx"),
       "utf8"
     );
-    expect(css).toContain(".problem-tags");
-    expect(css).toContain("display: none !important");
+    expect(source).not.toContain("problem.category");
+    expect(source).not.toContain("problem.topics");
   });
 
   it("uses local tldraw assets and starts in the pencil tool", () => {

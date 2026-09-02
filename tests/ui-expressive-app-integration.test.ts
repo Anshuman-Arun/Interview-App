@@ -53,15 +53,15 @@ describe("expressive product integration invariants", () => {
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
-    const problemCss = fs.readFileSync(
-      path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
+    const problem = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/ProblemCard.tsx"),
       "utf8"
     );
 
     expect(app).not.toContain("session.problem.topics");
     expect(app).not.toContain("{session.problem.category}");
-    expect(problemCss).toContain(".problem-tags");
-    expect(problemCss).toContain("display: none !important");
+    expect(problem).not.toContain("problem.topics");
+    expect(problem).not.toContain("problem.category");
   });
 
   it("keeps the native tldraw toolbar local and starts on Pencil", () => {

@@ -337,11 +337,6 @@ body {
   border-radius: var(--radius-panel) !important;
 }
 
-/* Live-problem topics are solution-direction hints, so keep them out of interviews. */
-.problem-tags {
-  display: none !important;
-}
-
 .whiteboard-canvas-container,
 [data-whiteboard-canvas="true"] {
   background: var(--surface-panel);
@@ -502,8 +497,20 @@ body {
   align-items: flex-start !important;
 }
 
-.problem-card-container .problem-header .flex.flex-wrap.items-center.gap-2 {
-  display: none !important;
+.problem-card-container .problem-header__eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font: 650 7px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.problem-card-container .problem-header__eyebrow > span:first-child {
+  color: var(--accent);
 }
 
 .problem-card-container .problem-header h2 {
@@ -511,10 +518,6 @@ body {
   color: var(--text-primary) !important;
   font: 650 20px/1.08 var(--font-display) !important;
   letter-spacing: -0.035em;
-}
-
-.problem-card-container .problem-header > .text-xs.font-mono {
-  display: none !important;
 }
 
 .problem-card-container .problem-statement {
@@ -526,10 +529,6 @@ body {
   color: var(--text-primary) !important;
   font-size: 12px !important;
   line-height: 1.65 !important;
-}
-
-.problem-card-container .problem-statement > p:first-child {
-  display: none !important;
 }
 
 .problem-card-container .given-information {
