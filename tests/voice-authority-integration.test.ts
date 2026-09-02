@@ -62,6 +62,35 @@ describe("authoritative voice delivery admission", () => {
     }
   });
 
+  it("keeps TEXT and AUDIO as separate exposures without duplicating semantic disclosure ids", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const source = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(source.deliveryId);
+      await deliveries.acknowledgeExposed(source.deliveryId);
+
+      const audio = await harness.turns.queueAudioDeliveryFromValidatedText({
+        sourceDeliveryId: source.deliveryId,
+        generationId: harness.generationId,
+        text: harness.safeProbe,
+        textSha256: sha256(harness.safeProbe),
+        audioRef: audioRef("multimodal-disclosure")
+      });
+      if (audio === undefined) throw new Error("Expected authoritative AUDIO delivery");
+      await deliveries.markStarted(audio.deliveryId);
+      await deliveries.acknowledgeExposed(audio.deliveryId);
+
+      const state = harness.writer.getState();
+      expect(state.deliveries[source.deliveryId]?.status).toBe("EXPOSED");
+      expect(state.deliveries[audio.deliveryId]?.status).toBe("EXPOSED");
+      expect(audio.disclosureIds).toEqual(source.disclosureIds);
+      expect(state.disclosureLedger).toEqual([...new Set(source.disclosureIds)]);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("lets beginUtterance supersede generation authority and conservatively classify started audio", async () => {
     const harness = await createCoreHarness();
     try {
