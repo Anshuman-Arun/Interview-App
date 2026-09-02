@@ -290,6 +290,39 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
+  it("bounds a backend that never settles and records a timeout discard", async () => {
+    const harness = await startedBoardSession();
+    const provenance = new DeterministicFakeVisionBackend([]).provenance;
+    const backend: VisionInferenceBackend = {
+      provenance,
+      analyze: async () => new Promise<never>(() => {
+        // Deliberately ignores cancellation and never settles.
+      })
+    };
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      backendTimeoutMs: 10
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      const result = await coordinator.process(request);
+      expect(result).toMatchObject({
+        status: "REJECTED",
+        reason: "BACKEND_TIMEOUT",
+        observationCount: 0,
+        evidenceCommittedCount: 0
+      });
+      expect(harness.writer.getState().visionRequests[request.requestId]?.status)
+        .toBe("DISCARDED");
+      expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
   it("fails closed for malformed image bytes, stale snapshot basis, and unavailable production vision", async () => {
     const harness = await startedBoardSession();
     const backend = new DeterministicFakeVisionBackend([]);
