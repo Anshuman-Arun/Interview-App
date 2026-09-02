@@ -20,6 +20,47 @@ const CLIENT_TOKEN = "phase0-browser-command-client-token-long-enough";
 const BASE_URL = "http://127.0.0.1:43123";
 const SESSION_ID = SessionIdSchema.parse("session_browser_test");
 const DELIVERY_ID = DeliveryIdSchema.parse("delivery_browser_test");
+const QUANT_TRADING_STATE = {
+  mode: "QUANT_TRADING",
+  scenario: { id: "BASIC_MARKET_MAKING", version: "1.0.0" },
+  status: "ACTIVE",
+  currentRound: 1,
+  plannedRounds: 8,
+  fairValue: 100,
+  portfolio: {
+    cash: 1_000,
+    position: 0,
+    realizedPnL: 0,
+    unrealizedPnL: 0,
+    totalPnL: 0,
+    portfolioValue: 1_000,
+    averageCostBasis: 0,
+    maxDrawdown: 0,
+    tradeCount: 0
+  },
+  marketUpdates: [],
+  quoteRequest: {
+    round: 1,
+    fairValue: 100,
+    tickSize: 0.5,
+    maxQuoteSize: 10,
+    hardPositionLimit: false,
+    maxPosition: 20
+  },
+  actionRequired: true
+} as const;
+const QUANT_RESEARCH_STATE = {
+  family: "MODEL_COMPARISON",
+  version: "1.0.0",
+  generatorVersion: "1.0.0",
+  rngVersion: "xorshift32-v1",
+  status: "IN_PROGRESS",
+  stage: "INITIAL_MODEL_CHOICE",
+  prompt: "Choose a model.",
+  visibleData: [],
+  acceptedActionCount: 0,
+  actionLimit: 64
+} as const;
 
 describe("browser transport endpoint derivation", () => {
   it("preserves the standalone command+1 renderer port convention", () => {
@@ -156,6 +197,105 @@ describe("browser command client", () => {
       requestId,
       sessionId: SESSION_ID,
       text: "I think the graph must contain a triangle."
+    });
+  });
+
+  it("gets bounded quant state through the normal authenticated command transport", async () => {
+    const requestId = RequestIdSchema.parse("request_quant_state");
+    const calls: FetchCall[] = [];
+    const client = createClient({
+      calls,
+      requestIdFactory: () => requestId,
+      response: jsonResponse({
+        protocolVersion: 1,
+        ok: true,
+        type: "QUANT_TRADING_STATE",
+        requestId,
+        sessionId: SESSION_ID,
+        state: QUANT_TRADING_STATE
+      })
+    });
+
+    const result = await client.getQuantSessionState(SESSION_ID);
+
+    expect(result.type).toBe("QUANT_TRADING_STATE");
+    expect(parseCommandBody(requireCall(calls).init.body)).toEqual({
+      protocolVersion: 1,
+      type: "GET_QUANT_SESSION_STATE",
+      requestId,
+      sessionId: SESSION_ID
+    });
+  });
+
+  it("serializes a Trading action with its optimistic round binding", async () => {
+    const requestId = RequestIdSchema.parse("request_quant_trading_action");
+    const calls: FetchCall[] = [];
+    const client = createClient({
+      calls,
+      requestIdFactory: () => requestId,
+      response: jsonResponse({
+        protocolVersion: 1,
+        ok: true,
+        type: "QUANT_TRADING_STATE",
+        requestId,
+        sessionId: SESSION_ID,
+        state: QUANT_TRADING_STATE
+      })
+    });
+
+    await client.submitQuantTradingAction(
+      SESSION_ID,
+      1,
+      { type: "PASS" }
+    );
+
+    expect(parseCommandBody(requireCall(calls).init.body)).toEqual({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_TRADING_ACTION",
+      requestId,
+      sessionId: SESSION_ID,
+      expectedRound: 1,
+      action: { type: "PASS" }
+    });
+  });
+
+  it("serializes a Research action with its optimistic action-count binding", async () => {
+    const requestId = RequestIdSchema.parse("request_quant_research_action");
+    const calls: FetchCall[] = [];
+    const client = createClient({
+      calls,
+      requestIdFactory: () => requestId,
+      response: jsonResponse({
+        protocolVersion: 1,
+        ok: true,
+        type: "QUANT_RESEARCH_STATE",
+        requestId,
+        sessionId: SESSION_ID,
+        state: QUANT_RESEARCH_STATE
+      })
+    });
+
+    await client.submitQuantResearchAction(
+      SESSION_ID,
+      0,
+      {
+        actionId: "model-choice",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }
+    );
+
+    expect(parseCommandBody(requireCall(calls).init.body)).toEqual({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_RESEARCH_ACTION",
+      requestId,
+      sessionId: SESSION_ID,
+      expectedActionCount: 0,
+      action: {
+        actionId: "model-choice",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }
     });
   });
 
