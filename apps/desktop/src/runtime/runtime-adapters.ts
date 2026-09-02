@@ -290,7 +290,7 @@ async function runWithWorkerRecycleOnTimeout<T>(
       throw new AggregateError(
         [error, recycleError],
         "Managed local model worker failed and could not be safely recycled",
-        { cause: error }
+        { cause: recycleError }
       );
     }
     throw error;
