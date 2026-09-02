@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import importlib.util
 import sys
 import tempfile
@@ -52,6 +53,14 @@ class _FakeTranscriber:
         return _FakeTranscript()
 
 
+class _FakeServer:
+    def __init__(self) -> None:
+        self.shutdown_calls = 0
+
+    def shutdown(self) -> None:
+        self.shutdown_calls += 1
+
+
 class _FakeTts:
     def __init__(self) -> None:
         self.cancel_calls = 0
@@ -61,6 +70,28 @@ class _FakeTts:
 
 
 class ProductionWorkerUnitTests(unittest.TestCase):
+    def test_parent_stdin_eof_and_explicit_shutdown_both_stop_worker(self) -> None:
+        eof_server = _FakeServer()
+        worker.monitor_parent_stdin(eof_server, io.StringIO(""))
+        self.assertEqual(eof_server.shutdown_calls, 1)
+
+        command_server = _FakeServer()
+        worker.monitor_parent_stdin(
+            command_server,
+            io.StringIO("ignored\nshutdown\ntrailing\n"),
+        )
+        self.assertEqual(command_server.shutdown_calls, 1)
+
+    def test_parent_stdin_read_failure_still_stops_worker(self) -> None:
+        class _FailingStream:
+            def __iter__(self):
+                raise OSError("synthetic stdin failure")
+
+        server = _FakeServer()
+        with self.assertRaisesRegex(OSError, "synthetic stdin failure"):
+            worker.monitor_parent_stdin(server, _FailingStream())
+        self.assertEqual(server.shutdown_calls, 1)
+
     def test_worker_server_bounds_connection_slots(self) -> None:
         server = worker.WorkerServer(
             ("127.0.0.1", 0),
