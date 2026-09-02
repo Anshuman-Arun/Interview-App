@@ -233,8 +233,15 @@ export class SupervisedProcessRunner {
           ? {}
           : { isolatedHomeFiles: snapshot.isolatedHomeFiles })
       }));
-      const initialIdentity = tryInspectExecutableSync(snapshot.executable, this.platform);
-      if (initialIdentity !== undefined) {
+      const initialIdentity = tryInspectExecutableSync(
+        snapshot.executable,
+        this.platform
+      );
+      // Windows execution uses async inspection plus content hashing on first
+      // use. Do not mix sync-stat identity fields into that pin because Node
+      // can report Windows file identity metadata differently across sync and
+      // async stat APIs.
+      if (initialIdentity !== undefined && this.platform !== "win32") {
         this.pinnedIdentities.set(snapshot.id, initialIdentity);
       }
     }
