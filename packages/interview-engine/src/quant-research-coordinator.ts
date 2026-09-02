@@ -79,7 +79,10 @@ function commandIdentityValue(value: unknown): CommandIdentityValue {
 
 function assertSessionAvailable(state: Readonly<SessionState>): void {
   if (state.status === "COMPLETED" || state.status === "ARCHIVED") {
-    throw new Error("Quant Research commands require a non-terminal session");
+    throw new QuantResearchError(
+      "SCENARIO_COMPLETE",
+      "Cannot apply Quant Research commands to a terminal session"
+    );
   }
 }
 
