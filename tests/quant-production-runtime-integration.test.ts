@@ -436,6 +436,67 @@ describe("production quant runtime integration", () => {
     ).state).toEqual(beforeOverflow);
   });
 
+  it("reports an inter-round fair-value risk stop with its bounded public reason", async () => {
+    await server.stop();
+    await registry.closeAll();
+    registry = new SessionRuntimeRegistry(store);
+    sessions = recoveryCoordinator(registry);
+    server = commandServer(
+      sessions,
+      new ProductionSessionRuntime({ seedSource: () => 7 })
+    );
+    address = await server.start();
+
+    const sessionId = newSessionId();
+    await expectStatus(postStart(sessionId, tradingConfiguration("RISK_MANAGEMENT")), 200);
+    const initial = QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state;
+
+    const stopped = QuantTradingStateResponseSchema.parse(
+      await responseJson(await post({
+        protocolVersion: 1,
+        type: "SUBMIT_QUANT_TRADING_ACTION",
+        requestId: newRequestId(),
+        sessionId,
+        expectedRound: initial.currentRound,
+        action: {
+          type: "QUOTE",
+          quote: {
+            bidPrice: 109,
+            bidSize: 4,
+            askPrice: 109.5,
+            askSize: 1
+          }
+        }
+      }))
+    ).state;
+
+    expect(stopped.status).toBe("RISK_STOPPED");
+    expect(stopped.currentRound).toBe(2);
+    expect(stopped.fairValue).toBe(98);
+    expect(stopped.lastRound).toMatchObject({
+      round: 1,
+      riskBreached: false
+    });
+    expect(stopped.marketUpdates).toEqual([
+      {
+        type: "FAIR_VALUE_UPDATE",
+        round: 2,
+        previousFairValue: 100,
+        fairValue: 98,
+        label: "PUBLIC_INFORMATION_UPDATE"
+      }
+    ]);
+    expect(stopped.completion?.lastRiskBreach).toMatchObject({
+      round: 2,
+      source: "FAIR_VALUE_UPDATE"
+    });
+    expect(stopped.completion?.lastRiskBreach?.reason).toContain("stop-loss");
+    expect(stopped.completion?.riskBreachCount).toBe(1);
+    expect(registry.get(sessionId).getState().status).toBe("COMPLETED");
+  });
+
   it("enforces the hard position limit through the authenticated production command path", async () => {
     await server.stop();
     await registry.closeAll();
