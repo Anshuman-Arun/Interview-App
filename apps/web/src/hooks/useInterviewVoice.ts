@@ -264,7 +264,12 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
           ) {
             // MAX_DURATION finalization can use the current frame only as an
             // endpoint trigger. Reframe that exact captured PCM as sequence 0
-            // of the next stream instead of dropping continuing student speech.
+            // of the next stream instead of dropping continuing student speech,
+            // but never bypass the same pending PCM budget used by capture.
+            if (!pendingFrameFitsBudget(frameQueueRef.current, frame)) {
+              failVoiceCycle("Microphone transport backpressure limit reached");
+              return;
+            }
             frameQueueRef.current.unshift(frame);
           }
         } catch (frameError) {
@@ -293,20 +298,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
   const enqueueFrame = useCallback((frame: AudioFrame, epoch: number): void => {
     if (epoch !== epochRef.current || !microphoneEnabledRef.current) return;
     const queued = frameQueueRef.current;
-    let pendingDurationMs = 0;
-    let pendingBytes = 0;
-    for (const pending of queued) {
-      pendingDurationMs += pending.samples.length / pending.sampleRate * 1_000;
-      pendingBytes += pending.samples.byteLength;
-    }
-    const frameDurationMs = frame.samples.length / frame.sampleRate * 1_000;
-    if (
-      !Number.isFinite(frameDurationMs)
-      || frameDurationMs <= 0
-      || queued.length >= MAX_PENDING_MICROPHONE_FRAMES
-      || pendingDurationMs + frameDurationMs > MAX_PENDING_MICROPHONE_DURATION_MS
-      || pendingBytes + frame.samples.byteLength > MAX_PENDING_MICROPHONE_BYTES
-    ) {
+    if (!pendingFrameFitsBudget(queued, frame)) {
       failVoiceCycle("Microphone transport backpressure limit reached");
       return;
     }
@@ -535,6 +527,40 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
       refreshAudioDevices
     }
   };
+}
+
+function pendingFrameFitsBudget(
+  queued: readonly AudioFrame[],
+  frame: AudioFrame
+): boolean {
+  if (queued.length >= MAX_PENDING_MICROPHONE_FRAMES) return false;
+
+  let pendingDurationMs = 0;
+  let pendingBytes = 0;
+  for (const pending of queued) {
+    const durationMs = pending.samples.length / pending.sampleRate * 1_000;
+    if (
+      !Number.isFinite(durationMs)
+      || durationMs <= 0
+      || !Number.isSafeInteger(pending.samples.byteLength)
+    ) {
+      return false;
+    }
+    pendingDurationMs += durationMs;
+    pendingBytes += pending.samples.byteLength;
+    if (
+      pendingDurationMs > MAX_PENDING_MICROPHONE_DURATION_MS
+      || pendingBytes > MAX_PENDING_MICROPHONE_BYTES
+    ) {
+      return false;
+    }
+  }
+
+  const frameDurationMs = frame.samples.length / frame.sampleRate * 1_000;
+  return Number.isFinite(frameDurationMs)
+    && frameDurationMs > 0
+    && pendingDurationMs + frameDurationMs <= MAX_PENDING_MICROPHONE_DURATION_MS
+    && pendingBytes + frame.samples.byteLength <= MAX_PENDING_MICROPHONE_BYTES;
 }
 
 function classifyCaptureError(error: unknown): {
