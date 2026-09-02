@@ -348,5 +348,12 @@ export const QuantResearchPublicStateSchema = z.object({
       message: "Quant Research completion metrics must exist exactly for completed state"
     });
   }
+  if ((value.status === "COMPLETE") !== (value.stage === "COMPLETE")) {
+    context.addIssue({
+      code: "custom",
+      path: ["stage"],
+      message: "Quant Research completion status must match the terminal stage"
+    });
+  }
 });
 export type QuantResearchPublicState = z.infer<typeof QuantResearchPublicStateSchema>;
