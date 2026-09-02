@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   AcceptedBoardObservationSchema,
   BoardRevisionSchema,
+  RequestIdSchema,
   evidenceKeyToString,
   newRequestId,
   newSessionId,
@@ -763,9 +764,10 @@ describe("application whiteboard vision integration", () => {
       expect(backend.analyzeCallCount).toBe(0);
       expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
         .toMatchObject({
-          status: "DECIDED",
+          status: "COMPLETED",
           decision: "PROPOSAL",
-          interpreterFingerprint: acceptedFingerprint
+          interpreterFingerprint: acceptedFingerprint,
+          evidenceCommitted: true
         });
 
       const resumed = await resumedCoordinator.process(request);
@@ -894,6 +896,80 @@ describe("application whiteboard vision integration", () => {
       const replay = await resumedCoordinator.process(request);
       expect(replay).toEqual(resumed);
       expect(proposeCalls).toBe(0);
+    } finally {
+      resumedCoordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("finishes a bridge when evidence admission persisted but the completion event did not", async () => {
+    const harness = await startedBoardSession();
+    const request = upload(harness.sessionId);
+    const acceptedFingerprint = "9".repeat(64);
+    await persistAcceptedPendingEvidenceBridge({
+      turns: harness.turns,
+      sessionId: harness.sessionId,
+      request,
+      interpreterFingerprint: acceptedFingerprint
+    });
+
+    const requestState = harness.writer.getState().visionRequests[request.requestId];
+    if (
+      requestState?.acceptedObservation === undefined
+      || requestState.resultEventId === undefined
+    ) {
+      throw new Error("Expected accepted vision state for completion crash fixture");
+    }
+    const proposal = progressInterpreter().propose({
+      observation: requestState.acceptedObservation,
+      problemId: sixPeopleProblem.id,
+      evidenceEventId: requestState.resultEventId
+    });
+    if (proposal === undefined) throw new Error("Expected fixture evidence proposal");
+
+    await harness.turns.recordVisionEvidenceBridgeDecision({
+      envelope: createCommandEnvelope({
+        sessionId: harness.sessionId,
+        producer: "test-crash-boundary",
+        correlationId: request.requestId
+      }),
+      interpreterFingerprint: acceptedFingerprint,
+      proposal
+    });
+    const evidenceResult = await harness.turns.processEvidenceProposal({
+      envelope: createCommandEnvelope({
+        sessionId: harness.sessionId,
+        producer: "vision-evidence",
+        requestId: RequestIdSchema.parse(`vision-evidence-commit:${request.requestId}`),
+        correlationId: request.requestId
+      }),
+      proposal,
+      requiredBoardRevision: requestState.acceptedObservation.admittedAtBoardRevision
+    });
+    expect(evidenceResult.committed).toBe(true);
+    expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
+      .toMatchObject({ status: "DECIDED", decision: "PROPOSAL" });
+    const proposedBeforeRecovery = harness.store.load(harness.sessionId)
+      .filter((event) => event.type === "EVIDENCE_PROPOSED").length;
+    expect(proposedBeforeRecovery).toBe(1);
+
+    const resumedCoordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions
+    });
+    try {
+      await harness.sessions.ensureRecovered(harness.sessionId);
+      expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
+        .toMatchObject({
+          status: "COMPLETED",
+          decision: "PROPOSAL",
+          evidenceCommitted: true
+        });
+      expect(harness.store.load(harness.sessionId)
+        .filter((event) => event.type === "EVIDENCE_PROPOSED")).toHaveLength(1);
+      expect(await resumedCoordinator.process(request)).toMatchObject({
+        status: "ACCEPTED",
+        evidenceCommittedCount: 1
+      });
     } finally {
       resumedCoordinator.shutdown();
       harness.store.close();
