@@ -506,6 +506,63 @@ describe("QueuedRendererAudioPlayer exposure semantics", () => {
     expect(onCompleted).not.toHaveBeenCalled();
   });
 
+  it("bounds a hung logical audio resolution before playback admission", async () => {
+    vi.useFakeTimers();
+    try {
+      let observedSignal: AbortSignal | undefined;
+      const playback = new BrowserAudioPlayback(() => new AudioElement());
+      const adapter = new QueuedRendererAudioPlayer(playback, {
+        resolveAudioSource: async (_audioRef, _deliveryId, signal) => {
+          observedSignal = signal;
+          return new Promise(() => undefined);
+        }
+      });
+      const onStarted = vi.fn();
+      const onCompleted = vi.fn();
+      const presentation = adapter.playAudio({
+        deliveryId: newDeliveryId(),
+        audioRef: "logical-ref",
+        text: "bounded resolution",
+        callbacks: { onStarted, onCompleted }
+      });
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await expect(presentation).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+      expect(observedSignal?.aborted).toBe(true);
+      expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
+      expect(onStarted).not.toHaveBeenCalled();
+      expect(onCompleted).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bounds playback that never reaches the physical playing event", async () => {
+    vi.useFakeTimers();
+    try {
+      const element = new AudioElement();
+      const playback = new BrowserAudioPlayback(() => element);
+      const adapter = new QueuedRendererAudioPlayer(playback);
+      const onStarted = vi.fn();
+      const onCompleted = vi.fn();
+      const presentation = adapter.playAudio({
+        deliveryId: newDeliveryId(),
+        audioRef: "never-starts.wav",
+        text: "bounded start",
+        callbacks: { onStarted, onCompleted }
+      });
+
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await expect(presentation).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+      expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
+      expect(onStarted).not.toHaveBeenCalled();
+      expect(onCompleted).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("preserves FIFO order, rejects duplicate pending ids, and disposal clears owned elements", async () => {
     const elements: AudioElement[] = [];
     const playback = new BrowserAudioPlayback(() => {
