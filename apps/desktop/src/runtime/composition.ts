@@ -539,6 +539,12 @@ export class DesktopLocalRuntimeComposition {
       args: ["-I", this.workerScriptPath, ...input.args],
       cwd: path.dirname(this.workerScriptPath),
       environment: {
+        values: {
+          // The interpreter is already canonical and absolute. Do not pass the
+          // user's full PATH into native model workers; retain only the
+          // interpreter directory for any runtime-local lookup.
+          PATH: path.dirname(requiredPythonExecutable(this.pythonExecutable))
+        },
         secrets: {
           INTERVIEW_LOCAL_WORKER_TOKEN: input.token
         }
@@ -641,11 +647,13 @@ async function resolvePythonExecutable(
   } else {
     const rawPath = environment["PATH"];
     if (typeof rawPath !== "string" || rawPath.length === 0) return undefined;
-    const names = platform === "win32" && path.extname(candidate) === ""
-      ? [`${candidate}.exe`]
+    const names = platform === "win32"
+      ? [candidate.toLowerCase().endsWith(".exe") ? candidate : `${candidate}.exe`]
       : [candidate];
     for (const rawEntry of rawPath.split(path.delimiter)) {
-      const entry = rawEntry.trim().replace(/^"(.*)"$/u, "$1");
+      const entry = rawEntry.startsWith('"') && rawEntry.endsWith('"')
+        ? rawEntry.slice(1, -1)
+        : rawEntry;
       if (entry.length === 0 || !path.isAbsolute(entry)) continue;
       for (const name of names) candidates.push(path.join(entry, name));
     }
