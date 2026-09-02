@@ -424,6 +424,17 @@ export class LoopbackCommandServer {
         };
       }
       case "ARCHIVE_SESSION": {
+        if (
+          recoveredComposition !== undefined
+          && recoveredComposition.mode !== "OXFORD_MATHEMATICS"
+          && writer.getState().status !== "COMPLETED"
+        ) {
+          throw new ProtocolHttpError(
+            409,
+            "CONFLICT",
+            "Active quant sessions cannot be archived before deterministic completion"
+          );
+        }
         const archived = await new TurnCoordinator(writer).archiveSession(envelope, command.reason);
         this.scheduleSessionTerminalCleanup(command.sessionId);
         return {
@@ -596,6 +607,7 @@ export class LoopbackCommandServer {
           writer,
           composition,
           command.action,
+          command.expectedActionCount,
           envelope
         );
         if (writer.getState().status === "COMPLETED") {
