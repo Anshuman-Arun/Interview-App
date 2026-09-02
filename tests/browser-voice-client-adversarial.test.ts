@@ -135,6 +135,34 @@ describe("browser voice client adversarial boundaries", () => {
     expect(requestedStreamId).toMatch(/^speech_stream_/u);
   });
 
+  it("allows a bounded retry to retire a stream after the first cancel transport attempt fails", async () => {
+    let cancelAttempts = 0;
+    const streamId = "speech_stream_retry_cancel";
+    const authenticatedFetch: typeof fetch = async (input) => {
+      if (!requestUrl(input).endsWith("/v1/voice/cancel")) {
+        throw new Error("Unexpected retry-cancel test request");
+      }
+      cancelAttempts += 1;
+      if (cancelAttempts === 1) throw new Error("simulated dropped cancel transport");
+      return new Response(JSON.stringify({
+        protocolVersion: 1,
+        ok: true,
+        type: "VOICE_STREAM_CANCELLED",
+        streamId
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    };
+    const client = new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch });
+    const stream = new BrowserVoiceStream(client, newSessionId(), streamId);
+
+    await expect(stream.cancel()).rejects.toThrow(/dropped cancel transport/u);
+    expect(stream.isClosed).toBe(true);
+    await expect(stream.cancel()).resolves.toBeUndefined();
+    expect(cancelAttempts).toBe(2);
+  });
+
   it("carries only a max-duration trigger frame proven outside the finalized audio basis", async () => {
     let frameRequest = 0;
     const streamId = "speech_stream_max_duration_carry";
