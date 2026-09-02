@@ -210,13 +210,21 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "QUANT_RESEARCH_SCENARIO_INITIALIZED": {
       if (state.quantResearch !== undefined) throw new Error("Quant Research scenario is already initialized");
       if (state.quantTrading !== undefined) throw new Error("Quant Trading state cannot be attached to a Quant Research session");
+      const configuration = state.configuration;
       if (
         !state.started
         || state.status !== "ACTIVE"
-        || (state.configuration !== undefined && state.configuration.mode !== "QUANT_RESEARCH")
-        || event.payload.definition.family !== event.payload.authoritativeSnapshot.family ||
-        state.problem?.id !== event.payload.definition.family ||
-        state.problem.version !== event.payload.definition.version
+        || (
+          configuration !== undefined
+          && (
+            configuration.mode !== "QUANT_RESEARCH"
+            || configuration.scenario.id !== event.payload.definition.family
+            || configuration.scenario.version !== event.payload.definition.version
+          )
+        )
+        || event.payload.definition.family !== event.payload.authoritativeSnapshot.family
+        || state.problem?.id !== event.payload.definition.family
+        || state.problem.version !== event.payload.definition.version
       ) {
         throw new Error("Quant Research initialization does not match the presented problem");
       }
