@@ -935,6 +935,28 @@ export function useInterviewSession(
       if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
       try {
         const client = getCommandClient();
+        const summary = await client.getSessionSummary(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
+
+        if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
+          pendingSubmissionsRef.current.clear();
+          resetBoardSync();
+          sessionMutationAdmissionRef.current = false;
+          setSessionId(targetSessionId);
+          setIsSessionStarted(summary.started);
+          setSessionStatus(summary.status);
+          setSequence(summary.sequence);
+          setContextEpoch(summary.contextEpoch);
+          setProblem(null);
+          setTranscript(summary.history.map(historyEntryToTranscriptItem));
+          stopRendererTransport();
+          return summary.status;
+        }
+
+        if (!summary.started || summary.status !== "ACTIVE") {
+          throw new Error("Session is not in a recoverable ACTIVE or terminal state");
+        }
+
         const context = await client.getInterviewSessionContext(targetSessionId);
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         const response = await client.resumeSession(targetSessionId);
