@@ -7,7 +7,6 @@ import {
 } from "../../domain/src/index.js";
 import {
   SupervisedCliReasoningProvider,
-  type SupervisedCliExecutionResult,
   type SupervisedCliExecutor
 } from "./supervised-cli-provider.js";
 
