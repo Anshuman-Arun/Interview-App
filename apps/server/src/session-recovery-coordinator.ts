@@ -8,7 +8,7 @@ import {
 import { DeliveryCoordinator } from "../../../packages/delivery/src/index.js";
 import { replaySession } from "../../../packages/events/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
-import { validateKnownReplayPrefix } from "../../../packages/replay/src/index.js";
+import { assertReplayPrefixValidForRecovery } from "../../../packages/replay/src/index.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import {
   type SessionRuntimeRegistry,
@@ -163,7 +163,7 @@ export class SessionRecoveryCoordinator {
       // Validate generic event provenance/transition semantics first, then exact
       // application-owned identity and specialized deterministic quant replay.
       // Recovery may append only after both layers accept the persisted prefix.
-      validateKnownReplayPrefix(sessionId, this.registry.loadEvents(sessionId));
+      assertReplayPrefixValidForRecovery(sessionId, this.registry.loadEvents(sessionId));
       resolveSessionStateComposition(writer.getState());
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.visionEvidenceDelegate !== undefined) {
