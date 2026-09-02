@@ -168,7 +168,7 @@ export class BrowserVoiceClient {
     }
     const urlFactory = globalThis.URL;
     if (
-      typeof urlFactory?.createObjectURL !== "function"
+      typeof urlFactory.createObjectURL !== "function"
       || typeof urlFactory.revokeObjectURL !== "function"
     ) {
       throw new Error("Browser Blob URL playback is unavailable");
