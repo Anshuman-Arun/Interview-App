@@ -261,13 +261,11 @@ export class RendererStreamServer {
 
     if (
       atom.content.medium === "AUDIO"
-      && (
-        this.options.audioAssetAvailable === undefined
-        || !safelyCheckAudioAsset(
-          this.options.audioAssetAvailable,
-          sessionId,
-          atom.content.audioRef
-        )
+      && this.options.audioAssetAvailable !== undefined
+      && !safelyCheckAudioAsset(
+        this.options.audioAssetAvailable,
+        sessionId,
+        atom.content.audioRef
       )
     ) {
       const deliveries = new DeliveryCoordinator(writer);
