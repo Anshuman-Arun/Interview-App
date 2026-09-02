@@ -131,6 +131,10 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
     const runtimeVersion = this.client.runtimeVersion();
     let synthesisTail: Promise<void> = Promise.resolve();
     let synthesisReservations = 0;
+    const synthesisStates = new Map<string, {
+      started: boolean;
+      cancelled: boolean;
+    }>();
 
     const synthesizeSerialized = (
       input: Parameters<KokoroRuntimeSession["synthesize"]>[0]
@@ -138,8 +142,18 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
       if (synthesisReservations >= TTS_LIMITS.maxConcurrentRequests) {
         return Promise.reject(new Error("Kokoro runtime synthesis queue is full"));
       }
+      if (synthesisStates.has(input.requestId)) {
+        return Promise.reject(new Error("Kokoro runtime request ID is already queued"));
+      }
+      const state = { started: false, cancelled: false };
+      synthesisStates.set(input.requestId, state);
       synthesisReservations += 1;
       const operation = synthesisTail.then(async () => {
+        if (state.cancelled) throw abortError();
+        // Set this synchronously before the first await. A cancellation that
+        // observes started=true must use the worker's request tombstone/native
+        // cancellation path; one that observes false never reaches the worker.
+        state.started = true;
         const result = await this.client.postJson("/v1/tts", {
           requestId: input.requestId,
           text: input.text,
@@ -161,6 +175,7 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
         () => undefined
       );
       return operation.finally(() => {
+        synthesisStates.delete(input.requestId);
         synthesisReservations = Math.max(0, synthesisReservations - 1);
       });
     };
@@ -176,6 +191,11 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
       cancel: async (
         requestId: Parameters<NonNullable<KokoroRuntimeSession["cancel"]>>[0]
       ): Promise<void> => {
+        const state = synthesisStates.get(requestId);
+        if (state !== undefined && !state.started) {
+          state.cancelled = true;
+          return;
+        }
         const result = await this.client.postJson("/v1/tts/cancel", {
           requestId
         }, {
