@@ -15,12 +15,13 @@ describe("expressive live shell CSS compatibility", () => {
     expect(css).toContain("width: 56% !important");
   });
 
-  it("keeps live problem metadata quiet and spoiler-light", () => {
-    const css = fs.readFileSync(
-      path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
+  it("keeps live problem metadata structurally spoiler-light", () => {
+    const source = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/ProblemCard.tsx"),
       "utf8"
     );
-    expect(css).toContain(".problem-tags");
-    expect(css).toContain("problem-header .flex.flex-wrap.items-center.gap-2");
+    expect(source).not.toContain("problem.topics");
+    expect(source).not.toContain("problem.category");
+    expect(source).toContain("problem.difficulty");
   });
 });

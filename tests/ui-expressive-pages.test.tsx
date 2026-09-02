@@ -5,6 +5,7 @@ import {
   SessionIdSchema,
   type StoredSessionSummary
 } from "../packages/domain/src/index.js";
+import { AppearanceProvider } from "../apps/web/src/appearance/AppearanceProvider.js";
 import { ProductFrame } from "../apps/web/src/components/ProductFrame.js";
 import { HomePage } from "../apps/web/src/pages/HomePage.js";
 import { SessionsPage } from "../apps/web/src/pages/SessionsPage.js";
@@ -43,13 +44,17 @@ const sessions: readonly StoredSessionSummary[] = [
 describe("expressive product page layer", () => {
   it("renders indexed product navigation instead of generic dashboard chrome", () => {
     const markup = renderToStaticMarkup(
-      React.createElement(ProductFrame, {
-        activePage: "home",
-        title: "Home",
-        kicker: "Interview room",
-        onNavigate: vi.fn(),
-        children: React.createElement("div", null, "content")
-      })
+      React.createElement(
+        AppearanceProvider,
+        null,
+        React.createElement(ProductFrame, {
+          activePage: "home",
+          title: "Home",
+          kicker: "Interview room",
+          onNavigate: vi.fn(),
+          children: React.createElement("div", null, "content")
+        })
+      )
     );
 
     expect(markup).toContain("01");
