@@ -22,6 +22,6 @@ describe("expressive live shell CSS compatibility", () => {
     );
     expect(source).not.toContain("problem.topics");
     expect(source).not.toContain("problem.category");
-    expect(source).toContain("problem.difficulty");
+    expect(source).not.toContain("problem.difficulty");
   });
 });
