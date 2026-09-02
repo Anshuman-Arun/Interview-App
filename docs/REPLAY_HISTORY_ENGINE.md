@@ -46,37 +46,39 @@ validate event provenance/transition semantics before recovery writes; this
 returns no replay projection or internal state. Raw normalization/upcaster hooks
 and collection/text slicing helpers remain internal implementation details.
 
-The current event-type catalog is compile-time exhaustive: all 46 current
+The current event-type catalog is compile-time exhaustive: all 50 current
 authoritative `EventType` values require an explicit timeline mapping and
 source-policy decision before TypeScript will accept the replay package. Specialized
 domains may additionally require an explicit validation-boundary decision rather
 than being silently treated as generically validated.
 
-## Quant Research compatibility boundary
+## Deterministic Quant compatibility boundary
 
-Current main adds three authoritative Quant Research events:
+Quant Research contributes three authoritative events:
 `QUANT_RESEARCH_SCENARIO_INITIALIZED`, `QUANT_RESEARCH_ACTION_ACCEPTED`, and
-`QUANT_RESEARCH_SCENARIO_COMPLETED`. Generic replay recognizes all three, validates
-their event schemas/reducer/source/lifecycle relationships, and preserves safe
-chronology, but it does not duplicate the dedicated deterministic Quant replay
-engine from `local-compute`.
+`QUANT_RESEARCH_SCENARIO_COMPLETED`. Quant Trading contributes four:
+`QUANT_TRADING_SCENARIO_INITIALIZED`, `QUANT_TRADING_ACTION_ACCEPTED`,
+`QUANT_TRADING_ROUND_RESOLVED`, and `QUANT_TRADING_SCENARIO_COMPLETED`.
+Generic replay recognizes all seven, validates their event schemas, reducer
+transitions, source policy, lifecycle relationships, and command grouping, but it
+does not duplicate either dedicated deterministic Quant replay engine from
+`local-compute`.
 
 The first Quant event is therefore an explicit specialized semantic boundary.
 Generic timeline entries at and after that boundary use
 `stateValidation: "SPECIALIZED_DOMAIN_UNVERIFIED"`, the projection reports
 `SPECIALIZED_DOMAIN_VALIDATION_REQUIRED`, `complete` is false, and
 `projectSessionHistory` does not expose current authoritative state beyond the
-pre-Quant prefix. The dedicated Quant replay path remains responsible for
-deterministically regenerating and verifying generated parameters, grading data,
-action legality, and result scoring.
+pre-Quant prefix. Application-owned composition/recovery additionally invokes the
+dedicated deterministic replay path before treating Quant state as authoritative.
 
-Generic replay exposes only bounded, non-private Quant metadata: family/version
-compatibility identity, whether an authoritative snapshot was persisted, action ID
-and action kind, and completion/action-count metadata. It intentionally withholds
-seed/config, candidate action values, generated parameters, grading data, scores,
-metrics, and evidence summaries. This prevents a schema-valid but deterministically
-tampered Quant history from becoming trusted performance state through the generic
-read model.
+Generic replay exposes only bounded, non-private Quant metadata such as
+family/version compatibility identity, action kind, round/action counts, and safe
+completion metadata. It intentionally withholds seeds, hidden order-flow outcomes,
+counterparties, candidate action values, generated parameters, grading references,
+and other private deterministic evidence from public read models. This prevents a
+schema-valid but deterministically tampered Quant history from becoming trusted
+performance state through the generic read model.
 
 ## Timeline semantics
 
