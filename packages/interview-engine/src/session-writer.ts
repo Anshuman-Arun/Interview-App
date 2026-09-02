@@ -2,6 +2,7 @@ import type {
   CommandEnvelope,
   CommandIdentity,
   CommandResult,
+  type RequestId,
   SessionId,
   StoredSessionSummary
 } from "../../domain/src/index.js";
@@ -53,6 +54,33 @@ export class SessionWriter {
 
   public isClosed(): boolean {
     return !this.acceptingCommands;
+  }
+
+  /**
+   * Reconstructs authoritative state immediately after the event group committed
+   * by a durable RequestId. Command drafts are required to remain contiguous.
+   * This lets callers reproduce the original state-valued response without
+   * trusting separately persisted idempotency JSON.
+   */
+  public getStateAfterRequest(requestId: RequestId): Readonly<SessionState> | undefined {
+    const events = this.store.load(this.sessionId);
+    let lastIndex = -1;
+    let leftRequestGroup = false;
+
+    for (const [index, event] of events.entries()) {
+      if (event.causationId === requestId) {
+        if (leftRequestGroup) {
+          throw new Error("Authoritative RequestId event group is not contiguous");
+        }
+        lastIndex = index;
+      } else if (lastIndex >= 0) {
+        leftRequestGroup = true;
+      }
+    }
+
+    return lastIndex < 0
+      ? undefined
+      : replaySession(this.sessionId, events.slice(0, lastIndex + 1));
   }
 
   public async waitForIdle(): Promise<void> {
