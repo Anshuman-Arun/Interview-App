@@ -848,8 +848,12 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       break;
     case "SESSION_ARCHIVED":
       if (
-        (state.configuration?.mode === "QUANT_TRADING"
-          || state.configuration?.mode === "QUANT_RESEARCH")
+        (
+          state.configuration?.mode === "QUANT_TRADING"
+          || state.configuration?.mode === "QUANT_RESEARCH"
+          || state.quantTrading !== undefined
+          || state.quantResearch !== undefined
+        )
         && state.status !== "COMPLETED"
       ) {
         throw new Error("Quant sessions can be archived only after deterministic session completion");
