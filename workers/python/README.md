@@ -8,7 +8,7 @@ The Node supervisor launches Python with isolated mode (`-I`), an allowlisted en
 
 The transport-neutral speech/TTS cores live under `packages/local-compute/src/speech-*` and `tts-*`. They continue to own bounded PCM/text protocols, endpointing, result validation, cancellation/supersession, and source-basis semantics rather than this process.
 
-`local_model_worker.py` is the production desktop model process. It is supervised only through `LocalRuntimeManager`, binds to authenticated loopback, verifies exact application-pinned model bytes before readiness, and hosts Silero VAD + Moonshine Tiny English STT or Kokoro TTS. It never opens SQLite or mutates authoritative session state. Its pinned Python dependencies are listed in `requirements-local-model-runtime.txt`; normal application startup does not install them or download model weights automatically.
+`local_model_worker.py` is the production desktop model process. It is supervised only through `LocalRuntimeManager`, binds to authenticated loopback, verifies exact application-pinned model bytes before readiness, and hosts Silero VAD + Moonshine Tiny English STT or Kokoro TTS. It never opens SQLite or mutates authoritative session state. Its complete pinned Python dependency graph is listed in `requirements-local-model-runtime.txt` and is supported on CPython 3.12-3.13; normal application startup does not install it or download model weights automatically. The worker verifies the installed graph before readiness.
 
 Production model/cache ownership and composition are documented in `apps/desktop/src/runtime/README.md`. Vision remains unavailable in this worker rather than being represented by a deterministic fake.
 

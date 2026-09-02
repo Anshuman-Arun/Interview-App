@@ -20,6 +20,7 @@ import sys
 import threading
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,31 @@ WORKER_COMPONENT_VERSION = "1"
 WORKER_PROTOCOL_VERSION = 1
 MOONSHINE_VERSION = "0.1.5"
 ONNXRUNTIME_VERSION = "1.29.0"
+PYTHON_DEPENDENCY_LOCK_VERSION = "1"
+MIN_PYTHON = (3, 12)
+MAX_PYTHON_EXCLUSIVE = (3, 14)
+EXPECTED_DISTRIBUTIONS = {
+    "moonshine-voice": "0.1.5",
+    "onnxruntime": "1.29.0",
+    "numpy": "2.5.2",
+    "sounddevice": "0.5.6",
+    "requests": "2.34.2",
+    "tqdm": "4.70.0",
+    "filelock": "3.32.5",
+    "platformdirs": "4.11.7",
+    "google-crc32c": "1.8.0",
+    "flatbuffers": "25.12.19",
+    "packaging": "26.3",
+    "protobuf": "7.36.1",
+    "charset-normalizer": "3.5.1",
+    "idna": "3.19",
+    "urllib3": "2.7.0",
+    "certifi": "2026.7.22",
+    "cffi": "2.1.1",
+    "pycparser": "3.0",
+}
+if sys.platform == "win32":
+    EXPECTED_DISTRIBUTIONS["colorama"] = "0.4.6"
 MAX_REQUEST_BYTES = 16 * 1024 * 1024
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 MAX_TRANSCRIPT_CHARS = 20_000
@@ -208,6 +234,15 @@ def verify_asset_tree(
         )
 
 
+def require_runtime_environment() -> None:
+    interpreter = sys.version_info[:2]
+    if not (MIN_PYTHON <= interpreter < MAX_PYTHON_EXCLUSIVE):
+        raise RuntimeError("desktop local model runtime requires CPython 3.12 or 3.13")
+    for distribution, expected in EXPECTED_DISTRIBUTIONS.items():
+        if version(distribution) != expected:
+            raise RuntimeError(f"{distribution} package version mismatch")
+
+
 def require_worker_token() -> str:
     token = os.environ.get("INTERVIEW_LOCAL_WORKER_TOKEN", "")
     if len(token) != 64 or any(ch not in "0123456789abcdef" for ch in token):
@@ -272,7 +307,8 @@ class SpeechRuntime:
         self._vad_lock = threading.Lock()
         self._stt_lock = threading.Lock()
         self.runtime_version = (
-            f"moonshine-voice/{MOONSHINE_VERSION};onnxruntime/{ONNXRUNTIME_VERSION}"
+            f"moonshine-voice/{MOONSHINE_VERSION};"
+            f"onnxruntime/{ONNXRUNTIME_VERSION};deps/{PYTHON_DEPENDENCY_LOCK_VERSION}"
         )
 
     def close(self) -> None:
@@ -423,7 +459,9 @@ class TtsRuntime:
         self._state_lock = threading.Lock()
         self._current_request_id: str | None = None
         self._cancelled_request_ids: set[str] = set()
-        self.runtime_version = f"moonshine-voice/{MOONSHINE_VERSION}"
+        self.runtime_version = (
+            f"moonshine-voice/{MOONSHINE_VERSION};deps/{PYTHON_DEPENDENCY_LOCK_VERSION}"
+        )
 
     def close(self) -> None:
         with self._state_lock:
@@ -635,6 +673,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    require_runtime_environment()
     token = require_worker_token()
     runtime: Any
     if args.component == "speech":

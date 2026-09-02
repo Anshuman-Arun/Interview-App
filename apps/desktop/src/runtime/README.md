@@ -27,6 +27,7 @@ The production runtime is:
 - STT: Moonshine Tiny English through `moonshine-voice==0.1.5`;
 - TTS: Kokoro `af_heart` through Moonshine Voice 0.1.5;
 - ONNX Runtime: exactly 1.29.0 for the Silero worker path;
+- Python dependency lock: exact graph version 1 on CPython 3.12-3.13;
 - vision: no production local backend is selected in this integration.
 
 Vision therefore reports `UNAVAILABLE / NO_PRODUCTION_BACKEND_CONFIGURED`.
@@ -39,11 +40,18 @@ Python packages. Missing assets produce `MISSING_ASSET`; a missing/incompatible
 Python runtime produces `UNAVAILABLE` or `FAILED`. Typed interviews remain
 usable.
 
-Install the pinned Python runtime dependencies explicitly:
+The supported production interpreter is **CPython 3.12 or 3.13**. The
+requirements file pins the complete dependency graph used by the worker, not
+only Moonshine/ONNX Runtime. Install it explicitly from wheels:
 
 ```text
-python -m pip install -r workers/python/requirements-local-model-runtime.txt
+python -m pip install --only-binary=:all: -r workers/python/requirements-local-model-runtime.txt
 ```
+
+The worker verifies the installed distribution versions before READY and binds
+the dependency-lock version into its trusted runtime handshake. A later pip
+resolution therefore cannot silently run under the same admitted runtime
+identity.
 
 Install the application-owned model manifests explicitly with:
 
@@ -160,9 +168,9 @@ Production composition defaults only to
 `workers/python/local_model_worker.py`. There is no environment variable that
 switches packaged production to a fake model.
 
-CI installs only the pinned Python runtime wheels and runs
-`validate_local_model_runtime.py` to catch package/version/API drift on both
-Ubuntu and Windows. It does not download model weights. Runtime integration
+CI installs only the exact pinned Python runtime dependency graph and runs
+`validate_local_model_runtime.py` to catch interpreter/package/version/API
+drift on both Ubuntu and Windows. It does not download model weights. Runtime integration
 still uses the separate `tests/fixtures/local-model-http-worker.mjs`
 deterministic worker. Tests exercise authentication, handshake binding, bounded
 adapter output, active cancellation, platform-specific crash handling, missing
@@ -216,3 +224,10 @@ separately after installing the pinned dependencies/assets:
    reaches trusted readiness.
 
 Do not claim this real-device evidence until it has actually been performed.
+
+
+### Supported wheel platforms
+
+The current production Python worker is validated on Windows x86-64 and Ubuntu
+x86-64. Upstream Moonshine 0.1.5 also publishes Linux ARM64 and macOS ARM64
+wheels, but those paths are not claimed production-validated by this PR.

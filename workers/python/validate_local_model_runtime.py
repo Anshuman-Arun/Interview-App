@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import inspect
+import sys
 from importlib.metadata import version
 
 import moonshine_voice
@@ -12,8 +13,30 @@ from moonshine_voice.moonshine_api import ModelArch
 from moonshine_voice.transcriber import Transcriber
 from moonshine_voice.tts import TextToSpeech
 
-EXPECTED_MOONSHINE = "0.1.5"
-EXPECTED_ONNXRUNTIME = "1.29.0"
+MIN_PYTHON = (3, 12)
+MAX_PYTHON_EXCLUSIVE = (3, 14)
+EXPECTED_DISTRIBUTIONS = {
+    "moonshine-voice": "0.1.5",
+    "onnxruntime": "1.29.0",
+    "numpy": "2.5.2",
+    "sounddevice": "0.5.6",
+    "requests": "2.34.2",
+    "tqdm": "4.70.0",
+    "filelock": "3.32.5",
+    "platformdirs": "4.11.7",
+    "google-crc32c": "1.8.0",
+    "flatbuffers": "25.12.19",
+    "packaging": "26.3",
+    "protobuf": "7.36.1",
+    "charset-normalizer": "3.5.1",
+    "idna": "3.19",
+    "urllib3": "2.7.0",
+    "certifi": "2026.7.22",
+    "cffi": "2.1.1",
+    "pycparser": "3.0",
+}
+if sys.platform == "win32":
+    EXPECTED_DISTRIBUTIONS["colorama"] = "0.4.6"
 
 
 def require(condition: bool, message: str) -> None:
@@ -22,17 +45,25 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> int:
+    interpreter = sys.version_info[:2]
     require(
-        version("moonshine-voice") == EXPECTED_MOONSHINE,
-        "moonshine-voice package version mismatch",
+        MIN_PYTHON <= interpreter < MAX_PYTHON_EXCLUSIVE,
+        "desktop local model runtime requires CPython 3.12 or 3.13",
     )
+
+    for distribution, expected in EXPECTED_DISTRIBUTIONS.items():
+        require(
+            version(distribution) == expected,
+            f"{distribution} package version mismatch",
+        )
+
     require(
-        getattr(moonshine_voice, "__version__", None) == EXPECTED_MOONSHINE,
+        getattr(moonshine_voice, "__version__", None) == EXPECTED_DISTRIBUTIONS["moonshine-voice"],
         "moonshine_voice runtime version mismatch",
     )
     require(
-        getattr(ort, "__version__", None) == EXPECTED_ONNXRUNTIME,
-        "onnxruntime version mismatch",
+        getattr(ort, "__version__", None) == EXPECTED_DISTRIBUTIONS["onnxruntime"],
+        "onnxruntime runtime version mismatch",
     )
     require(hasattr(ModelArch, "TINY"), "Moonshine ModelArch.TINY is unavailable")
 
