@@ -49,12 +49,12 @@ export class SessionRecoveryCoordinator {
       readonly medium: "TEXT" | "AUDIO";
     }>();
     const exposedTextKeys = new Set(
-      Object.values(state.deliveries)
-        .filter((delivery) =>
-          delivery.content.medium === "TEXT"
-          && (delivery.status === "EXPOSED" || delivery.status === "COMPLETED")
-        )
-        .map((delivery) => semanticDeliveryKey(delivery.generationId, delivery.content.text))
+      Object.values(state.deliveries).flatMap((delivery) =>
+        delivery.content.medium === "TEXT"
+        && (delivery.status === "EXPOSED" || delivery.status === "COMPLETED")
+          ? [semanticDeliveryKey(delivery.generationId, delivery.content.text)]
+          : []
+      )
     );
     const history: SessionHistoryEntry[] = [];
     for (const event of events) {
