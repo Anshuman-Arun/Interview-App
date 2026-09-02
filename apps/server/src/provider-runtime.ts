@@ -54,6 +54,7 @@ export interface ProviderAdapterRuntimeSource {
   readonly resolveRuntime: (
     selection: ProviderSelectionReference
   ) => unknown;
+  readonly drain?: () => unknown;
 }
 
 export interface ProviderRuntimePolicySource {
@@ -93,16 +94,23 @@ export class ProviderRuntimeResolutionError extends Error {
 }
 
 type RuntimeSourceOperation = (selection: ProviderSelectionReference) => unknown;
+type RuntimeDrainOperation = () => unknown;
 
 interface CapturedRuntimeSourceOperation {
   readonly receiver: object;
   readonly operation: RuntimeSourceOperation;
 }
 
+interface CapturedRuntimeDrainOperation {
+  readonly receiver: object;
+  readonly operation: RuntimeDrainOperation;
+}
+
 export class ProviderRuntimeResolver {
   private readonly registry: ProviderRegistry;
   private readonly configurationOperation: CapturedRuntimeSourceOperation | undefined;
   private readonly adapterRuntimeOperation: CapturedRuntimeSourceOperation | undefined;
+  private readonly adapterRuntimeDrainOperation: CapturedRuntimeDrainOperation | undefined;
   private readonly secretResolver: ProviderSecretResolver | undefined;
   private readonly policyOperation: CapturedRuntimeSourceOperation | undefined;
 
@@ -113,10 +121,15 @@ export class ProviderRuntimeResolver {
       "resolveConfiguration",
       "RUNTIME_CONFIGURATION_FAILED"
     );
+    const adapterRuntimeSource =
+      options.adapterRuntimeSource ?? createApplicationProviderAdapterRuntimeSource();
     this.adapterRuntimeOperation = captureRuntimeSourceOperation(
-      options.adapterRuntimeSource ?? createApplicationProviderAdapterRuntimeSource(),
+      adapterRuntimeSource,
       "resolveRuntime",
       "RUNTIME_DEPENDENCY_FAILED"
+    );
+    this.adapterRuntimeDrainOperation = captureOptionalRuntimeDrainOperation(
+      adapterRuntimeSource
     );
     this.secretResolver = options.secretResolver;
     this.policyOperation = captureRuntimeSourceOperation(
@@ -204,6 +217,19 @@ export class ProviderRuntimeResolver {
       policy
     });
   }
+
+  public async drain(): Promise<void> {
+    if (this.adapterRuntimeDrainOperation === undefined) return;
+    try {
+      await REFLECT_APPLY_INTRINSIC(
+        this.adapterRuntimeDrainOperation.operation,
+        this.adapterRuntimeDrainOperation.receiver,
+        []
+      );
+    } catch {
+      throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+    }
+  }
 }
 
 function createApplicationProviderRuntimePolicySource(): ProviderRuntimePolicySource {
@@ -286,6 +312,47 @@ function captureRuntimeSourceOperation(
   }
 
   throw new ProviderRuntimeResolutionError(errorCode);
+}
+
+function captureOptionalRuntimeDrainOperation(
+  source: object
+): CapturedRuntimeDrainOperation | undefined {
+  if (utilTypes.isProxy(source)) {
+    throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+  }
+
+  let current: object | null = source;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) break;
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, "drain");
+    } catch {
+      throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+    }
+    if (descriptor !== undefined) {
+      if (!("value" in descriptor) || typeof descriptor.value !== "function") {
+        throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+      }
+      return Object.freeze({
+        receiver: source,
+        operation: descriptor.value as RuntimeDrainOperation
+      });
+    }
+    try {
+      const prototypeCandidate: unknown = Object.getPrototypeOf(current);
+      if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+        throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+      }
+      current = prototypeCandidate;
+    } catch {
+      throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+    }
+  }
+  if (current !== null && current !== Object.prototype) {
+    throw new ProviderRuntimeResolutionError("RUNTIME_DEPENDENCY_FAILED");
+  }
+  return undefined;
 }
 
 async function invokeRuntimeSource(
