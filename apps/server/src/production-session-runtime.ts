@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import {
-  CommandIdentityValueSchema,
   QuantResearchCandidateActionSchema,
   QuantTradingCandidateActionSchema,
   type CommandEnvelope,
@@ -17,7 +16,6 @@ import {
   QUANT_RESEARCH_FAMILIES,
   createProductionQuantResearchDefinition
 } from "../../../packages/local-compute/src/index.js";
-import { z } from "zod";
 import type { InterviewSessionComposition } from "./interview-session-composition.js";
 
 export type QuantProductionPublicState =
@@ -32,35 +30,6 @@ export type QuantProductionPublicState =
 
 export interface ProductionSessionRuntimeOptions {
   readonly seedSource?: () => number;
-}
-
-const StartedResultSchema = z.object({ started: z.literal(true) }).strict();
-
-function commandIdentityValue(value: unknown) {
-  return CommandIdentityValueSchema.parse(JSON.parse(JSON.stringify(value)));
-}
-
-async function replayQuantStartWithoutNewSeed(
-  writer: SessionWriter,
-  composition: Extract<InterviewSessionComposition, { readonly mode: "QUANT_TRADING" | "QUANT_RESEARCH" }>,
-  envelope: CommandEnvelope
-): Promise<boolean> {
-  if (!writer.getState().started) return false;
-  await writer.execute(
-    envelope,
-    {
-      operation: "START_SESSION",
-      payload: {
-        configuration: commandIdentityValue(composition.configuration),
-        problem: null
-      }
-    },
-    StartedResultSchema,
-    () => {
-      throw new Error("Session already started");
-    }
-  );
-  return true;
 }
 
 function secureUint32Seed(): number {
@@ -100,22 +69,19 @@ export class ProductionSessionRuntime {
         }, envelope);
         return;
       case "QUANT_TRADING":
-        if (await replayQuantStartWithoutNewSeed(writer, composition, envelope)) return;
-        await new QuantTradingSessionCoordinator(writer).initializeConfigured(
+        await new QuantTradingSessionCoordinator(writer).initializeConfiguredWithSeedFactory(
           composition.configuration,
-          parseSeed(this.#seedSource()),
+          () => parseSeed(this.#seedSource()),
           envelope
         );
         return;
       case "QUANT_RESEARCH": {
-        if (await replayQuantStartWithoutNewSeed(writer, composition, envelope)) return;
-        const definition = createProductionQuantResearchDefinition(
-          quantResearchFamily(composition.configuration.scenario.id),
-          parseSeed(this.#seedSource())
-        );
-        await new QuantResearchCoordinator(writer).initializeConfigured(
+        await new QuantResearchCoordinator(writer).initializeConfiguredWithDefinitionFactory(
           composition.configuration,
-          definition,
+          () => createProductionQuantResearchDefinition(
+            quantResearchFamily(composition.configuration.scenario.id),
+            parseSeed(this.#seedSource())
+          ),
           envelope
         );
         return;
@@ -161,12 +127,17 @@ export class ProductionSessionRuntime {
     writer: SessionWriter,
     composition: InterviewSessionComposition,
     actionInput: QuantResearchCandidateAction,
+    expectedActionCount: number,
     envelope: CommandEnvelope
   ) {
     if (composition.mode !== "QUANT_RESEARCH") {
       throw new Error("Quant Research action was sent to a non-Research session");
     }
     const action = QuantResearchCandidateActionSchema.parse(actionInput);
-    return new QuantResearchCoordinator(writer).applyAction(action, envelope);
+    return new QuantResearchCoordinator(writer).applyActionAtExpectedCount(
+      action,
+      expectedActionCount,
+      envelope
+    );
   }
 }
