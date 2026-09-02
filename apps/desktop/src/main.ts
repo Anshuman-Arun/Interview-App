@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import process from "node:process";\nimport { createAndStartServer } from "../../server/src/server.js";
+import process from "node:process";
+import { createAndStartServer } from "../../server/src/server.js";
 import {
   app,
   BrowserWindow,
@@ -8,7 +9,8 @@ import {
   ipcMain,
   type IpcMainEvent
 } from "electron";
-import { DesktopBackendController } from "./backend-controller.js";\nimport { DesktopLocalRuntimeComposition } from "./runtime/index.js";
+import { DesktopBackendController } from "./backend-controller.js";
+import { DesktopLocalRuntimeComposition } from "./runtime/index.js";
 import {
   DESKTOP_BOOTSTRAP_CHANNEL,
   createDesktopRendererBootstrap,
@@ -32,7 +34,16 @@ import {
   createSecureWebPreferences
 } from "./window-config.js";
 
-const backend = new DesktopBackendController();
+let localRuntime: DesktopLocalRuntimeComposition | undefined;
+const startupAbort = new AbortController();
+const backend = new DesktopBackendController(async (config) =>
+  createAndStartServer({
+    ...config,
+    ...(localRuntime?.voiceRuntime === undefined
+      ? {}
+      : { voiceRuntime: localRuntime.voiceRuntime })
+  })
+);
 let frontendServer: DesktopFrontendServer | undefined;
 let mainWindow: BrowserWindow | undefined;
 let bootstrap: DesktopRendererBootstrap | undefined;
@@ -94,6 +105,24 @@ async function startDesktop(): Promise<void> {
     isPackaged: app.isPackaged
   });
   await mkdir(paths.appDataRoot, { recursive: true });
+
+  const runtime = new DesktopLocalRuntimeComposition({
+    appDataRoot: paths.appDataRoot,
+    cwd: process.cwd(),
+    resourcesPath: process.resourcesPath,
+    isPackaged: app.isPackaged
+  });
+  localRuntime = runtime;
+  if (process.argv.includes("--install-local-models")) {
+    try {
+      await runtime.installVoiceAssets(startupAbort.signal);
+    } catch (error) {
+      if (startupAbort.signal.aborted) return;
+      throw error;
+    }
+  }
+  await runtime.start({ signal: startupAbort.signal });
+  if (shuttingDown || startupAbort.signal.aborted) return;
 
   if (mode === "production") {
     frontendServer = new DesktopFrontendServer(paths.frontendRoot);
@@ -273,6 +302,7 @@ async function failStartup(message: string): Promise<void> {
 function shutdownDesktop(): Promise<void> {
   if (shutdownPromise !== undefined) return shutdownPromise;
   shuttingDown = true;
+  startupAbort.abort();
   bootstrap = undefined;
   ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
 
