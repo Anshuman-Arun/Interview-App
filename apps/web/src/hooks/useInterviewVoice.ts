@@ -108,6 +108,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
   const selectedInputRef = useRef<string | undefined>(undefined);
   const inputDeviceSwitchEpochRef = useRef(0);
   const inputDeviceSwitchPendingRef = useRef(false);
+  const deviceEnumerationEpochRef = useRef(0);
   const optionsRef = useRef(options);
   const observedSessionIdRef = useRef<SessionId | null>(options.sessionId);
   optionsRef.current = options;
@@ -422,8 +423,13 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
   const refreshAudioDevices = useCallback(async (): Promise<void> => {
     const manager = devicesRef.current;
     if (manager === null) return;
+    const enumerationEpoch = deviceEnumerationEpochRef.current + 1;
+    deviceEnumerationEpochRef.current = enumerationEpoch;
     const result = await manager.enumerate();
-    if (!mountedRef.current) return;
+    if (
+      !mountedRef.current
+      || deviceEnumerationEpochRef.current !== enumerationEpoch
+    ) return;
     if (result.status === "PERMISSION_DENIED") {
       setPermission((current) => current === "GRANTED" ? current : "DENIED");
     } else if (result.status === "UNSUPPORTED") {
@@ -493,6 +499,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
 
   useEffect(() => () => {
     mountedRef.current = false;
+    deviceEnumerationEpochRef.current += 1;
     inputDeviceSwitchEpochRef.current += 1;
     inputDeviceSwitchPendingRef.current = false;
     epochRef.current += 1;
