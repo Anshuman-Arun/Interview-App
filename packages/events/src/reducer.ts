@@ -437,21 +437,20 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       ) {
         throw new Error("Vision evidence bridge completion requires a decided proposal");
       }
-      if (request.evidenceBridge.interpreterFingerprint !== event.payload.interpreterFingerprint) {
+      const bridge = request.evidenceBridge;
+      const resultEventId = request.resultEventId;
+      if (bridge.interpreterFingerprint !== event.payload.interpreterFingerprint) {
         throw new Error("Vision evidence bridge completion fingerprint does not match its decision");
       }
       const proposalWasAdmitted = state.evidenceProposals.some((proposal) =>
-        jsonDataEqual(proposal, request.evidenceBridge?.status === "DECIDED"
-          && request.evidenceBridge.decision === "PROPOSAL"
-          ? request.evidenceBridge.proposal
-          : undefined)
+        jsonDataEqual(proposal, bridge.proposal)
       );
       if (!proposalWasAdmitted) {
         throw new Error("Vision evidence bridge completion requires an evidence admission attempt");
       }
       const evidenceCommitted = Object.values(state.evidenceHistory).some((records) =>
         records.some((record) =>
-          record.value.evidenceEventIds.includes(request.resultEventId as EventId)
+          record.value.evidenceEventIds.includes(resultEventId)
         )
       );
       if (evidenceCommitted !== event.payload.evidenceCommitted) {
@@ -465,10 +464,10 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
             ...request,
             evidenceBridge: {
               status: "COMPLETED",
-              interpreterFingerprint: request.evidenceBridge.interpreterFingerprint,
+              interpreterFingerprint: bridge.interpreterFingerprint,
               decision: "PROPOSAL",
-              proposal: request.evidenceBridge.proposal,
-              decisionEventId: request.evidenceBridge.decisionEventId,
+              proposal: bridge.proposal,
+              decisionEventId: bridge.decisionEventId,
               evidenceCommitted,
               completionEventId: event.eventId
             }
