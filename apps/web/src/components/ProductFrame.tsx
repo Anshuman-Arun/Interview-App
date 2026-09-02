@@ -20,7 +20,7 @@ export function ProductFrame({
   readonly onNavigate: (page: ProductPageId) => void;
   readonly children: ReactNode;
   readonly aside?: ReactNode;
-  readonly notice?: string | null;
+  readonly notice?: string | null | undefined;
   readonly onDismissNotice?: (() => void) | undefined;
 }) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
