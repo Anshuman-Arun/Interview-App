@@ -114,6 +114,41 @@ describe("desktop local model runtime", () => {
     await expect(remaining).resolves.toHaveLength(0);
   });
 
+  it("launches production Python workers in isolated interpreter mode", () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-isolated-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: "python"
+    });
+    compositions.push(composition);
+
+    const mutable = composition as unknown as {
+      workerDefinition(input: {
+        readonly componentId: string;
+        readonly component: "speech" | "tts";
+        readonly token: string;
+        readonly modelIdentity: string;
+        readonly runtimeVersion: string;
+        readonly capabilities: readonly string[];
+        readonly args: readonly string[];
+      }): LocalComponentDefinition;
+    };
+    const definition = mutable.workerDefinition({
+      componentId: "isolated-fixture",
+      component: "speech",
+      token: "a".repeat(64),
+      modelIdentity: "fixture-model",
+      runtimeVersion: "fixture-runtime",
+      capabilities: ["vad", "stt"],
+      args: ["--component", "speech"]
+    });
+
+    expect(definition.args[0]).toBe("-I");
+    expect(definition.args[1]).toBe(PRODUCTION_WORKER);
+  });
+
   it("keeps typed desktop startup usable when production model assets are absent", async () => {
     const appDataRoot = temporaryRoot("desktop-local-models-");
     const composition = new DesktopLocalRuntimeComposition({
