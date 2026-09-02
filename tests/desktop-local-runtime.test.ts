@@ -203,6 +203,8 @@ function fixtureManager(
     expectedHandshake: {
       componentVersion: "1",
       protocolVersion: 1,
+      workerType: component,
+      runtimeVersion: "fixture-runtime-1",
       modelVersionOrHash: modelIdentity,
       capabilities
     },
