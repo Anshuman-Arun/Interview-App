@@ -3,7 +3,7 @@ import { chmod, lstat, mkdtemp, realpath, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path, { win32 as win32Path } from "node:path";
 import process from "node:process";
-import { TextDecoder } from "node:util";
+import { TextDecoder, types as utilTypes } from "node:util";
 import {
   buildLocalEnvironment,
   snapshotParentEnvironmentRecord
@@ -99,6 +99,7 @@ interface ExecutableIdentity {
 }
 
 type PendingFailure =
+  | "SPAWN_FAILED"
   | "EXECUTION_TIMEOUT"
   | "EXECUTION_CANCELLED"
   | "OUTPUT_LIMIT_EXCEEDED"
@@ -197,6 +198,7 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("SPAWN_FAILED");
     }
 
+    const closePromise = waitForClose(child);
     const stdoutChunks: Buffer[] = [];
     let stdoutBytes = 0;
     let stderrBytes = 0;
@@ -227,7 +229,7 @@ export class SupervisedProcessRunner {
       stderrBytes += value.length;
     });
     child.stdin.on("error", () => {
-      if (!settled && pendingFailure === undefined) requestCleanup("SPAWN_FAILED" as PendingFailure);
+      if (!settled && pendingFailure === undefined) requestCleanup("SPAWN_FAILED");
     });
     child.stdout.on("error", () => {
       if (!settled && pendingFailure === undefined) requestCleanup("OUTPUT_LIMIT_EXCEEDED");
@@ -263,7 +265,7 @@ export class SupervisedProcessRunner {
         child.stdin.destroy();
       }
 
-      const exit = await waitForClose(child);
+      const exit = await closePromise;
       if (cleanupStarted !== undefined) {
         const cleaned = await cleanupStarted;
         if (!cleaned && pendingFailure !== "OUTPUT_LIMIT_EXCEEDED") {
@@ -417,7 +419,12 @@ function inspectPlainRecord(
   allowed: ReadonlySet<string>,
   code: "INVALID_DEFINITION" | "INVALID_REQUEST"
 ): Readonly<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
     throw new SupervisedProcessError(code);
   }
   let prototype: object | null;
@@ -452,7 +459,14 @@ function snapshotArguments(
   code: "INVALID_DEFINITION" | "INVALID_REQUEST"
 ): readonly string[] {
   if (value === undefined) return Object.freeze([]);
-  if (!Array.isArray(value)) throw new SupervisedProcessError(code);
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || !Array.isArray(value)
+  ) {
+    throw new SupervisedProcessError(code);
+  }
   const descriptors = Object.getOwnPropertyDescriptors(value);
   const rawLength = descriptors.length?.value as unknown;
   if (
