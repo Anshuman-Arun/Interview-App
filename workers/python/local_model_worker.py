@@ -397,34 +397,79 @@ class TtsRuntime:
             .models_from(asset_root, download=False)
         )
         self._tts.load()
-        self._lock = threading.Lock()
+        self._synthesis_lock = threading.Lock()
+        self._state_lock = threading.Lock()
+        self._current_request_id: str | None = None
+        self._cancelled_request_ids: set[str] = set()
         self.runtime_version = f"moonshine-voice/{MOONSHINE_VERSION}"
 
     def close(self) -> None:
+        with self._state_lock:
+            current = self._current_request_id
+        if current is not None:
+            try:
+                self._tts.cancel_stream()
+            except Exception:
+                pass
         self._tts.close()
 
     def synthesize(self, body: dict[str, Any]) -> dict[str, Any]:
+        request_id = body.get("requestId")
         text = body.get("text")
         voice = body.get("voice")
         language = body.get("language")
         sample_rate = body.get("sampleRate")
         speed = finite_float(body.get("speed"), "INVALID_SPEED")
+        if not isinstance(request_id, str) or not (1 <= len(request_id) <= 128):
+            raise ProtocolError(400, "INVALID_REQUEST_ID")
         if not isinstance(text, str) or not text or len(text) > MAX_TTS_TEXT_CHARS:
             raise ProtocolError(400, "INVALID_TEXT")
         if voice != "kokoro_af_heart" or language != "en-US" or sample_rate != 24_000:
             raise ProtocolError(400, "UNSUPPORTED_TTS_CONFIGURATION")
-        if speed < 0.5 or speed > 2.0:
-            raise ProtocolError(400, "INVALID_SPEED")
+        # Moonshine's cancellable TTS path is the streaming API. It does not
+        # expose per-request speed mutation, and desktop v1 always requests 1x.
+        if speed != 1.0:
+            raise ProtocolError(400, "UNSUPPORTED_TTS_SPEED")
 
-        with self._lock:
-            samples, actual_rate = self._tts.synthesize(text, speed=speed)
-        if int(actual_rate) != 24_000:
-            raise RuntimeError("Kokoro returned unexpected sample rate")
-        pcm = self._np.asarray(samples, dtype="<f4").reshape(-1)
-        if pcm.size == 0 or pcm.size > 24_000 * MAX_TTS_SECONDS:
-            raise RuntimeError("Kokoro output exceeds PCM bound")
-        if not self._np.isfinite(pcm).all() or bool((self._np.abs(pcm) > 1.001).any()):
-            raise RuntimeError("Kokoro returned invalid PCM")
+        with self._synthesis_lock:
+            with self._state_lock:
+                if self._current_request_id is not None:
+                    raise ProtocolError(409, "TTS_BUSY")
+                self._current_request_id = request_id
+                self._cancelled_request_ids.discard(request_id)
+
+            chunks: list[Any] = []
+            frame_count = 0
+            try:
+                for chunk in self._tts.stream(text):
+                    with self._state_lock:
+                        if request_id in self._cancelled_request_ids:
+                            raise ProtocolError(409, "CANCELLED")
+                    if int(chunk.sample_rate) != 24_000:
+                        raise RuntimeError("Kokoro returned unexpected sample rate")
+                    pcm_chunk = self._np.asarray(chunk.samples, dtype="<f4").reshape(-1)
+                    if pcm_chunk.size == 0:
+                        continue
+                    if not self._np.isfinite(pcm_chunk).all() or bool(
+                        (self._np.abs(pcm_chunk) > 1.001).any()
+                    ):
+                        raise RuntimeError("Kokoro returned invalid PCM")
+                    frame_count += int(pcm_chunk.size)
+                    if frame_count > 24_000 * MAX_TTS_SECONDS:
+                        raise RuntimeError("Kokoro output exceeds PCM bound")
+                    chunks.append(pcm_chunk.copy())
+
+                with self._state_lock:
+                    if request_id in self._cancelled_request_ids:
+                        raise ProtocolError(409, "CANCELLED")
+                if not chunks:
+                    raise RuntimeError("Kokoro returned no PCM")
+                pcm = self._np.concatenate(chunks).astype("<f4", copy=False)
+            finally:
+                with self._state_lock:
+                    self._current_request_id = None
+                    self._cancelled_request_ids.discard(request_id)
+
         raw = pcm.tobytes(order="C")
         encoded = base64.b64encode(raw).decode("ascii")
         result = {
@@ -436,6 +481,26 @@ class TtsRuntime:
         if len(encoded) > MAX_RESPONSE_BYTES:
             raise RuntimeError("Kokoro response exceeds transport bound")
         return result
+
+    def cancel(self, body: dict[str, Any]) -> dict[str, Any]:
+        request_id = body.get("requestId")
+        if not isinstance(request_id, str) or not (1 <= len(request_id) <= 128):
+            raise ProtocolError(400, "INVALID_REQUEST_ID")
+
+        with self._state_lock:
+            if self._current_request_id != request_id:
+                return {"accepted": False}
+            self._cancelled_request_ids.add(request_id)
+
+        # Moonshine explicitly documents cancel_stream() as safe for barge-in
+        # from another thread while stream() is producing chunks.
+        try:
+            self._tts.cancel_stream()
+        except Exception:
+            with self._state_lock:
+                self._cancelled_request_ids.discard(request_id)
+            raise
+        return {"accepted": True}
 
 
 class WorkerServer(ThreadingHTTPServer):
@@ -478,6 +543,8 @@ class Handler(BaseHTTPRequestHandler):
                 output = self.server.runtime.transcribe(body)
             elif self.server.component == "tts" and self.path == "/v1/tts":
                 output = self.server.runtime.synthesize(body)
+            elif self.server.component == "tts" and self.path == "/v1/tts/cancel":
+                output = self.server.runtime.cancel(body)
             else:
                 raise ProtocolError(404, "NOT_FOUND")
             self._send_json(200, output)
