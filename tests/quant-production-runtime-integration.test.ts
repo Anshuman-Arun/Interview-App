@@ -546,6 +546,13 @@ describe("production quant runtime integration", () => {
     ).state;
     expect(completed.status).toBe("COMPLETE");
     expect(completed.acceptedActionCount).toBe(2);
+    expect(completed.completion?.overallScore).toEqual(expect.any(Number));
+    expect(completed.completion?.evidence.length).toBeGreaterThan(0);
+    const completedSerialized = JSON.stringify(completed);
+    expect(completedSerialized).not.toContain('"seed"');
+    expect(completedSerialized).not.toContain("gradingData");
+    expect(completedSerialized).not.toContain("generatedParameters");
+    expect(completedSerialized).not.toContain("hiddenModel");
 
     await expectProtocolError(post({
       protocolVersion: 1,
