@@ -9,6 +9,7 @@ import {
   newRequestId,
   newSessionId,
   type InterviewSessionConfiguration,
+  type RequestId,
   type SessionId
 } from "../packages/domain/src/index.js";
 import type { SessionState } from "../packages/events/src/index.js";
