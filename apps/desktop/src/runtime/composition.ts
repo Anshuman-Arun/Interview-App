@@ -94,6 +94,7 @@ export class DesktopLocalRuntimeComposition {
   private speechWorker: SpeechWorkerCore | undefined;
   private ttsWorker: TtsWorkerCore | undefined;
   private startPromise: Promise<void> | undefined;
+  private stopPromise: Promise<void> | undefined;
   private stopping = false;
   private stopped = false;
 
@@ -144,9 +145,20 @@ export class DesktopLocalRuntimeComposition {
     }
   }
 
-  public async stopWorkers(): Promise<void> {
-    if (this.stopped) return;
+  public stopWorkers(): Promise<void> {
+    if (this.stopped) return Promise.resolve();
+    if (this.stopPromise !== undefined) return this.stopPromise;
+
     this.stopping = true;
+    const operation = this.performStopWorkers();
+    this.stopPromise = operation;
+    void operation.finally(() => {
+      if (this.stopPromise === operation) this.stopPromise = undefined;
+    }).catch(() => undefined);
+    return operation;
+  }
+
+  private async performStopWorkers(): Promise<void> {
     const failures: unknown[] = [];
     const coreShutdowns = [
       this.speechWorker?.shutdown(),
@@ -166,21 +178,35 @@ export class DesktopLocalRuntimeComposition {
     }
 
     if (processTreesStopped) {
-      for (const view of [this.ttsView, this.speechView]) {
-        if (view === undefined) continue;
+      // Once the process trees are verified gone, the core objects can no longer
+      // issue useful work. Clear them even if a later filesystem cleanup fails.
+      this.speechWorker = undefined;
+      this.ttsWorker = undefined;
+
+      if (this.ttsView !== undefined) {
         try {
-          await view.dispose();
+          await this.ttsView.dispose();
+          this.ttsView = undefined;
         } catch (error) {
           failures.push(error);
         }
       }
-      this.ttsView = undefined;
-      this.speechView = undefined;
+      if (this.speechView !== undefined) {
+        try {
+          await this.speechView.dispose();
+          this.speechView = undefined;
+        } catch (error) {
+          failures.push(error);
+        }
+      }
     }
 
     this.voiceRuntime = undefined;
-    this.stopped = processTreesStopped;
-    this.stopping = !processTreesStopped;
+    const runtimeViewsDisposed = this.ttsView === undefined && this.speechView === undefined;
+    this.stopped = processTreesStopped && runtimeViewsDisposed;
+    // A failed process-tree stop or failed view deletion is a shutdown state,
+    // not permission to return to start(). A later stopWorkers() may retry it.
+    this.stopping = !this.stopped;
     if (failures.length > 0) {
       throw new AggregateError(failures, "Desktop local model runtime shutdown failed");
     }
