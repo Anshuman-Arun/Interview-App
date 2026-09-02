@@ -27,12 +27,7 @@ function deferred(): {
 }
 
 function setTextareaValue(textarea: HTMLTextAreaElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(
-    HTMLTextAreaElement.prototype,
-    "value"
-  )?.set;
-  if (setter === undefined) throw new Error("textarea value setter unavailable");
-  setter.call(textarea, value);
+  textarea.value = value;
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
