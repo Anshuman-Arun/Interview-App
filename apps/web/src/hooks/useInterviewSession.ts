@@ -304,6 +304,9 @@ export function useInterviewSession(
 
   const pendingSubmissionsRef = useRef<Map<string, PendingSubmissionRecord>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
+  const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
+  const rendererLaunchEpochRef = useRef(0);
+  const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
   const rendererAudioPlayerRef = useRef<QueuedRendererAudioPlayer | null>(null);
   const audioOutputDeviceRef = useRef<string | undefined>(undefined);
@@ -331,10 +334,15 @@ export function useInterviewSession(
   );
   const interruptPlaybackForBargeIn = useCallback((): void => {
     const player = rendererAudioPlayerRef.current;
-    if (player === null) return;
-    player.interruptCurrent();
-    player.clearQueued();
-  }, []);
+    player?.interruptCurrent();
+    player?.clearQueued();
+
+    // Discard any pre-barge-in delivery commands still buffered in the old SSE
+    // connection. The replacement connection attaches only after the old
+    // consumer has settled, so recovery can classify uncertainty first and
+    // cannot replay cancelled/POSSIBLY_EXPOSED output.
+    if (sessionId !== null) rendererRestartRef.current?.(sessionId);
+  }, [sessionId]);
   const setAudioOutputDevice = useCallback((deviceId: string | undefined): void => {
     audioOutputDeviceRef.current = deviceId;
     rendererAudioPlayerRef.current?.setOutputDeviceId(deviceId);
@@ -521,6 +529,28 @@ export function useInterviewSession(
     [audioVoiceClient, authenticatedFetch, baseUrl, options.whiteboardAdapter, rendererStreamUrl]
   );
 
+  const launchRendererStream = useCallback((targetSessionId: SessionId): void => {
+    const launchEpoch = rendererLaunchEpochRef.current + 1;
+    rendererLaunchEpochRef.current = launchEpoch;
+    const priorTask = rendererStreamTaskRef.current;
+    abortControllerRef.current?.abort();
+
+    const task = (async (): Promise<void> => {
+      if (priorTask !== null) {
+        await priorTask.catch(() => undefined);
+      }
+      if (rendererLaunchEpochRef.current !== launchEpoch) return;
+      await attachRendererStream(targetSessionId);
+    })();
+    rendererStreamTaskRef.current = task;
+    void task.finally(() => {
+      if (rendererStreamTaskRef.current === task) {
+        rendererStreamTaskRef.current = null;
+      }
+    }).catch(() => undefined);
+  }, [attachRendererStream]);
+  rendererRestartRef.current = launchRendererStream;
+
   const startSession = useCallback(
     async (customSessionId?: SessionId): Promise<void> => {
       setError(null);
@@ -549,7 +579,7 @@ export function useInterviewSession(
         setProblem(problemView);
         setTranscript([]);
 
-        void attachRendererStream(targetSessionId);
+        launchRendererStream(targetSessionId);
       } catch (err) {
         let msg = "Failed to start interview session";
         if (err instanceof BrowserCommandProtocolError) {
@@ -561,7 +591,7 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, attachRendererStream]
+    [getCommandClient, launchRendererStream]
   );
 
   const recoverSession = useCallback(
@@ -583,7 +613,7 @@ export function useInterviewSession(
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
 
-        void attachRendererStream(targetSessionId);
+        launchRendererStream(targetSessionId);
       } catch (err) {
         let msg = "Failed to recover session";
         if (err instanceof BrowserCommandProtocolError) {
@@ -595,7 +625,7 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, attachRendererStream]
+    [getCommandClient, launchRendererStream]
   );
 
   const completeSession = useCallback(
@@ -765,6 +795,7 @@ export function useInterviewSession(
 
   const disconnect = useCallback((): void => {
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    rendererLaunchEpochRef.current += 1;
     if (abortControllerRef.current !== null) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -783,6 +814,8 @@ export function useInterviewSession(
 
   useEffect(() => {
     return () => {
+      rendererLaunchEpochRef.current += 1;
+      rendererRestartRef.current = null;
       if (abortControllerRef.current !== null) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
