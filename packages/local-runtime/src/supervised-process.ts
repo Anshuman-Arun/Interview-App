@@ -149,6 +149,7 @@ export class SupervisedProcessRunner {
   private readonly platform: NodeJS.Platform;
   private readonly pinnedIdentities = new Map<string, ExecutableIdentity>();
   private readonly quarantinedExecutableIds = new Set<string>();
+  private containmentCompromised = false;
   private windowsSupervisorIdentity: ExecutableIdentity | undefined;
   private readonly activeControllers = new Set<AbortController>();
   private readonly activeOperations = new Set<Promise<SupervisedProcessExecutionResult>>();
@@ -203,6 +204,11 @@ export class SupervisedProcessRunner {
     input: SupervisedProcessExecutionRequest
   ): Promise<SupervisedProcessExecutionResult> {
     const request = snapshotExecutionRequest(input);
+    if (this.containmentCompromised) {
+      return Promise.reject(
+        new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED")
+      );
+    }
     if (this.draining !== undefined) {
       return Promise.reject(new SupervisedProcessError("EXECUTION_CANCELLED"));
     }
@@ -243,13 +249,16 @@ export class SupervisedProcessRunner {
 
   private quarantineExecutable(executableId: string): void {
     this.quarantinedExecutableIds.add(executableId);
+    this.containmentCompromised = true;
     for (const controller of this.activeControllers) {
       controller.abort();
     }
   }
 
   private async drainActiveOperations(): Promise<void> {
-    if (this.quarantinedExecutableIds.size !== 0) {
+    if (this.containmentCompromised || this.quarantinedExecutableIds.size !== 0) {
+      for (const controller of this.activeControllers) controller.abort();
+      await Promise.allSettled([...this.activeOperations]);
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
     }
     for (const controller of this.activeControllers) controller.abort();
