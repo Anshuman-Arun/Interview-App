@@ -208,8 +208,10 @@ describe("configured session product-read integration", () => {
         reason: "EXACT_PROBLEM_UNAVAILABLE"
       });
       const history = await reads.getHistory();
-      expect(history.sessions.find((item) => item.sessionId === sessionId)?.evaluation)
-        .toBeUndefined();
+      const researchCard = history.sessions.find((item) => item.sessionId === sessionId);
+      expect(researchCard?.evaluation).toBeUndefined();
+      expect(researchCard?.problemId).toBeUndefined();
+      expect(researchCard?.problemVersion).toBeUndefined();
       expect(history.longitudinal.includedSessionCount).toBe(0);
       expect(history.longitudinal.problemsAttempted).toBe(0);
       expect(history.longitudinal.evaluationStatistics).toEqual([]);
