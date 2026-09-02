@@ -367,6 +367,52 @@ describe("provider execution admission", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("rejects Proxy prototype chains without invoking prototype traps", async () => {
+    let providerPrototypeTrapCalls = 0;
+    const providerPrototype = new Proxy({}, {
+      getOwnPropertyDescriptor() {
+        providerPrototypeTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        providerPrototypeTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    const provider = testProvider();
+    Object.setPrototypeOf(provider, providerPrototype);
+
+    await expect(openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "INVALID_PROVIDER_IDENTITY" });
+    expect(providerPrototypeTrapCalls).toBe(0);
+
+    let sessionPrototypeTrapCalls = 0;
+    const sessionPrototype = new Proxy({}, {
+      getOwnPropertyDescriptor() {
+        sessionPrototypeTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        sessionPrototypeTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    const rawSession = proposalSession();
+    Object.setPrototypeOf(rawSession, sessionPrototype);
+
+    await expect(openProviderExecutionSession({
+      provider: testProvider({
+        createSession: async () => rawSession
+      }),
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(sessionPrototypeTrapCalls).toBe(0);
+  });
+
   it("rejects Proxy-backed providers and sessions without invoking traps", async () => {
     let providerTrapCalls = 0;
     const providerProxy = new Proxy(testProvider(), {
