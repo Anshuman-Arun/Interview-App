@@ -2,7 +2,7 @@ import {
   MAX_WHITEBOARD_VISION_DIMENSION,
   MAX_WHITEBOARD_VISION_PIXELS,
   MAX_WHITEBOARD_VISION_PNG_BYTES
-} from "../../../packages/domain/src/index.js";
+} from "../../../../packages/domain/src/index.js";
 import {
   Box,
   type Editor,

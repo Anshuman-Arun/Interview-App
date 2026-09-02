@@ -9,6 +9,7 @@ import {
   WhiteboardVisionSnapshotResponseSchema,
   WhiteboardVisionSnapshotUploadSchema,
   type AuthoritativeBoardBounds,
+  type EventId,
   type SessionId,
   type VisionInferenceRequest,
   type VisionSnapshotBasis,
@@ -606,7 +607,7 @@ function sameShapeRevisions(
 
 function visionEvidenceWasCommitted(
   state: SessionState,
-  visionResultEventId: string
+  visionResultEventId: EventId
 ): boolean {
   return Object.values(state.evidenceHistory).some((records) =>
     records.some((record) =>
