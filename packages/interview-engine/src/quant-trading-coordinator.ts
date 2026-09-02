@@ -143,7 +143,12 @@ function publicStateFromEngine(
             riskBreachCount: completion.riskBreaches.length,
             ...(completion.riskBreaches.at(-1) === undefined
               ? {}
-              : { lastRiskBreach: completion.riskBreaches.at(-1) }),
+              : {
+                  lastRiskBreach: {
+                    round: completion.riskBreaches.at(-1)?.round,
+                    source: completion.riskBreaches.at(-1)?.source
+                  }
+                }),
             adverseSelectionPnL: completion.adverseSelectionPnL,
             accountingInvariantHolds: completion.accountingInvariantHolds,
             objectiveScore: completion.objectiveScore
