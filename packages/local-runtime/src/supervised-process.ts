@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream, lstatSync, realpathSync } from "node:fs";
+import { createReadStream, lstatSync, realpathSync, rmSync } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path, { win32 as win32Path } from "node:path";
@@ -11,7 +11,10 @@ import {
   snapshotParentEnvironmentRecord
 } from "./environment.js";
 import type { LocalEnvironmentDefinition } from "./types.js";
-import { WINDOWS_JOB_SUPERVISOR_SCRIPT } from "./windows-job-supervisor.js";
+import {
+  WINDOWS_JOB_SUPERVISOR_CSHARP_SOURCE,
+  WINDOWS_JOB_SUPERVISOR_SCRIPT
+} from "./windows-job-supervisor.js";
 
 const MAX_EXECUTABLES = 32;
 const MAX_ACTIVE_EXECUTIONS = 4;
@@ -20,6 +23,8 @@ const MAX_ARGUMENT_BYTES = 128 * 1024;
 const MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS = 24_000;
 const MAX_WINDOWS_SUPERVISOR_COMMAND_LINE_CHARACTERS = 4_096;
 const MAX_WINDOWS_SUPERVISOR_ENVIRONMENT_CHARACTERS = 30_000;
+const MAX_WINDOWS_SUPERVISOR_ASSEMBLY_BYTES = 5 * 1024 * 1024;
+const WINDOWS_SUPERVISOR_COMPILE_TIMEOUT_MS = 30_000;
 const MAX_STDIN_BYTES = 256 * 1024;
 const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_STDERR_BYTES = 512 * 1024;
@@ -148,6 +153,14 @@ interface WindowsSupervisorLaunch {
   readonly environment: NodeJS.ProcessEnv;
   readonly identity: ExecutableIdentity;
 }
+
+interface WindowsSupervisorAssembly {
+  readonly path: string;
+  readonly sha256: string;
+}
+
+const SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES =
+  new Map<string, Promise<WindowsSupervisorAssembly>>();
 
 type PendingFailure =
   | "SPAWN_FAILED"
