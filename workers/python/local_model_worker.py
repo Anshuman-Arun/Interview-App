@@ -827,7 +827,7 @@ def main() -> int:
     }
     print(json.dumps(ready, separators=(",", ":"), ensure_ascii=True), flush=True)
     try:
-        server.serve_forever(poll_interval=0.2)
+        serve_thread.join()
     finally:
         server.server_close()
         runtime.close()
