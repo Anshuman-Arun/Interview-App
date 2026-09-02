@@ -1224,6 +1224,7 @@ describe("local worker lifecycle manager", () => {
   it("drops oversized stdout frames without blocking a later valid readiness message", async () => {
     const runtime = manager();
     runtime.register(definition("oversized-output", "oversized-then-ready", {
+      startupTimeoutMs: 5_000,
       output: { maxLines: 4, maxBytes: 512, maxLineBytes: 256 }
     }, ["4096"]));
 
