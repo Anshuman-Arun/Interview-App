@@ -641,6 +641,7 @@ function expectedReplayReadCategory(
   if (
     kind === "TURN_COMMITTED"
     || kind === "QUANT_TRADING_ACTION_ACCEPTED"
+    || kind === "QUANT_RESEARCH_ACTION_ACCEPTED"
     || kind === "UTTERANCE_STARTED"
     || kind === "UTTERANCE_DISCARDED"
     || kind === "INPUT_EPISODE_STARTED"
