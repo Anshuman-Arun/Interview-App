@@ -322,6 +322,39 @@ describe("supervised one-shot process execution", () => {
     await expect(execution).rejects.toMatchObject({ code: "EXECUTION_CANCELLED" });
   });
 
+  it("drains active executions, blocks launches during drain, and permits reuse after cleanup", async () => {
+    const runtime = runner();
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const execution = runtime.execute(request([FIXTURE, "hang"], {
+      timeoutMs: 2_000,
+      onProcessStart: () => {
+        markStarted?.();
+      }
+    }));
+    await started;
+
+    const firstDrain = runtime.drain();
+    const secondDrain = runtime.drain();
+    expect(secondDrain).toBe(firstDrain);
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      stdin: "must-not-start-during-drain"
+    }))).rejects.toMatchObject({ code: "EXECUTION_CANCELLED" });
+
+    await expect(execution).rejects.toMatchObject({ code: "EXECUTION_CANCELLED" });
+    await expect(firstDrain).resolves.toBeUndefined();
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      stdin: "after-clean-drain"
+    }))).resolves.toMatchObject({
+      exitCode: 0,
+      stdout: "after-clean-drain"
+    });
+  });
+
   it("bounds stdout and stderr without reflecting hostile stream content in errors", async () => {
     const runtime = runner();
 
