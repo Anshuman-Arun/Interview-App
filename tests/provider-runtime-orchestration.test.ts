@@ -112,6 +112,94 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("graceful shutdown aborts active Gemini I/O without waiting for provider acknowledgement", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const registry = new SessionRuntimeRegistry(store);
+    let fetchEntered: (() => void) | undefined;
+    const entered = new Promise<void>((resolve) => {
+      fetchEntered = resolve;
+    });
+    let aborted = false;
+    const providerRuntimeResolver = new ProviderRuntimeResolver({
+      configurationSource: credentialReferenceSource(),
+      secretResolver: {
+        async resolveSecret() {
+          return "runtime-only-gemini-shutdown-key";
+        }
+      },
+      adapterRuntimeSource: {
+        resolveRuntime(selection) {
+          if (selection.providerId !== GEMINI_SELECTION.providerId) return undefined;
+          return {
+            fetchImpl: async (_request: RequestInfo | URL, init?: RequestInit) => {
+              fetchEntered?.();
+              const signal = init?.signal;
+              return await new Promise<Response>((_resolve, reject) => {
+                if (signal === null || signal === undefined) {
+                  reject(new Error("Expected Gemini fetch cancellation signal"));
+                  return;
+                }
+                const onAbort = (): void => {
+                  aborted = true;
+                  reject(new Error("Gemini fetch aborted for shutdown"));
+                };
+                if (signal.aborted) {
+                  onAbort();
+                  return;
+                }
+                signal.addEventListener("abort", onAbort, { once: true });
+              });
+            },
+            billingVerificationFactory: (now: Date) => ({
+              billingClass: "VERIFIED_FREE_ONLY" as const,
+              enforcementMechanism: "deterministic test-only technical no-spend proof",
+              verifiedAt: now.toISOString(),
+              adapterVersion: "1.0.0",
+              spendImpossible: true
+            })
+          };
+        }
+      },
+      policySource: {
+        resolvePolicy() {
+          return REMOTE_NO_METERED_POLICY;
+        }
+      }
+    });
+    const runtime = new LocalInterviewTransportRuntime({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: new Set(["http://127.0.0.1:5173"]),
+        clientToken: "provider-runtime-active-shutdown-token-long-enough"
+      },
+      registry,
+      store,
+      providerRuntimeResolver
+    });
+
+    try {
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const committed = await startConfiguredTurnForWriter(writer, GEMINI_SELECTION);
+      const orchestration = runtime.orchestrator.orchestrateTurn({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+
+      await entered;
+      await expect(runtime.stop()).resolves.toBeUndefined();
+      await expect(orchestration).resolves.toBeUndefined();
+      expect(aborted).toBe(true);
+      expect(Object.values(writer.getState().generations)).toEqual([
+        expect.objectContaining({ provider: "gemini-api", status: "SUPERSEDED" })
+      ]);
+    } finally {
+      store.close();
+    }
+  });
+
   it("keeps legacy/default mock execution working through the provider control plane", async () => {
     const harness = createHarness();
     try {
