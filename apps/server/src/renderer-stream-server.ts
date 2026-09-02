@@ -371,8 +371,22 @@ export class RendererStreamServer {
       if (!acceptedWithoutBackpressure) {
         const drained = await waitForRendererDrain(connection.response);
         if (!drained) {
+          await new DeliveryCoordinator(writer).markPossiblyExposed(
+            deliveryId,
+            "Renderer socket stalled after the delivery write became physically uncertain"
+          );
           if (!connection.response.destroyed) connection.response.destroy();
           this.removeConnection(connection);
+
+          const stalledStatus = writer.getState().deliveries[deliveryId]?.status;
+          if (stalledStatus === "EXPOSED" || stalledStatus === "COMPLETED") {
+            return { outcome: "SENT", deliveryId, status: stalledStatus };
+          }
+          return {
+            outcome: "NOT_DELIVERABLE",
+            deliveryId,
+            status: stalledStatus ?? "POSSIBLY_EXPOSED"
+          };
         }
       }
       return { outcome: "SENT", deliveryId, status: "DELIVERING" };
