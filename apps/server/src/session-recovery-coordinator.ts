@@ -206,7 +206,7 @@ export class SessionRecoveryCoordinator {
         if (isQuantSessionState(state)) {
           // Never let corrupted persisted deterministic history masquerade as a
           // malformed/stale candidate action at the HTTP error boundary.
-          throw new Error("Authoritative quant session recovery validation failed");
+          throw new Error("Authoritative quant session recovery validation failed", { cause: error });
         }
         throw error;
       }
