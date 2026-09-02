@@ -194,10 +194,7 @@ function assertPersistedCompositionMatchesState(
     }
     const persistedResearch = state.quantResearch;
     if (persistedResearch === undefined) {
-      if (state.problem !== undefined) {
-        throw new Error("Quant Research problem is presented without authoritative scenario state");
-      }
-      return;
+      throw new Error("Configured Quant Research session lacks authoritative scenario state");
     }
     if (
       persistedResearch.definition.family !== composition.configuration.scenario.id
@@ -218,17 +215,16 @@ function assertPersistedCompositionMatchesState(
   if (state.problem !== undefined) {
     throw new Error("Oxford problem state cannot be attached to a Quant Trading session");
   }
-  if (state.quantTrading !== undefined) {
-    if (
-      state.quantTrading.definition.family !== composition.configuration.scenario.id
-      || state.quantTrading.definition.version !== composition.configuration.scenario.version
-    ) {
-      throw new Error("Persisted Quant Trading identity does not match session configuration");
-    }
-    replayQuantTradingSessionState(state);
-  } else if (state.status === "COMPLETED") {
-    throw new Error("Completed Quant Trading session lacks authoritative scenario state");
+  if (state.quantTrading === undefined) {
+    throw new Error("Configured Quant Trading session lacks authoritative scenario state");
   }
+  if (
+    state.quantTrading.definition.family !== composition.configuration.scenario.id
+    || state.quantTrading.definition.version !== composition.configuration.scenario.version
+  ) {
+    throw new Error("Persisted Quant Trading identity does not match session configuration");
+  }
+  replayQuantTradingSessionState(state);
 }
 
 export function toInterviewProblemPublicView(
