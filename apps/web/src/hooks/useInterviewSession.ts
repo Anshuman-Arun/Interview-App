@@ -665,7 +665,11 @@ export function useInterviewSession(
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
 
-        launchRendererStream(targetSessionId);
+        if (response.status === "ACTIVE") {
+          launchRendererStream(targetSessionId);
+        } else {
+          stopRendererTransport();
+        }
       } catch (err) {
         let msg = "Failed to recover session";
         if (err instanceof BrowserCommandProtocolError) {
