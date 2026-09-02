@@ -1521,18 +1521,25 @@ async function terminateProcessTree(
   }
 
   if (platform === "win32") {
-    if (environment !== undefined) {
-      const treeKilled = await runWindowsTaskkill(pid, environment);
-      if (treeKilled && await waitForChildExit(child, TREE_FORCE_MS)) {
-        return true;
-      }
+    if (!isProcessAlive(child)) return true;
+
+    const treeKilled = environment !== undefined
+      && await runWindowsTaskkill(pid, environment);
+    if (treeKilled) {
+      return await waitForChildExit(child, TREE_FORCE_MS);
     }
+
+    // Root-only termination still closes the bootstrap's Job Object, but it
+    // cannot prove that application-owned bootstrap helpers (for example a
+    // compiler process created before the provider Job exists) were removed.
+    // Perform it as best-effort containment, then fail closed.
     try {
       child.kill();
     } catch {
-      return !isProcessAlive(child);
+      return false;
     }
-    return await waitForChildExit(child, TREE_FORCE_MS);
+    await waitForChildExit(child, TREE_FORCE_MS);
+    return false;
   }
 
   signalPosixGroup(child, "SIGTERM");
