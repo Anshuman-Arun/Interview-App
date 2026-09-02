@@ -156,13 +156,37 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         self.assertEqual(raised.exception.status, 429)
         self.assertEqual(raised.exception.code, "STT_BUSY")
 
+    def test_tts_cancel_before_synthesis_registration_prevents_model_start(self) -> None:
+        runtime = object.__new__(worker.TtsRuntime)
+        fake = _FakeTts()
+        runtime._np = np
+        runtime._tts = fake
+        runtime._synthesis_lock = threading.Lock()
+        runtime._state_lock = threading.Lock()
+        runtime._current_request_id = None
+        runtime._cancelled_request_ids = OrderedDict()
+
+        self.assertEqual(runtime.cancel({"requestId": "pre-cancelled"}), {"accepted": True})
+        with self.assertRaises(worker.ProtocolError) as raised:
+            runtime.synthesize({
+                "requestId": "pre-cancelled",
+                "text": "This must never enter Moonshine.",
+                "voice": "kokoro_af_heart",
+                "language": "en-US",
+                "speed": 1.0,
+                "sampleRate": 24_000,
+            })
+        self.assertEqual(raised.exception.status, 409)
+        self.assertEqual(raised.exception.code, "CANCELLED")
+        self.assertEqual(fake.cancel_calls, 0)
+
     def test_tts_cancel_is_bound_to_the_exact_active_request(self) -> None:
         runtime = object.__new__(worker.TtsRuntime)
         fake = _FakeTts()
         runtime._tts = fake
         runtime._state_lock = threading.Lock()
         runtime._current_request_id = "active-request"
-        runtime._cancelled_request_ids = set()
+        runtime._cancelled_request_ids = OrderedDict()
 
         self.assertEqual(runtime.cancel({"requestId": "other-request"}), {"accepted": False})
         self.assertEqual(fake.cancel_calls, 0)
