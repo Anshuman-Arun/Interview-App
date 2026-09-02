@@ -140,23 +140,31 @@ describe("whiteboard vision dirty scheduler", () => {
     }
   });
 
-  it("retries one transient flush failure without dropping the dirty region", async () => {
+  it("retries one transient submit with the same logical upload identity", async () => {
     vi.useFakeTimers();
     const currentShape = shape("shape:a", 1);
     let attempts = 0;
+    let captures = 0;
+    const requestIds: string[] = [];
     const scheduler = new WhiteboardVisionScheduler({
       sessionId: newSessionId(),
       debounceMs: 1,
       getAuthoritativeRevision: () => BoardRevisionSchema.parse(1),
       getStudentShapes: () => [currentShape],
-      captureRegion: async () => ({
-        bytes: new Uint8Array([1, 2, 3]),
-        width: 16,
-        height: 16
-      }),
+      captureRegion: async () => {
+        captures += 1;
+        return {
+          bytes: new Uint8Array([1, 2, 3]),
+          width: 16,
+          height: 16
+        };
+      },
       submit: async (upload) => {
         attempts += 1;
-        if (attempts === 1) throw new Error("transient loopback failure");
+        requestIds.push(upload.requestId);
+        if (attempts === 1) {
+          throw new Error("response lost after ambiguous server outcome");
+        }
         return acceptedResponse(upload);
       }
     });
@@ -169,6 +177,9 @@ describe("whiteboard vision dirty scheduler", () => {
 
       await vi.advanceTimersByTimeAsync(1);
       expect(attempts).toBe(2);
+      expect(captures).toBe(1);
+      expect(requestIds).toHaveLength(2);
+      expect(requestIds[1]).toBe(requestIds[0]);
       expect(scheduler.pendingDirtyBoxCount()).toBe(0);
       expect(scheduler.getLastResponse()?.status).toBe("ACCEPTED");
     } finally {

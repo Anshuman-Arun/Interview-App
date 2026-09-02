@@ -30,6 +30,17 @@ export interface StudentRegionPng {
   readonly height: number;
 }
 
+type VisionUpload = ReturnType<typeof WhiteboardVisionSnapshotUploadSchema.parse>;
+
+interface PendingSubmissionRetry {
+  readonly upload: VisionUpload;
+  readonly sourceBoardRevision: BoardRevision;
+  readonly relevantShapeRevisions: readonly {
+    readonly shapeId: string;
+    readonly expectedRevision: number;
+  }[];
+}
+
 export interface WhiteboardVisionSchedulerOptions {
   readonly sessionId: SessionId;
   readonly getAuthoritativeRevision: () => BoardRevision | undefined;
@@ -61,6 +72,7 @@ export class WhiteboardVisionScheduler {
   private disposed = false;
   private flushing = false;
   private transientRetryCount = 0;
+  private retrySubmission: PendingSubmissionRetry | undefined;
   private lastResponse: WhiteboardVisionSnapshotResponse | undefined;
 
   public constructor(options: WhiteboardVisionSchedulerOptions) {
@@ -83,6 +95,7 @@ export class WhiteboardVisionScheduler {
   public record(change: NormalizedStudentShapeChange): void {
     if (this.disposed) return;
     this.activeController?.abort();
+    this.retrySubmission = undefined;
     const boxes = dirtyBoxesFromChange(change);
     if (boxes.length === 0) return;
     this.transientRetryCount = 0;
@@ -114,6 +127,7 @@ export class WhiteboardVisionScheduler {
     this.activeController = undefined;
     this.dirtyBoxes = [];
     this.transientRetryCount = 0;
+    this.retrySubmission = undefined;
   }
 
   private reschedule(): void {
@@ -143,7 +157,27 @@ export class WhiteboardVisionScheduler {
     this.flushing = true;
     const batchBoxes = this.dirtyBoxes;
     this.dirtyBoxes = [];
+    let submissionForRetry: PendingSubmissionRetry | undefined;
     try {
+      const retry = this.retrySubmission;
+      this.retrySubmission = undefined;
+      if (retry !== undefined) {
+        if (
+          retry.sourceBoardRevision === sourceBoardRevision
+          && shapeRevisionsStillMatch(
+            retry.relevantShapeRevisions,
+            this.getStudentShapes()
+          )
+        ) {
+          const controller = new AbortController();
+          this.activeController = controller;
+          this.lastResponse = await this.submitVision(retry.upload, controller.signal);
+          this.transientRetryCount = 0;
+          return;
+        }
+        this.transientRetryCount = 0;
+      }
+
       const shapes = this.getStudentShapes();
       const coalescer = new DirtyRegionCoalescer({
         paddingRatio: 0.2,
@@ -223,16 +257,24 @@ export class WhiteboardVisionScheduler {
         requestedObservationKind: "ANY",
         pngBase64: bytesToBase64(image.bytes)
       });
+      submissionForRetry = {
+        upload,
+        sourceBoardRevision,
+        relevantShapeRevisions
+      };
       this.lastResponse = await this.submitVision(upload, controller.signal);
       this.transientRetryCount = 0;
     } catch {
       if (this.activeController?.signal.aborted === true) {
+        this.retrySubmission = undefined;
         this.requeue(batchBoxes);
       } else if (this.transientRetryCount < MAX_TRANSIENT_FLUSH_RETRIES) {
         this.transientRetryCount += 1;
+        this.retrySubmission = submissionForRetry;
         this.requeue(batchBoxes);
       } else {
         this.transientRetryCount = 0;
+        this.retrySubmission = undefined;
       }
     } finally {
       this.activeController = undefined;
