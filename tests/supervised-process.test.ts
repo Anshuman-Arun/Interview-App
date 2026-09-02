@@ -3,6 +3,7 @@ import {
   copyFileSync,
   existsSync,
   linkSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
@@ -188,6 +189,30 @@ describe("supervised one-shot process execution", () => {
 
       await expect(runtime.execute(request([FIXTURE, "echo"], {
         executableId: "linked"
+      }))).rejects.toMatchObject({ code: "EXECUTABLE_UNSAFE" });
+    }
+  );
+
+  it.runIf(process.platform === "win32")(
+    "rejects an executable reached through a parent directory junction",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "supervised-parent-junction-"));
+      temporaryRoots.push(root);
+      const realDirectory = join(root, "real");
+      const junctionDirectory = join(root, "junction");
+      mkdirSync(realDirectory);
+      const executable = join(realDirectory, "node.exe");
+      copyFileSync(process.execPath, executable);
+      symlinkSync(realDirectory, junctionDirectory, "junction");
+
+      const runtime = new SupervisedProcessRunner([{
+        id: "junctioned",
+        executable: join(junctionDirectory, "node.exe"),
+        isolatedWorkingDirectory: true
+      }]);
+
+      await expect(runtime.execute(request([FIXTURE, "echo"], {
+        executableId: "junctioned"
       }))).rejects.toMatchObject({ code: "EXECUTABLE_UNSAFE" });
     }
   );
