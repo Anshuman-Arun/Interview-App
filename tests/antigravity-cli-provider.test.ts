@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DisclosureIdSchema,
   newGenerationId,
   type InterviewerProposal,
   type ReasoningTurnInput
@@ -391,7 +392,9 @@ describe("Antigravity CLI one-turn protocol", () => {
         ...PROPOSAL,
         claimedDisclosureIds: Array.from(
           { length: 129 },
-          (_, index) => `disclosure-${String(index)}`
+          (_, index) => DisclosureIdSchema.parse(
+            `disclosure-${String(index)}`
+          )
         )
       }),
       antigravityStream({
