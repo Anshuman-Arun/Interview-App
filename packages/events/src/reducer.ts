@@ -1,7 +1,12 @@
 import { evidenceKeyToString, generationBasesEqual, isDisclosedStatus } from "../../domain/src/index.js";
 import type { DeliveryAtom, DisclosureId } from "../../domain/src/index.js";
 import type { SessionEvent } from "./schemas.js";
-import { initialSessionState, type GenerationState, type SessionState } from "./state.js";
+import {
+  initialSessionState,
+  type GenerationState,
+  type SessionState,
+  type VisionRequestState
+} from "./state.js";
 
 function assertSequence(state: SessionState, event: SessionEvent): void {
   if (event.sessionId !== state.sessionId) throw new Error("Event session does not match state session");
@@ -198,16 +203,277 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "TRANSCRIPT_CORRECTED":
       next = { ...state, transcriptRevision: event.payload.transcriptRevision, contextEpoch: event.payload.contextEpoch };
       break;
-    case "BOARD_PATCH_COMMITTED":
-      next = { ...state, boardRevision: event.payload.boardRevision };
+    case "BOARD_PATCH_COMMITTED": {
+      if (event.payload.boardRevision !== state.boardRevision + 1) {
+        throw new Error("Board revision must advance exactly once per committed patch");
+      }
+      const mutation = event.payload.mutation;
+      if (mutation === undefined) {
+        next = {
+          ...state,
+          boardRevision: event.payload.boardRevision,
+          boardShapeAuthorityKnown: false
+        };
+        break;
+      }
+      if (!state.boardShapeAuthorityKnown) {
+        throw new Error("Normalized board mutation cannot apply while shape authority is unknown");
+      }
+      if (mutation.baseBoardRevision !== state.boardRevision) {
+        throw new Error("Normalized board mutation basis does not match authoritative board revision");
+      }
+      const boardShapes = { ...state.boardShapes };
+      for (const shape of mutation.added) {
+        if (boardShapes[shape.id] !== undefined) {
+          throw new Error("Normalized board add targets an existing shape");
+        }
+        boardShapes[shape.id] = shape;
+      }
+      for (const entry of mutation.updated) {
+        const existing = boardShapes[entry.shape.id];
+        if (existing === undefined || existing.revision !== entry.beforeRevision) {
+          throw new Error("Normalized board update has a stale shape basis");
+        }
+        boardShapes[entry.shape.id] = entry.shape;
+      }
+      for (const entry of mutation.deleted) {
+        const existing = boardShapes[entry.shapeId];
+        if (existing === undefined || existing.revision !== entry.expectedRevision) {
+          throw new Error("Normalized board delete has a stale shape basis");
+        }
+        if (!Reflect.deleteProperty(boardShapes, entry.shapeId)) {
+          throw new Error("Normalized board delete could not remove the authoritative shape");
+        }
+      }
+      next = {
+        ...state,
+        boardRevision: event.payload.boardRevision,
+        boardShapeAuthorityKnown: true,
+        boardShapes
+      };
       break;
-    case "VISION_REQUESTED":
-      next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...event.payload, status: "PENDING" } } };
+    }
+    case "VISION_REQUESTED": {
+      if (state.visionRequests[event.payload.visionRequestId] !== undefined) {
+        throw new Error("Vision request already exists");
+      }
+      const request: VisionRequestState = {
+        visionRequestId: event.payload.visionRequestId,
+        sourceBoardRevision: event.payload.sourceBoardRevision,
+        regionId: event.payload.regionId,
+        relevantShapeIds: [...event.payload.relevantShapeIds],
+        ...(event.payload.snapshotBasis === undefined
+          ? {}
+          : { snapshotBasis: event.payload.snapshotBasis }),
+        ...(event.payload.relevantShapeRevisions === undefined
+          ? {}
+          : { relevantShapeRevisions: [...event.payload.relevantShapeRevisions] }),
+        ...(event.payload.regionBounds === undefined
+          ? {}
+          : { regionBounds: event.payload.regionBounds }),
+        ...(event.payload.requestedObservationKind === undefined
+          ? {}
+          : { requestedObservationKind: event.payload.requestedObservationKind }),
+        status: "PENDING"
+      };
+      next = {
+        ...state,
+        visionRequests: {
+          ...state.visionRequests,
+          [event.payload.visionRequestId]: request
+        }
+      };
       break;
+    }
     case "VISION_RESULT_ACCEPTED": {
       const request = state.visionRequests[event.payload.visionRequestId];
-      if (request === undefined || request.status !== "PENDING") throw new Error("Vision request is not pending");
-      next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...request, status: "ACCEPTED", observation: event.payload.observation } } };
+      if (request === undefined || request.status !== "PENDING") {
+        throw new Error("Vision request is not pending");
+      }
+      const observation = event.payload.observation;
+      if (
+        observation.sourceBoardRevision !== request.sourceBoardRevision
+        || observation.regionId !== request.regionId
+      ) {
+        throw new Error("Accepted vision observation does not match its persisted request basis");
+      }
+
+      const admission = event.payload.admission;
+      const dependencyShapeIds = admission === undefined
+        ? observation.relevantShapeIds
+        : admission.sourceRelevantShapeIds;
+      if (!sameStringSet(dependencyShapeIds, request.relevantShapeIds)) {
+        throw new Error("Accepted vision dependencies do not match the persisted request");
+      }
+
+      if (admission !== undefined) {
+        if (
+          request.snapshotBasis === undefined
+          || request.relevantShapeRevisions === undefined
+          || request.regionBounds === undefined
+          || request.requestedObservationKind === undefined
+        ) {
+          throw new Error("Accepted vision admission requires complete persisted request provenance");
+        }
+        if (
+          admission.requestId !== event.payload.visionRequestId
+          || admission.sessionId !== state.sessionId
+          || admission.admittedAtBoardRevision !== state.boardRevision
+          || !jsonDataEqual(admission.observation, observation)
+        ) {
+          throw new Error("Accepted vision admission identity does not match replay authority");
+        }
+        if (!jsonDataEqual(admission.snapshotBasis, request.snapshotBasis)) {
+          throw new Error("Accepted vision snapshot basis does not match the persisted request");
+        }
+        if (!sameShapeRevisionBindings(
+          admission.shapeRevisionBindings,
+          request.relevantShapeRevisions
+        )) {
+          throw new Error("Accepted vision shape revisions do not match the persisted request");
+        }
+        if (!jsonDataEqual(admission.observation.bounds, request.regionBounds)) {
+          throw new Error("Accepted vision region bounds do not match the persisted request");
+        }
+        if (
+          request.requestedObservationKind !== "ANY"
+          && admission.observationKind !== request.requestedObservationKind
+        ) {
+          throw new Error("Accepted vision observation kind does not match the persisted request");
+        }
+      }
+
+      next = {
+        ...state,
+        visionRequests: {
+          ...state.visionRequests,
+          [event.payload.visionRequestId]: {
+            ...request,
+            status: "ACCEPTED",
+            observation,
+            ...(admission === undefined ? {} : { acceptedObservation: admission }),
+            resultEventId: event.eventId,
+            resultSequence: event.sequence,
+            ...(event.payload.evidenceInterpreterFingerprint === undefined
+              ? {}
+              : event.payload.evidenceInterpreterFingerprint === null
+                ? {
+                    evidenceBridge: {
+                      status: "SKIPPED_NO_INTERPRETER" as const,
+                      interpreterFingerprint: null
+                    }
+                  }
+                : {
+                    evidenceBridge: {
+                      status: "PENDING" as const,
+                      interpreterFingerprint: event.payload.evidenceInterpreterFingerprint
+                    }
+                  })
+          }
+        }
+      };
+      break;
+    }
+    case "VISION_EVIDENCE_BRIDGE_DECIDED": {
+      const request = state.visionRequests[event.payload.visionRequestId];
+      if (
+        request === undefined
+        || request.status !== "ACCEPTED"
+        || request.resultEventId === undefined
+        || request.acceptedObservation === undefined
+        || request.evidenceBridge?.status !== "PENDING"
+      ) {
+        throw new Error("Vision evidence bridge decision requires an accepted pending bridge");
+      }
+      if (request.evidenceBridge.interpreterFingerprint !== event.payload.interpreterFingerprint) {
+        throw new Error("Vision evidence bridge interpreter fingerprint does not match acceptance");
+      }
+      const proposal = event.payload.proposal;
+      if (proposal !== undefined) {
+        if (
+          proposal.evidenceEventIds.length !== 1
+          || proposal.evidenceEventIds[0] !== request.resultEventId
+          || state.problem?.id !== proposal.key.problemId
+        ) {
+          throw new Error("Vision evidence bridge proposal provenance or problem scope is invalid");
+        }
+      }
+      next = {
+        ...state,
+        visionRequests: {
+          ...state.visionRequests,
+          [event.payload.visionRequestId]: proposal === undefined
+            ? {
+                ...request,
+                evidenceBridge: {
+                  status: "DECIDED",
+                  interpreterFingerprint: event.payload.interpreterFingerprint,
+                  decision: "NO_PROPOSAL",
+                  decisionEventId: event.eventId
+                }
+              }
+            : {
+                ...request,
+                evidenceBridge: {
+                  status: "DECIDED",
+                  interpreterFingerprint: event.payload.interpreterFingerprint,
+                  decision: "PROPOSAL",
+                  proposal,
+                  decisionEventId: event.eventId
+                }
+              }
+        }
+      };
+      break;
+    }
+    case "VISION_EVIDENCE_BRIDGE_COMPLETED": {
+      const request = state.visionRequests[event.payload.visionRequestId];
+      if (
+        request === undefined
+        || request.status !== "ACCEPTED"
+        || request.resultEventId === undefined
+        || request.evidenceBridge?.status !== "DECIDED"
+        || request.evidenceBridge.decision !== "PROPOSAL"
+      ) {
+        throw new Error("Vision evidence bridge completion requires a decided proposal");
+      }
+      const bridge = request.evidenceBridge;
+      const resultEventId = request.resultEventId;
+      if (bridge.interpreterFingerprint !== event.payload.interpreterFingerprint) {
+        throw new Error("Vision evidence bridge completion fingerprint does not match its decision");
+      }
+      const proposalWasAdmitted = state.evidenceProposals.some((proposal) =>
+        jsonDataEqual(proposal, bridge.proposal)
+      );
+      if (!proposalWasAdmitted) {
+        throw new Error("Vision evidence bridge completion requires an evidence admission attempt");
+      }
+      const evidenceCommitted = Object.values(state.evidenceHistory).some((records) =>
+        records.some((record) =>
+          record.value.evidenceEventIds.includes(resultEventId)
+        )
+      );
+      if (evidenceCommitted !== event.payload.evidenceCommitted) {
+        throw new Error("Vision evidence bridge completion does not match authoritative evidence history");
+      }
+      next = {
+        ...state,
+        visionRequests: {
+          ...state.visionRequests,
+          [event.payload.visionRequestId]: {
+            ...request,
+            evidenceBridge: {
+              status: "COMPLETED",
+              interpreterFingerprint: bridge.interpreterFingerprint,
+              decision: "PROPOSAL",
+              proposal: bridge.proposal,
+              decisionEventId: bridge.decisionEventId,
+              evidenceCommitted,
+              completionEventId: event.eventId
+            }
+          }
+        }
+      };
       break;
     }
     case "VISION_RESULT_DISCARDED": {
@@ -469,4 +735,28 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
 
 export function replaySession(sessionId: SessionState["sessionId"], events: readonly SessionEvent[]): SessionState {
   return events.reduce(reduceSessionEvent, initialSessionState(sessionId));
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((value) => rightSet.has(value));
+}
+
+function sameShapeRevisionBindings(
+  left: readonly { readonly shapeId: string; readonly expectedRevision: number }[],
+  right: readonly { readonly shapeId: string; readonly expectedRevision: number }[]
+): boolean {
+  if (left.length !== right.length) return false;
+  const rightById = new Map(right.map((binding) => [
+    binding.shapeId,
+    binding.expectedRevision
+  ] as const));
+  return left.every((binding) =>
+    rightById.get(binding.shapeId) === binding.expectedRevision
+  );
+}
+
+function jsonDataEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }

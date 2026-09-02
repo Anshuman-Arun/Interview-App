@@ -7,7 +7,11 @@ import {
   type DeliveryId
 } from "../../../packages/domain/src/index.js";
 import type { WhiteboardPresenter } from "./renderer-client.js";
-import type { NormalizedStudentMutationSource } from "./whiteboard/normalized-board.js";
+import {
+  normalizeStudentShape,
+  type NormalizedStudentMutationSource
+} from "./whiteboard/normalized-board.js";
+import type { StudentShape } from "../../../packages/whiteboard/src/index.js";
 
 export class StudentShapeImmutableError extends Error {
   public constructor(message: string) {
@@ -87,6 +91,14 @@ export interface TldrawEditor {
   createShapes: (shapes: readonly TLShapePartialRecord[]) => void;
   deleteShapes: (ids: readonly string[]) => void;
   updateShapes: (shapes: readonly TLShapePartialRecord[]) => void;
+  exportStudentShapesPng?: (
+    shapeIds: readonly string[],
+    bounds: TLShapeBounds
+  ) => Promise<{
+    readonly bytes: Uint8Array;
+    readonly width: number;
+    readonly height: number;
+  }>;
   getShapePageBounds?: (id: string | TLShapeRecord) => TLShapeBounds | undefined;
   store?: {
     listen?: (listener: (entry: unknown) => void) => () => void;
@@ -245,9 +257,10 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }
 
   /**
-   * Records one normalized student mutation observed from the real editor.
-   * Adapter-originated mutations are already counted by create/update methods;
-   * direct editor transactions advance the sole BoardRevision authority once.
+   * Records one normalized student mutation in the adapter's browser-local
+   * revision mirror. Application authority lives in the event-sourced session;
+   * AuthoritativeBoardSyncCoordinator binds this canvas to that BoardRevision.
+   * Adapter-originated mutations are already counted by create/update methods.
    */
   public observeNormalizedStudentMutation(source: NormalizedStudentMutationSource): void {
     if (source === "ADAPTER") return;
@@ -310,6 +323,36 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     if (aiShapeIds.length > 0) {
       editor.deleteShapes(aiShapeIds);
     }
+  }
+
+  public getNormalizedStudentShapes(): readonly StudentShape[] {
+    const editor = this.requireEditor();
+    const shapes: StudentShape[] = [];
+    for (const shape of editor.getCurrentPageShapes()) {
+      const layer = shape.meta?.["layer"];
+      if (layer !== "STUDENT" && layer !== undefined) continue;
+      const normalized = normalizeStudentShape(
+        shape,
+        this.resolveShapeBounds(editor, shape)
+      );
+      if (normalized !== null) shapes.push(normalized);
+    }
+    return shapes;
+  }
+
+  public async exportStudentRegionPng(
+    shapeIds: readonly string[],
+    bounds: TLShapeBounds
+  ): Promise<{
+    readonly bytes: Uint8Array;
+    readonly width: number;
+    readonly height: number;
+  }> {
+    const editor = this.requireEditor();
+    if (editor.exportStudentShapesPng === undefined) {
+      throw new Error("Mounted whiteboard editor does not support bounded PNG export");
+    }
+    return editor.exportStudentShapesPng(shapeIds, bounds);
   }
 
   public getCanvasSnapshot(): CanvasSnapshot {
@@ -529,7 +572,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       || this.localBoardRevision < 0
       || this.localBoardRevision >= Number.MAX_SAFE_INTEGER
     ) {
-      throw new Error("BoardRevision cannot exceed Number.MAX_SAFE_INTEGER");
+      throw new Error("Local whiteboard BoardRevision mirror cannot exceed Number.MAX_SAFE_INTEGER");
     }
   }
 

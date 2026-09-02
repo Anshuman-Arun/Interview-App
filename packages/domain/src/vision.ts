@@ -3,6 +3,8 @@ import { RequestIdSchema, SessionIdSchema } from "./ids.js";
 import { BoardRevisionSchema } from "./revisions.js";
 
 export const VISION_PROTOCOL_VERSION = 1 as const;
+export const VisionEvidenceInterpreterFingerprintSchema = z.string().regex(/^[0-9a-f]{64}$/u);
+export type VisionEvidenceInterpreterFingerprint = z.infer<typeof VisionEvidenceInterpreterFingerprintSchema>;
 export const MAX_VISION_ID_LENGTH = 160;
 export const MAX_VISION_REGION_SHAPES = 64;
 export const MAX_VISION_OBSERVATIONS = 16;
@@ -362,3 +364,99 @@ export const VisionDiagnosticSchema = z.discriminatedUnion("outcome", [
   }).strict()
 ]);
 export type VisionDiagnostic = z.infer<typeof VisionDiagnosticSchema>;
+
+
+export const MAX_WHITEBOARD_VISION_PNG_BYTES = 2 * 1024 * 1024;
+export const MAX_WHITEBOARD_VISION_DIMENSION = 4096;
+export const MAX_WHITEBOARD_VISION_PIXELS = 8 * 1024 * 1024;
+export const MAX_WHITEBOARD_VISION_BASE64_LENGTH =
+  Math.ceil(MAX_WHITEBOARD_VISION_PNG_BYTES / 3) * 4;
+
+export const WhiteboardVisionSnapshotUploadSchema = z.object({
+  protocolVersion: z.literal(VISION_PROTOCOL_VERSION),
+  requestId: VisionRequestIdSchema,
+  sessionId: VisionSessionIdSchema,
+  sourceBoardRevision: VisionBoardRevisionSchema,
+  snapshotId: boundedIdentifier(128),
+  capturedAtMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  declaredWidth: z.number().int().positive().max(MAX_WHITEBOARD_VISION_DIMENSION),
+  declaredHeight: z.number().int().positive().max(MAX_WHITEBOARD_VISION_DIMENSION),
+  region: VisionRegionSchema,
+  relevantShapeRevisions: z.array(VisionShapeRevisionBindingSchema)
+    .min(1)
+    .max(MAX_VISION_REGION_SHAPES),
+  requestedObservationKind: VisionRequestedObservationKindSchema,
+  pngBase64: z.string()
+    .min(4)
+    .max(MAX_WHITEBOARD_VISION_BASE64_LENGTH)
+    .regex(/^[A-Za-z0-9+/]+={0,2}$/u)
+}).strict().superRefine((upload, context) => {
+  if (upload.declaredWidth * upload.declaredHeight > MAX_WHITEBOARD_VISION_PIXELS) {
+    context.addIssue({
+      code: "custom",
+      path: ["declaredWidth"],
+      message: "Whiteboard vision snapshot exceeds the pixel limit"
+    });
+  }
+  if (upload.region.relevantShapeIds.length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["region", "relevantShapeIds"],
+      message: "Whiteboard vision requires at least one relevant shape"
+    });
+  }
+  const regionIds = new Set(upload.region.relevantShapeIds);
+  const bindingIds = upload.relevantShapeRevisions.map((binding) => binding.shapeId);
+  if (
+    new Set(bindingIds).size !== bindingIds.length
+    || bindingIds.length !== regionIds.size
+    || !bindingIds.every((shapeId) => regionIds.has(shapeId))
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["relevantShapeRevisions"],
+      message: "Whiteboard vision shape revisions must exactly cover the region shape set"
+    });
+  }
+});
+export type WhiteboardVisionSnapshotUpload = z.infer<typeof WhiteboardVisionSnapshotUploadSchema>;
+
+export const WhiteboardVisionSnapshotResponseSchema = z.object({
+  protocolVersion: z.literal(VISION_PROTOCOL_VERSION),
+  requestId: VisionRequestIdSchema,
+  sessionId: VisionSessionIdSchema,
+  status: z.enum(["ACCEPTED", "REJECTED", "VISION_UNAVAILABLE"]),
+  reason: z.string().min(1).max(240).optional(),
+  observationCount: z.number().int().nonnegative().max(1),
+  evidenceCommittedCount: z.number().int().nonnegative().max(1)
+}).strict().superRefine((response, context) => {
+  if (response.status === "ACCEPTED" && response.reason !== undefined) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "Accepted vision responses must not carry a rejection reason" });
+  }
+  if (response.status !== "ACCEPTED" && response.reason === undefined) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "Non-accepted vision responses require a reason" });
+  }
+  if (response.status === "ACCEPTED") {
+    if (response.observationCount !== 1) {
+      context.addIssue({
+        code: "custom",
+        path: ["observationCount"],
+        message: "Accepted whiteboard vision responses require exactly one observation"
+      });
+    }
+    if (response.evidenceCommittedCount > response.observationCount) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidenceCommittedCount"],
+        message: "Committed evidence cannot exceed accepted observations"
+      });
+    }
+  } else if (response.observationCount !== 0 || response.evidenceCommittedCount !== 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["observationCount"],
+      message: "Non-accepted whiteboard vision responses cannot report observations or evidence"
+    });
+  }
+});
+export type WhiteboardVisionSnapshotResponse = z.infer<typeof WhiteboardVisionSnapshotResponseSchema>;

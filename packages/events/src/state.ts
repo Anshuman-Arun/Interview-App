@@ -21,8 +21,15 @@ import type {
   TranscriptRevision,
   TurnId,
   UtteranceId,
+  AcceptedBoardObservation,
   BoardObservation,
+  AuthoritativeStudentShape,
   RequestId,
+  VisionBounds,
+  VisionEvidenceInterpreterFingerprint,
+  VisionRequestedObservationKind,
+  VisionShapeRevisionBinding,
+  VisionSnapshotBasis,
   VerificationResult,
   EvidenceKey
 } from "../../domain/src/index.js";
@@ -57,13 +64,53 @@ export interface UtteranceState {
   readonly inputEpisodeId?: InputEpisodeId;
   readonly text?: string;
 }
+export type VisionEvidenceBridgeState =
+  | {
+      readonly status: "SKIPPED_NO_INTERPRETER";
+      readonly interpreterFingerprint: null;
+    }
+  | {
+      readonly status: "PENDING";
+      readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+    }
+  | {
+      readonly status: "DECIDED";
+      readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+      readonly decision: "NO_PROPOSAL";
+      readonly decisionEventId: EventId;
+    }
+  | {
+      readonly status: "DECIDED";
+      readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+      readonly decision: "PROPOSAL";
+      readonly proposal: EvidenceProposal;
+      readonly decisionEventId: EventId;
+    }
+  | {
+      readonly status: "COMPLETED";
+      readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+      readonly decision: "PROPOSAL";
+      readonly proposal: EvidenceProposal;
+      readonly decisionEventId: EventId;
+      readonly evidenceCommitted: boolean;
+      readonly completionEventId: EventId;
+    };
+
 export interface VisionRequestState {
   readonly visionRequestId: RequestId;
   readonly sourceBoardRevision: BoardRevision;
   readonly regionId: string;
   readonly relevantShapeIds: readonly string[];
+  readonly snapshotBasis?: VisionSnapshotBasis;
+  readonly relevantShapeRevisions?: readonly VisionShapeRevisionBinding[];
+  readonly regionBounds?: VisionBounds;
+  readonly requestedObservationKind?: VisionRequestedObservationKind;
   readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
   readonly observation?: BoardObservation;
+  readonly acceptedObservation?: AcceptedBoardObservation;
+  readonly resultEventId?: EventId;
+  readonly resultSequence?: number;
+  readonly evidenceBridge?: VisionEvidenceBridgeState;
   readonly discardReason?: string;
 }
 export interface LocalComputeRequestState {
@@ -144,6 +191,8 @@ export interface SessionState {
   readonly contextEpoch: ContextEpoch;
   readonly transcriptRevision: TranscriptRevision;
   readonly boardRevision: BoardRevision;
+  readonly boardShapeAuthorityKnown: boolean;
+  readonly boardShapes: Readonly<Record<string, AuthoritativeStudentShape>>;
   readonly problemStateRevision: ProblemStateRevision;
   readonly policyRevision: PolicyRevision;
   readonly lastCommittedInputSequence?: number;
@@ -172,6 +221,8 @@ export const initialSessionState = (sessionId: SessionId): SessionState => ({
   contextEpoch: zeroContextEpoch,
   transcriptRevision: zeroTranscriptRevision,
   boardRevision: zeroBoardRevision,
+  boardShapeAuthorityKnown: true,
+  boardShapes: {},
   problemStateRevision: zeroProblemStateRevision,
   policyRevision: zeroPolicyRevision,
   eventIds: [],

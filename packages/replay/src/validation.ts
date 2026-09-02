@@ -117,6 +117,8 @@ const ALLOWED_SOURCES = {
   BOARD_PATCH_COMMITTED: ["USER"],
   VISION_REQUESTED: ["APPLICATION"],
   VISION_RESULT_ACCEPTED: ["WORKER"],
+  VISION_EVIDENCE_BRIDGE_DECIDED: ["APPLICATION"],
+  VISION_EVIDENCE_BRIDGE_COMPLETED: ["APPLICATION"],
   VISION_RESULT_DISCARDED: ["APPLICATION"],
   LOCAL_COMPUTE_REQUESTED: ["APPLICATION"],
   LOCAL_COMPUTE_RESULT_ACCEPTED: ["APPLICATION"],
@@ -182,6 +184,8 @@ const POST_TERMINAL_ALLOWED_EVENT_TYPE_VALUES = [
   "PROBLEM_PRESENTED",
   "UTTERANCE_DISCARDED",
   "VISION_RESULT_ACCEPTED",
+  "VISION_EVIDENCE_BRIDGE_DECIDED",
+  "VISION_EVIDENCE_BRIDGE_COMPLETED",
   "VISION_RESULT_DISCARDED",
   "LOCAL_COMPUTE_REQUESTED",
   "LOCAL_COMPUTE_RESULT_ACCEPTED",
@@ -795,16 +799,46 @@ export function validateKnownReplayPrefix(
           assertBoundedIdentifier(event.payload.visionRequestId);
           const request = state.visionRequests[event.payload.visionRequestId];
           const observation = event.payload.observation;
+          const dependencyShapeIds = event.payload.admission?.sourceRelevantShapeIds
+            ?? observation.relevantShapeIds;
+          const boardBasisMatches = event.payload.admission === undefined
+            ? request?.sourceBoardRevision === state.boardRevision
+            : event.payload.admission.admittedAtBoardRevision === state.boardRevision;
           if (
             request === undefined
             || request.status !== "PENDING"
-            || request.sourceBoardRevision !== state.boardRevision
+            || !boardBasisMatches
             || observation.sourceBoardRevision !== request.sourceBoardRevision
             || observation.regionId !== request.regionId
-            || observation.relevantShapeIds.length !== request.relevantShapeIds.length
+            || dependencyShapeIds.length !== request.relevantShapeIds.length
             || !request.relevantShapeIds.every((shapeId) =>
-              observation.relevantShapeIds.includes(shapeId)
+              dependencyShapeIds.includes(shapeId)
             )
+          ) fail();
+          break;
+        }
+
+        case "VISION_EVIDENCE_BRIDGE_DECIDED": {
+          assertBoundedIdentifier(event.payload.visionRequestId);
+          const request = state.visionRequests[event.payload.visionRequestId];
+          if (
+            request === undefined
+            || request.status !== "ACCEPTED"
+            || request.evidenceBridge?.status !== "PENDING"
+            || request.evidenceBridge.interpreterFingerprint !== event.payload.interpreterFingerprint
+          ) fail();
+          break;
+        }
+
+        case "VISION_EVIDENCE_BRIDGE_COMPLETED": {
+          assertBoundedIdentifier(event.payload.visionRequestId);
+          const request = state.visionRequests[event.payload.visionRequestId];
+          if (
+            request === undefined
+            || request.status !== "ACCEPTED"
+            || request.evidenceBridge?.status !== "DECIDED"
+            || request.evidenceBridge.decision !== "PROPOSAL"
+            || request.evidenceBridge.interpreterFingerprint !== event.payload.interpreterFingerprint
           ) fail();
           break;
         }

@@ -26,7 +26,16 @@ import {
   TranscriptRevisionSchema,
   TurnIdSchema,
   UtteranceIdSchema,
+  AcceptedBoardObservationSchema,
   BoardObservationSchema,
+  BoardShapeIdSchema,
+  MAX_VISION_REGION_SHAPES,
+  NormalizedBoardMutationSchema,
+  VisionBoundsSchema,
+  VisionEvidenceInterpreterFingerprintSchema,
+  VisionRequestedObservationKindSchema,
+  VisionShapeRevisionBindingSchema,
+  VisionSnapshotBasisSchema,
   VerificationResultSchema
 } from "../../domain/src/index.js";
 
@@ -344,10 +353,108 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   event("TURN_COMMITTED", z.object({ turnId: TurnIdSchema, inputEpisodeId: InputEpisodeIdSchema, studentText: z.string().min(1) }).strict()),
   event("TRANSCRIPT_FINALIZED", z.object({ utteranceId: UtteranceIdSchema, inputEpisodeId: InputEpisodeIdSchema, transcriptRevision: TranscriptRevisionSchema, text: z.string().min(1) }).strict()),
   event("TRANSCRIPT_CORRECTED", z.object({ transcriptRevision: TranscriptRevisionSchema, contextEpoch: ContextEpochSchema, correctedText: z.string().min(1) }).strict()),
-  event("BOARD_PATCH_COMMITTED", z.object({ boardRevision: BoardRevisionSchema, summary: z.string().min(1) }).strict()),
-  event("VISION_REQUESTED", z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema, regionId: z.string().min(1), relevantShapeIds: z.array(z.string().min(1)).min(1) }).strict()),
-  event("VISION_RESULT_ACCEPTED", z.object({ visionRequestId: RequestIdSchema, observation: BoardObservationSchema }).strict()),
-  event("VISION_RESULT_DISCARDED", z.object({ visionRequestId: RequestIdSchema, reason: z.string().min(1) }).strict()),
+  event("BOARD_PATCH_COMMITTED", z.object({
+    boardRevision: BoardRevisionSchema,
+    summary: z.string().min(1),
+    mutation: NormalizedBoardMutationSchema.optional()
+  }).strict()),
+  event("VISION_REQUESTED", z.object({
+    visionRequestId: RequestIdSchema,
+    sourceBoardRevision: BoardRevisionSchema,
+    regionId: z.string().min(1).max(128),
+    relevantShapeIds: z.array(BoardShapeIdSchema).min(1).max(MAX_VISION_REGION_SHAPES),
+    snapshotBasis: VisionSnapshotBasisSchema.optional(),
+    relevantShapeRevisions: z.array(VisionShapeRevisionBindingSchema)
+      .max(MAX_VISION_REGION_SHAPES)
+      .optional(),
+    regionBounds: VisionBoundsSchema.optional(),
+    requestedObservationKind: VisionRequestedObservationKindSchema.optional()
+  }).strict().superRefine((request, context) => {
+    if (new Set(request.relevantShapeIds).size !== request.relevantShapeIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["relevantShapeIds"],
+        message: "Vision request relevant shape IDs must be unique"
+      });
+    }
+    if (
+      request.snapshotBasis !== undefined
+      && request.snapshotBasis.sourceBoardRevision !== request.sourceBoardRevision
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["snapshotBasis", "sourceBoardRevision"],
+        message: "Vision request snapshot basis must match its source board revision"
+      });
+    }
+    if (request.relevantShapeRevisions !== undefined) {
+      const bindingIds = request.relevantShapeRevisions.map((binding) => binding.shapeId);
+      const relevantIds = new Set(request.relevantShapeIds);
+      if (
+        new Set(bindingIds).size !== bindingIds.length
+        || bindingIds.length !== relevantIds.size
+        || !bindingIds.every((shapeId) => relevantIds.has(shapeId))
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["relevantShapeRevisions"],
+          message: "Vision request shape revisions must exactly cover the relevant shape set"
+        });
+      }
+    }
+    const extendedProvenanceCount = [
+      request.snapshotBasis,
+      request.relevantShapeRevisions,
+      request.regionBounds,
+      request.requestedObservationKind
+    ].filter((value) => value !== undefined).length;
+    if (extendedProvenanceCount !== 0 && extendedProvenanceCount !== 4) {
+      context.addIssue({
+        code: "custom",
+        message: "Vision request extended provenance must be either complete or absent for legacy replay"
+      });
+    }
+  })),
+  event("VISION_RESULT_ACCEPTED", z.object({
+    visionRequestId: RequestIdSchema,
+    observation: BoardObservationSchema,
+    admission: AcceptedBoardObservationSchema.optional(),
+    evidenceInterpreterFingerprint: VisionEvidenceInterpreterFingerprintSchema.nullable().optional()
+  }).strict().superRefine((value, context) => {
+    if (
+      value.evidenceInterpreterFingerprint !== undefined
+      && value.admission === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidenceInterpreterFingerprint"],
+        message: "Vision evidence bridge authority requires an admitted observation"
+      });
+    }
+  })),
+  event("VISION_EVIDENCE_BRIDGE_DECIDED", z.object({
+    visionRequestId: RequestIdSchema,
+    interpreterFingerprint: VisionEvidenceInterpreterFingerprintSchema,
+    decision: z.enum(["NO_PROPOSAL", "PROPOSAL"]),
+    proposal: EvidenceProposalSchema.optional()
+  }).strict().superRefine((value, context) => {
+    if ((value.decision === "PROPOSAL") !== (value.proposal !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: ["proposal"],
+        message: "Vision evidence bridge proposal must match its decision"
+      });
+    }
+  })),
+  event("VISION_EVIDENCE_BRIDGE_COMPLETED", z.object({
+    visionRequestId: RequestIdSchema,
+    interpreterFingerprint: VisionEvidenceInterpreterFingerprintSchema,
+    evidenceCommitted: z.boolean()
+  }).strict()),
+  event("VISION_RESULT_DISCARDED", z.object({
+    visionRequestId: RequestIdSchema,
+    reason: z.string().min(1).max(240)
+  }).strict()),
   event("LOCAL_COMPUTE_REQUESTED", z.object({
     computeRequestId: RequestIdSchema,
     operation: z.literal("ANALYZE_TRANSCRIPT"),

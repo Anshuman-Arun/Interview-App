@@ -8,5 +8,5 @@
     "declaration": false,
     "types": ["node", "electron"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "../../packages/vision/src/pngjs.d.ts"]
 }

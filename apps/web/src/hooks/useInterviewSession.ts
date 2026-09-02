@@ -22,6 +22,7 @@ import {
 import { BrowserSessionReadClient } from "../session-read-client.js";
 import {
   RendererClient,
+  RendererPresentationNotExposedError,
   type TextPresenter,
   type WhiteboardPresenter
 } from "../renderer-client.js";
@@ -45,6 +46,13 @@ import {
   createLoopbackAcknowledgementSender
 } from "../renderer-stream.js";
 import type { TldrawWhiteboardAdapter } from "../tldraw-whiteboard-adapter.js";
+import {
+  AuthoritativeBoardSyncCoordinator,
+  type AuthoritativeBoardSyncSnapshot
+} from "../whiteboard/authoritative-board-sync.js";
+import type { NormalizedStudentShapeChange } from "../whiteboard/normalized-board.js";
+import { WhiteboardVisionClient } from "../whiteboard/whiteboard-vision-client.js";
+import { WhiteboardVisionScheduler } from "../whiteboard/vision-scheduler.js";
 import type { TranscriptItem } from "../components/TranscriptFeed.js";
 
 const RENDERER_REATTACH_MAX_ATTEMPTS = 10;
@@ -93,6 +101,9 @@ export interface UseInterviewSessionResult {
   readonly recoverSession: (sessionId: SessionId) => Promise<void>;
   readonly completeSession: (summary?: string) => Promise<void>;
   readonly archiveSession: (reason?: string) => Promise<void>;
+  readonly whiteboardSync: AuthoritativeBoardSyncSnapshot;
+  readonly synchronizeWhiteboard: () => Promise<void>;
+  readonly submitWhiteboardMutation: (change: NormalizedStudentShapeChange) => Promise<void>;
   readonly submitTypedInput: (text: string) => Promise<void>;
   readonly retrySubmission: (itemId: string) => Promise<void>;
   readonly clearError: () => void;
@@ -305,6 +316,10 @@ export function useInterviewSession(
   const [sequence, setSequence] = useState<number>(0);
   const [contextEpoch, setContextEpoch] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [whiteboardSync, setWhiteboardSync] = useState<AuthoritativeBoardSyncSnapshot>({
+    status: "UNINITIALIZED",
+    pendingMutationCount: 0
+  });
 
   const pendingSubmissionsRef = useRef<Map<string, PendingSubmissionRecord>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -313,6 +328,11 @@ export function useInterviewSession(
   const sessionTransitionEpochRef = useRef(0);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
+  const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
+  const boardSyncSessionRef = useRef<SessionId | null>(null);
+  const boardBootstrapSessionRef = useRef<SessionId | null>(null);
+  const visionSchedulerRef = useRef<WhiteboardVisionScheduler | null>(null);
+  const visionSchedulerSessionRef = useRef<SessionId | null>(null);
   const rendererAudioPlayerRef = useRef<QueuedRendererAudioPlayer | null>(null);
   const audioOutputDeviceRef = useRef<string | undefined>(undefined);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -325,6 +345,17 @@ export function useInterviewSession(
     headers.set("x-interview-client-token", authenticationHeaderValue);
     return fetchImpl(input, { ...init, headers });
   }, [authenticationHeaderValue, fetchImpl]);
+
+  const resetBoardSync = useCallback((): void => {
+    visionSchedulerRef.current?.dispose();
+    visionSchedulerRef.current = null;
+    visionSchedulerSessionRef.current = null;
+    boardSyncRef.current?.reset();
+    boardSyncRef.current = null;
+    boardSyncSessionRef.current = null;
+    boardBootstrapSessionRef.current = null;
+    setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
+  }, []);
 
   const voiceBaseUrl = useMemo(
     () => desktopBootstrap?.voiceBaseUrl ?? options.voiceBaseUrl ?? deriveDefaultVoiceBaseUrl(baseUrl),
@@ -382,8 +413,9 @@ export function useInterviewSession(
     if (desktopBootstrap !== undefined) {
       throw new Error("Desktop-managed command endpoint cannot be changed by renderer state");
     }
+    resetBoardSync();
     setBaseUrlState(url);
-  }, [desktopBootstrap]);
+  }, [desktopBootstrap, resetBoardSync]);
 
   const getCommandClient = useCallback((): BrowserCommandClient => {
     return new BrowserCommandClient({
@@ -394,6 +426,87 @@ export function useInterviewSession(
       fetchImpl
     });
   }, [baseUrl, desktopBootstrap, fetchImpl]);
+
+  const getBoardSyncCoordinator = useCallback((
+    targetSessionId: SessionId
+  ): AuthoritativeBoardSyncCoordinator => {
+    if (
+      boardSyncRef.current === null
+      || boardSyncSessionRef.current !== targetSessionId
+    ) {
+      boardSyncRef.current?.reset();
+      boardSyncRef.current = new AuthoritativeBoardSyncCoordinator(getCommandClient());
+      boardSyncSessionRef.current = targetSessionId;
+    }
+    return boardSyncRef.current;
+  }, [getCommandClient]);
+
+  const getVisionScheduler = useCallback((
+    targetSessionId: SessionId
+  ): WhiteboardVisionScheduler | undefined => {
+    const adapter = options.whiteboardAdapter;
+    if (adapter === undefined || adapter.getEditor() === null) return undefined;
+    if (
+      visionSchedulerRef.current !== null
+      && visionSchedulerSessionRef.current === targetSessionId
+    ) {
+      return visionSchedulerRef.current;
+    }
+    visionSchedulerRef.current?.dispose();
+    const authority = getBoardSyncCoordinator(targetSessionId);
+    const client = new WhiteboardVisionClient({
+      baseUrl,
+      authenticationHeaderValue,
+      fetchImpl
+    });
+    const scheduler = new WhiteboardVisionScheduler({
+      sessionId: targetSessionId,
+      getAuthoritativeRevision: () => authority.currentAuthoritativeRevision(),
+      getStudentShapes: () => adapter.getNormalizedStudentShapes(),
+      captureRegion: (shapeIds, bounds) =>
+        adapter.exportStudentRegionPng(shapeIds, bounds),
+      submit: (upload, signal) => client.submit(upload, signal)
+    });
+    visionSchedulerRef.current = scheduler;
+    visionSchedulerSessionRef.current = targetSessionId;
+    return scheduler;
+  }, [
+    authenticationHeaderValue,
+    baseUrl,
+    fetchImpl,
+    getBoardSyncCoordinator,
+    options.whiteboardAdapter
+  ]);
+
+  const synchronizeWhiteboardFor = useCallback(async (
+    targetSessionId: SessionId
+  ): Promise<void> => {
+    const adapter = options.whiteboardAdapter;
+    if (adapter === undefined || adapter.getEditor() === null) return;
+    const coordinator = getBoardSyncCoordinator(targetSessionId);
+    const allowBootstrap =
+      boardBootstrapSessionRef.current === targetSessionId;
+    const snapshot = await coordinator.synchronize(
+      targetSessionId,
+      adapter.getNormalizedStudentShapes(),
+      { allowBootstrapIntoEmptyAuthority: allowBootstrap }
+    );
+    if (
+      boardSyncRef.current !== coordinator
+      || boardSyncSessionRef.current !== targetSessionId
+    ) {
+      return;
+    }
+    if (allowBootstrap && snapshot.status === "SYNCED") {
+      boardBootstrapSessionRef.current = null;
+    }
+    setWhiteboardSync(snapshot);
+    getVisionScheduler(targetSessionId)?.wake();
+  }, [
+    getBoardSyncCoordinator,
+    getVisionScheduler,
+    options.whiteboardAdapter
+  ]);
 
   const getSessionReadClient = useCallback((): BrowserSessionReadClient => {
     return new BrowserSessionReadClient({
@@ -487,7 +600,25 @@ export function useInterviewSession(
       });
       rendererAudioPlayerRef.current = audioPlayer;
 
-      const whiteboardPresenter: WhiteboardPresenter | undefined = options.whiteboardAdapter;
+      const whiteboardAdapter = options.whiteboardAdapter;
+      const whiteboardPresenter: WhiteboardPresenter | undefined =
+        whiteboardAdapter === undefined
+          ? undefined
+          : {
+              presentWhiteboard: async (action, deliveryId) => {
+                const authority = boardSyncRef.current;
+                if (
+                  boardSyncSessionRef.current !== targetSessionId
+                  || authority === null
+                  || !authority.canBindCurrentCanvasToAuthority()
+                ) {
+                  throw new RendererPresentationNotExposedError(
+                    "Whiteboard canvas is not bound to current authoritative state"
+                  );
+                }
+                await whiteboardAdapter.presentWhiteboard(action, deliveryId);
+              }
+            };
 
       const acknowledgementSender = createLoopbackAcknowledgementSender({
         commandUrl: `${baseUrl}/v1/commands`,
@@ -612,9 +743,10 @@ export function useInterviewSession(
     // change. Revoke the old renderer synchronously and begin bounded
     // microphone teardown before any fallible replacement command can yield.
     stopRendererTransport();
+    resetBoardSync();
     await voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     return transitionEpoch;
-  }, [stopRendererTransport, voiceIntegration.voiceControls]);
+  }, [resetBoardSync, stopRendererTransport, voiceIntegration.voiceControls]);
 
   const startSession = useCallback(
     async (customSessionId?: SessionId): Promise<void> => {
@@ -642,7 +774,12 @@ export function useInterviewSession(
         }
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         if (sessionId !== targetSessionId) {
+          const mayBootstrapFreshCanvas = sessionId === null;
           pendingSubmissionsRef.current.clear();
+          resetBoardSync();
+          if (mayBootstrapFreshCanvas) {
+            boardBootstrapSessionRef.current = targetSessionId;
+          }
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(true);
@@ -650,6 +787,17 @@ export function useInterviewSession(
         setProblem(problemView);
         setTranscript([]);
 
+        try {
+          await synchronizeWhiteboardFor(targetSessionId);
+        } catch {
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+          setWhiteboardSync({
+            status: "UNSYNCHRONIZED",
+            pendingMutationCount: 0,
+            reason: "Whiteboard authority synchronization failed"
+          });
+        }
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         launchRendererStream(targetSessionId);
       } catch (err) {
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
@@ -663,7 +811,14 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [beginSessionTransition, getCommandClient, launchRendererStream, sessionId]
+    [
+      beginSessionTransition,
+      getCommandClient,
+      launchRendererStream,
+      resetBoardSync,
+      sessionId,
+      synchronizeWhiteboardFor
+    ]
   );
 
   const recoverSession = useCallback(
@@ -679,6 +834,7 @@ export function useInterviewSession(
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
+          resetBoardSync();
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(response.started);
@@ -689,6 +845,17 @@ export function useInterviewSession(
 
         setTranscript(response.history.map(historyEntryToTranscriptItem));
 
+        try {
+          await synchronizeWhiteboardFor(targetSessionId);
+        } catch {
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+          setWhiteboardSync({
+            status: "UNSYNCHRONIZED",
+            pendingMutationCount: 0,
+            reason: "Recovered whiteboard does not have a verified local revision correspondence"
+          });
+        }
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
         if (response.status === "ACTIVE") {
           launchRendererStream(targetSessionId);
         } else {
@@ -706,8 +873,54 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [beginSessionTransition, getCommandClient, launchRendererStream, sessionId, stopRendererTransport]
+    [
+      beginSessionTransition,
+      getCommandClient,
+      launchRendererStream,
+      resetBoardSync,
+      sessionId,
+      stopRendererTransport,
+      synchronizeWhiteboardFor
+    ]
   );
+
+  const synchronizeWhiteboard = useCallback(async (): Promise<void> => {
+    if (sessionId === null || sessionStatus !== "ACTIVE") return;
+    await synchronizeWhiteboardFor(sessionId);
+  }, [sessionId, sessionStatus, synchronizeWhiteboardFor]);
+
+  const submitWhiteboardMutation = useCallback(async (
+    change: NormalizedStudentShapeChange
+  ): Promise<void> => {
+    if (sessionId === null || sessionStatus !== "ACTIVE") return;
+    const coordinator = getBoardSyncCoordinator(sessionId);
+    const scheduler = getVisionScheduler(sessionId);
+    if (coordinator.snapshot().status === "UNINITIALIZED") {
+      scheduler?.record(change);
+      await synchronizeWhiteboardFor(sessionId);
+      scheduler?.wake();
+      return;
+    }
+    try {
+      // Begin the authoritative mutation request before cancelling/replacing
+      // any vision work so the server can supersede stale inference promptly.
+      const pending = coordinator.submit(change);
+      scheduler?.record(change);
+      setWhiteboardSync(coordinator.snapshot());
+      await pending;
+      setWhiteboardSync(coordinator.snapshot());
+      scheduler?.wake();
+    } catch (error) {
+      setWhiteboardSync(coordinator.snapshot());
+      throw error;
+    }
+  }, [
+    getBoardSyncCoordinator,
+    getVisionScheduler,
+    sessionId,
+    sessionStatus,
+    synchronizeWhiteboardFor
+  ]);
 
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
@@ -717,6 +930,7 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.completeSession(sessionId, summary);
+        resetBoardSync();
         void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
         stopRendererTransport();
         setSessionStatus("COMPLETED");
@@ -726,7 +940,13 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, sessionId, stopRendererTransport, voiceIntegration.voiceControls]
+    [
+      getCommandClient,
+      resetBoardSync,
+      sessionId,
+      stopRendererTransport,
+      voiceIntegration.voiceControls
+    ]
   );
 
   const archiveSession = useCallback(
@@ -737,6 +957,7 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.archiveSession(sessionId, reason);
+        resetBoardSync();
         void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
         stopRendererTransport();
         setSessionStatus("ARCHIVED");
@@ -746,7 +967,13 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, sessionId, stopRendererTransport, voiceIntegration.voiceControls]
+    [
+      getCommandClient,
+      resetBoardSync,
+      sessionId,
+      stopRendererTransport,
+      voiceIntegration.voiceControls
+    ]
   );
 
   const submitTypedInput = useCallback(
@@ -898,6 +1125,12 @@ export function useInterviewSession(
         abortControllerRef.current = null;
       }
       rendererClientRef.current = null;
+      visionSchedulerRef.current?.dispose();
+      visionSchedulerRef.current = null;
+      visionSchedulerSessionRef.current = null;
+      boardSyncRef.current?.reset();
+      boardSyncRef.current = null;
+      boardSyncSessionRef.current = null;
       rendererAudioPlayerRef.current?.dispose();
       rendererAudioPlayerRef.current = null;
     };
@@ -928,6 +1161,9 @@ export function useInterviewSession(
     recoverSession,
     completeSession,
     archiveSession,
+    whiteboardSync,
+    synchronizeWhiteboard,
+    submitWhiteboardMutation,
     submitTypedInput,
     retrySubmission,
     clearError,

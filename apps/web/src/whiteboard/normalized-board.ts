@@ -1,3 +1,8 @@
+import {
+  AuthoritativeStudentShapeSchema,
+  MAX_BOARD_SHAPE_POINTS,
+  MAX_BOARD_SHAPE_TEXT
+} from "../../../../packages/domain/src/index.js";
 import type { StudentShape, StudentShapeType } from "../../../../packages/whiteboard/src/index.js";
 import type { TLShapeBounds, TLShapeRecord } from "../tldraw-whiteboard-adapter.js";
 
@@ -25,7 +30,7 @@ export function isStudentOwnedShape(shape: TLShapeRecord): boolean {
 export function normalizeStudentShape(
   shape: TLShapeRecord,
   bounds: TLShapeBounds,
-  now: number = Date.now()
+  now: number = 0
 ): StudentShape | null {
   if (!isStudentOwnedShape(shape)) return null;
 
@@ -36,10 +41,13 @@ export function normalizeStudentShape(
   const lastModifiedAt = timestampFromMeta(shape.meta?.["lastModifiedAt"], createdAt);
   const revision = revisionFromMeta(shape.meta?.["shapeRevision"]);
   const text = typeof shape.props?.["text"] === "string" ? shape.props["text"] : undefined;
+  if (text !== undefined && text.length > MAX_BOARD_SHAPE_TEXT) {
+    throw new RangeError("Student shape text exceeds the normalized board limit");
+  }
   const points = normalizePoints(shape);
   const normalizedBounds = validateBounds(bounds);
 
-  return {
+  return AuthoritativeStudentShapeSchema.parse({
     id: shape.id,
     type,
     bounds: normalizedBounds,
@@ -48,7 +56,7 @@ export function normalizeStudentShape(
     revision,
     createdAt,
     lastModifiedAt
-  };
+  });
 }
 
 function validateBounds(bounds: TLShapeBounds): StudentShape["bounds"] {
@@ -119,6 +127,9 @@ function normalizePoints(shape: TLShapeRecord): { x: number; y: number }[] | und
       for (const rawPoint of segmentPoints) {
         const point = asPoint(rawPoint);
         if (point !== null) {
+          if (points.length >= MAX_BOARD_SHAPE_POINTS) {
+            throw new RangeError("Student stroke exceeds the normalized point limit");
+          }
           points.push({ x: shape.x + point.x, y: shape.y + point.y });
         }
       }

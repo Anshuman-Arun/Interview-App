@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   MAX_VISION_OBSERVATIONS,
@@ -19,7 +20,14 @@ import {
   assessVisionRequestFreshness,
   type VisionAuthorityView
 } from "./vision-admission.js";
-import type { VisionInferenceBackend } from "./vision-inference.js";
+import type {
+  VisionInferenceBackend,
+  VisionInferenceImagePayload
+} from "./vision-inference.js";
+
+const MAX_INFERENCE_IMAGE_BYTES = 64 * 1024 * 1024;
+const MAX_INFERENCE_IMAGE_DIMENSION = 16_384;
+const MAX_INFERENCE_IMAGE_PIXELS = 64 * 1024 * 1024;
 
 const ManagerOptionsSchema = z.object({
   maxInFlight: z.number().int().positive().max(64).default(8),
@@ -97,6 +105,64 @@ function cloneRequest(request: VisionInferenceRequest): VisionInferenceRequest {
 
 function cloneOutcome(outcome: VisionAdmissionResult): VisionAdmissionResult {
   return VisionAdmissionResultSchema.parse(outcome);
+}
+
+function prepareImagePayloadForExecution(
+  payload: VisionInferenceImagePayload,
+  request: VisionInferenceRequest
+): VisionInferenceImagePayload | undefined {
+  try {
+    const metadata = payload.metadata;
+    const mimeType = metadata.mimeType;
+    const width = metadata.width;
+    const height = metadata.height;
+    const byteSize = metadata.byteSize;
+    const contentDigest = metadata.contentDigest;
+    const readBytes = payload.readBytes;
+    if (
+      !Number.isSafeInteger(width)
+      || width <= 0
+      || width > MAX_INFERENCE_IMAGE_DIMENSION
+      || !Number.isSafeInteger(height)
+      || height <= 0
+      || height > MAX_INFERENCE_IMAGE_DIMENSION
+      || !Number.isSafeInteger(byteSize)
+      || byteSize <= 0
+      || byteSize > MAX_INFERENCE_IMAGE_BYTES
+      || contentDigest !== request.snapshotBasis.snapshotHash
+      || typeof readBytes !== "function"
+    ) {
+      return undefined;
+    }
+
+    const pixels = width * height;
+    if (!Number.isSafeInteger(pixels) || pixels > MAX_INFERENCE_IMAGE_PIXELS) {
+      return undefined;
+    }
+
+    const rawBytes = readBytes.call(payload);
+    if (!(rawBytes instanceof Uint8Array) || rawBytes.byteLength !== byteSize) {
+      return undefined;
+    }
+    const bytes = Uint8Array.from(rawBytes);
+    if (createHash("sha256").update(bytes).digest("hex") !== contentDigest) {
+      return undefined;
+    }
+
+    const stableMetadata = Object.freeze({
+      mimeType,
+      width,
+      height,
+      byteSize,
+      contentDigest
+    });
+    return Object.freeze({
+      metadata: stableMetadata,
+      readBytes: () => Uint8Array.from(bytes)
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 export class VisionRequestManager {
@@ -221,7 +287,11 @@ export class VisionRequestManager {
     }
   }
 
-  public submit(requestInput: unknown, backend: VisionInferenceBackend): Promise<VisionAdmissionResult> {
+  public submit(
+    requestInput: unknown,
+    backend: VisionInferenceBackend,
+    imagePayload?: VisionInferenceImagePayload
+  ): Promise<VisionAdmissionResult> {
     let provenance: VisionBackendProvenance;
     let analyze: VisionInferenceBackend["analyze"];
     try {
@@ -230,6 +300,15 @@ export class VisionRequestManager {
     } catch {
       const request = VisionInferenceRequestSchema.parse(requestInput);
       return Promise.resolve(rejected(request.requestId, "BACKEND_ERROR"));
+    }
+
+    let executionImagePayload: VisionInferenceImagePayload | undefined;
+    if (imagePayload !== undefined) {
+      const request = VisionInferenceRequestSchema.parse(requestInput);
+      executionImagePayload = prepareImagePayloadForExecution(imagePayload, request);
+      if (executionImagePayload === undefined) {
+        return Promise.resolve(rejected(request.requestId, "SNAPSHOT_MISMATCH"));
+      }
     }
 
     const registration = this.register(requestInput, provenance);
@@ -257,7 +336,12 @@ export class VisionRequestManager {
       try {
         const backendRequest = VisionInferenceRequestSchema.parse(entry.request);
         entry.backendStarted = true;
-        rawResult = await analyze(backendRequest, { signal: entry.controller.signal }).finally(() => {
+        rawResult = await analyze(backendRequest, {
+          signal: entry.controller.signal,
+          ...(executionImagePayload === undefined
+            ? {}
+            : { imagePayload: executionImagePayload })
+        }).finally(() => {
           entry.backendSettled = true;
           this.releaseExecutionSlot(entry);
         });

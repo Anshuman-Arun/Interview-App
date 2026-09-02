@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  BoardMutationCommittedResponseSchema,
   DeliveryReconnectResponseSchema,
   DeliveryAcknowledgedResponseSchema,
   InputCommittedResponseSchema,
@@ -240,6 +241,78 @@ describe("authenticated loopback command protocol", () => {
     expect(summaryText).not.toContain(sixPeopleProblem.private.canonicalSolution);
   });
 
+  it("keeps ordinary commands at 64 KiB while admitting larger bounded normalized whiteboard mutations on the dedicated endpoint", async () => {
+    const sessionId = newSessionId();
+    await postCommand(address, startCommand(sessionId));
+
+    const points = Array.from({ length: 1_024 }, (_, index) => ({
+      x: 123_456.125 + index / 10_000,
+      y: 234_567.875 - index / 10_000
+    }));
+    const requestId = newRequestId();
+    const command = {
+      protocolVersion: 1 as const,
+      type: "COMMIT_BOARD_MUTATION" as const,
+      requestId,
+      sessionId,
+      mutation: {
+        baseBoardRevision: 0,
+        added: [
+          {
+            id: "shape:large-stroke-a",
+            type: "stroke" as const,
+            bounds: { x: 10, y: 20, width: 300, height: 200 },
+            points,
+            text: "a".repeat(8_000),
+            revision: 1,
+            createdAt: 1,
+            lastModifiedAt: 1
+          },
+          {
+            id: "shape:large-stroke-b",
+            type: "stroke" as const,
+            bounds: { x: 400, y: 20, width: 300, height: 200 },
+            points,
+            text: "b".repeat(8_000),
+            revision: 1,
+            createdAt: 1,
+            lastModifiedAt: 1
+          }
+        ],
+        updated: [],
+        deleted: []
+      }
+    };
+    expect(Buffer.byteLength(JSON.stringify(command), "utf8")).toBeGreaterThan(64 * 1_024);
+
+    const generic = await postCommand(address, command);
+    expect(generic.status).toBe(413);
+    expect(ProtocolErrorResponseSchema.parse(await generic.json()).error.code)
+      .toBe("BODY_TOO_LARGE");
+
+    const dedicated = await postWhiteboardMutation(address, command);
+    expect(dedicated.status).toBe(200);
+    expect(BoardMutationCommittedResponseSchema.parse(await dedicated.json()))
+      .toMatchObject({
+        requestId,
+        sessionId,
+        committed: true,
+        boardRevision: 1
+      });
+    expect(registry.get(sessionId).getState().boardShapes["shape:large-stroke-a"]?.revision)
+      .toBe(1);
+
+    const wrongCommand = await postWhiteboardMutation(address, {
+      protocolVersion: 1,
+      type: "GET_BOARD_STATE",
+      requestId: newRequestId(),
+      sessionId
+    });
+    expect(wrongCommand.status).toBe(400);
+    expect(ProtocolErrorResponseSchema.parse(await wrongCommand.json()).error.code)
+      .toBe("INVALID_COMMAND");
+  });
+
   it("recovers persisted in-flight delivery before reconnect after application restart", async () => {
     await server.stop();
     const sessionId = newSessionId();
@@ -322,6 +395,21 @@ async function postCommand(
   };
   if (token !== undefined) headers["x-interview-client-token"] = token;
   return fetch(`${address.url}/v1/commands`, { method: "POST", headers, body: JSON.stringify(body) });
+}
+
+async function postWhiteboardMutation(
+  address: BoundLoopbackAddress,
+  body: unknown
+): Promise<Response> {
+  return fetch(`${address.url}/v1/whiteboard-mutations`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: CLIENT_ORIGIN,
+      "x-interview-client-token": CLIENT_TOKEN
+    },
+    body: JSON.stringify(body)
+  });
 }
 
 async function postRaw(address: BoundLoopbackAddress, body: string, contentType: string): Promise<Response> {

@@ -1,9 +1,12 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
+  authoritativeBoardShapeCanonicalJson,
   ClientCommandSchema,
+  MAX_WHITEBOARD_VISION_BASE64_LENGTH,
   ProtocolErrorResponseSchema,
+  WhiteboardVisionSnapshotUploadSchema,
   ProtocolSuccessResponseSchema,
   SessionIdSchema,
   type ClientCommand,
@@ -22,6 +25,7 @@ import { MAX_REPLAY_IDENTIFIER_CHARS } from "../../../packages/replay/src/index.
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { SessionReadService } from "./session-read-service.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
+import type { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 import {
   listInterviewCatalogEntries,
   resolveInterviewSessionConfiguration,
@@ -33,6 +37,10 @@ import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compat
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const COMMAND_PATH = "/v1/commands";
+const WHITEBOARD_MUTATION_PATH = "/v1/whiteboard-mutations";
+const WHITEBOARD_VISION_PATH = "/v1/whiteboard-vision";
+const MAX_WHITEBOARD_MUTATION_BODY_BYTES = 8 * 1024 * 1024;
+const MAX_WHITEBOARD_VISION_BODY_BYTES = MAX_WHITEBOARD_VISION_BASE64_LENGTH + 64 * 1024;
 const SESSION_READ_HISTORY_PATH = "/v1/read/sessions";
 const CORS_COMMAND_METHOD = "POST";
 const CORS_READ_METHOD = "GET";
@@ -47,6 +55,7 @@ export interface LoopbackCommandServerOptions {
   readonly sessions: SessionRecoveryCoordinator;
   readonly reads?: SessionReadService;
   readonly orchestrator?: ServerTurnOrchestrator;
+  readonly whiteboardVision?: WhiteboardVisionCoordinator;
   readonly onSessionTerminal?: (sessionId: SessionId) => void | Promise<void>;
   readonly port?: number;
 }
@@ -145,14 +154,59 @@ export class LoopbackCommandServer {
         return;
       }
 
-      if (request.method !== CORS_COMMAND_METHOD || request.url !== COMMAND_PATH) {
+      if (
+        request.method !== CORS_COMMAND_METHOD
+        || (
+          request.url !== COMMAND_PATH
+          && request.url !== WHITEBOARD_MUTATION_PATH
+          && request.url !== WHITEBOARD_VISION_PATH
+        )
+      ) {
         throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
       }
       const contentType = headerValue(request, "content-type");
       if (contentType?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
         throw new ProtocolHttpError(415, "INVALID_CONTENT_TYPE", "Content-Type must be application/json");
       }
-      const command = parseCommand(await readBody(request));
+
+      if (request.url === WHITEBOARD_VISION_PATH) {
+        const coordinator = this.options.whiteboardVision;
+        if (coordinator === undefined) {
+          throw new ProtocolHttpError(503, "INTERNAL_ERROR", "Whiteboard vision coordinator is unavailable");
+        }
+        const body = await readBody(request, MAX_WHITEBOARD_VISION_BODY_BYTES, "Whiteboard vision body");
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          throw new ProtocolHttpError(400, "INVALID_COMMAND", "Whiteboard vision body is not valid JSON");
+        }
+        const upload = WhiteboardVisionSnapshotUploadSchema.safeParse(parsed);
+        if (!upload.success) {
+          throw new ProtocolHttpError(
+            400,
+            "INVALID_COMMAND",
+            "Whiteboard vision body does not match protocol version 1"
+          );
+        }
+        const result = await coordinator.process(upload.data);
+        sendJson(response, 200, result, origin);
+        return;
+      }
+
+      const isWhiteboardMutation = request.url === WHITEBOARD_MUTATION_PATH;
+      const command = parseCommand(await readBody(
+        request,
+        isWhiteboardMutation ? MAX_WHITEBOARD_MUTATION_BODY_BYTES : MAX_COMMAND_BYTES,
+        isWhiteboardMutation ? "Whiteboard mutation body" : "Command body"
+      ));
+      if (isWhiteboardMutation && command.type !== "COMMIT_BOARD_MUTATION") {
+        throw new ProtocolHttpError(
+          400,
+          "INVALID_COMMAND",
+          "Whiteboard mutation endpoint accepts only COMMIT_BOARD_MUTATION"
+        );
+      }
       const result = await this.dispatch(command);
       sendJson(response, 200, ProtocolSuccessResponseSchema.parse(result), origin);
     } catch (error) {
@@ -391,6 +445,46 @@ export class LoopbackCommandServer {
           turnId: committed.turnId
         };
       }
+      case "COMMIT_BOARD_MUTATION": {
+        const committed = await new TurnCoordinator(writer).commitBoardMutation(
+          command.mutation,
+          envelope
+        );
+        if (committed.committed) {
+          this.options.whiteboardVision?.supersedeStaleRequests(command.sessionId);
+        }
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_MUTATION_COMMITTED",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          committed: committed.committed,
+          boardRevision: committed.boardRevision,
+          ...(committed.reason === undefined ? {} : { reason: committed.reason })
+        };
+      }
+      case "GET_BOARD_STATE": {
+        const state = writer.getState();
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_STATE",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          boardRevision: state.boardRevision,
+          shapeAuthorityKnown: state.boardShapeAuthorityKnown,
+          shapeRevisions: Object.values(state.boardShapes)
+            .map((shape) => ({
+              shapeId: shape.id,
+              revision: shape.revision,
+              contentSha256: createHash("sha256")
+                .update(authoritativeBoardShapeCanonicalJson(shape), "utf8")
+                .digest("hex")
+            }))
+            .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
+        };
+      }
       case "GET_SESSION_SUMMARY": {
         const state = writer.getState();
         return {
@@ -512,7 +606,11 @@ function containsUnsafeReadPathCharacter(value: string): boolean {
 }
 
 function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | undefined {
-  if (rawUrl === COMMAND_PATH) return CORS_COMMAND_METHOD;
+  if (
+    rawUrl === COMMAND_PATH
+    || rawUrl === WHITEBOARD_MUTATION_PATH
+    || rawUrl === WHITEBOARD_VISION_PATH
+  ) return CORS_COMMAND_METHOD;
   return parseReadRoute(rawUrl) === undefined ? undefined : CORS_READ_METHOD;
 }
 
@@ -532,13 +630,23 @@ function constantTimeEquals(received: string, expected: string): boolean {
   return receivedBytes.length === expectedBytes.length && timingSafeEqual(receivedBytes, expectedBytes);
 }
 
-async function readBody(request: IncomingMessage): Promise<string> {
+async function readBody(
+  request: IncomingMessage,
+  maxBytes: number = MAX_COMMAND_BYTES,
+  bodyLabel: string = "Command body"
+): Promise<string> {
   const chunks: Buffer[] = [];
   let byteLength = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
     byteLength += buffer.byteLength;
-    if (byteLength > MAX_COMMAND_BYTES) throw new ProtocolHttpError(413, "BODY_TOO_LARGE", "Command body exceeds the size limit");
+    if (byteLength > maxBytes) {
+      throw new ProtocolHttpError(
+        413,
+        "BODY_TOO_LARGE",
+        `${bodyLabel} exceeds the size limit`
+      );
+    }
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString("utf8");

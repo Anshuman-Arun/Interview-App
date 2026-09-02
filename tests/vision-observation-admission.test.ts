@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   AcceptedBoardObservationSchema,
@@ -778,6 +779,83 @@ describe("VisionRequestManager cancellation, idempotency, and resource bounds", 
     expect(result.accepted).toBe(true);
     expect(originalCalls).toBe(1);
     expect(replacementCalls).toBe(0);
+  });
+
+  it("binds execution image bytes exactly to the semantic snapshot digest", async () => {
+    const template = request();
+    const expectedBytes = Uint8Array.from([1, 2, 3, 4, 5, 6]);
+    const snapshotHash = createHash("sha256").update(expectedBytes).digest("hex");
+    const req = request({
+      sessionId: template.sessionId,
+      sourceBoardRevision: template.sourceBoardRevision,
+      snapshotBasis: {
+        ...template.snapshotBasis,
+        snapshotHash
+      }
+    });
+    let backendCalls = 0;
+    let observedBytes: Uint8Array | undefined;
+    const backend: VisionInferenceBackend = {
+      provenance: BACKEND,
+      analyze: async (backendRequest, options) => {
+        backendCalls += 1;
+        const payload = options.imagePayload;
+        if (payload === undefined) throw new Error("Expected bound image payload");
+        const firstRead = payload.readBytes();
+        firstRead[0] = 255;
+        observedBytes = payload.readBytes();
+        return VisionBackendResultSchema.parse(validResult(backendRequest));
+      }
+    };
+    const manager = new VisionRequestManager({
+      authority: (candidate) => authorityFor(candidate)
+    });
+    const metadata = {
+      mimeType: "image/png" as const,
+      width: 2,
+      height: 3,
+      byteSize: expectedBytes.byteLength,
+      contentDigest: snapshotHash
+    };
+
+    let oversizedRead = false;
+    const oversized = await manager.submit(req, backend, {
+      metadata: {
+        ...metadata,
+        byteSize: 64 * 1024 * 1024 + 1
+      },
+      readBytes: () => {
+        oversizedRead = true;
+        return expectedBytes;
+      }
+    });
+    expect(oversized).toMatchObject({
+      accepted: false,
+      reason: "SNAPSHOT_MISMATCH"
+    });
+    expect(oversizedRead).toBe(false);
+
+    const spoofed = await manager.submit(req, backend, {
+      metadata,
+      readBytes: () => Uint8Array.from([9, 9, 9, 9, 9, 9])
+    });
+    expect(spoofed).toMatchObject({
+      accepted: false,
+      reason: "SNAPSHOT_MISMATCH"
+    });
+    expect(backendCalls).toBe(0);
+
+    const callerBytes = Uint8Array.from(expectedBytes);
+    const pending = manager.submit(req, backend, {
+      metadata,
+      readBytes: () => callerBytes
+    });
+    callerBytes.fill(0);
+
+    const result = await pending;
+    expect(result.accepted).toBe(true);
+    expect(backendCalls).toBe(1);
+    expect(observedBytes).toEqual(expectedBytes);
   });
 
   it("deduplicates concurrent identical submissions before backend execution", async () => {

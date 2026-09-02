@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
@@ -12,7 +13,23 @@ import {
 import {
   RealTldrawEditorBridge
 } from "../apps/web/src/whiteboard/real-tldraw-editor.js";
-import type { BoardAction } from "../packages/domain/src/index.js";
+import {
+  BoardRevisionSchema,
+  authoritativeBoardShapeCanonicalJson,
+  newDeliveryId,
+  newRequestId,
+  newSessionId,
+  type AuthoritativeStudentShape,
+  type BoardAction
+} from "../packages/domain/src/index.js";
+import {
+  RendererStreamMessageSchema,
+  type RendererAcknowledgementCommand
+} from "../packages/delivery/src/index.js";
+import {
+  AuthoritativeBoardSyncCoordinator
+} from "../apps/web/src/whiteboard/authoritative-board-sync.js";
+import { RendererClient } from "../apps/web/src/renderer-client.js";
 import type { NormalizedStudentShapeChange } from "../apps/web/src/whiteboard/normalized-board.js";
 
 function requireRealTldrawBridge(
@@ -652,7 +669,7 @@ describe("Real tldraw mounted browser integration", () => {
           props: { geo: "rectangle", w: 20, h: 20 }
         }]);
       })
-    ).rejects.toThrow(/BoardRevision/u);
+    ).rejects.toThrow(/BoardRevision mirror.*Number\.MAX_SAFE_INTEGER/u);
 
     expect(bridge.getShape(nativeId)).toBeUndefined();
     expect(adapter.getBoardRevision()).toBe(Number.MAX_SAFE_INTEGER);
@@ -945,6 +962,193 @@ describe("Real tldraw mounted browser integration", () => {
       handle.unmount();
     });
     container.remove();
+  });
+
+  it("routes a real mounted tldraw student mutation into authoritative BoardRevision exactly once", async () => {
+    const container = document.createElement("div");
+    container.style.width = "800px";
+    container.style.height = "600px";
+    document.body.appendChild(container);
+
+    const sessionId = newSessionId();
+    let authoritativeRevision = BoardRevisionSchema.parse(0);
+    const authoritativeShapes: Record<string, AuthoritativeStudentShape> = {};
+    let committedMutationCount = 0;
+
+    type SyncClient = ConstructorParameters<typeof AuthoritativeBoardSyncCoordinator>[0];
+    const syncClient: SyncClient = {
+      getBoardState: async (_targetSessionId, options) => ({
+        protocolVersion: 1,
+        ok: true,
+        type: "BOARD_STATE",
+        requestId: options?.requestId ?? newRequestId(),
+        sessionId,
+        boardRevision: authoritativeRevision,
+        shapeAuthorityKnown: true,
+        shapeRevisions: Object.values(authoritativeShapes)
+          .map((shape) => ({
+            shapeId: shape.id,
+            revision: shape.revision,
+            contentSha256: createHash("sha256")
+              .update(authoritativeBoardShapeCanonicalJson(shape), "utf8")
+              .digest("hex")
+          }))
+          .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
+      }),
+      commitBoardMutation: async (_targetSessionId, mutation, options) => {
+        const requestId = options?.requestId ?? newRequestId();
+        if (mutation.baseBoardRevision !== authoritativeRevision) {
+          return {
+            protocolVersion: 1,
+            ok: true,
+            type: "BOARD_MUTATION_COMMITTED",
+            requestId,
+            sessionId,
+            committed: false,
+            boardRevision: authoritativeRevision,
+            reason: "STALE_CLIENT" as const
+          };
+        }
+        for (const shape of mutation.added) authoritativeShapes[shape.id] = shape;
+        for (const entry of mutation.updated) authoritativeShapes[entry.shape.id] = entry.shape;
+        for (const entry of mutation.deleted) Reflect.deleteProperty(authoritativeShapes, entry.shapeId);
+        authoritativeRevision = BoardRevisionSchema.parse(authoritativeRevision + 1);
+        committedMutationCount += 1;
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_MUTATION_COMMITTED",
+          requestId,
+          sessionId,
+          committed: true,
+          boardRevision: authoritativeRevision
+        };
+      }
+    };
+
+    const sync = new AuthoritativeBoardSyncCoordinator(syncClient);
+    const adapter = new TldrawWhiteboardAdapter();
+    const pendingMutations: Promise<void>[] = [];
+    let authoritativeBridgeEnabled = false;
+    const handle = createWhiteboardCanvasMount({
+      adapter,
+      onNormalizedBoardChange: (change) => {
+        if (authoritativeBridgeEnabled) {
+          pendingMutations.push(sync.submit(change));
+        }
+      }
+    });
+
+    try {
+      await act(async () => {
+        handle.mount(container);
+      });
+      const bridge = requireRealTldrawBridge(handle);
+      await sync.synchronize(sessionId, adapter.getNormalizedStudentShapes());
+      authoritativeBridgeEnabled = true;
+
+      const studentId = createShapeId("authoritative-mounted-student");
+      await act(async () => {
+        bridge.getNativeEditor().createShapes([{
+          id: studentId,
+          type: "geo",
+          x: 40,
+          y: 50,
+          props: { geo: "rectangle", w: 120, h: 80 }
+        }]);
+      });
+      await Promise.all(pendingMutations.splice(0));
+
+      expect(authoritativeRevision).toBe(BoardRevisionSchema.parse(1));
+      expect(authoritativeShapes[studentId]?.revision).toBe(1);
+      expect(committedMutationCount).toBe(1);
+
+      await act(async () => {
+        bridge.getNativeEditor().updateShapes([{
+          id: studentId,
+          type: "geo",
+          x: 90
+        }]);
+      });
+      await Promise.all(pendingMutations.splice(0));
+
+      expect(authoritativeRevision).toBe(BoardRevisionSchema.parse(2));
+      expect(authoritativeShapes[studentId]?.revision).toBe(2);
+      const studentBeforeOverlay = bridge.getShape(studentId);
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        annotationPurpose: "stale mounted target must reject",
+        targetShapeId: studentId,
+        expectedShapeRevision: 1
+      })).rejects.toThrow(/revision mismatch/u);
+      expect(authoritativeRevision).toBe(BoardRevisionSchema.parse(2));
+
+      const acknowledgements: RendererAcknowledgementCommand[] = [];
+      const renderer = new RendererClient({
+        sessionId,
+        acknowledgementSender: {
+          send: async (command) => {
+            acknowledgements.push(command);
+          }
+        },
+        textPresenter: { presentText: () => undefined },
+        audioPlayer: { playAudio: () => undefined },
+        whiteboardPresenter: adapter,
+        requestIdFactory: () => newRequestId()
+      });
+      const deliveryId = newDeliveryId();
+      const message = RendererStreamMessageSchema.parse({
+        protocolVersion: 1,
+        type: "DELIVERY_COMMAND",
+        command: {
+          deliveryId,
+          content: {
+            medium: "WHITEBOARD",
+            action: {
+              operation: "circle",
+              layer: "AI_ANNOTATION",
+              annotationPurpose: "authorized mounted overlay",
+              targetShapeId: studentId,
+              expectedShapeRevision: 2
+            }
+          }
+        }
+      });
+
+      await act(async () => {
+        const first = await renderer.handleMessage(message);
+        expect(first.duplicate).toBe(false);
+      });
+      const annotationAfterFirstDelivery = adapter.getCanvasSnapshot().aiAnnotations;
+      expect(annotationAfterFirstDelivery).toHaveLength(1);
+      expect(acknowledgements.map((command) => command.type)).toEqual([
+        "ACK_DELIVERY_EXPOSED",
+        "ACK_DELIVERY_COMPLETED"
+      ]);
+
+      await act(async () => {
+        const reconnectDuplicate = await renderer.handleMessage(message);
+        expect(reconnectDuplicate.duplicate).toBe(true);
+      });
+
+      expect(authoritativeRevision).toBe(BoardRevisionSchema.parse(2));
+      expect(bridge.getShape(studentId)).toEqual(studentBeforeOverlay);
+      expect(adapter.getCanvasSnapshot().aiAnnotations)
+        .toEqual(annotationAfterFirstDelivery);
+      expect(acknowledgements.map((command) => command.type)).toEqual([
+        "ACK_DELIVERY_EXPOSED",
+        "ACK_DELIVERY_COMPLETED"
+      ]);
+      expect(committedMutationCount).toBe(2);
+    } finally {
+      sync.reset();
+      await act(async () => {
+        handle.unmount();
+      });
+      container.remove();
+    }
   });
 
 });

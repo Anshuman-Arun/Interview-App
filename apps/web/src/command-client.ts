@@ -1,5 +1,7 @@
 import type { z } from "zod";
 import {
+  BoardMutationCommittedResponseSchema,
+  BoardStateResponseSchema,
   ClientCommandSchema,
   ConfiguredSessionStartedResponseSchema,
   DeliveryAcknowledgedResponseSchema,
@@ -18,6 +20,7 @@ import {
   SessionsListResponseSchema,
   type ClientCommand,
   type DeliveryId,
+  type NormalizedBoardMutation,
   type InterviewCatalogEntry,
   type InterviewSessionConfiguration,
   type ProtocolErrorResponse,
@@ -35,6 +38,8 @@ type SessionResumedResponse = z.infer<typeof SessionResumedResponseSchema>;
 type SessionCompletedResponse = z.infer<typeof SessionCompletedResponseSchema>;
 type SessionArchivedResponse = z.infer<typeof SessionArchivedResponseSchema>;
 type InputCommittedResponse = z.infer<typeof InputCommittedResponseSchema>;
+type BoardMutationCommittedResponse = z.infer<typeof BoardMutationCommittedResponseSchema>;
+type BoardStateResponse = z.infer<typeof BoardStateResponseSchema>;
 type SessionSummaryResponse = z.infer<typeof SessionSummaryResponseSchema>;
 type DeliveryReconnectResponse = z.infer<typeof DeliveryReconnectResponseSchema>;
 type DeliveryAcknowledgedResponse = z.infer<typeof DeliveryAcknowledgedResponseSchema>;
@@ -102,12 +107,15 @@ export class BrowserCommandProtocolError extends Error {
 
 export class BrowserCommandClient {
   readonly #commandUrl: string;
+  readonly #whiteboardMutationUrl: string;
   readonly #authenticationHeaderValue: string;
   readonly #fetchImpl: typeof fetch;
   readonly #requestIdFactory: () => RequestId;
 
   public constructor(options: BrowserCommandClientOptions) {
-    this.#commandUrl = `${normalizeLoopbackBaseUrl(options.baseUrl)}/v1/commands`;
+    const baseUrl = normalizeLoopbackBaseUrl(options.baseUrl);
+    this.#commandUrl = `${baseUrl}/v1/commands`;
+    this.#whiteboardMutationUrl = `${baseUrl}/v1/whiteboard-mutations`;
     if (
       options.clientToken !== undefined
       && options.externalAuthenticationHeaderValue !== undefined
@@ -350,6 +358,61 @@ export class BrowserCommandClient {
     );
   }
 
+  public async commitBoardMutation(
+    sessionId: SessionId,
+    mutation: NormalizedBoardMutation,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<BoardMutationCommittedResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "COMMIT_BOARD_MUTATION",
+      requestId,
+      sessionId,
+      mutation
+    });
+    const result = await this.send(
+      command,
+      (value) => BoardMutationCommittedResponseSchema.parse(value),
+      options.signal,
+      this.#whiteboardMutationUrl
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
+  public async getBoardState(
+    sessionId: SessionId,
+    options: BrowserCommandRequestOptions = {}
+  ): Promise<BoardStateResponse> {
+    const requestId = this.resolveRequestId(options);
+    const command = ClientCommandSchema.parse({
+      protocolVersion: 1,
+      type: "GET_BOARD_STATE",
+      requestId,
+      sessionId
+    });
+    const result = await this.send(
+      command,
+      (value) => BoardStateResponseSchema.parse(value),
+      options.signal
+    );
+    if (result.sessionId !== sessionId) {
+      throw new BrowserCommandResponseError(
+        "CORRELATION_MISMATCH",
+        requestId,
+        200
+      );
+    }
+    return result;
+  }
+
   public async getSessionSummary(
     sessionId: SessionId,
     options: BrowserCommandRequestOptions = {}
@@ -459,7 +522,8 @@ export class BrowserCommandClient {
   private async send<TResult extends ProtocolSuccessResponse>(
     command: ClientCommand,
     parseSuccess: (value: unknown) => TResult,
-    signal: AbortSignal | undefined
+    signal: AbortSignal | undefined,
+    endpoint: string = this.#commandUrl
   ): Promise<TResult> {
     if (isSignalAborted(signal)) {
       throw new BrowserCommandTransportError("ABORTED", command.requestId);
@@ -482,7 +546,7 @@ export class BrowserCommandClient {
 
     let response: Response;
     try {
-      response = await this.#fetchImpl(this.#commandUrl, init);
+      response = await this.#fetchImpl(endpoint, init);
     } catch {
       throw new BrowserCommandTransportError(
         isSignalAborted(signal) ? "ABORTED" : "NETWORK",

@@ -11,11 +11,31 @@ import {
   type VisionObservationKind
 } from "../../domain/src/index.js";
 
+export interface VisionInferenceImagePayload {
+  readonly metadata: {
+    readonly mimeType: "image/png";
+    readonly width: number;
+    readonly height: number;
+    readonly byteSize: number;
+    readonly contentDigest: string;
+  };
+  /**
+   * Returns a defensive copy of the validated encoded image bytes.
+   * This payload is execution-only and must never enter semantic request/event state.
+   */
+  readonly readBytes: () => Uint8Array;
+}
+
+export interface VisionInferenceExecutionOptions {
+  readonly signal: AbortSignal;
+  readonly imagePayload?: VisionInferenceImagePayload;
+}
+
 export interface VisionInferenceBackend {
   readonly provenance: VisionBackendProvenance;
   readonly analyze: (
     request: Readonly<VisionInferenceRequest>,
-    options: { readonly signal: AbortSignal }
+    options: VisionInferenceExecutionOptions
   ) => Promise<unknown>;
 }
 
@@ -73,7 +93,7 @@ export class DeterministicFakeVisionBackend implements VisionInferenceBackend {
 
   public async analyze(
     requestInput: Readonly<VisionInferenceRequest>,
-    options: { readonly signal: AbortSignal }
+    options: VisionInferenceExecutionOptions
   ): Promise<unknown> {
     if (options.signal.aborted) throw new Error("Vision inference was cancelled before execution");
     this.calls += 1;

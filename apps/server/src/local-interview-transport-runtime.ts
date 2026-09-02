@@ -1,5 +1,9 @@
 import type { LocalTransportSecurity } from "../../../packages/domain/src/index.js";
-import type { SessionRuntimeRegistry } from "../../../packages/interview-engine/src/index.js";
+import type {
+  SessionRuntimeRegistry,
+  VisionEvidenceInterpreter,
+  VisionInferenceBackend
+} from "../../../packages/interview-engine/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
 import {
   LoopbackCommandServer,
@@ -13,6 +17,7 @@ import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
+import { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 import {
   EphemeralAudioAssetStore,
   VoiceInputCoordinator,
@@ -38,6 +43,8 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly orchestrator?: ServerTurnOrchestrator;
   readonly providerRuntimeResolver?: ProviderRuntimeResolver;
   readonly readService?: SessionReadService;
+  readonly visionBackend?: VisionInferenceBackend;
+  readonly visionEvidenceInterpreter?: VisionEvidenceInterpreter;
 }
 
 export interface BoundLocalInterviewTransport {
@@ -53,6 +60,7 @@ export class LocalInterviewTransportRuntime {
   public readonly readService: SessionReadService;
   public readonly commandServer: LoopbackCommandServer;
   public readonly rendererStreamServer: RendererStreamServer;
+  public readonly whiteboardVision: WhiteboardVisionCoordinator;
   public readonly voiceTransportServer: VoiceTransportServer;
   public readonly audioAssets: EphemeralAudioAssetStore;
   public readonly voiceSynthesis: VoiceSynthesisCoordinator | undefined;
@@ -114,11 +122,19 @@ export class LocalInterviewTransportRuntime {
           options.store?.load(sessionId) ?? options.registry.loadEvents(sessionId)
       }
     });
+    this.whiteboardVision = new WhiteboardVisionCoordinator({
+      sessions: this.sessions,
+      ...(options.visionBackend === undefined ? {} : { backend: options.visionBackend }),
+      ...(options.visionEvidenceInterpreter === undefined
+        ? {}
+        : { evidenceInterpreter: options.visionEvidenceInterpreter })
+    });
     this.commandServer = new LoopbackCommandServer({
       security: options.security,
       sessions: this.sessions,
       reads: this.readService,
       orchestrator: this.orchestrator,
+      whiteboardVision: this.whiteboardVision,
       onSessionTerminal: (sessionId) => this.handleSessionTerminal(sessionId),
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })
     });
@@ -225,6 +241,11 @@ export class LocalInterviewTransportRuntime {
       // Speech/TTS worker shutdown is terminal. Never let a later start()
       // resurrect only the HTTP shells around already-shut-down workers.
       this.voiceWorkersTerminated = true;
+    }
+    try {
+      this.whiteboardVision.shutdown();
+    } catch (error) {
+      failures.push(error);
     }
     try {
       await this.voiceInput?.shutdown();

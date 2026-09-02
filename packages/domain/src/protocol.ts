@@ -8,6 +8,12 @@ import {
   SessionIdSchema,
   TurnIdSchema
 } from "./ids.js";
+import { BoardRevisionSchema } from "./revisions.js";
+import {
+  BoardShapeIdSchema,
+  MAX_AUTHORITATIVE_BOARD_SHAPES,
+  NormalizedBoardMutationSchema
+} from "./whiteboard.js";
 
 export const ProtocolVersionSchema = z.literal(1);
 
@@ -104,6 +110,15 @@ export const CommitTypedInputCommandSchema = ProtocolCommandBaseSchema.extend({
   text: z.string().trim().min(1).max(20_000)
 }).strict();
 
+export const CommitBoardMutationCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("COMMIT_BOARD_MUTATION"),
+  mutation: NormalizedBoardMutationSchema
+}).strict();
+
+export const GetBoardStateCommandSchema = ProtocolCommandBaseSchema.extend({
+  type: z.literal("GET_BOARD_STATE")
+}).strict();
+
 export const GetSessionSummaryCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("GET_SESSION_SUMMARY")
 }).strict();
@@ -136,6 +151,8 @@ export const ClientCommandSchema = z.discriminatedUnion("type", [
   CompleteSessionCommandSchema,
   ArchiveSessionCommandSchema,
   CommitTypedInputCommandSchema,
+  CommitBoardMutationCommandSchema,
+  GetBoardStateCommandSchema,
   GetSessionSummaryCommandSchema,
   GetInterviewSessionContextCommandSchema,
   ReconnectDeliveryCommandSchema,
@@ -217,6 +234,48 @@ export const InputCommittedResponseSchema = ResponseBaseSchema.extend({
   turnId: TurnIdSchema
 }).strict();
 
+export const BoardMutationCommittedResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("BOARD_MUTATION_COMMITTED"),
+  sessionId: SessionIdSchema,
+  committed: z.boolean(),
+  boardRevision: BoardRevisionSchema,
+  reason: z.enum(["STALE_CLIENT", "MUTATION_CONFLICT", "BOARD_AUTHORITY_UNKNOWN"]).optional()
+}).strict().superRefine((response, context) => {
+  if (response.committed === (response.reason !== undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["reason"],
+      message: "Rejected board mutations require a reason and committed mutations must not have one"
+    });
+  }
+});
+
+export const BoardStateResponseSchema = ResponseBaseSchema.extend({
+  ok: z.literal(true),
+  type: z.literal("BOARD_STATE"),
+  sessionId: SessionIdSchema,
+  boardRevision: BoardRevisionSchema,
+  shapeAuthorityKnown: z.boolean(),
+  shapeRevisions: z.array(z.object({
+    shapeId: BoardShapeIdSchema,
+    revision: z.number().refine(
+      (value) => Number.isSafeInteger(value) && value >= 1,
+      { message: "Shape revision must be a positive safe integer" }
+    ),
+    contentSha256: z.string().regex(/^[0-9a-f]{64}$/u)
+  }).strict()).max(MAX_AUTHORITATIVE_BOARD_SHAPES)
+}).strict().superRefine((response, context) => {
+  const ids = response.shapeRevisions.map((entry) => entry.shapeId);
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["shapeRevisions"],
+      message: "Board state shape revisions must contain unique shape IDs"
+    });
+  }
+});
+
 export const SessionSummaryResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
   type: z.literal("SESSION_SUMMARY"),
@@ -254,6 +313,8 @@ export const ProtocolSuccessResponseSchema = z.discriminatedUnion("type", [
   SessionCompletedResponseSchema,
   SessionArchivedResponseSchema,
   InputCommittedResponseSchema,
+  BoardMutationCommittedResponseSchema,
+  BoardStateResponseSchema,
   SessionSummaryResponseSchema,
   DeliveryReconnectResponseSchema,
   DeliveryAcknowledgedResponseSchema

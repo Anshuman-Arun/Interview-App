@@ -59,6 +59,8 @@ function summaryFor(type: EventType): string {
     case "BOARD_PATCH_COMMITTED": return "Whiteboard changed";
     case "VISION_REQUESTED": return "Vision verification requested";
     case "VISION_RESULT_ACCEPTED": return "Vision result accepted";
+    case "VISION_EVIDENCE_BRIDGE_DECIDED": return "Vision evidence bridge decision recorded";
+    case "VISION_EVIDENCE_BRIDGE_COMPLETED": return "Vision evidence bridge completed";
     case "VISION_RESULT_DISCARDED": return "Vision result discarded";
     case "LOCAL_COMPUTE_REQUESTED": return "Local compute requested";
     case "LOCAL_COMPUTE_RESULT_ACCEPTED": return "Local compute result accepted";
@@ -280,6 +282,12 @@ function entryForKnownEvent(
     case "VISION_RESULT_ACCEPTED":
       relations = { requestId: event.payload.visionRequestId };
       revisions = { boardRevision: event.payload.observation.sourceBoardRevision };
+      break;
+    case "VISION_EVIDENCE_BRIDGE_DECIDED":
+      relations = { requestId: event.payload.visionRequestId };
+      break;
+    case "VISION_EVIDENCE_BRIDGE_COMPLETED":
+      relations = { requestId: event.payload.visionRequestId };
       break;
     case "VISION_RESULT_DISCARDED":
       relations = { requestId: event.payload.visionRequestId };

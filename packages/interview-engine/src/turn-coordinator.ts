@@ -1,7 +1,17 @@
 import { createHash } from "node:crypto";
 import {
+  AcceptedBoardObservationSchema,
   BoardRevisionSchema,
   BoardObservationSchema,
+  NormalizedBoardMutationSchema,
+  RequestIdSchema,
+  VisionBoundsSchema,
+  VisionEvidenceInterpreterFingerprintSchema,
+  VisionRequestedObservationKindSchema,
+  VisionShapeRevisionBindingSchema,
+  VisionSnapshotBasisSchema,
+  MAX_AUTHORITATIVE_BOARD_SHAPES,
+  MAX_VISION_REGION_SHAPES,
   CommandEnvelopeSchema,
   CommandIdentityValueSchema,
   ContextEpochSchema,
@@ -15,7 +25,6 @@ import {
   EvidenceProposalSchema,
   EvidenceKeySchema,
   EvidenceValueSchema,
-  RequestIdSchema,
   RealizationRequestSchema,
   TranscriptRevisionSchema,
   TurnIdSchema,
@@ -28,8 +37,16 @@ import {
   newRequestId,
   newTurnId,
   newUtteranceId,
+  type AcceptedBoardObservation,
+  type AuthoritativeStudentShape,
   type BoardObservation,
   type BoardRevision,
+  type NormalizedBoardMutation,
+  type VisionBounds,
+  type VisionEvidenceInterpreterFingerprint,
+  type VisionRequestedObservationKind,
+  type VisionShapeRevisionBinding,
+  type VisionSnapshotBasis,
   type CommandEnvelope,
   type CommandIdentityValue,
   type DeliveryAtom,
@@ -44,8 +61,8 @@ import {
   type RealizationRequest,
   type RequestId,
   type TranscriptRevision,
-  type TurnId
-  ,type UtteranceId
+  type TurnId,
+  type UtteranceId
 } from "../../domain/src/index.js";
 import type { EventDraft, SessionState } from "../../events/src/index.js";
 import { z } from "zod";
@@ -77,8 +94,19 @@ const AudioDeliveryQueuedResultSchema = z.object({
 }).strict();
 const InputAppendedResultSchema = z.object({ appended: z.literal(true) }).strict();
 const BoardInputAppendedResultSchema = z.object({ appended: z.literal(true), boardRevision: BoardRevisionSchema }).strict();
+const BoardMutationCommitResultSchema = z.object({
+  committed: z.boolean(),
+  boardRevision: BoardRevisionSchema,
+  reason: z.enum(["STALE_CLIENT", "MUTATION_CONFLICT", "BOARD_AUTHORITY_UNKNOWN"]).optional()
+}).strict().superRefine((result, context) => {
+  if (result.committed === (result.reason !== undefined)) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "Board mutation result reason is inconsistent" });
+  }
+});
 const VisionRequestedResultSchema = z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema }).strict();
 const VisionProcessedResultSchema = z.object({ accepted: z.boolean(), reason: z.string().min(1).optional() }).strict();
+const VisionEvidenceBridgeDecisionResultSchema = z.object({ recorded: z.literal(true) }).strict();
+const VisionEvidenceBridgeCompletionResultSchema = z.object({ recorded: z.literal(true) }).strict();
 const EvidenceProcessedResultSchema = z.object({ committed: z.boolean(), key: z.string().min(1), reason: z.string().min(1).optional() }).strict();
 const CompletedResultSchema = z.object({ completed: z.literal(true), completedAt: z.string() }).strict();
 const ArchivedResultSchema = z.object({ archived: z.literal(true), archivedAt: z.string() }).strict();
@@ -604,20 +632,87 @@ export class TurnCoordinator {
     });
   }
 
-  public async appendBoardInput(inputEpisodeId: InputEpisodeId, summary: string): Promise<void> {
-    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "whiteboard", inputEpisodeId });
+  public async appendBoardInput(
+    inputEpisodeId: InputEpisodeId,
+    summary: string,
+    options: {
+      readonly alreadyCommittedBoardRevision?: BoardRevision;
+    } = {}
+  ): Promise<void> {
+    const alreadyCommittedBoardRevision = options.alreadyCommittedBoardRevision === undefined
+      ? undefined
+      : BoardRevisionSchema.parse(options.alreadyCommittedBoardRevision);
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "whiteboard",
+      inputEpisodeId
+    });
     await this.writer.execute(envelope, {
       operation: "APPEND_BOARD_INPUT",
-      payload: { inputEpisodeId, summary }
+      payload: {
+        inputEpisodeId,
+        summary,
+        ...(alreadyCommittedBoardRevision === undefined
+          ? {}
+          : { alreadyCommittedBoardRevision })
+      }
     }, BoardInputAppendedResultSchema, (state) => {
       assertSessionActive(state, "append board input");
       const episode = state.inputEpisodes[inputEpisodeId];
-      if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
+      if (episode === undefined || episode.status !== "ACTIVE") {
+        throw new Error("Input episode is not active");
+      }
+
+      if (alreadyCommittedBoardRevision !== undefined) {
+        if (alreadyCommittedBoardRevision !== state.boardRevision) {
+          throw new Error(
+            "Whiteboard input episode basis does not match the current authoritative BoardRevision"
+          );
+        }
+        return {
+          drafts: [
+            {
+              source: "USER",
+              type: "INPUT_EPISODE_UPDATED",
+              payload: {
+                inputEpisodeId,
+                modality: "WHITEBOARD",
+                semanticContent: summary
+              }
+            },
+            ...invalidateUndeliveredPolicyOutput(
+              state,
+              "Authoritative whiteboard input changed before delivery"
+            )
+          ],
+          result: {
+            appended: true,
+            boardRevision: state.boardRevision
+          }
+        };
+      }
+
       const boardRevision = BoardRevisionSchema.parse(state.boardRevision + 1);
       return {
         drafts: [
-          { source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision, summary } },
-          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "WHITEBOARD", semanticContent: summary } },
+          {
+            source: "USER",
+            type: "BOARD_PATCH_COMMITTED",
+            payload: { boardRevision, summary }
+          },
+          ...invalidateVisionDerivedEvidence(
+            state,
+            "Whiteboard shape authority became unknown after a summary-only board update"
+          ),
+          {
+            source: "USER",
+            type: "INPUT_EPISODE_UPDATED",
+            payload: {
+              inputEpisodeId,
+              modality: "WHITEBOARD",
+              semanticContent: summary
+            }
+          },
           ...invalidateUndeliveredPolicyOutput(
             state,
             "Authoritative board state changed before delivery"
@@ -654,48 +749,357 @@ export class TurnCoordinator {
     return result.value.turnId;
   }
 
-  public async requestVision(regionId: string, relevantShapeIds: readonly string[]): Promise<{ visionRequestId: RequestId; sourceBoardRevision: BoardRevision }> {
-    const visionRequestId = newRequestId();
-    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "vision-coordinator", correlationId: visionRequestId });
+  public async requestVision(
+    regionId: string,
+    relevantShapeIds: readonly string[],
+    options: {
+      readonly visionRequestId?: RequestId;
+      readonly snapshotBasis?: VisionSnapshotBasis;
+      readonly relevantShapeRevisions?: readonly VisionShapeRevisionBinding[];
+      readonly regionBounds?: VisionBounds;
+      readonly requestedObservationKind?: VisionRequestedObservationKind;
+    } = {}
+  ): Promise<{ visionRequestId: RequestId; sourceBoardRevision: BoardRevision }> {
+    const visionRequestId = RequestIdSchema.parse(options.visionRequestId ?? newRequestId());
+    const snapshotBasis = options.snapshotBasis === undefined
+      ? undefined
+      : VisionSnapshotBasisSchema.parse(options.snapshotBasis);
+    const relevantShapeRevisions = options.relevantShapeRevisions === undefined
+      ? undefined
+      : options.relevantShapeRevisions.map((binding) =>
+          VisionShapeRevisionBindingSchema.parse(binding)
+        );
+    const regionBounds = options.regionBounds === undefined
+      ? undefined
+      : VisionBoundsSchema.parse(options.regionBounds);
+    const requestedObservationKind = options.requestedObservationKind === undefined
+      ? undefined
+      : VisionRequestedObservationKindSchema.parse(options.requestedObservationKind);
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "vision-coordinator",
+      requestId: visionRequestId,
+      correlationId: visionRequestId
+    });
     const result = await this.writer.execute(envelope, {
       operation: "REQUEST_VISION",
-      payload: { regionId, relevantShapeIds: [...relevantShapeIds] }
+      payload: {
+        regionId,
+        relevantShapeIds: [...relevantShapeIds],
+        ...(snapshotBasis === undefined ? {} : { snapshotBasis }),
+        ...(relevantShapeRevisions === undefined ? {} : { relevantShapeRevisions }),
+        ...(regionBounds === undefined ? {} : { regionBounds }),
+        ...(requestedObservationKind === undefined ? {} : { requestedObservationKind })
+      }
     }, VisionRequestedResultSchema, (state) => {
       assertSessionActive(state, "request vision");
+      if (
+        snapshotBasis !== undefined
+        && snapshotBasis.sourceBoardRevision !== state.boardRevision
+      ) {
+        throw new Error("Vision snapshot basis does not match authoritative board revision");
+      }
       return {
-      drafts: [{ source: "APPLICATION", type: "VISION_REQUESTED", payload: { visionRequestId, sourceBoardRevision: state.boardRevision, regionId, relevantShapeIds: [...relevantShapeIds] } }],
-      result: { visionRequestId, sourceBoardRevision: state.boardRevision }
+        drafts: [{
+          source: "APPLICATION",
+          type: "VISION_REQUESTED",
+          payload: {
+            visionRequestId,
+            sourceBoardRevision: state.boardRevision,
+            regionId,
+            relevantShapeIds: [...relevantShapeIds],
+            ...(snapshotBasis === undefined ? {} : { snapshotBasis }),
+            ...(relevantShapeRevisions === undefined ? {} : { relevantShapeRevisions }),
+            ...(regionBounds === undefined ? {} : { regionBounds }),
+            ...(requestedObservationKind === undefined ? {} : { requestedObservationKind })
+          }
+        }],
+        result: { visionRequestId, sourceBoardRevision: state.boardRevision }
       };
     });
     return result.value;
   }
 
-  public async processVisionResult(input: { readonly envelope: CommandEnvelope; readonly observation: BoardObservation }): Promise<z.infer<typeof VisionProcessedResultSchema>> {
+  public async processVisionResult(input: {
+    readonly envelope: CommandEnvelope;
+    readonly observation: BoardObservation;
+    readonly admission?: AcceptedBoardObservation;
+    readonly evidenceInterpreterFingerprint?: VisionEvidenceInterpreterFingerprint | null;
+  }): Promise<z.infer<typeof VisionProcessedResultSchema>> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const observation = BoardObservationSchema.parse(input.observation);
+    const admission = input.admission === undefined
+      ? undefined
+      : AcceptedBoardObservationSchema.parse(input.admission);
+    const evidenceInterpreterFingerprint = input.evidenceInterpreterFingerprint === undefined
+      ? undefined
+      : input.evidenceInterpreterFingerprint === null
+        ? null
+        : VisionEvidenceInterpreterFingerprintSchema.parse(input.evidenceInterpreterFingerprint);
+    if (evidenceInterpreterFingerprint !== undefined && admission === undefined) {
+      throw new Error("Vision evidence bridge authority requires an admitted observation");
+    }
     const visionRequestId = envelope.correlationId;
     const result = await this.writer.execute(envelope, {
       operation: "PROCESS_VISION_RESULT",
-      payload: { observation }
+      payload: {
+        observation,
+        ...(admission === undefined ? {} : { admission }),
+        ...(evidenceInterpreterFingerprint === undefined
+          ? {}
+          : { evidenceInterpreterFingerprint })
+      }
     }, VisionProcessedResultSchema, (state) => {
       const request = state.visionRequests[visionRequestId];
-      if (request === undefined || request.status !== "PENDING") return { drafts: [], result: { accepted: false, reason: "Vision request is not pending" } };
-      const sameDependencySet = request.regionId === observation.regionId
-        && request.relevantShapeIds.length === observation.relevantShapeIds.length
-        && request.relevantShapeIds.every((shapeId) => observation.relevantShapeIds.includes(shapeId));
-      const freshness = assessVisionFreshness(observation, state);
-      const sourceMatches = envelope.sourceRevision === request.sourceBoardRevision && observation.sourceBoardRevision === request.sourceBoardRevision;
-      if (freshness !== "FRESH" || !sourceMatches || !sameDependencySet) {
-        const reason = `Vision result rejected: freshness=${freshness}, sourceMatches=${String(sourceMatches)}, dependenciesMatch=${String(sameDependencySet)}`;
-        return { drafts: [{ source: "APPLICATION", type: "VISION_RESULT_DISCARDED", payload: { visionRequestId, reason } }], result: { accepted: false, reason } };
+      if (request === undefined || request.status !== "PENDING") {
+        return {
+          drafts: [],
+          result: { accepted: false, reason: "Vision request is not pending" }
+        };
       }
-      return { drafts: [{ source: "WORKER", type: "VISION_RESULT_ACCEPTED", payload: { visionRequestId, observation } }], result: { accepted: true } };
+      const dependencyShapeIds = admission === undefined
+        ? observation.relevantShapeIds
+        : admission.sourceRelevantShapeIds;
+      const sameDependencySet = request.regionId === observation.regionId
+        && request.relevantShapeIds.length === dependencyShapeIds.length
+        && request.relevantShapeIds.every((shapeId) =>
+          dependencyShapeIds.includes(shapeId)
+        );
+      const freshness = admission === undefined
+        ? assessVisionFreshness(observation, state)
+        : admission.admittedAtBoardRevision === state.boardRevision
+          ? "FRESH"
+          : "STALE";
+      const sourceMatches = envelope.sourceRevision === request.sourceBoardRevision
+        && observation.sourceBoardRevision === request.sourceBoardRevision;
+      const admissionMatches = admission === undefined || (
+        admission.requestId === visionRequestId
+        && admission.sessionId === state.sessionId
+        && admission.observation.sourceBoardRevision === request.sourceBoardRevision
+        && admission.observation.regionId === request.regionId
+        && canonicalJson(admission.sourceRelevantShapeIds)
+          === canonicalJson(request.relevantShapeIds)
+        && (
+          request.snapshotBasis === undefined
+          || canonicalJson(admission.snapshotBasis) === canonicalJson(request.snapshotBasis)
+        )
+        && (
+          request.relevantShapeRevisions === undefined
+          || canonicalJson(admission.shapeRevisionBindings)
+            === canonicalJson(request.relevantShapeRevisions)
+        )
+        && (
+          request.regionBounds === undefined
+          || canonicalJson(admission.observation.bounds) === canonicalJson(request.regionBounds)
+        )
+        && (
+          request.requestedObservationKind === undefined
+          || request.requestedObservationKind === "ANY"
+          || admission.observationKind === request.requestedObservationKind
+        )
+      );
+      if (
+        freshness !== "FRESH"
+        || !sourceMatches
+        || !sameDependencySet
+        || !admissionMatches
+      ) {
+        const reason =
+          `Vision result rejected: freshness=${freshness}, sourceMatches=${String(sourceMatches)}, dependenciesMatch=${String(sameDependencySet)}, admissionMatches=${String(admissionMatches)}`;
+        return {
+          drafts: [{
+            source: "APPLICATION",
+            type: "VISION_RESULT_DISCARDED",
+            payload: { visionRequestId, reason }
+          }],
+          result: { accepted: false, reason }
+        };
+      }
+      return {
+        drafts: [{
+          source: "WORKER",
+          type: "VISION_RESULT_ACCEPTED",
+          payload: {
+            visionRequestId,
+            observation,
+            ...(admission === undefined ? {} : { admission }),
+            ...(evidenceInterpreterFingerprint === undefined
+              ? {}
+              : { evidenceInterpreterFingerprint })
+          }
+        }],
+        result: { accepted: true }
+      };
     });
     return result.value;
   }
 
-  public async processEvidenceProposal(input: { readonly envelope: CommandEnvelope; readonly proposal: EvidenceProposal }): Promise<z.infer<typeof EvidenceProcessedResultSchema>> {
+  public async recordVisionEvidenceBridgeDecision(input: {
+    readonly envelope: CommandEnvelope;
+    readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+    readonly proposal?: EvidenceProposal;
+  }): Promise<z.infer<typeof VisionEvidenceBridgeDecisionResultSchema>> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    const interpreterFingerprint = VisionEvidenceInterpreterFingerprintSchema.parse(
+      input.interpreterFingerprint
+    );
+    const proposal = input.proposal === undefined
+      ? undefined
+      : EvidenceProposalSchema.parse(input.proposal);
+    const visionRequestId = envelope.correlationId;
+
+    const result = await this.writer.execute(envelope, {
+      operation: "RECORD_VISION_EVIDENCE_BRIDGE_DECISION",
+      payload: {
+        visionRequestId,
+        interpreterFingerprint,
+        proposal: proposal === undefined ? null : commandIdentityValue(proposal)
+      }
+    }, VisionEvidenceBridgeDecisionResultSchema, (state) => {
+      const request = state.visionRequests[visionRequestId];
+      if (
+        request === undefined
+        || request.status !== "ACCEPTED"
+        || request.resultEventId === undefined
+        || request.acceptedObservation === undefined
+        || request.evidenceBridge?.status !== "PENDING"
+      ) {
+        throw new Error("Vision evidence bridge is not pending");
+      }
+      if (request.evidenceBridge.interpreterFingerprint !== interpreterFingerprint) {
+        throw new Error("Vision evidence interpreter fingerprint changed after acceptance");
+      }
+      if (
+        proposal !== undefined
+        && (
+          proposal.evidenceEventIds.length !== 1
+          || proposal.evidenceEventIds[0] !== request.resultEventId
+          || state.problem?.id !== proposal.key.problemId
+        )
+      ) {
+        throw new Error("Vision evidence proposal is not scoped to the accepted result");
+      }
+
+      return {
+        drafts: [{
+          source: "APPLICATION",
+          type: "VISION_EVIDENCE_BRIDGE_DECIDED",
+          payload: {
+            visionRequestId,
+            interpreterFingerprint,
+            decision: proposal === undefined ? "NO_PROPOSAL" as const : "PROPOSAL" as const,
+            ...(proposal === undefined ? {} : { proposal })
+          }
+        }],
+        result: { recorded: true as const }
+      };
+    });
+    return result.value;
+  }
+
+  public async recordVisionEvidenceBridgeCompletion(input: {
+    readonly envelope: CommandEnvelope;
+    readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+    readonly evidenceCommitted: boolean;
+  }): Promise<z.infer<typeof VisionEvidenceBridgeCompletionResultSchema>> {
+    const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    const interpreterFingerprint = VisionEvidenceInterpreterFingerprintSchema.parse(
+      input.interpreterFingerprint
+    );
+    const evidenceCommitted = z.boolean().parse(input.evidenceCommitted);
+    const visionRequestId = envelope.correlationId;
+
+    const result = await this.writer.execute(envelope, {
+      operation: "RECORD_VISION_EVIDENCE_BRIDGE_COMPLETION",
+      payload: {
+        visionRequestId,
+        interpreterFingerprint,
+        evidenceCommitted
+      }
+    }, VisionEvidenceBridgeCompletionResultSchema, (state) => {
+      const request = state.visionRequests[visionRequestId];
+      if (
+        request === undefined
+        || request.status !== "ACCEPTED"
+        || request.resultEventId === undefined
+        || request.evidenceBridge?.status !== "DECIDED"
+        || request.evidenceBridge.decision !== "PROPOSAL"
+      ) {
+        throw new Error("Vision evidence bridge proposal is not awaiting completion");
+      }
+      const bridge = request.evidenceBridge;
+      const resultEventId = request.resultEventId;
+      if (bridge.interpreterFingerprint !== interpreterFingerprint) {
+        throw new Error("Vision evidence bridge completion fingerprint changed after decision");
+      }
+      const proposalWasAdmitted = state.evidenceProposals.some((candidate) =>
+        canonicalJson(candidate) === canonicalJson(bridge.proposal)
+      );
+      if (!proposalWasAdmitted) {
+        throw new Error("Vision evidence bridge completion requires an evidence admission attempt");
+      }
+      const authoritativeCommitted = Object.values(state.evidenceHistory).some((records) =>
+        records.some((record) => record.value.evidenceEventIds.includes(resultEventId))
+      );
+      if (authoritativeCommitted !== evidenceCommitted) {
+        throw new Error("Vision evidence bridge completion does not match authoritative evidence state");
+      }
+
+      return {
+        drafts: [{
+          source: "APPLICATION",
+          type: "VISION_EVIDENCE_BRIDGE_COMPLETED",
+          payload: {
+            visionRequestId,
+            interpreterFingerprint,
+            evidenceCommitted
+          }
+        }],
+        result: { recorded: true as const }
+      };
+    });
+    return result.value;
+  }
+
+  public async discardVisionRequest(
+    visionRequestIdInput: RequestId,
+    reasonInput: string
+  ): Promise<void> {
+    const visionRequestId = RequestIdSchema.parse(visionRequestIdInput);
+    const reason = z.string().min(1).max(240).parse(reasonInput);
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "vision-admission",
+      correlationId: visionRequestId
+    });
+    await this.writer.execute(envelope, {
+      operation: "DISCARD_VISION_REQUEST",
+      payload: { visionRequestId, reason }
+    }, z.object({ discarded: z.literal(true) }).strict(), (state) => {
+      const request = state.visionRequests[visionRequestId];
+      if (request === undefined || request.status !== "PENDING") {
+        return { drafts: [], result: { discarded: true as const } };
+      }
+      return {
+        drafts: [{
+          source: "APPLICATION",
+          type: "VISION_RESULT_DISCARDED",
+          payload: { visionRequestId, reason }
+        }],
+        result: { discarded: true as const }
+      };
+    });
+  }
+
+  public async processEvidenceProposal(input: {
+    readonly envelope: CommandEnvelope;
+    readonly proposal: EvidenceProposal;
+    readonly requiredBoardRevision?: BoardRevision;
+  }): Promise<z.infer<typeof EvidenceProcessedResultSchema>> {
+    const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    const requiredBoardRevision = input.requiredBoardRevision === undefined
+      ? undefined
+      : BoardRevisionSchema.parse(input.requiredBoardRevision);
     if (!evidenceProposalWithinAdmissionBounds(input.proposal)) {
       throw new Error("Evidence proposal exceeds the bounded admission input size");
     }
@@ -703,9 +1107,20 @@ export class TurnCoordinator {
     const key = evidenceKeyToString(proposal.key);
     const result = await this.writer.execute(envelope, {
       operation: "PROCESS_EVIDENCE_PROPOSAL",
-      payload: { proposal }
+      payload: {
+        proposal,
+        ...(requiredBoardRevision === undefined
+          ? {}
+          : { requiredBoardRevision })
+      }
     }, EvidenceProcessedResultSchema, (state) => {
       const reasons: string[] = [];
+      if (
+        requiredBoardRevision !== undefined
+        && state.boardRevision !== requiredBoardRevision
+      ) {
+        reasons.push("Evidence board freshness precondition no longer holds");
+      }
       if (state.problem?.id !== proposal.key.problemId) reasons.push("Evidence is scoped to a different problem");
       const knownEventIds = new Set(state.eventIds);
       if (!proposal.evidenceEventIds.every((eventId) => knownEventIds.has(eventId))) {
@@ -986,6 +1401,133 @@ export class TurnCoordinator {
     return outcome.value;
   }
 
+  public async commitBoardMutation(
+    mutationInput: NormalizedBoardMutation,
+    commandEnvelope?: CommandEnvelope
+  ): Promise<z.infer<typeof BoardMutationCommitResultSchema>> {
+    const mutation = NormalizedBoardMutationSchema.parse(mutationInput);
+    const envelope = CommandEnvelopeSchema.parse(
+      commandEnvelope ?? createCommandEnvelope({
+        sessionId: this.writer.sessionId,
+        producer: "whiteboard"
+      })
+    );
+    const outcome = await this.writer.execute(envelope, {
+      operation: "COMMIT_BOARD_MUTATION",
+      payload: { mutation: commandIdentityValue(mutation) }
+    }, BoardMutationCommitResultSchema, (state) => {
+      assertSessionActive(state, "commit board mutation");
+      if (mutation.baseBoardRevision !== state.boardRevision) {
+        return {
+          drafts: [],
+          result: {
+            committed: false,
+            boardRevision: state.boardRevision,
+            reason: "STALE_CLIENT" as const
+          }
+        };
+      }
+      if (!state.boardShapeAuthorityKnown) {
+        return {
+          drafts: [],
+          result: {
+            committed: false,
+            boardRevision: state.boardRevision,
+            reason: "BOARD_AUTHORITY_UNKNOWN" as const
+          }
+        };
+      }
+
+      const resultingShapes: Record<string, AuthoritativeStudentShape> = {
+        ...state.boardShapes
+      };
+      let resultingShapeCount = Object.keys(resultingShapes).length;
+      for (const shape of mutation.added) {
+        if (resultingShapes[shape.id] !== undefined) {
+          return {
+            drafts: [],
+            result: {
+              committed: false,
+              boardRevision: state.boardRevision,
+              reason: "MUTATION_CONFLICT" as const
+            }
+          };
+        }
+        resultingShapes[shape.id] = shape;
+        resultingShapeCount += 1;
+      }
+      for (const entry of mutation.updated) {
+        const existing = resultingShapes[entry.shape.id];
+        if (
+          existing === undefined
+          || existing.revision !== entry.beforeRevision
+          || entry.shape.createdAt !== existing.createdAt
+          || entry.shape.lastModifiedAt < existing.lastModifiedAt
+        ) {
+          return {
+            drafts: [],
+            result: {
+              committed: false,
+              boardRevision: state.boardRevision,
+              reason: "MUTATION_CONFLICT" as const
+            }
+          };
+        }
+        resultingShapes[entry.shape.id] = entry.shape;
+      }
+      for (const entry of mutation.deleted) {
+        const existing = resultingShapes[entry.shapeId];
+        if (existing === undefined || existing.revision !== entry.expectedRevision) {
+          return {
+            drafts: [],
+            result: {
+              committed: false,
+              boardRevision: state.boardRevision,
+              reason: "MUTATION_CONFLICT" as const
+            }
+          };
+        }
+        if (!Reflect.deleteProperty(resultingShapes, entry.shapeId)) {
+          throw new Error("Validated board deletion could not be simulated for freshness");
+        }
+        resultingShapeCount -= 1;
+      }
+      if (resultingShapeCount < 0 || resultingShapeCount > MAX_AUTHORITATIVE_BOARD_SHAPES) {
+        return {
+          drafts: [],
+          result: {
+            committed: false,
+            boardRevision: state.boardRevision,
+            reason: "MUTATION_CONFLICT" as const
+          }
+        };
+      }
+
+      const boardRevision = BoardRevisionSchema.parse(state.boardRevision + 1);
+      const summary = `Normalized whiteboard mutation (+${String(mutation.added.length)} ~${String(mutation.updated.length)} -${String(mutation.deleted.length)})`;
+      return {
+        drafts: [
+          {
+            source: "USER",
+            type: "BOARD_PATCH_COMMITTED",
+            payload: { boardRevision, summary, mutation }
+          },
+          ...invalidateVisionDerivedEvidence(
+            state,
+            "Authoritative whiteboard changed the supporting vision basis",
+            resultingShapes
+          ),
+          ...invalidateUndeliveredPolicyOutput(
+            state,
+            "Authoritative board state changed before delivery"
+          )
+        ],
+        result: { committed: true, boardRevision }
+      };
+    });
+    return outcome.value;
+  }
+
   public async queueAudioDeliveryFromValidatedText(input: {
     readonly sourceDeliveryId: DeliveryId;
     readonly generationId: GenerationId;
@@ -1125,6 +1667,10 @@ export class TurnCoordinator {
             type: "BOARD_PATCH_COMMITTED",
             payload: { boardRevision: BoardRevisionSchema.parse(state.boardRevision + 1), summary }
           },
+          ...invalidateVisionDerivedEvidence(
+            state,
+            "Whiteboard shape authority became unknown after a summary-only board update"
+          ),
           ...invalidateUndeliveredPolicyOutput(
             state,
             "Authoritative board state changed before delivery"
@@ -1218,4 +1764,96 @@ function rejectAndSupersedeDrafts(
     ],
     result: rejected.result
   };
+}
+
+
+function invalidateVisionDerivedEvidence(
+  state: SessionState,
+  reason: string,
+  resultingShapes?: Readonly<Record<string, AuthoritativeStudentShape>>
+): EventDraft[] {
+  const staleVisionResultEventIds = new Set<string>();
+
+  for (const request of Object.values(state.visionRequests)) {
+    if (request.status !== "ACCEPTED" || request.resultEventId === undefined) {
+      continue;
+    }
+    if (
+      resultingShapes === undefined
+      || request.acceptedObservation === undefined
+      || !acceptedVisionObservationRemainsFresh(
+        request.acceptedObservation,
+        resultingShapes
+      )
+    ) {
+      staleVisionResultEventIds.add(request.resultEventId);
+    }
+  }
+
+  if (staleVisionResultEventIds.size === 0) return [];
+
+  const invalidations: EventDraft[] = [];
+  for (const records of Object.values(state.evidenceHistory)) {
+    const activeRecords = records.filter((record) => record.status === "ACTIVE");
+    if (activeRecords.length > 1) {
+      throw new Error("Evidence history contains multiple active records");
+    }
+    const active = activeRecords[0];
+    if (
+      active === undefined
+      || !active.value.evidenceEventIds.some((eventId) =>
+        staleVisionResultEventIds.has(eventId)
+      )
+    ) {
+      continue;
+    }
+    invalidations.push({
+      source: "APPLICATION",
+      type: "STUDENT_EVIDENCE_INVALIDATED",
+      payload: {
+        key: active.key,
+        invalidatesEventId: active.evidenceEventId,
+        reason
+      }
+    });
+  }
+  return invalidations;
+}
+
+function acceptedVisionObservationRemainsFresh(
+  accepted: AcceptedBoardObservation,
+  shapes: Readonly<Record<string, AuthoritativeStudentShape>>
+): boolean {
+  if (
+    accepted.sourceRelevantShapeIds.length > 0
+    && accepted.shapeRevisionBindings.length !== accepted.sourceRelevantShapeIds.length
+  ) {
+    return false;
+  }
+
+  for (const binding of accepted.shapeRevisionBindings) {
+    if (shapes[binding.shapeId]?.revision !== binding.expectedRevision) {
+      return false;
+    }
+  }
+
+  const regionShapeIds = Object.values(shapes)
+    .filter((shape) => boardBoundsIntersect(shape.bounds, accepted.observation.bounds))
+    .map((shape) => shape.id)
+    .sort();
+  if (regionShapeIds.length > MAX_VISION_REGION_SHAPES) return false;
+
+  const expectedShapeIds = [...accepted.sourceRelevantShapeIds].sort();
+  return regionShapeIds.length === expectedShapeIds.length
+    && regionShapeIds.every((shapeId, index) => shapeId === expectedShapeIds[index]);
+}
+
+function boardBoundsIntersect(
+  left: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  right: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+): boolean {
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y;
 }

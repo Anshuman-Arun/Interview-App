@@ -6,3 +6,5 @@ export * from "./renderer-stream-server.js";
 export * from "./session-recovery-coordinator.js";
 export * from "./turn-orchestrator.js";
 export * from "./server.js";
+export * from "./whiteboard-vision-coordinator.js";
+export * from "./whiteboard-activity-episode-bridge.js";
