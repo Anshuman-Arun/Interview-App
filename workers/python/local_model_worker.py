@@ -63,6 +63,8 @@ MAX_TTS_SECONDS = 60
 MAX_TTS_CANCELLATION_TOMBSTONES = 256
 MAX_VAD_STREAMS = 64
 MAX_SPEECH_NATIVE_RESERVATIONS = 4
+MAX_HTTP_CONNECTIONS = 16
+HTTP_SOCKET_TIMEOUT_SECONDS = 5.0
 SILERO_WINDOW_16K = 512
 SILERO_CONTEXT_16K = 64
 
@@ -599,12 +601,37 @@ class WorkerServer(ThreadingHTTPServer):
     daemon_threads = False
     block_on_close = True
     allow_reuse_address = False
+    request_queue_size = MAX_HTTP_CONNECTIONS
 
     def __init__(self, address: tuple[str, int], handler: type[BaseHTTPRequestHandler], *, token: str, component: str, runtime: Any) -> None:
         super().__init__(address, handler)
         self.worker_token = token
         self.component = component
         self.runtime = runtime
+        self._request_slots = threading.BoundedSemaphore(MAX_HTTP_CONNECTIONS)
+
+    def get_request(self):
+        request, client_address = super().get_request()
+        request.settimeout(HTTP_SOCKET_TIMEOUT_SECONDS)
+        return request, client_address
+
+    def process_request(self, request, client_address) -> None:
+        if not self._request_slots.acquire(blocking=False):
+            try:
+                request.close()
+            finally:
+                return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
 
 
 class Handler(BaseHTTPRequestHandler):
