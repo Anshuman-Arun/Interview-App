@@ -31,7 +31,8 @@ import type {
   VisionShapeRevisionBinding,
   VisionSnapshotBasis,
   VerificationResult,
-  EvidenceKey
+  EvidenceKey,
+  QuantTradingCandidateAction
 } from "../../domain/src/index.js";
 import type {
   QuantResearchActionEvent,
@@ -155,6 +156,7 @@ export interface EvidenceRecordState {
 }
 export interface QuantTradingSessionState {
   readonly definition: QuantTradingScenarioDefinitionEvent;
+  readonly pendingAction?: QuantTradingCandidateAction | undefined;
   readonly rounds: readonly QuantTradingRoundEvidenceEvent[];
   readonly result?: QuantTradingResultEvent | undefined;
 }
