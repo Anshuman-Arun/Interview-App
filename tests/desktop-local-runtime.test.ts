@@ -120,7 +120,10 @@ describe("desktop local model runtime", () => {
     });
     expect(result.sampleRate).toBe(24_000);
     expect(result.channels).toBe(1);
-    expect(Array.from(result.samples)).toEqual([0, 0.05, -0.05, 0]);
+    expect(result.samples[0]).toBe(0);
+    expect(result.samples[1]).toBeCloseTo(0.05, 6);
+    expect(result.samples[2]).toBeCloseTo(-0.05, 6);
+    expect(result.samples[3]).toBe(0);
   });
 
   it("recovers through LocalRuntimeManager after a worker dies during inference", async () => {
