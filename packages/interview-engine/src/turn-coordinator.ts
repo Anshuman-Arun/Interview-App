@@ -232,7 +232,11 @@ function terminalInvalidationDrafts(
   }
 
   for (const generation of Object.values(state.generations)) {
-    if (generation.status === "ACTIVE" || generation.status === "PROPOSAL_RECEIVED") {
+    if (
+      generation.status === "ACTIVE"
+      || generation.status === "PROPOSAL_RECEIVED"
+      || generation.status === "VALIDATED"
+    ) {
       drafts.push({
         source: "APPLICATION",
         type: "MODEL_GENERATION_SUPERSEDED",
@@ -1033,6 +1037,12 @@ export class TurnCoordinator {
         audioRef: input.audioRef
       }
     }, AudioDeliveryQueuedResultSchema, (state) => {
+      if (!state.started || state.status !== "ACTIVE") {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "TTS delivery is not authorized for a terminal session" }
+        };
+      }
       const source = state.deliveries[sourceDeliveryId];
       if (
         source === undefined
