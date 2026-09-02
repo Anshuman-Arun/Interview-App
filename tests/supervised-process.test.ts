@@ -2,6 +2,7 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  linkSync,
   mkdtempSync,
   readFileSync,
   renameSync,
@@ -159,6 +160,26 @@ describe("supervised one-shot process execution", () => {
 
       await expect(runtime.execute(request([FIXTURE, "echo"], {
         executableId: "linked"
+      }))).rejects.toMatchObject({ code: "EXECUTABLE_UNSAFE" });
+    }
+  );
+
+  it.runIf(process.platform === "win32")(
+    "rejects a hard-linked provider executable identity",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "supervised-hardlink-"));
+      temporaryRoots.push(root);
+      const original = join(root, "original.exe");
+      const linked = join(root, "linked.exe");
+      copyFileSync(process.execPath, original);
+      linkSync(original, linked);
+
+      const runtime = new SupervisedProcessRunner([{
+        id: "hardlinked",
+        executable: linked
+      }]);
+      await expect(runtime.execute(request([FIXTURE, "echo"], {
+        executableId: "hardlinked"
       }))).rejects.toMatchObject({ code: "EXECUTABLE_UNSAFE" });
     }
   );
