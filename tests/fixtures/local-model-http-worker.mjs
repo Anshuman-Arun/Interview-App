@@ -69,11 +69,11 @@ server.listen(0, "127.0.0.1", () => {
     handshake: {
       componentVersion: "1",
       protocolVersion: 1,
+      workerType: component,
+      runtimeVersion: "fixture-runtime-1",
       modelVersionOrHash: modelIdentity,
       capabilities: component === "speech" ? ["vad", "stt"] : ["tts"],
       metadata: {
-        workerType: component,
-        runtimeVersion: "fixture-runtime-1",
         port: address.port
       }
     }
