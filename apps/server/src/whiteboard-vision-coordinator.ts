@@ -10,6 +10,7 @@ import {
   type AuthoritativeBoardBounds,
   type SessionId,
   type VisionInferenceRequest,
+  type VisionSnapshotBasis,
   type WhiteboardVisionSnapshotResponse,
   type WhiteboardVisionSnapshotUpload
 } from "../../../packages/domain/src/index.js";
@@ -171,57 +172,15 @@ export class WhiteboardVisionCoordinator {
       }
     }
 
-    let bytes: Buffer;
+    let snapshotBasis: VisionSnapshotBasis;
     try {
-      bytes = decodeBoundedBase64(upload.pngBase64);
+      snapshotBasis = prepareSnapshotBasis(upload);
     } catch {
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
         "INVALID_IMAGE"
       ));
     }
-
-    let snapshot;
-    try {
-      snapshot = createValidatedImageSnapshot({
-        snapshotId: upload.snapshotId,
-        sourceType: "WHITEBOARD_SNAPSHOT",
-        sourceRevision: upload.sourceBoardRevision,
-        capturedAtMs: upload.capturedAtMs,
-        mimeType: "image/png",
-        declaredWidth: upload.declaredWidth,
-        declaredHeight: upload.declaredHeight,
-        encodedBytes: bytes
-      }, {
-        maxEncodedBytes: MAX_WHITEBOARD_VISION_PNG_BYTES,
-        maxWidth: MAX_WHITEBOARD_VISION_DIMENSION,
-        maxHeight: MAX_WHITEBOARD_VISION_DIMENSION,
-        maxPixels: MAX_WHITEBOARD_VISION_PIXELS
-      });
-      prepareVisionBatch(
-        [snapshot],
-        "whiteboard-observation",
-        {
-          maxImages: 1,
-          maxTotalBytes: MAX_WHITEBOARD_VISION_PNG_BYTES,
-          maxTotalPixels: MAX_WHITEBOARD_VISION_PIXELS,
-          maxCropsOrTiles: 1
-        },
-        "FAIL"
-      );
-    } catch {
-      return this.remember(upload.requestId, fingerprint, rejected(
-        upload,
-        "INVALID_IMAGE"
-      ));
-    }
-
-    const snapshotBasis = {
-      snapshotId: snapshot.metadata.snapshotId,
-      snapshotHash: snapshot.metadata.contentDigest,
-      preprocessingVersion: PREPROCESSING_VERSION,
-      sourceBoardRevision: upload.sourceBoardRevision
-    };
     const turn = new TurnCoordinator(writer);
     const requested = await turn.requestVision(
       upload.region.regionId,
@@ -475,4 +434,42 @@ function sameStringSet(
   const leftSorted = [...left].sort();
   const rightSorted = [...right].sort();
   return leftSorted.every((value, index) => value === rightSorted[index]);
+}
+
+function prepareSnapshotBasis(
+  upload: WhiteboardVisionSnapshotUpload
+): VisionSnapshotBasis {
+  const bytes = decodeBoundedBase64(upload.pngBase64);
+  const snapshot = createValidatedImageSnapshot({
+    snapshotId: upload.snapshotId,
+    sourceType: "WHITEBOARD_SNAPSHOT",
+    sourceRevision: upload.sourceBoardRevision,
+    capturedAtMs: upload.capturedAtMs,
+    mimeType: "image/png",
+    declaredWidth: upload.declaredWidth,
+    declaredHeight: upload.declaredHeight,
+    encodedBytes: bytes
+  }, {
+    maxEncodedBytes: MAX_WHITEBOARD_VISION_PNG_BYTES,
+    maxWidth: MAX_WHITEBOARD_VISION_DIMENSION,
+    maxHeight: MAX_WHITEBOARD_VISION_DIMENSION,
+    maxPixels: MAX_WHITEBOARD_VISION_PIXELS
+  });
+  prepareVisionBatch(
+    [snapshot],
+    "whiteboard-observation",
+    {
+      maxImages: 1,
+      maxTotalBytes: MAX_WHITEBOARD_VISION_PNG_BYTES,
+      maxTotalPixels: MAX_WHITEBOARD_VISION_PIXELS,
+      maxCropsOrTiles: 1
+    },
+    "FAIL"
+  );
+  return {
+    snapshotId: snapshot.metadata.snapshotId,
+    snapshotHash: snapshot.metadata.contentDigest,
+    preprocessingVersion: PREPROCESSING_VERSION,
+    sourceBoardRevision: upload.sourceBoardRevision
+  };
 }
