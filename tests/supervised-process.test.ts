@@ -432,6 +432,35 @@ describe("supervised one-shot process execution", () => {
     });
   });
 
+  it("rejects a fifth concurrent execution while four physical operations are outstanding", async () => {
+    const runtime = runner();
+    const executions = [
+      runtime.execute(request([FIXTURE, "echo"], { stdin: "one" })),
+      runtime.execute(request([FIXTURE, "echo"], { stdin: "two" })),
+      runtime.execute(request([FIXTURE, "echo"], { stdin: "three" })),
+      runtime.execute(request([FIXTURE, "echo"], { stdin: "four" }))
+    ];
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      stdin: "must-not-start"
+    }))).rejects.toMatchObject({ code: "CAPACITY_EXCEEDED" });
+
+    const results = await Promise.all(executions);
+    expect(results.map((result) => result.stdout).sort()).toEqual([
+      "four",
+      "one",
+      "three",
+      "two"
+    ]);
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      stdin: "after-capacity-released"
+    }))).resolves.toMatchObject({
+      exitCode: 0,
+      stdout: "after-capacity-released"
+    });
+  });
+
   it("bounds stdout and stderr without reflecting hostile stream content in errors", async () => {
     const runtime = runner();
 
