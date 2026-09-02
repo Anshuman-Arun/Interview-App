@@ -391,7 +391,7 @@ describe("Antigravity CLI one-turn protocol", () => {
       antigravityStream({
         ...PROPOSAL,
         claimedDisclosureIds: Array.from(
-          { length: 129 },
+          { length: 257 },
           (_, index) => DisclosureIdSchema.parse(
             `disclosure-${String(index)}`
           )
