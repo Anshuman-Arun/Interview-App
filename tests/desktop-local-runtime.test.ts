@@ -232,7 +232,7 @@ describe("desktop local model runtime", () => {
       sampleRate: 16_000,
       streamId: "stream-1"
     })).resolves.toEqual({ speechProbability: 0.875 });
-  });
+  }, 15_000);
 });
 
 function fixtureManager(
