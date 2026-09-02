@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { InterviewerProposalSchema } from "../../domain/src/index.js";
+import {
+  ANTIGRAVITY_CLI_ADAPTER_VERSION,
+  ANTIGRAVITY_CLI_MODEL_ID,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
+  createAntigravityCliReasoningProvider
+} from "./antigravity-cli-adapter.js";
+import type { SupervisedCliExecutor } from "./supervised-cli-provider.js";
 import { GeminiApiAdapter } from "./gemini-api-adapter.js";
 import { MockModelAdapter } from "./mock-model-adapter.js";
 import {
@@ -22,6 +29,8 @@ const isProviderControlPlaneError = ProviderControlPlaneError.isControlPlaneErro
 
 const MOCK_RUNTIME_KEYS = new Set(["proposal"]);
 const GEMINI_RUNTIME_KEYS = new Set(["fetchImpl", "billingVerificationFactory"]);
+const ANTIGRAVITY_RUNTIME_KEYS = new Set(["executor"]);
+const ANTIGRAVITY_EXECUTOR_KEYS = new Set(["execute"]);
 const MAX_BUILT_IN_CREDENTIAL_LENGTH = 4_096;
 const PROPOSAL_KEYS = Object.freeze([
   "realizedAction",
@@ -322,6 +331,103 @@ function snapshotGeminiFactoryRuntime(value: unknown): GeminiProviderFactoryRunt
   return Object.freeze(output);
 }
 
+function invalidAntigravityRuntime(): never {
+  throw new ProviderControlPlaneError(
+    "INVALID_FACTORY_INPUT",
+    "Antigravity CLI provider factory runtime is malformed"
+  );
+}
+
+function snapshotAntigravityExecutor(value: unknown): SupervisedCliExecutor {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return invalidAntigravityRuntime();
+  }
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  let prototype: object | null;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+    const candidate: unknown = Object.getPrototypeOf(value);
+    if (candidate !== null && typeof candidate !== "object") {
+      return invalidAntigravityRuntime();
+    }
+    prototype = candidate;
+  } catch {
+    return invalidAntigravityRuntime();
+  }
+  if (
+    symbols.length !== 0
+    || (prototype !== Object.prototype && prototype !== null)
+    || Object.keys(descriptors).some((key) => !setHas(ANTIGRAVITY_EXECUTOR_KEYS, key))
+  ) {
+    return invalidAntigravityRuntime();
+  }
+  const execute = descriptors.execute;
+  if (
+    execute === undefined
+    || execute.enumerable !== true
+    || !("value" in execute)
+    || typeof execute.value !== "function"
+  ) {
+    return invalidAntigravityRuntime();
+  }
+  return Object.freeze({
+    execute: execute.value as SupervisedCliExecutor["execute"]
+  });
+}
+
+function snapshotAntigravityFactoryRuntime(value: unknown): {
+  readonly executor: SupervisedCliExecutor;
+} {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return invalidAntigravityRuntime();
+  }
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  let prototype: object | null;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+    const candidate: unknown = Object.getPrototypeOf(value);
+    if (candidate !== null && typeof candidate !== "object") {
+      return invalidAntigravityRuntime();
+    }
+    prototype = candidate;
+  } catch {
+    return invalidAntigravityRuntime();
+  }
+  if (
+    symbols.length !== 0
+    || (prototype !== Object.prototype && prototype !== null)
+    || Object.keys(descriptors).some((key) => !setHas(ANTIGRAVITY_RUNTIME_KEYS, key))
+  ) {
+    return invalidAntigravityRuntime();
+  }
+  const executor = descriptors.executor;
+  if (
+    executor === undefined
+    || executor.enumerable !== true
+    || !("value" in executor)
+  ) {
+    return invalidAntigravityRuntime();
+  }
+  return Object.freeze({
+    executor: snapshotAntigravityExecutor(executor.value)
+  });
+}
+
+const antigravityFactory: ProviderAdapterFactoryDefinition = {
+  id: "antigravity-cli-adapter-factory",
+  createAdapter(input) {
+    const runtime = snapshotAntigravityFactoryRuntime(input.runtime);
+    return createAntigravityCliReasoningProvider(
+      runtime.executor,
+      input.resolved.model.adapterModelId ?? input.resolved.model.id
+    );
+  }
+};
+
 const mockFactory: ProviderAdapterFactoryDefinition = {
   id: "mock-model-adapter-factory",
   createAdapter(input) {
@@ -384,6 +490,45 @@ const geminiFactory: ProviderAdapterFactoryDefinition = {
         : { billingVerificationFactory: runtime.billingVerificationFactory })
     });
   }
+};
+
+const ANTIGRAVITY_CLI_PROVIDER_INPUT: ProviderDefinitionInput = {
+  id: ANTIGRAVITY_CLI_PROVIDER_ID,
+  displayName: "Antigravity CLI",
+  kind: "OTHER",
+  definitionVersion: "1",
+  capabilityVersion: "1",
+  adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
+  credentialRequirement: "NONE",
+  credentialPurposes: [],
+  models: [{
+    id: ANTIGRAVITY_CLI_MODEL_ID,
+    displayName: "Gemini 3.7 Flash (Medium) via Antigravity CLI",
+    adapterModelId: ANTIGRAVITY_CLI_MODEL_ID,
+    metadataVersion: "1",
+    capabilities: {
+      textGeneration: "SUPPORTED",
+      imageInput: "UNSUPPORTED",
+      toolCalling: "UNSUPPORTED",
+      streaming: "UNSUPPORTED",
+      reasoningControls: "UNSUPPORTED",
+      reasoningLevels: [],
+      persistentSession: "UNSUPPORTED",
+      resumableSession: "UNSUPPORTED",
+      sessionSurvivesClientAbort: "UNSUPPORTED",
+      sessionSurvivesProviderCancel: "UNSUPPORTED",
+      usageReporting: "UNSUPPORTED",
+      localExecution: "SUPPORTED",
+      remoteExecution: "SUPPORTED",
+      meteredExecution: "UNKNOWN",
+      dataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+      structuredOutput: "FINAL_ONLY",
+      cancellation: "INTERRUPT_LOCAL_PROCESS",
+      contextWindowTokens: "UNKNOWN",
+      outputLimitTokens: "UNKNOWN"
+    }
+  }],
+  adapterFactory: antigravityFactory
 };
 
 const MOCK_PROVIDER_INPUT: ProviderDefinitionInput = {
@@ -463,6 +608,7 @@ const GEMINI_API_PROVIDER_INPUT: ProviderDefinitionInput = {
   adapterFactory: geminiFactory
 };
 
+export const ANTIGRAVITY_CLI_PROVIDER_DEFINITION: ProviderDefinition = defineProvider(ANTIGRAVITY_CLI_PROVIDER_INPUT);
 export const MOCK_PROVIDER_DEFINITION: ProviderDefinition = defineProvider(MOCK_PROVIDER_INPUT);
 export const GEMINI_API_PROVIDER_DEFINITION: ProviderDefinition = defineProvider(GEMINI_API_PROVIDER_INPUT);
 
@@ -473,7 +619,7 @@ export function registerBuiltInProviders(
     REFLECT_APPLY_INTRINSIC(
       registerProviderDefinitions,
       registry,
-      [[MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT]]
+      [[MOCK_PROVIDER_INPUT, GEMINI_API_PROVIDER_INPUT, ANTIGRAVITY_CLI_PROVIDER_INPUT]]
     );
   } catch (error) {
     if (isProviderControlPlaneError(error)) throw error;
