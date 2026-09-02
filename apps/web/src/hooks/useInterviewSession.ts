@@ -840,8 +840,10 @@ export function useInterviewSession(
 
   const startSession = useCallback(
     async (customSessionId?: SessionId): Promise<void> => {
-      if (isSessionStarted && sessionStatus === "ACTIVE") {
-        throw new Error("Cannot start a new session while an interview is active");
+      if (sessionId !== null && sessionStatus === "ACTIVE") {
+        throw new Error(
+          "Cannot start a new session while an active session is attached or awaiting recovery"
+        );
       }
       setError(null);
       const targetSessionId =
@@ -912,7 +914,6 @@ export function useInterviewSession(
     [
       beginSessionTransition,
       getCommandClient,
-      isSessionStarted,
       launchRendererStream,
       resetBoardSync,
       sessionId,
@@ -924,11 +925,13 @@ export function useInterviewSession(
   const recoverSession = useCallback(
     async (targetSessionId: SessionId): Promise<SessionStatus | null> => {
       if (
-        isSessionStarted
+        sessionId !== null
         && sessionStatus === "ACTIVE"
         && sessionId !== targetSessionId
       ) {
-        throw new Error("Cannot replace an active interview with another session");
+        throw new Error(
+          "Cannot replace an active or unresolved interview with another session"
+        );
       }
       setError(null);
       const transitionEpoch = await beginSessionTransition();
@@ -1008,7 +1011,6 @@ export function useInterviewSession(
     [
       beginSessionTransition,
       getCommandClient,
-      isSessionStarted,
       launchRendererStream,
       resetBoardSync,
       sessionId,
