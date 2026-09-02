@@ -4,8 +4,7 @@ import type { AddressInfo } from "node:net";
 import { z } from "zod";
 import {
   SessionIdSchema,
-  type LocalTransportSecurity,
-  type SessionId
+  type LocalTransportSecurity
 } from "../../../packages/domain/src/index.js";
 import {
   MAX_SPEECH_FRAME_DURATION_MS,
@@ -14,10 +13,10 @@ import {
   SpeechSampleRateSchema,
   SpeechStreamIdSchema
 } from "../../../packages/local-compute/src/index.js";
-import {
+import type {
   EphemeralAudioAssetStore,
   VoiceInputCoordinator,
-  type VoiceIngressResult
+  VoiceIngressResult
 } from "./voice-runtime.js";
 
 const VOICE_OPEN_PATH = "/v1/voice/streams";
