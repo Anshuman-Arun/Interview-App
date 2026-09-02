@@ -1947,6 +1947,12 @@ function sanitizeHandshake(
   return Object.freeze({
     ...(handshake.componentVersion === undefined ? {} : { componentVersion: sanitizeDiagnosticText(redactKnownSecrets(handshake.componentVersion, secretValues)) }),
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
+    ...(handshake.workerType === undefined
+      ? {}
+      : { workerType: sanitizeDiagnosticText(redactKnownSecrets(handshake.workerType, secretValues)) }),
+    ...(handshake.runtimeVersion === undefined
+      ? {}
+      : { runtimeVersion: sanitizeDiagnosticText(redactKnownSecrets(handshake.runtimeVersion, secretValues)) }),
     ...(handshake.modelVersionOrHash === undefined ? {} : { modelVersionOrHash: sanitizeDiagnosticText(redactKnownSecrets(handshake.modelVersionOrHash, secretValues)) }),
     ...(capabilities === undefined ? {} : { capabilities: Object.freeze(capabilities) }),
     ...(handshake.metadata === undefined ? {} : { metadata: handshake.metadata })
