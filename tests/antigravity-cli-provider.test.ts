@@ -436,8 +436,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     const executor = {
       prefix: "receiver:",
       async execute(
-        this: { readonly prefix: string },
-        _request: SupervisedCliExecutionRequest
+        this: { readonly prefix: string }
       ): Promise<SupervisedCliExecutionResult> {
         if (this.prefix !== "receiver:") {
           throw new Error("receiver was lost");
