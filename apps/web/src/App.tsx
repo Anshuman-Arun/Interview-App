@@ -21,10 +21,12 @@ import {
 import { useProductNavigation } from "./navigation/useProductNavigation.js";
 import type { ProductPageId } from "./components/ProductFrame.js";
 import { ReviewReadPanel } from "./pages/ReviewReadPanel.js";
+import { useAppearance } from "./appearance/AppearanceProvider.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
 
 export const App: React.FC = () => {
+  const { resolvedTheme } = useAppearance();
   const [showSettings, setShowSettings] = useState(false);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
@@ -750,6 +752,7 @@ export const App: React.FC = () => {
                 <div className="flex-1 relative bg-slate-100/50">
                   <WhiteboardCanvas
                     adapter={whiteboardAdapter}
+                    colorScheme={resolvedTheme}
                     readOnly={
                       !session.isSessionStarted
                       || session.sessionStatus !== "ACTIVE"

@@ -25,6 +25,7 @@ export interface WhiteboardCanvasProps {
   readonly className?: string;
   readonly style?: React.CSSProperties;
   readonly readOnly?: boolean;
+  readonly colorScheme?: "light" | "dark";
 }
 
 export interface WhiteboardCanvasMountHandle {
@@ -81,7 +82,8 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
   onNormalizedBoardChange,
   className = "whiteboard-canvas-container w-full h-full min-h-[380px]",
   style,
-  readOnly = false
+  readOnly = false,
+  colorScheme = "light"
 }) => {
   const standaloneAdapter = useMemo(() => new TldrawWhiteboardAdapter(), []);
   const effectiveAdapter = adapter ?? standaloneAdapter;
@@ -164,6 +166,7 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
     >
       <Tldraw
         assetUrls={TLDRAW_ASSET_URLS}
+        colorScheme={colorScheme}
         initialState="draw"
         onMount={handleMount}
       />

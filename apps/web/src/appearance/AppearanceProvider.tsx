@@ -16,6 +16,7 @@ import {
   type BorderStyle,
   type CornerStyle,
   type InterfaceScale,
+  type ResolvedTheme,
   type ThemeMode
 } from "./appearance.js";
 
@@ -32,6 +33,7 @@ const SCALE_FACTORS: Record<InterfaceScale, number> = {
 
 interface AppearanceContextValue {
   readonly settings: AppearanceSettings;
+  readonly resolvedTheme: ResolvedTheme;
   readonly setTheme: (theme: ThemeMode) => void;
   readonly setAccent: (accent: AccentName) => void;
   readonly setAccentIntensity: (accentIntensity: number) => void;
@@ -114,8 +116,11 @@ export function AppearanceProvider({
     setSettings((current) => normalizeAppearance({ ...current, ...next }));
   }, []);
 
+  const resolvedTheme = resolveTheme(settings.theme, prefersDark);
+
   const value = useMemo<AppearanceContextValue>(() => ({
     settings,
+    resolvedTheme,
     setTheme: (theme) => patch({ theme }),
     setAccent: (accent) => patch({ accent }),
     setAccentIntensity: (accentIntensity) => patch({ accentIntensity }),
@@ -123,7 +128,7 @@ export function AppearanceProvider({
     setCorners: (corners) => patch({ corners }),
     setBorders: (borders) => patch({ borders }),
     reset: () => setSettings(DEFAULT_APPEARANCE)
-  }), [patch, settings]);
+  }), [patch, resolvedTheme, settings]);
 
   return (
     <AppearanceContext.Provider value={value}>

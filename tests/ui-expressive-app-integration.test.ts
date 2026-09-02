@@ -30,6 +30,7 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("controls={session.voiceControls}");
 
     expect(app).toContain("<WhiteboardCanvas");
+    expect(app).toContain("colorScheme={resolvedTheme}");
     expect(app).toContain("onEditorMount={handleWhiteboardEditorMount}");
     expect(app).toContain("onNormalizedBoardChange={(change)");
     expect(app).toContain("session.submitWhiteboardMutation(change)");
@@ -71,6 +72,7 @@ describe("expressive product integration invariants", () => {
 
     expect(whiteboard).toContain('@tldraw/assets/imports.vite.js');
     expect(whiteboard).toContain("assetUrls={TLDRAW_ASSET_URLS}");
+    expect(whiteboard).toContain("colorScheme={colorScheme}");
     expect(whiteboard).toContain('initialState="draw"');
   });
 
