@@ -67,6 +67,13 @@ export class TerminalSessionOutcomeUnknownError extends Error {
   }
 }
 
+export class TerminalSessionTransitionSupersededError extends Error {
+  public constructor() {
+    super("Terminal session transition was superseded by a newer session transition");
+    this.name = "TerminalSessionTransitionSupersededError";
+  }
+}
+
 export interface UseInterviewSessionOptions {
   readonly baseUrl?: string;
   readonly rendererStreamUrl?: string;
@@ -1049,10 +1056,14 @@ export function useInterviewSession(
     transitionEpoch: number,
     originalError: unknown
   ): Promise<void> => {
-    if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+    if (sessionTransitionEpochRef.current !== transitionEpoch) {
+      throw new TerminalSessionTransitionSupersededError();
+    }
     try {
       const summary = await client.getSessionSummary(targetSessionId);
-      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+      if (sessionTransitionEpochRef.current !== transitionEpoch) {
+        throw new TerminalSessionTransitionSupersededError();
+      }
       if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
         settleTerminalSession(summary.status);
         setError(null);
@@ -1070,7 +1081,10 @@ export function useInterviewSession(
       failClosedUnknownTerminalOutcome();
     } catch (reconciliationError) {
       if (reconciliationError === originalError) throw originalError;
-      if (reconciliationError instanceof TerminalSessionOutcomeUnknownError) {
+      if (
+        reconciliationError instanceof TerminalSessionOutcomeUnknownError
+        || reconciliationError instanceof TerminalSessionTransitionSupersededError
+      ) {
         throw reconciliationError;
       }
       failClosedUnknownTerminalOutcome();
@@ -1087,7 +1101,9 @@ export function useInterviewSession(
       const client = getCommandClient();
       try {
         await client.completeSession(sessionId, summary);
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) {
+          throw new TerminalSessionTransitionSupersededError();
+        }
         settleTerminalSession("COMPLETED");
       } catch (err) {
         await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
@@ -1112,7 +1128,9 @@ export function useInterviewSession(
       const client = getCommandClient();
       try {
         await client.archiveSession(sessionId, reason);
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) {
+          throw new TerminalSessionTransitionSupersededError();
+        }
         settleTerminalSession("ARCHIVED");
       } catch (err) {
         await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
