@@ -122,22 +122,48 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       };
       break;
     }
+    case "QUANT_TRADING_ACTION_ACCEPTED": {
+      const quantTrading = state.quantTrading;
+      if (quantTrading === undefined) throw new Error("Quant Trading scenario is not initialized");
+      if (
+        state.status !== "ACTIVE"
+        || quantTrading.result !== undefined
+        || quantTrading.pendingAction !== undefined
+      ) {
+        throw new Error("Quant Trading candidate action cannot be accepted in the current state");
+      }
+      next = {
+        ...state,
+        quantTrading: {
+          ...quantTrading,
+          pendingAction: event.payload.action
+        }
+      };
+      break;
+    }
     case "QUANT_TRADING_ROUND_RESOLVED": {
       const quantTrading = state.quantTrading;
       if (quantTrading === undefined) throw new Error("Quant Trading scenario is not initialized");
       if (state.status !== "ACTIVE" || quantTrading.result !== undefined) {
         throw new Error("Quant Trading scenario is already complete");
       }
+      if (quantTrading.pendingAction === undefined) {
+        throw new Error("Quant Trading round resolution requires an accepted candidate action");
+      }
       if (quantTrading.rounds.length >= 256) {
         throw new Error("Quant Trading round history exceeds the maximum size");
       }
-      if (event.payload.evidence.round !== quantTrading.rounds.length + 1) {
-        throw new Error("Quant Trading round resolution is not contiguous");
+      if (
+        event.payload.evidence.round !== quantTrading.rounds.length + 1
+        || JSON.stringify(event.payload.evidence.studentAction) !== JSON.stringify(quantTrading.pendingAction)
+      ) {
+        throw new Error("Quant Trading round resolution does not match the accepted action");
       }
       next = {
         ...state,
         quantTrading: {
           ...quantTrading,
+          pendingAction: undefined,
           rounds: [...quantTrading.rounds, event.payload.evidence]
         }
       };
@@ -146,8 +172,12 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "QUANT_TRADING_SCENARIO_COMPLETED": {
       const quantTrading = state.quantTrading;
       if (quantTrading === undefined) throw new Error("Quant Trading scenario is not initialized");
-      if (state.status !== "ACTIVE" || quantTrading.result !== undefined) {
-        throw new Error("Quant Trading scenario is already complete");
+      if (
+        state.status !== "ACTIVE"
+        || quantTrading.result !== undefined
+        || quantTrading.pendingAction !== undefined
+      ) {
+        throw new Error("Quant Trading scenario is already complete or has an unresolved action");
       }
       const result = event.payload.result;
       if (
