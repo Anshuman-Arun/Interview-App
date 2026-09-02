@@ -262,6 +262,14 @@ describe("Antigravity CLI one-turn protocol", () => {
         result: { status: "SUCCESS", num_turns: 1, structured_output: PROPOSAL }
       }) + "\n",
       antigravityStream() + "hostile trailing terminal text\n",
+      antigravityStream().replace(
+        '"permission_mode":"request-review"',
+        '"permission_mode":"always-proceed"'
+      ),
+      antigravityStream().replace(
+        '"model":"' + ANTIGRAVITY_CLI_MODEL_ID + '"',
+        '"model":"unexpected-model"'
+      ),
       antigravityStream(PROPOSAL, [{
         event: "step_update",
         step_update: {
