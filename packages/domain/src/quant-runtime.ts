@@ -264,6 +264,39 @@ export const QuantTradingPublicStateSchema = z.object({
 export type QuantTradingPublicState = z.infer<typeof QuantTradingPublicStateSchema>;
 
 const QuantResearchVersionSchema = z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/u);
+const QuantResearchScoreSchema = z.number().int().min(0).max(100);
+const QuantResearchEvidenceCategorySchema = z.enum([
+  "NUMERICAL_CORRECTNESS",
+  "CALIBRATION",
+  "ADAPTATION",
+  "SAMPLE_EFFICIENCY",
+  "CONSISTENCY",
+  "OBJECTIVE_QUALITY",
+  "CONSTRAINT_DISCIPLINE",
+  "ROBUSTNESS"
+]);
+const QuantResearchMetricsPublicSchema = z.object({
+  NUMERICAL_CORRECTNESS: QuantResearchScoreSchema.optional(),
+  CALIBRATION: QuantResearchScoreSchema.optional(),
+  ADAPTATION: QuantResearchScoreSchema.optional(),
+  SAMPLE_EFFICIENCY: QuantResearchScoreSchema.optional(),
+  CONSISTENCY: QuantResearchScoreSchema.optional(),
+  OBJECTIVE_QUALITY: QuantResearchScoreSchema.optional(),
+  CONSTRAINT_DISCIPLINE: QuantResearchScoreSchema.optional(),
+  ROBUSTNESS: QuantResearchScoreSchema.optional()
+}).strict();
+export const QuantResearchCompletionPublicSchema = z.object({
+  overallScore: QuantResearchScoreSchema,
+  metrics: QuantResearchMetricsPublicSchema,
+  evidence: z.array(z.object({
+    category: QuantResearchEvidenceCategorySchema,
+    stage: z.string().min(1).max(128),
+    score: QuantResearchScoreSchema,
+    summary: z.string().min(1).max(1_000)
+  }).strict()).max(16)
+}).strict();
+export type QuantResearchCompletionPublic = z.infer<typeof QuantResearchCompletionPublicSchema>;
+
 const QuantResearchPublicValueSchema = z.union([
   FiniteNumberSchema,
   z.string().max(4_000),
@@ -292,13 +325,21 @@ export const QuantResearchPublicStateSchema = z.object({
     value: QuantResearchPublicValueSchema
   }).strict()).max(128),
   acceptedActionCount: NonnegativeSafeIntegerSchema.max(64),
-  actionLimit: PositiveSafeIntegerSchema.max(64)
+  actionLimit: PositiveSafeIntegerSchema.max(64),
+  completion: QuantResearchCompletionPublicSchema.optional()
 }).strict().superRefine((value, context) => {
   if (value.acceptedActionCount > value.actionLimit) {
     context.addIssue({
       code: "custom",
       path: ["acceptedActionCount"],
       message: "Quant Research accepted action count cannot exceed its action limit"
+    });
+  }
+  if ((value.status === "COMPLETE") !== (value.completion !== undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["completion"],
+      message: "Quant Research completion metrics must exist exactly for completed state"
     });
   }
 });
