@@ -561,6 +561,10 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     const speech = await voiceClient.openStream(sessionId);
     const onset = await speech.sendFrame(microphoneFrame(0.2));
     expect(onset.events.some((event) => event.type === "SPEECH_STARTED")).toBe(true);
+    await waitFor(
+      () => server?.runtime.rendererStreamServer.activeConnectionCount() === 0,
+      "authoritative renderer interruption"
+    );
 
     const afterOnset = writer.getState();
     expect(afterOnset.generations[oldGeneration.generationId]?.status).toBe("SUPERSEDED");
