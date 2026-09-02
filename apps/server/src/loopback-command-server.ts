@@ -26,7 +26,10 @@ import {
   QuantTraderActionError
 } from "../../../packages/local-compute/src/index.js";
 import { MAX_REPLAY_IDENTIFIER_CHARS } from "../../../packages/replay/src/index.js";
-import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import {
+  LegacyUninitializedQuantSessionError,
+  type SessionRecoveryCoordinator
+} from "./session-recovery-coordinator.js";
 import type { SessionReadService } from "./session-read-service.js";
 import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import type { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
@@ -778,6 +781,13 @@ function classifyError(error: unknown): ProtocolHttpError {
   if (error instanceof ProtocolHttpError) return error;
   if (error instanceof RequestIdConflictError) {
     return new ProtocolHttpError(409, "CONFLICT", "RequestId conflicts with an earlier command");
+  }
+  if (error instanceof LegacyUninitializedQuantSessionError) {
+    return new ProtocolHttpError(
+      409,
+      "CONFLICT",
+      "Legacy Quant session has no deterministic scenario state; start a new Quant session"
+    );
   }
   if (error instanceof QuantTraderActionError) {
     const invalid = new Set([
