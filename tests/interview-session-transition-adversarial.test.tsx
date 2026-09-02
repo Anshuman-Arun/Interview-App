@@ -397,7 +397,7 @@ describe("interview session transition authority", () => {
     expect(rendered.current().baseUrl).toBe(BASE_URL);
     expect(rendered.current().sessionId).toBe(sessionId);
     expect(rendered.current().error).toContain(
-      "cannot change while an interview is active"
+      "cannot change while an active session"
     );
 
     act(() => rendered.current().disconnect());
@@ -872,6 +872,12 @@ describe("interview session transition authority", () => {
       .rejects.toThrow("Cannot submit input without an active session");
     expect(rendered.current().isConnected).toBe(false);
     expect(rendered.current().isStreaming).toBe(false);
+
+    act(() => {
+      rendered.current().setBaseUrl(OTHER_BASE_URL);
+    });
+    expect(rendered.current().baseUrl).toBe(BASE_URL);
+    expect(rendered.current().error).toContain("awaiting recovery");
 
     await act(async () => {
       rendered.root.unmount();
