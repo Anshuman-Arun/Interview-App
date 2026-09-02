@@ -84,6 +84,11 @@ export class BrowserVoiceStream {
   private sequence = 0;
   private timestampMs = 0;
   private closed = false;
+  private frameRequestInFlight = false;
+  private resamplerSourceRate: number | undefined;
+  private sourceSamplesSeen = 0;
+  private targetSamplesEmitted = 0;
+  private previousSourceSample: number | undefined;
 
   public constructor(
     private readonly client: BrowserVoiceClient,
@@ -93,6 +98,9 @@ export class BrowserVoiceStream {
 
   public async sendFrame(frame: AudioFrame, signal?: AbortSignal): Promise<BrowserVoiceFrameResult> {
     if (this.closed) throw new Error("Voice stream is closed");
+    if (this.frameRequestInFlight) {
+      throw new Error("Voice stream does not permit overlapping frame requests");
+    }
     if (
       frame.channelCount !== 1
       || !(frame.samples instanceof Float32Array)
@@ -100,44 +108,56 @@ export class BrowserVoiceStream {
     ) {
       throw new Error("Voice transport accepts non-empty mono Float32 microphone frames only");
     }
-    if (!Number.isFinite(frame.sampleRate) || frame.sampleRate <= 0) {
-      throw new Error("Microphone frame sample rate is invalid");
-    }
-    const targetLength = resampledLength(
-      frame.samples.length,
-      frame.sampleRate,
-      TARGET_SPEECH_SAMPLE_RATE
-    );
-    if (targetLength < 1 || targetLength > TARGET_SPEECH_SAMPLE_RATE / 10) {
-      throw new Error("Microphone frame exceeds the bounded speech duration");
+
+    const preview = previewStreamingResample({
+      samples: frame.samples,
+      sourceRate: frame.sampleRate,
+      targetRate: TARGET_SPEECH_SAMPLE_RATE,
+      previousSourceRate: this.resamplerSourceRate,
+      sourceSamplesSeen: this.sourceSamplesSeen,
+      targetSamplesEmitted: this.targetSamplesEmitted,
+      previousSourceSample: this.previousSourceSample
+    });
+    if (
+      preview.samples.length < 1
+      || preview.samples.length > TARGET_SPEECH_SAMPLE_RATE / 10
+    ) {
+      throw new Error("Microphone frame exceeds the bounded speech duration after resampling");
     }
 
-    const samples = resampleMono(
-      frame.samples,
-      frame.sampleRate,
-      TARGET_SPEECH_SAMPLE_RATE,
-      targetLength
-    );
     const admittedSequence = this.sequence;
-    const result = await this.client.sendFrame({
-      sessionId: this.sessionId,
-      streamId: this.streamId,
-      sequence: admittedSequence,
-      timestampMs: this.timestampMs,
-      samples,
-      ...(signal === undefined ? {} : { signal })
-    });
-    this.sequence += 1;
-    this.timestampMs += samples.length / TARGET_SPEECH_SAMPLE_RATE * 1_000;
-    if (result.terminal) this.closed = true;
-    const carryCurrentFrameToNextStream = result.events.some((event) =>
-      event.type === "UTTERANCE_FINALIZED"
-      && event.finalizationReason === "MAX_DURATION"
-      && event.sourceAudioBasis.lastSequence < admittedSequence
-    );
-    return carryCurrentFrameToNextStream
-      ? { ...result, carryCurrentFrameToNextStream: true }
-      : result;
+    this.frameRequestInFlight = true;
+    try {
+      const result = await this.client.sendFrame({
+        sessionId: this.sessionId,
+        streamId: this.streamId,
+        sequence: admittedSequence,
+        timestampMs: this.timestampMs,
+        samples: preview.samples,
+        ...(signal === undefined ? {} : { signal })
+      });
+
+      // Commit resampler phase only after the transport result is admitted.
+      // A failed/aborted request may therefore be retried without consuming
+      // local PCM or advancing sequence/timestamp identity.
+      this.resamplerSourceRate = preview.sourceRate;
+      this.sourceSamplesSeen = preview.sourceSamplesSeen;
+      this.targetSamplesEmitted = preview.targetSamplesEmitted;
+      this.previousSourceSample = preview.previousSourceSample;
+      this.sequence += 1;
+      this.timestampMs += preview.samples.length / TARGET_SPEECH_SAMPLE_RATE * 1_000;
+      if (result.terminal) this.closed = true;
+      const carryCurrentFrameToNextStream = result.events.some((event) =>
+        event.type === "UTTERANCE_FINALIZED"
+        && event.finalizationReason === "MAX_DURATION"
+        && event.sourceAudioBasis.lastSequence < admittedSequence
+      );
+      return carryCurrentFrameToNextStream
+        ? { ...result, carryCurrentFrameToNextStream: true }
+        : result;
+    } finally {
+      this.frameRequestInFlight = false;
+    }
   }
 
   public async flush(signal?: AbortSignal): Promise<BrowserVoiceFrameResult> {
@@ -634,41 +654,130 @@ function encodeF32Le(samples: Float32Array): ArrayBuffer {
   return buffer;
 }
 
-function resampledLength(
-  sampleCount: number,
-  sourceRate: number,
-  targetRate: number
-): number {
-  const scaled = sampleCount * targetRate / sourceRate;
-  if (!Number.isFinite(scaled) || scaled > Number.MAX_SAFE_INTEGER) {
-    throw new Error("Microphone frame resampling size is invalid");
-  }
-  return Math.max(1, Math.round(scaled));
+interface StreamingResamplePreview {
+  readonly samples: Float32Array;
+  readonly sourceRate: number;
+  readonly sourceSamplesSeen: number;
+  readonly targetSamplesEmitted: number;
+  readonly previousSourceSample: number;
 }
 
-function resampleMono(
-  samples: Float32Array,
-  sourceRate: number,
-  targetRate: number,
-  targetLength: number
-): Float32Array {
-  if (sourceRate === targetRate) return new Float32Array(samples);
-  const output = new Float32Array(targetLength);
-  if (samples.length === 1) {
-    output.fill(samples[0] ?? 0);
-    return output;
+function previewStreamingResample(input: {
+  readonly samples: Float32Array;
+  readonly sourceRate: number;
+  readonly targetRate: number;
+  readonly previousSourceRate: number | undefined;
+  readonly sourceSamplesSeen: number;
+  readonly targetSamplesEmitted: number;
+  readonly previousSourceSample: number | undefined;
+}): StreamingResamplePreview {
+  if (
+    !Number.isSafeInteger(input.sourceRate)
+    || input.sourceRate < 8_000
+    || input.sourceRate > 384_000
+    || !Number.isSafeInteger(input.targetRate)
+    || input.targetRate <= 0
+  ) {
+    throw new Error("Microphone frame resampling size is invalid");
   }
-  const scale = (samples.length - 1) / Math.max(1, targetLength - 1);
-  for (let index = 0; index < targetLength; index += 1) {
-    const position = index * scale;
-    const leftIndex = Math.floor(position);
-    const rightIndex = Math.min(samples.length - 1, leftIndex + 1);
-    const fraction = position - leftIndex;
-    const left = samples[leftIndex] ?? 0;
-    const right = samples[rightIndex] ?? left;
-    output[index] = left + (right - left) * fraction;
+  if (
+    input.previousSourceRate !== undefined
+    && input.previousSourceRate !== input.sourceRate
+  ) {
+    throw new Error("Microphone sample rate changed within an active voice stream");
   }
-  return output;
+  if (
+    !Number.isSafeInteger(input.sourceSamplesSeen)
+    || input.sourceSamplesSeen < 0
+    || !Number.isSafeInteger(input.targetSamplesEmitted)
+    || input.targetSamplesEmitted < 0
+  ) {
+    throw new Error("Microphone streaming resampler state is invalid");
+  }
+
+  const startSourceIndex = input.sourceSamplesSeen;
+  const endSourceIndex = startSourceIndex + input.samples.length - 1;
+  if (!Number.isSafeInteger(endSourceIndex)) {
+    throw new Error("Microphone frame resampling size is invalid");
+  }
+
+  const scaledEnd = endSourceIndex * input.targetRate;
+  if (!Number.isSafeInteger(scaledEnd)) {
+    throw new Error("Microphone frame resampling size is invalid");
+  }
+  const maximumTargetIndex = Math.floor(scaledEnd / input.sourceRate);
+  const outputLength = maximumTargetIndex - input.targetSamplesEmitted + 1;
+  if (
+    !Number.isSafeInteger(outputLength)
+    || outputLength < 1
+    || outputLength > input.targetRate / 10
+  ) {
+    throw new Error("Microphone frame exceeds the bounded speech duration after resampling");
+  }
+
+  if (input.sourceRate === input.targetRate) {
+    if (outputLength !== input.samples.length) {
+      throw new Error("Microphone streaming resampler lost identity-rate continuity");
+    }
+    const last = input.samples[input.samples.length - 1];
+    if (last === undefined) throw new Error("Microphone frame is unexpectedly empty");
+    return {
+      samples: new Float32Array(input.samples),
+      sourceRate: input.sourceRate,
+      sourceSamplesSeen: endSourceIndex + 1,
+      targetSamplesEmitted: input.targetSamplesEmitted + outputLength,
+      previousSourceSample: last
+    };
+  }
+
+  const output = new Float32Array(outputLength);
+  const sampleAt = (globalIndex: number): number => {
+    if (globalIndex === startSourceIndex - 1) {
+      if (input.previousSourceSample === undefined) {
+        throw new Error("Microphone streaming resampler lost its boundary sample");
+      }
+      return input.previousSourceSample;
+    }
+    const localIndex = globalIndex - startSourceIndex;
+    const sample = input.samples[localIndex];
+    if (
+      !Number.isSafeInteger(localIndex)
+      || localIndex < 0
+      || localIndex >= input.samples.length
+      || sample === undefined
+    ) {
+      throw new Error("Microphone streaming resampler requested unavailable PCM");
+    }
+    return sample;
+  };
+
+  for (let offset = 0; offset < outputLength; offset += 1) {
+    const targetIndex = input.targetSamplesEmitted + offset;
+    const numerator = targetIndex * input.sourceRate;
+    if (!Number.isSafeInteger(numerator)) {
+      throw new Error("Microphone frame resampling size is invalid");
+    }
+    const leftIndex = Math.floor(numerator / input.targetRate);
+    const remainder = numerator - leftIndex * input.targetRate;
+    const rightIndex = remainder === 0 ? leftIndex : leftIndex + 1;
+    if (rightIndex > endSourceIndex || leftIndex < startSourceIndex - 1) {
+      throw new Error("Microphone streaming resampler crossed an unavailable boundary");
+    }
+    const left = sampleAt(leftIndex);
+    const right = sampleAt(rightIndex);
+    const fraction = remainder / input.targetRate;
+    output[offset] = left + (right - left) * fraction;
+  }
+
+  const last = input.samples[input.samples.length - 1];
+  if (last === undefined) throw new Error("Microphone frame is unexpectedly empty");
+  return {
+    samples: output,
+    sourceRate: input.sourceRate,
+    sourceSamplesSeen: endSourceIndex + 1,
+    targetSamplesEmitted: input.targetSamplesEmitted + outputLength,
+    previousSourceSample: last
+  };
 }
 
 function finiteTimestamp(value: number): string {
