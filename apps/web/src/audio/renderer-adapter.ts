@@ -75,23 +75,24 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
       if (resolver === undefined) {
         resolved = { source: input.audioRef };
       } else {
-        let resolutionTimedOut = false;
-        const resolutionTimeout = globalThis.setTimeout(() => {
-          resolutionTimedOut = true;
-          controller.abort();
-        }, AUDIO_SOURCE_RESOLUTION_TIMEOUT_MS);
+        const resolutionPromise = Promise.resolve(
+          resolver(input.audioRef, input.deliveryId, controller.signal)
+        );
         try {
-          resolved = await resolver(input.audioRef, input.deliveryId, controller.signal);
+          resolved = await waitForAudioResolution(
+            resolutionPromise,
+            controller,
+            AUDIO_SOURCE_RESOLUTION_TIMEOUT_MS
+          );
         } catch (error) {
-          if (resolutionTimedOut) {
-            throw new RendererPresentationNotExposedError(
-              "Audio source resolution timed out before physical playback",
-              { cause: error }
-            );
-          }
+          // A cancellation-ignoring resolver may still produce an owned Blob
+          // URL later. Do not await it, but reclaim any late resource it hands
+          // back after this delivery has already lost admission.
+          void resolutionPromise.then(
+            (lateResolved) => releaseLateResolvedSource(lateResolved),
+            () => undefined
+          );
           throw error;
-        } finally {
-          globalThis.clearTimeout(resolutionTimeout);
         }
       }
       validateResolvedSource(resolved);
@@ -238,6 +239,52 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
       controller.abort();
     }
     this.pendingResolutions.clear();
+  }
+}
+
+async function waitForAudioResolution(
+  resolution: Promise<ResolvedAudioSource>,
+  controller: AbortController,
+  timeoutMs: number
+): Promise<ResolvedAudioSource> {
+  let timedOut = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => {
+      reject(new RendererPresentationNotExposedError(
+        timedOut
+          ? "Audio source resolution timed out before physical playback"
+          : "Audio source resolution was cancelled before physical playback"
+      ));
+    };
+    if (controller.signal.aborted) onAbort();
+    else controller.signal.addEventListener("abort", onAbort, { once: true });
+  });
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new RendererPresentationNotExposedError(
+        "Audio source resolution timed out before physical playback"
+      ));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([resolution, aborted, timeout]);
+  } finally {
+    if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
+    if (onAbort !== undefined) controller.signal.removeEventListener("abort", onAbort);
+  }
+}
+
+function releaseLateResolvedSource(value: unknown): void {
+  if (typeof value !== "object" || value === null) return;
+  try {
+    const release = Reflect.get(value, "release") as unknown;
+    if (typeof release === "function") Reflect.apply(release, value, []);
+  } catch {
+    // Late resource cleanup is best-effort; admission was already revoked.
   }
 }
 
