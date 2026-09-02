@@ -448,7 +448,43 @@ export const QuantTradingResultEventSchema = z.object({
   adverseSelectionPnL: QuantTradingFiniteNumberSchema,
   accountingInvariantHolds: z.boolean(),
   objectiveScore: z.number().int().min(0).max(100)
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (
+    value.roundsCompleted > value.plannedRounds
+    || value.completionRate !== value.roundsCompleted / value.plannedRounds
+    || (
+      value.completionStatus === "COMPLETED"
+      && value.roundsCompleted !== value.plannedRounds
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["roundsCompleted"],
+      message: "Quant Trading terminal round progress is inconsistent"
+    });
+  }
+  if (value.tradeCount !== value.finalPortfolio.tradeCount) {
+    context.addIssue({
+      code: "custom",
+      path: ["tradeCount"],
+      message: "Quant Trading terminal trade count must match final portfolio"
+    });
+  }
+  if (value.informedFlowCount + value.noiseFlowCount > value.roundsCompleted) {
+    context.addIssue({
+      code: "custom",
+      path: ["informedFlowCount"],
+      message: "Quant Trading terminal flow counts cannot exceed resolved rounds"
+    });
+  }
+  if (value.completionStatus === "RISK_STOPPED" && value.riskBreaches.length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["riskBreaches"],
+      message: "Risk-stopped Quant Trading result requires a recorded risk breach"
+    });
+  }
+});
 export type QuantTradingResultEvent = z.infer<typeof QuantTradingResultEventSchema>;
 
 const metadata = {
