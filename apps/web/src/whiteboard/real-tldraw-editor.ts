@@ -70,6 +70,10 @@ export class RealTldrawEditorBridge implements TldrawEditor {
     return this.nativeEditor;
   }
 
+  public setReadOnly(readOnly: boolean): void {
+    this.nativeEditor.updateInstanceState({ isReadonly: readOnly });
+  }
+
   public getShape(id: string): TLShapeRecord | undefined {
     const shape = this.nativeEditor.getShape(toShapeId(id));
     return shape === undefined ? undefined : this.toLegacyShape(shape);
