@@ -621,8 +621,8 @@ function parseStrictJson(raw: string): unknown {
   };
 
   const parseNumber = (): void => {
-    const match = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/u.exec(
-      raw.slice(index)
+    const match = raw.slice(index).match(
+      /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/u
     );
     if (match === null || match[0].length === 0) {
       throw new Error("Invalid JSON number");
