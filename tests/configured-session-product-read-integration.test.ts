@@ -1,3 +1,4 @@
+import type { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -24,6 +25,10 @@ const TOKEN = "configured-read-integration-token-0000000000000001";
 const ORIGIN = "http://127.0.0.1:5173";
 
 type StartedServer = Awaited<ReturnType<typeof createAndStartServer>>;
+
+interface StoreWithDatabase {
+  readonly database: DatabaseSync;
+}
 
 describe("configured session product-read integration", () => {
   it("evaluates and replays an exact non-Ramsey Oxford session read-only across restart", async () => {
@@ -148,6 +153,66 @@ describe("configured session product-read integration", () => {
     } finally {
       if (server !== undefined) await server.stop();
       fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("fails product reads closed on schema-valid deterministic Quant Trading tampering", async () => {
+    let server: StartedServer | undefined;
+    try {
+      server = await startServer(":memory:");
+      const command = commandClient(server);
+      const reads = readClient(server);
+      const sessionId = newSessionId();
+      const configuration = InterviewSessionConfigurationSchema.parse({
+        configurationVersion: 1,
+        mode: "QUANT_TRADING",
+        scenario: {
+          id: "BASIC_MARKET_MAKING",
+          version: QUANT_TRADER_SCENARIO_VERSION
+        },
+        interventionPolicy: "STRICT"
+      });
+      await command.startConfiguredSession(sessionId, configuration);
+
+      const trading = new QuantTradingSessionCoordinator(server.registry.get(sessionId));
+      await trading.applyAction(
+        { type: "PASS" },
+        1,
+        createCommandEnvelope({
+          sessionId,
+          producer: "configured-read-tamper-test"
+        })
+      );
+
+      const db = (server.store as unknown as StoreWithDatabase).database;
+      const rows = db.prepare(
+        "SELECT sequence, event_json FROM session_events WHERE session_id = ? ORDER BY sequence"
+      ).all(sessionId) as Array<{ sequence: number; event_json: string }>;
+      const roundRow = rows.find((row) => {
+        const parsed = JSON.parse(row.event_json) as { readonly type?: unknown };
+        return parsed.type === "QUANT_TRADING_ROUND_RESOLVED";
+      });
+      if (roundRow === undefined) throw new Error("Expected persisted Quant Trading round");
+      const tampered = JSON.parse(roundRow.event_json) as {
+        type: string;
+        payload: { evidence: { fairValue: number } };
+      };
+      tampered.payload.evidence.fairValue += 1;
+      db.prepare(
+        "UPDATE session_events SET event_json = ? WHERE session_id = ? AND sequence = ?"
+      ).run(JSON.stringify(tampered), sessionId, roundRow.sequence);
+
+      const replay = await reads.getReplay(sessionId);
+      expect(replay).toMatchObject({
+        available: false,
+        reason: "AUTHORITATIVE_HISTORY_UNAVAILABLE"
+      });
+      const history = await reads.getHistory();
+      expect(history.sessions.find((item) => item.sessionId === sessionId)).toMatchObject({
+        readStatus: "UNAVAILABLE"
+      });
+    } finally {
+      if (server !== undefined) await server.stop();
     }
   });
 
