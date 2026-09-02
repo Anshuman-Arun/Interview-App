@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
@@ -103,7 +103,7 @@ describe("desktop local model runtime", () => {
       assets: [],
       baseRoot: root
     });
-    const liveName = liveView.root.slice(liveView.root.lastIndexOf(join("a", "b").slice(1, 2)) + 1);
+    const liveName = basename(liveView.root);
     const match = /^run-([1-9][0-9]*)-([0-9a-f]{32})-/u.exec(liveName);
     if (match?.[1] === undefined || match[2] === undefined) {
       throw new Error("Expected runtime view owner identity in generated directory");
