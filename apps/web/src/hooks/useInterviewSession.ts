@@ -993,12 +993,28 @@ export function useInterviewSession(
       || sessionStatus !== "ACTIVE"
       || !sessionMutationAdmissionRef.current
     ) return;
-    const coordinator = getBoardSyncCoordinator(sessionId);
-    const scheduler = getVisionScheduler(sessionId);
+    const targetSessionId = sessionId;
+    const coordinator = getBoardSyncCoordinator(targetSessionId);
+    const scheduler = getVisionScheduler(targetSessionId);
+    const isCurrentCoordinator = (): boolean =>
+      sessionMutationAdmissionRef.current
+      && boardSyncRef.current === coordinator
+      && boardSyncSessionRef.current === targetSessionId;
+    const wakeCurrentScheduler = (): void => {
+      if (
+        isCurrentCoordinator()
+        && scheduler !== undefined
+        && visionSchedulerRef.current === scheduler
+        && visionSchedulerSessionRef.current === targetSessionId
+      ) {
+        scheduler.wake();
+      }
+    };
+
     if (coordinator.snapshot().status === "UNINITIALIZED") {
       scheduler?.record(change);
-      await synchronizeWhiteboardFor(sessionId);
-      scheduler?.wake();
+      await synchronizeWhiteboardFor(targetSessionId);
+      wakeCurrentScheduler();
       return;
     }
     try {
@@ -1006,12 +1022,18 @@ export function useInterviewSession(
       // any vision work so the server can supersede stale inference promptly.
       const pending = coordinator.submit(change);
       scheduler?.record(change);
-      setWhiteboardSync(coordinator.snapshot());
+      if (isCurrentCoordinator()) {
+        setWhiteboardSync(coordinator.snapshot());
+      }
       await pending;
-      setWhiteboardSync(coordinator.snapshot());
-      scheduler?.wake();
+      if (isCurrentCoordinator()) {
+        setWhiteboardSync(coordinator.snapshot());
+      }
+      wakeCurrentScheduler();
     } catch (error) {
-      setWhiteboardSync(coordinator.snapshot());
+      if (isCurrentCoordinator()) {
+        setWhiteboardSync(coordinator.snapshot());
+      }
       throw error;
     }
   }, [
