@@ -82,8 +82,10 @@ describe("expressive product integration invariants", () => {
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
-    expect(app).toContain("Current interview is active. End or archive it before starting another.");
-    expect(app).toContain("key={sessionId}");
+    expect(app).toContain("Current interview is active. End or archive it before starting or reviewing another session.");
+    expect(app).toContain("hasActiveInterview");
+    expect(app).toContain("!hasActiveInterview");
+    expect(app).not.toContain("<SessionReviewModal");
   });
 
   it("route-locks ACTIVE interviews to the live workspace", () => {
@@ -184,15 +186,46 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("disabled={sessionEntryPending || sessionTerminalPending}");
   });
 
-  it("does not recover the already-current ACTIVE session from the live Sessions overlay", () => {
+  it("does not switch to any other ACTIVE session while one interview is live", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
 
-    expect(app).toContain("session.sessionId === targetSessionId");
-    expect(app).toContain('s.status === "ACTIVE" && s.sessionId === session.sessionId');
-    expect(app).toContain("s.sessionId === session.sessionId");
+    expect(app).toContain('(session.isSessionStarted && session.sessionStatus === "ACTIVE")');
+    expect(app).toContain('s.status === "ACTIVE"');
+    expect(app).toContain("hasActiveInterview");
+    expect(app).toContain("|| sessionTerminalPending");
+  });
+
+  it("does not read or render longitudinal review data inside a live interview", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain("!hasActiveInterview && historyRead !== null");
+    expect(app).toContain("!hasActiveInterview && historyLoading");
+    expect(app).toContain('hasActiveInterview ? "Session record"');
+    expect(app).toContain("Problem metadata is intentionally hidden during the live interview.");
+    expect(app).not.toContain("<SessionReviewModal");
+  });
+
+  it("locks all live mutation surfaces across terminal transitions", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const complete = app.slice(
+      app.indexOf("const handleCompleteSession"),
+      app.indexOf("const handleArchiveSession")
+    );
+
+    expect(complete.indexOf("whiteboardAdapter.setReadOnly(true)"))
+      .toBeGreaterThan(-1);
+    expect(complete.indexOf("whiteboardAdapter.setReadOnly(true)"))
+      .toBeLessThan(complete.indexOf("await session.voiceControls.disableMicrophone()"));
+    expect(app).toContain("retryDisabled={sessionEntryPending || sessionTerminalPending}");
     expect(app).toContain("|| sessionTerminalPending");
   });
 
