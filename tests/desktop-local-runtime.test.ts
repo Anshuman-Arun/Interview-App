@@ -17,6 +17,7 @@ import {
 import { DesktopLocalRuntimeComposition } from "../apps/desktop/src/runtime/composition.js";
 import {
   ManagedModelWorkerClient,
+  ManagedWorkerRecoveryExhaustedError,
   ManagedWorkerRequestTimeoutError,
   ManagedWorkerResponseError
 } from "../apps/desktop/src/runtime/managed-worker-client.js";
@@ -457,6 +458,69 @@ describe("desktop local model runtime", () => {
     })).rejects.toBeInstanceOf(ManagedWorkerRequestTimeoutError);
     expect(recycledInstance).toBe(workerInstance);
   });
+
+  it("bounds consecutive uncertain worker recycles and stops after exhaustion", async () => {
+    const token = "3".repeat(64);
+    const runtime = fixtureManager(
+      "speech-recycle-budget",
+      "speech",
+      "fixture-speech-1",
+      token
+    );
+    await runtime.start("speech-recycle-budget");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-recycle-budget",
+      "speech",
+      token
+    );
+
+    const firstInstance = client.workerInstanceIdentity();
+    await expect(
+      client.recycleAfterUncertainRequest(firstInstance)
+    ).resolves.toBeUndefined();
+    const secondInstance = client.workerInstanceIdentity();
+    expect(secondInstance).not.toBe(firstInstance);
+
+    await expect(
+      client.recycleAfterUncertainRequest(secondInstance)
+    ).resolves.toBeUndefined();
+    const thirdInstance = client.workerInstanceIdentity();
+    expect(thirdInstance).not.toBe(secondInstance);
+
+    await expect(
+      client.recycleAfterUncertainRequest(thirdInstance)
+    ).rejects.toBeInstanceOf(ManagedWorkerRecoveryExhaustedError);
+    expect(runtime.getStatus("speech-recycle-budget").state).toBe("STOPPED");
+  }, 20_000);
+
+  it("resets uncertain worker recycle budget after a healthy response", async () => {
+    const token = "2".repeat(64);
+    const runtime = fixtureManager(
+      "speech-recycle-reset",
+      "speech",
+      "fixture-speech-1",
+      token
+    );
+    await runtime.start("speech-recycle-reset");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-recycle-reset",
+      "speech",
+      token
+    );
+
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    await expect(client.postJson("/v1/vad", {
+      pcmF32Base64: "AAAAAA==",
+      sampleRate: 16_000,
+      streamId: "recycle-reset-health"
+    })).resolves.toEqual({ speechProbability: 0.875 });
+
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    expect(runtime.getStatus("speech-recycle-reset").state).toBe("READY");
+  }, 20_000);
 
   it("does not respawn a timed-out model worker after desktop lifecycle abort", async () => {
     const token = "5".repeat(64);
