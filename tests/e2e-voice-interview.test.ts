@@ -117,7 +117,8 @@ class BlockingIgnoringRecognizer implements SpeechRecognizer {
     this.signalReturned = resolve;
   });
 
-  public async recognize(input: RecognizerAudioInput, _signal: AbortSignal): Promise<unknown> {
+  public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
+    void signal;
     this.signalStarted();
     await this.gate;
     this.signalReturned();
