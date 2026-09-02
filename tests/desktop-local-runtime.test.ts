@@ -393,6 +393,68 @@ describe("desktop local model runtime", () => {
     })).rejects.toThrow("restarted during an active VAD stream");
   });
 
+  it("queues the second concrete Kokoro synthesis instead of racing the single native synthesizer", async () => {
+    const token = "9".repeat(64);
+    const runtime = fixtureManager(
+      "tts-serialize-fixture",
+      "tts",
+      "fixture-tts-1",
+      token,
+      "blocking-tts"
+    );
+    await runtime.start("tts-serialize-fixture");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "tts-serialize-fixture",
+      "tts",
+      token
+    );
+    const adapter = new ManagedKokoroRuntime(
+      client,
+      "/verified/model.ort",
+      "/verified/config.json"
+    );
+    const session = await adapter.initialize({
+      modelPath: "/verified/model.ort",
+      configPath: "/verified/config.json"
+    });
+    const firstRequestId = TtsRequestIdSchema.parse("tts-serialized-1");
+    const secondRequestId = TtsRequestIdSchema.parse("tts-serialized-2");
+    const first = session.synthesize({
+      requestId: firstRequestId,
+      text: "First serialized request.",
+      voice: "kokoro_af_heart",
+      language: "en-US",
+      speed: 1,
+      sampleRate: 24_000
+    });
+    await waitForStatus(runtime, "tts-serialize-fixture", (status) =>
+      status.stdout.lines.includes(`TTS_STARTED:${firstRequestId}`)
+    );
+
+    const second = session.synthesize({
+      requestId: secondRequestId,
+      text: "Second serialized request.",
+      voice: "kokoro_af_heart",
+      language: "en-US",
+      speed: 1,
+      sampleRate: 24_000
+    });
+    await Promise.resolve();
+    expect(runtime.getStatus("tts-serialize-fixture").stdout.lines)
+      .not.toContain(`TTS_STARTED:${secondRequestId}`);
+
+    if (session.cancel === undefined) throw new Error("Expected Kokoro runtime cancellation");
+    await session.cancel(firstRequestId);
+    await expect(first).rejects.toThrow("rejected");
+    await waitForStatus(runtime, "tts-serialize-fixture", (status) =>
+      status.stdout.lines.includes(`TTS_STARTED:${secondRequestId}`)
+    );
+
+    await session.cancel(secondRequestId);
+    await expect(second).rejects.toThrow("rejected");
+  });
+
   it("recovers through LocalRuntimeManager after a worker dies during inference", async () => {
     const root = temporaryRoot("desktop-model-restart-");
     const marker = join(root, "crashed.once");
