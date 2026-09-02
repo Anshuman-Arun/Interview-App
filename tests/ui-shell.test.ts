@@ -155,8 +155,8 @@ describe("UI Shell & KaTeX Math Rendering", () => {
       expect(markup).toContain("In a group of six people");
       expect(markup).toContain("three mutual acquaintances or three mutual strangers");
       expect(markup).toContain("Acquaintance is symmetric");
-      expect(markup).toContain("combinatorics");
-      expect(markup).toContain("graph theory");
+      expect(markup).not.toContain("combinatorics");
+      expect(markup).not.toContain("graph theory");
       expect(markup).not.toContain(sixPeopleProblem.private.canonicalSolution);
       expect(markup).not.toContain("protectedDisclosures");
     });

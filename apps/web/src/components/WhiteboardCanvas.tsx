@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { getAssetUrlsByImport } from "@tldraw/assets/imports.vite.js";
 import { Tldraw, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import {
@@ -14,6 +15,8 @@ import type {
   NormalizedStudentShapeChange
 } from "../whiteboard/normalized-board.js";
 
+const TLDRAW_ASSET_URLS = getAssetUrlsByImport();
+
 export interface WhiteboardCanvasProps {
   readonly adapter?: TldrawWhiteboardAdapter;
   readonly onEditorMount?: (editor: TldrawEditor) => void;
@@ -22,6 +25,7 @@ export interface WhiteboardCanvasProps {
   readonly className?: string;
   readonly style?: React.CSSProperties;
   readonly readOnly?: boolean;
+  readonly colorScheme?: "light" | "dark";
 }
 
 export interface WhiteboardCanvasMountHandle {
@@ -78,7 +82,8 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
   onNormalizedBoardChange,
   className = "whiteboard-canvas-container w-full h-full min-h-[380px]",
   style,
-  readOnly = false
+  readOnly = false,
+  colorScheme = "light"
 }) => {
   const standaloneAdapter = useMemo(() => new TldrawWhiteboardAdapter(), []);
   const effectiveAdapter = adapter ?? standaloneAdapter;
@@ -146,10 +151,7 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
   }, [cleanupMountedEditor]);
 
   useEffect(() => {
-    const mountedEditor = effectiveAdapter.getEditor();
-    if (mountedEditor instanceof RealTldrawEditorBridge) {
-      mountedEditor.getNativeEditor().updateInstanceState({ isReadonly: readOnly });
-    }
+    effectiveAdapter.setReadOnly(readOnly);
   }, [effectiveAdapter, readOnly]);
 
   return (
@@ -159,7 +161,12 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
       className={className}
       style={style}
     >
-      <Tldraw onMount={handleMount} />
+      <Tldraw
+        assetUrls={TLDRAW_ASSET_URLS}
+        colorScheme={colorScheme}
+        initialState="draw"
+        onMount={handleMount}
+      />
     </div>
   );
 };

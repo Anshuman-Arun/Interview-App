@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@tldraw/assets':
+        specifier: 5.3.2
+        version: 5.3.2
       katex:
         specifier: ^0.18.4
         version: 0.18.4
@@ -1257,6 +1260,10 @@ packages:
 
   '@tiptap/starter-kit@3.30.5':
     resolution: {integrity: sha512-cmDRvukpoqjQjhE96q+l3tCLNZZcJKehxK+00Sp9F4XbKecfM2QpZ2TRHh3vi8qhCeDQNyMoCqfNaqznIjLjIQ==}
+
+  '@tldraw/assets@5.3.2':
+    resolution: {integrity: sha512-wranD2D3HulSVDiLbNqTIIYW4C0Vhi5I4MaI/llNcWEzBVfD2kYlUm0ppOw0FqVcntdu4ahdgoPRHOKpcto39w==}
+    engines: {node: '>=22.12.0'}
 
   '@tldraw/driver@5.3.2':
     resolution: {integrity: sha512-OJJwgdoyJv3G2ejvQoqnNKsLphOE8SBCUkiGSZibUCt8tWFrTjvhn7aLxPcXZXtQlxHWmyE4jBvQ56Swguv/rg==}
@@ -3370,6 +3377,10 @@ snapshots:
       '@tiptap/extension-underline': 3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5))
       '@tiptap/extensions': 3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5))(@tiptap/pm@3.30.5)
       '@tiptap/pm': 3.30.5
+
+  '@tldraw/assets@5.3.2':
+    dependencies:
+      '@tldraw/utils': 5.3.2
 
   '@tldraw/driver@5.3.2(@floating-ui/dom@1.8.0)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:

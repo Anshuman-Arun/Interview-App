@@ -1,5 +1,15 @@
 export const DESKTOP_BOOTSTRAP_CHANNEL = "interview-desktop:get-bootstrap";
+export const DESKTOP_ZOOM_CHANNEL = "interview-desktop:set-zoom";
+export const DESKTOP_ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 export const DESKTOP_AUTH_HEADER_VALUE = "desktop-managed-v1";
+
+export const DESKTOP_ZOOM_FACTORS = [0.875, 1, 1.125, 1.25] as const;
+export type DesktopZoomFactor = typeof DESKTOP_ZOOM_FACTORS[number];
+
+export function isDesktopZoomFactor(value: unknown): value is DesktopZoomFactor {
+  return typeof value === "number"
+    && DESKTOP_ZOOM_FACTORS.some((factor) => factor === value);
+}
 
 export interface DesktopRendererBootstrap {
   readonly protocolVersion: 1;
