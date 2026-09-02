@@ -43,7 +43,35 @@ export class SessionRecoveryCoordinator {
   ) {}
 
   public listSessions(): readonly StoredSessionSummary[] {
-    return this.store?.listSessions() ?? this.registry.listSessions();
+    const summaries = this.store?.listSessions() ?? this.registry.listSessions();
+    for (const summary of summaries) {
+      const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
+      const state = replaySession(summary.sessionId, events);
+      const isQuant =
+        state.configuration?.mode === "QUANT_TRADING"
+        || state.configuration?.mode === "QUANT_RESEARCH"
+        || state.quantTrading !== undefined
+        || state.quantResearch !== undefined;
+      if (!isQuant) continue;
+
+      // The SQLite session index is a rebuildable convenience projection. Do not
+      // let schema-valid but semantically forged deterministic Quant history be
+      // advertised as a trusted ACTIVE/COMPLETED inventory entry.
+      assertReplayPrefixValidForRecovery(summary.sessionId, events);
+      resolveSessionStateComposition(state);
+      if (
+        summary.status !== state.status
+        || summary.sequence !== state.sequence
+        || summary.eventCount !== events.length
+        || summary.problemId !== state.problem?.id
+        || summary.problemVersion !== state.problem?.version
+        || summary.createdAt !== events[0]?.wallTime
+        || summary.updatedAt !== events.at(-1)?.wallTime
+      ) {
+        throw new Error("Quant session inventory does not match authoritative state");
+      }
+    }
+    return summaries;
   }
 
   public hasSession(sessionId: SessionId): boolean {
