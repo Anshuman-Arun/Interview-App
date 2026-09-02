@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SessionIdSchema, type SessionId } from "../../../packages/domain/src/index.js";
+import { BrandMark } from "./components/BrandMark.js";
 import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
 import { StudentInputArea } from "./components/StudentInputArea.js";
@@ -13,6 +14,13 @@ import {
 } from "./components/SessionReviewModal.js";
 import type { SessionHistoryReadResponse } from "../../../packages/replay/src/index.js";
 import { isSessionIdAddressableForRead } from "./session-read-client.js";
+import { ProductPageRouter } from "./navigation/ProductPageRouter.js";
+import {
+  routeForActiveInterview
+} from "./navigation/product-route.js";
+import { useProductNavigation } from "./navigation/useProductNavigation.js";
+import type { ProductPageId } from "./components/ProductFrame.js";
+import { ReviewReadPanel } from "./pages/ReviewReadPanel.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
 
@@ -37,6 +45,7 @@ export const App: React.FC = () => {
   const session = useInterviewSession({
     whiteboardAdapter
   });
+  const { route, navigate } = useProductNavigation();
 
   const [inputUrl, setInputUrl] = useState(session.baseUrl);
 
@@ -44,6 +53,7 @@ export const App: React.FC = () => {
     try {
       await session.startSession();
       setShowSessionsModal(false);
+      navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
     }
@@ -54,7 +64,28 @@ export const App: React.FC = () => {
     if (targetSessionId === null) return;
     try {
       await session.completeSession();
-      setReviewTarget({ sessionId: targetSessionId, tab: "evaluation" });
+      setReviewTarget(null);
+      navigate({
+        page: "review",
+        sessionId: targetSessionId,
+        view: "evaluation"
+      });
+    } catch {
+      // Error handled in session.error
+    }
+  };
+
+  const handleArchiveSession = async (): Promise<void> => {
+    const targetSessionId = session.sessionId;
+    if (targetSessionId === null) return;
+    try {
+      await session.archiveSession();
+      setReviewTarget(null);
+      navigate({
+        page: "review",
+        sessionId: targetSessionId,
+        view: "evaluation"
+      });
     } catch {
       // Error handled in session.error
     }
@@ -65,13 +96,22 @@ export const App: React.FC = () => {
     tab: SessionReviewTab = "evaluation"
   ): void => {
     setShowSessionsModal(false);
-    setReviewTarget({ sessionId: targetSessionId, tab });
+    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
+      setReviewTarget({ sessionId: targetSessionId, tab });
+      return;
+    }
+    navigate({
+      page: "review",
+      sessionId: targetSessionId,
+      view: tab
+    });
   };
 
   const handleRecoverSession = async (targetSessionId: SessionId): Promise<void> => {
     try {
       await session.recoverSession(targetSessionId);
       setShowSessionsModal(false);
+      navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
     }
@@ -84,6 +124,7 @@ export const App: React.FC = () => {
       const parsed = SessionIdSchema.parse(recoverySessionInput.trim());
       await session.recoverSession(parsed);
       setShowSessionsModal(false);
+      navigate({ page: "interview" });
     } catch {
       // Error handled in session.error
     }
@@ -99,7 +140,7 @@ export const App: React.FC = () => {
     setShowSettings(false);
   };
 
-  const refreshStoredSessions = (): void => {
+  const refreshStoredSessions = useCallback((): void => {
     void session.fetchAvailableSessions();
     historyAbortRef.current?.abort();
     const controller = new AbortController();
@@ -119,12 +160,19 @@ export const App: React.FC = () => {
         setHistoryError("Bounded session history could not be loaded.");
         setHistoryLoading(false);
       });
-  };
+  }, [session.fetchAvailableSessions, session.readSessionHistory]);
 
   const openSessionsModal = (): void => {
     refreshStoredSessions();
     setShowSessionsModal(true);
   };
+
+  const navigateProductPage = useCallback((page: ProductPageId): void => {
+    setShowSettings(false);
+    setShowSessionsModal(false);
+    setReviewTarget(null);
+    navigate({ page });
+  }, [navigate]);
 
   useEffect(() => {
     historyAbortRef.current?.abort();
@@ -133,6 +181,16 @@ export const App: React.FC = () => {
     setHistoryLoading(false);
     setHistoryError(null);
   }, [session.baseUrl]);
+
+  useEffect(() => {
+    if (route.page === "home") {
+      void session.fetchAvailableSessions();
+      return;
+    }
+    if (route.page === "sessions") {
+      refreshStoredSessions();
+    }
+  }, [refreshStoredSessions, route.page, session.fetchAvailableSessions]);
 
   useEffect(() => {
     return () => {
@@ -148,6 +206,15 @@ export const App: React.FC = () => {
     });
   }, [session.synchronizeWhiteboard]);
 
+  const hasActiveInterview =
+    session.isSessionStarted && session.sessionStatus === "ACTIVE";
+  const displayRoute = routeForActiveInterview(route, hasActiveInterview);
+
+  useEffect(() => {
+    if (!hasActiveInterview || route.page === "interview") return;
+    navigate({ page: "interview" }, { replace: true });
+  }, [hasActiveInterview, navigate, route.page]);
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case "ACTIVE":
@@ -161,82 +228,100 @@ export const App: React.FC = () => {
     }
   };
 
+  if (displayRoute.page !== "interview") {
+    return (
+      <ProductPageRouter
+        route={displayRoute}
+        sessions={session.availableSessions}
+        activeSessionId={hasActiveInterview ? session.sessionId : null}
+        activeProblemTitle={session.problem?.title ?? null}
+        canReview={(storedSession) =>
+          (
+            storedSession.status === "COMPLETED"
+            || storedSession.status === "ARCHIVED"
+          )
+          && isSessionIdAddressableForRead(storedSession.sessionId)
+        }
+        onNavigatePage={navigateProductPage}
+        onEnterInterview={() => {
+          void handleStartSession();
+        }}
+        onResume={(sessionId) => {
+          void handleRecoverSession(sessionId);
+        }}
+        onReview={(sessionId, view) => {
+          navigate({
+            page: "review",
+            sessionId,
+            view
+          });
+        }}
+        onRefreshSessions={refreshStoredSessions}
+        connection={{
+          managed: session.isTransportManaged,
+          baseUrl: session.baseUrl,
+          locked: hasActiveInterview,
+          onSaveBaseUrl: session.setBaseUrl
+        }}
+        notice={session.error}
+        onDismissNotice={session.clearError}
+        renderReview={(sessionId, view) => (
+          <ReviewReadPanel
+            sessionId={sessionId}
+            view={view}
+            readEvaluation={session.readSessionEvaluation}
+            readReplay={session.readSessionReplay}
+          />
+        )}
+      />
+    );
+  }
+
   return (
     <div className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
-      {/* Top Header Bar */}
-      <header className="app-header bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-xs z-10 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold shadow-xs text-sm">
-            IV
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span>Technical Interview Runtime</span>
-              <span className="text-xs font-normal text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                Durable Runtime
-              </span>
-            </h1>
-            <p className="text-xs text-slate-500">
-              {session.problem?.title ?? "Application-owned interview session composition"}
-            </p>
-          </div>
-        </div>
+      {/* Focused live interview header */}
+      <header className="app-header">
+        <button
+          type="button"
+          className="app-header__identity"
+          disabled={hasActiveInterview}
+          onClick={() => navigateProductPage("home")}
+          aria-label={hasActiveInterview ? "Interview in progress" : "Open Home"}
+        >
+          <BrandMark size={28} title="Interview" />
+          <span className="app-header__identity-copy">
+            <strong>Interview</strong>
+            <small>{session.problem?.title ?? "Live reasoning workspace"}</small>
+          </span>
+        </button>
 
-        {/* Status Indicators & Controls */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ${
-                session.isConnected
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-slate-100 text-slate-600 border border-slate-200"
-              }`}
-              data-testid="connection-status"
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  session.isConnected ? "bg-emerald-500" : "bg-slate-400"
-                }`}
-              />
-              <span>{session.isConnected ? "Connected" : "Disconnected"}</span>
-            </span>
+        <div className="app-header__actions">
+          <span
+            className="app-header__connection"
+            data-connected={String(session.isConnected)}
+            data-testid="connection-status"
+          >
+            <span aria-hidden="true" />
+            {session.isConnected ? "Connected" : "Disconnected"}
+          </span>
 
-            {session.isStreaming && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">
-                <span>⚡ Stream Active</span>
-              </span>
-            )}
-          </div>
-
-          {session.sessionId !== null && (
-            <div className="text-xs font-mono bg-slate-50 px-2.5 py-1 rounded border border-slate-200 flex items-center gap-2">
-              <span className="text-slate-400">Session:</span>
-              <span className="font-semibold text-slate-800">{session.sessionId}</span>
-              <span className="text-slate-300">|</span>
-              <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border ${getStatusBadgeClass(session.sessionStatus)}`}>
-                {session.sessionStatus}
-              </span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-400">Seq:</span>
-              <span className="font-semibold text-slate-800">{session.sequence}</span>
-            </div>
+          {session.isStreaming && (
+            <span className="app-header__streaming">Responding</span>
           )}
 
-          {session.isSessionStarted && session.sessionStatus === "ACTIVE" && (
-            <div className="flex items-center gap-1.5">
+          {hasActiveInterview && (
+            <div className="app-header__session-actions">
               <button
                 type="button"
                 onClick={() => void handleCompleteSession()}
-                className="text-xs font-medium text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded border border-emerald-200 transition-colors"
-                title="Complete interview session"
+                className="app-header__end"
               >
-                ✓ Complete
+                End interview
               </button>
               <button
                 type="button"
-                onClick={() => void session.archiveSession()}
-                className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded border border-slate-200 transition-colors"
-                title="Archive interview session"
+                onClick={() => void handleArchiveSession()}
+                className="app-header__quiet"
               >
                 Archive
               </button>
@@ -245,28 +330,39 @@ export const App: React.FC = () => {
 
           <button
             type="button"
-            onClick={openSessionsModal}
-            className="text-xs font-medium text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md border border-indigo-200 transition-colors"
+            onClick={
+              hasActiveInterview
+                ? openSessionsModal
+                : () => navigateProductPage("sessions")
+            }
+            className="app-header__quiet"
             data-testid="sessions-btn"
           >
-            📋 Sessions
+            Sessions
           </button>
 
-          {!session.isTransportManaged && (
-            <button
-              type="button"
-              onClick={() => setShowSettings((prev) => !prev)}
-              className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md border border-slate-200 transition-colors"
-              data-testid="settings-btn"
-            >
-              ⚙️ Config
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={hasActiveInterview && session.isTransportManaged}
+            onClick={() => {
+              if (hasActiveInterview) {
+                if (!session.isTransportManaged) {
+                  setShowSettings((previous) => !previous);
+                }
+                return;
+              }
+              navigateProductPage("settings");
+            }}
+            className="app-header__quiet"
+            data-testid="settings-btn"
+          >
+            Settings
+          </button>
         </div>
       </header>
 
       {/* Settings Modal / Drawer */}
-      {showSettings && !session.isTransportManaged && (
+      {showSettings && hasActiveInterview && !session.isTransportManaged && (
         <div className="settings-drawer bg-slate-800 text-white px-6 py-4 border-b border-slate-700 flex items-center justify-between gap-6 shrink-0 shadow-md">
           <form onSubmit={handleSaveSettings} className="flex flex-wrap items-center gap-4 flex-1">
             <div className="flex flex-col gap-1">
@@ -594,7 +690,7 @@ export const App: React.FC = () => {
                 }`}
                 data-testid="tab-whiteboard"
               >
-                🎨 Interactive tldraw Whiteboard
+                Whiteboard
               </button>
               <button
                 type="button"
@@ -606,13 +702,24 @@ export const App: React.FC = () => {
                 }`}
                 data-testid="tab-formulation"
               >
-                📊 Session Context
+                Details
               </button>
             </div>
 
             <div className="text-[11px] text-slate-400 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-violet-400" />
-              <span>AI Overlay Protected Layer</span>
+              <span
+                className="w-2 h-2 rounded-full"
+                data-sync={session.whiteboardSync.status}
+              />
+              <span>
+                {session.whiteboardSync.status === "SYNCED"
+                  ? "Board synced"
+                  : session.whiteboardSync.status === "PENDING"
+                    ? "Updating board…"
+                    : session.whiteboardSync.status === "UNSYNCHRONIZED"
+                      ? "Board unavailable"
+                      : "Board readying"}
+              </span>
             </div>
           </div>
 
@@ -683,28 +790,9 @@ export const App: React.FC = () => {
                           <div className="font-semibold text-slate-500 uppercase tracking-wider">Difficulty</div>
                           <div className="text-slate-800 mt-1">{session.problem.difficulty}</div>
                         </div>
-                        <div>
-                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Category</div>
-                          <div className="text-slate-800 mt-1">{session.problem.category}</div>
-                        </div>
                       </div>
                     </div>
 
-                    <div className="border border-slate-200 rounded-md p-4 bg-indigo-50/50">
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-indigo-900 mb-2">
-                        Topics
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {session.problem.topics.map((topic) => (
-                          <span
-                            key={topic}
-                            className="text-xs bg-white border border-indigo-100 rounded px-2 py-1 text-slate-700"
-                          >
-                            {topic}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
                   </>
                 )}
               </div>
