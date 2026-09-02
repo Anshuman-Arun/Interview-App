@@ -45,6 +45,10 @@ function summaryFor(type: EventType): string {
   switch (type) {
     case "SESSION_STARTED": return "Session started";
     case "PROBLEM_PRESENTED": return "Problem presented";
+    case "QUANT_TRADING_SCENARIO_INITIALIZED": return "Quant Trading scenario initialized";
+    case "QUANT_TRADING_ACTION_ACCEPTED": return "Quant Trading candidate action accepted";
+    case "QUANT_TRADING_ROUND_RESOLVED": return "Quant Trading round resolved";
+    case "QUANT_TRADING_SCENARIO_COMPLETED": return "Quant Trading scenario completed";
     case "QUANT_RESEARCH_SCENARIO_INITIALIZED": return "Quant Research scenario initialized";
     case "QUANT_RESEARCH_ACTION_ACCEPTED": return "Quant Research action accepted";
     case "QUANT_RESEARCH_SCENARIO_COMPLETED": return "Quant Research scenario completed";
@@ -194,12 +198,48 @@ function entryForKnownEvent(
   let verification: ReplayVerificationDetail | undefined;
   let policy: ReplayTimelineEntry["policy"];
   let revisions: ReplayRevisionDetail | undefined;
+  let quantTrading: ReplayTimelineEntry["quantTrading"];
   let quantResearch: ReplayTimelineEntry["quantResearch"];
 
   switch (event.type) {
     case "SESSION_STARTED":
       break;
     case "PROBLEM_PRESENTED":
+      break;
+    case "QUANT_TRADING_SCENARIO_INITIALIZED":
+      quantTrading = {
+        phase: "INITIALIZED",
+        family: event.payload.definition.family,
+        version: event.payload.definition.version,
+        specializedValidationRequired: true
+      };
+      break;
+    case "QUANT_TRADING_ACTION_ACCEPTED":
+      quantTrading = {
+        phase: "ACTION_ACCEPTED",
+        actionType: event.payload.action.type,
+        specializedValidationRequired: true
+      };
+      break;
+    case "QUANT_TRADING_ROUND_RESOLVED":
+      quantTrading = {
+        phase: "ROUND_RESOLVED",
+        round: event.payload.evidence.round,
+        fillCount: event.payload.evidence.studentFills.length,
+        riskBreached: event.payload.evidence.riskBreached,
+        specializedValidationRequired: true
+      };
+      break;
+    case "QUANT_TRADING_SCENARIO_COMPLETED":
+      quantTrading = {
+        phase: "COMPLETED",
+        family: event.payload.result.family,
+        version: event.payload.result.version,
+        completionStatus: event.payload.result.completionStatus,
+        roundsCompleted: event.payload.result.roundsCompleted,
+        objectiveScore: event.payload.result.objectiveScore,
+        specializedValidationRequired: true
+      };
       break;
     case "QUANT_RESEARCH_SCENARIO_INITIALIZED":
       quantResearch = {
@@ -552,6 +592,7 @@ function entryForKnownEvent(
     ...(verification === undefined ? {} : { verification }),
     ...(policy === undefined ? {} : { policy }),
     ...(revisions === undefined ? {} : { revisions }),
+    ...(quantTrading === undefined ? {} : { quantTrading }),
     ...(quantResearch === undefined ? {} : { quantResearch })
   };
 }
