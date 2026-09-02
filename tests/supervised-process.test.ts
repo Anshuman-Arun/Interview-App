@@ -1,7 +1,10 @@
 import {
+  chmodSync,
+  copyFileSync,
   existsSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync
 } from "node:fs";
@@ -159,6 +162,103 @@ describe("supervised one-shot process execution", () => {
       }))).rejects.toMatchObject({ code: "EXECUTABLE_UNSAFE" });
     }
   );
+
+  it("creates a fresh isolated home and working directory for every execution", async () => {
+    const runtime = new SupervisedProcessRunner([{
+      id: "fixture",
+      executable: process.execPath,
+      isolatedWorkingDirectory: true,
+      isolatedHomeFiles: {
+        ".fixture/settings.txt": "application-owned-settings"
+      }
+    }]);
+
+    const first = await runtime.execute(request([
+      FIXTURE,
+      "inspect-isolation",
+      ".fixture/settings.txt"
+    ]));
+    const second = await runtime.execute(request([
+      FIXTURE,
+      "inspect-isolation",
+      ".fixture/settings.txt"
+    ]));
+
+    const firstPayload = JSON.parse(first.stdout) as {
+      readonly home: string;
+      readonly cwd: string;
+      readonly configuredContent: string;
+      readonly mutationExisted: boolean;
+    };
+    const secondPayload = JSON.parse(second.stdout) as typeof firstPayload;
+
+    expect(firstPayload.configuredContent).toBe("application-owned-settings");
+    expect(secondPayload.configuredContent).toBe("application-owned-settings");
+    expect(firstPayload.mutationExisted).toBe(false);
+    expect(secondPayload.mutationExisted).toBe(false);
+    expect(firstPayload.home).not.toBe(secondPayload.home);
+    expect(firstPayload.cwd).not.toBe(secondPayload.cwd);
+    expect(existsSync(firstPayload.home)).toBe(false);
+    expect(existsSync(secondPayload.home)).toBe(false);
+    expect(existsSync(firstPayload.cwd)).toBe(false);
+    expect(existsSync(secondPayload.cwd)).toBe(false);
+  });
+
+  it("rejects hostile isolated-home definitions without invoking accessors", () => {
+    let getterCalls = 0;
+    const hostileFiles = Object.defineProperty({}, ".fixture/settings.txt", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "must-not-run";
+      }
+    });
+
+    expect(() => new SupervisedProcessRunner([{
+      id: "fixture",
+      executable: process.execPath,
+      isolatedHomeFiles: hostileFiles as Readonly<Record<string, string>>
+    }])).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(getterCalls).toBe(0);
+  });
+
+  it("recovers when a missing executable later appears, then pins its identity", async () => {
+    const root = mkdtempSync(join(tmpdir(), "supervised-recovery-"));
+    temporaryRoots.push(root);
+    const executable = join(root, process.platform === "win32" ? "node.exe" : "node");
+    const runtime = new SupervisedProcessRunner([{
+      id: "recoverable",
+      executable
+    }]);
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      executableId: "recoverable"
+    }))).rejects.toMatchObject({ code: "EXECUTABLE_UNAVAILABLE" });
+
+    copyFileSync(process.execPath, executable);
+    if (process.platform !== "win32") chmodSync(executable, 0o755);
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      executableId: "recoverable",
+      stdin: "available-now"
+    }))).resolves.toMatchObject({
+      exitCode: 0,
+      stdout: "available-now"
+    });
+
+    const replacement = join(
+      root,
+      process.platform === "win32" ? "replacement.exe" : "replacement"
+    );
+    copyFileSync(process.execPath, replacement);
+    if (process.platform !== "win32") chmodSync(replacement, 0o755);
+    rmSync(executable, { force: true });
+    renameSync(replacement, executable);
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      executableId: "recoverable"
+    }))).rejects.toMatchObject({ code: "EXECUTABLE_UNSAFE" });
+  });
 
   it("kills hung executions on timeout and explicit cancellation", async () => {
     const runtime = runner();
