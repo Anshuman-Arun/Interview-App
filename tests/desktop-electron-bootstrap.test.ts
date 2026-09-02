@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DESKTOP_AUTH_HEADER_VALUE,
+  DESKTOP_ZOOM_CHANGED_CHANNEL,
   DESKTOP_ZOOM_CHANNEL,
   DESKTOP_ZOOM_FACTORS,
   createDesktopRendererBootstrap,
@@ -637,6 +638,7 @@ describe("desktop secure bootstrap", () => {
 
   it("bounds desktop interface zoom to approved factors", () => {
     expect(DESKTOP_ZOOM_CHANNEL).toBe("interview-desktop:set-zoom");
+    expect(DESKTOP_ZOOM_CHANGED_CHANNEL).toBe("interview-desktop:zoom-changed");
     expect(DESKTOP_ZOOM_FACTORS).toEqual([0.875, 1, 1.125, 1.25]);
     for (const factor of DESKTOP_ZOOM_FACTORS) {
       expect(isDesktopZoomFactor(factor)).toBe(true);
@@ -654,10 +656,23 @@ describe("desktop secure bootstrap", () => {
     expect(preload).toContain('exposeInMainWorld("interviewDesktop"');
     expect(preload).toContain("getBootstrap");
     expect(preload).toContain("setZoomFactor");
+    expect(preload).toContain("onZoomFactorChanged");
     expect(preload).toContain('const ZOOM_FACTORS = new Set([0.875, 1, 1.125, 1.25])');
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
     expect(preload).not.toContain("shell.");
+  });
+
+  it("keeps zoom shortcuts bounded without replacing the normal Electron menu", async () => {
+    const mainSource = await readFile(
+      path.resolve(process.cwd(), "apps/desktop/src/main.ts"),
+      "utf8"
+    );
+    expect(mainSource).toContain('"before-input-event"');
+    expect(mainSource).toContain("stepDesktopZoom(window, 1)");
+    expect(mainSource).toContain("stepDesktopZoom(window, -1)");
+    expect(mainSource).toContain("applyDesktopZoomFactor(window, 1, true)");
+    expect(mainSource).not.toContain("Menu.setApplicationMenu");
   });
 
   it("resolves development, production, and app-data paths without exposing them to bootstrap", () => {

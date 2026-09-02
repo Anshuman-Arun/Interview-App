@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 const CHANNEL = "interview-desktop:get-bootstrap";
 const ZOOM_CHANNEL = "interview-desktop:set-zoom";
+const ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 const AUTH_HEADER_VALUE = "desktop-managed-v1";
 const ZOOM_FACTORS = new Set([0.875, 1, 1.125, 1.25]);
 
@@ -98,5 +99,15 @@ contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
     if (ipcRenderer.sendSync(ZOOM_CHANNEL, factor) !== true) {
       throw new Error("Desktop zoom request was rejected");
     }
+  },
+  onZoomFactorChanged: (listener) => {
+    if (typeof listener !== "function") {
+      throw new Error("Desktop zoom listener must be a function");
+    }
+    const handler = (_event, factor) => {
+      if (ZOOM_FACTORS.has(factor)) listener(factor);
+    };
+    ipcRenderer.on(ZOOM_CHANGED_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(ZOOM_CHANGED_CHANNEL, handler);
   }
 }));

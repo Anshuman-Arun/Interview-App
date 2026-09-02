@@ -1,5 +1,6 @@
 export const DESKTOP_BOOTSTRAP_CHANNEL = "interview-desktop:get-bootstrap";
 export const DESKTOP_ZOOM_CHANNEL = "interview-desktop:set-zoom";
+export const DESKTOP_ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 export const DESKTOP_AUTH_HEADER_VALUE = "desktop-managed-v1";
 
 export const DESKTOP_ZOOM_FACTORS = [0.875, 1, 1.125, 1.25] as const;

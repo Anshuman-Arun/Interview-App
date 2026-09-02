@@ -37,6 +37,15 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain('session.whiteboardSync.status === "UNSYNCHRONIZED"');
   });
 
+  it("does not offer a second session from the ACTIVE-session overlay", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    expect(app).toContain("Current interview is active. End or archive it before starting another.");
+    expect(app).toContain("key={sessionId}");
+  });
+
   it("route-locks ACTIVE interviews to the live workspace", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),

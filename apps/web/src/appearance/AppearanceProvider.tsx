@@ -22,6 +22,9 @@ import {
 
 interface DesktopAppearanceBridge {
   readonly setZoomFactor?: (factor: number) => void;
+  readonly onZoomFactorChanged?: (
+    listener: (factor: number) => void
+  ) => (() => void);
 }
 
 const SCALE_FACTORS: Record<InterfaceScale, number> = {
@@ -74,6 +77,25 @@ export function AppearanceProvider({
     };
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    const bridge = (globalThis as typeof globalThis & {
+      readonly interviewDesktop?: DesktopAppearanceBridge;
+    }).interviewDesktop;
+    if (bridge?.onZoomFactorChanged === undefined) return;
+
+    return bridge.onZoomFactorChanged((factor) => {
+      const nextScale = (Object.entries(SCALE_FACTORS) as Array<
+        [InterfaceScale, number]
+      >).find(([, candidate]) => candidate === factor)?.[0];
+      if (nextScale === undefined) return;
+      setSettings((current) =>
+        current.scale === nextScale
+          ? current
+          : { ...current, scale: nextScale }
+      );
+    });
   }, []);
 
   useEffect(() => {

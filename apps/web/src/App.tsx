@@ -278,6 +278,7 @@ export const App: React.FC = () => {
         onDismissNotice={session.clearError}
         renderReview={(sessionId, view) => (
           <ReviewReadPanel
+            key={sessionId}
             sessionId={sessionId}
             view={view}
             readEvaluation={session.readSessionEvaluation}
@@ -432,13 +433,19 @@ export const App: React.FC = () => {
 
             <div className="p-4 overflow-y-auto flex-1 space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => void handleStartSession()}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors"
-                >
-                  + Start New Interview Session
-                </button>
+                {hasActiveInterview ? (
+                  <span className="text-[11px] text-slate-500">
+                    Current interview is active. End or archive it before starting another.
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleStartSession()}
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors"
+                  >
+                    + Start New Interview Session
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={refreshStoredSessions}
