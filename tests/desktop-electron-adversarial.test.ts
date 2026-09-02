@@ -97,7 +97,6 @@ describe("desktop-owned persistence", () => {
       commandBaseUrl: "http://127.0.0.1:41000",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41002",
-      voiceBaseUrl: "http://127.0.0.1:41002",
       appVersion: "test",
       platform: "test"
     });
