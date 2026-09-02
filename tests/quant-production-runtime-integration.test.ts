@@ -814,7 +814,7 @@ describe("adversarial quant lifecycle invariants", () => {
         { type: "PASS" },
         state.currentRound,
         createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
-      )).rejects.toThrow(/input episode is active/u);
+      )).rejects.toThrow(/candidate input is unresolved/u);
       expect(store.eventCount(sessionId)).toBe(countBeforeRejectedTerminal);
       expect(writer.getState().quantTrading?.rounds).toHaveLength(state.plannedRounds - 1);
 
@@ -827,6 +827,52 @@ describe("adversarial quant lifecycle invariants", () => {
       expect(completed.value.status).toBe("COMPLETED");
       expect(writer.getState().status).toBe("COMPLETED");
       expect(() => projectSessionHistory(store.load(sessionId))).not.toThrow();
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
+  it("refuses deterministic Trading completion while an utterance is still being captured", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const trading = new QuantTradingSessionCoordinator(writer);
+    const turns = new TurnCoordinator(writer);
+    try {
+      await trading.initializeConfigured(
+        tradingConfiguration(),
+        654_321,
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      );
+      let state = trading.getPublicState();
+      while (state.currentRound < state.plannedRounds) {
+        state = (await trading.applyAction(
+          { type: "PASS" },
+          state.currentRound,
+          createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+        )).value;
+      }
+
+      const utteranceId = await turns.beginUtterance();
+      expect(writer.getState().utterances[utteranceId]?.status).toBe("CAPTURING");
+      const countBeforeRejectedTerminal = store.eventCount(sessionId);
+      await expect(trading.applyAction(
+        { type: "PASS" },
+        state.currentRound,
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      )).rejects.toThrow(/candidate input is unresolved/u);
+      expect(store.eventCount(sessionId)).toBe(countBeforeRejectedTerminal);
+      expect(writer.getState().status).toBe("ACTIVE");
+
+      await turns.discardUtterance(utteranceId, "terminal race cleared");
+      const completed = await trading.applyAction(
+        { type: "PASS" },
+        state.currentRound,
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      );
+      expect(completed.value.status).toBe("COMPLETED");
+      expect(writer.getState().status).toBe("COMPLETED");
     } finally {
       await writer.close();
       store.close();
@@ -865,7 +911,7 @@ describe("adversarial quant lifecycle invariants", () => {
       }, 1, createCommandEnvelope({
         sessionId,
         producer: "quant-adversarial-test"
-      }))).rejects.toThrow(/input episode is active/u);
+      }))).rejects.toThrow(/candidate input is unresolved/u);
       expect(store.eventCount(sessionId)).toBe(countBeforeRejectedTerminal);
       expect(research.getPublicState().acceptedActionCount).toBe(1);
 
@@ -881,6 +927,55 @@ describe("adversarial quant lifecycle invariants", () => {
       expect(completed.value.state.status).toBe("COMPLETE");
       expect(writer.getState().status).toBe("COMPLETED");
       expect(() => projectSessionHistory(store.load(sessionId))).not.toThrow();
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
+  it("refuses deterministic Research completion while an utterance is still being captured", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const research = new QuantResearchCoordinator(writer);
+    const turns = new TurnCoordinator(writer);
+    try {
+      await research.initializeConfigured(
+        researchConfiguration(),
+        createProductionQuantResearchDefinition("MODEL_COMPARISON", 888),
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      );
+      await research.applyActionAtExpectedCount({
+        actionId: "research-before-capturing",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }, 0, createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" }));
+
+      const utteranceId = await turns.beginUtterance();
+      expect(writer.getState().utterances[utteranceId]?.status).toBe("CAPTURING");
+      const countBeforeRejectedTerminal = store.eventCount(sessionId);
+      await expect(research.applyActionAtExpectedCount({
+        actionId: "research-terminal-capturing-blocked",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }, 1, createCommandEnvelope({
+        sessionId,
+        producer: "quant-adversarial-test"
+      }))).rejects.toThrow(/candidate input is unresolved/u);
+      expect(store.eventCount(sessionId)).toBe(countBeforeRejectedTerminal);
+      expect(research.getPublicState().acceptedActionCount).toBe(1);
+
+      await turns.discardUtterance(utteranceId, "terminal race cleared");
+      const completed = await research.applyActionAtExpectedCount({
+        actionId: "research-terminal-after-discard",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }, 1, createCommandEnvelope({
+        sessionId,
+        producer: "quant-adversarial-test"
+      }));
+      expect(completed.value.state.status).toBe("COMPLETE");
+      expect(writer.getState().status).toBe("COMPLETED");
     } finally {
       await writer.close();
       store.close();
