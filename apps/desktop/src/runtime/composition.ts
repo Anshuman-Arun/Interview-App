@@ -237,7 +237,10 @@ export class DesktopLocalRuntimeComposition {
       this.ttsStatus = failed("ASSET_CACHE_UNSAFE");
       return;
     }
-    if (abortRequested(signal)) return;
+    if (abortRequested(signal)) {
+      this.markPendingCapabilitiesCancelled();
+      return;
+    }
 
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
       this.speechStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
@@ -273,6 +276,7 @@ export class DesktopLocalRuntimeComposition {
       await this.startSpeech(signal);
     } catch {
       speechFailed = true;
+      if (abortRequested(signal)) this.markPendingCapabilitiesCancelled();
     }
 
     let ttsFailed = false;
@@ -527,6 +531,15 @@ export class DesktopLocalRuntimeComposition {
     if (component === "speech") this.speechView = undefined;
     else this.ttsView = undefined;
     return !coreShutdownFailed;
+  }
+
+  private markPendingCapabilitiesCancelled(): void {
+    if (this.speechStatus.reasonCode === "NOT_STARTED") {
+      this.speechStatus = unavailable("START_CANCELLED");
+    }
+    if (this.ttsStatus.reasonCode === "NOT_STARTED") {
+      this.ttsStatus = unavailable("START_CANCELLED");
+    }
   }
 
   private async inspectAssets(
