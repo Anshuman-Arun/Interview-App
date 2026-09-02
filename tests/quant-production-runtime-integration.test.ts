@@ -481,6 +481,15 @@ describe("production quant runtime integration", () => {
     ).state;
     expect(afterFill.portfolio.position).toBe(-4);
     expect(afterFill.currentRound).toBe(2);
+    expect(afterFill.lastRound?.fills).toEqual([
+      { side: "SELL", price: 99.5, size: 4 }
+    ]);
+    const filledSerialized = JSON.stringify(afterFill);
+    expect(filledSerialized).not.toContain("counterparty");
+    expect(filledSerialized).not.toContain("orderFlowType");
+    expect(filledSerialized).not.toContain("incomingMarketSide");
+    expect(filledSerialized).not.toContain("orderId");
+    expect(filledSerialized).not.toContain("matchedOrderId");
 
     const countBeforeHardLimit = store.eventCount(sessionId);
     await expectProtocolError(post({
