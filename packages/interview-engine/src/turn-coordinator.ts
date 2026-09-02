@@ -609,20 +609,83 @@ export class TurnCoordinator {
     });
   }
 
-  public async appendBoardInput(inputEpisodeId: InputEpisodeId, summary: string): Promise<void> {
-    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "whiteboard", inputEpisodeId });
+  public async appendBoardInput(
+    inputEpisodeId: InputEpisodeId,
+    summary: string,
+    options: {
+      readonly alreadyCommittedBoardRevision?: BoardRevision;
+    } = {}
+  ): Promise<void> {
+    const alreadyCommittedBoardRevision = options.alreadyCommittedBoardRevision === undefined
+      ? undefined
+      : BoardRevisionSchema.parse(options.alreadyCommittedBoardRevision);
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "whiteboard",
+      inputEpisodeId
+    });
     await this.writer.execute(envelope, {
       operation: "APPEND_BOARD_INPUT",
-      payload: { inputEpisodeId, summary }
+      payload: {
+        inputEpisodeId,
+        summary,
+        ...(alreadyCommittedBoardRevision === undefined
+          ? {}
+          : { alreadyCommittedBoardRevision })
+      }
     }, BoardInputAppendedResultSchema, (state) => {
       assertSessionActive(state, "append board input");
       const episode = state.inputEpisodes[inputEpisodeId];
-      if (episode === undefined || episode.status !== "ACTIVE") throw new Error("Input episode is not active");
+      if (episode === undefined || episode.status !== "ACTIVE") {
+        throw new Error("Input episode is not active");
+      }
+
+      if (alreadyCommittedBoardRevision !== undefined) {
+        if (alreadyCommittedBoardRevision !== state.boardRevision) {
+          throw new Error(
+            "Whiteboard input episode basis does not match the current authoritative BoardRevision"
+          );
+        }
+        return {
+          drafts: [
+            {
+              source: "USER",
+              type: "INPUT_EPISODE_UPDATED",
+              payload: {
+                inputEpisodeId,
+                modality: "WHITEBOARD",
+                semanticContent: summary
+              }
+            },
+            ...invalidateUndeliveredPolicyOutput(
+              state,
+              "Authoritative whiteboard input changed before delivery"
+            )
+          ],
+          result: {
+            appended: true,
+            boardRevision: state.boardRevision
+          }
+        };
+      }
+
       const boardRevision = BoardRevisionSchema.parse(state.boardRevision + 1);
       return {
         drafts: [
-          { source: "USER", type: "BOARD_PATCH_COMMITTED", payload: { boardRevision, summary } },
-          { source: "USER", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "WHITEBOARD", semanticContent: summary } },
+          {
+            source: "USER",
+            type: "BOARD_PATCH_COMMITTED",
+            payload: { boardRevision, summary }
+          },
+          {
+            source: "USER",
+            type: "INPUT_EPISODE_UPDATED",
+            payload: {
+              inputEpisodeId,
+              modality: "WHITEBOARD",
+              semanticContent: summary
+            }
+          },
           ...invalidateUndeliveredPolicyOutput(
             state,
             "Authoritative board state changed before delivery"
