@@ -147,13 +147,14 @@ export class ProductionSessionRuntime {
     writer: SessionWriter,
     composition: InterviewSessionComposition,
     actionInput: QuantTradingCandidateAction,
+    expectedRound: number,
     envelope: CommandEnvelope
   ) {
     if (composition.mode !== "QUANT_TRADING") {
       throw new Error("Quant Trading action was sent to a non-Trading session");
     }
     const action = QuantTradingCandidateActionSchema.parse(actionInput);
-    return new QuantTradingSessionCoordinator(writer).applyAction(action, envelope);
+    return new QuantTradingSessionCoordinator(writer).applyAction(action, expectedRound, envelope);
   }
 
   public async applyResearchAction(
