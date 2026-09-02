@@ -64,12 +64,14 @@ function tradingConfiguration(
   return parsed;
 }
 
-function researchConfiguration(): Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_RESEARCH" }> {
+function researchConfiguration(
+  family: (typeof QUANT_RESEARCH_FAMILIES)[number] = "MODEL_COMPARISON"
+): Extract<InterviewSessionConfiguration, { readonly mode: "QUANT_RESEARCH" }> {
   const parsed = InterviewSessionConfigurationSchema.parse({
     configurationVersion: 1,
     mode: "QUANT_RESEARCH",
     scenario: {
-      id: "MODEL_COMPARISON",
+      id: family,
       version: QUANT_RESEARCH_VERSION
     },
     interventionPolicy: "BALANCED"
@@ -1476,6 +1478,84 @@ describe("production quant start seed lifecycle", () => {
     } finally {
       await writer.close();
       store.close();
+    }
+  });
+});
+
+describe("production Quant Research public serialization", () => {
+  it("keeps bounded public serialization valid through every family stage", async () => {
+    const scenarios = [
+      {
+        family: "BAYESIAN_UPDATING",
+        actions: [
+          { actionId: "bayes-prior", kind: "SUBMIT_PROBABILITY", value: 0.5 },
+          { actionId: "bayes-posterior", kind: "SUBMIT_PROBABILITY", value: 0.5 },
+          { actionId: "bayes-perturbed", kind: "SUBMIT_PROBABILITY", value: 0.5 }
+        ]
+      },
+      {
+        family: "SAMPLING_ESTIMATION",
+        actions: [
+          { actionId: "sampling-observe", kind: "REQUEST_OBSERVATION", count: 2 },
+          { actionId: "sampling-estimate", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 0 },
+          { actionId: "sampling-perturbed", kind: "SUBMIT_NUMERIC_ESTIMATE", value: 0 }
+        ]
+      },
+      {
+        family: "EXPERIMENTAL_ALLOCATION",
+        actions: [
+          { actionId: "experiment-allocation", kind: "ALLOCATE_SAMPLE", a: 1, b: 1 },
+          { actionId: "experiment-choice", kind: "CHOOSE_OPTION", option: "A" },
+          { actionId: "experiment-perturbed", kind: "ALLOCATE_SAMPLE", a: 1, b: 1 }
+        ]
+      },
+      {
+        family: "MODEL_COMPARISON",
+        actions: [
+          { actionId: "model-initial", kind: "CHOOSE_OPTION", option: "CONSTANT" },
+          { actionId: "model-perturbed", kind: "CHOOSE_OPTION", option: "CONSTANT" }
+        ]
+      },
+      {
+        family: "CONSTRAINED_OPTIMIZATION",
+        actions: [
+          { actionId: "optimization-base", kind: "SUBMIT_PARAMETERS", values: [0, 0] },
+          { actionId: "optimization-perturbed", kind: "SUBMIT_PARAMETERS", values: [0, 0] }
+        ]
+      }
+    ] as const;
+
+    for (const [scenarioIndex, scenario] of scenarios.entries()) {
+      const store = new SqliteEventStore(":memory:");
+      const sessionId = newSessionId();
+      const writer = SessionWriter.open(store, sessionId);
+      const coordinator = new QuantResearchCoordinator(writer);
+      try {
+        await coordinator.initializeConfigured(
+          researchConfiguration(scenario.family),
+          createProductionQuantResearchDefinition(scenario.family, 10_000 + scenarioIndex),
+          createCommandEnvelope({ sessionId, producer: "quant-public-schema-test" })
+        );
+        const initial = coordinator.getPublicState();
+        expect(QuantResearchPublicStateSchema.parse(initial)).toEqual(initial);
+
+        for (const action of scenario.actions) {
+          const before = coordinator.getPublicState();
+          const applied = await coordinator.applyActionAtExpectedCount(
+            action,
+            before.acceptedActionCount,
+            createCommandEnvelope({ sessionId, producer: "quant-public-schema-test" })
+          );
+          expect(QuantResearchPublicStateSchema.parse(applied.value.state))
+            .toEqual(applied.value.state);
+        }
+
+        expect(coordinator.getPublicState().status).toBe("COMPLETE");
+        expect(writer.getState().status).toBe("COMPLETED");
+      } finally {
+        await writer.close();
+        store.close();
+      }
     }
   });
 });
