@@ -11,9 +11,11 @@ import type { ManagedModelWorkerClient } from "./managed-worker-client.js";
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
 const MOONSHINE_RECOGNIZER_VERSION = "tiny-en-35d84fc0eb2d7451";
 const KOKORO_MODEL_VERSION = "af-heart-35d84fc0eb2d7451";
+const MAX_TRACKED_VAD_STREAMS = 128;
 
 export class ManagedSileroVadRuntime implements SileroVadRuntime {
   public readonly runtimeVersion: string;
+  private readonly streamRestartCounts = new Map<string, number>();
 
   public constructor(
     private readonly client: ManagedModelWorkerClient,
@@ -25,6 +27,19 @@ export class ManagedSileroVadRuntime implements SileroVadRuntime {
   public async score(input: Parameters<SileroVadRuntime["score"]>[0]): Promise<unknown> {
     if (input.modelPath !== this.expectedModelPath) {
       throw new Error("Silero runtime rejected an unexpected model path");
+    }
+    const restartCount = this.client.restartCount();
+    const previousRestartCount = this.streamRestartCounts.get(input.streamId);
+    if (previousRestartCount !== undefined && previousRestartCount !== restartCount) {
+      this.streamRestartCounts.delete(input.streamId);
+      throw new Error("Silero worker restarted during an active VAD stream");
+    }
+    this.streamRestartCounts.delete(input.streamId);
+    this.streamRestartCounts.set(input.streamId, restartCount);
+    while (this.streamRestartCounts.size > MAX_TRACKED_VAD_STREAMS) {
+      const oldest = this.streamRestartCounts.keys().next().value;
+      if (oldest === undefined) break;
+      this.streamRestartCounts.delete(oldest);
     }
     const result = await this.client.postJson("/v1/vad", {
       pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
