@@ -1,4 +1,5 @@
 import type {
+  GenerationId,
   InputEpisodeId,
   SessionId,
   TurnId
@@ -9,7 +10,10 @@ import {
   ProviderCoordinator,
   TurnCoordinator
 } from "../../../packages/interview-engine/src/index.js";
-import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
+import type {
+  SessionRecoveryCoordinator,
+  TurnRecoveryDisposition
+} from "./session-recovery-coordinator.js";
 import type { RendererStreamServer } from "./renderer-stream-server.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import { ProviderRuntimeResolver } from "./provider-runtime.js";
@@ -23,6 +27,16 @@ export interface TurnOrchestrationInput {
   readonly turnId: TurnId;
   readonly inputEpisodeId: InputEpisodeId;
   readonly studentText: string;
+}
+
+type TurnOrchestrationDisposition =
+  | "COMPLETE"
+  | "RETRYABLE_PROVIDER_RUNTIME";
+
+interface ActiveProviderExecution {
+  readonly sessionId: SessionId;
+  readonly generationId: GenerationId;
+  readonly coordinator: ProviderCoordinator;
 }
 
 function usesDeterministicMockRealization(
@@ -40,7 +54,8 @@ function usesDeterministicMockRealization(
 
 export class ServerTurnOrchestrator {
   private readonly validator: DisclosureValidator;
-  private readonly inFlight = new Map<string, Promise<void>>();
+  private readonly inFlight = new Map<string, Promise<TurnOrchestrationDisposition>>();
+  private readonly activeProviderExecutions = new Map<GenerationId, ActiveProviderExecution>();
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
@@ -54,36 +69,57 @@ export class ServerTurnOrchestrator {
   }
 
   public async orchestrateTurn(input: TurnOrchestrationInput): Promise<void> {
-    const key = `${input.sessionId}:${input.turnId}`;
-    const existing = this.inFlight.get(key);
-    if (existing !== undefined) {
-      return existing;
+    await this.orchestrateTurnWithDisposition(input);
+  }
+
+  /**
+   * Reconciles physical provider execution with authoritative generation state.
+   * Voice/whiteboard integrations may call this immediately after authoritative
+   * invalidation so a superseded remote request is aborted rather than merely
+   * prevented from delivering late output.
+   */
+  public async cancelSupersededGenerations(
+    sessionId: SessionId,
+    reason = "Authoritative state superseded provider execution"
+  ): Promise<void> {
+    const writer = this.sessions.getWriter(sessionId);
+    const state = writer.getState();
+    const records = Array.from(this.activeProviderExecutions.values())
+      .filter((record) => record.sessionId === sessionId);
+
+    for (const record of records) {
+      const status = state.generations[record.generationId]?.status;
+      if (
+        status === "ACTIVE"
+        || status === "PROPOSAL_RECEIVED"
+        || status === "VALIDATED"
+      ) {
+        continue;
+      }
+      await record.coordinator.cancelGeneration(record.generationId, reason)
+        .catch(() => undefined);
     }
-
-    const orchestration = this.executeOrchestration(input).finally(() => {
-      this.inFlight.delete(key);
-    });
-
-    this.inFlight.set(key, orchestration);
-    return orchestration;
   }
 
   public async waitForAll(): Promise<void> {
     await Promise.all(Array.from(this.inFlight.values()));
   }
 
-  public async recoverPendingTurns(sessionId: SessionId): Promise<void> {
+  public async recoverPendingTurns(
+    sessionId: SessionId
+  ): Promise<TurnRecoveryDisposition> {
     const writer = this.sessions.getWriter(sessionId);
     const state = writer.getState();
     if (!state.started || state.status !== "ACTIVE") {
-      return;
+      return "COMPLETE";
     }
 
     const composition = resolveSessionStateComposition(state);
     if (composition.mode !== "OXFORD_MATHEMATICS") {
-      return;
+      return "COMPLETE";
     }
     const turns = new TurnCoordinator(writer);
+    let disposition: TurnRecoveryDisposition = "COMPLETE";
 
     for (const [turnId, turn] of Object.entries(state.turns)) {
       // Clean up stranded in-flight generations from pre-crash processes, including older turns.
@@ -114,17 +150,47 @@ export class ServerTurnOrchestrator {
       );
 
       if (!hasValidatedGeneration && !hasDeliveries) {
-        await this.orchestrateTurn({
+        const turnDisposition = await this.orchestrateTurnWithDisposition({
           sessionId,
           turnId: turnId as TurnId,
           inputEpisodeId: turn.inputEpisodeId,
           studentText: turn.studentText
         });
+        if (turnDisposition === "RETRYABLE_PROVIDER_RUNTIME") {
+          disposition = "RETRYABLE";
+        }
       }
     }
+    return disposition;
   }
 
-  private async executeOrchestration(input: TurnOrchestrationInput): Promise<void> {
+  private async orchestrateTurnWithDisposition(
+    input: TurnOrchestrationInput
+  ): Promise<TurnOrchestrationDisposition> {
+    // A new authoritative turn normally arrives after commitInput has already
+    // superseded old generations. Reconcile physical execution before starting
+    // more provider work.
+    await this.cancelSupersededGenerations(input.sessionId);
+
+    const key = `${input.sessionId}:${input.turnId}`;
+    const existing = this.inFlight.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const orchestration = this.executeOrchestration(input).finally(() => {
+      if (this.inFlight.get(key) === orchestration) {
+        this.inFlight.delete(key);
+      }
+    });
+
+    this.inFlight.set(key, orchestration);
+    return orchestration;
+  }
+
+  private async executeOrchestration(
+    input: TurnOrchestrationInput
+  ): Promise<TurnOrchestrationDisposition> {
     const writer = this.sessions.getWriter(input.sessionId);
 
     // Resolve all orchestration inputs back to authoritative state before doing any provider work.
@@ -137,19 +203,19 @@ export class ServerTurnOrchestrator {
       || currentState.lastCommittedInputSequence === undefined
       || authoritativeTurn.committedSequence !== currentState.lastCommittedInputSequence
     ) {
-      return;
+      return "COMPLETE";
     }
 
     const existingGeneration = Object.values(currentState.generations).find(
       (g) => g.basis.turnId === input.turnId && g.status === "VALIDATED"
     );
     if (existingGeneration !== undefined) {
-      return;
+      return "COMPLETE";
     }
 
     const composition = resolveSessionStateComposition(currentState);
     if (composition.mode !== "OXFORD_MATHEMATICS") {
-      return;
+      return "COMPLETE";
     }
     const problem = composition.problem;
     const turns = new TurnCoordinator(writer);
@@ -157,7 +223,7 @@ export class ServerTurnOrchestrator {
     // 1. Pedagogical policy selects (or refreshes) the required action
     const realizationRequest = await turns.selectAction(input.turnId, problem);
     if (realizationRequest.requiredAction === "WAIT") {
-      return;
+      return "COMPLETE";
     }
 
     // 2. Keep deterministic problem-specific realization only for the mock provider.
@@ -172,9 +238,8 @@ export class ServerTurnOrchestrator {
       : undefined;
 
     // 3. Resolve the authoritative provider/model through the application-owned
-    // runtime boundary and the existing provider control plane. Runtime resolution
-    // failures are intentionally silent here: no raw provider/configuration errors
-    // are persisted, exposed, or replaced with mock execution.
+    // runtime boundary and the existing provider control plane. Raw runtime
+    // errors never escape; recovery receives only a stable retry disposition.
     let runtimeResolution: Awaited<ReturnType<ProviderRuntimeResolver["resolve"]>>;
     try {
       runtimeResolution = await this.providerRuntime.resolve({
@@ -184,7 +249,7 @@ export class ServerTurnOrchestrator {
         ...(mockProposal === undefined ? {} : { mockProposal })
       });
     } catch {
-      return;
+      return "RETRYABLE_PROVIDER_RUNTIME";
     }
 
     // 4. ProviderCoordinator owns policy/billing admission, context compilation,
@@ -203,13 +268,37 @@ export class ServerTurnOrchestrator {
     } catch {
       // The authoritative turn may have changed while runtime credentials or
       // dependencies were resolving. Never surface raw setup/state errors.
-      return;
+      return "COMPLETE";
     }
 
+    const activeRecord: ActiveProviderExecution = {
+      sessionId: input.sessionId,
+      generationId: execution.generationId,
+      coordinator
+    };
+    this.activeProviderExecutions.set(execution.generationId, activeRecord);
+
     try {
+      // Close the race where authoritative invalidation happens between
+      // startGeneration and registration in activeProviderExecutions.
+      await this.cancelExecutionIfSuperseded(activeRecord);
+
       const outcome = await execution.completion;
+      if (outcome.status === "FAILED") {
+        if (
+          this.isTurnStillLatest(input)
+          && (
+            outcome.stage === "PROVIDER_ADMISSION"
+            || outcome.stage === "PROVIDER_STREAM"
+            || outcome.stage === "NO_PROPOSAL"
+          )
+        ) {
+          return "RETRYABLE_PROVIDER_RUNTIME";
+        }
+        return "COMPLETE";
+      }
       if (outcome.status !== "ACCEPTED") {
-        return;
+        return "COMPLETE";
       }
 
       // 5. Publish delivery atoms to active renderer stream (SSE)
@@ -219,10 +308,42 @@ export class ServerTurnOrchestrator {
           await streamServer.publishDelivery(input.sessionId, atom.deliveryId);
         }
       }
+      return "COMPLETE";
     } catch {
-      // Safe semantic outcome handling - never print raw exception strings
+      return this.isTurnStillLatest(input)
+        ? "RETRYABLE_PROVIDER_RUNTIME"
+        : "COMPLETE";
+    } finally {
+      if (this.activeProviderExecutions.get(execution.generationId) === activeRecord) {
+        this.activeProviderExecutions.delete(execution.generationId);
+      }
     }
   }
 
+  private async cancelExecutionIfSuperseded(
+    record: ActiveProviderExecution
+  ): Promise<void> {
+    const writer = this.sessions.getWriter(record.sessionId);
+    const status = writer.getState().generations[record.generationId]?.status;
+    if (
+      status === "ACTIVE"
+      || status === "PROPOSAL_RECEIVED"
+      || status === "VALIDATED"
+    ) {
+      return;
+    }
+    await record.coordinator.cancelGeneration(
+      record.generationId,
+      "Authoritative state superseded provider execution"
+    ).catch(() => undefined);
+  }
 
+  private isTurnStillLatest(input: TurnOrchestrationInput): boolean {
+    const state = this.sessions.getWriter(input.sessionId).getState();
+    const turn = state.turns[input.turnId];
+    return turn !== undefined
+      && turn.inputEpisodeId === input.inputEpisodeId
+      && state.lastCommittedInputSequence !== undefined
+      && turn.committedSequence === state.lastCommittedInputSequence;
+  }
 }
