@@ -99,10 +99,14 @@ export class EphemeralAudioAssetStore {
     bytesInput: Uint8Array
   ): string {
     const metadata = snapshotAssetMetadata(metadataInput);
-    const bytes = snapshotBytes(bytesInput);
-    if (bytes.byteLength === 0 || bytes.byteLength > TTS_LIMITS.maxPcmBytes + 64 * 1024) {
+    if (
+      !(bytesInput instanceof Uint8Array)
+      || bytesInput.byteLength === 0
+      || bytesInput.byteLength > TTS_LIMITS.maxPcmBytes + 64 * 1024
+    ) {
       throw new Error("Ephemeral audio asset exceeds its bounded size");
     }
+    const bytes = snapshotBytes(bytesInput);
 
     const audioRef = computeAudioRef(metadata);
     const existing = this.assets.get(audioRef);
@@ -126,7 +130,7 @@ export class EphemeralAudioAssetStore {
 
   public has(sessionIdInput: SessionId, audioRef: string): boolean {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
-    if (!AUDIO_REF_PATTERN.test(audioRef)) return false;
+    if (!isBoundedAudioRef(audioRef)) return false;
     return this.assets.get(audioRef)?.metadata.sessionId === sessionId;
   }
 
@@ -138,7 +142,7 @@ export class EphemeralAudioAssetStore {
    */
   public take(sessionIdInput: SessionId, audioRef: string): ResolvedEphemeralAudioAsset | undefined {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
-    if (!AUDIO_REF_PATTERN.test(audioRef)) return undefined;
+    if (!isBoundedAudioRef(audioRef)) return undefined;
     const asset = this.assets.get(audioRef);
     if (asset === undefined || asset.metadata.sessionId !== sessionId) return undefined;
     this.assets.delete(audioRef);
@@ -151,6 +155,7 @@ export class EphemeralAudioAssetStore {
   }
 
   public remove(audioRef: string): void {
+    if (!isBoundedAudioRef(audioRef)) return;
     const asset = this.assets.get(audioRef);
     if (asset === undefined) return;
     this.assets.delete(audioRef);
@@ -832,6 +837,12 @@ export class VoiceInputCoordinator {
       this.sessionStreams.delete(context.sessionId);
     }
   }
+}
+
+function isBoundedAudioRef(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length === 73
+    && AUDIO_REF_PATTERN.test(value);
 }
 
 function computeAudioRef(metadata: EphemeralAudioAssetMetadata): string {
