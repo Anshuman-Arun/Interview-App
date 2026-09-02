@@ -1276,12 +1276,12 @@ export function useInterviewSession(
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
       sessionTransitionEpochRef.current = transitionEpoch;
       terminalTransitionInFlightRef.current = true;
-      sessionMutationAdmissionRef.current = false;
-      stopRendererTransport();
-      void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
-      setError(null);
-      const client = getCommandClient();
       try {
+        sessionMutationAdmissionRef.current = false;
+        stopRendererTransport();
+        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+        setError(null);
+        const client = getCommandClient();
         try {
           await client.completeSession(sessionId, summary);
           if (sessionTransitionEpochRef.current !== transitionEpoch) {
@@ -1317,12 +1317,12 @@ export function useInterviewSession(
       const transitionEpoch = sessionTransitionEpochRef.current + 1;
       sessionTransitionEpochRef.current = transitionEpoch;
       terminalTransitionInFlightRef.current = true;
-      sessionMutationAdmissionRef.current = false;
-      stopRendererTransport();
-      void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
-      setError(null);
-      const client = getCommandClient();
       try {
+        sessionMutationAdmissionRef.current = false;
+        stopRendererTransport();
+        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+        setError(null);
+        const client = getCommandClient();
         try {
           await client.archiveSession(sessionId, reason);
           if (sessionTransitionEpochRef.current !== transitionEpoch) {
