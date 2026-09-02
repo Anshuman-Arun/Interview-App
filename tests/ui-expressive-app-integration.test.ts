@@ -132,6 +132,21 @@ describe("expressive product integration invariants", () => {
     expect(adapter).toContain("globalThis.structuredClone(shape)");
   });
 
+  it("drops a prior canvas before attaching a different recovered ACTIVE session", () => {
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+    const recoverStart = hook.indexOf("const recoverSession = useCallback");
+    const pauseStart = hook.indexOf("const pauseSession = useCallback", recoverStart);
+    const recover = hook.slice(recoverStart, pauseStart);
+
+    expect(recover).toContain("if (sessionId !== targetSessionId)");
+    expect(recover).toContain("options.whiteboardAdapter?.resetForNewSession()");
+    expect(recover.indexOf("options.whiteboardAdapter?.resetForNewSession()"))
+      .toBeLessThan(recover.indexOf("setSessionId(targetSessionId)"));
+  });
+
   it("route-locks live ACTIVE interviews while permitting an explicit paused Home", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
