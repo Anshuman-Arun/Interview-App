@@ -5,6 +5,7 @@ import {
   ClientCommandSchema,
   MAX_WHITEBOARD_VISION_BASE64_LENGTH,
   ProtocolErrorResponseSchema,
+  WhiteboardVisionSnapshotUploadSchema,
   ProtocolSuccessResponseSchema,
   SessionIdSchema,
   type ClientCommand,
@@ -172,7 +173,15 @@ export class LoopbackCommandServer {
         } catch {
           throw new ProtocolHttpError(400, "INVALID_COMMAND", "Whiteboard vision body is not valid JSON");
         }
-        const result = await coordinator.process(parsed);
+        const upload = WhiteboardVisionSnapshotUploadSchema.safeParse(parsed);
+        if (!upload.success) {
+          throw new ProtocolHttpError(
+            400,
+            "INVALID_COMMAND",
+            "Whiteboard vision body does not match protocol version 1"
+          );
+        }
+        const result = await coordinator.process(upload.data);
         sendJson(response, 200, result, origin);
         return;
       }
