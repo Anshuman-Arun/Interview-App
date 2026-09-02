@@ -9,10 +9,8 @@ import {
   statfs
 } from "node:fs/promises";
 import path from "node:path";
-import {
-  ModelAssetManager,
-  verifyArtifactFile
-} from "../../../../packages/model-assets/src/index.js";
+import { verifyArtifactFile } from "../../../../packages/model-assets/src/index.js";
+import type { ModelAssetManager } from "../../../../packages/model-assets/src/index.js";
 import type { DesktopRuntimeAsset } from "./model-assets.js";
 
 const MAX_STALE_RUNTIME_VIEWS = 32;
