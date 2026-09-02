@@ -42,9 +42,7 @@ interface ActiveProviderExecution {
 interface InFlightOrchestration {
   readonly input: TurnOrchestrationInput;
   readonly completion: Promise<TurnOrchestrationDisposition>;
-  readonly cancellationSignal: Promise<void>;
   readonly signalCancellation: () => void;
-  readonly cancellationRequested: () => boolean;
 }
 
 function usesDeterministicMockRealization(
@@ -220,9 +218,7 @@ export class ServerTurnOrchestrator {
     record = {
       input,
       completion,
-      cancellationSignal,
-      signalCancellation,
-      cancellationRequested: () => requested
+      signalCancellation
     };
 
     this.inFlight.set(key, record);
