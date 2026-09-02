@@ -382,6 +382,7 @@ export const QuantTradingRoundEvidenceEventSchema = z.object({
     });
   }
 });
+export type QuantTradingRoundEvidenceEvent = z.infer<typeof QuantTradingRoundEvidenceEventSchema>;
 
 export const QuantTradingResultEventSchema = z.object({
   family: QuantTradingFamilySchema,
