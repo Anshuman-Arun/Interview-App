@@ -17,7 +17,8 @@ import {
 import { DesktopLocalRuntimeComposition } from "../apps/desktop/src/runtime/composition.js";
 import {
   ManagedModelWorkerClient,
-  ManagedWorkerRequestTimeoutError
+  ManagedWorkerRequestTimeoutError,
+  ManagedWorkerResponseError
 } from "../apps/desktop/src/runtime/managed-worker-client.js";
 import {
   ManagedKokoroRuntime,
@@ -184,6 +185,37 @@ describe("desktop local model runtime", () => {
       tts: {
         state: "UNAVAILABLE",
         reasonCode: "PYTHON_RUNTIME_UNAVAILABLE"
+      },
+      vision: {
+        state: "UNAVAILABLE",
+        reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+      }
+    });
+  });
+
+  it("reports explicit cancellation when optional runtime startup is already aborted", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-start-cancelled-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(composition.start({ signal: controller.signal })).resolves.toBeUndefined();
+
+    expect(composition.voiceRuntime).toBeUndefined();
+    expect(composition.getCapabilityStatus()).toEqual({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "START_CANCELLED"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "START_CANCELLED"
       },
       vision: {
         state: "UNAVAILABLE",
@@ -389,6 +421,51 @@ describe("desktop local model runtime", () => {
     expect(after.state).toBe("READY");
     expect(after.pid).toBe(before.pid);
     expect(after.readyAt).toBe(before.readyAt);
+  });
+
+  it("recycles on native 5xx failures but not request-level 4xx responses", async () => {
+    const token = "4".repeat(64);
+    const runtime = fixtureManager("speech-native-failure", "speech", "fixture-speech-1", token);
+    await runtime.start("speech-native-failure");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-native-failure",
+      "speech",
+      token
+    );
+    let recycleCount = 0;
+    const mutable = client as unknown as {
+      postJson(): Promise<unknown>;
+      recycleAfterUncertainRequest(expectedWorkerInstance: string): Promise<void>;
+    };
+    mutable.recycleAfterUncertainRequest = async () => {
+      recycleCount += 1;
+    };
+    const vad = new ManagedSileroVadRuntime(client, "/verified/silero.onnx");
+    const input = {
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      streamId: "stream-native-failure",
+      modelPath: "/verified/silero.onnx"
+    } as const;
+
+    mutable.postJson = async () => {
+      throw new ManagedWorkerResponseError(500, "RUNTIME_FAILURE");
+    };
+    await expect(vad.score(input)).rejects.toMatchObject({
+      statusCode: 500,
+      workerErrorCode: "RUNTIME_FAILURE"
+    });
+    expect(recycleCount).toBe(1);
+
+    mutable.postJson = async () => {
+      throw new ManagedWorkerResponseError(409, "CANCELLED");
+    };
+    await expect(vad.score(input)).rejects.toMatchObject({
+      statusCode: 409,
+      workerErrorCode: "CANCELLED"
+    });
+    expect(recycleCount).toBe(1);
   });
 
   it("authenticates a supervised loopback speech worker and preserves bounded adapter output", async () => {
