@@ -360,6 +360,38 @@ describe("supervised one-shot process execution", () => {
     }
   );
 
+  it("rejects AbortSignal method/accessor overrides without invoking them", async () => {
+    const runtime = runner();
+    const controller = new AbortController();
+    let getterCalls = 0;
+    Object.defineProperty(controller.signal, "addEventListener", {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return () => undefined;
+      }
+    });
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      signal: controller.signal
+    }))).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(getterCalls).toBe(0);
+
+    const second = new AbortController();
+    let abortedGetterCalls = 0;
+    Object.defineProperty(second.signal, "aborted", {
+      configurable: true,
+      get() {
+        abortedGetterCalls += 1;
+        return false;
+      }
+    });
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      signal: second.signal
+    }))).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(abortedGetterCalls).toBe(0);
+  });
+
   it("does not start a process for an already-cancelled request", async () => {
     const runtime = runner();
     const controller = new AbortController();
