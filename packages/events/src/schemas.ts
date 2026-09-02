@@ -350,6 +350,22 @@ const QuantTradingRiskBreachEventSchema = z.object({
   source: z.enum(["POST_ROUND", "FAIR_VALUE_UPDATE"]),
   reason: z.string().min(1).max(240)
 }).strict();
+const QuantTradingOrderFillEventSchema = OrderFillSchema.superRefine((fill, context) => {
+  for (const [field, value] of [
+    ["fillId", fill.fillId],
+    ["orderId", fill.orderId],
+    ["matchedOrderId", fill.matchedOrderId],
+    ["counterparty", fill.counterparty]
+  ] as const) {
+    if (value !== undefined && value.length > 128) {
+      context.addIssue({
+        code: "custom",
+        path: [field],
+        message: "Quant Trading persisted fill identifiers must be at most 128 characters"
+      });
+    }
+  }
+});
 
 export const QuantTradingScenarioDefinitionEventSchema = z.object({
   family: QuantTradingFamilySchema,
@@ -364,7 +380,7 @@ export const QuantTradingRoundEvidenceEventSchema = z.object({
   marketEvents: z.array(QuantTradingMarketEventSchema).max(16),
   orderFlowType: z.enum(["INFORMED", "NOISE", "NO_TRADE"]),
   incomingMarketSide: z.enum(["BUY", "SELL"]).optional(),
-  studentFills: z.array(OrderFillSchema).max(64),
+  studentFills: z.array(QuantTradingOrderFillEventSchema).max(64),
   portfolio: QuantTradingPortfolioEventSchema,
   riskBreached: z.boolean(),
   riskReason: z.string().min(1).max(240).optional(),
