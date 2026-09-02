@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import {
   EvidenceDimensionSchema,
   EvidenceProposalSchema,
   EvidenceRatingSchema,
   EvidenceSubjectSchema,
+  VisionEvidenceInterpreterFingerprintSchema,
   VisionObservationKindSchema,
   isEvidenceValueAllowed,
   type AcceptedBoardObservation,
@@ -10,6 +12,7 @@ import {
   type EvidenceProposal,
   type EvidenceRating,
   type EventId,
+  type VisionEvidenceInterpreterFingerprint,
   type VisionObservationKind
 } from "../../domain/src/index.js";
 
@@ -23,6 +26,8 @@ export interface VisionEvidenceCandidateContext {
 }
 
 export interface VisionEvidenceInterpreter {
+  /** Semantic identity for deterministic replay. Change whenever propose() semantics change. */
+  readonly fingerprint: VisionEvidenceInterpreterFingerprint;
   readonly propose: (
     context: Readonly<VisionEvidenceCandidateContext>
   ) => EvidenceProposal | undefined;
@@ -47,6 +52,7 @@ interface ParsedVisionEvidenceRule {
 const MAX_VISION_EVIDENCE_RULES = 32;
 
 export class RuleBasedVisionEvidenceInterpreter implements VisionEvidenceInterpreter {
+  public readonly fingerprint: VisionEvidenceInterpreterFingerprint;
   private readonly rules: ReadonlyMap<VisionObservationKind, ParsedVisionEvidenceRule>;
 
   public constructor(rules: readonly VisionEvidenceRule[]) {
@@ -81,6 +87,23 @@ export class RuleBasedVisionEvidenceInterpreter implements VisionEvidenceInterpr
       });
     }
     this.rules = parsed;
+    const canonicalRules = [...parsed.values()]
+      .sort((left, right) => left.observationKind.localeCompare(right.observationKind))
+      .map((rule) => ({
+        observationKind: rule.observationKind,
+        subject: rule.subject,
+        dimension: rule.dimension,
+        proposedValue: rule.proposedValue,
+        minConfidence: rule.minConfidence
+      }));
+    this.fingerprint = VisionEvidenceInterpreterFingerprintSchema.parse(
+      createHash("sha256")
+        .update(JSON.stringify({
+          implementation: "rule-based-vision-evidence-v1",
+          rules: canonicalRules
+        }), "utf8")
+        .digest("hex")
+    );
   }
 
   public propose(
