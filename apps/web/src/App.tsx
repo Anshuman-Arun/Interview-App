@@ -321,7 +321,7 @@ export const App: React.FC = () => {
       return;
     }
     if (session.isPaused) {
-      if (route.page !== "home" && route.page !== "interview") {
+      if (route.page !== "home") {
         navigate({ page: "home" }, { replace: true });
       }
       return;
