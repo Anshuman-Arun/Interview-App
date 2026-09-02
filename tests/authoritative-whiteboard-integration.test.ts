@@ -389,6 +389,54 @@ describe("browser authoritative board synchronization", () => {
     });
   });
 
+  it("fails closed without transport on oversized or structurally invalid editor transactions", async () => {
+    const sessionId = newSessionId();
+    let commitCalls = 0;
+    const client: SyncClient = {
+      getBoardState: async () =>
+        boardStateResponse(sessionId, BoardRevisionSchema.parse(0), []),
+      commitBoardMutation: async () => {
+        commitCalls += 1;
+        throw new Error("Invalid local mutations must never reach transport");
+      }
+    };
+
+    const oversizedSync = new AuthoritativeBoardSyncCoordinator(client);
+    await oversizedSync.synchronize(sessionId, []);
+    const oversized: NormalizedStudentShapeChange = {
+      source: "EDITOR",
+      added: Array.from(
+        { length: 65 },
+        (_, index) => shape(`shape:oversized-${String(index)}`, 1, index)
+      ),
+      updated: [],
+      deleted: []
+    };
+    await expect(oversizedSync.submit(oversized)).rejects.toThrow(/bounded mutation size/u);
+    expect(oversizedSync.snapshot()).toMatchObject({
+      status: "UNSYNCHRONIZED",
+      pendingMutationCount: 0
+    });
+    expect(commitCalls).toBe(0);
+
+    const invalidSync = new AuthoritativeBoardSyncCoordinator(client);
+    await invalidSync.synchronize(sessionId, []);
+    const duplicate = shape("shape:duplicate", 1, 10);
+    const invalid: NormalizedStudentShapeChange = {
+      source: "EDITOR",
+      added: [duplicate, duplicate],
+      updated: [],
+      deleted: []
+    };
+    await expect(invalidSync.submit(invalid)).rejects.toThrow();
+    expect(invalidSync.snapshot()).toMatchObject({
+      status: "UNSYNCHRONIZED",
+      pendingMutationCount: 0,
+      reason: "Whiteboard mutation failed local bounded validation"
+    });
+    expect(commitCalls).toBe(0);
+  });
+
   it("retries a dropped command response with the exact same request ID and mutation basis", async () => {
     const sessionId = newSessionId();
     const calls: Parameters<SyncClient["commitBoardMutation"]>[] = [];
