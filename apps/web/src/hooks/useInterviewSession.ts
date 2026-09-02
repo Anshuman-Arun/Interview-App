@@ -592,9 +592,10 @@ export function useInterviewSession(
     if (transportEpochRef.current !== transportEpoch) {
       throw new Error("Command server changed while stored sessions were being read");
     }
-    if (sessionListRequestEpochRef.current === requestEpoch) {
-      setAvailableSessions(sessions);
+    if (sessionListRequestEpochRef.current !== requestEpoch) {
+      throw new Error("Stored session read was superseded by a newer request");
     }
+    setAvailableSessions(sessions);
     return sessions;
   }, [getCommandClient]);
 
