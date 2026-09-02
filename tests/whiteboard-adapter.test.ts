@@ -73,6 +73,44 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       ).toBe(true);
     });
 
+    it("does not restore an incomplete freehand gesture that was never authoritative", () => {
+      const firstEditor = new InMemoryTldrawEditor();
+      firstEditor.createShapes([
+        {
+          id: "shape:stable_student",
+          type: "geo",
+          x: 10,
+          y: 10,
+          props: { text: "stable" },
+          meta: {
+            layer: "STUDENT",
+            origin: "STUDENT",
+            shapeRevision: 1
+          }
+        },
+        {
+          id: "shape:unfinished_stroke",
+          type: "draw",
+          x: 20,
+          y: 20,
+          props: { isComplete: false },
+          meta: {
+            layer: "STUDENT",
+            origin: "STUDENT",
+            shapeRevision: 1
+          }
+        }
+      ]);
+      const adapter = new TldrawWhiteboardAdapter(firstEditor);
+
+      adapter.detachEditor();
+      const remounted = new InMemoryTldrawEditor();
+      adapter.attachEditor(remounted);
+
+      expect(remounted.getShape("shape:stable_student")).toBeDefined();
+      expect(remounted.getShape("shape:unfinished_stroke")).toBeUndefined();
+    });
+
     it("does not restore a detached canvas after a genuine new-session reset", () => {
       const firstEditor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(firstEditor);
