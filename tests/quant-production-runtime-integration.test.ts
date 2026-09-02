@@ -26,7 +26,8 @@ import {
   QUANT_RESEARCH_VERSION,
   QUANT_TRADER_SCENARIO_VERSION,
   QuantResearchEngine,
-  createProductionQuantResearchDefinition
+  createProductionQuantResearchDefinition,
+  createQuantTraderScenario
 } from "../packages/local-compute/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
@@ -872,6 +873,127 @@ describe("adversarial quant lifecycle invariants", () => {
         } finally {
           await writer.close();
         }
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  it("rejects schema-valid deterministic Trading corruption before recovery can append", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const seed = 424_242;
+    try {
+      await new QuantTradingSessionCoordinator(writer).initializeConfigured(
+        tradingConfiguration(),
+        seed,
+        createCommandEnvelope({ sessionId, producer: "quant-corruption-test" })
+      );
+      await writer.close();
+
+      const engine = createQuantTraderScenario({
+        family: "BASIC_MARKET_MAKING",
+        seed
+      });
+      engine.submitAction({ type: "PASS" });
+      const round = engine.advance();
+      const tamperedFairValue = round.fairValue + 1;
+      const requestId = newRequestId();
+      store.appendIdempotent({
+        sessionId,
+        requestId,
+        causationId: requestId,
+        correlationId: requestId,
+        elapsedMs: 10,
+        expectedPriorSequence: 2,
+        commandFingerprint: "0".repeat(64),
+        drafts: [{
+          source: "USER",
+          type: "QUANT_TRADING_ACTION_ACCEPTED",
+          payload: { action: { type: "PASS" } }
+        }, {
+          source: "APPLICATION",
+          type: "QUANT_TRADING_ROUND_RESOLVED",
+          payload: {
+            evidence: {
+              round: round.round,
+              fairValue: tamperedFairValue,
+              marketEvents: round.marketEvents,
+              orderFlowType: round.orderFlowType,
+              ...(round.incomingMarketSide === undefined
+                ? {}
+                : { incomingMarketSide: round.incomingMarketSide }),
+              studentFills: round.studentFills,
+              portfolio: round.portfolio,
+              riskBreached: round.riskBreached,
+              ...(round.riskReason === undefined ? {} : { riskReason: round.riskReason }),
+              accountingInvariantHolds: round.accountingInvariantHolds,
+              rngDrawCount: round.rngDrawCount
+            }
+          }
+        }],
+        result: { injected: true }
+      });
+      const countBeforeRecovery = store.eventCount(sessionId);
+
+      const registry = new SessionRuntimeRegistry(store);
+      const recovery = new SessionRecoveryCoordinator(registry);
+      try {
+        await expect(recovery.ensureRecovered(sessionId))
+          .rejects.toThrow(/does not match deterministic replay/u);
+        expect(store.eventCount(sessionId)).toBe(countBeforeRecovery);
+      } finally {
+        await registry.closeAll();
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  it("rejects schema-valid Research stage corruption during recovery", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    try {
+      await new QuantResearchCoordinator(writer).initializeConfigured(
+        researchConfiguration(),
+        createProductionQuantResearchDefinition("MODEL_COMPARISON", 515_151),
+        createCommandEnvelope({ sessionId, producer: "quant-corruption-test" })
+      );
+      await writer.close();
+
+      const requestId = newRequestId();
+      store.appendIdempotent({
+        sessionId,
+        requestId,
+        causationId: requestId,
+        correlationId: requestId,
+        elapsedMs: 10,
+        expectedPriorSequence: 3,
+        commandFingerprint: "1".repeat(64),
+        drafts: [{
+          source: "USER",
+          type: "QUANT_RESEARCH_ACTION_ACCEPTED",
+          payload: {
+            action: {
+              actionId: "schema-valid-wrong-stage",
+              kind: "CHOOSE_OPTION",
+              option: "A"
+            }
+          }
+        }],
+        result: { injected: true }
+      });
+      const countBeforeRecovery = store.eventCount(sessionId);
+
+      const registry = new SessionRuntimeRegistry(store);
+      const recovery = new SessionRecoveryCoordinator(registry);
+      try {
+        await expect(recovery.ensureRecovered(sessionId)).rejects.toThrow();
+        expect(store.eventCount(sessionId)).toBe(countBeforeRecovery);
+      } finally {
+        await registry.closeAll();
       }
     } finally {
       store.close();
