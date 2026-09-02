@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   InterviewSessionConfigurationSchema,
   ProtocolErrorResponseSchema,
+  QuantResearchPublicStateSchema,
   QuantResearchStateResponseSchema,
+  QuantTradingPublicStateSchema,
   QuantTradingStateResponseSchema,
   newRequestId,
   newSessionId,
