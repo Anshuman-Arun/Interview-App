@@ -25,8 +25,12 @@ const MOONSHINE_LICENSE = Object.freeze({
   name: "MIT",
   url: "https://github.com/moonshine-ai/moonshine/blob/main/LICENSE"
 });
+const EN_US_G2P_LICENSE = Object.freeze({
+  name: "Mixed CMUdict-derived/Moonshine; see provenance",
+  url: "https://github.com/moonshine-ai/moonshine/blob/main/core/moonshine-tts/data/en_us/README.md"
+});
 const KOKORO_LICENSE = Object.freeze({
-  name: "Apache-2.0",
+  name: "Apache-2.0 (upstream Kokoro assets)",
   url: "https://huggingface.co/hexgrad/Kokoro-82M"
 });
 
@@ -55,7 +59,11 @@ function moonshineAsset(input: {
       sha256: input.sha256,
       sourceUrl: `https://download.moonshine.ai/${input.sourcePath}`,
       modelVersion: input.modelVersion,
-      license: input.familyId === "kokoro-en" ? KOKORO_LICENSE : MOONSHINE_LICENSE,
+      license: input.familyId === "kokoro-en"
+        ? KOKORO_LICENSE
+        : input.familyId === "moonshine-en-us-g2p"
+          ? EN_US_G2P_LICENSE
+          : MOONSHINE_LICENSE,
       sourceMetadata: {
         publisher: "Moonshine AI",
         repository: MOONSHINE_ASSET_REPOSITORY,
