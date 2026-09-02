@@ -3,16 +3,24 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_APPEARANCE,
+  MAX_INTERFACE_ZOOM_PERCENT,
+  MIN_INTERFACE_ZOOM_PERCENT,
   normalizeAppearance,
   resolveTheme
 } from "../apps/web/src/appearance/appearance.js";
 
 describe("expressive UI appearance foundations", () => {
-  it("keeps appearance local, bounded, and fail-closed", () => {
+  it("keeps appearance local, bounded, migratable, and fail-closed", () => {
     expect(resolveTheme("system", false)).toBe("light");
     expect(resolveTheme("system", true)).toBe("dark");
     expect(normalizeAppearance({ accentIntensity: 99 }).accentIntensity).toBe(28);
     expect(normalizeAppearance({ accentIntensity: -10 }).accentIntensity).toBe(8);
+    expect(normalizeAppearance({ zoomPercent: 113 }).zoomPercent).toBe(113);
+    expect(normalizeAppearance({ zoomPercent: 10 }).zoomPercent)
+      .toBe(MIN_INTERFACE_ZOOM_PERCENT);
+    expect(normalizeAppearance({ zoomPercent: 500 }).zoomPercent)
+      .toBe(MAX_INTERFACE_ZOOM_PERCENT);
+    expect(normalizeAppearance({ scale: "xl" }).zoomPercent).toBe(125);
     expect(normalizeAppearance({ theme: "unknown" })).toEqual(DEFAULT_APPEARANCE);
   });
 
@@ -35,14 +43,30 @@ describe("expressive UI appearance foundations", () => {
     expect(source).toContain('initialState="draw"');
   });
 
-  it("isolates native zoom work to interface-scale changes", () => {
-    const source = fs.readFileSync(
+  it("supports continuous interface zoom instead of named size presets", () => {
+    const provider = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/appearance/AppearanceProvider.tsx"),
       "utf8"
     );
+    const dock = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/AppearanceDock.tsx"),
+      "utf8"
+    );
 
-    expect(source).toContain("}, [settings.scale]);");
-    expect(source).toContain("bridge.setZoomFactor(scaleFactor)");
+    expect(provider).toContain("}, [settings.zoomPercent]);");
+    expect(provider).toContain("bridge.setZoomFactor(zoomFactor)");
+    expect(dock).toContain('aria-label="Interface zoom percent"');
+    expect(dock).toContain("setZoomPercent");
+    expect(dock).not.toContain("const SCALES");
+  });
+
+  it("lets transient appearance popovers dismiss without sacrificing controls", () => {
+    const dock = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/AppearanceDock.tsx"),
+      "utf8"
+    );
+    expect(dock).toContain('document.addEventListener("pointerdown", closeFromOutside)');
+    expect(dock).toContain('event.key !== "Escape"');
   });
 
   it("avoids expensive decorative UI loops and blur effects", () => {
