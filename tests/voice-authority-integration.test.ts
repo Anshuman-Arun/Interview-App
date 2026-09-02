@@ -15,6 +15,36 @@ function audioRef(seed: string): string {
 }
 
 describe("authoritative voice delivery admission", () => {
+  it("admits speech onset with no playback and remains safe across repeated sequential barge-ins", async () => {
+    const harness = await createCoreHarness();
+    try {
+      expect(Object.values(harness.writer.getState().deliveries)).toHaveLength(0);
+
+      const firstUtteranceId = await harness.turns.beginUtterance();
+      let state = harness.writer.getState();
+      expect(state.utterances[firstUtteranceId]?.status).toBe("CAPTURING");
+      expect(state.generations[harness.generationId]?.status).toBe("SUPERSEDED");
+      expect(Object.values(state.deliveries)).toHaveLength(0);
+
+      await harness.turns.discardUtterance(firstUtteranceId, "Repeated barge-in fixture");
+      const repeatedGeneration = await harness.turns.startGeneration(
+        harness.inputEpisodeId,
+        harness.turnId,
+        "mock-model-repeated-barge-in"
+      );
+
+      const secondUtteranceId = await harness.turns.beginUtterance();
+      state = harness.writer.getState();
+      expect(secondUtteranceId).not.toBe(firstUtteranceId);
+      expect(state.utterances[firstUtteranceId]?.status).toBe("DISCARDED");
+      expect(state.utterances[secondUtteranceId]?.status).toBe("CAPTURING");
+      expect(state.generations[repeatedGeneration.generationId]?.status).toBe("SUPERSEDED");
+      expect(Object.values(state.deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("derives AUDIO only from the exact validated speech text and preserves disclosure semantics", async () => {
     const harness = await createCoreHarness();
     try {
