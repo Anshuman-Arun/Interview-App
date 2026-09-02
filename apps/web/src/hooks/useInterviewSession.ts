@@ -544,6 +544,7 @@ export function useInterviewSession(
       if (rendererLaunchEpochRef.current !== launchEpoch) return;
 
       for (let attempt = 0; attempt < RENDERER_REATTACH_MAX_ATTEMPTS; attempt += 1) {
+        if (rendererLaunchEpochRef.current !== launchEpoch) return;
         try {
           await attachRendererStream(targetSessionId);
           return;
