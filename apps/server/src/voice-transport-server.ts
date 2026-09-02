@@ -33,6 +33,9 @@ const VOICE_HTTP_HEADERS_TIMEOUT_MS = 5_000;
 const VOICE_HTTP_KEEP_ALIVE_TIMEOUT_MS = 5_000;
 const MAX_REQUEST_BODY_CHUNKS = 128;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
+const MAX_CLIENT_TOKEN_CHARACTERS = 256;
+const MAX_ALLOWED_ORIGINS = 16;
+const MAX_ALLOWED_ORIGIN_CHARACTERS = 2_048;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const LOOPBACK_ORIGIN_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const ALLOWED_REQUEST_HEADERS: ReadonlySet<string> = new Set([
@@ -524,14 +527,18 @@ function validateSecurity(security: LocalTransportSecurity): void {
   if (
     typeof security.clientToken !== "string"
     || security.clientToken.length < 32
+    || security.clientToken.length > MAX_CLIENT_TOKEN_CHARACTERS
     || /[\r\n]/u.test(security.clientToken)
   ) {
     throw new Error("Voice transport client token must contain at least 32 safe characters");
   }
-  if (security.allowedOrigins.size === 0) {
-    throw new Error("Voice transport requires at least one exact client origin");
+  if (security.allowedOrigins.size === 0 || security.allowedOrigins.size > MAX_ALLOWED_ORIGINS) {
+    throw new Error("Voice transport requires a bounded non-empty client origin allowlist");
   }
   for (const origin of security.allowedOrigins) {
+    if (origin.length === 0 || origin.length > MAX_ALLOWED_ORIGIN_CHARACTERS) {
+      throw new Error("Voice allowed origin exceeds its bounded length");
+    }
     const parsed = new URL(origin);
     if (
       parsed.origin !== origin
