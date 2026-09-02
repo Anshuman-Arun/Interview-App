@@ -863,6 +863,50 @@ describe("production quant runtime integration", () => {
     ).state.acceptedActionCount).toBe(1);
   });
 
+  it("classifies schema-valid persisted Research corruption as an internal recovery failure", async () => {
+    const sessionId = newSessionId();
+    await expectStatus(postStart(sessionId, researchConfiguration()), 200);
+
+    await server.stop();
+    await registry.closeAll();
+
+    const injectedRequestId = newRequestId();
+    store.appendIdempotent({
+      sessionId,
+      requestId: injectedRequestId,
+      causationId: injectedRequestId,
+      correlationId: injectedRequestId,
+      elapsedMs: 10,
+      expectedPriorSequence: 3,
+      commandFingerprint: "7".repeat(64),
+      drafts: [{
+        source: "USER",
+        type: "QUANT_RESEARCH_ACTION_ACCEPTED",
+        payload: {
+          action: {
+            actionId: "persisted-wrong-stage",
+            kind: "CHOOSE_OPTION",
+            option: "A"
+          }
+        }
+      }],
+      result: { injected: true }
+    });
+    const countBeforeRecovery = store.eventCount(sessionId);
+
+    registry = new SessionRuntimeRegistry(store);
+    sessions = recoveryCoordinator(registry);
+    server = commandServer(sessions);
+    address = await server.start();
+
+    const response = await getQuantState(sessionId);
+    expect(response.status).toBe(500);
+    const error = ProtocolErrorResponseSchema.parse(await responseJson(response));
+    expect(error.error.code).toBe("INTERNAL_ERROR");
+    expect(error.error.message.length).toBeLessThanOrEqual(200);
+    expect(store.eventCount(sessionId)).toBe(countBeforeRecovery);
+  });
+
   it("rejects active quant archive and allows archive only after deterministic completion", async () => {
     const tradingId = newSessionId();
     const researchId = newSessionId();
