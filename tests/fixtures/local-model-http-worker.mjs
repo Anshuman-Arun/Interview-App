@@ -10,6 +10,7 @@ if (!token || !/^[0-9a-f]{64}$/u.test(token)) throw new Error("fixture token req
 let shuttingDown = false;
 let activeTtsRequestId = null;
 let activeTtsResponse = null;
+let activeSttResponse = null;
 const server = http.createServer((request, response) => {
   if (request.headers.authorization !== `Bearer ${token}`) {
     send(response, 401, { error: "UNAUTHORIZED" });
@@ -42,6 +43,11 @@ const server = http.createServer((request, response) => {
       return;
     }
     if (component === "speech" && request.url === "/v1/stt") {
+      if (behavior === "blocking-stt") {
+        activeSttResponse = response;
+        console.log(`STT_STARTED:${String(body.requestId ?? "")}`);
+        return;
+      }
       if (behavior === "delayed-stt") {
         console.log(`STT_STARTED:${String(body.requestId ?? "")}`);
         setTimeout(() => {
@@ -113,6 +119,10 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
   if (!chunk.includes("shutdown") || shuttingDown) return;
   shuttingDown = true;
+  if (activeSttResponse !== null) {
+    send(activeSttResponse, 503, { error: "SHUTDOWN" });
+    activeSttResponse = null;
+  }
   server.close(() => process.exit(0));
 });
 process.stdin.resume();
