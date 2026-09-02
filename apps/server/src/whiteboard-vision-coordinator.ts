@@ -32,6 +32,9 @@ import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.
 
 const PREPROCESSING_VERSION = "whiteboard-snapshot-v1";
 const MAX_RESPONSE_TOMBSTONES = 64;
+const MAX_COORDINATOR_IN_FLIGHT_REQUESTS = 64;
+const MAX_GLOBAL_BACKEND_RESERVATIONS = 16;
+const MAX_SESSION_VISION_MANAGERS = 64;
 const DEFAULT_BACKEND_TIMEOUT_MS = 15_000;
 const MAX_BACKEND_TIMEOUT_MS = 120_000;
 
@@ -85,6 +88,9 @@ export class WhiteboardVisionCoordinator {
       return active.fingerprint === fingerprint
         ? active.promise
         : rejected(upload, "CONFLICTING_REQUEST_ID");
+    }
+    if (this.inFlight.size >= MAX_COORDINATOR_IN_FLIGHT_REQUESTS) {
+      return rejected(upload, "RESOURCE_LIMIT");
     }
 
     const promise = this.processRequest(upload);
@@ -292,7 +298,21 @@ export class WhiteboardVisionCoordinator {
       relevantShapeRevisions: upload.relevantShapeRevisions,
       requestedObservationKind: upload.requestedObservationKind
     });
+    if (this.totalBackendReservations() >= MAX_GLOBAL_BACKEND_RESERVATIONS) {
+      await turn.discardVisionRequest(upload.requestId, "RESOURCE_LIMIT");
+      return this.remember(upload.requestId, fingerprint, rejected(
+        upload,
+        "RESOURCE_LIMIT"
+      ));
+    }
     const manager = this.managerFor(upload.sessionId);
+    if (manager === undefined) {
+      await turn.discardVisionRequest(upload.requestId, "RESOURCE_LIMIT");
+      return this.remember(upload.requestId, fingerprint, rejected(
+        upload,
+        "RESOURCE_LIMIT"
+      ));
+    }
     const admissionPromise = manager.submit(request, this.backend);
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const outcome = await Promise.race([
@@ -403,9 +423,20 @@ export class WhiteboardVisionCoordinator {
     this.managers.clear();
   }
 
-  private managerFor(sessionId: SessionId): VisionRequestManager {
+  private managerFor(sessionId: SessionId): VisionRequestManager | undefined {
     const existing = this.managers.get(sessionId);
     if (existing !== undefined) return existing;
+
+    if (this.managers.size >= MAX_SESSION_VISION_MANAGERS) {
+      for (const [candidateSessionId, candidate] of this.managers) {
+        if (candidate.inFlightCount !== 0) continue;
+        candidate.shutdown();
+        this.managers.delete(candidateSessionId);
+        break;
+      }
+    }
+    if (this.managers.size >= MAX_SESSION_VISION_MANAGERS) return undefined;
+
     const manager = new VisionRequestManager({
       maxInFlight: 4,
       maxObservationsPerResult: 1,
@@ -413,6 +444,15 @@ export class WhiteboardVisionCoordinator {
     });
     this.managers.set(sessionId, manager);
     return manager;
+  }
+
+  private totalBackendReservations(): number {
+    let count = 0;
+    for (const manager of this.managers.values()) {
+      count += manager.inFlightCount;
+      if (count >= MAX_GLOBAL_BACKEND_RESERVATIONS) break;
+    }
+    return count;
   }
 
   private authorityFor(request: Readonly<VisionInferenceRequest>) {
