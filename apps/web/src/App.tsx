@@ -151,15 +151,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const openHistoricalReview = (targetSessionId: SessionId): void => {
-    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") return;
-    navigate({
-      page: "review",
-      sessionId: targetSessionId,
-      view: "evaluation"
-    });
-  };
-
   const handleRecoverSession = async (targetSessionId: SessionId): Promise<void> => {
     if (
       sessionEntryPendingRef.current
