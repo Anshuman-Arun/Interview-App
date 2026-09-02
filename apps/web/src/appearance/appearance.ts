@@ -8,15 +8,17 @@ export type AccentName =
   | "coral"
   | "violet"
   | "rose";
-export type InterfaceScale = "s" | "m" | "l" | "xl";
 export type CornerStyle = "square" | "soft" | "round" | "generous";
 export type BorderStyle = "quiet" | "regular" | "strong" | "contrast";
+
+export const MIN_INTERFACE_ZOOM_PERCENT = 25;
+export const MAX_INTERFACE_ZOOM_PERCENT = 300;
 
 export interface AppearanceSettings {
   readonly theme: ThemeMode;
   readonly accent: AccentName;
   readonly accentIntensity: number;
-  readonly scale: InterfaceScale;
+  readonly zoomPercent: number;
   readonly corners: CornerStyle;
   readonly borders: BorderStyle;
 }
@@ -27,7 +29,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   theme: "system",
   accent: "cobalt",
   accentIntensity: 16,
-  scale: "m",
+  zoomPercent: 100,
   corners: "soft",
   borders: "regular"
 };
@@ -48,33 +50,52 @@ export const ACCENT_OPTIONS: readonly {
 
 const THEMES = new Set<ThemeMode>(["system", "light", "dark"]);
 const ACCENTS = new Set<AccentName>(ACCENT_OPTIONS.map((item) => item.id));
-const SCALES = new Set<InterfaceScale>(["s", "m", "l", "xl"]);
 const CORNERS = new Set<CornerStyle>(["square", "soft", "round", "generous"]);
 const BORDERS = new Set<BorderStyle>(["quiet", "regular", "strong", "contrast"]);
+const LEGACY_SCALE_PERCENT: Readonly<Record<string, number>> = {
+  s: 87.5,
+  m: 100,
+  l: 112.5,
+  xl: 125
+};
+
+function normalizeZoomPercent(candidate: Record<string, unknown>): number {
+  const raw = candidate["zoomPercent"];
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Math.min(
+      MAX_INTERFACE_ZOOM_PERCENT,
+      Math.max(MIN_INTERFACE_ZOOM_PERCENT, Math.round(raw))
+    );
+  }
+  const legacyScale = candidate["scale"];
+  if (typeof legacyScale === "string") {
+    const migrated = LEGACY_SCALE_PERCENT[legacyScale];
+    if (migrated !== undefined) return migrated;
+  }
+  return DEFAULT_APPEARANCE.zoomPercent;
+}
 
 export function normalizeAppearance(value: unknown): AppearanceSettings {
   if (typeof value !== "object" || value === null) return DEFAULT_APPEARANCE;
-  const candidate = value as Partial<AppearanceSettings>;
+  const candidate = value as Record<string, unknown>;
   return {
-    theme: THEMES.has(candidate.theme as ThemeMode)
-      ? candidate.theme as ThemeMode
+    theme: THEMES.has(candidate["theme"] as ThemeMode)
+      ? candidate["theme"] as ThemeMode
       : DEFAULT_APPEARANCE.theme,
-    accent: ACCENTS.has(candidate.accent as AccentName)
-      ? candidate.accent as AccentName
+    accent: ACCENTS.has(candidate["accent"] as AccentName)
+      ? candidate["accent"] as AccentName
       : DEFAULT_APPEARANCE.accent,
     accentIntensity:
-      typeof candidate.accentIntensity === "number"
-      && Number.isFinite(candidate.accentIntensity)
-        ? Math.min(28, Math.max(8, Math.round(candidate.accentIntensity)))
+      typeof candidate["accentIntensity"] === "number"
+      && Number.isFinite(candidate["accentIntensity"])
+        ? Math.min(28, Math.max(8, Math.round(candidate["accentIntensity"])))
         : DEFAULT_APPEARANCE.accentIntensity,
-    scale: SCALES.has(candidate.scale as InterfaceScale)
-      ? candidate.scale as InterfaceScale
-      : DEFAULT_APPEARANCE.scale,
-    corners: CORNERS.has(candidate.corners as CornerStyle)
-      ? candidate.corners as CornerStyle
+    zoomPercent: normalizeZoomPercent(candidate),
+    corners: CORNERS.has(candidate["corners"] as CornerStyle)
+      ? candidate["corners"] as CornerStyle
       : DEFAULT_APPEARANCE.corners,
-    borders: BORDERS.has(candidate.borders as BorderStyle)
-      ? candidate.borders as BorderStyle
+    borders: BORDERS.has(candidate["borders"] as BorderStyle)
+      ? candidate["borders"] as BorderStyle
       : DEFAULT_APPEARANCE.borders
   };
 }
