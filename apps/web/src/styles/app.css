@@ -681,16 +681,22 @@ summary:focus-visible {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .interview-app-container > main {
-    flex-direction: column !important;
+    position: relative;
+    display: block !important;
   }
 
   .left-panel,
   .right-panel {
     width: 100% !important;
     min-width: 0;
-    height: 50% !important;
+    height: 100% !important;
+  }
+
+  .interview-app-container > main[data-compact-pane="interview"] .right-panel,
+  .interview-app-container > main[data-compact-pane="whiteboard"] .left-panel {
+    display: none !important;
   }
 }
 
@@ -849,5 +855,40 @@ summary:focus-visible {
   .app-header__quiet,
   .app-header__end {
     padding: 0 6px;
+  }
+}
+
+
+.compact-workspace-tabs {
+  display: none;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.compact-workspace-tabs button {
+  min-height: 27px;
+  flex: 1 1 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 590 8px/1 var(--font-ui);
+}
+
+.compact-workspace-tabs button[aria-selected="true"] {
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+@media (max-width: 960px) {
+  .compact-workspace-tabs {
+    display: flex;
   }
 }

@@ -46,6 +46,8 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("routeForActiveInterview(route, hasActiveInterview)");
     expect(app).toContain('navigate({ page: "interview" }, { replace: true })');
     expect(app).toContain("<ProductPageRouter");
+    expect(app).toContain('data-compact-pane={compactPane}');
+    expect(app).toContain('aria-label="Compact interview workspace"');
   });
 
   it("does not reveal topic or category hints in the live interview shell", () => {
@@ -74,6 +76,23 @@ describe("expressive product integration invariants", () => {
     expect(whiteboard).toContain("assetUrls={TLDRAW_ASSET_URLS}");
     expect(whiteboard).toContain("colorScheme={colorScheme}");
     expect(whiteboard).toContain('initialState="draw"');
+  });
+
+  it("keeps both live panes mounted while compact CSS chooses visibility", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const css = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
+      "utf8"
+    );
+
+    expect(app).toContain("<ProblemCard");
+    expect(app).toContain("<WhiteboardCanvas");
+    expect(css).toContain('main[data-compact-pane="interview"] .right-panel');
+    expect(css).toContain('main[data-compact-pane="whiteboard"] .left-panel');
+    expect(css).not.toContain("height: 50% !important");
   });
 
   it("does not add expensive decorative effects", () => {

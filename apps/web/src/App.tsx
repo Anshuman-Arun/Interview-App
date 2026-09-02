@@ -32,6 +32,8 @@ export const App: React.FC = () => {
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [activeTab, setActiveTab] = useState<"whiteboard" | "formulation">("whiteboard");
+  const [compactPane, setCompactPane] =
+    useState<"interview" | "whiteboard">("interview");
   const [reviewTarget, setReviewTarget] = useState<{
     readonly sessionId: SessionId;
     readonly tab: SessionReviewTab;
@@ -592,6 +594,29 @@ export const App: React.FC = () => {
         </div>
       )}
 
+      <div
+        className="compact-workspace-tabs"
+        role="tablist"
+        aria-label="Compact interview workspace"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={compactPane === "interview"}
+          onClick={() => setCompactPane("interview")}
+        >
+          Interview
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={compactPane === "whiteboard"}
+          onClick={() => setCompactPane("whiteboard")}
+        >
+          Whiteboard
+        </button>
+      </div>
+
       {/* Error Banner */}
       {session.error !== null && (
         <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 flex items-center justify-between text-xs text-rose-800 shrink-0">
@@ -610,7 +635,10 @@ export const App: React.FC = () => {
       )}
 
       {/* Main Split-Pane Workspace */}
-      <main className="flex-1 flex overflow-hidden">
+      <main
+        className="flex-1 flex overflow-hidden"
+        data-compact-pane={compactPane}
+      >
         {/* Left Panel: Problem, Transcript, Input */}
         <section className="left-panel w-1/2 flex flex-col border-r border-slate-200 bg-white overflow-hidden">
           {/* Top Session Actions if not started */}
