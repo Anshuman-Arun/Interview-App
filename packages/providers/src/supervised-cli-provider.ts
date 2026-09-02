@@ -54,6 +54,7 @@ export interface SupervisedCliProviderDefinition {
 interface ActiveExecution {
   readonly controller: AbortController;
   processActive: boolean;
+  cancelled: boolean;
   completion?: Promise<unknown>;
 }
 
@@ -112,7 +113,8 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     }
     const record: ActiveExecution = {
       controller: new AbortController(),
-      processActive: false
+      processActive: false,
+      cancelled: false
     };
     this.active.set(snapshot.generationId, record);
     return this.iterateTurn(snapshot, record);
@@ -126,6 +128,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
       return { semantics: "INTERRUPT_LOCAL_PROCESS", signalSent: false };
     }
     const signalSent = record.processActive;
+    record.cancelled = true;
     record.controller.abort();
     return {
       semantics: "INTERRUPT_LOCAL_PROCESS",
@@ -138,6 +141,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     this.closed = true;
     const completions: Promise<unknown>[] = [];
     for (const record of this.active.values()) {
+      record.cancelled = true;
       record.controller.abort();
       if (record.completion !== undefined) completions.push(record.completion);
     }
@@ -149,7 +153,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     input: ReasoningTurnInput,
     record: ActiveExecution
   ): AsyncIterable<InterviewerProposal> {
-    if (record.controller.signal.aborted || this.closed) {
+    if (record.cancelled || this.closed) {
       if (this.active.get(input.generationId) === record) {
         this.active.delete(input.generationId);
       }
@@ -157,7 +161,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     }
 
     const execution = Promise.resolve().then(async () => {
-      if (record.controller.signal.aborted || this.closed) {
+      if (record.cancelled || this.closed) {
         throw new Error("Supervised CLI execution was cancelled before start");
       }
       return await this.executeTurn(input, {
@@ -181,7 +185,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
 
     try {
       const proposal = await completion;
-      if (record.controller.signal.aborted) return;
+      if (record.cancelled) return;
       yield proposal;
     } finally {
       if (this.active.get(input.generationId) === record) {
