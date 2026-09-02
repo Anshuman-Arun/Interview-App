@@ -9,10 +9,6 @@ import { VoiceControls } from "./components/VoiceControls.js";
 import { WhiteboardCanvas } from "./components/WhiteboardCanvas.js";
 import { TldrawWhiteboardAdapter } from "./tldraw-whiteboard-adapter.js";
 import { useInterviewSession } from "./hooks/useInterviewSession.js";
-import {
-  SessionReviewModal,
-  type SessionReviewTab
-} from "./components/SessionReviewModal.js";
 import type { SessionHistoryReadResponse } from "../../../packages/replay/src/index.js";
 import { isSessionIdAddressableForRead } from "./session-read-client.js";
 import { ProductPageRouter } from "./navigation/ProductPageRouter.js";
@@ -34,10 +30,6 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"whiteboard" | "formulation">("whiteboard");
   const [compactPane, setCompactPane] =
     useState<"interview" | "whiteboard">("interview");
-  const [reviewTarget, setReviewTarget] = useState<{
-    readonly sessionId: SessionId;
-    readonly tab: SessionReviewTab;
-  } | null>(null);
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -104,7 +96,6 @@ export const App: React.FC = () => {
     try {
       await session.voiceControls.disableMicrophone().catch(() => undefined);
       await session.completeSession();
-      setReviewTarget(null);
       navigate({
         page: "review",
         sessionId: targetSessionId,
@@ -130,7 +121,6 @@ export const App: React.FC = () => {
     try {
       await session.voiceControls.disableMicrophone().catch(() => undefined);
       await session.archiveSession();
-      setReviewTarget(null);
       navigate({
         page: "review",
         sessionId: targetSessionId,
@@ -144,16 +134,13 @@ export const App: React.FC = () => {
     }
   };
 
-  const openHistoricalReview = (
-    targetSessionId: SessionId,
-    tab: SessionReviewTab = "evaluation"
-  ): void => {
+  const openHistoricalReview = (targetSessionId: SessionId): void => {
     if (session.isSessionStarted && session.sessionStatus === "ACTIVE") return;
     setShowSessionsModal(false);
     navigate({
       page: "review",
       sessionId: targetSessionId,
-      view: tab
+      view: "evaluation"
     });
   };
 
@@ -247,7 +234,6 @@ export const App: React.FC = () => {
   const navigateProductPage = useCallback((page: ProductPageId): void => {
     setShowSettings(false);
     setShowSessionsModal(false);
-    setReviewTarget(null);
     navigate({ page });
   }, [navigate]);
 
@@ -983,15 +969,6 @@ export const App: React.FC = () => {
           </div>
         </section>
       </main>
-      {reviewTarget !== null ? (
-        <SessionReviewModal
-          sessionId={reviewTarget.sessionId}
-          initialTab={reviewTarget.tab}
-          readEvaluation={session.readSessionEvaluation}
-          readReplay={session.readSessionReplay}
-          onClose={() => setReviewTarget(null)}
-        />
-      ) : null}
     </div>
   );
 };
