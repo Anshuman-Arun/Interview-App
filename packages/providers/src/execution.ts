@@ -4,6 +4,7 @@ import {
   ModelCapabilitiesSchema,
   ProviderCancellationReportSchema,
   ProviderCancellationResultSchema,
+  ProviderRuntimeNameSchema,
   type GenerationId,
   type InterviewerProposal,
   type ModelCapabilities,
@@ -62,6 +63,26 @@ export interface ProviderExecutionSession {
   readonly close: () => Promise<void>;
 }
 
+export function snapshotReasoningProviderName(
+  provider: ReasoningProvider
+): string {
+  const providerValue: unknown = provider;
+  if (
+    typeof providerValue !== "object"
+    || providerValue === null
+    || utilTypes.isProxy(providerValue)
+  ) {
+    throw new ProviderExecutionError("INVALID_PROVIDER_IDENTITY");
+  }
+  const parsed = ProviderRuntimeNameSchema.safeParse(
+    readProviderMember(providerValue, "name", "INVALID_PROVIDER_IDENTITY")
+  );
+  if (!parsed.success) {
+    throw new ProviderExecutionError("INVALID_PROVIDER_IDENTITY");
+  }
+  return parsed.data;
+}
+
 export async function openProviderExecutionSession(input: {
   readonly provider: ReasoningProvider;
   readonly policy: unknown;
@@ -79,9 +100,7 @@ export async function openProviderExecutionSession(input: {
   // Capture provider identity, capabilities, and session creation exactly once
   // before any asynchronous billing-verification boundary. A mutable provider
   // must not be able to pass admission and swap execution behavior afterward.
-  const providerName = parseProviderIdentity(
-    readProviderMember(providerValue, "name", "INVALID_PROVIDER_IDENTITY")
-  );
+  const providerName = snapshotReasoningProviderName(input.provider);
   const adapterVersion = parseProviderIdentity(
     readProviderMember(providerValue, "adapterVersion", "INVALID_PROVIDER_IDENTITY")
   );
