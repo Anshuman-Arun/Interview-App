@@ -4,10 +4,7 @@ import {
   useRef,
   useState
 } from "react";
-import type {
-  SessionId,
-  TurnId
-} from "../../../../packages/domain/src/index.js";
+import type { SessionId } from "../../../../packages/domain/src/index.js";
 import {
   AudioInfrastructureError,
   BrowserAudioDeviceManager,
@@ -22,6 +19,7 @@ import {
 } from "../voice-client.js";
 
 const MAX_PENDING_MICROPHONE_FRAMES = 8;
+const VOICE_CANCEL_TIMEOUT_MS = 1_000;
 
 export type VoicePermissionState =
   | "UNKNOWN"
@@ -110,12 +108,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     const stream = streamRef.current;
     streamRef.current = null;
     if (stream === null) return;
-    try {
-      await stream.cancel();
-    } catch {
-      // Local transport cancellation is best-effort. The integration epoch
-      // below suppresses all late callbacks regardless of worker cooperation.
-    }
+    await cancelStreamBounded(stream);
   }, []);
 
   const disableMicrophone = useCallback(async (): Promise<void> => {
@@ -181,11 +174,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
             return;
           }
           if (epoch !== epochRef.current || !microphoneEnabledRef.current) {
-            try {
-              await stream.cancel();
-            } catch {
-              // Epoch invalidation already suppresses this stream.
-            }
+            await cancelStreamBounded(stream);
             return;
           }
           streamRef.current = stream;
@@ -365,7 +354,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     frameQueueRef.current.length = 0;
     const stream = streamRef.current;
     streamRef.current = null;
-    if (stream !== null) void stream.cancel().catch(() => undefined);
+    if (stream !== null) void cancelStreamBounded(stream);
     const capture = captureRef.current;
     captureRef.current = null;
     if (capture !== null) void capture.dispose().catch(() => undefined);
@@ -427,4 +416,20 @@ function normalizeDeviceId(deviceId: string | undefined): string | undefined {
     throw new Error("Audio device identifier is invalid");
   }
   return deviceId;
+}
+
+
+async function cancelStreamBounded(stream: BrowserVoiceStream): Promise<void> {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => {
+    controller.abort();
+  }, VOICE_CANCEL_TIMEOUT_MS);
+  try {
+    await stream.cancel(controller.signal);
+  } catch {
+    // Transport cancellation is best-effort. Local integration epochs and the
+    // server-side stream lease independently suppress late worker callbacks.
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
 }
