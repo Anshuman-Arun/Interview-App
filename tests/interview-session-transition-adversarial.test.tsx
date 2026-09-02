@@ -769,9 +769,20 @@ describe("interview session transition authority", () => {
       await rendered.current().startSession(sessionId);
     });
 
-    await expect(rendered.current().completeSession()).rejects.toBe(terminalError);
+    let completeError: unknown;
+    await act(async () => {
+      try {
+        await rendered.current().completeSession();
+      } catch (error) {
+        completeError = error;
+      }
+    });
+    expect(completeError).toMatchObject({
+      name: "BrowserCommandTransportError",
+      message: "Command transport failed"
+    });
     expect(rendered.current().sessionStatus).toBe("ACTIVE");
-    expect(rendered.current().error).toBe(terminalError.message);
+    expect(rendered.current().error).toBe("Command transport failed");
 
     await act(async () => {
       await rendered.current().submitTypedInput("allowed after confirmed active");
@@ -848,8 +859,15 @@ describe("interview session transition authority", () => {
       await rendered.current().startSession(sessionId);
     });
 
-    await expect(rendered.current().archiveSession())
-      .rejects.toBeInstanceOf(TerminalSessionOutcomeUnknownError);
+    let archiveError: unknown;
+    await act(async () => {
+      try {
+        await rendered.current().archiveSession();
+      } catch (error) {
+        archiveError = error;
+      }
+    });
+    expect(archiveError).toBeInstanceOf(TerminalSessionOutcomeUnknownError);
     expect(rendered.current().error).toContain("outcome is unknown");
     expect(rendered.current().isSessionStarted).toBe(false);
     expect(rendered.current().sessionStatus).toBe("ACTIVE");
