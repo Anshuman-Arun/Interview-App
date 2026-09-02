@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -21,6 +22,9 @@ import {
 } from "../apps/desktop/src/runtime/runtime-adapters.js";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/local-model-http-worker.mjs", import.meta.url));
+const PRODUCTION_WORKER = fileURLToPath(
+  new URL("../workers/python/local_model_worker.py", import.meta.url)
+);
 const temporaryRoots: string[] = [];
 const managers: LocalRuntimeManager[] = [];
 const compositions: DesktopLocalRuntimeComposition[] = [];
@@ -38,6 +42,26 @@ afterEach(async () => {
 });
 
 describe("desktop local model runtime", () => {
+  it("keeps the production Python worker syntax-valid in CI", () => {
+    const result = spawnSync("python", [
+      "-c",
+      [
+        "import ast, pathlib, sys",
+        "source = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')",
+        "ast.parse(source, filename=sys.argv[1])"
+      ].join("; "),
+      PRODUCTION_WORKER
+    ], {
+      encoding: "utf8",
+      windowsHide: true
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+
   it("keeps typed desktop startup usable when production model assets are absent", async () => {
     const appDataRoot = temporaryRoot("desktop-local-models-");
     const composition = new DesktopLocalRuntimeComposition({
