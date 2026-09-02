@@ -18,6 +18,7 @@ import {
 } from "../packages/local-compute/src/index.js";
 import {
   QuantResearchCoordinator,
+  QuantTradingSessionCoordinator,
   SessionRuntimeRegistry,
   TurnCoordinator,
   createCommandEnvelope
@@ -196,7 +197,15 @@ describe("generic interview session configuration", () => {
         ? persistedConfiguration.scenario
         : undefined
     )).toBe(true);
-    expect(registry.get(sessionId).getState().problem).toBeUndefined();
+    const tradingWriter = registry.get(sessionId);
+    expect(tradingWriter.getState().problem).toBeUndefined();
+    expect(tradingWriter.getState().quantTrading?.definition.family).toBe("BASIC_MARKET_MAKING");
+    expect(tradingWriter.getState().quantTrading?.definition.version).toBe(QUANT_TRADER_SCENARIO_VERSION);
+    expect(tradingWriter.getState().quantTrading?.definition.seed).toEqual(expect.any(Number));
+    const beforeRestart = new QuantTradingSessionCoordinator(tradingWriter).getPublicState();
+    expect(JSON.stringify(beforeRestart)).not.toContain("seed");
+    expect(JSON.stringify(beforeRestart)).not.toContain("INFORMED");
+    expect(JSON.stringify(beforeRestart)).not.toContain("NOISE");
 
     await server.stop();
     await registry.closeAll();
@@ -207,8 +216,10 @@ describe("generic interview session configuration", () => {
     address = await server.start();
 
     await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
-    expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
-    expect(registry.get(sessionId).getState().problem).toBeUndefined();
+    const reopened = registry.get(sessionId);
+    expect(reopened.getState().configuration).toEqual(configuration);
+    expect(reopened.getState().problem).toBeUndefined();
+    expect(new QuantTradingSessionCoordinator(reopened).getPublicState()).toEqual(beforeRestart);
   });
 
   it("supports configured start and catalog discovery through the browser command client", async () => {
