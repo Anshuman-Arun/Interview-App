@@ -66,9 +66,14 @@ export const App: React.FC = () => {
     setSessionEntryPending(true);
     try {
       const storedSessions = await session.fetchAvailableSessionsStrict();
-      const existingActive = storedSessions.find(
+      const activeSessions = storedSessions.filter(
         (storedSession) => storedSession.status === "ACTIVE"
       );
+      if (activeSessions.length > 1) {
+        setShowSessionsModal(true);
+        return;
+      }
+      const existingActive = activeSessions[0];
       if (existingActive !== undefined) {
         const recoveredStatus = await session.recoverSession(existingActive.sessionId);
         setShowSessionsModal(false);
@@ -304,9 +309,11 @@ export const App: React.FC = () => {
 
   const hasActiveInterview =
     session.isSessionStarted && session.sessionStatus === "ACTIVE";
-  const storedActiveSession = session.availableSessions.find(
+  const storedActiveSessions = session.availableSessions.filter(
     (storedSession) => storedSession.status === "ACTIVE"
-  ) ?? null;
+  );
+  const storedActiveSession =
+    storedActiveSessions.length === 1 ? storedActiveSessions[0] ?? null : null;
   const resumableActiveSessionId =
     hasActiveInterview && session.sessionId !== null
       ? session.sessionId
