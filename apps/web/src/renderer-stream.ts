@@ -126,9 +126,9 @@ export function createLoopbackAcknowledgementSender(
     send: async (input: RendererAcknowledgementCommand): Promise<void> => {
       const command = RendererAcknowledgementCommandSchema.parse(input);
       const controller = new AbortController();
-      let timedOut = false;
+      const timeoutState = { timedOut: false };
       const timeoutId = globalThis.setTimeout(() => {
-        timedOut = true;
+        timeoutState.timedOut = true;
         controller.abort();
       }, RENDERER_ACK_TIMEOUT_MS);
       let responseJson: unknown;
@@ -154,7 +154,7 @@ export function createLoopbackAcknowledgementSender(
           throw new Error("Renderer acknowledgement response was not valid JSON");
         }
       } catch (error) {
-        if (timedOut) {
+        if (timeoutState.timedOut) {
           throw new Error("Renderer acknowledgement timed out", { cause: error });
         }
         throw error;
