@@ -879,6 +879,12 @@ describe("interview session transition authority", () => {
     expect(rendered.current().baseUrl).toBe(BASE_URL);
     expect(rendered.current().error).toContain("awaiting recovery");
 
+    const otherSession = newSessionId();
+    await expect(rendered.current().startSession(otherSession))
+      .rejects.toThrow("awaiting recovery");
+    await expect(rendered.current().recoverSession(otherSession))
+      .rejects.toThrow("active or unresolved interview");
+
     await act(async () => {
       rendered.root.unmount();
     });
@@ -1156,9 +1162,9 @@ describe("interview session transition authority", () => {
     expect(rendered.current().sessionStatus).toBe("ACTIVE");
 
     await expect(rendered.current().startSession(otherSession))
-      .rejects.toThrow("Cannot start a new session while an interview is active");
+      .rejects.toThrow("Cannot start a new session while an active session is attached or awaiting recovery");
     await expect(rendered.current().recoverSession(otherSession))
-      .rejects.toThrow("Cannot replace an active interview with another session");
+      .rejects.toThrow("Cannot replace an active or unresolved interview with another session");
 
     expect(rendered.current().sessionId).toBe(currentSession);
     expect(rendered.current().sessionStatus).toBe("ACTIVE");
