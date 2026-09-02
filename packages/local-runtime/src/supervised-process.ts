@@ -256,25 +256,30 @@ export class SupervisedProcessRunner {
     let stderrBytes = 0;
     let pendingFailure: PendingFailure | undefined;
     let cleanupStarted: Promise<boolean> | undefined;
-    let signalContainmentFailure: (() => void) | undefined;
-    const containmentFailure = new Promise<void>((resolve) => {
-      signalContainmentFailure = resolve;
+    let signalFailureRequested: (() => void) | undefined;
+    const failureRequested = new Promise<void>((resolve) => {
+      signalFailureRequested = resolve;
     });
     let settled = false;
 
     const requestCleanup = (failure: PendingFailure): void => {
       if (pendingFailure === undefined) pendingFailure = failure;
-      if (cleanupStarted !== undefined) return;
-      cleanupStarted = terminateProcessTree(child, this.platform).then((cleaned) => {
-        if (!cleaned) {
-          pendingFailure = "PROCESS_TREE_CLEANUP_FAILED";
-          child.stdin.destroy();
-          child.stdout.destroy();
-          child.stderr.destroy();
-          signalContainmentFailure?.();
-        }
-        return cleaned;
-      });
+      signalFailureRequested?.();
+      cleanupStarted ??= terminateProcessTree(child, this.platform);
+    };
+
+    const throwPendingFailure = async (): Promise<never> => {
+      const failure = pendingFailure ?? "PROCESS_TREE_CLEANUP_FAILED";
+      const cleaned = cleanupStarted === undefined
+        ? true
+        : await cleanupStarted;
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.stderr.destroy();
+      if (!cleaned) {
+        throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+      }
+      throw new SupervisedProcessError(failure);
     };
 
     child.stdout.on("data", (value: Buffer) => {
@@ -304,56 +309,73 @@ export class SupervisedProcessRunner {
       if (!settled && pendingFailure === undefined) requestCleanup("OUTPUT_LIMIT_EXCEEDED");
     });
 
-    const timeout = setTimeout(() => requestCleanup("EXECUTION_TIMEOUT"), request.timeoutMs);
+    const timeout = setTimeout(
+      () => requestCleanup("EXECUTION_TIMEOUT"),
+      request.timeoutMs
+    );
     const onAbort = (): void => requestCleanup("EXECUTION_CANCELLED");
     request.signal?.addEventListener("abort", onAbort, { once: true });
 
     try {
-      await waitForSpawn(child);
-      const after = await inspectExecutable(definition.executable, this.platform);
-      if (!sameExecutableIdentity(before, after, this.platform)) {
-        requestCleanup("EXECUTABLE_UNSAFE");
+      const spawnOutcome = await Promise.race([
+        waitForSpawn(child).then(() => "SPAWNED" as const),
+        failureRequested.then(() => "FAILED" as const)
+      ]);
+      if (spawnOutcome === "FAILED") {
+        return await throwPendingFailure();
       }
-      if (request.signal?.aborted) {
-        requestCleanup("EXECUTION_CANCELLED");
-      }
-      if (pendingFailure === undefined && request.onProcessStart !== undefined) {
+
+      if (request.onProcessStart !== undefined) {
         try {
           request.onProcessStart();
         } catch {
           requestCleanup("EXECUTION_CANCELLED");
+          return await throwPendingFailure();
         }
       }
 
-      if (pendingFailure === undefined) {
-        await writeBoundedStdin(child, request.stdin);
-      } else {
-        child.stdin.destroy();
+      const identityOutcome = await Promise.race([
+        inspectExecutable(definition.executable, this.platform).then(
+          (identity) => ({ kind: "IDENTITY" as const, identity })
+        ),
+        failureRequested.then(() => ({ kind: "FAILED" as const }))
+      ]);
+      if (identityOutcome.kind === "FAILED") {
+        return await throwPendingFailure();
+      }
+      if (!sameExecutableIdentity(before, identityOutcome.identity, this.platform)) {
+        requestCleanup("EXECUTABLE_UNSAFE");
+        return await throwPendingFailure();
+      }
+      if (request.signal?.aborted) {
+        requestCleanup("EXECUTION_CANCELLED");
+        return await throwPendingFailure();
+      }
+
+      const stdinOutcome = await Promise.race([
+        writeBoundedStdin(child, request.stdin).then(() => "WRITTEN" as const),
+        failureRequested.then(() => "FAILED" as const)
+      ]);
+      if (stdinOutcome === "FAILED") {
+        return await throwPendingFailure();
       }
 
       const closeOutcome = await Promise.race([
         closePromise.then((exit) => ({ kind: "CLOSE" as const, exit })),
-        containmentFailure.then(() => ({ kind: "CONTAINMENT_FAILURE" as const }))
+        failureRequested.then(() => ({ kind: "FAILED" as const }))
       ]);
-      if (closeOutcome.kind === "CONTAINMENT_FAILURE") {
-        throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+      if (closeOutcome.kind === "FAILED") {
+        return await throwPendingFailure();
       }
       const exit = closeOutcome.exit;
-      if (cleanupStarted !== undefined) {
-        const cleaned = await cleanupStarted;
-        if (!cleaned) {
-          pendingFailure = "PROCESS_TREE_CLEANUP_FAILED";
-        }
-      }
 
       if (this.platform !== "win32") {
         const residualCleaned = await cleanupResidualPosixGroup(child.pid);
-        if (!residualCleaned) pendingFailure = "PROCESS_TREE_CLEANUP_FAILED";
+        if (!residualCleaned) {
+          throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+        }
       }
 
-      if (pendingFailure !== undefined) {
-        throw new SupervisedProcessError(pendingFailure);
-      }
       if (exit.code === null) {
         throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
       }
@@ -374,13 +396,17 @@ export class SupervisedProcessRunner {
       if (error instanceof SupervisedProcessError) {
         if (isProcessAlive(child)) {
           const cleaned = await terminateProcessTree(child, this.platform);
-          if (!cleaned) throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+          if (!cleaned) {
+            throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+          }
         }
         throw error;
       }
       if (isProcessAlive(child)) {
         const cleaned = await terminateProcessTree(child, this.platform);
-        if (!cleaned) throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+        if (!cleaned) {
+          throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+        }
       }
       throw new SupervisedProcessError("SPAWN_FAILED");
     } finally {
