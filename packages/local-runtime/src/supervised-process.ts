@@ -26,6 +26,7 @@ const MAX_STDERR_BYTES = 512 * 1024;
 const MAX_EXECUTION_MS = 5 * 60_000;
 const MAX_EXECUTABLE_BYTES = 512n * 1024n * 1024n;
 const EXECUTABLE_HASH_TIMEOUT_MS = 30_000;
+const DRAIN_TIMEOUT_MS = 5_000;
 const MAX_ISOLATED_HOME_FILES = 16;
 const MAX_ISOLATED_HOME_FILE_BYTES = 64 * 1024;
 const MAX_ISOLATED_HOME_TOTAL_BYTES = 128 * 1024;
@@ -155,6 +156,8 @@ export class SupervisedProcessRunner {
   private readonly pinnedIdentities = new Map<string, ExecutableIdentity>();
   private readonly quarantinedExecutableIds = new Set<string>();
   private readonly identityInitializations = new Map<string, Promise<void>>();
+  private readonly identityInitializationControllers =
+    new Map<string, AbortController>();
   private containmentCompromised = false;
   private windowsSupervisorIdentity: ExecutableIdentity | undefined;
   private readonly activeControllers = new Set<AbortController>();
@@ -275,25 +278,29 @@ export class SupervisedProcessRunner {
     for (const controller of this.activeControllers) {
       controller.abort();
     }
+    for (const controller of this.identityInitializationControllers.values()) {
+      controller.abort();
+    }
   }
 
   private async drainActiveOperations(): Promise<void> {
-    if (this.containmentCompromised || this.quarantinedExecutableIds.size !== 0) {
-      for (const controller of this.activeControllers) controller.abort();
-      await Promise.allSettled([
-        ...this.activeOperations,
-        ...this.identityInitializations.values()
-      ]);
-      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
-    }
     for (const controller of this.activeControllers) controller.abort();
-    const operations = [
+    for (const controller of this.identityInitializationControllers.values()) {
+      controller.abort();
+    }
+
+    const operations: Promise<unknown>[] = [
       ...this.activeOperations,
       ...this.identityInitializations.values()
     ];
-    const results = await Promise.allSettled(operations);
+    const results = await settleWithin(operations, DRAIN_TIMEOUT_MS);
+    if (results === undefined) {
+      this.containmentCompromised = true;
+      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+    }
     if (
-      this.quarantinedExecutableIds.size !== 0
+      this.containmentCompromised
+      || this.quarantinedExecutableIds.size !== 0
       || results.some(
         (result) =>
           result.status === "rejected"
@@ -333,15 +340,22 @@ export class SupervisedProcessRunner {
     ) {
       let initialization = this.identityInitializations.get(definition.id);
       if (initialization === undefined) {
+        const initializationController = new AbortController();
         initialization = this.initializeWindowsExecutableIdentity(
           definition,
-          before
+          before,
+          initializationController.signal
         );
         this.identityInitializations.set(definition.id, initialization);
+        this.identityInitializationControllers.set(
+          definition.id,
+          initializationController
+        );
         const captured = initialization;
         void captured.finally(() => {
           if (this.identityInitializations.get(definition.id) === captured) {
             this.identityInitializations.delete(definition.id);
+            this.identityInitializationControllers.delete(definition.id);
           }
         }).catch(() => undefined);
       }
@@ -428,9 +442,13 @@ export class SupervisedProcessRunner {
 
   private async initializeWindowsExecutableIdentity(
     definition: RegisteredExecutable,
-    baseline: ExecutableIdentity
+    baseline: ExecutableIdentity,
+    signal: AbortSignal
   ): Promise<void> {
-    const contentSha256 = await sha256Executable(definition.executable);
+    const contentSha256 = await sha256Executable(
+      definition.executable,
+      signal
+    );
     const afterHash = await inspectExecutable(definition.executable, "win32");
     const pinned = this.pinnedIdentities.get(definition.id);
     if (
@@ -1179,10 +1197,18 @@ function tryInspectExecutableSync(
   }
 }
 
-async function sha256Executable(executable: string): Promise<string> {
+async function sha256Executable(
+  executable: string,
+  signal: AbortSignal
+): Promise<string> {
+  if (signal.aborted) {
+    throw new SupervisedProcessError("EXECUTION_CANCELLED");
+  }
   const hash = createHash("sha256");
   const stream = createReadStream(executable);
   let timedOut = false;
+  const onAbort = (): void => stream.destroy();
+  signal.addEventListener("abort", onAbort, { once: true });
   const timer = setTimeout(() => {
     timedOut = true;
     stream.destroy();
@@ -1198,17 +1224,39 @@ async function sha256Executable(executable: string): Promise<string> {
     if (timedOut) {
       throw new SupervisedProcessError("EXECUTION_TIMEOUT");
     }
+    if (signal.aborted) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
     return hash.digest("hex");
   } catch (error) {
     if (error instanceof SupervisedProcessError) throw error;
     if (timedOut) {
       throw new SupervisedProcessError("EXECUTION_TIMEOUT");
     }
+    if (signal.aborted) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
   } finally {
     clearTimeout(timer);
+    signal.removeEventListener("abort", onAbort);
     stream.destroy();
   }
+}
+
+async function settleWithin(
+  operations: readonly Promise<unknown>[],
+  timeoutMs: number
+): Promise<readonly PromiseSettledResult<unknown>[] | undefined> {
+  if (operations.length === 0) return [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), timeoutMs);
+  });
+  const settled = Promise.allSettled(operations);
+  const result = await Promise.race([settled, timeout]);
+  if (timer !== undefined) clearTimeout(timer);
+  return result;
 }
 
 function waitForOperationOrAbort(
