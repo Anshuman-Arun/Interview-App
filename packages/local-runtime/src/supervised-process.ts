@@ -1191,7 +1191,7 @@ function windowsPowerShellExecutablePath(
   if (
     win32Path.basename(normalizedRoot).toLowerCase() !== "windows"
     || win32Path.dirname(normalizedRoot).toLowerCase()
-      !== parsedRoot.root.replace(/[\\/]$/u, "").toLowerCase()
+      !== parsedRoot.root.toLowerCase()
   ) {
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
   }
