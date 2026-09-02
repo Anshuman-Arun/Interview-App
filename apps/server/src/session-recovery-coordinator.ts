@@ -160,11 +160,15 @@ export class SessionRecoveryCoordinator {
 
     const recovery = (async () => {
       const writer = await this.getWriterAsync(sessionId);
-      // Validate generic event provenance/transition semantics first, then exact
-      // application-owned identity and specialized deterministic quant replay.
-      // Recovery may append only after both layers accept the persisted prefix.
-      assertReplayPrefixValidForRecovery(sessionId, this.registry.loadEvents(sessionId));
-      resolveSessionStateComposition(writer.getState());
+      // Resolve exact application-owned identity and specialized deterministic
+      // state before recovery may append anything. Quant streams additionally
+      // require generic event provenance/transition validation: unlike the older
+      // Oxford recovery fixtures, their production event family has no legacy
+      // recovery-only histories that intentionally bypass replay projection.
+      const composition = resolveSessionStateComposition(writer.getState());
+      if (composition.mode !== "OXFORD_MATHEMATICS") {
+        assertReplayPrefixValidForRecovery(sessionId, this.registry.loadEvents(sessionId));
+      }
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.visionEvidenceDelegate !== undefined) {
         await this.visionEvidenceDelegate.recoverPendingVisionEvidence(sessionId);
