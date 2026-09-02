@@ -43,10 +43,21 @@ describe("expressive product integration invariants", () => {
       "utf8"
     );
 
-    expect(app).toContain("const storedSessions = await session.fetchAvailableSessions()");
+    expect(app).toContain("const storedSessions = await session.fetchAvailableSessionsStrict()");
     expect(app).toContain('storedSession.status === "ACTIVE"');
     expect(app).toContain("await session.recoverSession(existingActive.sessionId)");
     expect(app).toContain("await session.startSession()");
+  });
+
+  it("fails closed if the pre-Start stored-session authority check cannot be read", () => {
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+
+    expect(hook).toContain("fetchAvailableSessionsStrict");
+    expect(hook).toContain("return await listAvailableSessions()");
+    expect(hook).toContain("throw err");
   });
 
   it("prefers a stored ACTIVE session over starting a second interview", () => {
