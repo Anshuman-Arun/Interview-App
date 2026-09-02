@@ -134,6 +134,63 @@ describe("authoritative whiteboard mutation admission", () => {
     }
   });
 
+  it("rejects updates that rewrite creation time or move modification time backwards", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const sessionId = newSessionId();
+      const writer = new SessionRuntimeRegistry(store).get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      await turns.startSession(sixPeopleProblem);
+
+      const original = {
+        ...shape("shape:clock", 1, 10),
+        lastModifiedAt: 10
+      };
+      expect((await turns.commitBoardMutation(
+        mutation(BoardRevisionSchema.parse(0), { added: [original] })
+      )).committed).toBe(true);
+
+      const rewriteCreatedAt = await turns.commitBoardMutation(
+        mutation(BoardRevisionSchema.parse(1), {
+          updated: [{
+            beforeRevision: 1,
+            shape: {
+              ...shape("shape:clock", 2, 20),
+              createdAt: 2,
+              lastModifiedAt: 20
+            }
+          }]
+        })
+      );
+      expect(rewriteCreatedAt).toEqual({
+        committed: false,
+        boardRevision: BoardRevisionSchema.parse(1),
+        reason: "MUTATION_CONFLICT"
+      });
+
+      const backwardsModified = await turns.commitBoardMutation(
+        mutation(BoardRevisionSchema.parse(1), {
+          updated: [{
+            beforeRevision: 1,
+            shape: {
+              ...shape("shape:clock", 2, 20),
+              createdAt: 1,
+              lastModifiedAt: 5
+            }
+          }]
+        })
+      );
+      expect(backwardsModified).toEqual({
+        committed: false,
+        boardRevision: BoardRevisionSchema.parse(1),
+        reason: "MUTATION_CONFLICT"
+      });
+      expect(writer.getState().boardShapes["shape:clock"]).toEqual(original);
+    } finally {
+      store.close();
+    }
+  });
+
   it("fails closed after a legacy summary-only patch makes shape authority unknown", async () => {
     const store = new SqliteEventStore(":memory:");
     try {

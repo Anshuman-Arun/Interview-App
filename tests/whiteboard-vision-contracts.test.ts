@@ -200,6 +200,27 @@ describe("authoritative whiteboard and vision runtime contracts", () => {
     expect(SessionEventSchema.safeParse(mismatched).success).toBe(false);
   });
 
+  it("rejects partially populated persisted vision provenance", () => {
+    const sessionId = newSessionId();
+    const visionRequestId = newRequestId();
+    const complete = visionRequestedEvent({
+      sessionId,
+      visionRequestId,
+      sequence: 1
+    });
+    const partial = {
+      ...complete,
+      payload: {
+        visionRequestId,
+        sourceBoardRevision: 0,
+        regionId: "region:test",
+        relevantShapeIds: ["shape:a"],
+        snapshotBasis: complete.payload.snapshotBasis
+      }
+    };
+    expect(SessionEventSchema.safeParse(partial).success).toBe(false);
+  });
+
   it("treats duplicate persisted vision request IDs as replay corruption", () => {
     const sessionId = newSessionId();
     const visionRequestId = newRequestId();
