@@ -62,6 +62,7 @@ export class ServerTurnOrchestrator {
   private readonly validator: DisclosureValidator;
   private readonly inFlight = new Map<string, InFlightOrchestration>();
   private readonly activeProviderExecutions = new Map<GenerationId, ActiveProviderExecution>();
+  private acceptingWork = true;
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
@@ -119,6 +120,7 @@ export class ServerTurnOrchestrator {
    * Provider acknowledgement is best effort and never gates process progress.
    */
   public requestCancellationForShutdown(): void {
+    this.acceptingWork = false;
     for (const orchestration of this.inFlight.values()) {
       orchestration.signalCancellation();
     }
@@ -128,6 +130,13 @@ export class ServerTurnOrchestrator {
         "Application shutdown cancelled provider execution"
       ).catch(() => undefined);
     }
+  }
+
+  public resumeAfterShutdown(): void {
+    if (this.inFlight.size !== 0 || this.activeProviderExecutions.size !== 0) {
+      throw new Error("Cannot resume provider orchestration while prior work is still active");
+    }
+    this.acceptingWork = true;
   }
 
   public async waitForAll(): Promise<void> {
@@ -198,6 +207,9 @@ export class ServerTurnOrchestrator {
   private async orchestrateTurnWithDisposition(
     input: TurnOrchestrationInput
   ): Promise<TurnOrchestrationDisposition> {
+    if (!this.acceptingWork) {
+      return "COMPLETE";
+    }
     const key = `${input.sessionId}:${input.turnId}`;
     const existing = this.inFlight.get(key);
     if (existing !== undefined) {
