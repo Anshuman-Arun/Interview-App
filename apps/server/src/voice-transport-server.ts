@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { z } from "zod";
 import {
   SessionIdSchema,
+  newRequestId,
   type LocalTransportSecurity
 } from "../../../packages/domain/src/index.js";
 import {
@@ -188,6 +189,7 @@ export class VoiceTransportServer {
       }
       throw new VoiceHttpError(404, "NOT_FOUND", "Voice endpoint not found");
     } catch (error) {
+      if (response.destroyed) return;
       if (response.headersSent) {
         response.destroy();
         return;
@@ -267,9 +269,26 @@ export class VoiceTransportServer {
       }
     }
 
+    let transportDropped = false;
+    const cancelDroppedStream = (): void => {
+      if (transportDropped || response.writableEnded) return;
+      transportDropped = true;
+      void coordinator.cancelStream(
+        sessionId.data,
+        streamId.data,
+        newRequestId()
+      ).catch(() => undefined);
+    };
+    const onResponseClose = (): void => {
+      if (!response.writableEnded) cancelDroppedStream();
+    };
+    request.once("aborted", cancelDroppedStream);
+    response.once("close", onResponseClose);
+
     this.activeFrameRequests += 1;
     try {
       const payload = await readBinaryBody(request, expectedBytes, expectedBytes);
+      if (transportDropped) return;
       const envelope = SpeechPcmFrameEnvelopeSchema.safeParse({
         protocolVersion: 1,
         requestId: requestId.data,
@@ -292,6 +311,7 @@ export class VoiceTransportServer {
       } catch (error) {
         throw classifyCoordinatorError(error);
       }
+      if (transportDropped || response.destroyed) return;
       sendJson(response, 200, {
         protocolVersion: 1,
         ok: true,
@@ -301,6 +321,8 @@ export class VoiceTransportServer {
         ...(result.commit === undefined ? {} : { commit: result.commit })
       }, origin);
     } finally {
+      request.off("aborted", cancelDroppedStream);
+      response.off("close", onResponseClose);
       this.activeFrameRequests = Math.max(0, this.activeFrameRequests - 1);
     }
   }
