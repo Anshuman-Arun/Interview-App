@@ -1487,7 +1487,7 @@ function inspectDefinition(definition: LocalComponentDefinition): LocalComponent
         "backoffMs",
         "maxBackoffMs"
       ]));
-  const expectedHandshake = top.expectedHandshake === undefined
+  const inspectedExpectedHandshake = top.expectedHandshake === undefined
     ? undefined
     : inspectKnownDataObject(top.expectedHandshake, "expectedHandshake", new Set([
         "componentVersion",
@@ -1497,6 +1497,18 @@ function inspectDefinition(definition: LocalComponentDefinition): LocalComponent
         "modelVersionOrHash",
         "capabilities"
       ]));
+  const expectedHandshake = inspectedExpectedHandshake === undefined
+    ? undefined
+    : Object.freeze({
+        ...inspectedExpectedHandshake,
+        ...(inspectedExpectedHandshake.capabilities === undefined
+          ? {}
+          : {
+              capabilities: inspectExpectedHandshakeCapabilities(
+                inspectedExpectedHandshake.capabilities
+              )
+            })
+      });
   const output = top.output === undefined
     ? undefined
     : inspectKnownDataObject(top.output, "output", new Set([
@@ -1556,6 +1568,48 @@ function inspectKnownDataObject(
     copy[key] = descriptor.value;
   }
   return Object.freeze(copy);
+}
+
+function inspectExpectedHandshakeCapabilities(value: unknown): readonly string[] {
+  if (typeof value === "object" && value !== null && utilTypes.isProxy(value)) {
+    invalid("expectedHandshake.capabilities could not be inspected");
+  }
+  if (!safelyIsArray(value, "expectedHandshake.capabilities")) {
+    invalid("expectedHandshake.capabilities must be an array");
+  }
+
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    invalid("expectedHandshake.capabilities could not be inspected");
+  }
+  const rawLength = descriptors.length?.value as unknown;
+  if (typeof rawLength !== "number"
+      || !Number.isSafeInteger(rawLength)
+      || rawLength < 0
+      || rawLength > MAX_CAPABILITIES) {
+    invalid(`expectedHandshake.capabilities must contain at most ${String(MAX_CAPABILITIES)} items`);
+  }
+
+  const output: string[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (descriptor === undefined || !("value" in descriptor)) {
+      invalid("expectedHandshake.capabilities must be a dense data-only array");
+    }
+    if (typeof descriptor.value !== "string") {
+      invalid("expectedHandshake.capabilities must contain strings");
+    }
+    output.push(descriptor.value);
+  }
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (key === "length" || descriptor.enumerable !== true) continue;
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(key)) {
+      invalid("expectedHandshake.capabilities may not contain extra enumerable properties");
+    }
+  }
+  return Object.freeze(output);
 }
 
 function inspectDefinitionArguments(value: unknown): readonly string[] {
