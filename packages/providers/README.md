@@ -71,8 +71,11 @@ Antigravity authentication is deliberately outside provider/session state. The t
 relies only on the CLI's documented OS-native keyring sign-in and does not inspect, copy, persist,
 or return those credentials. Each supervised turn receives a fresh temporary CLI profile rather
 than the user's normal `~/.gemini` profile. That profile pins strict tool review,
-non-workspace access off, terminal sandboxing on, AI-credit fallback off, telemetry off, and no
-user plugins/hooks/MCP/custom agents. The CLI self-updater is disabled for the supervised child.
+non-workspace access off, terminal sandboxing on, AI-credit fallback off, and telemetry off.
+The isolated profile does not inherit the user's normal CLI customizations; instead it contains
+one application-owned documented custom agent with an empty tool list and subagent invocation
+disabled. Runtime admission additionally requires the CLI's `init.tools` list to be empty.
+The CLI self-updater is disabled for the supervised child.
 
 Antigravity remains a remote inference path even though the client process is local. Its model
 capabilities therefore declare both local process execution and remote execution, conservative
@@ -110,8 +113,14 @@ knows only a narrow injected executor contract: bounded argument strings, bounde
 bounded stdout/stderr byte budgets, an execution deadline, cancellation signal, and a
 process-start acknowledgement. It cannot import child-process APIs or select an executable.
 
-The trusted process half lives in `packages/local-runtime`. This split preserves the frozen
-architecture rule that provider adapters are untrusted realization engines and do not gain
-general filesystem/process authority. Future Ollama, llama.cpp, or Codex-like adapters can
-reuse the same executor seam while defining their own application-owned executable identities
-and exact output protocols.
+The trusted process half lives in `packages/local-runtime`. The concrete Antigravity desktop
+runtime is currently Windows-only: Windows execution uses an application-owned Job Object
+bootstrap so the provider is created suspended, assigned to a kill-on-job-close containment
+object before it executes, and given only stdin/stdout/stderr handles. Non-Windows application
+composition fails closed instead of claiming POSIX process-group containment is equivalent for
+hostile descendants that can re-session themselves.
+
+This split preserves the frozen architecture rule that provider adapters are untrusted
+realization engines and do not gain general filesystem/process authority. Future Ollama,
+llama.cpp, or Codex-like adapters can reuse the same executor seam while defining their own
+application-owned executable identities and exact output protocols.
