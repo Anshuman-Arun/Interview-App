@@ -6,7 +6,10 @@ import {
   type StoredSessionSummary
 } from "../../../packages/domain/src/index.js";
 import { DeliveryCoordinator } from "../../../packages/delivery/src/index.js";
-import { replaySession } from "../../../packages/events/src/index.js";
+import {
+  replaySession,
+  type SessionEvent
+} from "../../../packages/events/src/index.js";
 import type { SqliteEventStore } from "../../../packages/persistence/src/index.js";
 import { assertReplayPrefixValidForRecovery } from "../../../packages/replay/src/index.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
@@ -25,6 +28,17 @@ export interface TurnRecoveryDelegate {
 
 export interface VisionEvidenceRecoveryDelegate {
   readonly recoverPendingVisionEvidence: (sessionId: SessionId) => Promise<void>;
+}
+
+export class LegacyUninitializedQuantSessionError extends Error {
+  public readonly code = "LEGACY_UNINITIALIZED_QUANT_SESSION" as const;
+
+  public constructor() {
+    super(
+      "This Quant session predates deterministic runtime initialization and cannot be resumed; start a new Quant session"
+    );
+    this.name = "LegacyUninitializedQuantSessionError";
+  }
 }
 
 /**
@@ -49,28 +63,25 @@ export class SessionRecoveryCoordinator {
       const state = replaySession(summary.sessionId, events);
       if (!isQuantSessionState(state)) return summary;
 
-      // The SQLite session index is a rebuildable convenience projection. Do not
-      // let schema-valid but semantically forged deterministic Quant history be
-      // advertised as a trusted ACTIVE/COMPLETED inventory entry.
-      try {
-        assertReplayPrefixValidForRecovery(summary.sessionId, events);
-        resolveSessionStateComposition(state);
-        if (
-          summary.status !== state.status
-          || summary.sequence !== state.sequence
-          || summary.eventCount !== events.length
-          || summary.problemId !== state.problem?.id
-          || summary.problemVersion !== state.problem?.version
-          || summary.createdAt !== events[0]?.wallTime
-          || summary.updatedAt !== events.at(-1)?.wallTime
-        ) {
-          throw new Error("Quant session inventory does not match authoritative state");
+      // Older builds could persist configured Quant sessions before the
+      // deterministic runtime existed. Keep those sessions discoverable but
+      // never invent a seed or treat them as deterministically initialized.
+      if (isLegacyUninitializedQuantSessionState(state)) {
+        assertSessionInventoryMatchesState(summary, state, events);
+      } else {
+        // The SQLite session index is a rebuildable convenience projection. Do not
+        // let schema-valid but semantically forged deterministic Quant history be
+        // advertised as a trusted ACTIVE/COMPLETED inventory entry.
+        try {
+          assertReplayPrefixValidForRecovery(summary.sessionId, events);
+          resolveSessionStateComposition(state);
+          assertSessionInventoryMatchesState(summary, state, events);
+        } catch {
+          // Persisted-history validation failures are server-authority failures,
+          // not candidate command conflicts, even when the deterministic engine
+          // happens to report them with an action-shaped error type.
+          throw new Error("Authoritative quant session inventory validation failed");
         }
-      } catch {
-        // Persisted-history validation failures are server-authority failures,
-        // not candidate command conflicts, even when the deterministic engine
-        // happens to report them with an action-shaped error type.
-        throw new Error("Authoritative quant session inventory validation failed");
       }
 
       // Quant Research persists a synthetic PROBLEM_PRESENTED only so generic
@@ -208,6 +219,10 @@ export class SessionRecoveryCoordinator {
       // Oxford recovery fixtures, their production event family has no legacy
       // recovery-only histories that intentionally bypass replay projection.
       const state = writer.getState();
+      if (isLegacyUninitializedQuantSessionState(state)) {
+        throw new LegacyUninitializedQuantSessionError();
+      }
+
       let composition: ReturnType<typeof resolveSessionStateComposition>;
       try {
         composition = resolveSessionStateComposition(state);
@@ -249,6 +264,35 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function assertSessionInventoryMatchesState(
+  summary: Readonly<StoredSessionSummary>,
+  state: Readonly<ReturnType<SessionWriter["getState"]>>,
+  events: readonly SessionEvent[]
+): void {
+  if (
+    summary.status !== state.status
+    || summary.sequence !== state.sequence
+    || summary.eventCount !== events.length
+    || summary.problemId !== state.problem?.id
+    || summary.problemVersion !== state.problem?.version
+    || summary.createdAt !== events[0]?.wallTime
+    || summary.updatedAt !== events.at(-1)?.wallTime
+  ) {
+    throw new Error("Quant session inventory does not match authoritative state");
+  }
+}
+
+function isLegacyUninitializedQuantSessionState(
+  state: Readonly<ReturnType<SessionWriter["getState"]>>
+): boolean {
+  if (!state.started || state.status !== "ACTIVE") return false;
+  if (state.problem !== undefined || state.quantTrading !== undefined || state.quantResearch !== undefined) {
+    return false;
+  }
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH";
 }
 
 function isQuantSessionState(state: Readonly<ReturnType<SessionWriter["getState"]>>): boolean {
