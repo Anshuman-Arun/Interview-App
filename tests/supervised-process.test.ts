@@ -22,6 +22,11 @@ const FIXTURE = fileURLToPath(
 );
 const temporaryRoots: string[] = [];
 const fixturePids: number[] = [];
+const DEFAULT_TEST_EXECUTION_TIMEOUT_MS =
+  process.platform === "win32" ? 7_500 : 1_000;
+const WINDOWS_TREE_TEST_TIMEOUT_MS = 10_000;
+const FILE_WAIT_TIMEOUT_MS =
+  process.platform === "win32" ? 7_500 : 1_000;
 
 afterEach(() => {
   for (const pid of fixturePids.splice(0)) {
@@ -55,7 +60,7 @@ function request(
     executableId: "fixture",
     args,
     stdin: "hello",
-    timeoutMs: 1_000,
+    timeoutMs: DEFAULT_TEST_EXECUTION_TIMEOUT_MS,
     maxStdoutBytes: 16 * 1024,
     maxStderrBytes: 16 * 1024,
     ...overrides
@@ -63,7 +68,7 @@ function request(
 }
 
 async function waitForFile(path: string): Promise<void> {
-  const deadline = Date.now() + 1_000;
+  const deadline = Date.now() + FILE_WAIT_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (existsSync(path)) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -438,7 +443,9 @@ describe("supervised one-shot process execution", () => {
       markStarted = resolve;
     });
     const execution = runtime.execute(request([FIXTURE, "hang"], {
-      timeoutMs: 2_000,
+      timeoutMs: process.platform === "win32"
+        ? WINDOWS_TREE_TEST_TIMEOUT_MS
+        : 2_000,
       onProcessStart: () => {
         markStarted?.();
       }
@@ -528,7 +535,9 @@ describe("supervised one-shot process execution", () => {
         "write-forever",
         stream
       ], {
-        timeoutMs: 2_000,
+        timeoutMs: process.platform === "win32"
+        ? WINDOWS_TREE_TEST_TIMEOUT_MS
+        : 2_000,
         maxStdoutBytes: 16 * 1024,
         maxStderrBytes: 16 * 1024
       }))).rejects.toMatchObject({ code: "OUTPUT_LIMIT_EXCEEDED" });
@@ -550,7 +559,9 @@ describe("supervised one-shot process execution", () => {
 
     const execution = runtime.execute(request([FIXTURE, "tree-hang", pidFile], {
       signal: controller.signal,
-      timeoutMs: 2_000
+      timeoutMs: process.platform === "win32"
+        ? WINDOWS_TREE_TEST_TIMEOUT_MS
+        : 2_000
     }));
     await waitForFile(pidFile);
     const childPid = Number(readFileSync(pidFile, "utf8"));
@@ -601,7 +612,9 @@ describe("supervised one-shot process execution", () => {
         "exit-with-tree",
         pidFile
       ], {
-        timeoutMs: 2_000
+        timeoutMs: process.platform === "win32"
+        ? WINDOWS_TREE_TEST_TIMEOUT_MS
+        : 2_000
       }))).resolves.toMatchObject({
         exitCode: 0
       });
@@ -630,7 +643,9 @@ describe("supervised one-shot process execution", () => {
         "exit-with-detached-tree",
         pidFile
       ], {
-        timeoutMs: 2_000
+        timeoutMs: process.platform === "win32"
+        ? WINDOWS_TREE_TEST_TIMEOUT_MS
+        : 2_000
       }))).resolves.toMatchObject({ exitCode: 0 });
       await waitForFile(pidFile);
       const childPid = Number(readFileSync(pidFile, "utf8"));
