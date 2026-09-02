@@ -1,0 +1,101 @@
+.expressive-review {
+  width: min(100%, 1060px);
+  margin: 0 auto;
+  padding-top: 26px;
+}
+
+.expressive-review__hero {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) minmax(180px, 330px);
+  gap: 22px;
+  align-items: start;
+  padding: 20px 0 30px;
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.expressive-review__hero > button {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 570 8.5px/1.4 var(--font-ui);
+}
+
+.expressive-review__hero span {
+  color: var(--accent);
+  font: 650 7px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.expressive-review__hero h2 {
+  max-width: 18ch;
+  margin: 8px 0 0;
+  color: var(--text-primary);
+  font: 650 29px/1.03 var(--font-display);
+  letter-spacing: -0.045em;
+}
+
+.expressive-review__hero code {
+  justify-self: end;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 450 7.5px/1.4 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expressive-review__tabs {
+  display: flex;
+  min-height: 46px;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.expressive-review__tabs button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 590 9px/1 var(--font-ui);
+}
+
+.expressive-review__tabs button span {
+  font: 500 7px/1 var(--font-mono);
+}
+
+.expressive-review__tabs button[aria-selected="true"] {
+  color: var(--text-primary);
+}
+
+.expressive-review__tabs button[aria-selected="true"]::after {
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 2px;
+  background: var(--accent);
+  content: "";
+}
+
+.expressive-review__content {
+  padding: 24px 0 38px;
+}
+
+@media (max-width: 720px) {
+  .expressive-review__hero {
+    grid-template-columns: 1fr;
+  }
+
+  .expressive-review__hero code {
+    justify-self: start;
+  }
+}

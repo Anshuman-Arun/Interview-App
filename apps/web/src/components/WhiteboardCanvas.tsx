@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { getAssetUrlsByImport } from "@tldraw/assets/imports.vite.js";
 import { Tldraw, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import {
@@ -13,6 +14,8 @@ import {
 import type {
   NormalizedStudentShapeChange
 } from "../whiteboard/normalized-board.js";
+
+const TLDRAW_ASSET_URLS = getAssetUrlsByImport();
 
 export interface WhiteboardCanvasProps {
   readonly adapter?: TldrawWhiteboardAdapter;
@@ -159,7 +162,11 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
       className={className}
       style={style}
     >
-      <Tldraw onMount={handleMount} />
+      <Tldraw
+        assetUrls={TLDRAW_ASSET_URLS}
+        initialState="draw"
+        onMount={handleMount}
+      />
     </div>
   );
 };

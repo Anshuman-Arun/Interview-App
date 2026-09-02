@@ -88,3 +88,34 @@
   vertical-align: middle;
   animation: cursor-blink 0.8s infinite;
 }
+
+
+/* Theme-aware transcript compatibility */
+.transcript-feed-container {
+  background: var(--surface-panel);
+  border-color: var(--border-subtle);
+}
+
+.ai-math-bubble {
+  color: var(--text-primary);
+}
+
+.ai-math-bubble .katex {
+  color: var(--text-primary);
+}
+
+.live-math-preview {
+  background: var(--surface-raised);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.streaming-cursor {
+  background-color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-cursor {
+    animation: none;
+  }
+}
