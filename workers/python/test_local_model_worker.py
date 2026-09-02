@@ -61,6 +61,26 @@ class _FakeTts:
 
 
 class ProductionWorkerUnitTests(unittest.TestCase):
+    def test_worker_server_bounds_connection_slots(self) -> None:
+        server = worker.WorkerServer(
+            ("127.0.0.1", 0),
+            worker.Handler,
+            token="a" * 64,
+            component="speech",
+            runtime=object(),
+        )
+        try:
+            acquired = [
+                server._request_slots.acquire(blocking=False)
+                for _ in range(worker.MAX_HTTP_CONNECTIONS)
+            ]
+            self.assertTrue(all(acquired))
+            self.assertFalse(server._request_slots.acquire(blocking=False))
+            for _ in acquired:
+                server._request_slots.release()
+        finally:
+            server.server_close()
+
     def test_runtime_environment_accepts_the_exact_installed_lock(self) -> None:
         worker.require_runtime_environment()
 
