@@ -97,6 +97,7 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
         input: Parameters<KokoroRuntimeSession["synthesize"]>[0]
       ): Promise<KokoroRuntimeSynthesisResult> => {
         const result = await this.client.postJson("/v1/tts", {
+          requestId: input.requestId,
           text: input.text,
           voice: input.voice,
           speed: input.speed,
@@ -110,6 +111,19 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
           )
         });
         return parseTtsResult(result);
+      },
+      cancel: async (requestId): Promise<void> => {
+        const result = await this.client.postJson("/v1/tts/cancel", {
+          requestId
+        }, {
+          timeoutMs: TTS_LIMITS.maxRuntimeCancellationWaitMs,
+          maxResponseBytes: 1_024
+        });
+        if (!isRecord(result)
+            || Object.keys(result).length !== 1
+            || result["accepted"] !== true) {
+          throw new Error("Kokoro worker did not accept runtime cancellation");
+        }
       }
     });
   }
