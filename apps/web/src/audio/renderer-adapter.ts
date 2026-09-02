@@ -8,6 +8,7 @@ import { AudioInfrastructureError } from "./types.js";
 
 const AUDIO_SOURCE_RESOLUTION_TIMEOUT_MS = 5_000;
 const AUDIO_PLAYBACK_START_TIMEOUT_MS = 5_000;
+const MAX_PENDING_AUDIO_RESOLUTIONS = 32;
 
 export interface ResolvedAudioSource {
   readonly source: string;
@@ -59,13 +60,18 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
     }
 
     const epoch = this.resolutionEpoch;
-    const controller = new AbortController();
     const prior = this.pendingResolutions.get(input.deliveryId);
     if (prior !== undefined) {
       throw new RendererPresentationNotExposedError(
         "Audio delivery is already resolving"
       );
     }
+    if (this.pendingResolutions.size >= MAX_PENDING_AUDIO_RESOLUTIONS) {
+      throw new RendererPresentationNotExposedError(
+        "Audio source resolution concurrency limit reached"
+      );
+    }
+    const controller = new AbortController();
     this.pendingResolutions.set(input.deliveryId, controller);
 
     let resolved: ResolvedAudioSource | undefined;
