@@ -11,6 +11,7 @@ import {
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
+import { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 
 export interface LocalInterviewTransportRuntimeOptions {
@@ -23,6 +24,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererConnectionsPerSession?: number;
   readonly maxRendererMessageBytes?: number;
   readonly orchestrator?: ServerTurnOrchestrator;
+  readonly providerRuntimeResolver?: ProviderRuntimeResolver;
   readonly readService?: SessionReadService;
 }
 
@@ -49,7 +51,12 @@ export class LocalInterviewTransportRuntime {
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
     this.orchestrator =
       options.orchestrator ??
-      new ServerTurnOrchestrator(this.sessions, () => this.rendererStreamServer);
+      new ServerTurnOrchestrator(
+        this.sessions,
+        () => this.rendererStreamServer,
+        undefined,
+        options.providerRuntimeResolver
+      );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
       source: {
