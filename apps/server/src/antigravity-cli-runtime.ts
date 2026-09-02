@@ -61,6 +61,7 @@ export interface ApplicationProviderAdapterRuntimeSource {
   readonly resolveRuntime: (
     selection: ProviderSelectionReference
   ) => unknown;
+  readonly drain: () => Promise<void>;
 }
 
 export function createApplicationProviderAdapterRuntimeSource(): ApplicationProviderAdapterRuntimeSource {
@@ -101,6 +102,9 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
         return runtime;
       }
       return undefined;
+    },
+    async drain(): Promise<void> {
+      await runner.drain();
     }
   });
 }
