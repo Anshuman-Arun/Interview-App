@@ -209,6 +209,23 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
       runtime
     })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
     expect(getterCalls).toBe(0);
+
+    let proxyTrapCalls = 0;
+    const hostileProxy = new Proxy({}, {
+      ownKeys() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getOwnPropertyDescriptor() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    await expect(factory.createAdapter({
+      resolved,
+      runtime: hostileProxy
+    })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(proxyTrapCalls).toBe(0);
   });
 });
 
@@ -352,6 +369,29 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("makes cancellation before first iterator next sticky and starts no process", async () => {
+    let calls = 0;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => {
+        calls += 1;
+        return executionResult(antigravityStream());
+      })
+    );
+    const session = await provider.createSession();
+    const input = turnInput({ turn: "pre-iteration" });
+    const stream = session.sendTurn(input);
+    const cancelTurn = session.cancelTurn;
+    if (cancelTurn === undefined) throw new Error("Antigravity session must support cancellation");
+
+    await expect(cancelTurn(input.generationId)).resolves.toEqual({
+      semantics: "INTERRUPT_LOCAL_PROCESS",
+      signalSent: false
+    });
+    await expect(collectProposals(stream)).resolves.toEqual([]);
+    expect(calls).toBe(0);
+    await session.close();
+  });
+
   it("interrupts the supervised local process on generation cancellation without persistent-session reuse", async () => {
     let firstStarted: (() => void) | undefined;
     const started = new Promise<void>((resolve) => {
@@ -424,6 +464,21 @@ describe("Antigravity CLI one-turn protocol", () => {
       })
     );
     const session = await provider.createSession();
+
+    let proxyTrapCalls = 0;
+    const proxyContext = new Proxy({}, {
+      ownKeys() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getOwnPropertyDescriptor() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    await expect(collectProposals(session.sendTurn(turnInput(proxyContext))))
+      .rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+    expect(proxyTrapCalls).toBe(0);
 
     let getterCalls = 0;
     const accessorContext = Object.defineProperty({}, "hidden", {
