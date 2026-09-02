@@ -30,7 +30,7 @@ import {
   BoardObservationSchema,
   NormalizedBoardMutationSchema,
   VisionBoundsSchema,
-  VisionObservationKindSchema,
+  VisionRequestedObservationKindSchema,
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
   VerificationResultSchema
@@ -363,7 +363,7 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     snapshotBasis: VisionSnapshotBasisSchema.optional(),
     relevantShapeRevisions: z.array(VisionShapeRevisionBindingSchema).optional(),
     regionBounds: VisionBoundsSchema.optional(),
-    requestedObservationKind: VisionObservationKindSchema.optional()
+    requestedObservationKind: VisionRequestedObservationKindSchema.optional()
   }).strict()),
   event("VISION_RESULT_ACCEPTED", z.object({
     visionRequestId: RequestIdSchema,

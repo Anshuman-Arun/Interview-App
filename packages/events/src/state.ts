@@ -26,7 +26,7 @@ import type {
   AuthoritativeStudentShape,
   RequestId,
   VisionBounds,
-  VisionObservationKind,
+  VisionRequestedObservationKind,
   VisionShapeRevisionBinding,
   VisionSnapshotBasis,
   VerificationResult,
@@ -71,7 +71,7 @@ export interface VisionRequestState {
   readonly snapshotBasis?: VisionSnapshotBasis;
   readonly relevantShapeRevisions?: readonly VisionShapeRevisionBinding[];
   readonly regionBounds?: VisionBounds;
-  readonly requestedObservationKind?: VisionObservationKind;
+  readonly requestedObservationKind?: VisionRequestedObservationKind;
   readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
   readonly observation?: BoardObservation;
   readonly acceptedObservation?: AcceptedBoardObservation;

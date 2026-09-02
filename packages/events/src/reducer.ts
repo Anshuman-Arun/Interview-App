@@ -269,7 +269,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
             ...(event.payload.admission === undefined
               ? {}
               : { acceptedObservation: event.payload.admission }),
-            resultEventId: event.id
+            resultEventId: event.eventId
           }
         }
       };

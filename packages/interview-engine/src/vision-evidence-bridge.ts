@@ -6,13 +6,15 @@ import {
   VisionObservationKindSchema,
   isEvidenceValueAllowed,
   type AcceptedBoardObservation,
-  type EvidenceDimension,
+  type EvidenceKey,
   type EvidenceProposal,
   type EvidenceRating,
-  type EvidenceSubject,
   type EventId,
   type VisionObservationKind
 } from "../../domain/src/index.js";
+
+type EvidenceDimension = EvidenceKey["dimension"];
+type EvidenceSubject = EvidenceKey["subject"];
 
 export interface VisionEvidenceCandidateContext {
   readonly observation: AcceptedBoardObservation;

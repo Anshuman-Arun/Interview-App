@@ -5,7 +5,7 @@ import {
   NormalizedBoardMutationSchema,
   RequestIdSchema,
   VisionBoundsSchema,
-  VisionObservationKindSchema,
+  VisionRequestedObservationKindSchema,
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
   MAX_AUTHORITATIVE_BOARD_SHAPES,
@@ -21,7 +21,6 @@ import {
   EvidenceProposalSchema,
   EvidenceKeySchema,
   EvidenceValueSchema,
-  RequestIdSchema,
   RealizationRequestSchema,
   TranscriptRevisionSchema,
   TurnIdSchema,
@@ -39,7 +38,7 @@ import {
   type BoardRevision,
   type NormalizedBoardMutation,
   type VisionBounds,
-  type VisionObservationKind,
+  type VisionRequestedObservationKind,
   type VisionShapeRevisionBinding,
   type VisionSnapshotBasis,
   type CommandEnvelope,
@@ -730,7 +729,7 @@ export class TurnCoordinator {
       readonly snapshotBasis?: VisionSnapshotBasis;
       readonly relevantShapeRevisions?: readonly VisionShapeRevisionBinding[];
       readonly regionBounds?: VisionBounds;
-      readonly requestedObservationKind?: VisionObservationKind;
+      readonly requestedObservationKind?: VisionRequestedObservationKind;
     } = {}
   ): Promise<{ visionRequestId: RequestId; sourceBoardRevision: BoardRevision }> {
     const visionRequestId = RequestIdSchema.parse(options.visionRequestId ?? newRequestId());
@@ -747,7 +746,7 @@ export class TurnCoordinator {
       : VisionBoundsSchema.parse(options.regionBounds);
     const requestedObservationKind = options.requestedObservationKind === undefined
       ? undefined
-      : VisionObservationKindSchema.parse(options.requestedObservationKind);
+      : VisionRequestedObservationKindSchema.parse(options.requestedObservationKind);
     const envelope = createCommandEnvelope({
       sessionId: this.writer.sessionId,
       producer: "vision-coordinator",
