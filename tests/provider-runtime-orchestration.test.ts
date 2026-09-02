@@ -14,6 +14,7 @@ import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import type { ProviderSecretResolver } from "../packages/providers/src/index.js";
 import {
+  LocalInterviewTransportRuntime,
   ProviderRuntimeResolutionError,
   ProviderRuntimeResolver,
   ServerTurnOrchestrator,
@@ -37,6 +38,30 @@ const REMOTE_NO_METERED_POLICY = Object.freeze({
 });
 
 describe("production provider runtime resolution", () => {
+  it("rejects ambiguous composition instead of silently ignoring a provider runtime resolver", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const registry = new SessionRuntimeRegistry(store);
+    try {
+      const sessions = new SessionRecoveryCoordinator(registry, store);
+      const orchestrator = new ServerTurnOrchestrator(sessions, () => undefined);
+
+      expect(() => new LocalInterviewTransportRuntime({
+        security: {
+          host: "127.0.0.1",
+          allowedOrigins: new Set(["http://127.0.0.1:5173"]),
+          clientToken: "provider-runtime-composition-token-long-enough"
+        },
+        registry,
+        store,
+        orchestrator,
+        providerRuntimeResolver: new ProviderRuntimeResolver()
+      })).toThrow(/both an orchestrator and a provider runtime resolver/u);
+    } finally {
+      await registry.closeAll();
+      store.close();
+    }
+  });
+
   it("keeps legacy/default mock execution working through the provider control plane", async () => {
     const harness = createHarness();
     try {
