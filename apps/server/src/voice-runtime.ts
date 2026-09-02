@@ -684,12 +684,19 @@ export class VoiceInputCoordinator {
           throw new Error("Transcript arrived without an admitted authoritative utterance");
         }
         const turns = new TurnCoordinator(writer);
-        const finalized = await turns.finalizeAndCommitUtterance({
+
+        // This is the frozen STT admission seam. Once finalization wins the
+        // serialized authority transition, commit the resulting InputEpisode
+        // immediately so cancellation cannot strand a finalized speech
+        // episode. If cancellation serialized first, finalizeUtterance() fails
+        // closed because the utterance is no longer CAPTURING.
+        const finalized = await turns.finalizeUtterance({
           utteranceId: authoritativeId,
           text: candidate.text
         });
+        const turnId = await turns.commitInputEpisode(finalized.inputEpisodeId);
 
-        const turn = writer.getState().turns[finalized.turnId];
+        const turn = writer.getState().turns[turnId];
         if (
           turn === undefined
           || turn.inputEpisodeId !== finalized.inputEpisodeId
@@ -699,12 +706,12 @@ export class VoiceInputCoordinator {
         }
         commit = {
           inputEpisodeId: finalized.inputEpisodeId,
-          turnId: finalized.turnId,
+          turnId,
           text: candidate.text
         };
         void this.orchestrator.orchestrateTurn({
           sessionId: context.sessionId,
-          turnId: finalized.turnId,
+          turnId,
           inputEpisodeId: finalized.inputEpisodeId,
           studentText: candidate.text
         }).catch(() => {
