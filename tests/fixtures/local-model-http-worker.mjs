@@ -42,6 +42,13 @@ const server = http.createServer((request, response) => {
       return;
     }
     if (component === "speech" && request.url === "/v1/stt") {
+      if (behavior === "delayed-stt") {
+        console.log(`STT_STARTED:${String(body.requestId ?? "")}`);
+        setTimeout(() => {
+          send(response, 200, { text: "fixture transcript", confidence: 0.9 });
+        }, 150);
+        return;
+      }
       send(response, 200, { text: "fixture transcript", confidence: 0.9 });
       return;
     }
