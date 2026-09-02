@@ -506,6 +506,28 @@ describe("QueuedRendererAudioPlayer exposure semantics", () => {
     expect(onCompleted).not.toHaveBeenCalled();
   });
 
+  it("reclaims a resolver-owned resource when its resolved shape is malformed", async () => {
+    const release = vi.fn();
+    const adapter = new QueuedRendererAudioPlayer(
+      new BrowserAudioPlayback(() => new AudioElement()),
+      {
+        resolveAudioSource: async () => ({
+          source: "",
+          release
+        })
+      }
+    );
+
+    await expect(adapter.playAudio({
+      deliveryId: newDeliveryId(),
+      audioRef: "logical-malformed",
+      text: "malformed",
+      callbacks: { onStarted: vi.fn(), onCompleted: vi.fn() }
+    })).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
   it("bounds concurrent logical audio resolution before Blob/network work can fan out", async () => {
     const resolver = vi.fn(async () => new Promise<never>(() => undefined));
     const playback = new BrowserAudioPlayback(() => new AudioElement());
