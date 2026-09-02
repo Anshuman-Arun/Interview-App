@@ -15,7 +15,7 @@ const MAX_TRACKED_VAD_STREAMS = 128;
 
 export class ManagedSileroVadRuntime implements SileroVadRuntime {
   public readonly runtimeVersion: string;
-  private readonly streamRestartCounts = new Map<string, number>();
+  private readonly streamWorkerInstances = new Map<string, string>();
 
   public constructor(
     private readonly client: ManagedModelWorkerClient,
@@ -28,18 +28,18 @@ export class ManagedSileroVadRuntime implements SileroVadRuntime {
     if (input.modelPath !== this.expectedModelPath) {
       throw new Error("Silero runtime rejected an unexpected model path");
     }
-    const restartCount = this.client.restartCount();
-    const previousRestartCount = this.streamRestartCounts.get(input.streamId);
-    if (previousRestartCount !== undefined && previousRestartCount !== restartCount) {
-      this.streamRestartCounts.delete(input.streamId);
+    const workerInstance = this.client.workerInstanceIdentity();
+    const previousWorkerInstance = this.streamWorkerInstances.get(input.streamId);
+    if (previousWorkerInstance !== undefined && previousWorkerInstance !== workerInstance) {
+      this.streamWorkerInstances.delete(input.streamId);
       throw new Error("Silero worker restarted during an active VAD stream");
     }
-    this.streamRestartCounts.delete(input.streamId);
-    this.streamRestartCounts.set(input.streamId, restartCount);
-    while (this.streamRestartCounts.size > MAX_TRACKED_VAD_STREAMS) {
-      const oldest = this.streamRestartCounts.keys().next().value;
+    this.streamWorkerInstances.delete(input.streamId);
+    this.streamWorkerInstances.set(input.streamId, workerInstance);
+    while (this.streamWorkerInstances.size > MAX_TRACKED_VAD_STREAMS) {
+      const oldest = this.streamWorkerInstances.keys().next().value;
       if (oldest === undefined) break;
-      this.streamRestartCounts.delete(oldest);
+      this.streamWorkerInstances.delete(oldest);
     }
     const result = await this.client.postJson("/v1/vad", {
       pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
