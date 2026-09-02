@@ -4,8 +4,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DESKTOP_AUTH_HEADER_VALUE,
+  DESKTOP_ZOOM_CHANNEL,
+  DESKTOP_ZOOM_FACTORS,
   createDesktopRendererBootstrap,
   isAuthorizedDesktopBootstrapRequest,
+  isDesktopZoomFactor,
   isTrustedDesktopNavigation,
   validateDesktopRendererBootstrap
 } from "../apps/desktop/src/bootstrap.js";
@@ -632,6 +635,17 @@ describe("desktop secure bootstrap", () => {
     })).toThrow(/token is invalid/u);
   });
 
+  it("bounds desktop interface zoom to approved factors", () => {
+    expect(DESKTOP_ZOOM_CHANNEL).toBe("interview-desktop:set-zoom");
+    expect(DESKTOP_ZOOM_FACTORS).toEqual([0.875, 1, 1.125, 1.25]);
+    for (const factor of DESKTOP_ZOOM_FACTORS) {
+      expect(isDesktopZoomFactor(factor)).toBe(true);
+    }
+    expect(isDesktopZoomFactor(0.5)).toBe(false);
+    expect(isDesktopZoomFactor(2)).toBe(false);
+    expect(isDesktopZoomFactor("1")).toBe(false);
+  });
+
   it("keeps the actual preload surface narrow and free of privileged APIs", async () => {
     const preload = await readFile(
       path.resolve(process.cwd(), "apps/desktop/preload.cjs"),
@@ -639,6 +653,8 @@ describe("desktop secure bootstrap", () => {
     );
     expect(preload).toContain('exposeInMainWorld("interviewDesktop"');
     expect(preload).toContain("getBootstrap");
+    expect(preload).toContain("setZoomFactor");
+    expect(preload).toContain('const ZOOM_FACTORS = new Set([0.875, 1, 1.125, 1.25])');
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
     expect(preload).not.toContain("shell.");

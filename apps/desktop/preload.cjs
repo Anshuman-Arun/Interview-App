@@ -3,7 +3,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 const CHANNEL = "interview-desktop:get-bootstrap";
+const ZOOM_CHANNEL = "interview-desktop:set-zoom";
 const AUTH_HEADER_VALUE = "desktop-managed-v1";
+const ZOOM_FACTORS = new Set([0.875, 1, 1.125, 1.25]);
 
 function isExactLoopbackOrigin(value) {
   try {
@@ -88,5 +90,13 @@ contextBridge.exposeInMainWorld("interviewDesktop", Object.freeze({
   getBootstrap: () => ({
     ...bootstrap,
     authentication: { ...bootstrap.authentication }
-  })
+  }),
+  setZoomFactor: (factor) => {
+    if (!ZOOM_FACTORS.has(factor)) {
+      throw new Error("Desktop zoom factor is unsupported");
+    }
+    if (ipcRenderer.sendSync(ZOOM_CHANNEL, factor) !== true) {
+      throw new Error("Desktop zoom request was rejected");
+    }
+  }
 }));

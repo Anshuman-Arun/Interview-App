@@ -19,6 +19,17 @@ import {
   type ThemeMode
 } from "./appearance.js";
 
+interface DesktopAppearanceBridge {
+  readonly setZoomFactor?: (factor: number) => void;
+}
+
+const SCALE_FACTORS: Record<InterfaceScale, number> = {
+  s: 0.875,
+  m: 1,
+  l: 1.125,
+  xl: 1.25
+};
+
 interface AppearanceContextValue {
   readonly settings: AppearanceSettings;
   readonly setTheme: (theme: ThemeMode) => void;
@@ -72,6 +83,22 @@ export function AppearanceProvider({
     root.dataset["corners"] = settings.corners;
     root.dataset["borders"] = settings.borders;
     root.style.setProperty("--accent-wash", `${String(settings.accentIntensity)}%`);
+
+    const bridge = (globalThis as typeof globalThis & {
+      readonly interviewDesktop?: DesktopAppearanceBridge;
+    }).interviewDesktop;
+    const scaleFactor = SCALE_FACTORS[settings.scale];
+    if (bridge?.setZoomFactor !== undefined) {
+      root.style.removeProperty("font-size");
+      try {
+        bridge.setZoomFactor(scaleFactor);
+      } catch {
+        // Desktop zoom is presentation-only. Fallback keeps browser UI usable.
+        root.style.fontSize = `${String(16 * scaleFactor)}px`;
+      }
+    } else {
+      root.style.fontSize = `${String(16 * scaleFactor)}px`;
+    }
 
     try {
       window.localStorage.setItem(

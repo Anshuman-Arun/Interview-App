@@ -6,13 +6,16 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  Menu,
   type IpcMainEvent
 } from "electron";
 import { DesktopBackendController } from "./backend-controller.js";
 import {
   DESKTOP_BOOTSTRAP_CHANNEL,
+  DESKTOP_ZOOM_CHANNEL,
   createDesktopRendererBootstrap,
   isAuthorizedDesktopBootstrapRequest,
+  isDesktopZoomFactor,
   isTrustedDesktopNavigation,
   type DesktopRendererBootstrap
 } from "./bootstrap.js";
@@ -132,6 +135,8 @@ async function startDesktop(): Promise<void> {
   });
 
   installBootstrapHandler();
+  installZoomHandler();
+  installApplicationMenu();
   await createMainWindow(paths.preloadPath);
 }
 
@@ -160,6 +165,49 @@ function installBootstrapHandler(): void {
     }
     event.returnValue = currentBootstrap;
   });
+}
+
+function installZoomHandler(): void {
+  ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
+  ipcMain.on(DESKTOP_ZOOM_CHANNEL, (event: IpcMainEvent, requestedFactor: unknown) => {
+    const currentWindow = mainWindow;
+    const currentBootstrap = bootstrap;
+    const currentFrontendUrl = frontendUrl;
+    if (
+      currentWindow === undefined
+      || currentBootstrap === undefined
+      || currentFrontendUrl === undefined
+      || !isAuthorizedDesktopBootstrapRequest({
+        shuttingDown,
+        senderWebContentsId: event.sender.id,
+        trustedWebContentsId: currentWindow.webContents.id,
+        senderFrame: event.senderFrame,
+        trustedMainFrame: currentWindow.webContents.mainFrame,
+        senderFrameUrl: event.senderFrame?.url,
+        trustedFrontendUrl: currentFrontendUrl
+      })
+      || !isDesktopZoomFactor(requestedFactor)
+    ) {
+      event.returnValue = false;
+      return;
+    }
+
+    currentWindow.webContents.setZoomFactor(requestedFactor);
+    event.returnValue = true;
+  });
+}
+
+function installApplicationMenu(): void {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: "View",
+      submenu: [
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { role: "resetZoom" }
+      ]
+    }
+  ]));
 }
 
 async function createMainWindow(preloadPath?: string): Promise<void> {
@@ -275,6 +323,7 @@ function shutdownDesktop(): Promise<void> {
   shuttingDown = true;
   bootstrap = undefined;
   ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
+  ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
 
   const failures: unknown[] = [];
 

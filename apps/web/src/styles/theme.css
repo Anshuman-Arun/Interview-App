@@ -98,11 +98,6 @@
   --accent-hover: #ad3d60;
 }
 
-:root[data-scale="s"] { font-size: 14px; }
-:root[data-scale="m"] { font-size: 16px; }
-:root[data-scale="l"] { font-size: 18px; }
-:root[data-scale="xl"] { font-size: 20px; }
-
 :root[data-corners="square"] {
   --radius-control: 2px;
   --radius-panel: 4px;
