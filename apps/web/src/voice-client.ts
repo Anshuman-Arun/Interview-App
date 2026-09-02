@@ -64,6 +64,11 @@ export interface BrowserVoiceFrameResult {
   readonly events: readonly SpeechWorkerEvent[];
   readonly terminal: boolean;
   readonly commit?: BrowserVoiceCommit;
+  /**
+   * True only when MAX_DURATION finalization proves the frame that triggered
+   * finalization was outside SourceAudioBasis and must seed a fresh stream.
+   */
+  readonly carryCurrentFrameToNextStream?: boolean;
 }
 
 export interface BrowserVoiceClientOptions {
@@ -109,10 +114,11 @@ export class BrowserVoiceStream {
       TARGET_SPEECH_SAMPLE_RATE,
       targetLength
     );
+    const admittedSequence = this.sequence;
     const result = await this.client.sendFrame({
       sessionId: this.sessionId,
       streamId: this.streamId,
-      sequence: this.sequence,
+      sequence: admittedSequence,
       timestampMs: this.timestampMs,
       samples,
       ...(signal === undefined ? {} : { signal })
@@ -120,7 +126,14 @@ export class BrowserVoiceStream {
     this.sequence += 1;
     this.timestampMs += samples.length / TARGET_SPEECH_SAMPLE_RATE * 1_000;
     if (result.terminal) this.closed = true;
-    return result;
+    const carryCurrentFrameToNextStream = result.events.some((event) =>
+      event.type === "UTTERANCE_FINALIZED"
+      && event.finalizationReason === "MAX_DURATION"
+      && event.sourceAudioBasis.lastSequence < admittedSequence
+    );
+    return carryCurrentFrameToNextStream
+      ? { ...result, carryCurrentFrameToNextStream: true }
+      : result;
   }
 
   public async flush(signal?: AbortSignal): Promise<BrowserVoiceFrameResult> {
