@@ -18,8 +18,11 @@ import {
   replayQuantTradingSessionState
 } from "../packages/interview-engine/src/index.js";
 import {
+  QUANT_RESEARCH_FAMILIES,
   QUANT_RESEARCH_VERSION,
-  QUANT_TRADER_SCENARIO_VERSION
+  QUANT_TRADER_SCENARIO_VERSION,
+  QuantResearchEngine,
+  createProductionQuantResearchDefinition
 } from "../packages/local-compute/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
@@ -546,6 +549,22 @@ describe("production quant runtime integration", () => {
       body
     });
   }
+});
+
+describe("production Quant Research definition admission", () => {
+  it("deterministically normalizes representative uint32 seeds to runnable scenarios for every family", () => {
+    const seeds = [0, 1, 2, 3, 17, 42, 91, 0xffff_ffff];
+    for (const family of QUANT_RESEARCH_FAMILIES) {
+      for (const initialSeed of seeds) {
+        const first = createProductionQuantResearchDefinition(family, initialSeed);
+        const second = createProductionQuantResearchDefinition(family, initialSeed);
+        expect(first).toEqual(second);
+        expect(first.seed).toBeGreaterThanOrEqual(0);
+        expect(first.seed).toBeLessThanOrEqual(0xffff_ffff);
+        expect(() => new QuantResearchEngine(first)).not.toThrow();
+      }
+    }
+  });
 });
 
 describe("Quant Trading coordinator isolation and replay determinism", () => {
