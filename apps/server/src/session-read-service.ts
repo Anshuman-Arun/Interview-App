@@ -300,14 +300,15 @@ export class SessionReadService {
       ) as SessionReplayReadResponse;
     }
 
-    const events = this.loadEventsConsistently(sessionId, expectedEventCount);
-    if (events === undefined) {
+    const loaded = this.loadAuthoritative(sessionId, expectedEventCount);
+    if (loaded === undefined) {
       return safeReadFailure(
         "SESSION_REPLAY_READ",
         sessionId,
         "AUTHORITATIVE_HISTORY_UNAVAILABLE"
       ) as SessionReplayReadResponse;
     }
+    const events = loaded.events;
 
     let history: ReturnType<typeof projectSessionHistory>;
     try {
