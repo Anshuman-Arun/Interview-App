@@ -47,10 +47,16 @@ application continues instead of waiting for the per-worker timeout sequence.
 
 The supported production interpreter is **CPython 3.12 or 3.13**. The
 requirements file pins the complete dependency graph used by the worker, not
-only Moonshine/ONNX Runtime. Install it explicitly from wheels:
+only Moonshine/ONNX Runtime.
+
+Use the same interpreter for installation and desktop execution. By default the
+desktop resolves `python` on Windows and `python3` on Linux. For a venv or
+multi-Python machine, set `INTERVIEW_LOCAL_PYTHON` to that interpreter
+(preferably an absolute path); desktop startup canonicalizes and pins it before
+any worker is registered.
 
 ```text
-python -m pip install --only-binary=:all: -r workers/python/requirements-local-model-runtime.txt
+<the same python executable> -m pip install --only-binary=:all: -r workers/python/requirements-local-model-runtime.txt
 ```
 
 The worker verifies the installed distribution versions before READY and binds
