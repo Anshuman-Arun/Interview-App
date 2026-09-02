@@ -1098,8 +1098,8 @@ describe("interview session transition authority", () => {
         type: "rectangle",
         bounds: { x: 10, y: 10, width: 20, height: 20 },
         revision: 1,
-        createdAt: "2026-09-02T15:00:00.000Z",
-        lastModifiedAt: "2026-09-02T15:00:00.000Z"
+        createdAt: Date.parse("2026-09-02T15:00:00.000Z"),
+        lastModifiedAt: Date.parse("2026-09-02T15:00:00.000Z")
       }],
       updated: [],
       deleted: []
