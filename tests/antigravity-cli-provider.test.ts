@@ -267,6 +267,10 @@ describe("Antigravity CLI one-turn protocol", () => {
         '"permission_mode":"always-proceed"'
       ),
       antigravityStream().replace(
+        '"permission_mode":"request-review"',
+        '"permission_mode":"proceed-in-sandbox"'
+      ),
+      antigravityStream().replace(
         '"model":"' + ANTIGRAVITY_CLI_MODEL_ID + '"',
         '"model":"unexpected-model"'
       ),
