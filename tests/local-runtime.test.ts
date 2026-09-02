@@ -220,7 +220,14 @@ describe("local worker lifecycle manager", () => {
   it("starts one process, coalesces duplicate starts, records readiness, and handshakes versions", async () => {
     const runtime = manager();
     runtime.register(definition("worker", "ready", {
-      expectedHandshake: {\n        componentVersion: "fixture-1",\n        protocolVersion: 1,\n        modelVersionOrHash: "fixture-model-1",\n        capabilities: ["FIXTURE"]\n      }
+      expectedHandshake: {
+        componentVersion: "fixture-1",
+        protocolVersion: 1,
+        workerType: "fixture",
+        runtimeVersion: "fixture-runtime-1",
+        modelVersionOrHash: "fixture-model-1",
+        capabilities: ["FIXTURE"]
+      }
     }));
 
     const first = runtime.start("worker");
