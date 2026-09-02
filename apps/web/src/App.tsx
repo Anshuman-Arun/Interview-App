@@ -144,25 +144,11 @@ export const App: React.FC = () => {
   }, []);
 
 
-  const handleWhiteboardEditorMount = useCallback((editor: TldrawEditor): void => {
-    if (editor.getCurrentPageShapes().length === 0) {
-      whiteboardAdapter.createStudentShape({
-        type: "geo",
-        x: 80,
-        y: 80,
-        props: {
-          w: 220,
-          h: 120,
-          geo: "rectangle",
-          color: "blue",
-          text: "Let V = {v1, v2, v3, v4, v5, v6}\nComplete graph K6"
-        }
-      });
-    }
+  const handleWhiteboardEditorMount = useCallback((_editor: TldrawEditor): void => {
     void session.synchronizeWhiteboard().catch(() => {
       // The sync status remains fail-closed and is surfaced by the session hook.
     });
-  }, [session.synchronizeWhiteboard, whiteboardAdapter]);
+  }, [session.synchronizeWhiteboard]);
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
