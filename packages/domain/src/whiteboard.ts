@@ -59,7 +59,7 @@ export const MAX_BOARD_SHAPE_TEXT = 8_000;
 export const MAX_BOARD_SHAPE_ID_LENGTH = 160;
 export const MAX_BOARD_COORDINATE_MAGNITUDE = 1_000_000;
 
-const BoardShapeIdSchema = z.string()
+export const BoardShapeIdSchema = z.string()
   .min(1)
   .max(MAX_BOARD_SHAPE_ID_LENGTH)
   .refine((value) => value === value.trim(), {
@@ -74,10 +74,10 @@ const NonnegativeSafeTimestampSchema = z.number().refine(
   { message: "Board shape timestamp must be a non-negative safe integer" }
 );
 const BoardCoordinateSchema = z.number()
-    .min(-MAX_BOARD_COORDINATE_MAGNITUDE)
+  .min(-MAX_BOARD_COORDINATE_MAGNITUDE)
   .max(MAX_BOARD_COORDINATE_MAGNITUDE);
 const BoardDimensionSchema = z.number()
-    .nonnegative()
+  .nonnegative()
   .max(MAX_BOARD_COORDINATE_MAGNITUDE);
 
 export const AuthoritativeBoardShapeTypeSchema = z.enum([

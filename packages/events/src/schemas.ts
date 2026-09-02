@@ -28,6 +28,8 @@ import {
   UtteranceIdSchema,
   AcceptedBoardObservationSchema,
   BoardObservationSchema,
+  BoardShapeIdSchema,
+  MAX_VISION_REGION_SHAPES,
   NormalizedBoardMutationSchema,
   VisionBoundsSchema,
   VisionRequestedObservationKindSchema,
@@ -358,19 +360,57 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   event("VISION_REQUESTED", z.object({
     visionRequestId: RequestIdSchema,
     sourceBoardRevision: BoardRevisionSchema,
-    regionId: z.string().min(1),
-    relevantShapeIds: z.array(z.string().min(1)).min(1),
+    regionId: z.string().min(1).max(128),
+    relevantShapeIds: z.array(BoardShapeIdSchema).min(1).max(MAX_VISION_REGION_SHAPES),
     snapshotBasis: VisionSnapshotBasisSchema.optional(),
-    relevantShapeRevisions: z.array(VisionShapeRevisionBindingSchema).optional(),
+    relevantShapeRevisions: z.array(VisionShapeRevisionBindingSchema)
+      .max(MAX_VISION_REGION_SHAPES)
+      .optional(),
     regionBounds: VisionBoundsSchema.optional(),
     requestedObservationKind: VisionRequestedObservationKindSchema.optional()
-  }).strict()),
+  }).strict().superRefine((request, context) => {
+    if (new Set(request.relevantShapeIds).size !== request.relevantShapeIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["relevantShapeIds"],
+        message: "Vision request relevant shape IDs must be unique"
+      });
+    }
+    if (
+      request.snapshotBasis !== undefined
+      && request.snapshotBasis.sourceBoardRevision !== request.sourceBoardRevision
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["snapshotBasis", "sourceBoardRevision"],
+        message: "Vision request snapshot basis must match its source board revision"
+      });
+    }
+    if (request.relevantShapeRevisions !== undefined) {
+      const bindingIds = request.relevantShapeRevisions.map((binding) => binding.shapeId);
+      const relevantIds = new Set(request.relevantShapeIds);
+      if (
+        new Set(bindingIds).size !== bindingIds.length
+        || bindingIds.length !== relevantIds.size
+        || !bindingIds.every((shapeId) => relevantIds.has(shapeId))
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["relevantShapeRevisions"],
+          message: "Vision request shape revisions must exactly cover the relevant shape set"
+        });
+      }
+    }
+  })),
   event("VISION_RESULT_ACCEPTED", z.object({
     visionRequestId: RequestIdSchema,
     observation: BoardObservationSchema,
     admission: AcceptedBoardObservationSchema.optional()
   }).strict()),
-  event("VISION_RESULT_DISCARDED", z.object({ visionRequestId: RequestIdSchema, reason: z.string().min(1) }).strict()),
+  event("VISION_RESULT_DISCARDED", z.object({
+    visionRequestId: RequestIdSchema,
+    reason: z.string().min(1).max(240)
+  }).strict()),
   event("LOCAL_COMPUTE_REQUESTED", z.object({
     computeRequestId: RequestIdSchema,
     operation: z.literal("ANALYZE_TRANSCRIPT"),

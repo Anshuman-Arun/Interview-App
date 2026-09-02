@@ -10,6 +10,7 @@ import {
 } from "./ids.js";
 import { BoardRevisionSchema } from "./revisions.js";
 import {
+  BoardShapeIdSchema,
   MAX_AUTHORITATIVE_BOARD_SHAPES,
   NormalizedBoardMutationSchema
 } from "./whiteboard.js";
@@ -257,13 +258,22 @@ export const BoardStateResponseSchema = ResponseBaseSchema.extend({
   boardRevision: BoardRevisionSchema,
   shapeAuthorityKnown: z.boolean(),
   shapeRevisions: z.array(z.object({
-    shapeId: z.string().min(1).max(160),
+    shapeId: BoardShapeIdSchema,
     revision: z.number().refine(
       (value) => Number.isSafeInteger(value) && value >= 1,
       { message: "Shape revision must be a positive safe integer" }
     )
   }).strict()).max(MAX_AUTHORITATIVE_BOARD_SHAPES)
-}).strict();
+}).strict().superRefine((response, context) => {
+  const ids = response.shapeRevisions.map((entry) => entry.shapeId);
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["shapeRevisions"],
+      message: "Board state shape revisions must contain unique shape IDs"
+    });
+  }
+});
 
 export const SessionSummaryResponseSchema = ResponseBaseSchema.extend({
   ok: z.literal(true),
