@@ -592,7 +592,7 @@ export class LoopbackCommandServer {
         if (composition.mode !== "QUANT_TRADING") {
           throw new ProtocolHttpError(409, "CONFLICT", "Session is not a Quant Trading session");
         }
-        const applied = await this.productionRuntime.applyTradingAction(
+        await this.productionRuntime.applyTradingAction(
           writer,
           composition,
           command.action,
@@ -602,13 +602,17 @@ export class LoopbackCommandServer {
         if (writer.getState().status === "COMPLETED") {
           this.scheduleSessionTerminalCleanup(command.sessionId);
         }
+        const projected = this.productionRuntime.readQuantState(writer, composition);
+        if (projected.mode !== "QUANT_TRADING") {
+          throw new Error("Quant Trading command resolved to incompatible runtime state");
+        }
         return {
           protocolVersion: 1,
           ok: true,
           type: "QUANT_TRADING_STATE",
           requestId: command.requestId,
           sessionId: command.sessionId,
-          state: applied.value
+          state: projected.state
         };
       }
       case "SUBMIT_QUANT_RESEARCH_ACTION": {
@@ -619,7 +623,7 @@ export class LoopbackCommandServer {
         if (composition.mode !== "QUANT_RESEARCH") {
           throw new ProtocolHttpError(409, "CONFLICT", "Session is not a Quant Research session");
         }
-        const applied = await this.productionRuntime.applyResearchAction(
+        await this.productionRuntime.applyResearchAction(
           writer,
           composition,
           command.action,
@@ -629,13 +633,17 @@ export class LoopbackCommandServer {
         if (writer.getState().status === "COMPLETED") {
           this.scheduleSessionTerminalCleanup(command.sessionId);
         }
+        const projected = this.productionRuntime.readQuantState(writer, composition);
+        if (projected.mode !== "QUANT_RESEARCH") {
+          throw new Error("Quant Research command resolved to incompatible runtime state");
+        }
         return {
           protocolVersion: 1,
           ok: true,
           type: "QUANT_RESEARCH_STATE",
           requestId: command.requestId,
           sessionId: command.sessionId,
-          state: applied.value.state
+          state: projected.state
         };
       }
       case "RECONNECT_DELIVERY": {
