@@ -389,6 +389,17 @@ public static class InterviewJobSupervisor
                 Marshal.FreeHGlobal(handleList);
             }
 
+            executableLock.Position = 0;
+            string postCreateSha256 = Sha256Hex(executableLock);
+            if (!String.Equals(
+                postCreateSha256,
+                expectedSha256,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                TerminateProcess(process, 197);
+                throw new InvalidOperationException("executable changed during process creation");
+            }
+
             if (!AssignProcessToJobObject(job, process))
             {
                 TerminateProcess(process, 193);
