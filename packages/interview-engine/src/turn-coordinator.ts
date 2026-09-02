@@ -243,7 +243,7 @@ function evidenceProposalWithinAdmissionBounds(value: unknown): boolean {
   return true;
 }
 
-function terminalInvalidationDrafts(
+export function terminalInvalidationDrafts(
   state: Readonly<SessionState>,
   reason: string
 ): readonly EventDraft[] {
