@@ -334,14 +334,9 @@ function parseAntigravityStream(
 
     const init = InitEventSchema.safeParse(event);
     if (init.success) {
-      let schemaMatches = false;
-      try {
-        schemaMatches =
-          serializeBoundedPlainJson(init.data.init.json_schema, MAX_SCHEMA_BYTES)
-          === INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL;
-      } catch {
-        schemaMatches = false;
-      }
+      const schemaMatches = schemaMatchesProposalContract(
+        init.data.init.json_schema
+      );
       if (
         sawInit
         || index !== firstNonBlankLineIndex(lines)
@@ -390,14 +385,9 @@ function parseAntigravityStream(
 
     const result = ResultEventSchema.safeParse(event);
     if (result.success) {
-      let schemaMatches = false;
-      try {
-        schemaMatches =
-          serializeBoundedPlainJson(result.data.result.json_schema, MAX_SCHEMA_BYTES)
-          === INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL;
-      } catch {
-        schemaMatches = false;
-      }
+      const schemaMatches = schemaMatchesProposalContract(
+        result.data.result.json_schema
+      );
       if (
         !sawInit
         || conversationId === undefined
@@ -428,6 +418,15 @@ function parseAntigravityStream(
   return proposal;
 }
 
+function schemaMatchesProposalContract(value: unknown): boolean {
+  try {
+    return serializeBoundedPlainJson(value, MAX_SCHEMA_BYTES)
+      === INTERVIEWER_PROPOSAL_SCHEMA_CANONICAL;
+  } catch {
+    return false;
+  }
+}
+
 function readOwnTurnContext(input: unknown): unknown {
   if (
     typeof input !== "object"
@@ -437,7 +436,7 @@ function readOwnTurnContext(input: unknown): unknown {
   ) {
     throw new Error("Turn input must be a plain object");
   }
-  const prototype = Object.getPrototypeOf(input);
+  const prototype: unknown = Object.getPrototypeOf(input);
   if (prototype !== Object.prototype && prototype !== null) {
     throw new Error("Turn input must be a plain object");
   }
@@ -527,7 +526,7 @@ function serializeBoundedPlainJson(
         return `[${items.join(",")}]`;
       }
 
-      const prototype = Object.getPrototypeOf(candidate);
+      const prototype: unknown = Object.getPrototypeOf(candidate);
       if (prototype !== Object.prototype && prototype !== null) {
         throw new Error("JSON object prototype is not trusted");
       }
