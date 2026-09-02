@@ -159,9 +159,26 @@ export class BrowserVoiceStream {
 
 export class BrowserVoiceClient {
   private readonly baseUrl: string;
+  private readonly authenticatedFetch: typeof fetch;
 
-  public constructor(private readonly options: BrowserVoiceClientOptions) {
-    this.baseUrl = exactLoopbackOrigin(options.baseUrl);
+  public constructor(options: BrowserVoiceClientOptions) {
+    const rawOptions: unknown = options;
+    if (typeof rawOptions !== "object" || rawOptions === null) {
+      throw new Error("Browser voice client options are invalid");
+    }
+    let baseUrl: unknown;
+    let authenticatedFetch: unknown;
+    try {
+      baseUrl = Reflect.get(rawOptions, "baseUrl");
+      authenticatedFetch = Reflect.get(rawOptions, "authenticatedFetch");
+    } catch (error) {
+      throw new Error("Browser voice client options could not be inspected", { cause: error });
+    }
+    if (typeof baseUrl !== "string" || typeof authenticatedFetch !== "function") {
+      throw new Error("Browser voice client options are invalid");
+    }
+    this.baseUrl = exactLoopbackOrigin(baseUrl);
+    this.authenticatedFetch = authenticatedFetch as typeof fetch;
   }
 
   public async openStream(sessionIdInput: SessionId, signal?: AbortSignal): Promise<BrowserVoiceStream> {
@@ -198,10 +215,14 @@ export class BrowserVoiceClient {
     signal: AbortSignal
   ): Promise<ResolvedAudioSource> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
-    if (!AUDIO_REF_PATTERN.test(audioRef)) {
+    if (
+      typeof audioRef !== "string"
+      || audioRef.length !== 73
+      || !AUDIO_REF_PATTERN.test(audioRef)
+    ) {
       throw new Error("Renderer audio reference is not a bounded local logical reference");
     }
-    const response = await this.options.authenticatedFetch(
+    const response = await this.authenticatedFetch(
       `${this.baseUrl}/v1/voice/audio/${encodeURIComponent(audioRef)}`,
       {
         method: "GET",
@@ -221,8 +242,15 @@ export class BrowserVoiceClient {
     }
     const declared = response.headers.get("content-length");
     if (declared !== null) {
+      if (
+        declared.length === 0
+        || declared.length > 16
+        || !/^[1-9][0-9]*$/u.test(declared)
+      ) {
+        throw new Error("Audio asset declared size is malformed");
+      }
       const parsed = Number(declared);
-      if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_WAV_ASSET_BYTES) {
+      if (!Number.isSafeInteger(parsed) || parsed > MAX_WAV_ASSET_BYTES) {
         throw new Error("Audio asset declared size is outside the browser bound");
       }
     }
@@ -263,15 +291,27 @@ export class BrowserVoiceClient {
     readonly samples: Float32Array;
     readonly signal?: AbortSignal;
   }): Promise<BrowserVoiceFrameResult> {
+    const sessionId = SessionIdSchema.parse(input.sessionId);
+    const streamId = SpeechStreamIdSchema.parse(input.streamId);
+    if (!Number.isSafeInteger(input.sequence) || input.sequence < 0) {
+      throw new Error("Voice frame sequence is invalid");
+    }
+    if (
+      !(input.samples instanceof Float32Array)
+      || input.samples.length < 1
+      || input.samples.length > TARGET_SPEECH_SAMPLE_RATE / 10
+    ) {
+      throw new Error("Voice frame PCM is outside the bounded transport shape");
+    }
     const payload = encodeF32Le(input.samples);
-    const response = await this.options.authenticatedFetch(
+    const response = await this.authenticatedFetch(
       `${this.baseUrl}/v1/voice/frames`,
       {
         method: "POST",
         headers: {
           "content-type": "application/octet-stream",
-          "x-interview-session-id": input.sessionId,
-          "x-speech-stream-id": input.streamId,
+          "x-interview-session-id": sessionId,
+          "x-speech-stream-id": streamId,
           "x-speech-request-id": `request_${globalThis.crypto.randomUUID()}`,
           "x-speech-sequence": String(input.sequence),
           "x-speech-sample-rate": String(TARGET_SPEECH_SAMPLE_RATE),
@@ -291,10 +331,12 @@ export class BrowserVoiceClient {
     streamId: string,
     signal?: AbortSignal
   ): Promise<BrowserVoiceFrameResult> {
+    const boundedSessionId = SessionIdSchema.parse(sessionId);
+    const boundedStreamId = SpeechStreamIdSchema.parse(streamId);
     const response = await this.requestJsonResponse("/v1/voice/flush", {
       protocolVersion: 1,
-      sessionId,
-      streamId,
+      sessionId: boundedSessionId,
+      streamId: boundedStreamId,
       requestId: `request_${globalThis.crypto.randomUUID()}`
     }, signal);
     return parseVoiceFrameResponse(response);
@@ -305,13 +347,15 @@ export class BrowserVoiceClient {
     streamId: string,
     signal?: AbortSignal
   ): Promise<void> {
+    const boundedSessionId = SessionIdSchema.parse(sessionId);
+    const boundedStreamId = SpeechStreamIdSchema.parse(streamId);
     const cancelled = VoiceCancelResponseSchema.parse(await this.requestJson("/v1/voice/cancel", {
       protocolVersion: 1,
-      sessionId,
-      streamId,
+      sessionId: boundedSessionId,
+      streamId: boundedStreamId,
       requestId: `request_${globalThis.crypto.randomUUID()}`
     }, signal));
-    if (cancelled.streamId !== streamId) {
+    if (cancelled.streamId !== boundedStreamId) {
       throw new Error("Voice stream-cancel response did not match the admitted request");
     }
   }
@@ -338,7 +382,7 @@ export class BrowserVoiceClient {
   }
 
   private requestJsonResponse(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
-    return this.options.authenticatedFetch(`${this.baseUrl}${path}`, {
+    return this.authenticatedFetch(`${this.baseUrl}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -374,7 +418,15 @@ export function deriveDefaultVoiceBaseUrl(commandBaseUrl: string): string {
 }
 
 function exactLoopbackOrigin(value: string): string {
-  const parsed = new URL(value);
+  if (typeof value !== "string" || value.length === 0 || value.length > 2_048) {
+    throw new Error("Voice endpoint must be a bounded URL string");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch (error) {
+    throw new Error("Voice endpoint must be a valid URL", { cause: error });
+  }
   if (
     parsed.protocol !== "http:"
     || (
@@ -446,14 +498,20 @@ async function readBoundedResponseBytes(
   label: string
 ): Promise<Uint8Array<ArrayBuffer>> {
   const declared = response.headers.get("content-length");
+  let declaredBytes: number | undefined;
   if (declared !== null) {
-    if (!/^(?:0|[1-9][0-9]*)$/u.test(declared)) {
+    if (
+      declared.length === 0
+      || declared.length > 16
+      || !/^(?:0|[1-9][0-9]*)$/u.test(declared)
+    ) {
       throw new Error(`${label} declared size is malformed`);
     }
     const parsed = Number(declared);
     if (!Number.isSafeInteger(parsed) || parsed > maximumBytes) {
       throw new Error(`${label} declared size exceeds the browser bound`);
     }
+    declaredBytes = parsed;
   }
   if (response.body === null) throw new Error(`${label} has no response body`);
 
@@ -479,6 +537,10 @@ async function readBoundedResponseBytes(
     } catch {
       // Reader cleanup must not obscure the bounded response result.
     }
+  }
+
+  if (declaredBytes !== undefined && total !== declaredBytes) {
+    throw new Error(`${label} body length does not match Content-Length`);
   }
 
   const output = new Uint8Array(new ArrayBuffer(total));
