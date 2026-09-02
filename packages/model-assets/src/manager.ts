@@ -423,7 +423,14 @@ export class ModelAssetManager {
     );
   }
 
-  public async inspect(manifestValue: unknown): Promise<AssetInspection> {
+  public async inspect(
+    manifestValue: unknown,
+    signal?: AbortSignal
+  ): Promise<AssetInspection> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
+    if (isSignalAborted(validatedSignal)) {
+      throw new ModelAssetError("CANCELLED", "Artifact inspection was cancelled.");
+    }
     const manifest = parseAssetManifest(manifestValue);
     const key = artifactInstallationKey(manifest);
     const active = this.inFlight.get(key);
@@ -431,7 +438,7 @@ export class ModelAssetManager {
       return this.inspectionFor(manifest, active.stage);
     }
 
-    const check = await this.checkInstallation(manifest);
+    const check = await this.checkInstallation(manifest, validatedSignal);
     if (check.status === "INSTALLED") {
       return this.inspectionFor(manifest, "INSTALLED");
     }
@@ -457,9 +464,16 @@ export class ModelAssetManager {
     return this.inspectionFor(manifest, "NOT_PRESENT");
   }
 
-  public async verifyInstalledArtifact(manifestValue: unknown): Promise<boolean> {
+  public async verifyInstalledArtifact(
+    manifestValue: unknown,
+    signal?: AbortSignal
+  ): Promise<boolean> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
+    if (isSignalAborted(validatedSignal)) {
+      throw new ModelAssetError("CANCELLED", "Artifact verification was cancelled.");
+    }
     const manifest = parseAssetManifest(manifestValue);
-    const check = await this.checkInstallation(manifest);
+    const check = await this.checkInstallation(manifest, validatedSignal);
     if (check.status === "FAILED") {
       throw new ModelAssetError(
         check.errorCode ?? "IO_ERROR",
@@ -469,9 +483,16 @@ export class ModelAssetManager {
     return check.status === "INSTALLED";
   }
 
-  public async getInstalledPath(manifestValue: unknown): Promise<string> {
+  public async getInstalledPath(
+    manifestValue: unknown,
+    signal?: AbortSignal
+  ): Promise<string> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
+    if (isSignalAborted(validatedSignal)) {
+      throw new ModelAssetError("CANCELLED", "Artifact path inspection was cancelled.");
+    }
     const manifest = parseAssetManifest(manifestValue);
-    const check = await this.checkInstallation(manifest);
+    const check = await this.checkInstallation(manifest, validatedSignal);
     if (check.status === "FAILED") {
       throw new ModelAssetError(
         check.errorCode ?? "IO_ERROR",

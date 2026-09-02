@@ -35,7 +35,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["tests/fixtures/local-runtime-worker.mjs"],
+    files: ["tests/fixtures/local-runtime-worker.mjs", "tests/fixtures/local-model-http-worker.mjs"],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       globals: {
@@ -43,7 +43,9 @@ export default tseslint.config(
         console: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
-        setTimeout: "readonly"
+        setTimeout: "readonly",
+        setImmediate: "readonly",
+        Buffer: "readonly"
       }
     }
   }

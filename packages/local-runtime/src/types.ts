@@ -12,6 +12,8 @@ export type LocalComponentState = (typeof LOCAL_COMPONENT_STATES)[number];
 export interface LocalComponentHandshake {
   readonly componentVersion?: string;
   readonly protocolVersion?: string | number;
+  readonly workerType?: string;
+  readonly runtimeVersion?: string;
   readonly modelVersionOrHash?: string;
   readonly capabilities?: readonly string[];
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -20,6 +22,10 @@ export interface LocalComponentHandshake {
 export interface LocalExpectedHandshake {
   readonly componentVersion?: string;
   readonly protocolVersion?: string | number;
+  readonly workerType?: string;
+  readonly runtimeVersion?: string;
+  readonly modelVersionOrHash?: string;
+  readonly capabilities?: readonly string[];
 }
 
 export type LocalReadinessDecision =

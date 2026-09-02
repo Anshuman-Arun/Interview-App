@@ -22,9 +22,10 @@
     "demo": "tsx apps/server/src/run-synthetic.ts",
     "check": "node scripts/check-architecture-boundaries.mjs && pnpm security:public && pnpm typecheck && pnpm lint && pnpm build:web && pnpm build:desktop && pnpm test:desktop && pnpm test:ci && pnpm test:replay && pnpm test:property && pnpm test:e2e && pnpm test:e2e:voice && pnpm demo",
     "build:desktop": "tsc -p apps/desktop/tsconfig.json",
-    "test:desktop": "vitest run tests/desktop-electron-bootstrap.test.ts tests/desktop-electron-adversarial.test.ts tests/desktop-hook-bootstrap.test.tsx",
+    "test:desktop": "vitest run tests/desktop-electron-bootstrap.test.ts tests/desktop-electron-adversarial.test.ts tests/desktop-hook-bootstrap.test.tsx tests/desktop-local-runtime.test.ts",
     "dev:desktop": "pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js",
     "start:desktop": "pnpm build:web && pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production",
+    "setup:desktop-models": "pnpm build:web && pnpm build:desktop && electron dist/desktop-runtime/apps/desktop/src/main.js --desktop-production --install-local-models",
     "security:public": "node scripts/check-public-release.mjs",
     "test:e2e:voice": "vitest run tests/e2e-voice-interview.test.ts"
   },
