@@ -127,9 +127,6 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     }
     const signalSent = record.processActive;
     record.controller.abort();
-    if (record.completion !== undefined) {
-      await record.completion.catch(() => undefined);
-    }
     return {
       semantics: "INTERRUPT_LOCAL_PROCESS",
       signalSent
