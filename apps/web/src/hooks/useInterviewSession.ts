@@ -991,7 +991,7 @@ export function useInterviewSession(
 
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
-      if (sessionId === null) return;
+      if (sessionId === null || sessionStatus !== "ACTIVE") return;
       sessionTransitionEpochRef.current += 1;
       setError(null);
       try {
@@ -1011,6 +1011,7 @@ export function useInterviewSession(
       getCommandClient,
       resetBoardSync,
       sessionId,
+      sessionStatus,
       stopRendererTransport,
       voiceIntegration.voiceControls
     ]
@@ -1018,7 +1019,7 @@ export function useInterviewSession(
 
   const archiveSession = useCallback(
     async (reason?: string): Promise<void> => {
-      if (sessionId === null) return;
+      if (sessionId === null || sessionStatus !== "ACTIVE") return;
       sessionTransitionEpochRef.current += 1;
       setError(null);
       try {
@@ -1038,6 +1039,7 @@ export function useInterviewSession(
       getCommandClient,
       resetBoardSync,
       sessionId,
+      sessionStatus,
       stopRendererTransport,
       voiceIntegration.voiceControls
     ]
@@ -1107,7 +1109,7 @@ export function useInterviewSession(
 
   const retrySubmission = useCallback(
     async (itemId: string): Promise<void> => {
-      if (sessionId === null) return;
+      if (sessionId === null || sessionStatus !== "ACTIVE") return;
       const record = pendingSubmissionsRef.current.get(itemId);
       if (record === undefined) return;
       if (record.sessionId !== sessionId) {
@@ -1169,7 +1171,7 @@ export function useInterviewSession(
         );
       }
     },
-    [sessionId, getCommandClient]
+    [sessionId, sessionStatus, getCommandClient]
   );
 
   const disconnect = useCallback((): void => {
