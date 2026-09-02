@@ -60,12 +60,19 @@ export class SessionRecoveryCoordinator {
     const summaries = this.store?.listSessions() ?? this.registry.listSessions();
     return summaries.map((summary): StoredSessionSummary => {
       const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
+
+      // Older builds could persist configured Quant sessions before the
+      // deterministic runtime existed, including generic COMPLETED/ARCHIVED
+      // lifecycle events that modern Quant reducers intentionally reject.
+      // Detect that exact pre-runtime shape before modern reducer replay.
+      if (isLegacyUninitializedQuantEventStream(events)) {
+        assertLegacyQuantInventoryMatchesEvents(summary, events);
+        return sanitizedQuantInventorySummary(summary);
+      }
+
       const state = replaySession(summary.sessionId, events);
       if (!isQuantSessionState(state)) return summary;
 
-      // Older builds could persist configured Quant sessions before the
-      // deterministic runtime existed. Keep those sessions discoverable but
-      // never invent a seed or treat them as deterministically initialized.
       if (isLegacyUninitializedQuantSessionState(state)) {
         assertSessionInventoryMatchesState(summary, state, events);
       } else {
@@ -88,14 +95,7 @@ export class SessionRecoveryCoordinator {
       // replay can retain chronology. LIST_SESSIONS has no mode discriminator,
       // so exposing that identity as problemId/problemVersion would make it
       // indistinguishable from an Oxford problem to legacy consumers.
-      return {
-        sessionId: summary.sessionId,
-        status: summary.status,
-        sequence: summary.sequence,
-        createdAt: summary.createdAt,
-        updatedAt: summary.updatedAt,
-        eventCount: summary.eventCount
-      };
+      return sanitizedQuantInventorySummary(summary);
     });
   }
 
@@ -211,6 +211,11 @@ export class SessionRecoveryCoordinator {
     const existing = this.recoveries.get(sessionId);
     if (existing !== undefined) return existing;
 
+    const persistedEvents = this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
+    if (isLegacyUninitializedQuantEventStream(persistedEvents)) {
+      return Promise.reject(new LegacyUninitializedQuantSessionError());
+    }
+
     const recovery = (async () => {
       const writer = await this.getWriterAsync(sessionId);
       // Resolve exact application-owned identity and specialized deterministic
@@ -263,6 +268,90 @@ export class SessionRecoveryCoordinator {
       }
     });
     return recovery;
+  }
+}
+
+function sanitizedQuantInventorySummary(
+  summary: Readonly<StoredSessionSummary>
+): StoredSessionSummary {
+  return {
+    sessionId: summary.sessionId,
+    status: summary.status,
+    sequence: summary.sequence,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+    eventCount: summary.eventCount
+  };
+}
+
+function isLegacyUninitializedQuantEventStream(
+  events: readonly SessionEvent[]
+): boolean {
+  const first = events[0];
+  if (first?.type !== "SESSION_STARTED") return false;
+  const configuration = first.payload.configuration;
+  if (
+    configuration?.mode !== "QUANT_TRADING"
+    && configuration?.mode !== "QUANT_RESEARCH"
+  ) {
+    return false;
+  }
+
+  for (const event of events) {
+    if (
+      event.type === "PROBLEM_PRESENTED"
+      || event.type === "QUANT_TRADING_SCENARIO_INITIALIZED"
+      || event.type === "QUANT_TRADING_ACTION_ACCEPTED"
+      || event.type === "QUANT_TRADING_ROUND_RESOLVED"
+      || event.type === "QUANT_TRADING_SCENARIO_COMPLETED"
+      || event.type === "QUANT_RESEARCH_SCENARIO_INITIALIZED"
+      || event.type === "QUANT_RESEARCH_ACTION_ACCEPTED"
+      || event.type === "QUANT_RESEARCH_SCENARIO_COMPLETED"
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function legacyQuantStatusFromEvents(
+  events: readonly SessionEvent[]
+): StoredSessionSummary["status"] {
+  let status: StoredSessionSummary["status"] = "ACTIVE";
+  for (const event of events) {
+    if (event.type === "SESSION_COMPLETED") {
+      if (status !== "ACTIVE") {
+        throw new Error("Legacy Quant completion lifecycle is inconsistent");
+      }
+      status = "COMPLETED";
+    } else if (event.type === "SESSION_ARCHIVED") {
+      if (status !== "ACTIVE" && status !== "COMPLETED") {
+        throw new Error("Legacy Quant archive lifecycle is inconsistent");
+      }
+      status = "ARCHIVED";
+    }
+  }
+  return status;
+}
+
+function assertLegacyQuantInventoryMatchesEvents(
+  summary: Readonly<StoredSessionSummary>,
+  events: readonly SessionEvent[]
+): void {
+  const first = events[0];
+  const last = events.at(-1);
+  if (
+    first === undefined
+    || last === undefined
+    || summary.status !== legacyQuantStatusFromEvents(events)
+    || summary.sequence !== last.sequence
+    || summary.eventCount !== events.length
+    || summary.problemId !== undefined
+    || summary.problemVersion !== undefined
+    || summary.createdAt !== first.wallTime
+    || summary.updatedAt !== last.wallTime
+  ) {
+    throw new Error("Legacy Quant session inventory does not match authoritative events");
   }
 }
 
