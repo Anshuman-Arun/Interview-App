@@ -52,7 +52,7 @@ export async function createAndStartServer(config: ServerConfig = {}) {
   const store = new SqliteEventStore(databasePath);
   const registry = new SessionRuntimeRegistry(store);
 
-  let runtime: LocalInterviewTransportRuntime;
+  let runtime: LocalInterviewTransportRuntime | undefined;
   let bound: Awaited<ReturnType<LocalInterviewTransportRuntime["start"]>>;
   try {
     runtime = new LocalInterviewTransportRuntime({
@@ -69,12 +69,33 @@ export async function createAndStartServer(config: ServerConfig = {}) {
     });
     bound = await runtime.start();
   } catch (error) {
+    let cleanupFailure: unknown;
+    if (runtime !== undefined) {
+      try {
+        await startedRuntime.stop();
+      } catch (cleanupError) {
+        cleanupFailure = cleanupError;
+      }
+    }
     store.close();
+    if (cleanupFailure !== undefined) {
+      throw new AggregateError(
+        [error, cleanupFailure],
+        "Server startup failed and runtime cleanup also failed",
+        { cause: error }
+      );
+    }
     throw error;
   }
 
+  const startedRuntime = runtime;
+  if (startedRuntime === undefined) {
+    store.close();
+    throw new Error("Server runtime was not constructed");
+  }
+
   return {
-    runtime,
+    runtime: startedRuntime,
     store,
     registry,
     security,
