@@ -146,6 +146,13 @@ describe("authoritative voice delivery admission", () => {
       expect(state.deliveries[source.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
       expect(state.deliveries[audio.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
 
+      // A real late renderer acknowledgement is evidence that physical
+      // exposure did begin before interruption. It may resolve uncertainty,
+      // but it must not replay the delivery or revive generation authority.
+      await deliveries.acknowledgeExposed(audio.deliveryId);
+      expect(harness.writer.getState().deliveries[audio.deliveryId]?.status).toBe("EXPOSED");
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+
       await expect(harness.turns.queueAudioDeliveryFromValidatedText({
         sourceDeliveryId: source.deliveryId,
         generationId: harness.generationId,
