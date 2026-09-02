@@ -283,7 +283,8 @@ export class ServerTurnOrchestrator {
       ...(composition.configuration.providerSelection === undefined
         ? {}
         : { selection: composition.configuration.providerSelection }),
-      ...(mockProposal === undefined ? {} : { mockProposal })
+      ...(mockProposal === undefined ? {} : { mockProposal }),
+      cancellationRequested
     }).then(
       (resolution) => ({ kind: "RESOLVED" as const, resolution }),
       () => ({ kind: "FAILED" as const })
