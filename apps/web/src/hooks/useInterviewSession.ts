@@ -414,9 +414,21 @@ export function useInterviewSession(
     if (desktopBootstrap !== undefined) {
       throw new Error("Desktop-managed command endpoint cannot be changed by renderer state");
     }
+
+    const candidate = url.trim();
+    try {
+      deriveDefaultRendererStreamUrl(candidate);
+    } catch {
+      setError("Command server URL must be an exact HTTP loopback origin with a usable port");
+      return;
+    }
+
+    const normalized = new URL(candidate).origin;
+    setError(null);
+    if (normalized === baseUrl) return;
     resetBoardSync();
-    setBaseUrlState(url);
-  }, [desktopBootstrap, resetBoardSync]);
+    setBaseUrlState(normalized);
+  }, [baseUrl, desktopBootstrap, resetBoardSync]);
 
   const getCommandClient = useCallback((): BrowserCommandClient => {
     return new BrowserCommandClient({
