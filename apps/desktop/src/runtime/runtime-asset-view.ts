@@ -80,7 +80,7 @@ export async function materializeRuntimeAssetView(input: {
   try {
     for (const asset of input.assets) {
       if (abortRequested(input.signal)) throw abortError();
-      const source = await input.manager.getInstalledPath(asset.manifest);
+      const source = await input.manager.getInstalledPath(asset.manifest, input.signal);
       const destination = resolveWithinRoot(root, asset.runtimeRelativePath);
       await mkdir(path.dirname(destination), { recursive: true });
       await copyFile(source, destination, fsConstants.COPYFILE_EXCL);
