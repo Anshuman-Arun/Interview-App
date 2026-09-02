@@ -25,7 +25,6 @@ public static class InterviewJobSupervisor
     private const uint HANDLE_FLAG_INHERIT = 0x00000001;
     private const uint INFINITE = 0xFFFFFFFF;
     private const uint WAIT_OBJECT_0 = 0x00000000;
-    private const int STD_INPUT_HANDLE = -10;
     private const int STD_OUTPUT_HANDLE = -11;
     private const int STD_ERROR_HANDLE = -12;
 
@@ -251,7 +250,10 @@ public static class InterviewJobSupervisor
         string executable,
         string[] arguments,
         string currentDirectory,
-        string expectedSha256)
+        string expectedSha256,
+        string stdinPath,
+        long expectedStdinBytes,
+        string expectedStdinSha256)
     {
         IntPtr job = IntPtr.Zero;
         IntPtr process = IntPtr.Zero;
@@ -264,7 +266,25 @@ public static class InterviewJobSupervisor
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.Read))
+            using (FileStream stdinLock = new FileStream(
+                stdinPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read))
             {
+                if (stdinLock.Length != expectedStdinBytes)
+                    throw new InvalidOperationException("stdin length mismatch");
+
+                string actualStdinSha256 = Sha256Hex(stdinLock);
+                if (!String.Equals(
+                    actualStdinSha256,
+                    expectedStdinSha256,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("stdin identity mismatch");
+                }
+                stdinLock.Position = 0;
+
                 string actualSha256 = Sha256Hex(executableLock);
                 if (!String.Equals(
                     actualSha256,
@@ -299,7 +319,7 @@ public static class InterviewJobSupervisor
                 Marshal.FreeHGlobal(limitsPointer);
             }
 
-            IntPtr stdin = GetStdHandle(STD_INPUT_HANDLE);
+            IntPtr stdin = stdinLock.SafeFileHandle.DangerousGetHandle();
             IntPtr stdout = GetStdHandle(STD_OUTPUT_HANDLE);
             IntPtr stderr = GetStdHandle(STD_ERROR_HANDLE);
             RequireInheritable(stdin);
@@ -519,11 +539,14 @@ foreach ($argument in $config.arguments) {
 $currentDirectory = if ($null -eq $config.cwd) { $null } else { [string]$config.cwd }
 
 try {
-  $invokeArguments = New-Object object[] 4
+  $invokeArguments = New-Object object[] 7
   $invokeArguments[0] = [string]$config.executable
   $invokeArguments[1] = [string[]]$arguments
   $invokeArguments[2] = $currentDirectory
   $invokeArguments[3] = [string]$config.expectedSha256
+  $invokeArguments[4] = [string]$config.stdinPath
+  $invokeArguments[5] = [long]$config.stdinBytes
+  $invokeArguments[6] = [string]$config.stdinSha256
   $exitCode = [int]$runMethod.Invoke($null, $invokeArguments)
   exit $exitCode
 }
