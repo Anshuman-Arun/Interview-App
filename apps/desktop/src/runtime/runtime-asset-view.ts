@@ -15,7 +15,8 @@ import { verifyArtifactFile } from "../../../../packages/model-assets/src/index.
 import type { ModelAssetManager } from "../../../../packages/model-assets/src/index.js";
 import type { DesktopRuntimeAsset } from "./model-assets.js";
 
-const MAX_STALE_RUNTIME_VIEWS = 32;
+const MAX_RUNTIME_VIEW_DIRECTORY_ENTRIES = 1_024;
+const MAX_STALE_RUNTIME_VIEW_DELETIONS = 16;
 const RUNTIME_VIEW_OWNER_TOKEN = randomBytes(16).toString("hex");
 const RUNTIME_VIEW_NAME = /^run-([1-9][0-9]*)-([0-9a-f]{32})-/u;
 
@@ -28,9 +29,10 @@ export interface RuntimeAssetView {
 export async function cleanupStaleRuntimeAssetViews(baseRoot: string): Promise<void> {
   await ensureOwnedDirectory(baseRoot);
   const entries = await readdir(baseRoot, { withFileTypes: true });
-  if (entries.length > MAX_STALE_RUNTIME_VIEWS) {
-    throw new Error("Local runtime asset-view directory exceeds the bounded entry limit");
+  if (entries.length > MAX_RUNTIME_VIEW_DIRECTORY_ENTRIES) {
+    throw new Error("Local runtime asset-view directory exceeds the hard inspection limit");
   }
+  let deleted = 0;
   for (const entry of entries) {
     if (!entry.name.startsWith("run-")) continue;
     const candidate = resolveWithinRoot(baseRoot, entry.name);
@@ -47,7 +49,9 @@ export async function cleanupStaleRuntimeAssetViews(baseRoot: string): Promise<v
     // root. Protect only views created by this exact process instance; PID
     // liveness alone is unsafe because operating systems reuse PIDs.
     if (runtimeViewOwnedByCurrentProcess(entry.name)) continue;
+    if (deleted >= MAX_STALE_RUNTIME_VIEW_DELETIONS) continue;
     await rm(candidate, { recursive: true, force: true });
+    deleted += 1;
   }
 }
 
