@@ -133,7 +133,7 @@ describe("professional UI foundation invariants", () => {
 
     expect(packageSource).toContain('"@tldraw/assets": "5.3.2"');
     expect(whiteboardSource).toContain(
-      'from "@tldraw/assets/imports.vite"'
+      'from "@tldraw/assets/imports.vite.js"'
     );
     expect(whiteboardSource).toContain("getAssetUrlsByImport()");
     expect(whiteboardSource).toContain("assetUrls={TLDRAW_ASSET_URLS}");

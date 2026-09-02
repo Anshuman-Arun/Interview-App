@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { getAssetUrlsByImport } from "@tldraw/assets/imports.vite";
+import { getAssetUrlsByImport } from "@tldraw/assets/imports.vite.js";
 import { Tldraw, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import {
