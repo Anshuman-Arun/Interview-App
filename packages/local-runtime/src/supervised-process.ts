@@ -363,10 +363,26 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
-    const before = await inspectExecutable(definition.executable, this.platform);
+    let before = await inspectExecutable(definition.executable, this.platform);
     if (this.platform === "win32" && before.linkCount !== 1n) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
+
+    if (this.platform === "win32") {
+      const initializationInProgress =
+        this.identityInitializations.get(definition.id);
+      if (initializationInProgress !== undefined) {
+        await waitForOperationOrAbort(
+          initializationInProgress,
+          request.signal
+        );
+        before = await inspectExecutable(definition.executable, "win32");
+        if (before.linkCount !== 1n) {
+          throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+        }
+      }
+    }
+
     const pinned = this.pinnedIdentities.get(definition.id);
     if (pinned === undefined) {
       this.pinnedIdentities.set(definition.id, before);
