@@ -892,3 +892,144 @@ summary:focus-visible {
     display: flex;
   }
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Bounded legacy utility compatibility                                       */
+/* -------------------------------------------------------------------------- */
+/* A few authoritative review/modal surfaces predate the semantic CSS layer   */
+/* and still use Tailwind-shaped class names. The app does not ship Tailwind. */
+/* Keep this list deliberately small and token-backed until those surfaces are */
+/* fully migrated; do not grow this into a second styling framework.          */
+
+.grid { display: grid; }
+.inline-flex { display: inline-flex; }
+.items-baseline { align-items: baseline; }
+.relative { position: relative; }
+.text-center { text-align: center; }
+.uppercase { text-transform: uppercase; }
+.underline { text-decoration: underline; }
+.break-all { word-break: break-all; }
+.whitespace-pre-wrap { white-space: pre-wrap; }
+.list-none { list-style: none; }
+.leading-relaxed { line-height: 1.625; }
+.tracking-wider { letter-spacing: 0.05em; }
+
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.gap-x-3 { column-gap: 0.75rem; }
+.gap-y-1 { row-gap: 0.25rem; }
+
+.h-screen { height: 100vh; }
+.w-screen { width: 100vw; }
+.h-2 { height: 0.5rem; }
+.w-2 { width: 0.5rem; }
+.w-28 { width: 7rem; }
+.w-56 { width: 14rem; }
+.max-w-2xl { max-width: 42rem; }
+.max-w-5xl { max-width: 64rem; }
+.max-h-\[80vh\] { max-height: 80vh; }
+.max-h-\[92vh\] { max-height: 92vh; }
+.min-h-\[220px\] { min-height: 220px; }
+.min-h-\[380px\] { min-height: 380px; }
+
+.mt-0\.5 { margin-top: 0.125rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.pt-2 { padding-top: 0.5rem; }
+.pt-4 { padding-top: 1rem; }
+.pb-2 { padding-bottom: 0.5rem; }
+.px-1\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
+.px-3\.5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+.px-5 { padding-left: 1.25rem; padding-right: 1.25rem; }
+.py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+.py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+
+.space-y-1\.5 > * + * { margin-top: 0.375rem; }
+.space-y-5 > * + * { margin-top: 1.25rem; }
+
+.text-\[10px\] { font-size: 10px; line-height: 1.35; }
+.text-lg { font-size: 1.125rem; line-height: 1.45; }
+.text-xl { font-size: 1.25rem; line-height: 1.4; }
+.text-3xl { font-size: 1.875rem; line-height: 1.15; }
+
+.rounded-xl { border-radius: var(--radius-dialog) !important; }
+
+.bg-blue-50 { background-color: var(--info-soft) !important; }
+.text-blue-700 { color: var(--info) !important; }
+.border-blue-200 {
+  border-color: color-mix(in srgb, var(--info) 32%, var(--border-subtle)) !important;
+}
+
+.bg-amber-50,
+.bg-amber-50\/50 { background-color: var(--warning-soft) !important; }
+.text-amber-700,
+.text-amber-800 { color: var(--warning) !important; }
+.border-amber-100,
+.border-amber-200,
+.border-amber-100\/80 {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border-subtle)) !important;
+}
+
+.bg-violet-50 { background-color: var(--accent-soft) !important; }
+.text-violet-700 { color: var(--accent) !important; }
+.border-violet-200 {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle)) !important;
+}
+
+.text-indigo-950 { color: var(--text-primary) !important; }
+.bg-indigo-50\/70 { background-color: var(--accent-soft) !important; }
+.bg-slate-50\/50,
+.bg-slate-100\/50 { background-color: var(--surface-raised) !important; }
+
+.bg-black\/40 { background-color: rgb(0 0 0 / 40%) !important; }
+.bg-black\/50 { background-color: rgb(0 0 0 / 50%) !important; }
+
+.shadow-2xs,
+.shadow-sm { box-shadow: none !important; }
+.shadow-xl,
+.shadow-2xl { box-shadow: var(--shadow-popover) !important; }
+
+.z-\[60\] { z-index: 60; }
+
+.cursor-not-allowed { cursor: not-allowed; }
+
+.hover\:bg-slate-50:hover,
+.hover\:bg-slate-100:hover,
+.hover\:bg-slate-200:hover,
+.hover\:bg-slate-300:hover {
+  background-color: var(--surface-hover) !important;
+}
+.hover\:bg-slate-600:hover,
+.hover\:bg-slate-700:hover {
+  background-color: var(--surface-active) !important;
+}
+.hover\:bg-indigo-100:hover,
+.hover\:bg-indigo-500:hover,
+.hover\:bg-indigo-700:hover {
+  background-color: var(--accent-hover) !important;
+}
+.hover\:border-indigo-300:hover {
+  border-color: var(--accent) !important;
+}
+.hover\:text-slate-600:hover,
+.hover\:text-slate-700:hover,
+.hover\:text-slate-800:hover,
+.hover\:text-slate-900:hover {
+  color: var(--text-primary) !important;
+}
+.hover\:text-rose-900:hover {
+  color: var(--danger) !important;
+}
+
+.focus\:outline-none:focus { outline: none; }
+.focus\:border-indigo-400:focus { border-color: var(--accent) !important; }
+
+@media (min-width: 640px) {
+  .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 768px) {
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
