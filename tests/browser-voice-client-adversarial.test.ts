@@ -78,6 +78,66 @@ describe("browser voice client adversarial boundaries", () => {
     expect(cancelled?.streamId).toBe(opened?.streamId);
   });
 
+  it("carries only a max-duration trigger frame proven outside the finalized audio basis", async () => {
+    let frameRequest = 0;
+    const streamId = "speech_stream_max_duration_carry";
+    const authenticatedFetch: typeof fetch = async (input) => {
+      if (!String(input).endsWith("/v1/voice/frames")) {
+        throw new Error("Unexpected browser voice carry test request");
+      }
+      frameRequest += 1;
+      const body = frameRequest === 1
+        ? {
+            protocolVersion: 1,
+            ok: true,
+            type: "VOICE_FRAME_RESULT",
+            events: [],
+            terminal: false
+          }
+        : {
+            protocolVersion: 1,
+            ok: true,
+            type: "VOICE_FRAME_RESULT",
+            events: [{
+              protocolVersion: 1,
+              type: "UTTERANCE_FINALIZED",
+              requestId: "request_max_duration",
+              streamId,
+              utteranceId: "utterance_max_duration",
+              finalizationReason: "MAX_DURATION",
+              speechFrameCount: 1,
+              durationMs: 100,
+              sourceAudioBasis: {
+                streamId,
+                firstSequence: 0,
+                lastSequence: 0,
+                startTimestampMs: 0,
+                endTimestampMs: 100,
+                sampleRate: 48_000,
+                channels: 1,
+                sampleCount: 4_800,
+                pcmSha256: "0".repeat(64)
+              }
+            }],
+            terminal: true
+          };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    };
+    const client = new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch });
+    const stream = new BrowserVoiceStream(client, newSessionId(), streamId);
+
+    const first = await stream.sendFrame(frame(48_000, 4_800));
+    expect(first.carryCurrentFrameToNextStream).not.toBe(true);
+
+    const second = await stream.sendFrame(frame(48_000, 4_800));
+    expect(second.terminal).toBe(true);
+    expect(second.carryCurrentFrameToNextStream).toBe(true);
+    expect(stream.isClosed).toBe(true);
+  });
+
   it("caps audio response bytes even when Content-Length is absent", async () => {
     const oversizedBody = new ReadableStream<Uint8Array>({
       start(controller) {
