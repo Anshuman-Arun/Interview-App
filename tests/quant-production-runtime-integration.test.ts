@@ -810,6 +810,23 @@ describe("production quant runtime integration", () => {
     ).state).toEqual(authoritativeTrading);
     expect(store.eventCount(tradingId)).toBe(tradingCount);
 
+    const progressedTrading = QuantTradingStateResponseSchema.parse(
+      await responseJson(await post({
+        protocolVersion: 1,
+        type: "SUBMIT_QUANT_TRADING_ACTION",
+        requestId: newRequestId(),
+        sessionId: tradingId,
+        expectedRound: authoritativeTrading.currentRound,
+        action: { type: "PASS" }
+      }))
+    ).state;
+    expect(progressedTrading.currentRound).toBeGreaterThan(authoritativeTrading.currentRound);
+    const progressedTradingCount = store.eventCount(tradingId);
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await post(tradingCommand))
+    ).state).toEqual(authoritativeTrading);
+    expect(store.eventCount(tradingId)).toBe(progressedTradingCount);
+
     const researchId = newSessionId();
     await expectStatus(postStart(researchId, researchConfiguration()), 200);
     const researchInitial = QuantResearchStateResponseSchema.parse(
