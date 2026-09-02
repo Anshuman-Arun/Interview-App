@@ -66,7 +66,7 @@ function canonicalEventResult(engine: QuantResearchEngine) {
 
 function runtimePublicState(
   state: QuantResearchPublicState,
-  result: Pick<QuantResearchResult, "status" | "overallScore" | "metrics" | "evidence">
+  result: QuantResearchResult | ReturnType<typeof canonicalEventResult>
 ) {
   return QuantResearchRuntimePublicStateSchema.parse({
     ...state,
