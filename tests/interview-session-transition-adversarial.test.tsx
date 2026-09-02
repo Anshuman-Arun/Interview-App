@@ -24,7 +24,7 @@ interface DeferredStart {
 function createDeferredStart(
   sessionId: SessionId,
   state: {
-    readonly resolvers: Map<SessionId, (response: Response) => void>;
+    readonly resolvers: Map<SessionId, () => void>;
     readonly seenResolvers: Map<SessionId, () => void>;
   }
 ): DeferredStart {
@@ -38,22 +38,15 @@ function createDeferredStart(
     release: () => {
       const resolve = state.resolvers.get(sessionId);
       if (resolve === undefined) throw new Error("Deferred START_SESSION request was not observed");
-      resolve(jsonResponse({
-        protocolVersion: 1,
-        requestId: "request_placeholder",
-        ok: true,
-        type: "SESSION_STARTED",
-        sessionId
-      }));
+      resolve();
     }
   };
 }
 
 function makeFetchHarness(deferredSessions: readonly SessionId[]) {
   const deferred = new Set<SessionId>(deferredSessions);
-  const resolvers = new Map<SessionId, (response: Response) => void>();
+  const resolvers = new Map<SessionId, () => void>();
   const seenResolvers = new Map<SessionId, () => void>();
-  const requestIds = new Map<SessionId, string>();
 
   const fetchImpl: typeof fetch = async (input, init = {}) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -86,16 +79,13 @@ function makeFetchHarness(deferredSessions: readonly SessionId[]) {
 
     if (command.type === "START_SESSION") {
       if (command.sessionId === undefined) throw new Error("START_SESSION is missing sessionId");
-      requestIds.set(command.sessionId, command.requestId);
       if (deferred.has(command.sessionId)) {
         seenResolvers.get(command.sessionId)?.();
         return new Promise<Response>((resolve) => {
-          resolvers.set(command.sessionId as SessionId, (response) => {
-            const payload = JSON.parse(String(response instanceof Response ? "" : "")) as never;
-            void payload;
+          resolvers.set(command.sessionId as SessionId, () => {
             resolve(jsonResponse({
               protocolVersion: 1,
-              requestId: requestIds.get(command.sessionId as SessionId),
+              requestId: command.requestId,
               ok: true,
               type: "SESSION_STARTED",
               sessionId: command.sessionId
