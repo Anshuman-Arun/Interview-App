@@ -24,6 +24,7 @@ const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_STDERR_BYTES = 512 * 1024;
 const MAX_EXECUTION_MS = 5 * 60_000;
 const MAX_EXECUTABLE_BYTES = 512n * 1024n * 1024n;
+const EXECUTABLE_HASH_TIMEOUT_MS = 30_000;
 const MAX_ISOLATED_HOME_FILES = 16;
 const MAX_ISOLATED_HOME_FILE_BYTES = 64 * 1024;
 const MAX_ISOLATED_HOME_TOTAL_BYTES = 128 * 1024;
@@ -1158,6 +1159,11 @@ function tryInspectExecutableSync(
 async function sha256Executable(executable: string): Promise<string> {
   const hash = createHash("sha256");
   const stream = createReadStream(executable);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    stream.destroy();
+  }, EXECUTABLE_HASH_TIMEOUT_MS);
   try {
     for await (const chunk of stream) {
       const chunkValue: unknown = chunk;
@@ -1166,11 +1172,18 @@ async function sha256Executable(executable: string): Promise<string> {
       }
       hash.update(chunkValue);
     }
+    if (timedOut) {
+      throw new SupervisedProcessError("EXECUTION_TIMEOUT");
+    }
     return hash.digest("hex");
   } catch (error) {
     if (error instanceof SupervisedProcessError) throw error;
+    if (timedOut) {
+      throw new SupervisedProcessError("EXECUTION_TIMEOUT");
+    }
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
   } finally {
+    clearTimeout(timer);
     stream.destroy();
   }
 }
