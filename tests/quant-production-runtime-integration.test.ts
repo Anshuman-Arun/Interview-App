@@ -7,6 +7,7 @@ import {
   QuantTradingPublicStateSchema,
   QuantTradingStateResponseSchema,
   SessionResumedResponseSchema,
+  SessionsListResponseSchema,
   newRequestId,
   newSessionId,
   type InterviewSessionConfiguration,
@@ -612,6 +613,35 @@ describe("production quant runtime integration", () => {
     expect(QuantResearchStateResponseSchema.parse(
       await responseJson(await getQuantState(sessionId))
     ).state).toEqual(before);
+  });
+
+  it("keeps synthetic Quant problem identities out of the mode-less session inventory", async () => {
+    const researchId = newSessionId();
+    const tradingId = newSessionId();
+    const oxfordId = newSessionId();
+    await expectStatus(postStart(researchId, researchConfiguration()), 200);
+    await expectStatus(postStart(tradingId, tradingConfiguration()), 200);
+    await expectStatus(postStart(oxfordId, InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "OXFORD_MATHEMATICS",
+      problem: { id: sixPeopleProblem.id, version: sixPeopleProblem.version },
+      difficulty: sixPeopleProblem.interviewer.difficulty,
+      interventionPolicy: "BALANCED"
+    })), 200);
+
+    const inventory = SessionsListResponseSchema.parse(await responseJson(await post({
+      protocolVersion: 1,
+      type: "LIST_SESSIONS",
+      requestId: newRequestId()
+    })));
+    const byId = new Map(inventory.sessions.map((summary) => [summary.sessionId, summary]));
+
+    expect(byId.get(researchId)?.problemId).toBeUndefined();
+    expect(byId.get(researchId)?.problemVersion).toBeUndefined();
+    expect(byId.get(tradingId)?.problemId).toBeUndefined();
+    expect(byId.get(tradingId)?.problemVersion).toBeUndefined();
+    expect(byId.get(oxfordId)?.problemId).toBe(sixPeopleProblem.id);
+    expect(byId.get(oxfordId)?.problemVersion).toBe(sixPeopleProblem.version);
   });
 
   it("routes Quant Research structured actions through the existing deterministic coordinator with mode isolation", async () => {
