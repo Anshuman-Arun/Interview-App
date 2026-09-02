@@ -6,7 +6,9 @@ import {
 } from "../packages/domain/src/index.js";
 import {
   ANTIGRAVITY_CLI_ADAPTER_VERSION,
+  ANTIGRAVITY_CLI_AGENT_ID,
   ANTIGRAVITY_CLI_MODEL_ID,
+  ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
   ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   AntigravityCliAdapterError,
@@ -19,6 +21,9 @@ import {
   type SupervisedCliExecutionResult,
   type SupervisedCliExecutor
 } from "../packages/providers/src/index.js";
+
+const ANTIGRAVITY_CLI_PROPOSAL_SCHEMA =
+  JSON.parse(ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT) as unknown;
 
 const PROPOSAL: InterviewerProposal = {
   realizedAction: "CLARIFY",
@@ -52,7 +57,9 @@ function antigravityStream(
         cwd: "/isolated",
         tools: [],
         permission_mode: "request-review",
-        model: ANTIGRAVITY_CLI_MODEL_ID
+        model: ANTIGRAVITY_CLI_MODEL_ID,
+        agent: ANTIGRAVITY_CLI_AGENT_ID,
+        json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA
       }
     }),
     ...between.map((event) => JSON.stringify(event)),
@@ -65,6 +72,7 @@ function antigravityStream(
         duration_seconds: 0.1,
         num_turns: 1,
         structured_output: proposal,
+        json_schema: ANTIGRAVITY_CLI_PROPOSAL_SCHEMA,
         usage: {
           input_tokens: 1,
           output_tokens: 1,
@@ -239,6 +247,8 @@ describe("Antigravity CLI one-turn protocol", () => {
     expect(request?.args).toContain("--json-schema");
     expect(request?.args).toContain("--sandbox");
     expect(request?.args).toContain(ANTIGRAVITY_CLI_MODEL_ID);
+    expect(request?.args).toContain("--agent");
+    expect(request?.args).toContain(ANTIGRAVITY_CLI_AGENT_ID);
     expect(request?.args).not.toContain("--continue");
     expect(request?.args).not.toContain("--conversation");
     expect(request?.args).not.toContain("--dangerously-skip-permissions");
@@ -274,10 +284,32 @@ describe("Antigravity CLI one-turn protocol", () => {
         '"model":"' + ANTIGRAVITY_CLI_MODEL_ID + '"',
         '"model":"unexpected-model"'
       ),
+      antigravityStream().replace(
+        '"agent":"' + ANTIGRAVITY_CLI_AGENT_ID + '"',
+        '"agent":"unexpected-agent"'
+      ),
+      antigravityStream().replace('"tools":[]', '"tools":["run_command"]'),
+      antigravityStream().replace(
+        '"conversation_id":"fake-conversation","status":"SUCCESS"',
+        '"conversation_id":"other-conversation","status":"SUCCESS"'
+      ),
       antigravityStream(PROPOSAL, [{
         event: "step_update",
         step_update: {
+          conversation_id: "fake-conversation",
+          step_index: 1,
+          state: "DONE",
+          step_type: "unexpected-step"
+        }
+      }]),
+      antigravityStream(PROPOSAL, [{
+        event: "step_update",
+        step_update: {
+          conversation_id: "fake-conversation",
+          step_index: 1,
+          state: "DONE",
           step_type: "tool",
+          tool_name: "run_command",
           tool_info: { name: "run_command" }
         }
       }]),
@@ -381,6 +413,57 @@ describe("Antigravity CLI one-turn protocol", () => {
     }
 
     await Promise.all([first.close(), second.close()]);
+  });
+
+  it("rejects accessor, toJSON, cyclic, sparse, and non-finite context without invoking user code", async () => {
+    let calls = 0;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => {
+        calls += 1;
+        return executionResult(antigravityStream());
+      })
+    );
+    const session = await provider.createSession();
+
+    let getterCalls = 0;
+    const accessorContext = Object.defineProperty({}, "hidden", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "must-not-run";
+      }
+    });
+    await expect(collectProposals(session.sendTurn(turnInput(accessorContext))))
+      .rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+    expect(getterCalls).toBe(0);
+
+    let toJsonCalls = 0;
+    const toJsonContext = {
+      safe: true,
+      toJSON() {
+        toJsonCalls += 1;
+        return { changed: true };
+      }
+    };
+    await expect(collectProposals(session.sendTurn(turnInput(toJsonContext))))
+      .rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+    expect(toJsonCalls).toBe(0);
+
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+    await expect(collectProposals(session.sendTurn(turnInput(cyclic))))
+      .rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+
+    const sparse = new Array<unknown>(2);
+    sparse[0] = "present";
+    await expect(collectProposals(session.sendTurn(turnInput(sparse))))
+      .rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+
+    await expect(collectProposals(session.sendTurn(turnInput({ value: Number.NaN }))))
+      .rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+
+    expect(calls).toBe(0);
+    await session.close();
   });
 
   it("rejects an oversized turn context before launching the CLI", async () => {
