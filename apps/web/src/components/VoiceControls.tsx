@@ -59,11 +59,13 @@ export function VoiceControls({
           className={styles.voiceStatus}
           role="status"
           aria-live="polite"
-          data-testid="voice-listening-status"
         >
           {statusLabel}
         </span>
 
+        <span className={styles.speakingState} data-testid="voice-listening-status">
+          {state.listening ? "Listening" : "Not listening"}
+        </span>
         <span className={styles.speakingState} data-testid="voice-speaking-status">
           {state.speaking ? "Speaking" : "Not speaking"}
         </span>

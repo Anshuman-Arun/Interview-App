@@ -18,6 +18,7 @@ const FOUNDATION_FILES = [
   "apps/web/src/components/BrandMark.module.css",
   "apps/web/src/components/MathText.module.css",
   "apps/web/src/components/WhiteboardCanvas.module.css",
+  "apps/web/src/components/VoiceControls.module.css",
   "apps/web/src/AppShell.module.css",
   "apps/web/src/theme/ThemeProvider.tsx"
 ] as const;
@@ -149,6 +150,26 @@ describe("professional UI foundation invariants", () => {
     expect(composerSource).toContain("React.memo(StudentInputAreaComponent)");
     expect(appSource).toContain('className={styles.app ?? ""}');
     expect(appSource).toContain("onSubmit={handleSubmitReasoning}");
+  });
+
+  it("integrates real voice controls without high-frequency decorative UI", () => {
+    const appSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const voiceSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/VoiceControls.tsx"),
+      "utf8"
+    );
+
+    expect(appSource).toContain("<VoiceControls");
+    expect(appSource).toContain("state={session.voice}");
+    expect(appSource).toContain("controls={session.voiceControls}");
+    expect(voiceSource).toContain('data-testid="voice-listening-status"');
+    expect(voiceSource).toContain('data-testid="voice-speaking-status"');
+    expect(voiceSource).not.toContain("requestAnimationFrame");
+    expect(voiceSource).not.toContain("setInterval");
+    expect(voiceSource).not.toContain("canvas");
   });
 
   it("rejects expensive decorative effects from the stage-A foundation surface", () => {
