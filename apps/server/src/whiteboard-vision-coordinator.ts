@@ -66,6 +66,7 @@ export class WhiteboardVisionCoordinator {
   private readonly evidenceInterpreter: VisionEvidenceInterpreter | undefined;
   private readonly evidenceInterpreterFingerprint: string | undefined;
   private readonly backendTimeoutMs: number;
+  private readonly unregisterVisionEvidenceRecovery: () => void;
   private readonly managers = new Map<SessionId, VisionRequestManager>();
   private readonly tombstones = new Map<string, ResponseTombstone>();
   private readonly inFlight = new Map<string, InFlightResponse>();
@@ -85,6 +86,11 @@ export class WhiteboardVisionCoordinator {
     ) {
       throw new RangeError("Whiteboard vision backend timeout is outside its bounded range");
     }
+    this.unregisterVisionEvidenceRecovery = this.sessions.setVisionEvidenceRecoveryDelegate({
+      recoverPendingVisionEvidence: async (sessionId) => {
+        await this.recoverPendingVisionEvidence(sessionId);
+      }
+    });
   }
 
   public async process(
@@ -516,11 +522,54 @@ export class WhiteboardVisionCoordinator {
     };
   }
 
+  public async recoverPendingVisionEvidence(sessionId: SessionId): Promise<void> {
+    const writer = await this.sessions.getWriterAsync(sessionId);
+    const candidates = Object.values(writer.getState().visionRequests)
+      .filter((request) =>
+        request.status === "ACCEPTED"
+        && (
+          request.evidenceBridge?.status === "PENDING"
+          || (
+            request.evidenceBridge?.status === "DECIDED"
+            && request.evidenceBridge.decision === "PROPOSAL"
+          )
+        )
+      )
+      .map((request) => {
+        if (request.resultSequence === undefined) {
+          throw new Error("Accepted vision bridge is missing its authoritative result sequence");
+        }
+        return {
+          visionRequestId: request.visionRequestId,
+          resultSequence: request.resultSequence
+        };
+      })
+      .sort((left, right) =>
+        left.resultSequence - right.resultSequence
+        || left.visionRequestId.localeCompare(right.visionRequestId)
+      );
+
+    const turn = new TurnCoordinator(writer);
+    for (const candidate of candidates) {
+      const recovered = await this.completeEvidenceBridge(
+        writer,
+        turn,
+        candidate.visionRequestId
+      );
+      if (!recovered.completed) {
+        throw new Error(
+          `Vision evidence recovery failed for ${candidate.visionRequestId}: ${recovered.reason}`
+        );
+      }
+    }
+  }
+
   public supersedeStaleRequests(sessionId: SessionId): number {
     return this.managers.get(sessionId)?.supersedeStaleRequests() ?? 0;
   }
 
   public shutdown(): void {
+    this.unregisterVisionEvidenceRecovery();
     for (const manager of this.managers.values()) manager.shutdown();
     this.managers.clear();
   }
