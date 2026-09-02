@@ -375,9 +375,6 @@ async function authoritativeSubsetOfLocal(
 }
 
 async function shapeContentSha256(shape: StudentShape): Promise<string> {
-  if (globalThis.crypto?.subtle === undefined) {
-    throw new Error("Web Crypto is required for authoritative whiteboard synchronization");
-  }
   const payload = new TextEncoder().encode(
     authoritativeBoardShapeCanonicalJson(toAuthoritativeShape(shape))
   );
