@@ -141,6 +141,9 @@ function publicStateFromEngine(
             averageSpread: completion.averageSpread,
             quoteParticipationRate: completion.quoteParticipationRate,
             riskBreachCount: completion.riskBreaches.length,
+            ...(completion.riskBreaches.at(-1) === undefined
+              ? {}
+              : { lastRiskBreach: completion.riskBreaches.at(-1) }),
             adverseSelectionPnL: completion.adverseSelectionPnL,
             accountingInvariantHolds: completion.accountingInvariantHolds,
             objectiveScore: completion.objectiveScore
