@@ -213,6 +213,9 @@ function readProviderMember(
   let current: object | null = value;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
     if (current === Object.prototype) break;
+    if (utilTypes.isProxy(current)) {
+      throw new ProviderExecutionError(errorCode);
+    }
     if (seen.has(current)) {
       throw new ProviderExecutionError(errorCode);
     }
@@ -287,6 +290,9 @@ function readReasoningSessionOperation(
   let current: object | null = value;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
     if (current === Object.prototype) break;
+    if (utilTypes.isProxy(current)) {
+      throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+    }
     if (seen.has(current)) {
       throw new ProviderExecutionError("SESSION_CREATION_FAILED");
     }
