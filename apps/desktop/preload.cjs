@@ -35,6 +35,7 @@ function validateBootstrap(value) {
       "protocolVersion",
       "commandBaseUrl",
       "rendererStreamUrl",
+      "voiceBaseUrl",
       "authentication",
       "appVersion",
       "platform"
@@ -44,6 +45,7 @@ function validateBootstrap(value) {
     value.protocolVersion !== 1
     || !isExactLoopbackOrigin(value.commandBaseUrl)
     || typeof value.rendererStreamUrl !== "string"
+    || !isExactLoopbackOrigin(value.voiceBaseUrl)
     || typeof value.authentication !== "object"
     || value.authentication === null
     || value.authentication.mode !== "DESKTOP_MANAGED"
@@ -71,6 +73,7 @@ function validateBootstrap(value) {
     protocolVersion: 1,
     commandBaseUrl: value.commandBaseUrl,
     rendererStreamUrl: value.rendererStreamUrl,
+    voiceBaseUrl: value.voiceBaseUrl,
     authentication: Object.freeze({
       mode: "DESKTOP_MANAGED",
       headerValue: AUTH_HEADER_VALUE
