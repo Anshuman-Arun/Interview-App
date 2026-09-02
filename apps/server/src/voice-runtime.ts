@@ -202,7 +202,7 @@ interface VoiceTtsRuntimeSnapshot {
 }
 
 function snapshotVoiceTtsRuntimeConfiguration(
-  input: VoiceTtsRuntimeConfiguration
+  input: unknown
 ): VoiceTtsRuntimeSnapshot {
   if (typeof input !== "object" || input === null) {
     throw new Error("Voice TTS runtime configuration must be an object");
@@ -313,7 +313,7 @@ export class VoiceSynthesisCoordinator {
         requestId: newRequestId(),
         text: exactText,
         voice: this.runtime.voice,
-        speed: this.runtime.speed ?? 1,
+        speed: this.runtime.speed,
         language: this.runtime.language,
         sampleRate: this.runtime.sampleRate,
         outputFormat: "PCM_F32LE"
