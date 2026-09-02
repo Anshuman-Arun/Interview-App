@@ -41,9 +41,9 @@ The package intentionally exposes three projection entrypoints:
 `projectReplayTimeline`, `projectSessionHistory`, and
 `projectLongitudinalHistory`, plus projection types, bounded configuration, and
 the sanitized `ReplayProjectionError`. It also exposes the narrow
-`assertReplayPrefixValidForRecovery` admission seam used by server recovery to
-validate event provenance/transition semantics before recovery writes; this
-returns no replay projection or internal state. Raw normalization/upcaster hooks
+`assertReplayPrefixValidForRecovery` admission seam used by deterministic Quant
+recovery to validate event provenance/transition semantics before recovery
+writes; this returns no replay projection or internal state. Raw normalization/upcaster hooks
 and collection/text slicing helpers remain internal implementation details.
 
 The current event-type catalog is compile-time exhaustive: all 52 current
