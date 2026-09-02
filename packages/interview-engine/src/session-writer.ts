@@ -134,7 +134,7 @@ export class SessionWriter {
         // Pre-runtime Quant streams have no persisted seed/definition from which
         // deterministic authority can be reconstructed. They remain replayable
         // for migration compatibility, but no current command may extend them.
-        throw new Error("Legacy Quant session is read-only and cannot accept new commands");
+        throw new Error("Cannot extend legacy Quant session without deterministic scenario state");
       }
       const transition = handler(this.state);
       const validatedResult = resultSchema.parse(transition.result);
