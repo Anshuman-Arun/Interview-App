@@ -131,6 +131,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         || quantTrading.result !== undefined
         || quantTrading.pendingAction !== undefined
         || quantTrading.actions.length !== quantTrading.rounds.length
+        || quantTrading.actions.length >= 256
       ) {
         throw new Error("Quant Trading candidate action cannot be accepted in the current state");
       }
@@ -183,10 +184,18 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         throw new Error("Quant Trading scenario is already complete or has an unresolved action");
       }
       const result = event.payload.result;
+      const lastRound = quantTrading.rounds.at(-1);
       if (
-        result.family !== quantTrading.definition.family
+        lastRound === undefined
+        || quantTrading.actions.length !== quantTrading.rounds.length
+        || result.family !== quantTrading.definition.family
         || result.seed !== quantTrading.definition.seed
         || result.roundsCompleted !== quantTrading.rounds.length
+        || result.roundsCompleted > result.plannedRounds
+        || result.completionRate !== result.roundsCompleted / result.plannedRounds
+        || (result.completionStatus === "COMPLETED" && result.roundsCompleted !== result.plannedRounds)
+        || result.finalFairValue !== lastRound.fairValue
+        || !jsonDataEqual(result.finalPortfolio, lastRound.portfolio)
         || result.tradeCount !== result.finalPortfolio.tradeCount
       ) {
         throw new Error("Quant Trading completion result does not match authoritative history");
