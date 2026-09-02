@@ -7,6 +7,7 @@ import {
   type ModelCapabilities,
   type ReasoningProvider
 } from "../../domain/src/index.js";
+import { snapshotValidatedModelCapabilities } from "./runtime-capabilities.js";
 import {
   SafeProviderConfigurationRecordSchema,
   containsSecretLikeConfigurationText,
@@ -1294,7 +1295,7 @@ function validateAndSnapshotAdapter(
       snapshotAdapterCapabilities(capabilities)
     );
     if (!parsed.success) throw adapterDefinitionMismatch();
-    const execution = parsed.data;
+    const execution = snapshotValidatedModelCapabilities(parsed.data);
     const declared = resolved.model.capabilities;
     const executionReasoningLevels = sortedReasoningLevels(execution);
     let reasoningMatches: boolean;
