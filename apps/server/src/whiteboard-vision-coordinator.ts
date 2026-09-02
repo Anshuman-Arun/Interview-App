@@ -170,12 +170,6 @@ export class WhiteboardVisionCoordinator {
     }
 
     const turn = new TurnCoordinator(writer);
-    if (this.backend === undefined) {
-      if (persistedRequest?.status === "PENDING") {
-        await turn.discardVisionRequest(upload.requestId, "VISION_UNAVAILABLE");
-      }
-      return this.remember(upload.requestId, fingerprint, visionUnavailable(upload));
-    }
 
     if (state.status !== "ACTIVE") {
       if (persistedRequest?.status === "PENDING") {
@@ -245,6 +239,11 @@ export class WhiteboardVisionCoordinator {
         ));
       }
     }
+    if (this.backend === undefined && persistedRequest?.status === "PENDING") {
+      await turn.discardVisionRequest(upload.requestId, "VISION_UNAVAILABLE");
+      return this.remember(upload.requestId, fingerprint, visionUnavailable(upload));
+    }
+
     let requested;
     try {
       requested = await turn.requestVision(
@@ -282,6 +281,10 @@ export class WhiteboardVisionCoordinator {
         upload,
         "STALE_BOARD"
       ));
+    }
+    if (this.backend === undefined) {
+      await turn.discardVisionRequest(upload.requestId, "VISION_UNAVAILABLE");
+      return this.remember(upload.requestId, fingerprint, visionUnavailable(upload));
     }
 
     const request = VisionInferenceRequestSchema.parse({
