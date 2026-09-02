@@ -543,23 +543,41 @@ export function useInterviewSession(
       }
       if (rendererLaunchEpochRef.current !== launchEpoch) return;
 
+      let lastError: unknown;
       for (let attempt = 0; attempt < RENDERER_REATTACH_MAX_ATTEMPTS; attempt += 1) {
         if (rendererLaunchEpochRef.current !== launchEpoch) return;
         try {
           await attachRendererStream(targetSessionId);
-          return;
+          if (rendererLaunchEpochRef.current !== launchEpoch) return;
+
+          // An authenticated renderer stream is intended to live for the
+          // session. Returning without a launch-epoch change means the server,
+          // transport, or presentation failed/ended unexpectedly. Reattach so
+          // disconnect recovery can conservatively classify any in-flight atom
+          // and later QUEUED output is not stranded.
+          lastError = new Error("Renderer stream ended unexpectedly");
         } catch (err) {
           if (rendererLaunchEpochRef.current !== launchEpoch) return;
-          const retryableReplacementRace =
-            err instanceof RendererStreamConnectionError
-            && err.status === 409
-            && attempt + 1 < RENDERER_REATTACH_MAX_ATTEMPTS;
-          if (!retryableReplacementRace) {
-            setError(err instanceof Error ? err.message : "Renderer stream disconnected");
-            return;
-          }
-          await delay(RENDERER_REATTACH_DELAY_MS);
+          lastError = err;
         }
+
+        if (attempt + 1 >= RENDERER_REATTACH_MAX_ATTEMPTS) break;
+        const replacementConflict =
+          lastError instanceof RendererStreamConnectionError
+          && lastError.status === 409;
+        await delay(
+          replacementConflict
+            ? RENDERER_REATTACH_DELAY_MS
+            : Math.min(RENDERER_REATTACH_DELAY_MS * 2 ** attempt, 800)
+        );
+      }
+
+      if (rendererLaunchEpochRef.current === launchEpoch) {
+        setError(
+          lastError instanceof Error
+            ? lastError.message
+            : "Renderer stream disconnected"
+        );
       }
     })();
     rendererStreamTaskRef.current = task;
