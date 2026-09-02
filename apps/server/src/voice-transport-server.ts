@@ -37,7 +37,6 @@ const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
 const MAX_CLIENT_TOKEN_CHARACTERS = 256;
 const MAX_ALLOWED_ORIGINS = 16;
 const MAX_ALLOWED_ORIGIN_CHARACTERS = 2_048;
-const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const LOOPBACK_ORIGIN_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const ALLOWED_REQUEST_HEADERS: ReadonlySet<string> = new Set([
   "content-type",
@@ -367,7 +366,7 @@ export class VoiceTransportServer {
       } catch (error) {
         throw classifyCoordinatorError(error);
       }
-      if (transportState.dropped || response.destroyed) return;
+      if (transportResponseUnavailable(transportState, response)) return;
       sendJson(response, 200, {
         protocolVersion: 1,
         ok: true,
@@ -527,6 +526,13 @@ export class VoiceTransportServer {
   private allowedOrigin(origin: string | undefined): boolean {
     return origin !== undefined && this.security.allowedOrigins.has(origin);
   }
+}
+
+function transportResponseUnavailable(
+  state: { readonly dropped: boolean },
+  response: ServerResponse
+): boolean {
+  return state.dropped || response.destroyed;
 }
 
 function snapshotSecurity(securityInput: unknown): LocalTransportSecurity {
