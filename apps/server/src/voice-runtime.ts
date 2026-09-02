@@ -654,8 +654,12 @@ export class VoiceInputCoordinator {
       if (event.type === "UTTERANCE_FINALIZED") {
         this.assertBoundUtterance(context, event.utteranceId);
         const basis = SourceAudioBasisSchema.parse(event.sourceAudioBasis);
-        if (basis.streamId !== context.streamId) {
-          throw new Error("Finalized speech audio basis escaped its bound stream");
+        if (
+          basis.streamId !== context.streamId
+          || basis.sampleRate !== context.sampleRate
+          || basis.lastSequence >= context.expectedSequence
+        ) {
+          throw new Error("Finalized speech audio basis escaped its admitted stream frontier");
         }
         context.finalizedBasis = basis;
         continue;
