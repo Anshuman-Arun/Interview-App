@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type {
-  EvidenceKey,
-  SessionId
-} from "../../../../packages/domain/src/index.js";
+import type { SessionId } from "../../../../packages/domain/src/index.js";
 import type {
   GroundedEvaluationReadModel,
   GroundedReadFailureReason,
@@ -67,18 +64,6 @@ export function failureMessage(reason: GroundedReadFailureReason): string {
   }
 }
 
-function evidenceSubjectLabel(key: EvidenceKey): string {
-  const subject = key.subject;
-  const id = subject.kind === "CLAIM"
-    ? subject.claimId
-    : subject.kind === "MILESTONE"
-      ? subject.milestoneId
-      : subject.kind === "SKILL"
-        ? subject.skillId
-        : subject.approachId;
-  return `${key.dimension} · ${subject.kind} · ${id}`;
-}
-
 function scoreLabel(score: number | null): string {
   return score === null ? "Not scored" : String(score);
 }
@@ -110,38 +95,20 @@ export function EvaluationPanel({
   return (
     <div className="space-y-5" data-testid="grounded-evaluation-panel">
       <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-baseline justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-              Grounded composite
-            </p>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-slate-900">
-                {scoreLabel(evaluation.composite.score)}
-              </span>
-              <span className="text-xs text-slate-500">{evaluation.composite.status}</span>
-            </div>
+            <p className="text-[11px] text-slate-500 font-semibold">Overall</p>
+            <span className="text-3xl font-bold text-slate-900">
+              {scoreLabel(evaluation.composite.score)}
+            </span>
           </div>
           <SupportBadge support={evaluation.composite.supportLevel} />
         </div>
         <p className="mt-3 text-sm text-slate-700">{evaluation.summaryAssessment}</p>
-        {evaluation.composite.omittedDimensions.length > 0 ? (
-          <p className="mt-2 text-[11px] text-slate-500">
-            Unsupported weighted dimensions omitted from the composite:{" "}
-            {evaluation.composite.omittedDimensions
-              .map((name) => DIMENSION_LABELS[name])
-              .join(", ")}.
-          </p>
-        ) : null}
       </section>
 
       <section>
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-900">Evaluation dimensions</h3>
-          <span className="text-[11px] text-slate-500">
-            Score and support are separate signals
-          </span>
-        </div>
+        <h3 className="mb-2 text-sm font-bold text-slate-900">Breakdown</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {evaluation.dimensions.map((dimension) => (
             <article
@@ -149,211 +116,66 @@ export function EvaluationPanel({
               className="rounded-lg border border-slate-200 bg-white p-3"
               data-testid={`evaluation-dimension-${dimension.name}`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-900">
-                    {DIMENSION_LABELS[dimension.name]}
-                  </h4>
-                  <p
-                    className={`mt-1 text-xl font-bold ${
-                      dimension.score === null ? "text-slate-500" : "text-indigo-700"
-                    }`}
-                  >
-                    {scoreLabel(dimension.score)}
-                  </p>
-                </div>
-                <SupportBadge support={dimension.supportLevel} />
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-xs font-semibold text-slate-900">
+                  {DIMENSION_LABELS[dimension.name]}
+                </h4>
+                <span className={
+                  dimension.score === null
+                    ? "text-sm font-bold text-slate-500"
+                    : "text-sm font-bold text-indigo-700"
+                }>
+                  {scoreLabel(dimension.score)}
+                </span>
               </div>
-
               {dimension.notScoredReason !== undefined ? (
-                <p className="mt-2 rounded bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
+                <p className="mt-2 text-[11px] text-slate-500">
                   {dimension.notScoredReason}
                 </p>
               ) : null}
-
-              <details className="mt-2">
-                <summary className="cursor-pointer text-[11px] font-semibold text-indigo-700">
-                  Why? Evidence
-                </summary>
-                <div className="mt-2 space-y-1.5">
-                  {dimension.evidenceRefs.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">
-                      No grounded evidence references are available for this dimension.
-                    </p>
-                  ) : (
-                    dimension.evidenceRefs.map((ref) => (
-                      <div
-                        key={`${ref.kind}:${ref.id}`}
-                        className="rounded bg-slate-50 px-2 py-1 font-mono text-[10px] text-slate-600 break-all"
-                      >
-                        {ref.kind}: {ref.id}
-                      </div>
-                    ))
-                  )}
-                  {dimension.evidenceRefTruncation.truncated ? (
-                    <p className="text-[10px] text-slate-500">
-                      +{dimension.evidenceRefTruncation.remainingCount} additional references withheld by the display bound.
-                    </p>
-                  ) : null}
-                </div>
-              </details>
             </article>
           ))}
         </div>
       </section>
 
-      <section>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-bold text-slate-900">Milestones</h3>
-          <span className="text-xs text-slate-600">
-            {evaluation.milestoneSummary.achieved}/{evaluation.milestoneSummary.total} achieved ·{" "}
-            {evaluation.milestoneSummary.unassisted} unassisted ·{" "}
-            {evaluation.milestoneSummary.assisted} assisted
-          </span>
-        </div>
-        <div className="space-y-2">
-          {evaluation.milestones.map((milestone) => (
-            <details
-              key={milestone.milestoneId}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2"
-            >
-              <summary className="cursor-pointer list-none">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-indigo-700">
-                      {milestone.milestoneId}
-                    </span>
-                    <span className={`text-[10px] font-semibold ${
-                      milestone.achieved ? "text-emerald-700" : "text-slate-500"
-                    }`}>
-                      {milestone.achieved ? "ACHIEVED" : "NOT ESTABLISHED"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500">
-                      Assistance level {milestone.assistanceLevel}
-                    </span>
-                    <SupportBadge support={milestone.supportLevel} />
-                  </div>
-                </div>
-              </summary>
-              <div className="mt-2 border-t border-slate-100 pt-2 space-y-1.5">
-                {milestone.achievedAtTurnId !== undefined ? (
-                  <p className="text-[11px] text-slate-600">
-                    Established at turn <span className="font-mono">{milestone.achievedAtTurnId}</span>
-                  </p>
-                ) : null}
-                <p className="text-[11px] text-slate-600">
-                  Disclosure associations: {milestone.assistanceDisclosureCount}
-                </p>
-                {milestone.evidenceRefs.map((ref) => (
-                  <div
-                    key={`${ref.kind}:${ref.id}`}
-                    className="font-mono text-[10px] text-slate-500 break-all"
-                  >
-                    {ref.kind}: {ref.id}
-                  </div>
-                ))}
-                {milestone.evidenceRefTruncation.truncated ? (
-                  <p className="text-[10px] text-slate-500">
-                    +{milestone.evidenceRefTruncation.remainingCount} additional milestone evidence reference(s) are outside the bounded display.
-                  </p>
-                ) : null}
-              </div>
-            </details>
-          ))}
-          {evaluation.milestoneTruncation.truncated ? (
-            <p className="text-[11px] text-slate-500">
-              {evaluation.milestoneTruncation.remainingCount} additional milestones are outside the bounded display.
-            </p>
-          ) : null}
-        </div>
-      </section>
-
-      {evaluation.disclosedInterventions.length > 0 ? (
-        <section>
-          <h3 className="mb-2 text-sm font-bold text-slate-900">
-            Delivered assistance associations
-          </h3>
-          <div className="space-y-2">
-            {evaluation.disclosedInterventions.map((intervention) => (
-              <div
-                key={intervention.deliveryId}
-                className="rounded-lg border border-slate-200 bg-white p-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono text-[11px] text-slate-700 break-all">
-                    {intervention.deliveryId}
-                  </span>
-                  <span className="text-[10px] font-semibold text-slate-600">
-                    {intervention.deliveryStatus} · level {intervention.disclosureLevel}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {intervention.disclosureAssociationCount} protected disclosure association(s)
-                  {intervention.relatedMilestoneIds.length > 0
-                    ? ` · milestones: ${intervention.relatedMilestoneIds.join(", ")}`
-                    : ""}
-                </p>
-                {intervention.relatedMilestoneTruncation.truncated ? (
-                  <p className="mt-1 text-[10px] text-slate-500">
-                    +{intervention.relatedMilestoneTruncation.remainingCount} additional milestone association(s) are outside the bounded display.
-                  </p>
-                ) : null}
-                {intervention.deliveryStatus === "POSSIBLY_EXPOSED" ? (
-                  <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
-                    Exposure is uncertain. Content is intentionally not replayed.
-                  </p>
-                ) : null}
-              </div>
-            ))}
-            {evaluation.interventionTruncation.truncated ? (
-              <p className="text-[11px] text-slate-500">
-                {evaluation.interventionTruncation.remainingCount} additional delivered-assistance record(s) are outside the bounded display.
-              </p>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
-      {evaluation.keyStrengths.length > 0 || evaluation.areasForImprovement.length > 0 ? (
+      {(evaluation.keyStrengths.length > 0 || evaluation.areasForImprovement.length > 0) ? (
         <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <h3 className="text-xs font-bold text-slate-900">Grounded strengths</h3>
-            {evaluation.keyStrengths.length === 0 ? (
-              <p className="mt-2 text-[11px] text-slate-500">No supported strength statement was produced.</p>
-            ) : (
-              <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
-                {evaluation.keyStrengths.map((strength) => (
-                  <li key={strength}>• {strength}</li>
-                ))}
-              </ul>
-            )}
-            {evaluation.strengthsTruncation.truncated ? (
-              <p className="mt-2 text-[10px] text-slate-500">
-                +{evaluation.strengthsTruncation.remainingCount} additional grounded strength statement(s) are outside the bounded display.
-              </p>
-            ) : null}
+            <h3 className="text-xs font-bold text-slate-900">What worked</h3>
+            <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
+              {evaluation.keyStrengths.map((strength) => (
+                <li key={strength}>• {strength}</li>
+              ))}
+              {evaluation.keyStrengths.length === 0 ? (
+                <li className="text-slate-500">No supported strengths were recorded.</li>
+              ) : null}
+            </ul>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <h3 className="text-xs font-bold text-slate-900">Grounded improvement areas</h3>
-            {evaluation.areasForImprovement.length === 0 ? (
-              <p className="mt-2 text-[11px] text-slate-500">No supported improvement statement was produced.</p>
-            ) : (
-              <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
-                {evaluation.areasForImprovement.map((area) => (
-                  <li key={area}>• {area}</li>
-                ))}
-              </ul>
-            )}
-            {evaluation.improvementTruncation.truncated ? (
-              <p className="mt-2 text-[10px] text-slate-500">
-                +{evaluation.improvementTruncation.remainingCount} additional grounded improvement statement(s) are outside the bounded display.
-              </p>
-            ) : null}
+            <h3 className="text-xs font-bold text-slate-900">Next time</h3>
+            <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
+              {evaluation.areasForImprovement.map((area) => (
+                <li key={area}>• {area}</li>
+              ))}
+              {evaluation.areasForImprovement.length === 0 ? (
+                <li className="text-slate-500">No supported improvement areas were recorded.</li>
+              ) : null}
+            </ul>
           </div>
         </section>
       ) : null}
+
+      <section className="flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-200 pt-3 text-[11px] text-slate-500">
+        <span>
+          Milestones: {evaluation.milestoneSummary.achieved}/{evaluation.milestoneSummary.total}
+        </span>
+        <span>
+          Unassisted: {evaluation.milestoneSummary.unassisted}
+        </span>
+        {evaluation.disclosedInterventions.length > 0 ? (
+          <span>Assistance used: {evaluation.disclosedInterventions.length}</span>
+        ) : null}
+      </section>
     </div>
   );
 }
@@ -373,35 +195,13 @@ export function ReplayPanel({
 
   return (
     <div className="space-y-4" data-testid="session-replay-panel">
-      <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
-          <span>
-            {response.replay.totalEventCount} authoritative events · validated through seq{" "}
-            {response.replay.validatedThroughSequence}
-          </span>
-          <span className="font-semibold">
-            {response.replay.complete ? "Complete replay" : "Bounded/incomplete replay"}
-          </span>
-        </div>
-        {!response.replay.currentStateAvailable ? (
-          <p className="mt-2 text-[11px] text-amber-800">
-            Current-state claims are unavailable beyond the validated replay boundary.
+      {(!response.replay.complete || !response.replay.currentStateAvailable) ? (
+        <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-[11px] text-slate-600">
+            This replay is incomplete, so later state is intentionally not inferred.
           </p>
-        ) : null}
-        {response.replay.issues.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {response.replay.issues.map((issue, index) => (
-              <span
-                key={issue.code + ":" + (issue.sequence === undefined ? "none" : String(issue.sequence)) + ":" + String(index)}
-                className="rounded bg-white border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600"
-              >
-                {issue.code}
-                {issue.sequence === undefined ? "" : " @ " + String(issue.sequence)}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       <div className="flex flex-wrap gap-1" role="group" aria-label="Replay category filter">
         {REPLAY_FILTERS.map((item) => (
@@ -423,7 +223,7 @@ export function ReplayPanel({
       <div className="space-y-2">
         {entries.length === 0 ? (
           <p className="py-8 text-center text-xs text-slate-500">
-            No projected events match this filter.
+            Nothing in this view.
           </p>
         ) : (
           entries.map((entry) => (
@@ -431,112 +231,64 @@ export function ReplayPanel({
               key={entry.eventId}
               className="rounded-lg border border-slate-200 bg-white p-3"
             >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[10px] text-slate-400">
-                      #{entry.sequence}
-                    </span>
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                      {entry.category}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-900">
-                      {entry.summary}
-                    </span>
-                  </div>
-                  <p className="mt-1 font-mono text-[10px] text-slate-400 break-all">
-                    {entry.eventId}
-                  </p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                    {entry.category}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-900">
+                    {entry.summary}
+                  </span>
                 </div>
-                <span className="text-[10px] text-slate-400">
-                  {new Date(entry.occurredAt).toLocaleTimeString()}
-                </span>
+                <time className="shrink-0 text-[10px] text-slate-400">
+                  {new Date(entry.occurredAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  })}
+                </time>
               </div>
 
               {entry.text !== undefined ? (
                 <div className="mt-2 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-800">
                   {entry.text.text}
-                  {entry.text.truncated ? (
-                    <span className="text-slate-400"> …</span>
-                  ) : null}
+                  {entry.text.truncated ? <span className="text-slate-400"> …</span> : null}
                 </div>
               ) : null}
 
-              {entry.delivery !== undefined ? (
-                <div className="mt-2 rounded border border-slate-100 bg-slate-50 p-2 text-[11px] text-slate-600">
-                  <div className="flex flex-wrap gap-x-3 gap-y-1">
-                    <span>Status: {entry.delivery.status}</span>
-                    <span>Presentation: {entry.delivery.presentationState}</span>
-                    <span>Disclosure level: {entry.delivery.effectiveDisclosureLevel}</span>
-                    <span>Associations: {entry.delivery.disclosureIdCount}</span>
-                  </div>
-                  {entry.delivery.contentWithheld ? (
-                    <p className="mt-1 font-semibold text-amber-800">
-                      {entry.delivery.presentationState === "POSSIBLY_PRESENTED"
-                        ? "Possibly exposed content is intentionally withheld and is never re-delivered by replay."
-                        : "Content is not repeated from this delivery lifecycle event."}
-                    </p>
-                  ) : null}
-                  {entry.delivery.boardAction !== undefined ? (
-                    <div className="mt-2">
-                      <span className="font-semibold">
-                        Whiteboard {entry.delivery.boardAction.operation}
-                      </span>
-                      {entry.delivery.boardAction.content !== undefined ? (
-                        <p className="mt-1 whitespace-pre-wrap">
-                          {entry.delivery.boardAction.content.text}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
+              {entry.delivery?.contentWithheld ? (
+                <p className="mt-2 text-[11px] font-semibold text-amber-800">
+                  Possibly exposed content is intentionally withheld from replay.
+                </p>
               ) : null}
 
-              {entry.verification !== undefined ? (
-                <div className="mt-2 rounded border border-slate-100 bg-slate-50 p-2 text-[11px] text-slate-600">
-                  <div className="flex flex-wrap gap-x-3 gap-y-1">
-                    <span>Phase: {entry.verification.phase}</span>
-                    {entry.verification.resultStatus !== undefined ? (
-                      <span className="font-semibold">
-                        Result: {entry.verification.resultStatus}
-                      </span>
-                    ) : null}
-                    {entry.verification.verifier !== undefined ? (
-                      <span>Verifier: {entry.verification.verifier}</span>
-                    ) : null}
-                  </div>
-                  {entry.verification.evidenceKey !== undefined ? (
-                    <p className="mt-1 font-mono text-[10px] break-all">
-                      {evidenceSubjectLabel(entry.verification.evidenceKey)}
+              {entry.delivery?.boardAction !== undefined ? (
+                <div className="mt-2 text-[11px] text-slate-600">
+                  <span className="font-semibold">
+                    Whiteboard {entry.delivery.boardAction.operation}
+                  </span>
+                  {entry.delivery.boardAction.content !== undefined ? (
+                    <p className="mt-1 whitespace-pre-wrap">
+                      {entry.delivery.boardAction.content.text}
                     </p>
                   ) : null}
                 </div>
               ) : null}
 
-              {entry.evidence !== undefined ? (
-                <div className="mt-2 rounded border border-slate-100 bg-slate-50 p-2 text-[11px] text-slate-600">
-                  <p className="font-mono text-[10px] break-all">
-                    {evidenceSubjectLabel(entry.evidence.key)}
-                  </p>
-                  <p className="mt-1">
-                    {entry.evidence.transition}
-                    {entry.evidence.value === undefined ? "" : ` · ${entry.evidence.value}`}
-                    {entry.evidence.inferenceConfidence === undefined
-                      ? ""
-                      : " · recorded confidence " + String(entry.evidence.inferenceConfidence)}
-                  </p>
-                </div>
+              {entry.verification?.resultStatus !== undefined ? (
+                <p className="mt-2 text-[11px] text-slate-600">
+                  Verification: <strong>{entry.verification.resultStatus}</strong>
+                </p>
+              ) : null}
+
+              {entry.evidence !== undefined && entry.evidence.value !== undefined ? (
+                <p className="mt-2 text-[11px] text-slate-600">
+                  Evidence: {entry.evidence.value}
+                </p>
               ) : null}
             </article>
           ))
         )}
       </div>
-
-      {response.replay.timelineTruncation.truncated ? (
-        <p className="text-[11px] text-slate-500">
-          {response.replay.timelineTruncation.remainingCount} timeline entries are outside the bounded display.
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -628,7 +380,12 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
     replayResponse?.available === true ? replayResponse : null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <div
         className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
         role="dialog"
@@ -636,14 +393,9 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
         aria-labelledby="session-review-title"
       >
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
-          <div>
-            <h2 id="session-review-title" className="text-base font-bold text-slate-900">
-              Session Review
-            </h2>
-            <p className="mt-0.5 font-mono text-[10px] text-slate-500 break-all">
-              {sessionId}
-            </p>
-          </div>
+          <h2 id="session-review-title" className="text-base font-bold text-slate-900">
+            Session Review
+          </h2>
           <button
             type="button"
             onClick={onClose}

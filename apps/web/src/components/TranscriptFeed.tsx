@@ -39,7 +39,6 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
     return new Date(timestamp).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit"
     });
   };
 
@@ -49,10 +48,7 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
       data-testid="transcript-feed"
     >
       <header className="transcript-feed__header">
-        <div>
-          <span className="transcript-feed__index">02 / DIALOGUE</span>
-          <strong>Interview transcript</strong>
-        </div>
+        <strong>Transcript</strong>
         <span className="transcript-feed__count">
           {items.length} {items.length === 1 ? "entry" : "entries"}
         </span>
@@ -71,7 +67,7 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
             </div>
           </div>
         ) : (
-          items.map((item, index) => {
+          items.map((item) => {
             const isStudent = item.role === "student";
 
             return (
@@ -82,9 +78,6 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
                 data-role={item.role}
               >
                 <div className="transcript-entry__rail">
-                  <span className="transcript-entry__number">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
                   <span className="transcript-entry__speaker">
                     {isStudent ? "Student (You)" : "Socratic Interviewer"}
                   </span>
@@ -127,11 +120,6 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
                     </div>
                   )}
 
-                  <div className="metadata-bar transcript-entry__meta">
-                    {item.turnId !== undefined && <span>Turn: {item.turnId}</span>}
-                    {item.inputEpisodeId !== undefined && <span>Episode: {item.inputEpisodeId}</span>}
-                    {item.deliveryId !== undefined && <span>Delivery: {item.deliveryId}</span>}
-                  </div>
                 </div>
               </article>
             );

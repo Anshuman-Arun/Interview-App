@@ -1,18 +1,15 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
-import type { SessionId } from "../../../../packages/domain/src/index.js";
 import "./ReviewPageShell.css";
 
 export type ReviewView = "evaluation" | "replay";
 
 export function ReviewPageShell({
-  sessionId,
   view,
   onViewChange,
   onBack,
   evaluation,
   replay
 }: {
-  readonly sessionId: SessionId;
   readonly view: ReviewView;
   readonly onViewChange: (view: ReviewView) => void;
   readonly onBack: () => void;
@@ -38,10 +35,9 @@ export function ReviewPageShell({
       <header className="expressive-review__hero">
         <button type="button" onClick={onBack}>← Sessions</button>
         <div>
-          <span>POST-INTERVIEW</span>
-          <h2>Review the reasoning, not just the score.</h2>
+          <h2>Review</h2>
+          <p>What worked, what to improve, and the replay.</p>
         </div>
-        <code>{sessionId}</code>
       </header>
 
       <div className="expressive-review__tabs" role="tablist" aria-label="Review view">
@@ -56,7 +52,6 @@ export function ReviewPageShell({
           onKeyDown={handleTabKeyDown}
           onClick={() => onViewChange("evaluation")}
         >
-          <span>01</span>
           Evaluation
         </button>
         <button
@@ -70,7 +65,6 @@ export function ReviewPageShell({
           onKeyDown={handleTabKeyDown}
           onClick={() => onViewChange("replay")}
         >
-          <span>02</span>
           Replay
         </button>
       </div>

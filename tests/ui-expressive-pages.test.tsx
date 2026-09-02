@@ -86,6 +86,28 @@ describe("expressive product page layer", () => {
     expect(markup).not.toContain(">Enter interview<");
   });
 
+  it("labels an attached paused interview as resumable without implying termination", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(HomePage, {
+        activeSessionId: ACTIVE,
+        activeProblemTitle: null,
+        activeSessionPaused: true,
+        sessions,
+        onStartInterview: vi.fn(),
+        onResumeInterview: vi.fn(),
+        onOpenSessions: vi.fn(),
+        onOpenSettings: vi.fn(),
+        canReview: () => false,
+        onReview: vi.fn(),
+        sessionEntryPending: false
+      })
+    );
+
+    expect(markup).toContain("Resume interview");
+    expect(markup).toContain("Paused.");
+    expect(markup).toContain("nothing was ended or archived");
+  });
+
   it("renders a searchable ledger with grounded action ownership supplied by the caller", () => {
     const markup = renderToStaticMarkup(
       React.createElement(SessionsPage, {
@@ -157,7 +179,6 @@ describe("expressive product page layer", () => {
   it("keeps review presentation independent of product-read implementation", () => {
     const markup = renderToStaticMarkup(
       React.createElement(ReviewPageShell, {
-        sessionId: COMPLETE,
         view: "evaluation",
         onViewChange: vi.fn(),
         onBack: vi.fn(),
@@ -166,7 +187,8 @@ describe("expressive product page layer", () => {
       })
     );
 
-    expect(markup).toContain("Review the reasoning, not just the score.");
+    expect(markup).toContain(">Review<");
+    expect(markup).toContain("What worked, what to improve, and the replay.");
     expect(markup).toContain("evaluation-content");
     expect(markup).not.toContain("replay-content");
   });

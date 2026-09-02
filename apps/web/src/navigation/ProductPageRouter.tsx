@@ -19,6 +19,7 @@ export function ProductPageRouter({
   activeSessionId,
   currentSessionId,
   activeProblemTitle,
+  activeSessionPaused,
   canReview,
   sessionEntryPending,
   onNavigatePage,
@@ -39,6 +40,7 @@ export function ProductPageRouter({
   readonly activeSessionId: SessionId | null;
   readonly currentSessionId: SessionId | null;
   readonly activeProblemTitle?: string | null;
+  readonly activeSessionPaused?: boolean;
   readonly canReview: (session: StoredSessionSummary) => boolean;
   readonly sessionEntryPending: boolean;
   readonly onNavigatePage: (page: ProductPageId) => void;
@@ -80,6 +82,7 @@ export function ProductPageRouter({
         <HomePage
           activeSessionId={activeSessionId}
           activeProblemTitle={activeProblemTitle ?? null}
+          activeSessionPaused={activeSessionPaused ?? false}
           sessions={sessions}
           onStartInterview={onEnterInterview}
           onResumeInterview={onResume}
@@ -125,7 +128,6 @@ export function ProductPageRouter({
       activePage = null;
       content = (
         <ReviewPageShell
-          sessionId={route.sessionId}
           view={route.view}
           onViewChange={(view) =>
             onReview(route.sessionId, view, { replace: true })

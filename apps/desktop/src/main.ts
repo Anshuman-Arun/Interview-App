@@ -13,7 +13,8 @@ import {
   DESKTOP_BOOTSTRAP_CHANNEL,
   DESKTOP_ZOOM_CHANGED_CHANNEL,
   DESKTOP_ZOOM_CHANNEL,
-  DESKTOP_ZOOM_FACTORS,
+  DESKTOP_MAX_ZOOM_FACTOR,
+  DESKTOP_MIN_ZOOM_FACTOR,
   createDesktopRendererBootstrap,
   isAuthorizedDesktopBootstrapRequest,
   isDesktopZoomFactor,
@@ -211,17 +212,11 @@ function applyDesktopZoomFactor(
 
 function stepDesktopZoom(window: BrowserWindow, direction: -1 | 1): void {
   const current = window.webContents.getZoomFactor();
-  const factors = DESKTOP_ZOOM_FACTORS;
-  let target: DesktopZoomFactor;
-
-  if (direction > 0) {
-    target = factors.find((factor) => factor > current + 0.001)
-      ?? 1.25;
-  } else {
-    target = [...factors].reverse().find((factor) => factor < current - 0.001)
-      ?? 0.875;
-  }
-
+  const unclamped = current + direction * 0.1;
+  const target = Math.min(
+    DESKTOP_MAX_ZOOM_FACTOR,
+    Math.max(DESKTOP_MIN_ZOOM_FACTOR, Math.round(unclamped * 100) / 100)
+  );
   applyDesktopZoomFactor(window, target, true);
 }
 

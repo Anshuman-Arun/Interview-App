@@ -1,15 +1,16 @@
+import React, { useEffect, useRef } from "react";
 import {
   ACCENT_OPTIONS,
+  MAX_INTERFACE_ZOOM_PERCENT,
+  MIN_INTERFACE_ZOOM_PERCENT,
   type BorderStyle,
   type CornerStyle,
-  type InterfaceScale,
   type ThemeMode
 } from "../appearance/appearance.js";
 import { useAppearance } from "../appearance/AppearanceProvider.js";
 import "./AppearanceDock.css";
 
 const THEMES: readonly ThemeMode[] = ["system", "light", "dark"];
-const SCALES: readonly InterfaceScale[] = ["s", "m", "l", "xl"];
 const CORNERS: readonly CornerStyle[] = ["square", "soft", "round", "generous"];
 const BORDERS: readonly BorderStyle[] = ["quiet", "regular", "strong", "contrast"];
 
@@ -18,19 +19,52 @@ export function AppearanceDock({
 }: {
   readonly compact?: boolean;
 }) {
+  const rootRef = useRef<HTMLDetailsElement | null>(null);
   const {
     settings,
     setTheme,
     setAccent,
     setAccentIntensity,
-    setScale,
+    setZoomPercent,
     setCorners,
     setBorders,
     reset
   } = useAppearance();
 
+  useEffect(() => {
+    const closeFromOutside = (event: PointerEvent): void => {
+      const root = rootRef.current;
+      if (
+        root === null
+        || !root.open
+        || !(event.target instanceof Node)
+        || root.contains(event.target)
+      ) {
+        return;
+      }
+      root.open = false;
+    };
+    const closeFromEscape = (event: KeyboardEvent): void => {
+      const root = rootRef.current;
+      if (event.key !== "Escape" || root === null || !root.open) return;
+      root.open = false;
+      root.querySelector<HTMLElement>("summary")?.focus();
+    };
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromEscape);
+    };
+  }, []);
+
+  const nudgeZoom = (delta: number): void => {
+    setZoomPercent(settings.zoomPercent + delta);
+  };
+
   return (
     <details
+      ref={rootRef}
       className={
         compact
           ? "appearance-dock appearance-dock--compact"
@@ -141,19 +175,83 @@ export function AppearanceDock({
         </section>
 
         <section className="appearance-dock__section appearance-dock__section--last">
-          <span className="appearance-dock__label">Interface scale</span>
-          <div className="appearance-scale-options">
-            {SCALES.map((scale) => (
-              <button
-                key={scale}
-                type="button"
-                aria-pressed={settings.scale === scale}
-                onClick={() => setScale(scale)}
-              >
-                {scale.toUpperCase()}
-              </button>
-            ))}
+          <div className="appearance-zoom__heading">
+            <span className="appearance-dock__label">Zoom</span>
+            <button
+              type="button"
+              className="appearance-zoom__reset"
+              onClick={() => setZoomPercent(100)}
+              disabled={settings.zoomPercent === 100}
+            >
+              100%
+            </button>
           </div>
+          <div className="appearance-zoom">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              onClick={() => nudgeZoom(-10)}
+              disabled={settings.zoomPercent <= MIN_INTERFACE_ZOOM_PERCENT}
+            >
+              −
+            </button>
+            <label className="appearance-zoom__value">
+              <input
+                key={settings.zoomPercent}
+                type="number"
+                min={MIN_INTERFACE_ZOOM_PERCENT}
+                max={MAX_INTERFACE_ZOOM_PERCENT}
+                step="1"
+                defaultValue={settings.zoomPercent}
+                aria-label="Interface zoom percent"
+                onBlur={(event) => {
+                  const raw = event.currentTarget.value.trim();
+                  if (raw.length === 0) {
+                    event.currentTarget.value = String(settings.zoomPercent);
+                    return;
+                  }
+                  const next = Number(raw);
+                  if (!Number.isFinite(next)) {
+                    event.currentTarget.value = String(settings.zoomPercent);
+                    return;
+                  }
+                  const normalized = Math.min(
+                    MAX_INTERFACE_ZOOM_PERCENT,
+                    Math.max(MIN_INTERFACE_ZOOM_PERCENT, Math.round(next))
+                  );
+                  event.currentTarget.value = String(normalized);
+                  setZoomPercent(normalized);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  } else if (event.key === "Escape") {
+                    event.currentTarget.value = String(settings.zoomPercent);
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+              <span>%</span>
+            </label>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              onClick={() => nudgeZoom(10)}
+              disabled={settings.zoomPercent >= MAX_INTERFACE_ZOOM_PERCENT}
+            >
+              +
+            </button>
+          </div>
+          <input
+            className="appearance-zoom__range"
+            type="range"
+            min={MIN_INTERFACE_ZOOM_PERCENT}
+            max={MAX_INTERFACE_ZOOM_PERCENT}
+            step="1"
+            value={settings.zoomPercent}
+            aria-label="Interface zoom"
+            onChange={(event) => setZoomPercent(Number(event.target.value))}
+          />
         </section>
       </div>
     </details>
