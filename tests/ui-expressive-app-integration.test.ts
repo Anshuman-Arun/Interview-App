@@ -218,7 +218,9 @@ describe("expressive product integration invariants", () => {
     );
 
     expect(app).toContain("!hasActiveInterview && historyRead !== null");
-    expect(app).toContain("!hasActiveInterview && historyLoading");
+    expect(app).toContain("!hasActiveInterview ? (");
+    expect(app).toContain("historyLoading && historyRead === null");
+    expect(app).toContain('if (session.isSessionStarted && session.sessionStatus === "ACTIVE")');
     expect(app).toContain('hasActiveInterview ? "Session record"');
     expect(app).toContain("Problem metadata is intentionally hidden during the live interview.");
     expect(app).not.toContain("<SessionReviewModal");
