@@ -18,7 +18,7 @@ export type TurnRecoveryDisposition = "COMPLETE" | "RETRYABLE";
 export interface TurnRecoveryDelegate {
   readonly recoverPendingTurns: (
     sessionId: SessionId
-  ) => Promise<TurnRecoveryDisposition | void>;
+  ) => Promise<TurnRecoveryDisposition>;
 }
 
 /**
