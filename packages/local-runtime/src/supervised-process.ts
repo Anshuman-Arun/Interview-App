@@ -973,6 +973,9 @@ function acquireSharedWindowsSupervisorAssembly(
       released = true;
       entry.consumers -= 1;
       if (entry.consumers === 0 && !entry.settled) {
+        if (SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key) === entry) {
+          SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.delete(key);
+        }
         entry.controller.abort();
       }
     }
