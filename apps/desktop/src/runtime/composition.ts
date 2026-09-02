@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { lstat } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { access, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import {
   KokoroSpeechSynthesizer,
@@ -82,7 +83,8 @@ export class DesktopLocalRuntimeComposition {
   private readonly assetManager: ModelAssetManager;
   private readonly runtimeViewsRoot: string;
   private readonly workerScriptPath: string;
-  private readonly pythonExecutable: string;
+  private readonly pythonExecutableCandidate: string;
+  private pythonExecutable: string | undefined;
   private speechStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private ttsStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private readonly visionStatus: DesktopRuntimeCapabilityStatus = Object.freeze({
@@ -117,7 +119,7 @@ export class DesktopLocalRuntimeComposition {
         ? path.join(options.resourcesPath, "workers", "python", "local_model_worker.py")
         : path.resolve(options.cwd, "workers", "python", "local_model_worker.py")
     );
-    this.pythonExecutable = options.pythonExecutable
+    this.pythonExecutableCandidate = options.pythonExecutable
       ?? (process.platform === "win32" ? "python" : "python3");
   }
 
@@ -243,6 +245,18 @@ export class DesktopLocalRuntimeComposition {
       this.ttsStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
       return;
     }
+
+    const pythonExecutable = await resolvePythonExecutable(
+      this.pythonExecutableCandidate,
+      process.platform,
+      process.env
+    );
+    if (pythonExecutable === undefined) {
+      this.speechStatus = unavailable("PYTHON_RUNTIME_UNAVAILABLE");
+      this.ttsStatus = unavailable("PYTHON_RUNTIME_UNAVAILABLE");
+      return;
+    }
+    this.pythonExecutable = pythonExecutable;
 
     // Runtime views copy large verified model artifacts onto the same app-data
     // filesystem. Start them sequentially so each disk-space check sees the
@@ -521,7 +535,7 @@ export class DesktopLocalRuntimeComposition {
   }): LocalComponentDefinition {
     return {
       id: input.componentId,
-      executable: this.pythonExecutable,
+      executable: requiredPythonExecutable(this.pythonExecutable),
       args: ["-I", this.workerScriptPath, ...input.args],
       cwd: path.dirname(this.workerScriptPath),
       environment: {
@@ -601,6 +615,63 @@ export class DesktopLocalRuntimeComposition {
       return false;
     }
   }
+}
+
+async function resolvePythonExecutable(
+  candidate: string,
+  platform: NodeJS.Platform,
+  environment: NodeJS.ProcessEnv
+): Promise<string | undefined> {
+  if (
+    typeof candidate !== "string"
+    || candidate.length === 0
+    || candidate.length > 1_024
+    || candidate.includes("\0")
+  ) {
+    return undefined;
+  }
+
+  const pathLike = path.isAbsolute(candidate)
+    || candidate.includes("/")
+    || candidate.includes("\\");
+  const candidates: string[] = [];
+  if (pathLike) {
+    if (!path.isAbsolute(candidate)) return undefined;
+    candidates.push(candidate);
+  } else {
+    const rawPath = environment["PATH"];
+    if (typeof rawPath !== "string" || rawPath.length === 0) return undefined;
+    const names = platform === "win32" && path.extname(candidate) === ""
+      ? [`${candidate}.exe`]
+      : [candidate];
+    for (const rawEntry of rawPath.split(path.delimiter)) {
+      const entry = rawEntry.trim().replace(/^"(.*)"$/u, "$1");
+      if (entry.length === 0 || !path.isAbsolute(entry)) continue;
+      for (const name of names) candidates.push(path.join(entry, name));
+    }
+  }
+
+  for (const executable of candidates.slice(0, 256)) {
+    try {
+      const resolved = await realpath(executable);
+      const metadata = await lstat(resolved);
+      if (!metadata.isFile() || metadata.isSymbolicLink()) continue;
+      if (platform !== "win32") {
+        await access(resolved, fsConstants.X_OK);
+      } else if (path.extname(resolved).toLowerCase() !== ".exe") {
+        continue;
+      }
+      return resolved;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+function requiredPythonExecutable(value: string | undefined): string {
+  if (value === undefined) throw new Error("Python runtime was not resolved before worker registration");
+  return value;
 }
 
 function requiredViewPath(view: RuntimeAssetView, relativePath: string): string {
