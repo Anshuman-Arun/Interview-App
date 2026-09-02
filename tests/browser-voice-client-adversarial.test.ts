@@ -78,6 +78,46 @@ describe("browser voice client adversarial boundaries", () => {
     expect(cancelled?.streamId).toBe(opened?.streamId);
   });
 
+  it("rejects a successful open response bound to the wrong stream identity", async () => {
+    let requestedStreamId: string | undefined;
+    const authenticatedFetch: typeof fetch = async (input, init = {}) => {
+      const url = String(input);
+      const body = init.body === undefined
+        ? undefined
+        : JSON.parse(String(init.body)) as { streamId?: string };
+      if (url.endsWith("/v1/voice/streams")) {
+        requestedStreamId = body?.streamId;
+        return new Response(JSON.stringify({
+          protocolVersion: 1,
+          ok: true,
+          type: "VOICE_STREAM_OPENED",
+          sessionId: body === undefined ? "" : newSessionId(),
+          streamId: "speech_stream_wrong_identity",
+          sampleRate: 48_000
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      if (url.endsWith("/v1/voice/cancel")) {
+        return new Response(JSON.stringify({
+          protocolVersion: 1,
+          ok: true,
+          type: "VOICE_STREAM_CANCELLED",
+          streamId: body?.streamId
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      throw new Error("Unexpected browser voice identity test request");
+    };
+
+    const client = new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch });
+    await expect(client.openStream(newSessionId())).rejects.toThrow();
+    expect(requestedStreamId).toMatch(/^speech_stream_/u);
+  });
+
   it("carries only a max-duration trigger frame proven outside the finalized audio basis", async () => {
     let frameRequest = 0;
     const streamId = "speech_stream_max_duration_carry";
