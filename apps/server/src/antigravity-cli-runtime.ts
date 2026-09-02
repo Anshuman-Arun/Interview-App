@@ -164,7 +164,7 @@ function trustedWindowsSystemRoot(): string {
   if (
     win32Path.basename(normalized).toLowerCase() !== "windows"
     || win32Path.dirname(normalized).toLowerCase()
-      !== parsed.root.replace(/[\\/]$/u, "").toLowerCase()
+      !== parsed.root.toLowerCase()
   ) {
     throw new Error("Windows SystemRoot is not a root-level Windows directory");
   }
