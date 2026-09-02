@@ -1,0 +1,387 @@
+import { describe, expect, it } from "vitest";
+import {
+  newGenerationId,
+  type InterviewerProposal,
+  type ReasoningTurnInput
+} from "../packages/domain/src/index.js";
+import {
+  ANTIGRAVITY_CLI_ADAPTER_VERSION,
+  ANTIGRAVITY_CLI_MODEL_ID,
+  ANTIGRAVITY_CLI_PROVIDER_DEFINITION,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
+  AntigravityCliAdapterError,
+  assertProviderPermitted,
+  createAntigravityCliReasoningProvider,
+  registerBuiltInProviders,
+  resolveAdapterFactory,
+  resolveProviderConfiguration,
+  type SupervisedCliExecutionRequest,
+  type SupervisedCliExecutionResult,
+  type SupervisedCliExecutor
+} from "../packages/providers/src/index.js";
+
+const PROPOSAL: InterviewerProposal = {
+  realizedAction: "CLARIFY",
+  claimedDisclosureLevel: 0,
+  claimedDisclosureIds: [],
+  speechText: "What would you try next?"
+};
+
+function executionResult(
+  stdout: string,
+  overrides: Partial<SupervisedCliExecutionResult> = {}
+): SupervisedCliExecutionResult {
+  return {
+    exitCode: 0,
+    stdout,
+    stdoutBytes: Buffer.byteLength(stdout, "utf8"),
+    stderrBytes: 0,
+    ...overrides
+  };
+}
+
+function antigravityStream(
+  proposal: InterviewerProposal = PROPOSAL,
+  between: readonly unknown[] = []
+): string {
+  return [
+    JSON.stringify({
+      event: "init",
+      conversation_id: "fake-conversation",
+      init: {
+        cwd: "/isolated",
+        tools: [],
+        permission_mode: "request-review",
+        model: ANTIGRAVITY_CLI_MODEL_ID
+      }
+    }),
+    ...between.map((event) => JSON.stringify(event)),
+    JSON.stringify({
+      event: "result",
+      result: {
+        conversation_id: "fake-conversation",
+        status: "SUCCESS",
+        response: JSON.stringify(proposal),
+        duration_seconds: 0.1,
+        num_turns: 1,
+        structured_output: proposal,
+        usage: {
+          input_tokens: 1,
+          output_tokens: 1,
+          thinking_tokens: 0,
+          cache_read_tokens: 0,
+          total_tokens: 2
+        }
+      }
+    })
+  ].join("\n") + "\n";
+}
+
+function fakeExecutor(
+  implementation: (
+    request: SupervisedCliExecutionRequest
+  ) => Promise<SupervisedCliExecutionResult>
+): SupervisedCliExecutor {
+  return Object.freeze({ execute: implementation });
+}
+
+function turnInput(context: unknown): ReasoningTurnInput {
+  return {
+    generationId: newGenerationId(),
+    context
+  };
+}
+
+async function collectProposals(
+  input: AsyncIterable<InterviewerProposal>
+): Promise<readonly InterviewerProposal[]> {
+  const proposals: InterviewerProposal[] = [];
+  for await (const proposal of input) proposals.push(proposal);
+  return proposals;
+}
+
+describe("Antigravity CLI provider registration and policy truthfulness", () => {
+  it("registers one pinned real model with conservative remote/billing capabilities", () => {
+    const registry = registerBuiltInProviders();
+    const provider = registry.getProvider(ANTIGRAVITY_CLI_PROVIDER_ID);
+    const model = registry.getModel(
+      ANTIGRAVITY_CLI_PROVIDER_ID,
+      ANTIGRAVITY_CLI_MODEL_ID
+    );
+
+    expect(provider).toMatchObject({
+      id: ANTIGRAVITY_CLI_PROVIDER_ID,
+      kind: "OTHER",
+      adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
+      credentialRequirement: "NONE"
+    });
+    expect(model.capabilities).toMatchObject({
+      textGeneration: "SUPPORTED",
+      imageInput: "UNSUPPORTED",
+      toolCalling: "UNSUPPORTED",
+      streaming: "UNSUPPORTED",
+      persistentSession: "UNSUPPORTED",
+      resumableSession: "UNSUPPORTED",
+      localExecution: "SUPPORTED",
+      remoteExecution: "SUPPORTED",
+      meteredExecution: "UNKNOWN",
+      dataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+      structuredOutput: "FINAL_ONLY",
+      cancellation: "INTERRUPT_LOCAL_PROCESS"
+    });
+    expect(ANTIGRAVITY_CLI_PROVIDER_DEFINITION.id).toBe(ANTIGRAVITY_CLI_PROVIDER_ID);
+
+    expect(() => registry.getModel(
+      ANTIGRAVITY_CLI_PROVIDER_ID,
+      "invented-model"
+    )).toThrow(expect.objectContaining({ code: "UNKNOWN_MODEL" }));
+  });
+
+  it("does not claim that subscription CLI invocation makes incremental spend impossible", async () => {
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => executionResult(antigravityStream()))
+    );
+    const now = new Date("2026-09-01T12:00:00.000Z");
+    const verification = await provider.verifyBillingSafety({ now });
+
+    expect(verification).toMatchObject({
+      billingClass: "UNKNOWN",
+      adapterVersion: ANTIGRAVITY_CLI_ADAPTER_VERSION,
+      spendImpossible: false
+    });
+
+    expect(() => assertProviderPermitted({
+      policy: {
+        allowMeteredUsage: false,
+        maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+        billingVerificationMaxAgeMs: 60_000
+      },
+      capabilities: provider.capabilities,
+      billingVerification: verification,
+      adapterVersion: provider.adapterVersion,
+      now
+    })).toThrow(expect.objectContaining({ code: "SPEND_NOT_PROVEN_IMPOSSIBLE" }));
+
+    expect(() => assertProviderPermitted({
+      policy: {
+        allowMeteredUsage: true,
+        maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+        billingVerificationMaxAgeMs: 60_000
+      },
+      capabilities: provider.capabilities,
+      adapterVersion: provider.adapterVersion,
+      now
+    })).not.toThrow();
+  });
+
+  it("rejects accessor-backed runtime injection without invoking it", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: {
+        version: 1,
+        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+        modelId: ANTIGRAVITY_CLI_MODEL_ID,
+        enabled: true
+      }
+    });
+    const factory = resolveAdapterFactory(resolved);
+
+    let getterCalls = 0;
+    const runtime = Object.defineProperty({}, "executor", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return fakeExecutor(async () => executionResult(antigravityStream()));
+      }
+    });
+
+    await expect(factory.createAdapter({
+      resolved,
+      runtime
+    })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(getterCalls).toBe(0);
+  });
+});
+
+describe("Antigravity CLI one-turn protocol", () => {
+  it("sends exact application context through one stateless stdin turn and accepts only structured output", async () => {
+    const requests: SupervisedCliExecutionRequest[] = [];
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        requests.push(request);
+        request.onProcessStart();
+        return executionResult(antigravityStream(PROPOSAL, [{
+          event: "step_update",
+          step_update: {
+            conversation_id: "fake-conversation",
+            step_index: 0,
+            state: "DONE",
+            step_type: "user_input"
+          }
+        }]));
+      })
+    );
+    const session = await provider.createSession();
+    const context = {
+      selectedAction: "CLARIFY",
+      studentText: "I would try parity.",
+      disclosure: { maximum: 0 }
+    };
+
+    await expect(collectProposals(session.sendTurn(turnInput(context))))
+      .resolves.toEqual([PROPOSAL]);
+    expect(requests).toHaveLength(1);
+
+    const request = requests[0];
+    expect(request?.args).toContain("--input-format");
+    expect(request?.args).toContain("stream-json");
+    expect(request?.args).toContain("--json-schema");
+    expect(request?.args).toContain("--sandbox");
+    expect(request?.args).toContain(ANTIGRAVITY_CLI_MODEL_ID);
+    expect(request?.args).not.toContain("--continue");
+    expect(request?.args).not.toContain("--conversation");
+    expect(request?.args).not.toContain("--dangerously-skip-permissions");
+
+    const stdinMessage = JSON.parse((request?.stdin ?? "").trim()) as {
+      readonly event?: unknown;
+      readonly message?: { readonly content?: unknown };
+    };
+    expect(stdinMessage.event).toBe("user");
+    expect(stdinMessage.message?.content).toContain(
+      JSON.stringify(context)
+    );
+    await session.close();
+  });
+
+  it("rejects malformed, ambiguous, tool-bearing, and non-proposal output", async () => {
+    const invalidStreams = [
+      "terminal prose\n",
+      antigravityStream() + JSON.stringify({
+        event: "result",
+        result: { status: "SUCCESS", num_turns: 1, structured_output: PROPOSAL }
+      }) + "\n",
+      antigravityStream() + "hostile trailing terminal text\n",
+      antigravityStream(PROPOSAL, [{
+        event: "step_update",
+        step_update: {
+          step_type: "tool",
+          tool_info: { name: "run_command" }
+        }
+      }]),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: undefined
+      } as unknown as InterviewerProposal)
+    ];
+
+    for (const stdout of invalidStreams) {
+      const provider = createAntigravityCliReasoningProvider(
+        fakeExecutor(async () => executionResult(stdout))
+      );
+      const session = await provider.createSession();
+      await expect(collectProposals(session.sendTurn(turnInput({ safe: true }))))
+        .rejects.toBeInstanceOf(AntigravityCliAdapterError);
+      await session.close();
+    }
+  });
+
+  it("does not surface stdout, stderr, or executor exception credentials in adapter errors", async () => {
+    const secret = "private-provider-credential-value";
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => {
+        throw new Error(secret);
+      })
+    );
+    const session = await provider.createSession();
+
+    let observed: unknown;
+    try {
+      await collectProposals(session.sendTurn(turnInput({ safe: true })));
+    } catch (error) {
+      observed = error;
+    }
+
+    expect(observed).toBeInstanceOf(AntigravityCliAdapterError);
+    expect(String(observed)).not.toContain(secret);
+    await session.close();
+  });
+
+  it("interrupts the supervised local process on generation cancellation without persistent-session reuse", async () => {
+    let firstStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    const requests: SupervisedCliExecutionRequest[] = [];
+    const executor = fakeExecutor(async (request) => {
+      requests.push(request);
+      request.onProcessStart();
+      firstStarted?.();
+      return await new Promise<SupervisedCliExecutionResult>((resolve, reject) => {
+        const onAbort = (): void => reject(new Error("cancelled-local-process"));
+        request.signal.addEventListener("abort", onAbort, { once: true });
+        if (request.signal.aborted) onAbort();
+      });
+    });
+    const provider = createAntigravityCliReasoningProvider(executor);
+    const session = await provider.createSession();
+    const input = turnInput({ turn: "one" });
+    const completion = collectProposals(session.sendTurn(input));
+
+    await started;
+    const cancellation = await session.cancelTurn(input.generationId);
+    expect(cancellation).toEqual({
+      semantics: "INTERRUPT_LOCAL_PROCESS",
+      signalSent: true
+    });
+    await expect(completion).rejects.toBeInstanceOf(AntigravityCliAdapterError);
+    expect(requests).toHaveLength(1);
+
+    await session.close();
+  });
+
+  it("keeps simultaneous sessions stateless and context-separated", async () => {
+    const prompts: string[] = [];
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        prompts.push(request.stdin);
+        request.onProcessStart();
+        return executionResult(antigravityStream());
+      })
+    );
+    const first = await provider.createSession();
+    const second = await provider.createSession();
+
+    await Promise.all([
+      collectProposals(first.sendTurn(turnInput({ session: "alpha" }))),
+      collectProposals(second.sendTurn(turnInput({ session: "beta" })))
+    ]);
+
+    expect(prompts).toHaveLength(2);
+    expect(prompts.some((prompt) => prompt.includes('"session":"alpha"'))).toBe(true);
+    expect(prompts.some((prompt) => prompt.includes('"session":"beta"'))).toBe(true);
+    for (const prompt of prompts) {
+      expect(prompt).not.toContain("--continue");
+    }
+
+    await Promise.all([first.close(), second.close()]);
+  });
+
+  it("rejects an oversized turn context before launching the CLI", async () => {
+    let calls = 0;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => {
+        calls += 1;
+        return executionResult(antigravityStream());
+      })
+    );
+    const session = await provider.createSession();
+
+    await expect(collectProposals(session.sendTurn(turnInput({
+      oversized: "x".repeat(128 * 1024)
+    })))).rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+    expect(calls).toBe(0);
+    await session.close();
+  });
+});
