@@ -200,6 +200,51 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("does not admit new provider work after shutdown begins and re-enables only on explicit restart", async () => {
+    const harness = createHarness();
+    try {
+      const committed = await startConfiguredTurn(harness, MOCK_SELECTION);
+      let configurationCalls = 0;
+      const orchestrator = new ServerTurnOrchestrator(
+        harness.sessions,
+        () => undefined,
+        undefined,
+        new ProviderRuntimeResolver({
+          configurationSource: {
+            resolveConfiguration() {
+              configurationCalls += 1;
+              return undefined;
+            }
+          }
+        })
+      );
+
+      orchestrator.requestCancellationForShutdown();
+      await orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+      expect(configurationCalls).toBe(0);
+      expect(Object.values(harness.writer.getState().generations)).toEqual([]);
+
+      orchestrator.resumeAfterShutdown();
+      await orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+      expect(configurationCalls).toBe(1);
+      expect(Object.values(harness.writer.getState().generations)).toEqual([
+        expect.objectContaining({ provider: "mock-model", status: "VALIDATED" })
+      ]);
+    } finally {
+      await harness.close();
+    }
+  });
+
   it("keeps legacy/default mock execution working through the provider control plane", async () => {
     const harness = createHarness();
     try {
