@@ -102,6 +102,7 @@ export const App: React.FC = () => {
     sessionTerminalPendingRef.current = true;
     setSessionTerminalPending(true);
     try {
+      await session.voiceControls.disableMicrophone().catch(() => undefined);
       await session.completeSession();
       setReviewTarget(null);
       navigate({
@@ -127,6 +128,7 @@ export const App: React.FC = () => {
     sessionTerminalPendingRef.current = true;
     setSessionTerminalPending(true);
     try {
+      await session.voiceControls.disableMicrophone().catch(() => undefined);
       await session.archiveSession();
       setReviewTarget(null);
       navigate({
@@ -205,7 +207,12 @@ export const App: React.FC = () => {
 
   const handleSaveSettings = (e: React.SyntheticEvent): void => {
     e.preventDefault();
-    if (session.isTransportManaged) {
+    if (
+      session.isTransportManaged
+      || (session.isSessionStarted && session.sessionStatus === "ACTIVE")
+      || sessionEntryPendingRef.current
+      || sessionTerminalPendingRef.current
+    ) {
       setShowSettings(false);
       return;
     }
@@ -352,7 +359,7 @@ export const App: React.FC = () => {
         connection={{
           managed: session.isTransportManaged,
           baseUrl: session.baseUrl,
-          locked: hasActiveInterview,
+          locked: hasActiveInterview || sessionEntryPending || sessionTerminalPending,
           onSaveBaseUrl: session.setBaseUrl
         }}
         notice={session.error}
@@ -524,7 +531,7 @@ export const App: React.FC = () => {
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 {hasActiveInterview ? (
                   <span className="text-[11px] text-slate-500">
-                    Current interview is active. End or archive it before starting another.
+                    Current interview is active. End or archive it before starting or reviewing another session.
                   </span>
                 ) : (
                   <button
