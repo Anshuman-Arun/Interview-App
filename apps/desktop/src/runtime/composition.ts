@@ -341,6 +341,7 @@ export class DesktopLocalRuntimeComposition {
         SPEECH_COMPONENT_ID,
         signal === undefined ? {} : { signal }
       );
+      if (abortRequested(signal)) throw abortError();
       const client = new ManagedModelWorkerClient(
         this.runtimeManager,
         SPEECH_COMPONENT_ID,
@@ -415,6 +416,7 @@ export class DesktopLocalRuntimeComposition {
         TTS_COMPONENT_ID,
         signal === undefined ? {} : { signal }
       );
+      if (abortRequested(signal)) throw abortError();
       const client = new ManagedModelWorkerClient(
         this.runtimeManager,
         TTS_COMPONENT_ID,
@@ -426,6 +428,7 @@ export class DesktopLocalRuntimeComposition {
         modelPath,
         configPath
       });
+      if (abortRequested(signal)) throw abortError();
       this.ttsWorker = new TtsWorkerCore(synthesizer);
       this.ttsStatus = ready(
         TTS_WORKER_MODEL_IDENTITY,
