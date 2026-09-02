@@ -579,7 +579,7 @@ export class VoiceInputCoordinator {
         // Authority changes before physical interruption/cancellation signals are
         // allowed to propagate. Provider/TTS cancellation may fail without
         // weakening the supersession state written by beginUtterance().
-        await this.synthesis.cancelSession(context.sessionId);
+        void this.synthesis.cancelSession(context.sessionId).catch(() => undefined);
         this.assets.pruneUnauthorizedSessionAssets(context.sessionId, writer.getState());
         continue;
       }
