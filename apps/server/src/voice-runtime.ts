@@ -18,10 +18,13 @@ import {
   SpeechPcmFrameEnvelopeSchema,
   SpeechStreamIdSchema,
   TTS_LIMITS,
+  TtsLanguageSchema,
   TtsModelIdentitySchema,
   TtsOutgoingMessageSchema,
   TtsSampleRateSchema,
   TtsSynthesizeRequestSchema,
+  TtsVoiceSchema,
+  TtsWorkerCore,
   planTtsRequest,
   type SourceAudioBasis,
   type SpeechPcmFrameEnvelope,
@@ -32,8 +35,7 @@ import {
   type TtsLanguage,
   type TtsModelIdentity,
   type TtsOutgoingMessage,
-  type TtsSampleRate,
-  type TtsWorkerCore
+  type TtsSampleRate
 } from "../../../packages/local-compute/src/index.js";
 import {
   TurnCoordinator
@@ -189,6 +191,53 @@ export class EphemeralAudioAssetStore {
   }
 }
 
+interface VoiceTtsRuntimeSnapshot {
+  readonly worker: TtsWorkerCore;
+  readonly voice: string;
+  readonly language: TtsLanguage;
+  readonly sampleRate: TtsSampleRate;
+  readonly speed: number;
+}
+
+function snapshotVoiceTtsRuntimeConfiguration(
+  input: VoiceTtsRuntimeConfiguration
+): VoiceTtsRuntimeSnapshot {
+  if (typeof input !== "object" || input === null) {
+    throw new Error("Voice TTS runtime configuration must be an object");
+  }
+  let worker: unknown;
+  let voice: unknown;
+  let language: unknown;
+  let sampleRate: unknown;
+  let speed: unknown;
+  try {
+    worker = Reflect.get(input, "worker");
+    voice = Reflect.get(input, "voice");
+    language = Reflect.get(input, "language");
+    sampleRate = Reflect.get(input, "sampleRate");
+    speed = Reflect.get(input, "speed");
+  } catch {
+    throw new Error("Voice TTS runtime configuration could not be inspected");
+  }
+  if (!(worker instanceof TtsWorkerCore)) {
+    throw new Error("Voice TTS runtime worker must be a TtsWorkerCore");
+  }
+  const parsedVoice = TtsVoiceSchema.parse(voice);
+  const parsedLanguage = TtsLanguageSchema.parse(language);
+  const parsedSampleRate = TtsSampleRateSchema.parse(sampleRate);
+  const parsedSpeed = speed === undefined ? 1 : Number(speed);
+  if (!Number.isFinite(parsedSpeed) || parsedSpeed < 0.5 || parsedSpeed > 2) {
+    throw new Error("Voice TTS speed is outside the supported range");
+  }
+  return Object.freeze({
+    worker,
+    voice: parsedVoice,
+    language: parsedLanguage,
+    sampleRate: parsedSampleRate,
+    speed: parsedSpeed
+  });
+}
+
 interface TtsAssembly {
   begin: Extract<TtsOutgoingMessage, { readonly type: "AUDIO_BEGIN" }> | undefined;
   chunks: Array<Extract<TtsOutgoingMessage, { readonly type: "AUDIO_CHUNK" }>>;
@@ -198,15 +247,14 @@ interface TtsAssembly {
 export class VoiceSynthesisCoordinator {
   private readonly activeBySession = new Map<SessionId, Set<string>>();
   private readonly inFlightSourceDeliveries = new Map<SessionId, Set<DeliveryId>>();
+  private readonly runtime: VoiceTtsRuntimeSnapshot;
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
     private readonly assets: EphemeralAudioAssetStore,
-    private readonly config: VoiceTtsRuntimeConfiguration
+    config: VoiceTtsRuntimeConfiguration
   ) {
-    if (!Number.isFinite(config.speed ?? 1) || (config.speed ?? 1) < 0.5 || (config.speed ?? 1) > 2) {
-      throw new Error("Voice TTS speed is outside the supported range");
-    }
+    this.runtime = snapshotVoiceTtsRuntimeConfiguration(config);
   }
 
   public async synthesizeSentTextDelivery(
@@ -255,10 +303,10 @@ export class VoiceSynthesisCoordinator {
         type: "SYNTHESIZE",
         requestId: newRequestId(),
         text: exactText,
-        voice: this.config.voice,
-        speed: this.config.speed ?? 1,
-        language: this.config.language,
-        sampleRate: this.config.sampleRate,
+        voice: this.runtime.voice,
+        speed: this.runtime.speed ?? 1,
+        language: this.runtime.language,
+        sampleRate: this.runtime.sampleRate,
         outputFormat: "PCM_F32LE"
       });
       const plan = planTtsRequest(request);
@@ -266,7 +314,7 @@ export class VoiceSynthesisCoordinator {
       this.rememberActive(sessionId, request.requestId);
 
       try {
-        const summary = await this.config.worker.handle(request, async (messageInput) => {
+        const summary = await this.runtime.worker.handle(request, async (messageInput) => {
           const message = TtsOutgoingMessageSchema.parse(messageInput);
           if (message.requestId !== request.requestId) {
             throw new Error("TTS callback request identity changed");
@@ -380,7 +428,7 @@ export class VoiceSynthesisCoordinator {
     const requestIds = [...(this.activeBySession.get(sessionId) ?? [])];
     await Promise.all(requestIds.map(async (requestId) => {
       try {
-        await this.config.worker.handle({
+        await this.runtime.worker.handle({
           protocolVersion: 1,
           type: "CANCEL_SYNTHESIS",
           requestId
@@ -399,7 +447,7 @@ export class VoiceSynthesisCoordinator {
   }
 
   public async shutdown(): Promise<void> {
-    await this.config.worker.shutdown();
+    await this.runtime.worker.shutdown();
   }
 
   private rememberActive(sessionId: SessionId, requestId: string): void {
