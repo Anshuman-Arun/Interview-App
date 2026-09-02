@@ -96,7 +96,7 @@ export async function materializeRuntimeAssetView(input: {
           input.signal ?? new AbortController().signal
         );
       } finally {
-        await destinationHandle.close().catch(() => undefined);
+        await destinationHandle.close();
       }
       if (abortRequested(input.signal)) throw abortError();
       const verification = await verifyArtifactFile(destination, {
