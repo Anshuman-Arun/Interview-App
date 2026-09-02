@@ -312,6 +312,7 @@ export class VoiceSynthesisCoordinator {
         if (begin === undefined || end === undefined || assembly.chunks.length === 0) {
           throw new Error("TTS completed without a complete bounded audio stream");
         }
+        validateTtsAssemblyConsistency(plan, request.sampleRate, begin, assembly.chunks, end);
         if (
           begin.model.engine !== end.model.engine
           || begin.model.modelId !== end.model.modelId
@@ -958,6 +959,50 @@ function snapshotBytes(input: Uint8Array): Uint8Array {
     throw new Error("Audio asset bytes must be a non-empty Uint8Array");
   }
   return Uint8Array.prototype.slice.call(input);
+}
+
+function validateTtsAssemblyConsistency(
+  plan: ReturnType<typeof planTtsRequest>,
+  sampleRate: ReturnType<typeof TtsSampleRateSchema.parse>,
+  begin: NonNullable<TtsAssembly["begin"]>,
+  chunks: readonly TtsAssembly["chunks"][number][],
+  end: NonNullable<TtsAssembly["end"]>
+): void {
+  if (
+    begin.segmentCount !== plan.segments.length
+    || begin.sampleRate !== sampleRate
+    || end.sampleRate !== sampleRate
+    || end.segmentsSynthesized !== plan.segments.length
+  ) {
+    throw new Error("TTS stream summary does not match the admitted synthesis plan");
+  }
+
+  let expectedSegmentIndex = 0;
+  let totalFrames = 0;
+  for (const chunk of chunks) {
+    if (
+      chunk.sampleRate !== sampleRate
+      || chunk.segmentIndex !== expectedSegmentIndex
+    ) {
+      throw new Error("TTS chunk escaped the admitted sample-rate/segment sequence");
+    }
+    const segment = plan.segments[chunk.segmentIndex];
+    if (segment === undefined || chunk.segmentHash !== segment.textHash) {
+      throw new Error("TTS chunk segment hash does not match the admitted text segment");
+    }
+    totalFrames += chunk.frameCount;
+    if (!Number.isSafeInteger(totalFrames) || totalFrames > Math.floor(TTS_LIMITS.maxPcmBytes / 4)) {
+      throw new Error("TTS aggregate frame count exceeds its hard bound");
+    }
+    if (chunk.finalInSegment) expectedSegmentIndex += 1;
+  }
+
+  if (
+    expectedSegmentIndex !== plan.segments.length
+    || totalFrames !== end.totalFrames
+  ) {
+    throw new Error("TTS chunk assembly does not match the declared completed segments/frames");
+  }
 }
 
 function concatenateTtsPcm(
