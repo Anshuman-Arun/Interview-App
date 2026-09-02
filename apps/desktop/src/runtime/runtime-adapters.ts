@@ -1,5 +1,6 @@
 import {
   MAX_SPEECH_CONCURRENT_STREAMS,
+  SPEECH_VAD_TIMEOUT_ABORT_REASON,
   TTS_LIMITS,
   type KokoroRuntime,
   type KokoroRuntimeSession,
@@ -46,17 +47,35 @@ export class ManagedSileroVadRuntime implements SileroVadRuntime {
       if (oldest === undefined) break;
       this.streamWorkerInstances.delete(oldest);
     }
-    const result = await runWithWorkerRecycleOnTimeout(this.client, () =>
-      this.client.postJson("/v1/vad", {
-        pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
-        sampleRate: input.sampleRate,
-        streamId: input.streamId
-      }, {
-        ...(input.signal === undefined ? {} : { signal: input.signal }),
-        timeoutMs: 5_000,
-        maxResponseBytes: 1_024
-      })
-    );
+    let result: unknown;
+    try {
+      result = await runWithWorkerRecycleOnTimeout(this.client, () =>
+        this.client.postJson("/v1/vad", {
+          pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
+          sampleRate: input.sampleRate,
+          streamId: input.streamId
+        }, {
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
+          timeoutMs: 5_000,
+          maxResponseBytes: 1_024
+        })
+      );
+    } catch (error) {
+      const timedOutInSpeechCore =
+        input.signal?.aborted === true
+        && input.signal.reason === SPEECH_VAD_TIMEOUT_ABORT_REASON;
+      if (!timedOutInSpeechCore) throw error;
+      try {
+        await this.client.recycleAfterUncertainRequest(workerInstance);
+      } catch (recycleError) {
+        throw new AggregateError(
+          [error, recycleError],
+          "Silero VAD timed out and its worker could not be safely recycled",
+          { cause: recycleError }
+        );
+      }
+      throw error;
+    }
     if (!isRecord(result) || Object.keys(result).length !== 1) {
       throw new Error("Silero worker returned invalid output");
     }
