@@ -154,6 +154,37 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         self.assertEqual(state.pending.size, 1)
         self.assertAlmostEqual(float(state.pending[0]), 0.0, places=6)
 
+    def test_vad_rejects_resume_after_recurrent_state_eviction(self) -> None:
+        runtime = object.__new__(worker.SpeechRuntime)
+        runtime._np = np
+        runtime._silero = _FakeSilero()
+        runtime._states = OrderedDict()
+        runtime._evicted_streams = OrderedDict()
+        runtime._vad_lock = threading.Lock()
+        runtime._vad_slots = threading.BoundedSemaphore(4)
+
+        original_limit = worker.MAX_VAD_STREAMS
+        worker.MAX_VAD_STREAMS = 2
+        try:
+            for stream_id in ("stream-a", "stream-b", "stream-c"):
+                runtime.score_vad({
+                    "streamId": stream_id,
+                    "sampleRate": 16_000,
+                    "pcmF32Base64": pcm_base64([0.0]),
+                })
+            self.assertIn("stream-a", runtime._evicted_streams)
+
+            with self.assertRaises(worker.ProtocolError) as raised:
+                runtime.score_vad({
+                    "streamId": "stream-a",
+                    "sampleRate": 16_000,
+                    "pcmF32Base64": pcm_base64([0.0]),
+                })
+            self.assertEqual(raised.exception.status, 409)
+            self.assertEqual(raised.exception.code, "VAD_STREAM_STATE_EVICTED")
+        finally:
+            worker.MAX_VAD_STREAMS = original_limit
+
     def test_vad_rejects_sample_rate_change_for_existing_stream(self) -> None:
         runtime = object.__new__(worker.SpeechRuntime)
         runtime._np = np
