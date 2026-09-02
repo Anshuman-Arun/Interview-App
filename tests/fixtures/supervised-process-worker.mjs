@@ -91,6 +91,7 @@ switch (mode) {
         mutationExisted: existsSync(marker),
         supervisorVariablesExisted:
           process.env.INTERVIEW_SUPERVISED_CONFIG !== undefined
+          || process.env.INTERVIEW_SUPERVISED_CONFIG_JSON !== undefined
           || process.env.INTERVIEW_SUPERVISED_BOOTSTRAP !== undefined,
         powershellModulePathExisted:
           process.env.PSModulePath !== undefined
