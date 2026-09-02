@@ -14,6 +14,7 @@ import type { LocalEnvironmentDefinition } from "./types.js";
 import { WINDOWS_JOB_SUPERVISOR_SCRIPT } from "./windows-job-supervisor.js";
 
 const MAX_EXECUTABLES = 32;
+const MAX_ACTIVE_EXECUTIONS = 8;
 const MAX_ARGUMENTS = 64;
 const MAX_ARGUMENT_BYTES = 128 * 1024;
 const MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS = 24_000;
@@ -44,6 +45,7 @@ export type SupervisedProcessErrorCode =
   | "INVALID_DEFINITION"
   | "UNKNOWN_EXECUTABLE"
   | "INVALID_REQUEST"
+  | "CAPACITY_EXCEEDED"
   | "EXECUTABLE_UNAVAILABLE"
   | "EXECUTABLE_UNSAFE"
   | "SPAWN_FAILED"
@@ -215,6 +217,9 @@ export class SupervisedProcessRunner {
     if (this.draining !== undefined) {
       return Promise.reject(new SupervisedProcessError("EXECUTION_CANCELLED"));
     }
+    if (this.activeOperations.size >= MAX_ACTIVE_EXECUTIONS) {
+      return Promise.reject(new SupervisedProcessError("CAPACITY_EXCEEDED"));
+    }
 
     const controller = new AbortController();
     const externalSignal = request.signal;
@@ -230,13 +235,23 @@ export class SupervisedProcessRunner {
     const operation = this.executeSnapshot(trackedRequest);
     this.activeOperations.add(operation);
 
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      deadlineTimer = setTimeout(() => {
+        controller.abort();
+        reject(new SupervisedProcessError("EXECUTION_TIMEOUT"));
+      }, request.timeoutMs);
+    });
+    const publicOperation = Promise.race([operation, deadline]);
+
     const cleanup = (): void => {
+      if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
       externalSignal?.removeEventListener("abort", forwardAbort);
       this.activeControllers.delete(controller);
       this.activeOperations.delete(operation);
     };
     void operation.then(cleanup, cleanup);
-    return operation;
+    return publicOperation;
   }
 
   public drain(): Promise<void> {
@@ -1677,6 +1692,7 @@ function supervisedProcessErrorMessage(code: SupervisedProcessErrorCode): string
     case "INVALID_DEFINITION": return "Supervised executable definition is invalid";
     case "UNKNOWN_EXECUTABLE": return "Supervised executable identity is unknown";
     case "INVALID_REQUEST": return "Supervised process request is invalid";
+    case "CAPACITY_EXCEEDED": return "Supervised process execution capacity is exhausted";
     case "EXECUTABLE_UNAVAILABLE": return "Supervised executable is unavailable";
     case "EXECUTABLE_UNSAFE": return "Supervised executable identity could not be trusted";
     case "SPAWN_FAILED": return "Supervised process could not be started";
