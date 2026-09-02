@@ -64,15 +64,19 @@ export class LocalInterviewTransportRuntime {
   private voiceDeliveryShutdown = false;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
+    const voiceRuntime = options.voiceRuntime;
+    const speechWorker = voiceRuntime?.speechWorker;
+    const ttsRuntime = voiceRuntime?.tts;
+
     this.registry = options.registry;
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
     this.audioAssets = new EphemeralAudioAssetStore();
-    this.voiceSynthesis = options.voiceRuntime === undefined
+    this.voiceSynthesis = ttsRuntime === undefined
       ? undefined
       : new VoiceSynthesisCoordinator(
         this.sessions,
         this.audioAssets,
-        options.voiceRuntime.tts
+        ttsRuntime
       );
     this.orchestrator =
       options.orchestrator ??
@@ -120,12 +124,12 @@ export class LocalInterviewTransportRuntime {
       onDeliverySent: (sessionId, deliveryId) =>
         this.scheduleVoiceDelivery(sessionId, deliveryId)
     });
-    this.voiceInput = options.voiceRuntime === undefined || this.voiceSynthesis === undefined
+    this.voiceInput = speechWorker === undefined || this.voiceSynthesis === undefined
       ? undefined
       : new VoiceInputCoordinator(
         this.sessions,
         this.orchestrator,
-        options.voiceRuntime.speechWorker,
+        speechWorker,
         this.audioAssets,
         this.voiceSynthesis
       );
