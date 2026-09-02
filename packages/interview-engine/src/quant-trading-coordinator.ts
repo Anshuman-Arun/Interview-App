@@ -70,12 +70,21 @@ function terminalResultEvent(
 }
 
 function persistedRoundEvidence(evidence: QuantRoundEvidence): QuantTradingRoundEvidenceEvent {
-  const {
-    studentAction: _studentAction,
-    marketStateAfterAction: _marketStateAfterAction,
-    ...semanticEvidence
-  } = evidence;
-  return QuantTradingRoundEvidenceEventSchema.parse(semanticEvidence);
+  return QuantTradingRoundEvidenceEventSchema.parse({
+    round: evidence.round,
+    fairValue: evidence.fairValue,
+    marketEvents: evidence.marketEvents,
+    orderFlowType: evidence.orderFlowType,
+    ...(evidence.incomingMarketSide === undefined
+      ? {}
+      : { incomingMarketSide: evidence.incomingMarketSide }),
+    studentFills: evidence.studentFills,
+    portfolio: evidence.portfolio,
+    riskBreached: evidence.riskBreached,
+    ...(evidence.riskReason === undefined ? {} : { riskReason: evidence.riskReason }),
+    accountingInvariantHolds: evidence.accountingInvariantHolds,
+    rngDrawCount: evidence.rngDrawCount
+  });
 }
 
 function publicRound(evidence: QuantTradingRoundEvidenceEvent) {
@@ -155,7 +164,6 @@ function reconstructQuantTradingEngine(
   if (
     persisted.definition.family !== configuration.scenario.id
     || persisted.definition.version !== configuration.scenario.version
-    || persisted.definition.version !== QUANT_TRADER_SCENARIO_VERSION
     || state.problem !== undefined
     || state.quantResearch !== undefined
   ) {
@@ -232,18 +240,11 @@ export class QuantTradingSessionCoordinator {
     commandEnvelope?: CommandEnvelope
   ): Promise<CommandResult<{ readonly started: true }>> {
     const parsed = InterviewSessionConfigurationSchema.parse(configurationInput);
-    if (parsed.mode !== "QUANT_TRADING") {
-      throw new Error("Quant Trading initialization requires Quant Trading configuration");
-    }
     const definition = QuantTradingScenarioDefinitionEventSchema.parse({
       family: QuantTraderScenarioFamilySchema.parse(parsed.scenario.id),
       version: parsed.scenario.version,
       seed
     });
-    if (definition.version !== QUANT_TRADER_SCENARIO_VERSION) {
-      throw new Error("Configured Quant Trading scenario version is not supported");
-    }
-
     // Construct before persistence so invalid or non-runnable definitions fail closed.
     const engine = createQuantTraderScenario({
       family: definition.family,
