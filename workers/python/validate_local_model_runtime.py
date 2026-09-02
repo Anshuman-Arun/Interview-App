@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import inspect
+import platform
 import sys
 from importlib.metadata import version
 
