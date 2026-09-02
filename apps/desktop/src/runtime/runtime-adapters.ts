@@ -261,7 +261,7 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 
 
 function abortError(): Error {
-  const error = new Error("Managed Moonshine recognition was cancelled before native inference");
+  const error = new Error("Managed local model operation was cancelled before native inference");
   error.name = "AbortError";
   return error;
 }
