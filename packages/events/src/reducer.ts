@@ -162,6 +162,35 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       ) {
         throw new Error("Quant Trading round resolution is not contiguous with accepted actions");
       }
+      const acceptedAction = quantTrading.pendingAction;
+      const fills = event.payload.evidence.studentFills;
+      if (acceptedAction.type === "PASS") {
+        if (fills.length !== 0) {
+          throw new Error("Quant Trading PASS action cannot produce student fills");
+        }
+      } else {
+        let bidFillVolume = 0;
+        let askFillVolume = 0;
+        for (const fill of fills) {
+          if (fill.side === "BUY") {
+            if (fill.price !== acceptedAction.quote.bidPrice) {
+              throw new Error("Quant Trading buy fill does not match the accepted bid");
+            }
+            bidFillVolume += fill.size;
+          } else {
+            if (fill.price !== acceptedAction.quote.askPrice) {
+              throw new Error("Quant Trading sell fill does not match the accepted ask");
+            }
+            askFillVolume += fill.size;
+          }
+        }
+        if (
+          bidFillVolume > acceptedAction.quote.bidSize
+          || askFillVolume > acceptedAction.quote.askSize
+        ) {
+          throw new Error("Quant Trading fill volume exceeds the accepted quote size");
+        }
+      }
       next = {
         ...state,
         quantTrading: {
