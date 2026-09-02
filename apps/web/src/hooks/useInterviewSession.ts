@@ -433,8 +433,10 @@ export function useInterviewSession(
     if (desktopBootstrap !== undefined) {
       throw new Error("Desktop-managed command endpoint cannot be changed by renderer state");
     }
-    if (isSessionStarted && sessionStatus === "ACTIVE") {
-      setError("Command server URL cannot change while an interview is active");
+    if (sessionId !== null && sessionStatus === "ACTIVE") {
+      setError(
+        "Command server URL cannot change while an active session is attached or awaiting recovery"
+      );
       return;
     }
 
@@ -473,8 +475,8 @@ export function useInterviewSession(
   }, [
     baseUrl,
     desktopBootstrap,
-    isSessionStarted,
     resetBoardSync,
+    sessionId,
     sessionStatus
   ]);
 
