@@ -89,10 +89,6 @@ export async function createAndStartServer(config: ServerConfig = {}) {
   }
 
   const startedRuntime = runtime;
-  if (startedRuntime === undefined) {
-    store.close();
-    throw new Error("Server runtime was not constructed");
-  }
 
   return {
     runtime: startedRuntime,
