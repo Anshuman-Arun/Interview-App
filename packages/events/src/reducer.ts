@@ -353,6 +353,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
             observation,
             ...(admission === undefined ? {} : { acceptedObservation: admission }),
             resultEventId: event.eventId,
+            resultSequence: event.sequence,
             ...(event.payload.evidenceInterpreterFingerprint === undefined
               ? {}
               : event.payload.evidenceInterpreterFingerprint === null

@@ -100,6 +100,7 @@ export interface VisionRequestState {
   readonly observation?: BoardObservation;
   readonly acceptedObservation?: AcceptedBoardObservation;
   readonly resultEventId?: EventId;
+  readonly resultSequence?: number;
   readonly evidenceBridge?: VisionEvidenceBridgeState;
   readonly discardReason?: string;
 }
