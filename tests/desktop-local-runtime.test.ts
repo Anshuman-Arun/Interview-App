@@ -84,8 +84,8 @@ describe("desktop local model runtime", () => {
 
     const stt = new ManagedMoonshineRuntime(client, "/verified/moonshine");
     await expect(stt.transcribe({
-      requestId: "request-1",
-      utteranceId: "utterance-1",
+      requestId: SpeechRequestIdSchema.parse("request-1"),
+      utteranceId: SpeechUtteranceIdSchema.parse("utterance-1"),
       pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
       sampleRate: 16_000,
       modelPath: "/verified/moonshine"
