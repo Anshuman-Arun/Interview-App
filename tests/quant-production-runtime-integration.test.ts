@@ -958,6 +958,87 @@ describe("adversarial quant lifecycle invariants", () => {
     }
   });
 
+  it("rejects forged Trading event provenance before recovery writes even when outcomes are deterministic", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const seed = 434_343;
+    const writer = SessionWriter.open(store, sessionId);
+    try {
+      await new QuantTradingSessionCoordinator(writer).initializeConfigured(
+        tradingConfiguration(),
+        seed,
+        createCommandEnvelope({ sessionId, producer: "quant-provenance-test" })
+      );
+      await writer.close();
+
+      const engine = createQuantTraderScenario({
+        family: "BASIC_MARKET_MAKING",
+        seed
+      });
+      engine.submitAction({ type: "PASS" });
+      const round = engine.advance();
+      const requestId = newRequestId();
+      store.appendIdempotent({
+        sessionId,
+        requestId,
+        causationId: requestId,
+        correlationId: requestId,
+        elapsedMs: 10,
+        expectedPriorSequence: 2,
+        commandFingerprint: "2".repeat(64),
+        drafts: [{
+          // Structurally legal EventSource, but semantically forged: candidate
+          // actions must originate from USER.
+          source: "APPLICATION",
+          type: "QUANT_TRADING_ACTION_ACCEPTED",
+          payload: { action: { type: "PASS" } }
+        }, {
+          source: "APPLICATION",
+          type: "QUANT_TRADING_ROUND_RESOLVED",
+          payload: {
+            evidence: {
+              round: round.round,
+              fairValue: round.fairValue,
+              marketEvents: [...round.marketEvents],
+              orderFlowType: round.orderFlowType,
+              ...(round.incomingMarketSide === undefined
+                ? {}
+                : { incomingMarketSide: round.incomingMarketSide }),
+              studentFills: [...round.studentFills],
+              portfolio: round.portfolio,
+              riskBreached: round.riskBreached,
+              ...(round.riskReason === undefined ? {} : { riskReason: round.riskReason }),
+              accountingInvariantHolds: round.accountingInvariantHolds,
+              rngDrawCount: round.rngDrawCount
+            }
+          }
+        }],
+        result: { injected: true }
+      });
+
+      const reopened = SessionWriter.open(store, sessionId);
+      try {
+        // Specialized deterministic replay alone accepts the outcome; recovery
+        // must still reject the forged provenance layer.
+        expect(() => resolveSessionStateComposition(reopened.getState())).not.toThrow();
+      } finally {
+        await reopened.close();
+      }
+
+      const countBeforeRecovery = store.eventCount(sessionId);
+      const registry = new SessionRuntimeRegistry(store);
+      const recovery = new SessionRecoveryCoordinator(registry);
+      try {
+        await expect(recovery.ensureRecovered(sessionId)).rejects.toThrow();
+        expect(store.eventCount(sessionId)).toBe(countBeforeRecovery);
+      } finally {
+        await registry.closeAll();
+      }
+    } finally {
+      store.close();
+    }
+  });
+
   it("rejects schema-valid Research stage corruption during recovery", async () => {
     const store = new SqliteEventStore(":memory:");
     const sessionId = newSessionId();
