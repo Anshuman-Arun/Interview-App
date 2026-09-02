@@ -11,6 +11,7 @@ import {
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
+import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 
 export interface LocalInterviewTransportRuntimeOptions {
@@ -23,6 +24,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererConnectionsPerSession?: number;
   readonly maxRendererMessageBytes?: number;
   readonly orchestrator?: ServerTurnOrchestrator;
+  readonly providerRuntimeResolver?: ProviderRuntimeResolver;
   readonly readService?: SessionReadService;
 }
 
@@ -45,11 +47,24 @@ export class LocalInterviewTransportRuntime {
   private readonly registry: SessionRuntimeRegistry;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
+    if (
+      options.orchestrator !== undefined
+      && options.providerRuntimeResolver !== undefined
+    ) {
+      throw new Error(
+        "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
+      );
+    }
     this.registry = options.registry;
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
     this.orchestrator =
       options.orchestrator ??
-      new ServerTurnOrchestrator(this.sessions, () => this.rendererStreamServer);
+      new ServerTurnOrchestrator(
+        this.sessions,
+        () => this.rendererStreamServer,
+        undefined,
+        options.providerRuntimeResolver
+      );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
       source: {
@@ -102,6 +117,7 @@ export class LocalInterviewTransportRuntime {
     }
     if (this.bound !== undefined) return Promise.resolve(this.bound);
     if (this.starting !== undefined) return this.starting;
+    this.orchestrator.resumeAfterShutdown();
     const starting = this.startBoth();
     this.starting = starting;
     const clearStarting = (): void => {
@@ -141,6 +157,10 @@ export class LocalInterviewTransportRuntime {
     } catch (error) {
       failures.push(error);
     }
+    // No new commands can enter after command-server shutdown. Cancel any
+    // already admitted provider/resolver work before waiting so a hung remote
+    // or runtime dependency cannot pin graceful process shutdown forever.
+    this.orchestrator.requestCancellationForShutdown();
     try {
       await this.orchestrator.waitForAll();
     } catch (error) {

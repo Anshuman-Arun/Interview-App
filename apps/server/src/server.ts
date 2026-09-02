@@ -4,6 +4,7 @@ import { SqliteEventStore } from "../../../packages/persistence/src/index.js";
 import { SessionRuntimeRegistry } from "../../../packages/interview-engine/src/index.js";
 import type { LocalTransportSecurity } from "../../../packages/domain/src/index.js";
 import { LocalInterviewTransportRuntime } from "./local-interview-transport-runtime.js";
+import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 
 const DEFAULT_COMMAND_PORT = 43123;
 const DEFAULT_RENDERER_STREAM_PORT = 43124;
@@ -20,6 +21,7 @@ export interface ServerConfig {
   readonly clientToken?: string;
   readonly allowedOrigins?: readonly string[];
   readonly databasePath?: string;
+  readonly providerRuntimeResolver?: ProviderRuntimeResolver;
 }
 
 export async function createAndStartServer(config: ServerConfig = {}) {
@@ -45,7 +47,10 @@ export async function createAndStartServer(config: ServerConfig = {}) {
     registry,
     store,
     commandPort,
-    rendererStreamPort
+    rendererStreamPort,
+    ...(config.providerRuntimeResolver === undefined
+      ? {}
+      : { providerRuntimeResolver: config.providerRuntimeResolver })
   });
 
   let bound: Awaited<ReturnType<LocalInterviewTransportRuntime["start"]>>;

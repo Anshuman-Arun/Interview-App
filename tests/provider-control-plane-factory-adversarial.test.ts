@@ -1629,7 +1629,10 @@ describe("adapter factory adversarial boundary", () => {
 
     const adapter = await resolveAdapterFactory(resolved).createAdapter({ resolved });
     expect(getterCalls).toBe(1);
+    expect(adapter.name).toBe("mock-model");
+    expect(adapter.name).toBe("mock-model");
     expect(adapter.adapterVersion).toBe("1.0.0");
+    expect(getterCalls).toBe(1);
   });
 
   it("snapshots top-level capability accessors before domain-schema validation", async () => {
@@ -1673,6 +1676,8 @@ describe("adapter factory adversarial boundary", () => {
 
     const adapter = await resolveAdapterFactory(resolved).createAdapter({ resolved });
     expect(adapter.name).toBe("mock-model");
+    expect(adapter.capabilities.textStreaming).toBe(false);
+    expect(adapter.capabilities.textStreaming).toBe(false);
     expect(getterCalls).toBe(1);
   });
 
@@ -2415,6 +2420,36 @@ describe("adapter factory adversarial boundary", () => {
       resolved,
       secretResolver: wrongTypeResolver
     })).rejects.toMatchObject({ code: "CREDENTIAL_RESOLUTION_FAILED" });
+  });
+
+  it("returns immutable validated capability snapshots from adapter factories", async () => {
+    const registry = registerBuiltInProviders();
+    const resolved = resolveProviderConfiguration({
+      registry,
+      configuration: GEMINI_CONFIGURATION
+    });
+    const adapter = await resolveAdapterFactory(resolved).createAdapter({
+      resolved,
+      secretResolver: {
+        async resolveSecret() {
+          return "runtime-only-capability-test-key";
+        }
+      }
+    });
+
+    expect(Object.isFrozen(adapter.capabilities)).toBe(true);
+    expect(adapter.capabilities.dataUse)
+      .toBe("REMOTE_MAY_BE_USED_FOR_IMPROVEMENT");
+    expect(Reflect.set(adapter.capabilities, "dataUse", "LOCAL_ONLY")).toBe(false);
+    expect(adapter.capabilities.dataUse)
+      .toBe("REMOTE_MAY_BE_USED_FOR_IMPROVEMENT");
+
+    const modalities = adapter.capabilities.inputModalities;
+    modalities.add("image");
+    modalities.delete("text");
+    Set.prototype.add.call(modalities, "image");
+    expect([...modalities]).toEqual(["image"]);
+    expect([...adapter.capabilities.inputModalities]).toEqual(["text"]);
   });
 
   it("does not expose resolved Gemini credentials through returned adapter own state", async () => {

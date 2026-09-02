@@ -106,6 +106,81 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
+  it("completes authoritative cancellation while provider session creation never resolves", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      let signalSessionCreation: (() => void) | undefined;
+      const sessionCreationStarted = new Promise<void>((resolve) => {
+        signalSessionCreation = resolve;
+      });
+      const never = new Promise<ReasoningSession>(() => undefined);
+      const provider = testProvider(async () => {
+        signalSessionCreation?.();
+        return await never;
+      });
+
+      const execution = await harness.coordinator.start(startInput(harness, provider));
+      await sessionCreationStarted;
+      await harness.coordinator.cancelGeneration(
+        execution.generationId,
+        "student barge-in during provider admission"
+      );
+
+      await expect(execution.completion).resolves.toEqual({
+        status: "CANCELLED",
+        generationId: execution.generationId
+      });
+      expect(harness.writer.getState().generations[execution.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("completes authoritative cancellation even when provider stream, cancel, and close never resolve", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      let signalTurnStarted: (() => void) | undefined;
+      const turnStarted = new Promise<void>((resolve) => {
+        signalTurnStarted = resolve;
+      });
+      const never = new Promise<never>(() => undefined);
+      const provider = testProvider(async () => ({
+        async *sendTurn() {
+          signalTurnStarted?.();
+          await never;
+          yield PROPOSAL;
+        },
+        async cancelTurn() {
+          await never;
+          return { semantics: "NONE" as const };
+        },
+        async close() {
+          await never;
+        }
+      }));
+
+      const execution = await harness.coordinator.start(startInput(harness, provider));
+      await turnStarted;
+      void harness.coordinator.cancelGeneration(
+        execution.generationId,
+        "student barge-in"
+      );
+
+      const outcome = await execution.completion;
+      expect(outcome).toEqual({
+        status: "CANCELLED",
+        generationId: execution.generationId
+      });
+      expect(harness.writer.getState().generations[execution.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("rejects a late proposal after a basis-changing mutation proactively supersedes its generation", async () => {
     const harness = await coordinatorHarness();
     try {
@@ -141,6 +216,49 @@ describe("application-owned ProviderCoordinator", () => {
       expect(harness.store.load(harness.sessionId).filter((event) => event.type === "MODEL_PROPOSAL_RECEIVED"))
         .toHaveLength(1);
       expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(1);
+    } finally {
+      harness.store.close();
+    }
+  });
+
+  it("restores iterator cleanup and does not gate an accepted proposal on hanging session close", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      let iteratorClosed: (() => void) | undefined;
+      const iteratorClosedPromise = new Promise<void>((resolve) => {
+        iteratorClosed = resolve;
+      });
+      let closeStarted: (() => void) | undefined;
+      const closeStartedPromise = new Promise<void>((resolve) => {
+        closeStarted = resolve;
+      });
+      const never = new Promise<never>(() => {
+        // Intentionally unresolved provider cleanup.
+      });
+      const provider = testProvider(async () => ({
+        async *sendTurn() {
+          try {
+            yield PROPOSAL;
+            await never;
+          } finally {
+            iteratorClosed?.();
+          }
+        },
+        async close() {
+          closeStarted?.();
+          await never;
+        }
+      }));
+
+      const execution = await harness.coordinator.start(startInput(harness, provider));
+      const outcome = await execution.completion;
+
+      expect(outcome.status).toBe("ACCEPTED");
+      await expect(iteratorClosedPromise).resolves.toBeUndefined();
+      await expect(closeStartedPromise).resolves.toBeUndefined();
+      expect(harness.writer.getState().generations[execution.generationId]?.status)
+        .toBe("VALIDATED");
+      expect(Object.values(harness.writer.getState().deliveries)).toHaveLength(1);
     } finally {
       harness.store.close();
     }
@@ -304,7 +422,7 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
-  it("resolves as cancelled when cancellation races provider-session close after proposal admission", async () => {
+  it("keeps authoritative cancellation effective while provider close remains pending", async () => {
     const harness = await coordinatorHarness();
     try {
       let signalCloseStarted: (() => void) | undefined;
@@ -325,7 +443,7 @@ describe("application-owned ProviderCoordinator", () => {
       releaseClose?.();
       const outcome = await execution.completion;
 
-      expect(outcome.status).toBe("CANCELLED");
+      expect(outcome.status).toBe("ACCEPTED");
       expect(harness.writer.getState().generations[execution.generationId]?.status).toBe("SUPERSEDED");
       expect(Object.values(harness.writer.getState().deliveries)).toHaveLength(1);
       expect(Object.values(harness.writer.getState().deliveries)[0]?.status).toBe("CANCELLED");
