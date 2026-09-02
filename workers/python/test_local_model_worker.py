@@ -10,6 +10,7 @@ import threading
 import unittest
 from collections import OrderedDict
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -296,6 +297,52 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         self.assertNotIn("error", outcome)
         self.assertEqual(outcome.get("value"), {"text": ""})
         self.assertEqual(runtime._transcriber.calls, 1)
+
+    def test_stt_drops_malformed_optional_word_metadata_without_losing_text(self) -> None:
+        runtime = object.__new__(worker.SpeechRuntime)
+        runtime._np = np
+        runtime._stt_lock = threading.Lock()
+        runtime._stt_slots = threading.BoundedSemaphore(
+            worker.MAX_SPEECH_NATIVE_RESERVATIONS
+        )
+
+        class _WordMetadataTranscriber:
+            def transcribe_without_streaming(self, _samples, *, sample_rate: int):
+                if sample_rate != 16_000:
+                    raise AssertionError("unexpected sample rate")
+                return SimpleNamespace(lines=[
+                    SimpleNamespace(
+                        text="hello",
+                        words=[
+                            SimpleNamespace(
+                                word="hello",
+                                start=0.0,
+                                end=0.0005,
+                                confidence=0.9,
+                            ),
+                            SimpleNamespace(
+                                word="impossible",
+                                start=0.0,
+                                end=10.0,
+                                confidence=0.8,
+                            ),
+                        ],
+                    ),
+                    SimpleNamespace(text=123, words=[]),
+                ])
+
+        runtime._transcriber = _WordMetadataTranscriber()
+        result = runtime.transcribe({
+            "requestId": "request-word-metadata",
+            "utteranceId": "utterance-word-metadata",
+            "sampleRate": 16_000,
+            "pcmF32Base64": pcm_base64([0.0] * 16),
+        })
+
+        self.assertEqual(result["text"], "hello")
+        self.assertEqual(len(result["words"]), 1)
+        self.assertEqual(result["words"][0]["word"], "hello")
+        self.assertAlmostEqual(result["confidence"], 0.9)
 
     def test_tts_cancel_before_synthesis_registration_prevents_model_start(self) -> None:
         runtime = object.__new__(worker.TtsRuntime)
