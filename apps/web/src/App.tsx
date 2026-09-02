@@ -31,7 +31,6 @@ export const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
-  const [activeTab, setActiveTab] = useState<"whiteboard" | "formulation">("whiteboard");
   const [compactPane, setCompactPane] =
     useState<"interview" | "whiteboard">("interview");
   const [historyRead, setHistoryRead] = useState<SessionHistoryReadResponse | null>(null);
@@ -511,6 +510,17 @@ export const App: React.FC = () => {
             <div className="app-header__session-actions">
               <button
                 type="button"
+                onClick={() => {
+                  session.pauseSession();
+                  navigateProductPage("home");
+                }}
+                disabled={sessionTerminalPending || sessionEntryPending}
+                className="app-header__quiet"
+              >
+                Home
+              </button>
+              <button
+                type="button"
                 onClick={() => void handleCompleteSession()}
                 disabled={sessionTerminalPending || sessionEntryPending}
                 className="app-header__end"
@@ -530,36 +540,26 @@ export const App: React.FC = () => {
 
           <AppearanceDock compact />
 
-          <button
-            type="button"
-            onClick={
-              hasActiveInterview
-                ? openSessionsModal
-                : () => navigateProductPage("sessions")
-            }
-            className="app-header__quiet"
-            data-testid="sessions-btn"
-          >
-            Sessions
-          </button>
-
-          <button
-            type="button"
-            disabled={hasActiveInterview && session.isTransportManaged}
-            onClick={() => {
-              if (hasActiveInterview) {
-                if (!session.isTransportManaged) {
-                  setShowSettings((previous) => !previous);
-                }
-                return;
-              }
-              navigateProductPage("settings");
-            }}
-            className="app-header__quiet"
-            data-testid="settings-btn"
-          >
-            Settings
-          </button>
+          {!hasActiveInterview && (
+            <>
+              <button
+                type="button"
+                onClick={() => navigateProductPage("sessions")}
+                className="app-header__quiet"
+                data-testid="sessions-btn"
+              >
+                Sessions
+              </button>
+              <button
+                type="button"
+                onClick={() => navigateProductPage("settings")}
+                className="app-header__quiet"
+                data-testid="settings-btn"
+              >
+                Settings
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -839,7 +839,6 @@ export const App: React.FC = () => {
           role="tab"
           aria-selected={compactPane === "whiteboard"}
           onClick={() => {
-            setActiveTab("whiteboard");
             setCompactPane("whiteboard");
           }}
         >
@@ -980,119 +979,64 @@ export const App: React.FC = () => {
           </div>
         </section>
 
-        {/* Right Panel: Whiteboard & Formulation Inspector */}
+        {/* Right Panel: Whiteboard */}
         <section className="right-panel w-1/2 flex flex-col bg-slate-50 overflow-hidden">
-          {/* Panel Tab Header */}
-          <div className="panel-tabs bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0">
-            <div
-              className="flex items-center gap-2"
-              role="tablist"
-              aria-label="Whiteboard view"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === "whiteboard"}
-                onClick={() => setActiveTab("whiteboard")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  activeTab === "whiteboard"
-                    ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                data-testid="tab-whiteboard"
-              >
+          {session.whiteboardSync.status !== "SYNCED" && (
+            <div className="panel-tabs bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0">
+              <strong className="text-xs text-slate-700" data-testid="tab-whiteboard">
                 Whiteboard
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === "formulation"}
-                onClick={() => setActiveTab("formulation")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  activeTab === "formulation"
-                    ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                data-testid="tab-formulation"
-              >
-                Details
-              </button>
-            </div>
-
-            <div className="text-[11px] text-slate-400 flex items-center gap-2">
-              <span
-                className="w-2 h-2 rounded-full"
-                data-sync={session.whiteboardSync.status}
-              />
-              <span>
-                {session.whiteboardSync.status === "SYNCED"
-                  ? "Board synced"
-                  : session.whiteboardSync.status === "PENDING"
-                    ? "Updating board…"
+              </strong>
+              <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  data-sync={session.whiteboardSync.status}
+                />
+                <span>
+                  {session.whiteboardSync.status === "PENDING"
+                    ? "Saving…"
                     : session.whiteboardSync.status === "UNSYNCHRONIZED"
                       ? "Board unavailable"
-                      : "Board readying"}
-              </span>
+                      : "Preparing…"}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Panel Content */}
           <div className="flex-1 p-4 overflow-hidden flex flex-col">
-            {activeTab === "whiteboard" ? (
-              <div className="whiteboard-wrapper flex-1 bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden flex flex-col">
-                <div className="whiteboard-toolbar px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
-                  <span className="font-semibold flex items-center gap-1.5">
-                    <span>Interview Whiteboard</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void whiteboardAdapter.clearAiOverlay()}
-                      className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-medium"
-                    >
-                      Clear AI Overlays
-                    </button>
-                  </div>
-                </div>
-                <div className="flex-1 relative bg-slate-100/50">
-                  <WhiteboardCanvas
-                    adapter={whiteboardAdapter}
-                    colorScheme={resolvedTheme}
-                    readOnly={
-                      !session.isSessionStarted
-                      || session.sessionStatus !== "ACTIVE"
-                      || session.isPaused
-                      || sessionEntryPending
-                      || sessionTerminalPending
-                      || session.whiteboardSync.status === "UNINITIALIZED"
-                      || session.whiteboardSync.status === "UNSYNCHRONIZED"
-                    }
-                    onEditorMount={handleWhiteboardEditorMount}
-                    onNormalizedBoardChange={(change) => {
-                      void session.submitWhiteboardMutation(change).catch(() => {
-                        // The hook retains the fail-closed synchronization state.
-                      });
-                    }}
-                    className="w-full h-full min-h-[380px]"
-                  />
-                </div>
+            <div className="whiteboard-wrapper flex-1 bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden flex flex-col">
+              <div className="whiteboard-toolbar px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                <span className="font-semibold">Whiteboard</span>
+                <button
+                  type="button"
+                  onClick={() => void whiteboardAdapter.clearAiOverlay()}
+                  className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-medium"
+                >
+                  Clear AI marks
+                </button>
               </div>
-            ) : (
-              <div className="formulation-inspector flex-1 bg-white border border-slate-200 rounded-lg p-5 overflow-y-auto space-y-4 shadow-xs">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 mb-1">
-                    Session Context
-                  </h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Safe public identity for the problem bound to this session.
-                  </p>
-                </div>
-
-                <div className="border border-slate-200 rounded-md p-4 bg-slate-50 text-sm text-slate-500">
-                  Problem metadata is intentionally hidden during the live interview.
-                </div>
+              <div className="flex-1 relative bg-slate-100/50">
+                <WhiteboardCanvas
+                  adapter={whiteboardAdapter}
+                  colorScheme={resolvedTheme}
+                  readOnly={
+                    !session.isSessionStarted
+                    || session.sessionStatus !== "ACTIVE"
+                    || session.isPaused
+                    || sessionEntryPending
+                    || sessionTerminalPending
+                    || session.whiteboardSync.status === "UNINITIALIZED"
+                    || session.whiteboardSync.status === "UNSYNCHRONIZED"
+                  }
+                  onEditorMount={handleWhiteboardEditorMount}
+                  onNormalizedBoardChange={(change) => {
+                    void session.submitWhiteboardMutation(change).catch(() => {
+                      // The hook retains the fail-closed synchronization state.
+                    });
+                  }}
+                  className="w-full h-full min-h-[380px]"
+                />
               </div>
-            )}
+            </div>
           </div>
         </section>
       </main>
