@@ -50,18 +50,18 @@ export async function createAndStartServer(config: ServerConfig = {}) {
   const store = new SqliteEventStore(databasePath);
   const registry = new SessionRuntimeRegistry(store);
 
-  const runtime = new LocalInterviewTransportRuntime({
-    security,
-    registry,
-    store,
-    commandPort,
-    rendererStreamPort,
-    voicePort,
-    ...(config.voiceRuntime === undefined ? {} : { voiceRuntime: config.voiceRuntime })
-  });
-
+  let runtime: LocalInterviewTransportRuntime;
   let bound: Awaited<ReturnType<LocalInterviewTransportRuntime["start"]>>;
   try {
+    runtime = new LocalInterviewTransportRuntime({
+      security,
+      registry,
+      store,
+      commandPort,
+      rendererStreamPort,
+      voicePort,
+      ...(config.voiceRuntime === undefined ? {} : { voiceRuntime: config.voiceRuntime })
+    });
     bound = await runtime.start();
   } catch (error) {
     store.close();
