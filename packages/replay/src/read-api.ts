@@ -1747,9 +1747,13 @@ export function projectSessionReplayReadModel(
       : [...history.timeline.issues];
   const issues = takeBounded(issueValues, 32).values;
 
-  const deterministicQuantTimeline = history.timeline.entries.some(
-    (entry) => entry.quantTrading !== undefined || entry.quantResearch !== undefined
-  );
+  const deterministicQuantTimeline =
+    history.timeline.entries.some(
+      (entry) => entry.quantTrading !== undefined || entry.quantResearch !== undefined
+    )
+    || history.timeline.issues.some(
+      (issue) => issue.code === "SPECIALIZED_DOMAIN_VALIDATION_REQUIRED"
+    );
 
   return SessionReplayReadModelSchema.parse({
     sessionId: history.sessionId,
