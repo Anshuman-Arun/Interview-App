@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
@@ -14,6 +15,7 @@ import {
 } from "../apps/web/src/whiteboard/real-tldraw-editor.js";
 import {
   BoardRevisionSchema,
+  authoritativeBoardShapeCanonicalJson,
   newDeliveryId,
   newRequestId,
   newSessionId,
@@ -994,7 +996,13 @@ describe("Real tldraw mounted browser integration", () => {
           boardRevision: state.boardRevision,
           shapeAuthorityKnown: state.boardShapeAuthorityKnown,
           shapeRevisions: Object.values(state.boardShapes)
-            .map((shape) => ({ shapeId: shape.id, revision: shape.revision }))
+            .map((shape) => ({
+              shapeId: shape.id,
+              revision: shape.revision,
+              contentSha256: createHash("sha256")
+                .update(authoritativeBoardShapeCanonicalJson(shape), "utf8")
+                .digest("hex")
+            }))
             .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
         };
       },

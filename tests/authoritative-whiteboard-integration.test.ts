@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   BoardRevisionSchema,
+  authoritativeBoardShapeCanonicalJson,
   newRequestId,
   newSessionId,
   type AuthoritativeStudentShape,
@@ -244,7 +246,11 @@ function studentChange(
 function boardStateResponse(
   sessionId: SessionId,
   boardRevision: BoardRevision,
-  shapeRevisions: readonly { readonly shapeId: string; readonly revision: number }[]
+  shapeRevisions: readonly {
+    readonly shapeId: string;
+    readonly revision: number;
+    readonly contentSha256?: string;
+  }[]
 ): Awaited<ReturnType<SyncClient["getBoardState"]>> {
   return {
     protocolVersion: 1,
@@ -254,7 +260,11 @@ function boardStateResponse(
     sessionId,
     boardRevision,
     shapeAuthorityKnown: true,
-    shapeRevisions: [...shapeRevisions]
+    shapeRevisions: shapeRevisions.map((entry) => ({
+      shapeId: entry.shapeId,
+      revision: entry.revision,
+      contentSha256: entry.contentSha256 ?? "0".repeat(64)
+    }))
   };
 }
 
@@ -469,7 +479,11 @@ describe("browser authoritative board synchronization", () => {
         boardStateResponse(
           sessionId,
           BoardRevisionSchema.parse(1),
-          [{ shapeId: "shape:first-bootstrap", revision: 1 }]
+          [{
+            shapeId: "shape:first-bootstrap",
+            revision: 1,
+            contentSha256: testShapeDigest(shape("shape:first-bootstrap", 1, 10))
+          }]
         ),
       commitBoardMutation: async (_targetSessionId, mutation, options) => {
         committedMutations.push(mutation);
@@ -529,3 +543,9 @@ describe("browser authoritative board synchronization", () => {
     expect(sync.currentAuthoritativeRevision()).toBeUndefined();
   });
 });
+
+function testShapeDigest(value: AuthoritativeStudentShape): string {
+  return createHash("sha256")
+    .update(authoritativeBoardShapeCanonicalJson(value), "utf8")
+    .digest("hex");
+}

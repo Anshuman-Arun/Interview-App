@@ -121,8 +121,8 @@ describe("authoritative whiteboard and vision runtime contracts", () => {
       boardRevision: 1,
       shapeAuthorityKnown: true,
       shapeRevisions: [
-        { shapeId: "shape:a", revision: 1 },
-        { shapeId: "shape:a", revision: 2 }
+        { shapeId: "shape:a", revision: 1, contentSha256: "a".repeat(64) },
+        { shapeId: "shape:a", revision: 2, contentSha256: "b".repeat(64) }
       ]
     }).success).toBe(false);
   });
