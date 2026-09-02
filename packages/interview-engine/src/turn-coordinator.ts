@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   BoardRevisionSchema,
   BoardObservationSchema,
@@ -5,6 +6,7 @@ import {
   CommandIdentityValueSchema,
   ContextEpochSchema,
   DeliveryAtomSchema,
+  DeliveryIdSchema,
   GenerationBasisSchema,
   GenerationIdSchema,
   InputEpisodeIdSchema,
@@ -31,6 +33,7 @@ import {
   type CommandEnvelope,
   type CommandIdentityValue,
   type DeliveryAtom,
+  type DeliveryId,
   type GenerationBasis,
   type GenerationId,
   type InputEpisodeId,
@@ -67,6 +70,11 @@ const CorrectedResultSchema = z.object({ corrected: z.literal(true) }).strict();
 const UtteranceStartedResultSchema = z.object({ utteranceId: UtteranceIdSchema }).strict();
 const UtteranceDiscardedResultSchema = z.object({ discarded: z.literal(true) }).strict();
 const UtteranceFinalizedResultSchema = z.object({ inputEpisodeId: InputEpisodeIdSchema, transcriptRevision: TranscriptRevisionSchema }).strict();
+const AudioDeliveryQueuedResultSchema = z.object({
+  queued: z.boolean(),
+  atom: DeliveryAtomSchema.optional(),
+  reason: z.string().min(1).optional()
+}).strict();
 const InputAppendedResultSchema = z.object({ appended: z.literal(true) }).strict();
 const BoardInputAppendedResultSchema = z.object({ appended: z.literal(true), boardRevision: BoardRevisionSchema }).strict();
 const VisionRequestedResultSchema = z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema }).strict();
@@ -966,6 +974,117 @@ export class TurnCoordinator {
       return { drafts, result: { accepted: true, deliveryAtoms: atoms } };
     });
     return outcome.value;
+  }
+
+  public async queueAudioDeliveryFromValidatedText(input: {
+    readonly sourceDeliveryId: DeliveryId;
+    readonly generationId: GenerationId;
+    readonly text: string;
+    readonly textSha256: string;
+    readonly audioRef: string;
+  }): Promise<DeliveryAtom | undefined> {
+    const sourceDeliveryId = DeliveryIdSchema.parse(input.sourceDeliveryId);
+    const generationId = GenerationIdSchema.parse(input.generationId);
+    if (
+      typeof input.text !== "string"
+      || input.text.length === 0
+      || input.text.length > MAX_INTERVIEWER_PROPOSAL_TEXT_CHARACTERS
+    ) {
+      throw new Error("TTS source text is invalid or exceeds the bounded realization size");
+    }
+    if (!/^[0-9a-f]{64}$/u.test(input.textSha256)) {
+      throw new Error("TTS source text hash is malformed");
+    }
+    const computedTextSha256 = createHash("sha256").update(input.text, "utf8").digest("hex");
+    if (computedTextSha256 !== input.textSha256) {
+      throw new Error("TTS source text hash does not match the exact realization text");
+    }
+    if (!/^audio_v1_[0-9a-f]{64}$/u.test(input.audioRef) || input.audioRef.length > 80) {
+      throw new Error("TTS audio reference is malformed");
+    }
+
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "tts-delivery",
+      generationId
+    });
+    const result = await this.writer.execute(envelope, {
+      operation: "QUEUE_AUDIO_DELIVERY",
+      payload: {
+        sourceDeliveryId,
+        generationId,
+        textSha256: input.textSha256,
+        audioRef: input.audioRef
+      }
+    }, AudioDeliveryQueuedResultSchema, (state) => {
+      const source = state.deliveries[sourceDeliveryId];
+      if (
+        source === undefined
+        || source.generationId !== generationId
+        || source.content.medium !== "TEXT"
+      ) {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "Validated speech source delivery is unavailable or mismatched" }
+        };
+      }
+      if (
+        source.status !== "DELIVERING"
+        && source.status !== "EXPOSED"
+        && source.status !== "COMPLETED"
+      ) {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "Validated speech source has not begun an authorized physical delivery" }
+        };
+      }
+      if (
+        source.content.text !== input.text
+        || createHash("sha256").update(source.content.text, "utf8").digest("hex") !== input.textSha256
+      ) {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "TTS result does not match the exact validated speech text" }
+        };
+      }
+
+      const generation = state.generations[generationId];
+      if (generation === undefined || generation.status !== "VALIDATED") {
+        return {
+          drafts: [],
+          result: { queued: false, reason: "TTS generation is no longer authorized for delivery" }
+        };
+      }
+      const compatibility = isGenerationBasisStillCompatible(generation.basis, state);
+      if (compatibility !== "COMPATIBLE") {
+        return {
+          drafts: [],
+          result: { queued: false, reason: `TTS generation compatibility is ${compatibility}` }
+        };
+      }
+
+      const atom = DeliveryAtomSchema.parse({
+        deliveryId: newDeliveryId(),
+        generationId,
+        content: {
+          medium: "AUDIO",
+          text: source.content.text,
+          audioRef: input.audioRef
+        },
+        disclosureIds: [...source.disclosureIds],
+        effectiveDisclosureLevel: source.effectiveDisclosureLevel,
+        status: "VALIDATED"
+      });
+      return {
+        drafts: [{
+          source: "APPLICATION",
+          type: "DELIVERY_QUEUED",
+          payload: { atom }
+        }],
+        result: { queued: true, atom }
+      };
+    });
+    return result.value.queued ? result.value.atom : undefined;
   }
 
   public async commitBoardPatch(summary: string): Promise<void> {
