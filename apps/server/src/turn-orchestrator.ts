@@ -194,7 +194,6 @@ export class ServerTurnOrchestrator {
         // A recovery attempt cancelled by application shutdown is not a
         // successful recovery. Report it separately so the recovery cache does
         // not strand this authoritative pending turn across a stop/start cycle.
-        if (!this.acceptingWork) return "DEFERRED";
         const turnDisposition = await this.orchestrateTurnWithDisposition({
           sessionId,
           turnId: turnId as TurnId,
