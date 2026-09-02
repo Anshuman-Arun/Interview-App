@@ -79,28 +79,33 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
 
 async function createIsolatedAntigravityProfile(): Promise<string> {
   const profile = await mkdtemp(path.join(tmpdir(), "interview-antigravity-profile-"));
-  if (process.platform !== "win32") {
-    await chmod(profile, 0o700);
-  }
-  const settingsDirectory = path.join(
-    profile,
-    ".gemini",
-    "antigravity-cli"
-  );
-  await mkdir(settingsDirectory, {
-    recursive: true,
-    ...(process.platform === "win32" ? {} : { mode: 0o700 })
-  });
-  await writeFile(
-    path.join(settingsDirectory, "settings.json"),
-    ANTIGRAVITY_SAFE_SETTINGS_JSON,
-    {
-      encoding: "utf8",
-      flag: "wx",
-      ...(process.platform === "win32" ? {} : { mode: 0o600 })
+  try {
+    if (process.platform !== "win32") {
+      await chmod(profile, 0o700);
     }
-  );
-  return profile;
+    const settingsDirectory = path.join(
+      profile,
+      ".gemini",
+      "antigravity-cli"
+    );
+    await mkdir(settingsDirectory, {
+      recursive: true,
+      ...(process.platform === "win32" ? {} : { mode: 0o700 })
+    });
+    await writeFile(
+      path.join(settingsDirectory, "settings.json"),
+      ANTIGRAVITY_SAFE_SETTINGS_JSON,
+      {
+        encoding: "utf8",
+        flag: "wx",
+        ...(process.platform === "win32" ? {} : { mode: 0o600 })
+      }
+    );
+    return profile;
+  } catch {
+    await rm(profile, { recursive: true, force: true }).catch(() => undefined);
+    throw new Error("Antigravity isolated runtime profile could not be prepared");
+  }
 }
 
 function antigravityEnvironment(
