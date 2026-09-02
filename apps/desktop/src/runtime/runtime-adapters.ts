@@ -9,6 +9,7 @@ import {
 } from "../../../../packages/local-compute/src/index.js";
 import {
   ManagedWorkerRequestTimeoutError,
+  ManagedWorkerResponseError,
   type ManagedModelWorkerClient
 } from "./managed-worker-client.js";
 
@@ -279,13 +280,16 @@ async function runWithWorkerRecycleOnTimeout<T>(
   try {
     return await operation();
   } catch (error) {
-    if (!(error instanceof ManagedWorkerRequestTimeoutError)) throw error;
+    const uncertainNativeState =
+      error instanceof ManagedWorkerRequestTimeoutError
+      || (error instanceof ManagedWorkerResponseError && error.statusCode >= 500);
+    if (!uncertainNativeState) throw error;
     try {
       await client.recycleAfterUncertainRequest(workerInstance);
     } catch (recycleError) {
       throw new AggregateError(
         [error, recycleError],
-        "Managed local model worker timed out and could not be safely recycled"
+        "Managed local model worker failed and could not be safely recycled"
       );
     }
     throw error;
