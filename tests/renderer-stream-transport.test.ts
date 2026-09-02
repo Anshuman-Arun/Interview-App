@@ -533,6 +533,66 @@ describe("authenticated renderer stream transport", () => {
     }
   });
 
+  it("does not memoize a send when durable DELIVERING admission throws before the physical write", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const visible: DeliveryId[] = [];
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+        }
+      },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const controller = new AbortController();
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const atom = await queueDelivery(writer, {
+      medium: "TEXT",
+      text: "retry after pre-write post-commit failure"
+    });
+    const originalExecute = writer.execute.bind(writer);
+    let injected = false;
+    const executeSpy = vi.spyOn(writer, "execute").mockImplementation(
+      async (...args: Parameters<typeof writer.execute>) => {
+        const result = await originalExecute(...args);
+        if (!injected && args[1].operation === "RECONNECT_DELIVERY") {
+          injected = true;
+          throw new Error("injected post-commit pre-write failure");
+        }
+        return result;
+      }
+    );
+
+    await expect(streamServer.publishDelivery(sessionId, atom.deliveryId))
+      .rejects.toThrow(/post-commit pre-write/u);
+    expect(injected).toBe(true);
+    expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("DELIVERING");
+    expect(visible).toEqual([]);
+
+    executeSpy.mockRestore();
+    const retried = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+    expect(retried).toEqual({
+      outcome: "SENT",
+      deliveryId: atom.deliveryId,
+      status: "DELIVERING"
+    });
+    await waitFor(() => visible.includes(atom.deliveryId));
+
+    controller.abort();
+    await consumer;
+  });
+
   it("does not physically write a delivery invalidated after DELIVERING admission", async () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
