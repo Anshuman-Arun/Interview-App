@@ -591,6 +591,17 @@ export class SessionReadService {
     if (state.status !== "COMPLETED" && state.status !== "ARCHIVED") {
       return { available: false, reason: "SESSION_NOT_TERMINAL" };
     }
+    if (
+      state.configuration?.mode === "QUANT_TRADING"
+      || state.configuration?.mode === "QUANT_RESEARCH"
+      || state.quantTrading !== undefined
+      || state.quantResearch !== undefined
+    ) {
+      // Deterministic Quant engines own their completion metrics. The generic
+      // Oxford evaluator must never reinterpret synthetic Quant problem state,
+      // even if a future catalog identity happens to collide.
+      return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };
+    }
     if (state.problem === undefined) {
       return { available: false, reason: "EXACT_PROBLEM_UNAVAILABLE" };
     }
