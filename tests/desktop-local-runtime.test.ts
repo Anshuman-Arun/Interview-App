@@ -158,7 +158,49 @@ describe("desktop local model runtime", () => {
     expect(result.samples[1]).toBeCloseTo(0.05, 6);
     expect(result.samples[2]).toBeCloseTo(-0.05, 6);
     expect(result.samples[3]).toBe(0);
-    await expect(session.cancel?.(requestId)).resolves.toBeUndefined();
+  });
+
+  it("cancels the exact active Kokoro request through the supervised worker", async () => {
+    const token = "e".repeat(64);
+    const runtime = fixtureManager(
+      "tts-cancel-fixture",
+      "tts",
+      "fixture-tts-1",
+      token,
+      "blocking-tts"
+    );
+    await runtime.start("tts-cancel-fixture");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "tts-cancel-fixture",
+      "tts",
+      token
+    );
+    const adapter = new ManagedKokoroRuntime(
+      client,
+      "/verified/model.ort",
+      "/verified/config.json"
+    );
+    const session = await adapter.initialize({
+      modelPath: "/verified/model.ort",
+      configPath: "/verified/config.json"
+    });
+    const requestId = TtsRequestIdSchema.parse("tts-cancel-active");
+    const synthesis = session.synthesize({
+      requestId,
+      text: "Cancel this exact admitted text.",
+      voice: "kokoro_af_heart",
+      language: "en-US",
+      speed: 1,
+      sampleRate: 24_000
+    });
+    await waitForStatus(runtime, "tts-cancel-fixture", (status) =>
+      status.stdout.lines.includes(`TTS_STARTED:${requestId}`)
+    );
+
+    if (session.cancel === undefined) throw new Error("Expected Kokoro runtime cancellation");
+    await expect(session.cancel(requestId)).resolves.toBeUndefined();
+    await expect(synthesis).rejects.toThrow("rejected");
   });
 
   it("recovers through LocalRuntimeManager after a worker dies during inference", async () => {
