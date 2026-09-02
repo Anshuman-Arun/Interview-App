@@ -329,6 +329,46 @@ describe("provider execution admission", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("rejects Proxy-backed providers and sessions without invoking traps", async () => {
+    let providerTrapCalls = 0;
+    const providerProxy = new Proxy(testProvider(), {
+      getOwnPropertyDescriptor() {
+        providerTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        providerTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    await expect(openProviderExecutionSession({
+      provider: providerProxy,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "INVALID_PROVIDER_IDENTITY" });
+    expect(providerTrapCalls).toBe(0);
+
+    let sessionTrapCalls = 0;
+    const sessionProxy = new Proxy(proposalSession(), {
+      getOwnPropertyDescriptor() {
+        sessionTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        sessionTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    await expect(openProviderExecutionSession({
+      provider: testProvider({
+        createSession: async () => sessionProxy
+      }),
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(sessionTrapCalls).toBe(0);
+  });
+
   it("drops a provider result released after cancellation even when the provider ignores cancellation", async () => {
     let release: (() => void) | undefined;
     const blocked = new Promise<void>((resolve) => { release = resolve; });
