@@ -43,8 +43,8 @@ import {
 
 const SPEECH_COMPONENT_ID = "desktop-local-speech";
 const TTS_COMPONENT_ID = "desktop-local-tts";
-const WORKER_COMPONENT_VERSION = "1";
-const WORKER_PROTOCOL_VERSION = 1;
+const WORKER_COMPONENT_VERSION = "2";
+const WORKER_PROTOCOL_VERSION = 2;
 const SPEECH_RUNTIME_VERSION = "moonshine-voice/0.1.5;onnxruntime/1.29.0;deps/1";
 const TTS_RUNTIME_VERSION = "moonshine-voice/0.1.5;deps/1";
 const MAX_ASSET_BYTES = 128 * 1024 * 1024;
