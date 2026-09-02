@@ -642,9 +642,16 @@ export class ModelAssetManager {
     this.lastFailures.delete(key);
   }
 
-  public async cleanupTemporary(): Promise<void> {
+  public async cleanupTemporary(signal?: AbortSignal): Promise<void> {
+    const validatedSignal = validateOptionalAbortSignal(signal);
+    if (isSignalAborted(validatedSignal)) {
+      throw new ModelAssetError("CANCELLED", "Temporary artifact cleanup was cancelled.");
+    }
     const paths = await this.getSafeCachePaths();
     await this.withMutationGate(paths, async (shared) => {
+      if (isSignalAborted(validatedSignal)) {
+        throw new ModelAssetError("CANCELLED", "Temporary artifact cleanup was cancelled.");
+      }
       if (shared.activeInstallationCounts.size > 0) {
         throw new ModelAssetError(
           "ASSET_BUSY",
@@ -657,11 +664,17 @@ export class ModelAssetManager {
         "Temporary cache entry count exceeds the configured cleanup limit."
       );
       for (const entry of entries) {
+        if (isSignalAborted(validatedSignal)) {
+          throw new ModelAssetError("CANCELLED", "Temporary artifact cleanup was cancelled.");
+        }
         if (!TEMPORARY_ENTRY_PATTERN.test(entry)
             && !REMOVAL_TOMBSTONE_PATTERN.test(entry)) {
           continue;
         }
         await this.removeManagedEntry(paths, path.join(paths.temporary, entry));
+      }
+      if (isSignalAborted(validatedSignal)) {
+        throw new ModelAssetError("CANCELLED", "Temporary artifact cleanup was cancelled.");
       }
       await validateCachePaths(paths);
     });
