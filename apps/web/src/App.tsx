@@ -58,6 +58,10 @@ export const App: React.FC = () => {
 
   const [inputUrl, setInputUrl] = useState(session.baseUrl);
 
+  useEffect(() => {
+    setInputUrl(session.baseUrl);
+  }, [session.baseUrl]);
+
   const handleStartSession = async (): Promise<void> => {
     if (sessionEntryPendingRef.current || sessionTerminalPendingRef.current) return;
     sessionEntryPendingRef.current = true;
@@ -930,10 +934,6 @@ export const App: React.FC = () => {
                         <div>
                           <div className="font-semibold text-slate-500 uppercase tracking-wider">Version</div>
                           <div className="font-mono text-slate-800 mt-1">{session.problem.version}</div>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Difficulty</div>
-                          <div className="text-slate-800 mt-1">{session.problem.difficulty}</div>
                         </div>
                       </div>
                     </div>
