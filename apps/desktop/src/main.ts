@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import process from "node:process";
+import process from "node:process";\nimport { createAndStartServer } from "../../server/src/server.js";
 import {
   app,
   BrowserWindow,
@@ -8,7 +8,7 @@ import {
   ipcMain,
   type IpcMainEvent
 } from "electron";
-import { DesktopBackendController } from "./backend-controller.js";
+import { DesktopBackendController } from "./backend-controller.js";\nimport { DesktopLocalRuntimeComposition } from "./runtime/index.js";
 import {
   DESKTOP_BOOTSTRAP_CHANNEL,
   createDesktopRendererBootstrap,
@@ -320,6 +320,16 @@ function shutdownDesktop(): Promise<void> {
       await backend.stop();
     } catch (error) {
       failures.push(error);
+    }
+
+    const currentLocalRuntime = localRuntime;
+    if (currentLocalRuntime !== undefined) {
+      try {
+        await currentLocalRuntime.stopWorkers();
+        if (localRuntime === currentLocalRuntime) localRuntime = undefined;
+      } catch (error) {
+        failures.push(error);
+      }
     }
 
     const currentFrontendServer = frontendServer;
