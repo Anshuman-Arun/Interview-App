@@ -21,7 +21,8 @@ import {
   ManagedModelWorkerClient,
   ManagedWorkerRecoveryExhaustedError,
   ManagedWorkerRequestTimeoutError,
-  ManagedWorkerResponseError
+  ManagedWorkerResponseError,
+  ManagedWorkerTransportError
 } from "../apps/desktop/src/runtime/managed-worker-client.js";
 import {
   ManagedKokoroRuntime,
@@ -456,6 +457,47 @@ describe("desktop local model runtime", () => {
     );
     await expect(composition.stopWorkers()).resolves.toBeUndefined();
     expect(disposeCalls).toBe(2);
+  });
+
+  it("recycles the exact worker after an ambiguous loopback transport failure", async () => {
+    const token = "a".repeat(64);
+    const runtime = fixtureManager(
+      "speech-transport-recycle",
+      "speech",
+      "fixture-speech-1",
+      token
+    );
+    await runtime.start("speech-transport-recycle");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-transport-recycle",
+      "speech",
+      token
+    );
+    const workerInstance = client.workerInstanceIdentity();
+    let recycleCount = 0;
+    const mutable = client as unknown as {
+      postJson(): Promise<unknown>;
+      recycleAfterUncertainRequest(expectedWorkerInstance: string): Promise<void>;
+    };
+    mutable.postJson = async () => {
+      throw new ManagedWorkerTransportError(
+        new TypeError("synthetic loopback connection reset")
+      );
+    };
+    mutable.recycleAfterUncertainRequest = async (expectedWorkerInstance) => {
+      expect(expectedWorkerInstance).toBe(workerInstance);
+      recycleCount += 1;
+    };
+    const vad = new ManagedSileroVadRuntime(client, "/verified/silero.onnx");
+
+    await expect(vad.score({
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      streamId: "stream-transport-recycle",
+      modelPath: "/verified/silero.onnx"
+    })).rejects.toBeInstanceOf(ManagedWorkerTransportError);
+    expect(recycleCount).toBe(1);
   });
 
   it("recycles Silero after a speech-core VAD timeout but not ordinary cancellation", async () => {
