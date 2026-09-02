@@ -239,6 +239,12 @@ export class DesktopLocalRuntimeComposition {
     }
     if (abortRequested(signal)) return;
 
+    if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
+      this.speechStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
+      this.ttsStatus = unavailable("UNSUPPORTED_RUNTIME_PLATFORM");
+      return;
+    }
+
     const workerAvailable = await this.workerScriptIsSafe();
     if (!workerAvailable) {
       this.speechStatus = unavailable("WORKER_EXECUTABLE_UNAVAILABLE");
@@ -621,6 +627,13 @@ export class DesktopLocalRuntimeComposition {
       return false;
     }
   }
+}
+
+function isProductionLocalModelPlatformSupported(
+  platform: NodeJS.Platform,
+  arch: string
+): boolean {
+  return arch === "x64" && (platform === "win32" || platform === "linux");
 }
 
 async function resolvePythonExecutable(
