@@ -714,10 +714,11 @@ export const App: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void handleStartSession()}
+                  disabled={sessionEntryPending}
                   className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   data-testid="start-session-btn"
                 >
-                  Start Session
+                  {sessionEntryPending ? "Opening…" : "Start Session"}
                 </button>
                 <form
                   onSubmit={(e) => {
@@ -728,15 +729,17 @@ export const App: React.FC = () => {
                   <input
                     type="text"
                     value={recoverySessionInput}
+                    disabled={sessionEntryPending}
                     onChange={(e) => setRecoverySessionInput(e.target.value)}
                     placeholder="session_..."
                     className="w-28 px-2 py-1 text-xs border border-indigo-200 rounded bg-white font-mono"
                   />
                   <button
                     type="submit"
+                    disabled={sessionEntryPending}
                     className="px-2.5 py-1 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 text-xs font-medium rounded"
                   >
-                    Recover
+                    {sessionEntryPending ? "Opening…" : "Recover"}
                   </button>
                 </form>
               </div>
