@@ -10,6 +10,10 @@ import {
   useInterviewSession,
   type UseInterviewSessionResult
 } from "../apps/web/src/hooks/useInterviewSession.js";
+import {
+  InMemoryTldrawEditor,
+  TldrawWhiteboardAdapter
+} from "../apps/web/src/tldraw-whiteboard-adapter.js";
 
 const BASE_URL = "http://127.0.0.1:43123";
 const RENDERER_URL = "http://127.0.0.1:43124/v1/renderer-stream";
@@ -129,7 +133,10 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function renderHook(fetchImpl: typeof fetch): {
+function renderHook(
+  fetchImpl: typeof fetch,
+  whiteboardAdapter?: TldrawWhiteboardAdapter
+): {
   readonly root: Root;
   readonly container: HTMLDivElement;
   current(): UseInterviewSessionResult;
@@ -141,7 +148,8 @@ function renderHook(fetchImpl: typeof fetch): {
       rendererStreamUrl: RENDERER_URL,
       voiceBaseUrl: VOICE_URL,
       clientToken: CLIENT_TOKEN,
-      fetchImpl
+      fetchImpl,
+      ...(whiteboardAdapter === undefined ? {} : { whiteboardAdapter })
     });
     return <div>{current.sessionId ?? "none"}</div>;
   }
@@ -200,6 +208,137 @@ describe("interview session transition authority", () => {
       await firstStart;
     });
     expect(rendered.current().sessionId).toBe(secondSession);
+
+    act(() => rendered.current().disconnect());
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
+  it("ignores a stale whiteboard synchronization that finishes after session replacement", async () => {
+    const firstSession = newSessionId();
+    const secondSession = newSessionId();
+    let releaseFirstBoardState: (() => void) | undefined;
+    let markFirstBoardStateSeen: (() => void) | undefined;
+    const firstBoardStateSeen = new Promise<void>((resolve) => {
+      markFirstBoardStateSeen = resolve;
+    });
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init.signal;
+          const abort = (): void => {
+            const error = new Error("renderer stream aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (signal?.aborted === true) {
+            abort();
+            return;
+          }
+          signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") throw new Error("Command body must be JSON text");
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+        readonly sessionId?: SessionId;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
+
+      if (command.type === "START_SESSION") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_STARTED",
+          sessionId: command.sessionId
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Context intentionally unavailable in transition test"
+          }
+        }, 500);
+      }
+      if (command.type === "GET_BOARD_STATE") {
+        if (command.sessionId === firstSession) {
+          markFirstBoardStateSeen?.();
+          return new Promise<Response>((resolve) => {
+            releaseFirstBoardState = () => resolve(jsonResponse({
+              protocolVersion: 1,
+              requestId: command.requestId,
+              ok: true,
+              type: "BOARD_STATE",
+              sessionId: firstSession,
+              boardRevision: 1,
+              shapeAuthorityKnown: true,
+              shapeRevisions: []
+            }));
+          });
+        }
+        if (command.sessionId === secondSession) {
+          return jsonResponse({
+            protocolVersion: 1,
+            requestId: command.requestId,
+            ok: true,
+            type: "BOARD_STATE",
+            sessionId: secondSession,
+            boardRevision: 2,
+            shapeAuthorityKnown: true,
+            shapeRevisions: []
+          });
+        }
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const adapter = new TldrawWhiteboardAdapter(new InMemoryTldrawEditor());
+    const rendered = renderHook(fetchImpl, adapter);
+    let firstStart: Promise<void> | undefined;
+
+    await act(async () => {
+      firstStart = rendered.current().startSession(firstSession);
+      await firstBoardStateSeen;
+    });
+
+    await act(async () => {
+      await rendered.current().startSession(secondSession);
+    });
+    expect(rendered.current().sessionId).toBe(secondSession);
+    expect(rendered.current().whiteboardSync).toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: 2
+    });
+
+    if (releaseFirstBoardState === undefined) {
+      throw new Error("First board-state request was not deferred");
+    }
+    releaseFirstBoardState();
+    await act(async () => {
+      await firstStart;
+    });
+
+    expect(rendered.current().sessionId).toBe(secondSession);
+    expect(rendered.current().whiteboardSync).toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: 2
+    });
 
     act(() => rendered.current().disconnect());
     await act(async () => {

@@ -22,6 +22,7 @@ import {
 import { BrowserSessionReadClient } from "../session-read-client.js";
 import {
   RendererClient,
+  RendererPresentationNotExposedError,
   type TextPresenter,
   type WhiteboardPresenter
 } from "../renderer-client.js";
@@ -490,6 +491,12 @@ export function useInterviewSession(
       adapter.getNormalizedStudentShapes(),
       { allowBootstrapIntoEmptyAuthority: allowBootstrap }
     );
+    if (
+      boardSyncRef.current !== coordinator
+      || boardSyncSessionRef.current !== targetSessionId
+    ) {
+      return;
+    }
     if (allowBootstrap && snapshot.status === "SYNCED") {
       boardBootstrapSessionRef.current = null;
     }
