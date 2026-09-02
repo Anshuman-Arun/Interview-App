@@ -1703,35 +1703,38 @@ async function settleWithin(
   return result;
 }
 
-function waitForOperationOrAbort(
-  operation: Promise<void>,
+function waitForOperationOrAbort<T>(
+  operation: Promise<T>,
   signal: AbortSignal | undefined
-): Promise<void> {
+): Promise<T> {
   if (signal === undefined) return operation;
   if (abortSignalAborted(signal)) {
     return Promise.reject(new SupervisedProcessError("EXECUTION_CANCELLED"));
   }
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     let settled = false;
-    const finish = (error?: unknown): void => {
-      if (settled) return;
+    const cleanup = (): boolean => {
+      if (settled) return false;
       settled = true;
       removeAbortSignalListener(signal, onAbort);
-      if (error === undefined) {
-        resolve();
-      } else {
+      return true;
+    };
+    const onAbort = (): void => {
+      if (!cleanup()) return;
+      reject(new SupervisedProcessError("EXECUTION_CANCELLED"));
+    };
+    addAbortSignalListener(signal, onAbort);
+    void operation.then(
+      (value) => {
+        if (!cleanup()) return;
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (!cleanup()) return;
         reject(error instanceof Error
           ? error
           : new SupervisedProcessError("EXECUTABLE_UNSAFE"));
       }
-    };
-    const onAbort = (): void => {
-      finish(new SupervisedProcessError("EXECUTION_CANCELLED"));
-    };
-    addAbortSignalListener(signal, onAbort);
-    void operation.then(
-      () => finish(),
-      (error: unknown) => finish(error)
     );
   });
 }
