@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
-import { createShapeId } from "tldraw";
+import { b64Vecs, createShapeId } from "tldraw";
 import {
   createWhiteboardCanvasMount
 } from "../apps/web/src/components/WhiteboardCanvas.js";
@@ -320,7 +320,13 @@ describe("Real tldraw mounted browser integration", () => {
         x: 20,
         y: 30,
         props: {
-          segments: [],
+          segments: [{
+            type: "free",
+            path: b64Vecs.encodePoints([
+              { x: 0, y: 0, z: 0.5 },
+              { x: 12, y: 8, z: 0.5 }
+            ])
+          }],
           color: "black",
           fill: "none",
           dash: "draw",
@@ -328,7 +334,9 @@ describe("Real tldraw mounted browser integration", () => {
           isComplete: false,
           isClosed: false,
           isPen: false,
-          scale: 1
+          scale: 1,
+          scaleX: 1,
+          scaleY: 1
         }
       }]);
     });
