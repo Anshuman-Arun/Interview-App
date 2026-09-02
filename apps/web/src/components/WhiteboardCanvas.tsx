@@ -13,6 +13,7 @@ import {
 import type {
   NormalizedStudentShapeChange
 } from "../whiteboard/normalized-board.js";
+import { useOptionalTheme } from "../theme/ThemeProvider.js";
 
 export interface WhiteboardCanvasProps {
   readonly adapter?: TldrawWhiteboardAdapter;
@@ -82,6 +83,8 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
 }) => {
   const standaloneAdapter = useMemo(() => new TldrawWhiteboardAdapter(), []);
   const effectiveAdapter = adapter ?? standaloneAdapter;
+  const theme = useOptionalTheme();
+  const colorScheme = theme?.resolvedTheme ?? "system";
   const cleanupRef = useRef<(() => void) | null>(null);
 
   const cleanupMountedEditor = useCallback((): void => {
@@ -159,7 +162,10 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
       className={className}
       style={style}
     >
-      <Tldraw onMount={handleMount} />
+      <Tldraw
+        colorScheme={colorScheme}
+        onMount={handleMount}
+      />
     </div>
   );
 };

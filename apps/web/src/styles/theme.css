@@ -1,0 +1,229 @@
+:root {
+  --ui-font-sans: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --ui-font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+
+  --surface-app: #f5f6f8;
+  --surface-panel: #ffffff;
+  --surface-raised: #fafafb;
+  --surface-hover: #f1f2f4;
+  --surface-active: #e9eaed;
+  --surface-overlay: rgba(16, 18, 23, 0.48);
+
+  --border-subtle: #e6e7ea;
+  --border-default: #d9dbe0;
+  --border-strong: #c5c8cf;
+
+  --text-primary: #18191d;
+  --text-secondary: #555b65;
+  --text-muted: #8a909a;
+  --text-inverse: #ffffff;
+
+  --accent: #5d63dc;
+  --accent-hover: #4e54cd;
+  --accent-soft: #eff0ff;
+  --accent-border: #d8d9ff;
+
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --success-border: #bbf7d0;
+  --warning: #a16207;
+  --warning-soft: #fffbeb;
+  --warning-border: #fde68a;
+  --danger: #be123c;
+  --danger-soft: #fff1f2;
+  --danger-border: #fecdd3;
+  --info: #0369a1;
+  --info-soft: #f0f9ff;
+  --info-border: #bae6fd;
+
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --radius-dialog: 10px;
+
+  --motion-fast: 100ms;
+  --motion-default: 140ms;
+  --motion-dialog: 160ms;
+  --motion-ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+:root[data-theme="dark"] {
+  --surface-app: #0d0f12;
+  --surface-panel: #111318;
+  --surface-raised: #15181e;
+  --surface-hover: #1a1e25;
+  --surface-active: #20242c;
+  --surface-overlay: rgba(0, 0, 0, 0.62);
+
+  --border-subtle: #22262d;
+  --border-default: #2b3039;
+  --border-strong: #3a404b;
+
+  --text-primary: #f3f4f6;
+  --text-secondary: #b2b6bf;
+  --text-muted: #767d89;
+  --text-inverse: #0d0f12;
+
+  --accent: #7479ee;
+  --accent-hover: #858af5;
+  --accent-soft: #1b1d38;
+  --accent-border: #383b70;
+
+  --success: #5fd38a;
+  --success-soft: #10251a;
+  --success-border: #245c38;
+  --warning: #e7b85c;
+  --warning-soft: #2a2110;
+  --warning-border: #624c1e;
+  --danger: #fb7185;
+  --danger-soft: #2b1419;
+  --danger-border: #6f2634;
+  --info: #7dd3fc;
+  --info-soft: #10232c;
+  --info-border: #28576b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface-app: #0d0f12;
+    --surface-panel: #111318;
+    --surface-raised: #15181e;
+    --surface-hover: #1a1e25;
+    --surface-active: #20242c;
+    --surface-overlay: rgba(0, 0, 0, 0.62);
+
+    --border-subtle: #22262d;
+    --border-default: #2b3039;
+    --border-strong: #3a404b;
+
+    --text-primary: #f3f4f6;
+    --text-secondary: #b2b6bf;
+    --text-muted: #767d89;
+    --text-inverse: #0d0f12;
+
+    --accent: #7479ee;
+    --accent-hover: #858af5;
+    --accent-soft: #1b1d38;
+    --accent-border: #383b70;
+
+    --success: #5fd38a;
+    --success-soft: #10251a;
+    --success-border: #245c38;
+    --warning: #e7b85c;
+    --warning-soft: #2a2110;
+    --warning-border: #624c1e;
+    --danger: #fb7185;
+    --danger-soft: #2b1419;
+    --danger-border: #6f2634;
+    --info: #7dd3fc;
+    --info-soft: #10232c;
+    --info-border: #28576b;
+  }
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-family: var(--ui-font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Compatibility layer for the current application shell while Eve and Frank
+ * still own App.tsx. These selectors intentionally have higher specificity
+ * than the temporary utility classes in app.css. They are removed in shell PR B.
+ */
+html[data-theme="dark"] .interview-app-container,
+html[data-theme="dark"] .left-panel,
+html[data-theme="dark"] .right-panel {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+
+html[data-theme="dark"] .app-header,
+html[data-theme="dark"] .bg-white {
+  background-color: var(--surface-panel);
+}
+
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-100 {
+  background-color: var(--surface-raised);
+}
+
+html[data-theme="dark"] .bg-slate-200 {
+  background-color: var(--surface-active);
+}
+
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-800 {
+  color: var(--text-primary);
+}
+
+html[data-theme="dark"] .text-slate-700,
+html[data-theme="dark"] .text-slate-600 {
+  color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .text-slate-500,
+html[data-theme="dark"] .text-slate-400,
+html[data-theme="dark"] .text-slate-300 {
+  color: var(--text-muted);
+}
+
+html[data-theme="dark"] .border-slate-100,
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-300 {
+  border-color: var(--border-default);
+}
+
+html[data-theme="dark"] .bg-indigo-50 {
+  background-color: var(--accent-soft);
+}
+
+html[data-theme="dark"] .bg-indigo-600,
+html[data-theme="dark"] .bg-indigo-700 {
+  background-color: var(--accent);
+}
+
+html[data-theme="dark"] .text-indigo-600,
+html[data-theme="dark"] .text-indigo-700 {
+  color: var(--accent);
+}
+
+html[data-theme="dark"] .border-indigo-100,
+html[data-theme="dark"] .border-indigo-200 {
+  border-color: var(--accent-border);
+}
+
+html[data-theme="dark"] .whiteboard-canvas-container,
+html[data-theme="dark"] [data-whiteboard-canvas="true"] {
+  background-color: var(--surface-panel);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

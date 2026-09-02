@@ -1,0 +1,111 @@
+.problem {
+  color: var(--text-primary);
+  padding: 20px 20px 18px;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.empty {
+  min-height: 112px;
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.empty p {
+  margin: 0;
+}
+
+.header {
+  margin-bottom: 14px;
+}
+
+.title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-transform: capitalize;
+}
+
+.prompt {
+  max-width: 78ch;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.62;
+}
+
+.section {
+  margin-top: 16px;
+}
+
+.sectionTitle {
+  margin: 0 0 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.givenList {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.givenList li::marker {
+  color: var(--text-muted);
+}
+
+.topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.topic {
+  padding: 3px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+@media (max-height: 760px) {
+  .problem {
+    padding-top: 16px;
+    padding-bottom: 14px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .section {
+    margin-top: 12px;
+  }
+
+  .topics {
+    margin-top: 12px;
+  }
+}

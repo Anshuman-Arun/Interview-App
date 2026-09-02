@@ -1,0 +1,52 @@
+.control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.option,
+.optionActive {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font: 500 11px/1 var(--ui-font-sans);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.option {
+  color: var(--text-muted);
+}
+
+.option:hover {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+
+.optionActive {
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+}
+
+.compact .option,
+.compact .optionActive {
+  min-height: 24px;
+  padding: 0 7px;
+  font-size: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option,
+  .optionActive {
+    transition: none;
+  }
+}

@@ -245,8 +245,10 @@ describe("Adversarial Test Suite 2: Input Boundary & Rapid Concurrency Stress", 
         onSubmit: mockSubmit
       });
       const markup = renderToStaticMarkup(element);
-      expect(markup).toContain("0 / 20,000 chars");
-      expect(markup).toContain("cursor-not-allowed");
+      expect(markup).toContain('maxLength="20000"');
+      expect(markup).toContain('data-testid="char-counter"');
+      expect(markup).toContain('data-testid="submit-reasoning-btn"');
+      expect(markup).toContain("disabled");
       expect(mockSubmit).not.toHaveBeenCalled();
     }
   });
@@ -261,7 +263,7 @@ describe("Adversarial Test Suite 2: Input Boundary & Rapid Concurrency Stress", 
       onSubmit: vi.fn()
     });
     const markup20k = renderToStaticMarkup(element20k);
-    expect(markup20k).toContain("20,000 chars");
+    expect(markup20k).toContain('maxLength="20000"');
 
     // Live preview with 20k string
     const segments20k = parseMathSegments(exactly20k);
@@ -644,8 +646,8 @@ describe("Adversarial Test Suite 3: Full Oxford Ramsey R(3,3) Multi-Turn Socrati
     });
     const transcriptMarkup = renderToStaticMarkup(transcriptElement);
 
-    expect(transcriptMarkup).toContain("Student (You)");
-    expect(transcriptMarkup).toContain("Socratic Interviewer");
+    expect(transcriptMarkup).toContain(">You<");
+    expect(transcriptMarkup).toContain(">Interviewer<");
     expect(transcriptMarkup).toContain("Turn: " + t1Commit.turnId);
     expect(transcriptMarkup).toContain("Turn: " + t2Commit.turnId);
     expect(transcriptMarkup).toContain("Turn: " + t3Commit.turnId);

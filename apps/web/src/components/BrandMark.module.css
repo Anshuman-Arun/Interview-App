@@ -1,0 +1,23 @@
+.mark {
+  display: block;
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  overflow: visible;
+}
+
+.frame,
+.core {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.frame {
+  stroke-width: 1.45;
+  opacity: 0.58;
+}
+
+.core {
+  stroke-width: 1.65;
+}

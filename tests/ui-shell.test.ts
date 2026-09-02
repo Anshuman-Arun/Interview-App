@@ -191,7 +191,7 @@ describe("UI Shell & KaTeX Math Rendering", () => {
       const pendingMarkup = renderToStaticMarkup(
         React.createElement(DeliveryBadge, { status: "PENDING" })
       );
-      expect(pendingMarkup).toContain("Sending...");
+      expect(pendingMarkup).toContain("Sending…");
 
       const ackMarkup = renderToStaticMarkup(
         React.createElement(DeliveryBadge, { status: "ACKNOWLEDGED" })
@@ -213,10 +213,11 @@ describe("UI Shell & KaTeX Math Rendering", () => {
       const markup = renderToStaticMarkup(element);
 
       expect(markup).toContain("student-reasoning-input");
-      expect(markup).toContain("Your Mathematical Reasoning");
-      expect(markup).toContain("0 / 20,000 chars");
-      expect(markup).toContain("Submit Reasoning");
-      expect(markup).toContain("Ctrl+Enter");
+      expect(markup).toContain("Your mathematical reasoning");
+      expect(markup).toContain('data-testid="char-counter"');
+      expect(markup).toContain(">Send<");
+      expect(markup).toContain("<kbd>Ctrl</kbd>");
+      expect(markup).toContain("<kbd>Enter</kbd>");
     });
   });
 
@@ -261,10 +262,10 @@ describe("UI Shell & KaTeX Math Rendering", () => {
       });
       const markup = renderToStaticMarkup(element);
 
-      expect(markup).toContain("Student (You)");
-      expect(markup).toContain("Socratic Interviewer");
-      expect(markup).toContain("student-math-bubble");
-      expect(markup).toContain("ai-math-bubble");
+      expect(markup).toContain(">You<");
+      expect(markup).toContain(">Interviewer<");
+      expect(markup).toContain('data-testid="transcript-bubble-msg_1"');
+      expect(markup).toContain('data-testid="transcript-bubble-msg_2"');
       expect(markup).toContain("Turn: turn_1");
       expect(markup).toContain("Episode: input_ep_1");
       expect(markup).toContain("Delivery: delivery_1");

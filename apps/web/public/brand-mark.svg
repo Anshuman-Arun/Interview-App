@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <style>
+    .frame,.core{fill:none;stroke:#18191d;stroke-linecap:round;stroke-linejoin:round}
+    .frame{stroke-width:1.45;opacity:.58}
+    .core{stroke-width:1.65}
+    @media (prefers-color-scheme: dark){
+      .frame,.core{stroke:#f3f4f6}
+    }
+  </style>
+  <path class="frame" d="M9 5.25H7.25A2 2 0 0 0 5.25 7.25v9.5a2 2 0 0 0 2 2H9"/>
+  <path class="frame" d="M15 5.25h1.75a2 2 0 0 1 2 2v9.5a2 2 0 0 1-2 2H15"/>
+  <path class="core" d="M10.25 8h3.5M12 8v8m-1.75 0h3.5"/>
+</svg>

@@ -10,6 +10,7 @@ import type {
   SessionEvaluationReadResponse,
   SessionReplayReadResponse
 } from "../../../../packages/replay/src/index.js";
+import styles from "./SessionReviewModal.module.css";
 
 export type SessionReviewTab = "evaluation" | "replay";
 
@@ -83,21 +84,29 @@ function scoreLabel(score: number | null): string {
   return score === null ? "Not scored" : String(score);
 }
 
+function supportClass(
+  support: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT"
+): string {
+  switch (support) {
+    case "STRONG":
+      return styles.supportStrong ?? "";
+    case "MODERATE":
+      return styles.supportModerate ?? "";
+    case "WEAK":
+      return styles.supportWeak ?? "";
+    case "INSUFFICIENT":
+      return styles.supportInsufficient ?? "";
+  }
+}
+
 function SupportBadge({
   support
 }: {
   readonly support: "STRONG" | "MODERATE" | "WEAK" | "INSUFFICIENT";
 }) {
-  const className = support === "STRONG"
-    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-    : support === "MODERATE"
-      ? "bg-blue-50 text-blue-700 border-blue-200"
-      : support === "WEAK"
-        ? "bg-amber-50 text-amber-700 border-amber-200"
-        : "bg-slate-100 text-slate-600 border-slate-200";
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full border text-[10px] font-semibold ${className}`}>
-      {support}
+    <span className={`${styles.supportBadge ?? ""} ${supportClass(support)}`}>
+      {support.toLowerCase()}
     </span>
   );
 }
@@ -108,93 +117,99 @@ export function EvaluationPanel({
   readonly evaluation: GroundedEvaluationReadModel;
 }) {
   return (
-    <div className="space-y-5" data-testid="grounded-evaluation-panel">
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className={styles.stack} data-testid="grounded-evaluation-panel">
+      <section className={styles.composite}>
+        <div className={styles.compositeHeader}>
           <div>
-            <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-              Grounded composite
-            </p>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-slate-900">
+            <div className={styles.eyebrow}>Grounded evaluation</div>
+            <div className={styles.compositeScoreRow}>
+              <span className={styles.compositeScore}>
                 {scoreLabel(evaluation.composite.score)}
               </span>
-              <span className="text-xs text-slate-500">{evaluation.composite.status}</span>
+              <span className={styles.compositeStatus}>
+                {evaluation.composite.status}
+              </span>
             </div>
           </div>
           <SupportBadge support={evaluation.composite.supportLevel} />
         </div>
-        <p className="mt-3 text-sm text-slate-700">{evaluation.summaryAssessment}</p>
-        {evaluation.composite.omittedDimensions.length > 0 ? (
-          <p className="mt-2 text-[11px] text-slate-500">
+
+        <p className={styles.summaryAssessment}>
+          {evaluation.summaryAssessment}
+        </p>
+
+        {evaluation.composite.omittedDimensions.length > 0 && (
+          <p className={styles.footnote}>
             Unsupported weighted dimensions omitted from the composite:{" "}
             {evaluation.composite.omittedDimensions
               .map((name) => DIMENSION_LABELS[name])
               .join(", ")}.
           </p>
-        ) : null}
+        )}
       </section>
 
       <section>
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-900">Evaluation dimensions</h3>
-          <span className="text-[11px] text-slate-500">
+        <div className={styles.sectionHeadingRow}>
+          <h3 className={styles.sectionTitle}>Evaluation dimensions</h3>
+          <span className={styles.sectionMeta}>
             Score and support are separate signals
           </span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+        <div className={styles.dimensionTable}>
           {evaluation.dimensions.map((dimension) => (
             <article
               key={dimension.name}
-              className="rounded-lg border border-slate-200 bg-white p-3"
+              className={styles.dimensionRow}
               data-testid={`evaluation-dimension-${dimension.name}`}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className={styles.dimensionMain}>
                 <div>
-                  <h4 className="text-xs font-semibold text-slate-900">
+                  <h4 className={styles.dimensionName}>
                     {DIMENSION_LABELS[dimension.name]}
                   </h4>
-                  <p
-                    className={`mt-1 text-xl font-bold ${
-                      dimension.score === null ? "text-slate-500" : "text-indigo-700"
-                    }`}
+                  {dimension.notScoredReason !== undefined && (
+                    <p className={styles.notScoredReason}>
+                      {dimension.notScoredReason}
+                    </p>
+                  )}
+                </div>
+                <div className={styles.dimensionValue}>
+                  <span
+                    className={
+                      dimension.score === null
+                        ? styles.scoreMuted
+                        : styles.score
+                    }
                   >
                     {scoreLabel(dimension.score)}
-                  </p>
+                  </span>
+                  <SupportBadge support={dimension.supportLevel} />
                 </div>
-                <SupportBadge support={dimension.supportLevel} />
               </div>
 
-              {dimension.notScoredReason !== undefined ? (
-                <p className="mt-2 rounded bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
-                  {dimension.notScoredReason}
-                </p>
-              ) : null}
-
-              <details className="mt-2">
-                <summary className="cursor-pointer text-[11px] font-semibold text-indigo-700">
-                  Why? Evidence
-                </summary>
-                <div className="mt-2 space-y-1.5">
+              <details className={styles.evidenceDetails}>
+                <summary>Evidence</summary>
+                <div className={styles.evidenceList}>
                   {dimension.evidenceRefs.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">
+                    <p className={styles.mutedText}>
                       No grounded evidence references are available for this dimension.
                     </p>
                   ) : (
                     dimension.evidenceRefs.map((ref) => (
-                      <div
+                      <code
                         key={`${ref.kind}:${ref.id}`}
-                        className="rounded bg-slate-50 px-2 py-1 font-mono text-[10px] text-slate-600 break-all"
+                        className={styles.codeRow}
                       >
                         {ref.kind}: {ref.id}
-                      </div>
+                      </code>
                     ))
                   )}
-                  {dimension.evidenceRefTruncation.truncated ? (
-                    <p className="text-[10px] text-slate-500">
+                  {dimension.evidenceRefTruncation.truncated && (
+                    <p className={styles.footnote}>
                       +{dimension.evidenceRefTruncation.remainingCount} additional references withheld by the display bound.
                     </p>
-                  ) : null}
+                  )}
                 </div>
               </details>
             </article>
@@ -203,157 +218,156 @@ export function EvaluationPanel({
       </section>
 
       <section>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-bold text-slate-900">Milestones</h3>
-          <span className="text-xs text-slate-600">
+        <div className={styles.sectionHeadingRow}>
+          <h3 className={styles.sectionTitle}>Milestones</h3>
+          <span className={styles.sectionMeta}>
             {evaluation.milestoneSummary.achieved}/{evaluation.milestoneSummary.total} achieved ·{" "}
             {evaluation.milestoneSummary.unassisted} unassisted ·{" "}
             {evaluation.milestoneSummary.assisted} assisted
           </span>
         </div>
-        <div className="space-y-2">
+
+        <div className={styles.list}>
           {evaluation.milestones.map((milestone) => (
-            <details
-              key={milestone.milestoneId}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2"
-            >
-              <summary className="cursor-pointer list-none">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-indigo-700">
-                      {milestone.milestoneId}
-                    </span>
-                    <span className={`text-[10px] font-semibold ${
-                      milestone.achieved ? "text-emerald-700" : "text-slate-500"
-                    }`}>
-                      {milestone.achieved ? "ACHIEVED" : "NOT ESTABLISHED"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500">
-                      Assistance level {milestone.assistanceLevel}
-                    </span>
-                    <SupportBadge support={milestone.supportLevel} />
-                  </div>
+            <details key={milestone.milestoneId} className={styles.detailRow}>
+              <summary className={styles.detailSummary}>
+                <div className={styles.detailPrimary}>
+                  <code>{milestone.milestoneId}</code>
+                  <span
+                    className={
+                      milestone.achieved
+                        ? styles.achieved
+                        : styles.notEstablished
+                    }
+                  >
+                    {milestone.achieved ? "Achieved" : "Not established"}
+                  </span>
+                </div>
+                <div className={styles.detailSecondary}>
+                  <span>Assistance {milestone.assistanceLevel}</span>
+                  <SupportBadge support={milestone.supportLevel} />
                 </div>
               </summary>
-              <div className="mt-2 border-t border-slate-100 pt-2 space-y-1.5">
-                {milestone.achievedAtTurnId !== undefined ? (
-                  <p className="text-[11px] text-slate-600">
-                    Established at turn <span className="font-mono">{milestone.achievedAtTurnId}</span>
+              <div className={styles.detailBody}>
+                {milestone.achievedAtTurnId !== undefined && (
+                  <p>
+                    Established at turn{" "}
+                    <code>{milestone.achievedAtTurnId}</code>
                   </p>
-                ) : null}
-                <p className="text-[11px] text-slate-600">
+                )}
+                <p>
                   Disclosure associations: {milestone.assistanceDisclosureCount}
                 </p>
                 {milestone.evidenceRefs.map((ref) => (
-                  <div
+                  <code
                     key={`${ref.kind}:${ref.id}`}
-                    className="font-mono text-[10px] text-slate-500 break-all"
+                    className={styles.codeRow}
                   >
                     {ref.kind}: {ref.id}
-                  </div>
+                  </code>
                 ))}
-                {milestone.evidenceRefTruncation.truncated ? (
-                  <p className="text-[10px] text-slate-500">
+                {milestone.evidenceRefTruncation.truncated && (
+                  <p className={styles.footnote}>
                     +{milestone.evidenceRefTruncation.remainingCount} additional milestone evidence reference(s) are outside the bounded display.
                   </p>
-                ) : null}
+                )}
               </div>
             </details>
           ))}
-          {evaluation.milestoneTruncation.truncated ? (
-            <p className="text-[11px] text-slate-500">
+          {evaluation.milestoneTruncation.truncated && (
+            <p className={styles.footnote}>
               {evaluation.milestoneTruncation.remainingCount} additional milestones are outside the bounded display.
             </p>
-          ) : null}
+          )}
         </div>
       </section>
 
-      {evaluation.disclosedInterventions.length > 0 ? (
+      {evaluation.disclosedInterventions.length > 0 && (
         <section>
-          <h3 className="mb-2 text-sm font-bold text-slate-900">
-            Delivered assistance associations
-          </h3>
-          <div className="space-y-2">
+          <h3 className={styles.sectionTitle}>Delivered assistance</h3>
+          <div className={styles.list}>
             {evaluation.disclosedInterventions.map((intervention) => (
-              <div
+              <article
                 key={intervention.deliveryId}
-                className="rounded-lg border border-slate-200 bg-white p-3"
+                className={styles.assistanceRow}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono text-[11px] text-slate-700 break-all">
-                    {intervention.deliveryId}
-                  </span>
-                  <span className="text-[10px] font-semibold text-slate-600">
+                <div className={styles.assistanceHeader}>
+                  <code>{intervention.deliveryId}</code>
+                  <span>
                     {intervention.deliveryStatus} · level {intervention.disclosureLevel}
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className={styles.mutedText}>
                   {intervention.disclosureAssociationCount} protected disclosure association(s)
                   {intervention.relatedMilestoneIds.length > 0
                     ? ` · milestones: ${intervention.relatedMilestoneIds.join(", ")}`
                     : ""}
                 </p>
-                {intervention.relatedMilestoneTruncation.truncated ? (
-                  <p className="mt-1 text-[10px] text-slate-500">
+                {intervention.relatedMilestoneTruncation.truncated && (
+                  <p className={styles.footnote}>
                     +{intervention.relatedMilestoneTruncation.remainingCount} additional milestone association(s) are outside the bounded display.
                   </p>
-                ) : null}
-                {intervention.deliveryStatus === "POSSIBLY_EXPOSED" ? (
-                  <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                )}
+                {intervention.deliveryStatus === "POSSIBLY_EXPOSED" && (
+                  <p className={styles.exposureWarning}>
                     Exposure is uncertain. Content is intentionally not replayed.
                   </p>
-                ) : null}
-              </div>
+                )}
+              </article>
             ))}
-            {evaluation.interventionTruncation.truncated ? (
-              <p className="text-[11px] text-slate-500">
+            {evaluation.interventionTruncation.truncated && (
+              <p className={styles.footnote}>
                 {evaluation.interventionTruncation.remainingCount} additional delivered-assistance record(s) are outside the bounded display.
               </p>
-            ) : null}
+            )}
           </div>
         </section>
-      ) : null}
+      )}
 
-      {evaluation.keyStrengths.length > 0 || evaluation.areasForImprovement.length > 0 ? (
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <h3 className="text-xs font-bold text-slate-900">Grounded strengths</h3>
+      {(evaluation.keyStrengths.length > 0
+        || evaluation.areasForImprovement.length > 0) && (
+        <section className={styles.insightsGrid}>
+          <div className={styles.insightColumn}>
+            <h3 className={styles.sectionTitle}>Grounded strengths</h3>
             {evaluation.keyStrengths.length === 0 ? (
-              <p className="mt-2 text-[11px] text-slate-500">No supported strength statement was produced.</p>
+              <p className={styles.mutedText}>
+                No supported strength statement was produced.
+              </p>
             ) : (
-              <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
+              <ul>
                 {evaluation.keyStrengths.map((strength) => (
-                  <li key={strength}>• {strength}</li>
+                  <li key={strength}>{strength}</li>
                 ))}
               </ul>
             )}
-            {evaluation.strengthsTruncation.truncated ? (
-              <p className="mt-2 text-[10px] text-slate-500">
+            {evaluation.strengthsTruncation.truncated && (
+              <p className={styles.footnote}>
                 +{evaluation.strengthsTruncation.remainingCount} additional grounded strength statement(s) are outside the bounded display.
               </p>
-            ) : null}
+            )}
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <h3 className="text-xs font-bold text-slate-900">Grounded improvement areas</h3>
+
+          <div className={styles.insightColumn}>
+            <h3 className={styles.sectionTitle}>Grounded improvement areas</h3>
             {evaluation.areasForImprovement.length === 0 ? (
-              <p className="mt-2 text-[11px] text-slate-500">No supported improvement statement was produced.</p>
+              <p className={styles.mutedText}>
+                No supported improvement statement was produced.
+              </p>
             ) : (
-              <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
+              <ul>
                 {evaluation.areasForImprovement.map((area) => (
-                  <li key={area}>• {area}</li>
+                  <li key={area}>{area}</li>
                 ))}
               </ul>
             )}
-            {evaluation.improvementTruncation.truncated ? (
-              <p className="mt-2 text-[10px] text-slate-500">
+            {evaluation.improvementTruncation.truncated && (
+              <p className={styles.footnote}>
                 +{evaluation.improvementTruncation.remainingCount} additional grounded improvement statement(s) are outside the bounded display.
               </p>
-            ) : null}
+            )}
           </div>
         </section>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -372,171 +386,179 @@ export function ReplayPanel({
   );
 
   return (
-    <div className="space-y-4" data-testid="session-replay-panel">
-      <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+    <div className={styles.stack} data-testid="session-replay-panel">
+      <section className={styles.replaySummary}>
+        <div>
           <span>
-            {response.replay.totalEventCount} authoritative events · validated through seq{" "}
-            {response.replay.validatedThroughSequence}
+            {response.replay.totalEventCount} authoritative events
           </span>
-          <span className="font-semibold">
-            {response.replay.complete ? "Complete replay" : "Bounded/incomplete replay"}
+          <span aria-hidden="true"> · </span>
+          <span>
+            validated through seq {response.replay.validatedThroughSequence}
           </span>
         </div>
-        {!response.replay.currentStateAvailable ? (
-          <p className="mt-2 text-[11px] text-amber-800">
+        <strong>
+          {response.replay.complete
+            ? "Complete replay"
+            : "Bounded / incomplete replay"}
+        </strong>
+
+        {!response.replay.currentStateAvailable && (
+          <p className={styles.exposureWarning}>
             Current-state claims are unavailable beyond the validated replay boundary.
           </p>
-        ) : null}
-        {response.replay.issues.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-1">
+        )}
+
+        {response.replay.issues.length > 0 && (
+          <div className={styles.issueList}>
             {response.replay.issues.map((issue, index) => (
-              <span
+              <code
                 key={issue.code + ":" + (issue.sequence === undefined ? "none" : String(issue.sequence)) + ":" + String(index)}
-                className="rounded bg-white border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600"
+                className={styles.issue}
               >
                 {issue.code}
                 {issue.sequence === undefined ? "" : " @ " + String(issue.sequence)}
-              </span>
+              </code>
             ))}
           </div>
-        ) : null}
+        )}
       </section>
 
-      <div className="flex flex-wrap gap-1" role="group" aria-label="Replay category filter">
+      <div
+        className={styles.filterBar}
+        role="group"
+        aria-label="Replay category filter"
+      >
         {REPLAY_FILTERS.map((item) => (
           <button
             key={item.value}
             type="button"
             onClick={() => setFilter(item.value)}
-            className={`px-2.5 py-1 rounded-md border text-[11px] font-semibold ${
+            className={
               filter === item.value
-                ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
+                ? styles.filterActive
+                : styles.filterButton
+            }
           >
             {item.label}
           </button>
         ))}
       </div>
 
-      <div className="space-y-2">
+      <div className={styles.timeline}>
         {entries.length === 0 ? (
-          <p className="py-8 text-center text-xs text-slate-500">
+          <p className={styles.emptyState}>
             No projected events match this filter.
           </p>
         ) : (
           entries.map((entry) => (
-            <article
-              key={entry.eventId}
-              className="rounded-lg border border-slate-200 bg-white p-3"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[10px] text-slate-400">
-                      #{entry.sequence}
-                    </span>
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                      {entry.category}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-900">
-                      {entry.summary}
-                    </span>
-                  </div>
-                  <p className="mt-1 font-mono text-[10px] text-slate-400 break-all">
-                    {entry.eventId}
-                  </p>
-                </div>
-                <span className="text-[10px] text-slate-400">
-                  {new Date(entry.occurredAt).toLocaleTimeString()}
-                </span>
+            <article key={entry.eventId} className={styles.timelineEntry}>
+              <div className={styles.timelineRail}>
+                <code>#{entry.sequence}</code>
               </div>
 
-              {entry.text !== undefined ? (
-                <div className="mt-2 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-800">
-                  {entry.text.text}
-                  {entry.text.truncated ? (
-                    <span className="text-slate-400"> …</span>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {entry.delivery !== undefined ? (
-                <div className="mt-2 rounded border border-slate-100 bg-slate-50 p-2 text-[11px] text-slate-600">
-                  <div className="flex flex-wrap gap-x-3 gap-y-1">
-                    <span>Status: {entry.delivery.status}</span>
-                    <span>Presentation: {entry.delivery.presentationState}</span>
-                    <span>Disclosure level: {entry.delivery.effectiveDisclosureLevel}</span>
-                    <span>Associations: {entry.delivery.disclosureIdCount}</span>
+              <div className={styles.timelineContent}>
+                <header className={styles.timelineHeader}>
+                  <div className={styles.timelineTitleGroup}>
+                    <span className={styles.category}>
+                      {entry.category}
+                    </span>
+                    <strong>{entry.summary}</strong>
                   </div>
-                  {entry.delivery.contentWithheld ? (
-                    <p className="mt-1 font-semibold text-amber-800">
-                      {entry.delivery.presentationState === "POSSIBLY_PRESENTED"
-                        ? "Possibly exposed content is intentionally withheld and is never re-delivered by replay."
-                        : "Content is not repeated from this delivery lifecycle event."}
-                    </p>
-                  ) : null}
-                  {entry.delivery.boardAction !== undefined ? (
-                    <div className="mt-2">
-                      <span className="font-semibold">
-                        Whiteboard {entry.delivery.boardAction.operation}
-                      </span>
-                      {entry.delivery.boardAction.content !== undefined ? (
-                        <p className="mt-1 whitespace-pre-wrap">
-                          {entry.delivery.boardAction.content.text}
-                        </p>
-                      ) : null}
+                  <time dateTime={entry.occurredAt}>
+                    {new Date(entry.occurredAt).toLocaleTimeString()}
+                  </time>
+                </header>
+
+                <code className={styles.eventId}>{entry.eventId}</code>
+
+                {entry.text !== undefined && (
+                  <div className={styles.payloadText}>
+                    {entry.text.text}
+                    {entry.text.truncated && (
+                      <span className={styles.mutedText}> …</span>
+                    )}
+                  </div>
+                )}
+
+                {entry.delivery !== undefined && (
+                  <div className={styles.payloadBox}>
+                    <div className={styles.inlineMeta}>
+                      <span>Status: {entry.delivery.status}</span>
+                      <span>Presentation: {entry.delivery.presentationState}</span>
+                      <span>Disclosure: {entry.delivery.effectiveDisclosureLevel}</span>
+                      <span>Associations: {entry.delivery.disclosureIdCount}</span>
                     </div>
-                  ) : null}
-                </div>
-              ) : null}
 
-              {entry.verification !== undefined ? (
-                <div className="mt-2 rounded border border-slate-100 bg-slate-50 p-2 text-[11px] text-slate-600">
-                  <div className="flex flex-wrap gap-x-3 gap-y-1">
-                    <span>Phase: {entry.verification.phase}</span>
-                    {entry.verification.resultStatus !== undefined ? (
-                      <span className="font-semibold">
-                        Result: {entry.verification.resultStatus}
-                      </span>
-                    ) : null}
-                    {entry.verification.verifier !== undefined ? (
-                      <span>Verifier: {entry.verification.verifier}</span>
-                    ) : null}
+                    {entry.delivery.contentWithheld && (
+                      <p className={styles.exposureWarning}>
+                        {entry.delivery.presentationState === "POSSIBLY_PRESENTED"
+                          ? "Possibly exposed content is intentionally withheld and is never re-delivered by replay."
+                          : "Content is not repeated from this delivery lifecycle event."}
+                      </p>
+                    )}
+
+                    {entry.delivery.boardAction !== undefined && (
+                      <div className={styles.payloadSection}>
+                        <strong>
+                          Whiteboard {entry.delivery.boardAction.operation}
+                        </strong>
+                        {entry.delivery.boardAction.content !== undefined && (
+                          <p>{entry.delivery.boardAction.content.text}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {entry.verification.evidenceKey !== undefined ? (
-                    <p className="mt-1 font-mono text-[10px] break-all">
-                      {evidenceSubjectLabel(entry.verification.evidenceKey)}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
+                )}
 
-              {entry.evidence !== undefined ? (
-                <div className="mt-2 rounded border border-slate-100 bg-slate-50 p-2 text-[11px] text-slate-600">
-                  <p className="font-mono text-[10px] break-all">
-                    {evidenceSubjectLabel(entry.evidence.key)}
-                  </p>
-                  <p className="mt-1">
-                    {entry.evidence.transition}
-                    {entry.evidence.value === undefined ? "" : ` · ${entry.evidence.value}`}
-                    {entry.evidence.inferenceConfidence === undefined
-                      ? ""
-                      : " · recorded confidence " + String(entry.evidence.inferenceConfidence)}
-                  </p>
-                </div>
-              ) : null}
+                {entry.verification !== undefined && (
+                  <div className={styles.payloadBox}>
+                    <div className={styles.inlineMeta}>
+                      <span>Phase: {entry.verification.phase}</span>
+                      {entry.verification.resultStatus !== undefined && (
+                        <strong>
+                          Result: {entry.verification.resultStatus}
+                        </strong>
+                      )}
+                      {entry.verification.verifier !== undefined && (
+                        <span>Verifier: {entry.verification.verifier}</span>
+                      )}
+                    </div>
+                    {entry.verification.evidenceKey !== undefined && (
+                      <code className={styles.codeRow}>
+                        {evidenceSubjectLabel(entry.verification.evidenceKey)}
+                      </code>
+                    )}
+                  </div>
+                )}
+
+                {entry.evidence !== undefined && (
+                  <div className={styles.payloadBox}>
+                    <code className={styles.codeRow}>
+                      {evidenceSubjectLabel(entry.evidence.key)}
+                    </code>
+                    <p>
+                      {entry.evidence.transition}
+                      {entry.evidence.value === undefined
+                        ? ""
+                        : ` · ${entry.evidence.value}`}
+                      {entry.evidence.inferenceConfidence === undefined
+                        ? ""
+                        : " · recorded confidence " + String(entry.evidence.inferenceConfidence)}
+                    </p>
+                  </div>
+                )}
+              </div>
             </article>
           ))
         )}
       </div>
 
-      {response.replay.timelineTruncation.truncated ? (
-        <p className="text-[11px] text-slate-500">
+      {response.replay.timelineTruncation.truncated && (
+        <p className={styles.footnote}>
           {response.replay.timelineTruncation.remainingCount} timeline entries are outside the bounded display.
         </p>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -567,6 +589,14 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
     setEvaluationLoading(false);
     setReplayLoading(false);
   }, [initialTab, sessionId]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
 
   useEffect(() => {
     if (
@@ -628,34 +658,30 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
     replayResponse?.available === true ? replayResponse : null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+    <div className={styles.overlay}>
       <div
-        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+        className={styles.modal}
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-review-title"
       >
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
+        <header className={styles.modalHeader}>
           <div>
-            <h2 id="session-review-title" className="text-base font-bold text-slate-900">
-              Session Review
-            </h2>
-            <p className="mt-0.5 font-mono text-[10px] text-slate-500 break-all">
-              {sessionId}
-            </p>
+            <h2 id="session-review-title">Session review</h2>
+            <code>{sessionId}</code>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded px-2 py-1 text-sm font-bold text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+            className={styles.closeButton}
             aria-label="Close session review"
           >
-            ✕
+            ×
           </button>
         </header>
 
         <div
-          className="flex items-center gap-2 border-b border-slate-200 bg-white px-5 py-2"
+          className={styles.tabs}
           role="tablist"
           aria-label="Session review views"
         >
@@ -664,11 +690,11 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
             role="tab"
             aria-selected={activeTab === "evaluation"}
             onClick={() => setActiveTab("evaluation")}
-            className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+            className={
               activeTab === "evaluation"
-                ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                : "text-slate-600 hover:bg-slate-50"
-            }`}
+                ? styles.tabActive
+                : styles.tab
+            }
           >
             Evaluation
           </button>
@@ -677,58 +703,50 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
             role="tab"
             aria-selected={activeTab === "replay"}
             onClick={() => setActiveTab("replay")}
-            className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+            className={
               activeTab === "replay"
-                ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                : "text-slate-600 hover:bg-slate-50"
-            }`}
+                ? styles.tabActive
+                : styles.tab
+            }
           >
             Replay timeline
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className={styles.modalBody}>
           {activeTab === "evaluation" ? (
             evaluationLoading ? (
-              <p className="py-12 text-center text-sm text-slate-500">
+              <p className={styles.loadingState}>
                 Loading bounded evaluation…
               </p>
             ) : evaluationError !== null ? (
-              <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-                {evaluationError}
-              </div>
+              <div className={styles.errorState}>{evaluationError}</div>
             ) : evaluationAvailable !== null ? (
               <EvaluationPanel evaluation={evaluationAvailable} />
             ) : evaluationResponse?.available === false ? (
               <div
-                className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                className={styles.unavailableState}
                 data-testid="evaluation-unavailable"
               >
-                <h3 className="text-sm font-bold text-slate-900">Evaluation not scored here</h3>
-                <p className="mt-2 text-xs text-slate-600">
-                  {failureMessage(evaluationResponse.reason)}
-                </p>
+                <h3>Evaluation not scored here</h3>
+                <p>{failureMessage(evaluationResponse.reason)}</p>
               </div>
             ) : null
           ) : replayLoading ? (
-            <p className="py-12 text-center text-sm text-slate-500">
+            <p className={styles.loadingState}>
               Loading bounded replay…
             </p>
           ) : replayError !== null ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-              {replayError}
-            </div>
+            <div className={styles.errorState}>{replayError}</div>
           ) : replayAvailable !== null ? (
             <ReplayPanel response={replayAvailable} />
           ) : replayResponse?.available === false ? (
             <div
-              className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+              className={styles.unavailableState}
               data-testid="replay-unavailable"
             >
-              <h3 className="text-sm font-bold text-slate-900">Replay unavailable</h3>
-              <p className="mt-2 text-xs text-slate-600">
-                {failureMessage(replayResponse.reason)}
-              </p>
+              <h3>Replay unavailable</h3>
+              <p>{failureMessage(replayResponse.reason)}</p>
             </div>
           ) : null}
         </div>
