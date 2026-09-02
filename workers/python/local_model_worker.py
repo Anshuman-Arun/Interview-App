@@ -431,35 +431,67 @@ class SpeechRuntime:
             self._stt_slots.release()
 
         lines = list(getattr(transcript, "lines", []) or [])
-        text = "\n".join(
-            str(getattr(line, "text", "")).strip() for line in lines
-            if str(getattr(line, "text", "")).strip()
-        )
+        text_parts: list[str] = []
+        for line in lines:
+            raw_line_text = getattr(line, "text", "")
+            if not isinstance(raw_line_text, str):
+                continue
+            normalized_line_text = raw_line_text.strip()
+            if normalized_line_text:
+                text_parts.append(normalized_line_text)
+        text = "\n".join(text_parts)
         if len(text) > MAX_TRANSCRIPT_CHARS:
             raise RuntimeError("Moonshine transcript exceeds output bound")
 
         words: list[dict[str, Any]] = []
         confidences: list[float] = []
+        duration_seconds = samples.size / int(sample_rate)
         for line in lines:
             for word in list(getattr(line, "words", None) or []):
                 if len(words) >= MAX_WORDS:
                     break
-                word_text = str(getattr(word, "word", ""))
-                if not word_text or len(word_text) > 128:
+                word_text = getattr(word, "word", "")
+                start = getattr(word, "start", None)
+                end = getattr(word, "end", None)
+                confidence = getattr(word, "confidence", None)
+                if (
+                    not isinstance(word_text, str)
+                    or not word_text
+                    or len(word_text) > 128
+                    or isinstance(start, bool)
+                    or not isinstance(start, (int, float))
+                    or isinstance(end, bool)
+                    or not isinstance(end, (int, float))
+                    or isinstance(confidence, bool)
+                    or not isinstance(confidence, (int, float))
+                ):
                     continue
-                start = finite_float(getattr(word, "start", None), "INVALID_WORD")
-                end = finite_float(getattr(word, "end", None), "INVALID_WORD")
-                confidence = finite_float(getattr(word, "confidence", None), "INVALID_WORD")
-                if start < 0 or end < start or confidence < 0 or confidence > 1:
+                start_value = float(start)
+                end_value = float(end)
+                confidence_value = float(confidence)
+                if (
+                    not math.isfinite(start_value)
+                    or not math.isfinite(end_value)
+                    or not math.isfinite(confidence_value)
+                    or start_value < 0
+                    or end_value < start_value
+                    or end_value > duration_seconds + 0.001
+                    or confidence_value < 0
+                    or confidence_value > 1
+                ):
+                    continue
+                start_ms = start_value * 1000.0
+                end_ms = end_value * 1000.0
+                if not math.isfinite(start_ms) or not math.isfinite(end_ms):
                     continue
                 item: dict[str, Any] = {
                     "word": word_text,
-                    "startMs": start * 1000.0,
-                    "endMs": end * 1000.0,
-                    "confidence": confidence,
+                    "startMs": start_ms,
+                    "endMs": end_ms,
+                    "confidence": confidence_value,
                 }
                 words.append(item)
-                confidences.append(confidence)
+                confidences.append(confidence_value)
 
         result: dict[str, Any] = {"text": text}
         if confidences:
