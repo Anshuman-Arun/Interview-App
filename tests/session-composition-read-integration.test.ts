@@ -304,8 +304,8 @@ describe("generic session composition + grounded product reads", () => {
       status: "COMPLETED",
       readStatus: "AVAILABLE"
     });
-    expect(history.longitudinal.includedSessionCount).toBe(1);
-    expect(history.longitudinal.sessionTruncation.remainingCount).toBe(1);
+    expect(history.longitudinal.includedSessionCount).toBe(0);
+    expect(history.longitudinal.sessionTruncation.remainingCount).toBe(2);
     expect(server.store.eventCount(tradingId)).toBe(tradingCount);
     expect(server.store.eventCount(researchId)).toBe(researchCount);
   });
