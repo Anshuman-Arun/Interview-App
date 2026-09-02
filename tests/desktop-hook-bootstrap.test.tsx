@@ -36,7 +36,6 @@ describe("desktop hook bootstrap lifecycle", () => {
       commandBaseUrl: "http://127.0.0.1:41000",
       rendererStreamUrl: "http://127.0.0.1:41001/v1/renderer-stream",
      voiceBaseUrl: "http://127.0.0.1:41002",
-      voiceBaseUrl: "http://127.0.0.1:41002",
       authentication: {
         mode: "DESKTOP_MANAGED",
         headerValue: "desktop-managed-v1"
