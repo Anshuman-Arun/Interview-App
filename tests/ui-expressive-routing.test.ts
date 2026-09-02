@@ -60,7 +60,7 @@ describe("expressive product routing", () => {
     expect(routeForActiveInterview({ page: "home" }, true, true))
       .toEqual({ page: "home" });
     expect(routeForActiveInterview({ page: "interview" }, true, true))
-      .toEqual({ page: "interview" });
+      .toEqual({ page: "home" });
     expect(routeForActiveInterview({ page: "sessions" }, true, true))
       .toEqual({ page: "home" });
     expect(routeForActiveInterview({ page: "settings" }, true, true))
