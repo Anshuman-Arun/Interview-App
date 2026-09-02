@@ -1629,7 +1629,10 @@ describe("adapter factory adversarial boundary", () => {
 
     const adapter = await resolveAdapterFactory(resolved).createAdapter({ resolved });
     expect(getterCalls).toBe(1);
+    expect(adapter.name).toBe("mock-model");
+    expect(adapter.name).toBe("mock-model");
     expect(adapter.adapterVersion).toBe("1.0.0");
+    expect(getterCalls).toBe(1);
   });
 
   it("snapshots top-level capability accessors before domain-schema validation", async () => {
@@ -1673,6 +1676,8 @@ describe("adapter factory adversarial boundary", () => {
 
     const adapter = await resolveAdapterFactory(resolved).createAdapter({ resolved });
     expect(adapter.name).toBe("mock-model");
+    expect(adapter.capabilities.textStreaming).toBe(false);
+    expect(adapter.capabilities.textStreaming).toBe(false);
     expect(getterCalls).toBe(1);
   });
 
