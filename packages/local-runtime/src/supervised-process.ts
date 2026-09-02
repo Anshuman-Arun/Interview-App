@@ -41,6 +41,15 @@ const ISOLATED_HOME_PATH_SEGMENT =
 const WINDOWS_RESERVED_PATH_SEGMENT =
   /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/iu;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
+const REFLECT_APPLY_INTRINSIC = Reflect.apply;
+/* eslint-disable @typescript-eslint/unbound-method -- Captured intrinsics are invoked only through Reflect.apply. */
+const ABORT_SIGNAL_ADD_EVENT_LISTENER_INTRINSIC =
+  AbortSignal.prototype.addEventListener;
+const ABORT_SIGNAL_REMOVE_EVENT_LISTENER_INTRINSIC =
+  AbortSignal.prototype.removeEventListener;
+/* eslint-enable @typescript-eslint/unbound-method */
+const ABORT_SIGNAL_ABORTED_GETTER_INTRINSIC =
+  Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
 
 export type SupervisedProcessErrorCode =
   | "INVALID_DEFINITION"
@@ -233,8 +242,8 @@ export class SupervisedProcessRunner {
     const forwardAbort = (): void => {
       controller.abort(new SupervisedProcessError("EXECUTION_CANCELLED"));
     };
-    if (externalSignal?.aborted) forwardAbort();
-    else externalSignal?.addEventListener("abort", forwardAbort, { once: true });
+    if (externalSignal !== undefined && abortSignalAborted(externalSignal)) forwardAbort();
+    else addAbortSignalListener(externalSignal, forwardAbort);
 
     const trackedRequest = Object.freeze({
       ...request,
@@ -254,10 +263,10 @@ export class SupervisedProcessRunner {
           : new SupervisedProcessError("EXECUTION_CANCELLED"));
       };
       removeInterruptListener = () => {
-        controller.signal.removeEventListener("abort", onInterrupt);
+        removeAbortSignalListener(controller.signal, onInterrupt);
       };
-      if (controller.signal.aborted) onInterrupt();
-      else controller.signal.addEventListener("abort", onInterrupt, { once: true });
+      if (abortSignalAborted(controller.signal)) onInterrupt();
+      else addAbortSignalListener(controller.signal, onInterrupt);
     });
     deadlineTimer = setTimeout(() => {
       controller.abort(new SupervisedProcessError("EXECUTION_TIMEOUT"));
@@ -267,7 +276,7 @@ export class SupervisedProcessRunner {
     const cleanup = (): void => {
       if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
       removeInterruptListener();
-      externalSignal?.removeEventListener("abort", forwardAbort);
+      if (externalSignal !== undefined) removeAbortSignalListener(externalSignal, forwardAbort);
       this.activeControllers.delete(controller);
       this.activeOperations.delete(operation);
     };
@@ -333,7 +342,7 @@ export class SupervisedProcessRunner {
     if (this.quarantinedExecutableIds.has(definition.id)) {
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
     }
-    if (request.signal?.aborted) {
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
@@ -392,7 +401,7 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
-    if (request.signal?.aborted) {
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
@@ -416,7 +425,7 @@ export class SupervisedProcessRunner {
       await cleanupExecutionIsolation(isolation);
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
-    if (request.signal?.aborted) {
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       await cleanupExecutionIsolation(isolation);
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
@@ -504,7 +513,7 @@ export class SupervisedProcessRunner {
       launchIdentity = launch.identity;
     }
 
-    if (request.signal?.aborted) {
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
@@ -590,10 +599,10 @@ export class SupervisedProcessRunner {
       request.timeoutMs
     );
     const onAbort = (): void => requestCleanup("EXECUTION_CANCELLED");
-    if (request.signal?.aborted) {
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       requestCleanup("EXECUTION_CANCELLED");
     } else {
-      request.signal?.addEventListener("abort", onAbort, { once: true });
+      if (request.signal !== undefined) addAbortSignalListener(request.signal, onAbort);
     }
 
     try {
@@ -627,7 +636,7 @@ export class SupervisedProcessRunner {
         requestCleanup("EXECUTABLE_UNSAFE");
         return await throwPendingFailure();
       }
-      if (request.signal?.aborted) {
+      if (request.signal !== undefined && abortSignalAborted(request.signal)) {
         requestCleanup("EXECUTION_CANCELLED");
         return await throwPendingFailure();
       }
@@ -692,7 +701,7 @@ export class SupervisedProcessRunner {
     } finally {
       settled = true;
       clearTimeout(timeout);
-      request.signal?.removeEventListener("abort", onAbort);
+      if (request.signal !== undefined) removeAbortSignalListener(request.signal, onAbort);
       child.stdin.destroy();
       child.stdout.destroy();
       child.stderr.destroy();
@@ -710,12 +719,12 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
-    if (request.signal?.aborted) {
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
     const powershell = windowsPowerShellExecutablePath(environment);
     const identity = await inspectExecutable(powershell, "win32");
-    if (request.signal?.aborted) {
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
     if (this.windowsSupervisorIdentity === undefined) {
@@ -733,7 +742,7 @@ export class SupervisedProcessRunner {
       expectedSha256: expectedIdentity.contentSha256,
       environmentKeys: Object.keys(environment)
     });
-    if (request.signal?.aborted) {
+    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
@@ -1020,6 +1029,7 @@ function snapshotExecutionRequest(input: SupervisedProcessExecutionRequest): {
       || signal === null
       || utilTypes.isProxy(signal)
       || !(signal instanceof AbortSignal)
+      || !isTrustedAbortSignal(signal)
     )
   ) {
     throw new SupervisedProcessError("INVALID_REQUEST");
@@ -1125,6 +1135,69 @@ function snapshotArguments(
   return Object.freeze(output);
 }
 
+function isTrustedAbortSignal(signal: AbortSignal): boolean {
+  try {
+    if (Object.getPrototypeOf(signal) !== AbortSignal.prototype) return false;
+    const descriptors = Object.getOwnPropertyDescriptors(signal);
+    return descriptors.aborted === undefined
+      && descriptors.reason === undefined
+      && descriptors.addEventListener === undefined
+      && descriptors.removeEventListener === undefined;
+  } catch {
+    return false;
+  }
+}
+
+function abortSignalAborted(signal: AbortSignal): boolean {
+  if (ABORT_SIGNAL_ABORTED_GETTER_INTRINSIC === undefined) {
+    throw new SupervisedProcessError("INVALID_REQUEST");
+  }
+  let value: unknown;
+  try {
+    value = REFLECT_APPLY_INTRINSIC(
+      ABORT_SIGNAL_ABORTED_GETTER_INTRINSIC,
+      signal,
+      []
+    );
+  } catch {
+    throw new SupervisedProcessError("INVALID_REQUEST");
+  }
+  if (typeof value !== "boolean") {
+    throw new SupervisedProcessError("INVALID_REQUEST");
+  }
+  return value;
+}
+
+function addAbortSignalListener(
+  signal: AbortSignal,
+  listener: () => void
+): void {
+  try {
+    REFLECT_APPLY_INTRINSIC(
+      ABORT_SIGNAL_ADD_EVENT_LISTENER_INTRINSIC,
+      signal,
+      ["abort", listener, { once: true }]
+    );
+  } catch {
+    throw new SupervisedProcessError("INVALID_REQUEST");
+  }
+}
+
+function removeAbortSignalListener(
+  signal: AbortSignal,
+  listener: () => void
+): void {
+  try {
+    REFLECT_APPLY_INTRINSIC(
+      ABORT_SIGNAL_REMOVE_EVENT_LISTENER_INTRINSIC,
+      signal,
+      ["abort", listener]
+    );
+  } catch {
+    throw new SupervisedProcessError("INVALID_REQUEST");
+  }
+}
+
 function boundedPositiveInteger(value: unknown, maximum: number): number | undefined {
   return typeof value === "number"
     && Number.isSafeInteger(value)
@@ -1215,7 +1288,7 @@ async function sha256Executable(
   executable: string,
   signal: AbortSignal
 ): Promise<string> {
-  if (signal.aborted) {
+  if (abortSignalAborted(signal)) {
     throw new SupervisedProcessError("EXECUTION_CANCELLED");
   }
   const hash = createHash("sha256");
@@ -1223,7 +1296,7 @@ async function sha256Executable(
   const onAbort = (): void => {
     stream.destroy(new SupervisedProcessError("EXECUTION_CANCELLED"));
   };
-  signal.addEventListener("abort", onAbort, { once: true });
+  addAbortSignalListener(signal, onAbort);
   const timer = setTimeout(() => {
     stream.destroy(new SupervisedProcessError("EXECUTION_TIMEOUT"));
   }, EXECUTABLE_HASH_TIMEOUT_MS);
@@ -1241,7 +1314,7 @@ async function sha256Executable(
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
   } finally {
     clearTimeout(timer);
-    signal.removeEventListener("abort", onAbort);
+    removeAbortSignalListener(signal, onAbort);
     stream.destroy();
   }
 }
@@ -1266,7 +1339,7 @@ function waitForOperationOrAbort(
   signal: AbortSignal | undefined
 ): Promise<void> {
   if (signal === undefined) return operation;
-  if (signal.aborted) {
+  if (abortSignalAborted(signal)) {
     return Promise.reject(new SupervisedProcessError("EXECUTION_CANCELLED"));
   }
   return new Promise<void>((resolve, reject) => {
@@ -1274,7 +1347,7 @@ function waitForOperationOrAbort(
     const finish = (error?: unknown): void => {
       if (settled) return;
       settled = true;
-      signal.removeEventListener("abort", onAbort);
+      removeAbortSignalListener(signal, onAbort);
       if (error === undefined) {
         resolve();
       } else {
@@ -1286,7 +1359,7 @@ function waitForOperationOrAbort(
     const onAbort = (): void => {
       finish(new SupervisedProcessError("EXECUTION_CANCELLED"));
     };
-    signal.addEventListener("abort", onAbort, { once: true });
+    addAbortSignalListener(signal, onAbort);
     void operation.then(
       () => finish(),
       (error: unknown) => finish(error)
