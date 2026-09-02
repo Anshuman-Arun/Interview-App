@@ -1751,7 +1751,13 @@ async function terminateProcessTree(
   }
 
   if (platform === "win32") {
-    if (!isProcessAlive(child)) return true;
+    if (!isProcessAlive(child)) {
+      // Cleanup is requested only before the child's close event has been
+      // accepted. A dead root with an unclosed stdio tree can mean a bootstrap
+      // helper still owns inherited handles, so root absence is not proof of
+      // descendant absence.
+      return false;
+    }
 
     const treeKilled = environment !== undefined
       && await runWindowsTaskkill(pid, environment);
