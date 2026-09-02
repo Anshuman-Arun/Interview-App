@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -186,6 +186,30 @@ describe("desktop local model runtime", () => {
     expect(definition.environment?.values?.["PATH"]).toBe(dirname(process.execPath));
     expect(args[0]).toBe("-I");
     expect(args[1]).toBe(PRODUCTION_WORKER);
+  });
+
+  it("preserves a POSIX virtualenv-style Python launcher symlink after validation", async () => {
+    if (process.platform === "win32") return;
+
+    const binRoot = temporaryRoot("desktop-python-venv-link-");
+    const launcher = join(binRoot, "python3");
+    symlinkSync(process.execPath, launcher);
+
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-venv-appdata-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: launcher
+    });
+    compositions.push(composition);
+
+    await composition.start();
+
+    const mutable = composition as unknown as {
+      pythonExecutable?: string;
+    };
+    expect(mutable.pythonExecutable).toBe(launcher);
   });
 
   it("degrades voice without spawning when the configured Python runtime cannot be resolved", async () => {
