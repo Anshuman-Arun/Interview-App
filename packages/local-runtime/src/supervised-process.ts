@@ -419,7 +419,12 @@ function snapshotExecutableDefinition(
   platform: NodeJS.Platform
 ): ExecutableDefinitionSnapshot {
   const record = inspectPlainRecord(input, new Set([
-    "id", "executable", "fixedArgs", "environment", "isolatedWorkingDirectory"
+    "id",
+    "executable",
+    "fixedArgs",
+    "environment",
+    "isolatedWorkingDirectory",
+    "isolatedHomeFiles"
   ]), "INVALID_DEFINITION");
   if (
     typeof record.id !== "string"
@@ -446,13 +451,69 @@ function snapshotExecutableDefinition(
     throw new SupervisedProcessError("INVALID_DEFINITION");
   }
   const environment = record.environment as LocalEnvironmentDefinition | undefined;
+  const isolatedHomeFiles = snapshotIsolatedHomeFiles(record.isolatedHomeFiles);
   return Object.freeze({
     id: record.id,
     executable: canonicalConfiguredPath,
     fixedArgs,
     ...(environment === undefined ? {} : { environment }),
-    isolatedWorkingDirectory
+    isolatedWorkingDirectory,
+    ...(isolatedHomeFiles === undefined ? {} : { isolatedHomeFiles })
   });
+}
+
+function snapshotIsolatedHomeFiles(
+  value: unknown
+): readonly IsolatedHomeFile[] | undefined {
+  if (value === undefined) return undefined;
+  const record = inspectPlainRecord(
+    value,
+    new Set(Object.keys(value as object)),
+    "INVALID_DEFINITION"
+  );
+  const entries = Object.entries(record);
+  if (entries.length > MAX_ISOLATED_HOME_FILES) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+
+  const output: IsolatedHomeFile[] = [];
+  let totalBytes = 0;
+  for (const [relativePath, content] of entries) {
+    if (
+      relativePath.length === 0
+      || relativePath.includes("\\")
+      || relativePath.startsWith("/")
+      || relativePath.includes("\0")
+    ) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+    const segments = relativePath.split("/");
+    if (
+      segments.some((segment) =>
+        segment.length === 0
+        || segment === "."
+        || segment === ".."
+        || segment.includes("\0")
+      )
+    ) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+    if (typeof content !== "string" || content.includes("\0")) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+    const bytes = Buffer.byteLength(content, "utf8");
+    totalBytes += bytes;
+    if (
+      bytes > MAX_ISOLATED_HOME_FILE_BYTES
+      || totalBytes > MAX_ISOLATED_HOME_TOTAL_BYTES
+    ) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+    output.push(Object.freeze({ relativePath, content }));
+  }
+
+  output.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+  return Object.freeze(output);
 }
 
 function snapshotExecutionRequest(input: SupervisedProcessExecutionRequest): {
