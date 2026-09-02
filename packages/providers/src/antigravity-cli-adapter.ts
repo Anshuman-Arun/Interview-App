@@ -179,6 +179,7 @@ const ResultEventSchema = z.looseObject({
   result: z.looseObject({
     conversation_id: z.string().min(1).max(256),
     status: z.string().min(1),
+    response: z.string(),
     num_turns: z.number().int().nonnegative(),
     structured_output: z.unknown().optional(),
     json_schema: z.unknown()
@@ -534,6 +535,21 @@ function parseAntigravityStream(
       ) {
         throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
       }
+      let responsePayload: unknown;
+      try {
+        responsePayload = parseStrictJson(result.data.result.response.trim());
+      } catch {
+        throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+      }
+      if (
+        !jsonValuesCanonicallyEqual(
+          responsePayload,
+          result.data.result.structured_output
+        )
+      ) {
+        throw new AntigravityCliAdapterError("INVALID_PROTOCOL");
+      }
+
       const parsedProposal = InterviewerProposalSchema.safeParse(
         result.data.result.structured_output
       );
@@ -591,6 +607,18 @@ function antigravityProposalWithinBounds(
     }
   }
   return true;
+}
+
+function jsonValuesCanonicallyEqual(
+  left: unknown,
+  right: unknown
+): boolean {
+  try {
+    return serializeBoundedPlainJson(left, MAX_STDOUT_BYTES)
+      === serializeBoundedPlainJson(right, MAX_STDOUT_BYTES);
+  } catch {
+    return false;
+  }
 }
 
 function schemaMatchesProposalContract(value: unknown): boolean {
