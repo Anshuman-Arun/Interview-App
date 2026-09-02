@@ -116,7 +116,6 @@ interface ExecutionIsolation {
   readonly environment: NodeJS.ProcessEnv;
   readonly workingDirectory?: string;
   readonly homeDirectory?: string;
-  readonly controlDirectory?: string;
 }
 
 interface ExecutableIdentity {
@@ -343,8 +342,7 @@ export class SupervisedProcessRunner {
         request,
         expectedIdentity,
         isolation.environment,
-        isolation.workingDirectory,
-        isolation.controlDirectory
+        isolation.workingDirectory
       );
     } catch (error) {
       failed = true;
@@ -373,8 +371,7 @@ export class SupervisedProcessRunner {
     request: ReturnType<typeof snapshotExecutionRequest>,
     before: ExecutableIdentity,
     environment: NodeJS.ProcessEnv,
-    workingDirectory: string | undefined,
-    controlDirectory: string | undefined
+    workingDirectory: string | undefined
   ): Promise<SupervisedProcessExecutionResult> {
     let launchExecutable = definition.executable;
     let launchArgs: readonly string[] = [...definition.fixedArgs, ...request.args];
@@ -387,8 +384,7 @@ export class SupervisedProcessRunner {
         request,
         before,
         environment,
-        workingDirectory,
-        controlDirectory
+        workingDirectory
       );
       launchExecutable = launch.executable;
       launchArgs = launch.args;
@@ -596,13 +592,9 @@ export class SupervisedProcessRunner {
     request: ReturnType<typeof snapshotExecutionRequest>,
     expectedIdentity: ExecutableIdentity,
     environment: NodeJS.ProcessEnv,
-    workingDirectory: string | undefined,
-    controlDirectory: string | undefined
+    workingDirectory: string | undefined
   ): Promise<WindowsSupervisorLaunch> {
-    if (
-      controlDirectory === undefined
-      || expectedIdentity.contentSha256 === undefined
-    ) {
+    if (expectedIdentity.contentSha256 === undefined) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
@@ -622,17 +614,12 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
-    const configPath = path.join(controlDirectory, "launch.json");
     const configuration = JSON.stringify({
       executable: definition.executable,
       arguments: [...definition.fixedArgs, ...request.args],
       cwd: workingDirectory ?? null,
       expectedSha256: expectedIdentity.contentSha256,
       environmentKeys: Object.keys(environment)
-    });
-    await writeFile(configPath, configuration, {
-      encoding: "utf8",
-      flag: "wx"
     });
     if (request.signal?.aborted) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
@@ -658,7 +645,7 @@ export class SupervisedProcessRunner {
     for (const [key, value] of Object.entries(environment)) {
       if (typeof value === "string") supervisorEnvironment[key] = value;
     }
-    supervisorEnvironment.INTERVIEW_SUPERVISED_CONFIG = configPath;
+    supervisorEnvironment.INTERVIEW_SUPERVISED_CONFIG_JSON = configuration;
     supervisorEnvironment.INTERVIEW_SUPERVISED_BOOTSTRAP =
       WINDOWS_JOB_SUPERVISOR_SCRIPT;
     if (
@@ -1244,13 +1231,7 @@ async function createExecutionIsolation(
 ): Promise<ExecutionIsolation> {
   let workingDirectory: string | undefined;
   let homeDirectory: string | undefined;
-  let controlDirectory: string | undefined;
   try {
-    if (platform === "win32") {
-      controlDirectory = await mkdtemp(
-        path.join(tmpdir(), "interview-provider-control-")
-      );
-    }
     const environment = Object.create(null) as NodeJS.ProcessEnv;
     for (const [key, value] of Object.entries(definition.environment)) {
       if (typeof value === "string") environment[key] = value;
@@ -1284,16 +1265,14 @@ async function createExecutionIsolation(
     return Object.freeze({
       environment: Object.freeze(environment),
       ...(workingDirectory === undefined ? {} : { workingDirectory }),
-      ...(homeDirectory === undefined ? {} : { homeDirectory }),
-      ...(controlDirectory === undefined ? {} : { controlDirectory })
+      ...(homeDirectory === undefined ? {} : { homeDirectory })
     });
   } catch (error) {
     try {
       await cleanupExecutionIsolation({
         environment: Object.freeze(Object.create(null) as NodeJS.ProcessEnv),
         ...(workingDirectory === undefined ? {} : { workingDirectory }),
-        ...(homeDirectory === undefined ? {} : { homeDirectory }),
-        ...(controlDirectory === undefined ? {} : { controlDirectory })
+        ...(homeDirectory === undefined ? {} : { homeDirectory })
       });
     } catch {
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
@@ -1362,13 +1341,6 @@ async function cleanupExecutionIsolation(
   if (isolation.homeDirectory !== undefined) {
     try {
       await rm(isolation.homeDirectory, { recursive: true, force: true });
-    } catch {
-      failed = true;
-    }
-  }
-  if (isolation.controlDirectory !== undefined) {
-    try {
-      await rm(isolation.controlDirectory, { recursive: true, force: true });
     } catch {
       failed = true;
     }
