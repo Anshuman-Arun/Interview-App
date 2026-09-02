@@ -134,6 +134,10 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     await Promise.allSettled(completions);
   }
 
+  private isClosed(): boolean {
+    return this.closed;
+  }
+
   private async *iterateTurn(
     input: ReasoningTurnInput
   ): AsyncIterable<InterviewerProposal> {
@@ -159,7 +163,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
 
     try {
       const proposal = await completion;
-      if (controller.signal.aborted || this.closed) return;
+      if (controller.signal.aborted || this.isClosed()) return;
       yield proposal;
     } finally {
       this.active.delete(input.generationId);
