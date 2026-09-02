@@ -22,6 +22,7 @@ import {
   QUANT_TRADER_SCENARIO_VERSION
 } from "../packages/local-compute/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
+import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   LoopbackCommandServer,
   ServerTurnOrchestrator,
@@ -208,6 +209,25 @@ describe("production quant runtime integration", () => {
     expect(registry.get(sessionId).getState().quantTrading?.rounds).toHaveLength(0);
   });
 
+  it("rejects an unsupported configured Quant Trading scenario version before session authority is created", async () => {
+    const sessionId = newSessionId();
+    const configuration = {
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: {
+        id: "BASIC_MARKET_MAKING",
+        version: "0.0.0"
+      },
+      interventionPolicy: "STRICT"
+    };
+    await expectProtocolError(postStart(
+      sessionId,
+      configuration as InterviewSessionConfiguration
+    ), 404, "NOT_FOUND");
+    expect(registry.has(sessionId)).toBe(false);
+    expect(store.eventCount(sessionId)).toBe(0);
+  });
+
   it("makes Trading action requests idempotent, conflict-safe, restart-stable, and deterministically terminal", async () => {
     const sessionId = newSessionId();
     await expectStatus(postStart(sessionId, tradingConfiguration()), 200);
@@ -312,8 +332,16 @@ describe("production quant runtime integration", () => {
   it("routes Quant Research structured actions through the existing deterministic coordinator with mode isolation", async () => {
     const researchSession = newSessionId();
     const tradingSession = newSessionId();
+    const oxfordSession = newSessionId();
     await expectStatus(postStart(researchSession, researchConfiguration()), 200);
     await expectStatus(postStart(tradingSession, tradingConfiguration()), 200);
+    await expectStatus(postStart(oxfordSession, InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "OXFORD_MATHEMATICS",
+      problem: { id: sixPeopleProblem.id, version: sixPeopleProblem.version },
+      difficulty: sixPeopleProblem.interviewer.difficulty,
+      interventionPolicy: "BALANCED"
+    })), 200);
 
     const initialResearch = QuantResearchStateResponseSchema.parse(
       await responseJson(await getQuantState(researchSession))
@@ -329,6 +357,16 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_TRADING_ACTION",
       requestId: newRequestId(),
       sessionId: researchSession,
+      action: { type: "PASS" }
+    }), 409, "CONFLICT");
+
+    await expectProtocolError(getQuantState(oxfordSession), 409, "CONFLICT");
+
+    await expectProtocolError(post({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_TRADING_ACTION",
+      requestId: newRequestId(),
+      sessionId: oxfordSession,
       action: { type: "PASS" }
     }), 409, "CONFLICT");
 
@@ -592,7 +630,7 @@ async function expectStatus(responsePromise: Promise<Response>, expected: number
 async function expectProtocolError(
   responsePromise: Promise<Response>,
   status: number,
-  code: "INVALID_COMMAND" | "CONFLICT"
+  code: "INVALID_COMMAND" | "CONFLICT" | "NOT_FOUND"
 ): Promise<void> {
   const response = await responsePromise;
   expect(response.status).toBe(status);
