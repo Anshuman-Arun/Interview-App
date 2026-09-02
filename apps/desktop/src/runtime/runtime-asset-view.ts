@@ -139,7 +139,7 @@ export async function materializeRuntimeAssetView(input: {
       throw new AggregateError(
         [error, cleanupError],
         "Local runtime asset materialization and cleanup both failed",
-        { cause: error }
+        { cause: cleanupError }
       );
     }
     throw error;
