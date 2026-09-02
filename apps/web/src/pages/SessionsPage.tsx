@@ -41,7 +41,10 @@ export function SessionsPage({
       .filter((session) =>
         normalized.length === 0
         || session.sessionId.toLowerCase().includes(normalized)
-        || (session.problemId?.toLowerCase().includes(normalized) ?? false)
+        || (
+          session.status !== "ACTIVE"
+          && (session.problemId?.toLowerCase().includes(normalized) ?? false)
+        )
       )
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   }, [filter, query, sessions]);
@@ -180,7 +183,11 @@ export function SessionsPage({
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <div className="expressive-sessions__identity">
-                  <strong>{session.problemId ?? "Configured interview"}</strong>
+                  <strong>
+                    {session.status === "ACTIVE"
+                      ? "Active interview"
+                      : session.problemId ?? "Configured interview"}
+                  </strong>
                   <code>{session.sessionId}</code>
                 </div>
                 <span className="expressive-sessions__status" data-status={session.status}>
