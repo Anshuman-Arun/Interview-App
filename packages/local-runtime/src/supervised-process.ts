@@ -379,6 +379,10 @@ export class SupervisedProcessRunner {
       launchIdentity = launch.identity;
     }
 
+    if (request.signal?.aborted) {
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
+
     let child: ChildProcessWithoutNullStreams;
     try {
       child = spawn(
@@ -461,14 +465,18 @@ export class SupervisedProcessRunner {
       request.timeoutMs
     );
     const onAbort = (): void => requestCleanup("EXECUTION_CANCELLED");
-    request.signal?.addEventListener("abort", onAbort, { once: true });
+    if (request.signal?.aborted) {
+      requestCleanup("EXECUTION_CANCELLED");
+    } else {
+      request.signal?.addEventListener("abort", onAbort, { once: true });
+    }
 
     try {
       const spawnOutcome = await Promise.race([
         waitForSpawn(child).then(() => "SPAWNED" as const),
         failureRequested.then(() => "FAILED" as const)
       ]);
-      if (spawnOutcome === "FAILED") {
+      if (spawnOutcome === "FAILED" || pendingFailure !== undefined) {
         return await throwPendingFailure();
       }
 
