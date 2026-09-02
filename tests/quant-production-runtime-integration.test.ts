@@ -389,6 +389,53 @@ describe("production quant runtime integration", () => {
     }
   });
 
+  it("rejects finite Trading arithmetic overflow as invalid without mutating the round", async () => {
+    const sessionId = newSessionId();
+    await expectStatus(postStart(sessionId, tradingConfiguration()), 200);
+
+    const hugeQuote = {
+      type: "QUOTE" as const,
+      quote: {
+        bidPrice: 1e307,
+        bidSize: 1,
+        askPrice: 8e307,
+        askSize: 1
+      }
+    };
+
+    let state = QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state;
+    for (let index = 0; index < 2; index += 1) {
+      state = QuantTradingStateResponseSchema.parse(
+        await responseJson(await post({
+          protocolVersion: 1,
+          type: "SUBMIT_QUANT_TRADING_ACTION",
+          requestId: newRequestId(),
+          sessionId,
+          expectedRound: state.currentRound,
+          action: hugeQuote
+        }))
+      ).state;
+    }
+
+    const beforeOverflow = state;
+    const countBeforeOverflow = store.eventCount(sessionId);
+    await expectProtocolError(post({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_TRADING_ACTION",
+      requestId: newRequestId(),
+      sessionId,
+      expectedRound: beforeOverflow.currentRound,
+      action: hugeQuote
+    }), 400, "INVALID_COMMAND");
+
+    expect(store.eventCount(sessionId)).toBe(countBeforeOverflow);
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state).toEqual(beforeOverflow);
+  });
+
   it("enforces the hard position limit through the authenticated production command path", async () => {
     await server.stop();
     await registry.closeAll();
