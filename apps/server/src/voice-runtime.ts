@@ -189,6 +189,7 @@ interface TtsAssembly {
 
 export class VoiceSynthesisCoordinator {
   private readonly activeBySession = new Map<SessionId, Set<string>>();
+  private readonly triggeredSourceDeliveries = new Set<DeliveryId>();
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
@@ -206,6 +207,8 @@ export class VoiceSynthesisCoordinator {
   ): Promise<DeliveryAtom | undefined> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const sourceDeliveryId = DeliveryIdSchema.parse(sourceDeliveryIdInput);
+    if (this.triggeredSourceDeliveries.has(sourceDeliveryId)) return undefined;
+    this.triggeredSourceDeliveries.add(sourceDeliveryId);
     await this.sessions.ensureRecovered(sessionId);
     const writer = this.sessions.getWriter(sessionId);
     const source = writer.getState().deliveries[sourceDeliveryId];
