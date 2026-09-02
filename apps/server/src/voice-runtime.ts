@@ -18,7 +18,9 @@ import {
   SpeechPcmFrameEnvelopeSchema,
   SpeechStreamIdSchema,
   TTS_LIMITS,
+  TtsModelIdentitySchema,
   TtsOutgoingMessageSchema,
+  TtsSampleRateSchema,
   TtsSynthesizeRequestSchema,
   planTtsRequest,
   type SourceAudioBasis,
@@ -863,6 +865,11 @@ function snapshotAssetMetadata(input: EphemeralAudioAssetMetadata): EphemeralAud
   ) {
     throw new Error("Ephemeral audio metadata is malformed");
   }
+  const model = TtsModelIdentitySchema.parse(input.model);
+  const sampleRate = TtsSampleRateSchema.parse(input.sampleRate);
+  if (input.durationMs > TTS_LIMITS.maxOutputDurationMs) {
+    throw new Error("Ephemeral audio duration exceeds the TTS output bound");
+  }
   return Object.freeze({
     sessionId,
     generationId,
@@ -871,8 +878,8 @@ function snapshotAssetMetadata(input: EphemeralAudioAssetMetadata): EphemeralAud
     requestBasisHash: input.requestBasisHash,
     normalizedTextHash: input.normalizedTextHash,
     audioSha256: input.audioSha256,
-    model: Object.freeze({ ...input.model }),
-    sampleRate: input.sampleRate,
+    model: Object.freeze({ ...model }),
+    sampleRate,
     durationMs: input.durationMs
   });
 }
