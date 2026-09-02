@@ -156,7 +156,11 @@ export function HomePage({
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <div className="expressive-home__row-main">
-                      <strong>{session.problemId ?? "Configured interview"}</strong>
+                      <strong>
+                        {session.status === "ACTIVE"
+                          ? "Active interview"
+                          : session.problemId ?? "Configured interview"}
+                      </strong>
                       <code>{session.sessionId}</code>
                     </div>
                     <span
