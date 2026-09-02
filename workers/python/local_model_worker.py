@@ -513,19 +513,20 @@ class TtsRuntime:
         if not isinstance(request_id, str) or not (1 <= len(request_id) <= 128):
             raise ProtocolError(400, "INVALID_REQUEST_ID")
 
+        # Keep the request identity stable across the native cancellation call.
+        # Without this lock, a just-completed request could clear itself and a
+        # following request could begin before cancel_stream() executes.
         with self._state_lock:
             if self._current_request_id != request_id:
                 return {"accepted": False}
             self._cancelled_request_ids.add(request_id)
-
-        # Moonshine explicitly documents cancel_stream() as safe for barge-in
-        # from another thread while stream() is producing chunks.
-        try:
-            self._tts.cancel_stream()
-        except Exception:
-            with self._state_lock:
+            # Moonshine explicitly documents cancel_stream() as safe for
+            # barge-in from another thread while stream() is producing chunks.
+            try:
+                self._tts.cancel_stream()
+            except Exception:
                 self._cancelled_request_ids.discard(request_id)
-            raise
+                raise
         return {"accepted": True}
 
 
