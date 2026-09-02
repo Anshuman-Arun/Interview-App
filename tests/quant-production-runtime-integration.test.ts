@@ -371,23 +371,21 @@ describe("production quant runtime integration", () => {
     }
   });
 
-  it("rejects an unsupported configured Quant Trading scenario version before session authority is created", async () => {
-    const sessionId = newSessionId();
-    const configuration = {
-      configurationVersion: 1,
-      mode: "QUANT_TRADING",
-      scenario: {
-        id: "BASIC_MARKET_MAKING",
-        version: "0.0.0"
-      },
-      interventionPolicy: "STRICT"
-    };
-    await expectProtocolError(postStart(
-      sessionId,
-      configuration as InterviewSessionConfiguration
-    ), 404, "NOT_FOUND");
-    expect(registry.hasSession(sessionId)).toBe(false);
-    expect(store.eventCount(sessionId)).toBe(0);
+  it("rejects unsupported configured Quant Trading family/version before session authority is created", async () => {
+    for (const scenario of [
+      { id: "BASIC_MARKET_MAKING", version: "0.0.0" },
+      { id: "NOT_A_TRADING_FAMILY", version: QUANT_TRADER_SCENARIO_VERSION }
+    ]) {
+      const sessionId = newSessionId();
+      await expectProtocolError(postStart(sessionId, {
+        configurationVersion: 1,
+        mode: "QUANT_TRADING",
+        scenario,
+        interventionPolicy: "STRICT"
+      }), 404, "NOT_FOUND");
+      expect(registry.hasSession(sessionId)).toBe(false);
+      expect(store.eventCount(sessionId)).toBe(0);
+    }
   });
 
   it("enforces the hard position limit through the authenticated production command path", async () => {
