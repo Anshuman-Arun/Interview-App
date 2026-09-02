@@ -6,6 +6,7 @@ import {
   QuantResearchStateResponseSchema,
   QuantTradingPublicStateSchema,
   QuantTradingStateResponseSchema,
+  SessionResumedResponseSchema,
   newRequestId,
   newSessionId,
   type InterviewSessionConfiguration,
@@ -586,6 +587,28 @@ describe("production quant runtime integration", () => {
     expect(store.load(sessionId).filter((event) => event.type === "QUANT_TRADING_ACTION_ACCEPTED"))
       .toHaveLength(1);
     expect(registry.get(sessionId).getState().quantTrading?.rounds).toHaveLength(1);
+  });
+
+  it("resumes Quant Research without exposing its synthetic replay problem as an Oxford problem", async () => {
+    const sessionId = newSessionId();
+    await expectStatus(postStart(sessionId, researchConfiguration()), 200);
+    const before = QuantResearchStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state;
+
+    const resumed = SessionResumedResponseSchema.parse(
+      await responseJson(await post({
+        protocolVersion: 1,
+        type: "RESUME_SESSION",
+        requestId: newRequestId(),
+        sessionId
+      }))
+    );
+    expect(resumed.problemId).toBeUndefined();
+    expect(resumed.status).toBe("ACTIVE");
+    expect(QuantResearchStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state).toEqual(before);
   });
 
   it("routes Quant Research structured actions through the existing deterministic coordinator with mode isolation", async () => {
