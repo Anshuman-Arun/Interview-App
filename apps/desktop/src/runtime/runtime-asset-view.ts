@@ -20,7 +20,6 @@ import type { DesktopRuntimeAsset } from "./model-assets.js";
 const MAX_RUNTIME_VIEW_DIRECTORY_ENTRIES = 1_024;
 const MAX_STALE_RUNTIME_VIEW_DELETIONS = 16;
 const RUNTIME_VIEW_OWNER_TOKEN = randomBytes(16).toString("hex");
-const RUNTIME_VIEW_NAME = /^run-([1-9][0-9]*)-([0-9a-f]{32})-/u;
 const ACTIVE_RUNTIME_VIEW_ROOTS = new Set<string>();
 
 export interface RuntimeAssetView {
@@ -139,7 +138,8 @@ export async function materializeRuntimeAssetView(input: {
     } catch (cleanupError) {
       throw new AggregateError(
         [error, cleanupError],
-        "Local runtime asset materialization and cleanup both failed"
+        "Local runtime asset materialization and cleanup both failed",
+        { cause: error }
       );
     }
     throw error;
