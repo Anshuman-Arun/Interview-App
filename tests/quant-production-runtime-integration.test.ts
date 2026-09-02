@@ -12,6 +12,7 @@ import {
 import type { SessionState } from "../packages/events/src/index.js";
 import {
   QuantTradingSessionCoordinator,
+  TurnCoordinator,
   SessionRuntimeRegistry,
   SessionWriter,
   createCommandEnvelope,
@@ -35,7 +36,8 @@ import {
   ProductionSessionRuntime,
   ServerTurnOrchestrator,
   SessionRecoveryCoordinator,
-  resolveInterviewSessionConfiguration
+  resolveInterviewSessionConfiguration,
+  resolveSessionStateComposition
 } from "../apps/server/src/index.js";
 
 const CLIENT_TOKEN = "quant-runtime-integration-token-that-is-long-enough";
@@ -444,6 +446,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_RESEARCH_ACTION",
       requestId: newRequestId(),
       sessionId: tradingSession,
+      expectedActionCount: 0,
       action: { actionId: "wrong-mode", kind: "CHOOSE_OPTION", option: "CONSTANT" }
     }), 409, "CONFLICT");
 
@@ -452,6 +455,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_RESEARCH_ACTION",
       requestId: newRequestId(),
       sessionId: researchSession,
+      expectedActionCount: initialResearch.acceptedActionCount,
       action: {
         actionId: "too-large",
         kind: "SUBMIT_PARAMETERS",
@@ -469,6 +473,7 @@ describe("production quant runtime integration", () => {
       type: "SUBMIT_QUANT_RESEARCH_ACTION" as const,
       requestId: firstRequestId,
       sessionId: researchSession,
+      expectedActionCount: initialResearch.acceptedActionCount,
       action: {
         actionId: "model-choice-1",
         kind: "CHOOSE_OPTION" as const,
@@ -487,6 +492,20 @@ describe("production quant runtime integration", () => {
     expect(store.eventCount(researchSession)).toBe(countAfterFirst);
 
     await expectProtocolError(post({
+      protocolVersion: 1,
+      type: "SUBMIT_QUANT_RESEARCH_ACTION",
+      requestId: newRequestId(),
+      sessionId: researchSession,
+      expectedActionCount: initialResearch.acceptedActionCount,
+      action: {
+        actionId: "model-choice-stale",
+        kind: "CHOOSE_OPTION",
+        option: "LINEAR"
+      }
+    }), 409, "CONFLICT");
+    expect(store.eventCount(researchSession)).toBe(countAfterFirst);
+
+    await expectProtocolError(post({
       ...firstCommand,
       action: {
         actionId: "model-choice-conflict",
@@ -501,6 +520,7 @@ describe("production quant runtime integration", () => {
         type: "SUBMIT_QUANT_RESEARCH_ACTION",
         requestId: newRequestId(),
         sessionId: researchSession,
+        expectedActionCount: first.acceptedActionCount,
         action: {
           actionId: "model-choice-2",
           kind: "CHOOSE_OPTION",
