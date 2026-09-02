@@ -20,6 +20,7 @@ import {
   MAX_SPEECH_UTTERANCE_DURATION_MS,
   MAX_SPEECH_REMEMBERED_RESULT_CHARS,
   MAX_SPEECH_VAD_TIMEOUT_MS,
+  SPEECH_VAD_TIMEOUT_ABORT_REASON,
   SpeechCancelRequestSchema,
   SpeechControlRequestSchema,
   SpeechFlushRequestSchema,
@@ -503,7 +504,7 @@ export class SpeechWorkerCore {
         vadOperation,
         vadAbort.signal,
         this.vadTimeoutMs,
-        () => vadAbort.abort()
+        () => vadAbort.abort(SPEECH_VAD_TIMEOUT_ABORT_REASON)
       );
       try {
         observation = VadObservationSchema.parse(rawObservation);
