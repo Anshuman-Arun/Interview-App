@@ -101,7 +101,12 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
           throw error;
         }
       }
-      validateResolvedSource(resolved);
+      try {
+        validateResolvedSource(resolved);
+      } catch (error) {
+        releaseLateResolvedSource(resolved);
+        throw error;
+      }
       releaseResolved = createReleaseOnce(resolved);
 
       if (
