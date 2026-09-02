@@ -23,6 +23,7 @@ import {
 import {
   QUANT_TRADER_SCENARIO_VERSION,
   QuantStudentActionSchema,
+  QuantTraderActionError,
   QuantTraderScenarioFamilySchema,
   createQuantTraderScenario,
   type QuantRoundEvidence,
@@ -338,8 +339,19 @@ export class QuantTradingSessionCoordinator {
       if (engine.getState().currentRound !== expectedRound) {
         throw new Error("Cannot apply Quant Trading action to a stale round");
       }
-      engine.submitAction(action);
-      const evidence = persistedRoundEvidence(engine.advance());
+      let evidence: QuantTradingRoundEvidenceEvent;
+      try {
+        engine.submitAction(action);
+        evidence = persistedRoundEvidence(engine.advance());
+      } catch (error) {
+        if (error instanceof RangeError) {
+          throw new QuantTraderActionError(
+            "INVALID_ACTION",
+            "Candidate action exceeds bounded Quant Trading arithmetic"
+          );
+        }
+        throw error;
+      }
       const drafts: EventDraft[] = [
         {
           source: "USER",
