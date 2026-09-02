@@ -1481,15 +1481,12 @@ function invalidateVisionDerivedEvidence(
   const staleVisionResultEventIds = new Set<string>();
 
   for (const request of Object.values(state.visionRequests)) {
-    if (
-      request.status !== "ACCEPTED"
-      || request.resultEventId === undefined
-      || request.acceptedObservation === undefined
-    ) {
+    if (request.status !== "ACCEPTED" || request.resultEventId === undefined) {
       continue;
     }
     if (
       resultingShapes === undefined
+      || request.acceptedObservation === undefined
       || !acceptedVisionObservationRemainsFresh(
         request.acceptedObservation,
         resultingShapes
