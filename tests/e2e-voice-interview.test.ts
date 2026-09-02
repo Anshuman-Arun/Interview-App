@@ -107,6 +107,7 @@ class BlockingIgnoringRecognizer implements SpeechRecognizer {
   private releaseGate!: () => void;
   private signalStarted!: () => void;
   private signalReturned!: () => void;
+  private signalAbortObserved!: () => void;
   private readonly gate = new Promise<void>((resolve) => {
     this.releaseGate = resolve;
   });
@@ -116,9 +117,13 @@ class BlockingIgnoringRecognizer implements SpeechRecognizer {
   public readonly returned = new Promise<void>((resolve) => {
     this.signalReturned = resolve;
   });
+  public readonly abortObserved = new Promise<void>((resolve) => {
+    this.signalAbortObserved = resolve;
+  });
 
   public async recognize(input: RecognizerAudioInput, signal: AbortSignal): Promise<unknown> {
-    void signal;
+    if (signal.aborted) this.signalAbortObserved();
+    else signal.addEventListener("abort", () => this.signalAbortObserved(), { once: true });
     this.signalStarted();
     await this.gate;
     this.signalReturned();
@@ -435,7 +440,7 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     const { generationId } = await turns.startGeneration(
       inputEpisodeId,
       turnId,
-      "blocking-tts-test"
+      "mock-model"
     );
     const safeProbe = "Why must that step be true?";
     const validator = new DisclosureValidator(new ClosedWorldDisclosureAnalyzer([safeProbe]));
@@ -609,6 +614,7 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
 
     controller.abort();
     await expect(recognitionFrame).rejects.toBeDefined();
+    await recognizer.abortObserved;
     recognizer.release();
     await recognizer.returned;
     await waitFor(
