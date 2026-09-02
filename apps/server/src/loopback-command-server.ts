@@ -427,7 +427,7 @@ export class LoopbackCommandServer {
         if (
           recoveredComposition !== undefined
           && recoveredComposition.mode !== "OXFORD_MATHEMATICS"
-          && writer.getState().status !== "COMPLETED"
+          && writer.getState().status === "ACTIVE"
         ) {
           throw new ProtocolHttpError(
             409,
