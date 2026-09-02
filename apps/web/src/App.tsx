@@ -37,8 +37,11 @@ export const App: React.FC = () => {
   const historyAbortRef = useRef<AbortController | null>(null);
   const sessionEntryPendingRef = useRef(false);
   const sessionTerminalPendingRef = useRef(false);
+  const resumeMountPendingRef = useRef(false);
+  const resumeFinalizeInFlightRef = useRef(false);
   const [sessionEntryPending, setSessionEntryPending] = useState(false);
   const [sessionTerminalPending, setSessionTerminalPending] = useState(false);
+  const [resumeMountPending, setResumeMountPending] = useState(false);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -179,26 +182,25 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleResumePausedSession = async (): Promise<void> => {
+  const handleResumePausedSession = (): void => {
     if (
       !session.isPaused
       || session.sessionId === null
       || sessionEntryPendingRef.current
       || sessionTerminalPendingRef.current
+      || resumeMountPendingRef.current
     ) {
       return;
     }
+
+    // Mount the whiteboard in readonly mode before restoring live authority.
+    // This prevents renderer/voice/input admission from racing ahead of the
+    // canvas that the authoritative BoardRevision is supposed to describe.
+    resumeMountPendingRef.current = true;
     sessionEntryPendingRef.current = true;
+    setResumeMountPending(true);
     setSessionEntryPending(true);
-    try {
-      await session.resumePausedSession();
-      navigate({ page: "interview" });
-    } catch {
-      // Error handled in session.error; the session remains safely paused.
-    } finally {
-      sessionEntryPendingRef.current = false;
-      setSessionEntryPending(false);
-    }
+    navigate({ page: "interview" });
   };
 
   const handleManualRecover = async (e: React.SyntheticEvent): Promise<void> => {
@@ -292,10 +294,39 @@ export const App: React.FC = () => {
 
 
   const handleWhiteboardEditorMount = useCallback((): void => {
+    if (resumeMountPendingRef.current && session.isPaused) {
+      if (resumeFinalizeInFlightRef.current) return;
+      resumeFinalizeInFlightRef.current = true;
+
+      void session.resumePausedSession()
+        .then(() => {
+          if (!resumeMountPendingRef.current) return;
+          resumeMountPendingRef.current = false;
+          setResumeMountPending(false);
+        })
+        .catch(() => {
+          if (!resumeMountPendingRef.current) return;
+          resumeMountPendingRef.current = false;
+          setResumeMountPending(false);
+          navigate({ page: "home" }, { replace: true });
+        })
+        .finally(() => {
+          resumeFinalizeInFlightRef.current = false;
+          sessionEntryPendingRef.current = false;
+          setSessionEntryPending(false);
+        });
+      return;
+    }
+
     void session.synchronizeWhiteboard().catch(() => {
       // The sync status remains fail-closed and is surfaced by the session hook.
     });
-  }, [session.synchronizeWhiteboard]);
+  }, [
+    navigate,
+    session.isPaused,
+    session.resumePausedSession,
+    session.synchronizeWhiteboard
+  ]);
 
   const hasActiveInterview =
     session.isSessionStarted && session.sessionStatus === "ACTIVE";
@@ -311,7 +342,7 @@ export const App: React.FC = () => {
   const displayRoute = routeForActiveInterview(
     route,
     hasActiveInterview,
-    session.isPaused
+    session.isPaused && !resumeMountPending
   );
 
   useEffect(() => {
@@ -321,7 +352,11 @@ export const App: React.FC = () => {
       return;
     }
     if (session.isPaused) {
-      if (route.page !== "home") {
+      if (resumeMountPending) {
+        if (route.page !== "interview") {
+          navigate({ page: "interview" }, { replace: true });
+        }
+      } else if (route.page !== "home") {
         navigate({ page: "home" }, { replace: true });
       }
       return;
@@ -333,6 +368,7 @@ export const App: React.FC = () => {
     hasActiveInterview,
     navigate,
     route.page,
+    resumeMountPending,
     session.isPaused,
     session.pauseSession
   ]);
@@ -360,7 +396,7 @@ export const App: React.FC = () => {
         }}
         onResume={(sessionId) => {
           if (session.isPaused && session.sessionId === sessionId) {
-            void handleResumePausedSession();
+            handleResumePausedSession();
           } else {
             void handleRecoverSession(sessionId);
           }
