@@ -125,7 +125,7 @@ export const QuantTradingTerminalMetricsSchema = z.object({
   riskBreachCount: NonnegativeSafeIntegerSchema,
   adverseSelectionPnL: FiniteNumberSchema,
   accountingInvariantHolds: z.boolean(),
-  objectiveScore: FiniteNumberSchema
+  objectiveScore: z.number().int().min(0).max(100)
 }).strict();
 
 export const QuantTradingPublicStateSchema = z.object({
