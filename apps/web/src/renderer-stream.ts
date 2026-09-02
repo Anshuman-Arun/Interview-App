@@ -65,6 +65,7 @@ export async function consumeAuthenticatedRendererStream(
   try {
     for (;;) {
       const chunk = await reader.read();
+      if (options.signal?.aborted === true) return;
       if (chunk.done) break;
       buffer += decoder.decode(chunk.value, { stream: true });
       if (byteLength(buffer) > MAX_RENDERER_STREAM_MESSAGE_BYTES * 2) {
@@ -75,7 +76,9 @@ export async function consumeAuthenticatedRendererStream(
       while (boundary !== undefined) {
         const block = buffer.slice(0, boundary.index);
         buffer = buffer.slice(boundary.index + boundary.length);
+        if (options.signal?.aborted === true) return;
         if (block.length > 0) await handleSseBlock(block, renderer);
+        if (options.signal?.aborted === true) return;
         boundary = findEventBoundary(buffer);
       }
     }
