@@ -210,143 +210,153 @@ export class VoiceSynthesisCoordinator {
     const sourceDeliveryId = DeliveryIdSchema.parse(sourceDeliveryIdInput);
     if (this.inFlightSourceDeliveries.has(sourceDeliveryId)) return undefined;
     this.inFlightSourceDeliveries.add(sourceDeliveryId);
-    await this.sessions.ensureRecovered(sessionId);
-    const writer = this.sessions.getWriter(sessionId);
-    const initialState = writer.getState();
-    const source = initialState.deliveries[sourceDeliveryId];
-    if (
-      source === undefined
-      || source.content.medium !== "TEXT"
-      || (
-        source.status !== "DELIVERING"
-        && source.status !== "EXPOSED"
-        && source.status !== "COMPLETED"
-      )
-    ) {
-      return undefined;
-    }
 
-    const generationId = GenerationIdSchema.parse(source.generationId);
-    const exactText = source.content.text;
-    const existingAudio = Object.values(initialState.deliveries).find((atom) =>
-      atom.content.medium === "AUDIO"
-      && atom.generationId === generationId
-      && atom.content.text === exactText
-      && atom.status !== "CANCELLED"
-    );
-    if (existingAudio !== undefined) {
-      this.inFlightSourceDeliveries.delete(sourceDeliveryId);
-      return undefined;
-    }
-    const textSha256 = sha256Utf8(exactText);
-    const request = TtsSynthesizeRequestSchema.parse({
-      protocolVersion: 1,
-      type: "SYNTHESIZE",
-      requestId: newRequestId(),
-      text: exactText,
-      voice: this.config.voice,
-      speed: this.config.speed ?? 1,
-      language: this.config.language,
-      sampleRate: this.config.sampleRate,
-      outputFormat: "PCM_F32LE"
-    });
-    const plan = planTtsRequest(request);
-    const assembly: TtsAssembly = { begin: undefined, chunks: [], end: undefined };
-    this.rememberActive(sessionId, request.requestId);
-
+    let registeredAudioRef: string | undefined;
     try {
-      const summary = await this.config.worker.handle(request, async (messageInput) => {
-        const message = TtsOutgoingMessageSchema.parse(messageInput);
-        if (message.requestId !== request.requestId) {
-          throw new Error("TTS callback request identity changed");
-        }
-        if (message.type === "TTS_ERROR" || message.type === "CANCEL_RESULT") {
-          throw new Error("TTS synthesis emitted an unexpected control result");
-        }
-        if (message.requestBasisHash !== plan.requestBasisHash) {
-          throw new Error("TTS callback basis does not match the exact admitted text/configuration");
-        }
-        if (message.type === "AUDIO_BEGIN") {
-          if (
-            assembly.begin !== undefined
-            || message.normalizedTextHash !== plan.normalizedTextHash
-            || message.sequence !== 0
-          ) {
-            throw new Error("TTS begin metadata does not match the admitted synthesis");
-          }
-          assembly.begin = message;
-          return;
-        }
-        if (message.type === "AUDIO_CHUNK") {
-          if (assembly.begin === undefined || assembly.end !== undefined) {
-            throw new Error("TTS chunk arrived outside the admitted audio stream");
-          }
-          if (message.sequence !== assembly.chunks.length + 1 || message.chunkIndex !== assembly.chunks.length) {
-            throw new Error("TTS chunk sequence is discontinuous");
-          }
-          assembly.chunks.push(message);
-          return;
-        }
-        if (assembly.begin === undefined || assembly.end !== undefined) {
-          throw new Error("TTS end arrived outside the admitted audio stream");
-        }
-        if (message.sequence !== assembly.chunks.length + 1) {
-          throw new Error("TTS end sequence is discontinuous");
-        }
-        assembly.end = message;
-      });
-
-      if (summary.kind !== "SYNTHESIS" || summary.summary.outcome !== "DONE") return undefined;
-      const begin = assembly.begin;
-      const end = assembly.end;
-      if (begin === undefined || end === undefined || assembly.chunks.length === 0) {
-        throw new Error("TTS completed without a complete bounded audio stream");
-      }
+      await this.sessions.ensureRecovered(sessionId);
+      const writer = this.sessions.getWriter(sessionId);
+      const initialState = writer.getState();
+      const source = initialState.deliveries[sourceDeliveryId];
       if (
-        begin.model.engine !== end.model.engine
-        || begin.model.modelId !== end.model.modelId
-        || begin.model.modelVersion !== end.model.modelVersion
-        || begin.model.runtimeVersion !== end.model.runtimeVersion
-        || begin.model.waveformDeterminism !== end.model.waveformDeterminism
+        source === undefined
+        || source.content.medium !== "TEXT"
+        || (
+          source.status !== "DELIVERING"
+          && source.status !== "EXPOSED"
+          && source.status !== "COMPLETED"
+        )
       ) {
-        throw new Error("TTS model/runtime identity changed within one synthesis");
-      }
-
-      const pcm = concatenateTtsPcm(assembly.chunks, end.totalBytes);
-      if (sha256Bytes(pcm) !== end.audioHash) {
-        throw new Error("TTS aggregate audio hash does not match emitted PCM");
-      }
-      const wav = encodePcm16Wav(pcm, end.sampleRate);
-      const metadata: EphemeralAudioAssetMetadata = {
-        sessionId,
-        generationId,
-        sourceDeliveryId,
-        textSha256,
-        requestBasisHash: plan.requestBasisHash,
-        normalizedTextHash: plan.normalizedTextHash,
-        audioSha256: end.audioHash,
-        model: { ...end.model },
-        sampleRate: end.sampleRate,
-        durationMs: end.durationMs
-      };
-      const audioRef = this.assets.register(metadata, wav);
-
-      const audioAtom = await new TurnCoordinator(writer).queueAudioDeliveryFromValidatedText({
-        sourceDeliveryId,
-        generationId,
-        text: exactText,
-        textSha256,
-        audioRef
-      });
-      if (audioAtom === undefined) {
-        this.assets.remove(audioRef);
         return undefined;
       }
-      return audioAtom;
+
+      const generationId = GenerationIdSchema.parse(source.generationId);
+      const exactText = source.content.text;
+      const existingAudio = Object.values(initialState.deliveries).find((atom) =>
+        atom.content.medium === "AUDIO"
+        && atom.generationId === generationId
+        && atom.content.text === exactText
+        && atom.status !== "CANCELLED"
+      );
+      if (existingAudio !== undefined) return undefined;
+
+      const textSha256 = sha256Utf8(exactText);
+      const request = TtsSynthesizeRequestSchema.parse({
+        protocolVersion: 1,
+        type: "SYNTHESIZE",
+        requestId: newRequestId(),
+        text: exactText,
+        voice: this.config.voice,
+        speed: this.config.speed ?? 1,
+        language: this.config.language,
+        sampleRate: this.config.sampleRate,
+        outputFormat: "PCM_F32LE"
+      });
+      const plan = planTtsRequest(request);
+      const assembly: TtsAssembly = { begin: undefined, chunks: [], end: undefined };
+      this.rememberActive(sessionId, request.requestId);
+
+      try {
+        const summary = await this.config.worker.handle(request, async (messageInput) => {
+          const message = TtsOutgoingMessageSchema.parse(messageInput);
+          if (message.requestId !== request.requestId) {
+            throw new Error("TTS callback request identity changed");
+          }
+          if (message.type === "TTS_ERROR" || message.type === "CANCEL_RESULT") {
+            throw new Error("TTS synthesis emitted an unexpected control result");
+          }
+          if (message.requestBasisHash !== plan.requestBasisHash) {
+            throw new Error("TTS callback basis does not match the exact admitted text/configuration");
+          }
+          if (message.type === "AUDIO_BEGIN") {
+            if (
+              assembly.begin !== undefined
+              || message.normalizedTextHash !== plan.normalizedTextHash
+              || message.sequence !== 0
+            ) {
+              throw new Error("TTS begin metadata does not match the admitted synthesis");
+            }
+            assembly.begin = message;
+            return;
+          }
+          if (message.type === "AUDIO_CHUNK") {
+            if (assembly.begin === undefined || assembly.end !== undefined) {
+              throw new Error("TTS chunk arrived outside the admitted audio stream");
+            }
+            if (message.sequence !== assembly.chunks.length + 1 || message.chunkIndex !== assembly.chunks.length) {
+              throw new Error("TTS chunk sequence is discontinuous");
+            }
+            assembly.chunks.push(message);
+            return;
+          }
+          if (assembly.begin === undefined || assembly.end !== undefined) {
+            throw new Error("TTS end arrived outside the admitted audio stream");
+          }
+          if (message.sequence !== assembly.chunks.length + 1) {
+            throw new Error("TTS end sequence is discontinuous");
+          }
+          assembly.end = message;
+        });
+
+        if (summary.kind !== "SYNTHESIS" || summary.summary.outcome !== "DONE") return undefined;
+        const begin = assembly.begin;
+        const end = assembly.end;
+        if (begin === undefined || end === undefined || assembly.chunks.length === 0) {
+          throw new Error("TTS completed without a complete bounded audio stream");
+        }
+        if (
+          begin.model.engine !== end.model.engine
+          || begin.model.modelId !== end.model.modelId
+          || begin.model.modelVersion !== end.model.modelVersion
+          || begin.model.runtimeVersion !== end.model.runtimeVersion
+          || begin.model.waveformDeterminism !== end.model.waveformDeterminism
+        ) {
+          throw new Error("TTS model/runtime identity changed within one synthesis");
+        }
+
+        const pcm = concatenateTtsPcm(assembly.chunks, end.totalBytes);
+        if (sha256Bytes(pcm) !== end.audioHash) {
+          throw new Error("TTS aggregate audio hash does not match emitted PCM");
+        }
+        const wav = encodePcm16Wav(pcm, end.sampleRate);
+        const metadata: EphemeralAudioAssetMetadata = {
+          sessionId,
+          generationId,
+          sourceDeliveryId,
+          textSha256,
+          requestBasisHash: plan.requestBasisHash,
+          normalizedTextHash: plan.normalizedTextHash,
+          audioSha256: end.audioHash,
+          model: { ...end.model },
+          sampleRate: end.sampleRate,
+          durationMs: end.durationMs
+        };
+        const audioRef = this.assets.register(metadata, wav);
+        registeredAudioRef = audioRef;
+
+        const audioAtom = await new TurnCoordinator(writer).queueAudioDeliveryFromValidatedText({
+          sourceDeliveryId,
+          generationId,
+          text: exactText,
+          textSha256,
+          audioRef
+        });
+        if (audioAtom === undefined) {
+          this.assets.remove(audioRef);
+          registeredAudioRef = undefined;
+          return undefined;
+        }
+
+        // Ownership of the ephemeral bytes now belongs to the authoritative
+        // queued AUDIO delivery until the renderer resolves or invalidates it.
+        registeredAudioRef = undefined;
+        return audioAtom;
+      } finally {
+        this.forgetActive(sessionId, request.requestId);
+      }
     } catch {
+      if (registeredAudioRef !== undefined) this.assets.remove(registeredAudioRef);
       return undefined;
     } finally {
-      this.forgetActive(sessionId, request.requestId);
       this.inFlightSourceDeliveries.delete(sourceDeliveryId);
     }
   }
