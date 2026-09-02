@@ -65,9 +65,21 @@ export interface ApplicationProviderAdapterRuntimeSource {
 }
 
 export function createApplicationProviderAdapterRuntimeSource(): ApplicationProviderAdapterRuntimeSource {
+  if (process.platform !== "win32") {
+    return Object.freeze({
+      resolveRuntime(): undefined {
+        return undefined;
+      },
+      async drain(): Promise<void> {
+        // The concrete Antigravity runtime is intentionally unavailable on
+        // platforms where this PR cannot provide kernel-owned tree containment.
+      }
+    });
+  }
+
   const runner = new SupervisedProcessRunner([{
     id: ANTIGRAVITY_EXECUTABLE_ID,
-    executable: defaultAntigravityCliExecutablePath(),
+    executable: defaultAntigravityCliExecutablePath("win32"),
     environment: antigravityEnvironment(),
     isolatedWorkingDirectory: true,
     isolatedHomeFiles: {
