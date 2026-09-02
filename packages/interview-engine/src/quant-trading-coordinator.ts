@@ -116,7 +116,7 @@ function publicStateFromEngine(
     actionRequired: state.status === "ACTIVE" && state.phase === "AWAITING_ACTION",
     ...(lastRound === undefined
       ? {}
-      : { lastRound: publicRound(QuantTradingRoundEvidenceEventSchema.parse(lastRound)) }),
+      : { lastRound: publicRound(persistedRoundEvidence(lastRound)) }),
     ...(completion === undefined
       ? {}
       : {
