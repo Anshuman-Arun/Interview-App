@@ -257,6 +257,23 @@ describe("production quant runtime integration", () => {
     expect(store.eventCount(sessionId)).toBe(0);
   });
 
+  it("rejects unsupported Quant Research family/version before session authority is created", async () => {
+    for (const scenario of [
+      { id: "MODEL_COMPARISON", version: "0.0.0" },
+      { id: "NOT_A_RESEARCH_FAMILY", version: QUANT_RESEARCH_VERSION }
+    ]) {
+      const sessionId = newSessionId();
+      await expectProtocolError(postStart(sessionId, {
+        configurationVersion: 1,
+        mode: "QUANT_RESEARCH",
+        scenario,
+        interventionPolicy: "BALANCED"
+      } as InterviewSessionConfiguration), 404, "NOT_FOUND");
+      expect(registry.hasSession(sessionId)).toBe(false);
+      expect(store.eventCount(sessionId)).toBe(0);
+    }
+  });
+
   it("makes Trading action requests idempotent, conflict-safe, restart-stable, and deterministically terminal", async () => {
     const sessionId = newSessionId();
     await expectStatus(postStart(sessionId, tradingConfiguration()), 200);
