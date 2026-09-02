@@ -148,11 +148,7 @@ export const App: React.FC = () => {
     if (
       sessionEntryPendingRef.current
       || sessionTerminalPendingRef.current
-      || (
-        session.isSessionStarted
-        && session.sessionStatus === "ACTIVE"
-        && session.sessionId === targetSessionId
-      )
+      || (session.isSessionStarted && session.sessionStatus === "ACTIVE")
     ) return;
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
@@ -227,7 +223,16 @@ export const App: React.FC = () => {
   }, [session.fetchAvailableSessions, session.readSessionHistory]);
 
   const openSessionsModal = (): void => {
-    refreshStoredSessions();
+    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
+      historyAbortRef.current?.abort();
+      historyAbortRef.current = null;
+      setHistoryRead(null);
+      setHistoryLoading(false);
+      setHistoryError(null);
+      void session.fetchAvailableSessions();
+    } else {
+      refreshStoredSessions();
+    }
     setShowSessionsModal(true);
   };
 
@@ -531,14 +536,20 @@ export const App: React.FC = () => {
                 )}
                 <button
                   type="button"
-                  onClick={refreshStoredSessions}
+                  onClick={() => {
+                    if (hasActiveInterview) {
+                      void session.fetchAvailableSessions();
+                    } else {
+                      refreshStoredSessions();
+                    }
+                  }}
                   className="text-xs text-slate-500 hover:text-slate-700 underline"
                 >
                   Refresh List
                 </button>
               </div>
 
-              {historyLoading && historyRead === null ? (
+              {!hasActiveInterview && historyLoading && historyRead === null ? (
                 <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
                   Loading grounded history…
                 </div>
@@ -548,7 +559,7 @@ export const App: React.FC = () => {
                 </div>
               ) : null}
 
-              {historyRead !== null ? (
+              {!hasActiveInterview && historyRead !== null ? (
                 <section
                   className="rounded-lg border border-slate-200 bg-slate-50 p-3"
                   data-testid="longitudinal-history-panel"
@@ -654,7 +665,7 @@ export const App: React.FC = () => {
                         (
                           s.status === "ACTIVE"
                           && (
-                            s.sessionId === session.sessionId
+                            hasActiveInterview
                             || sessionEntryPending
                             || sessionTerminalPending
                           )
