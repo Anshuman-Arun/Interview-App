@@ -237,6 +237,71 @@ describe("renderer DeliveryId deduplication", () => {
     ]);
   });
 
+  it("retries transient acknowledgements without replaying presentation or changing RequestIds", async () => {
+    const attempts = new Map<string, number>();
+    const requestIds = new Map<string, Set<string>>();
+    const sender: RendererAcknowledgementSender = {
+      send: async (command) => {
+        const parsed = RendererAcknowledgementCommandSchema.parse(command);
+        const count = (attempts.get(parsed.type) ?? 0) + 1;
+        attempts.set(parsed.type, count);
+        const ids = requestIds.get(parsed.type) ?? new Set<string>();
+        ids.add(parsed.requestId);
+        requestIds.set(parsed.type, ids);
+
+        if (parsed.type === "ACK_DELIVERY_EXPOSED" && count < 3) {
+          throw new Error("transient exposed acknowledgement failure");
+        }
+        if (parsed.type === "ACK_DELIVERY_COMPLETED" && count < 2) {
+          throw new Error("transient completion acknowledgement failure");
+        }
+      }
+    };
+    const visible: DeliveryId[] = [];
+    const client = new RendererClient({
+      sessionId: newSessionId(),
+      acknowledgementSender: sender,
+      textPresenter: {
+        presentText: (_text, deliveryId) => {
+          visible.push(deliveryId);
+        }
+      },
+      audioPlayer: new HoldingAudioPlayer(),
+      requestIdFactory: requestIdFactory()
+    });
+    const message = textMessage();
+
+    await client.handleMessage(message);
+    await waitFor(() => {
+      const snapshot = client.snapshot()[0];
+      return snapshot?.exposedAcknowledged === true
+        && snapshot.completedAcknowledged === true;
+    });
+
+    expect(visible).toEqual([message.command.deliveryId]);
+    expect(attempts.get("ACK_DELIVERY_EXPOSED")).toBe(3);
+    expect(attempts.get("ACK_DELIVERY_COMPLETED")).toBe(2);
+    expect(requestIds.get("ACK_DELIVERY_EXPOSED")?.size).toBe(1);
+    expect(requestIds.get("ACK_DELIVERY_COMPLETED")?.size).toBe(1);
+  });
+
+  it("rejects renderer cache limits that do not provide a real finite bound", () => {
+    const base = {
+      sessionId: newSessionId(),
+      acknowledgementSender: new RecordingAcknowledgementSender(),
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: new HoldingAudioPlayer()
+    };
+    expect(() => new RendererClient({
+      ...base,
+      maxTrackedDeliveries: Number.MAX_SAFE_INTEGER
+    })).toThrow(/hard limit/u);
+    expect(() => new RendererClient({
+      ...base,
+      maxTrackedDeliveries: 1.5
+    })).toThrow(/safe integer/u);
+  });
+
   it("fails closed if one DeliveryId is reused for different content", async () => {
     const client = new RendererClient({
       sessionId: newSessionId(),
@@ -338,4 +403,17 @@ function staticSseFetch(body: string): typeof fetch {
     status: 200,
     headers: { "content-type": "text/event-stream; charset=utf-8" }
   });
+}
+
+
+async function waitFor(
+  condition: () => boolean,
+  timeoutMs = 2_000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting for renderer acknowledgement retry");
 }
