@@ -540,7 +540,7 @@ describe("production provider runtime resolution", () => {
       const generation = Object.values(harness.writer.getState().generations)[0];
       expect(generation?.status).toBe("SUPERSEDED");
 
-      orchestrator.requestCancellationForSupersededGenerations(harness.sessionId);
+      orchestrator.requestCancellationForSupersededWork(harness.sessionId);
       await expect(orchestration).resolves.toBeUndefined();
       expect(aborted).toBe(true);
       expect(signalRef?.aborted).toBe(true);
@@ -794,18 +794,19 @@ describe("production provider runtime resolution", () => {
     try {
       const first = await startConfiguredTurn(harness, MOCK_SELECTION);
       let enteredResolve: (() => void) | undefined;
-      let releaseResolve: (() => void) | undefined;
+      let resolutionCalls = 0;
       const entered = new Promise<void>((resolve) => {
         enteredResolve = resolve;
       });
-      const release = new Promise<void>((resolve) => {
-        releaseResolve = resolve;
-      });
+      const never = new Promise<never>(() => undefined);
       const resolver = new ProviderRuntimeResolver({
         configurationSource: {
           async resolveConfiguration() {
-            enteredResolve?.();
-            await release;
+            resolutionCalls += 1;
+            if (resolutionCalls === 1) {
+              enteredResolve?.();
+              await never;
+            }
             return undefined;
           }
         }
@@ -827,10 +828,19 @@ describe("production provider runtime resolution", () => {
 
       const turns = new TurnCoordinator(harness.writer);
       const newer = await turns.commitInput("I have a newer argument for the problem.");
-      releaseResolve?.();
+      const newerOrchestration = orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: newer.turnId,
+        inputEpisodeId: newer.inputEpisodeId,
+        studentText: "I have a newer argument for the problem."
+      });
 
       await expect(orchestration).resolves.toBeUndefined();
-      expect(Object.keys(harness.writer.getState().generations)).toHaveLength(0);
+      await expect(newerOrchestration).resolves.toBeUndefined();
+      expect(resolutionCalls).toBe(2);
+      expect(Object.values(harness.writer.getState().generations)).toEqual([
+        expect.objectContaining({ provider: "mock-model", status: "VALIDATED" })
+      ]);
       expect(harness.writer.getState().lastCommittedInputSequence)
         .toBe(harness.writer.getState().turns[newer.turnId]?.committedSequence);
     } finally {
