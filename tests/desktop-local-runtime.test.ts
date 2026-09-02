@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -21,6 +21,7 @@ import {
   ManagedMoonshineRuntime,
   ManagedSileroVadRuntime
 } from "../apps/desktop/src/runtime/runtime-adapters.js";
+import { cleanupStaleRuntimeAssetViews } from "../apps/desktop/src/runtime/runtime-asset-view.js";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/local-model-http-worker.mjs", import.meta.url));
 const PRODUCTION_WORKER = fileURLToPath(
@@ -62,6 +63,16 @@ describe("desktop local model runtime", () => {
     expect(result.stderr).toBe("");
   });
 
+
+  it("does not delete a verified runtime view owned by this live desktop process", async () => {
+    const root = temporaryRoot("desktop-runtime-view-owner-");
+    const liveView = join(root, `run-${String(process.pid)}-live`);
+    mkdirSync(liveView, { recursive: true });
+
+    await cleanupStaleRuntimeAssetViews(root);
+
+    expect(existsSync(liveView)).toBe(true);
+  });
 
   it("keeps typed desktop startup usable when production model assets are absent", async () => {
     const appDataRoot = temporaryRoot("desktop-local-models-");
