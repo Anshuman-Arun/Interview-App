@@ -1,3 +1,4 @@
+import { types as utilTypes } from "node:util";
 import {
   BillingVerificationSchema,
   type DataUsePolicy,
@@ -7,6 +8,7 @@ import {
 
 export type ProviderPolicyErrorCode =
   | "INVALID_POLICY"
+  | "INVALID_CAPABILITIES"
   | "INVALID_ADAPTER_VERSION"
   | "INVALID_CLOCK"
   | "DATA_USE_EXCEEDS_POLICY"
@@ -27,6 +29,23 @@ export class ProviderPolicyError extends Error {
     this.code = code;
   }
 }
+
+const REFLECT_APPLY_INTRINSIC = Reflect.apply;
+/* eslint-disable @typescript-eslint/unbound-method -- Captured intrinsic is invoked only through Reflect.apply. */
+const DATE_GET_TIME_INTRINSIC = Date.prototype.getTime;
+/* eslint-enable @typescript-eslint/unbound-method */
+const POLICY_KEYS = new Set([
+  "allowMeteredUsage",
+  "maximumDataUse",
+  "billingVerificationMaxAgeMs"
+]);
+const BILLING_VERIFICATION_KEYS = new Set([
+  "billingClass",
+  "enforcementMechanism",
+  "verifiedAt",
+  "adapterVersion",
+  "spendImpossible"
+]);
 
 const dataUseRank: Record<DataUsePolicy, number> = {
   LOCAL_ONLY: 0,
@@ -50,7 +69,8 @@ export function preflightProviderPolicy(input: {
   assertAdapterVersion(input.adapterVersion);
   const now = assertClock(input.now);
 
-  const providerDataUseRank = dataUseRank[input.capabilities.dataUse];
+  const providerDataUse = readProviderDataUse(input.capabilities);
+  const providerDataUseRank = dataUseRank[providerDataUse];
   const maximumDataUseRank = dataUseRank[policy.maximumDataUse];
   if (providerDataUseRank > maximumDataUseRank) {
     throw new ProviderPolicyError(
@@ -80,7 +100,9 @@ export function assertProviderPermitted(input: {
     );
   }
 
-  const parsed = BillingVerificationSchema.safeParse(input.billingVerification);
+  const parsed = BillingVerificationSchema.safeParse(
+    snapshotBillingVerification(input.billingVerification)
+  );
   if (!parsed.success) {
     throw new ProviderPolicyError(
       "INVALID_BILLING_VERIFICATION",
@@ -147,30 +169,134 @@ export function assertProviderPermitted(input: {
 }
 
 function parsePolicyConfiguration(value: unknown): ProviderPolicy {
-  if (typeof value !== "object" || value === null) {
-    throw invalidPolicy();
-  }
-
-  const candidate = value as Record<string, unknown>;
-  const allowMeteredUsage = candidate.allowMeteredUsage;
-  const maximumDataUse = candidate.maximumDataUse;
-  const billingVerificationMaxAgeMs = candidate.billingVerificationMaxAgeMs;
+  const record = snapshotExactDataRecord(value, POLICY_KEYS, "INVALID_POLICY");
+  const allowMeteredUsage = record.allowMeteredUsage;
+  const maximumDataUse = record.maximumDataUse;
+  const billingVerificationMaxAgeMs = record.billingVerificationMaxAgeMs;
 
   if (
     typeof allowMeteredUsage !== "boolean"
     || !isDataUsePolicy(maximumDataUse)
     || typeof billingVerificationMaxAgeMs !== "number"
     || !Number.isFinite(billingVerificationMaxAgeMs)
+    || !Number.isSafeInteger(billingVerificationMaxAgeMs)
     || billingVerificationMaxAgeMs <= 0
   ) {
     throw invalidPolicy();
   }
 
-  return {
+  return Object.freeze({
     allowMeteredUsage,
     maximumDataUse,
     billingVerificationMaxAgeMs
+  });
+}
+
+function readProviderDataUse(capabilities: unknown): DataUsePolicy {
+  const record = snapshotExactDataRecordMember(
+    capabilities,
+    "dataUse",
+    "INVALID_CAPABILITIES"
+  );
+  if (!isDataUsePolicy(record)) {
+    throw new ProviderPolicyError(
+      "INVALID_CAPABILITIES",
+      "Provider capabilities are invalid"
+    );
+  }
+  return record;
+}
+
+function snapshotBillingVerification(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  return snapshotExactDataRecord(
+    value,
+    BILLING_VERIFICATION_KEYS,
+    "INVALID_BILLING_VERIFICATION"
+  );
+}
+
+function snapshotExactDataRecordMember(
+  value: unknown,
+  key: string,
+  errorCode: "INVALID_CAPABILITIES"
+): unknown {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
+    throw new ProviderPolicyError(errorCode, "Provider capabilities are invalid");
+  }
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(value, key);
+  } catch {
+    throw new ProviderPolicyError(errorCode, "Provider capabilities are invalid");
+  }
+  if (
+    descriptor === undefined
+    || descriptor.enumerable !== true
+    || !("value" in descriptor)
+  ) {
+    throw new ProviderPolicyError(errorCode, "Provider capabilities are invalid");
+  }
+  return descriptor.value;
+}
+
+function snapshotExactDataRecord(
+  value: unknown,
+  allowedKeys: ReadonlySet<string>,
+  errorCode: "INVALID_POLICY" | "INVALID_BILLING_VERIFICATION"
+): Readonly<Record<string, unknown>> {
+  const fail = (): never => {
+    if (errorCode === "INVALID_POLICY") throw invalidPolicy();
+    throw new ProviderPolicyError(
+      "INVALID_BILLING_VERIFICATION",
+      "Billing verification is malformed"
+    );
   };
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
+    return fail();
+  }
+
+  let prototype: unknown;
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  try {
+    prototype = Object.getPrototypeOf(value);
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+  } catch {
+    return fail();
+  }
+  if (
+    (prototype !== Object.prototype && prototype !== null)
+    || symbols.length !== 0
+    || Object.keys(descriptors).some((key) => !allowedKeys.has(key))
+  ) {
+    return fail();
+  }
+
+  const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const key of allowedKeys) {
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined
+      || descriptor.enumerable !== true
+      || !("value" in descriptor)
+    ) {
+      return fail();
+    }
+    output[key] = descriptor.value;
+  }
+  return Object.freeze(output);
 }
 
 function isDataUsePolicy(value: unknown): value is DataUsePolicy {
@@ -196,12 +322,38 @@ function assertAdapterVersion(adapterVersion: string): void {
 }
 
 function assertClock(now: Date | undefined): Date {
-  const value = now ?? new Date();
-  if (!Number.isFinite(value.getTime())) {
+  const value: unknown = now ?? new Date();
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+  ) {
     throw new ProviderPolicyError(
       "INVALID_CLOCK",
       "Provider policy clock is invalid"
     );
   }
-  return value;
+  let milliseconds: unknown;
+  try {
+    milliseconds = REFLECT_APPLY_INTRINSIC(
+      DATE_GET_TIME_INTRINSIC,
+      value,
+      []
+    );
+  } catch {
+    throw new ProviderPolicyError(
+      "INVALID_CLOCK",
+      "Provider policy clock is invalid"
+    );
+  }
+  if (
+    typeof milliseconds !== "number"
+    || !Number.isFinite(milliseconds)
+  ) {
+    throw new ProviderPolicyError(
+      "INVALID_CLOCK",
+      "Provider policy clock is invalid"
+    );
+  }
+  return new Date(milliseconds);
 }
