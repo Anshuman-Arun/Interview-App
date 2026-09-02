@@ -313,6 +313,35 @@ class AudioElement implements BrowserAudioElementLike {
 }
 
 describe("QueuedRendererAudioPlayer exposure semantics", () => {
+  it("does not let a throwing speaking-status observer suppress exposure callbacks", async () => {
+    const element = new AudioElement();
+    const adapter = new QueuedRendererAudioPlayer(
+      new BrowserAudioPlayback(() => element),
+      {
+        onSpeakingChanged: () => {
+          throw new Error("UI observer failure");
+        }
+      }
+    );
+    const onStarted = vi.fn();
+    const onCompleted = vi.fn();
+    const presentation = adapter.playAudio({
+      deliveryId: newDeliveryId(),
+      audioRef: "observer.wav",
+      text: "observer",
+      callbacks: { onStarted, onCompleted }
+    });
+
+    await Promise.resolve();
+    element.emit("playing");
+    await presentation;
+    expect(onStarted).toHaveBeenCalledTimes(1);
+
+    element.emit("ended");
+    await Promise.resolve();
+    expect(onCompleted).toHaveBeenCalledTimes(1);
+  });
+
   it("resolves presentation only on physical playing and completes only on ended", async () => {
     const elements: AudioElement[] = [];
     const playback = new BrowserAudioPlayback(() => {
