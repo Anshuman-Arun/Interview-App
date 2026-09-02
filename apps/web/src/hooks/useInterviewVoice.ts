@@ -238,6 +238,21 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
         try {
           const result = await stream.sendFrame(frame, transportSignal);
           processFrameResult(result, epoch, stream.sessionId);
+          if (
+            result.carryCurrentFrameToNextStream === true
+            && isVoiceContextCurrent(
+              epochRef.current,
+              microphoneEnabledRef.current,
+              epoch,
+              optionsRef.current.sessionId,
+              stream.sessionId
+            )
+          ) {
+            // MAX_DURATION finalization can use the current frame only as an
+            // endpoint trigger. Reframe that exact captured PCM as sequence 0
+            // of the next stream instead of dropping continuing student speech.
+            frameQueueRef.current.unshift(frame);
+          }
         } catch (frameError) {
           if (
             epoch !== epochRef.current
