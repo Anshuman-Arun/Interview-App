@@ -12,6 +12,7 @@ import {
 import {
   ManagedWorkerRequestTimeoutError,
   ManagedWorkerResponseError,
+  ManagedWorkerTransportError,
   type ManagedModelWorkerClient
 } from "./managed-worker-client.js";
 
@@ -346,6 +347,7 @@ async function runWithWorkerRecycleOnTimeout<T>(
   } catch (error) {
     const uncertainNativeState =
       error instanceof ManagedWorkerRequestTimeoutError
+      || error instanceof ManagedWorkerTransportError
       || (error instanceof ManagedWorkerResponseError && error.statusCode >= 500);
     if (!uncertainNativeState) throw error;
     try {
