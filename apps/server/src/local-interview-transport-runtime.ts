@@ -268,7 +268,8 @@ export class LocalInterviewTransportRuntime {
       if (rollbackFailures.length > 1) {
         throw new AggregateError(
           rollbackFailures,
-          "Local interview transport startup failed and rollback also failed"
+          "Local interview transport startup failed and rollback also failed",
+          { cause: error }
         );
       }
       throw error;
@@ -291,13 +292,17 @@ export class LocalInterviewTransportRuntime {
     sessionId: Parameters<VoiceSynthesisCoordinator["synthesizeSentTextDelivery"]>[0],
     deliveryId: Parameters<VoiceSynthesisCoordinator["synthesizeSentTextDelivery"]>[1]
   ): Promise<void> {
-    if (this.voiceDeliveryShutdown || this.voiceSynthesis === undefined) return;
+    if (this.voiceDeliveryIsShuttingDown() || this.voiceSynthesis === undefined) return;
     const writer = this.sessions.getWriter(sessionId);
     const source = writer.getState().deliveries[deliveryId];
     if (source?.content.medium !== "TEXT") return;
 
     const audio = await this.voiceSynthesis.synthesizeSentTextDelivery(sessionId, deliveryId);
-    if (audio === undefined || this.voiceDeliveryShutdown) return;
+    if (audio === undefined || this.voiceDeliveryIsShuttingDown()) return;
     await this.rendererStreamServer.publishDelivery(sessionId, audio.deliveryId);
+  }
+
+  private voiceDeliveryIsShuttingDown(): boolean {
+    return this.voiceDeliveryShutdown;
   }
 }
