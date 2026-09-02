@@ -100,6 +100,20 @@ switch (mode) {
     setInterval(() => undefined, 1_000);
     break;
   }
+  case "exit-with-detached-tree": {
+    const pidFile = args[0];
+    if (!pidFile) throw new Error("pid file required");
+    const child = spawn(process.execPath, [import.meta.filename, "hang"], {
+      stdio: "ignore",
+      windowsHide: true,
+      detached: true
+    });
+    if (child.pid === undefined) throw new Error("child pid unavailable");
+    child.unref();
+    writeFileSync(pidFile, String(child.pid), "utf8");
+    process.exit(0);
+    break;
+  }
   case "exit-with-tree": {
     const pidFile = args[0];
     if (!pidFile) throw new Error("pid file required");
