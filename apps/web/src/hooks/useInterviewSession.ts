@@ -424,7 +424,7 @@ export function useInterviewSession(
   }, []);
   const voiceIntegration = useInterviewVoice({
     sessionId,
-    sessionActive: isSessionStarted && sessionStatus === "ACTIVE",
+    sessionActive: isSessionStarted && sessionStatus === "ACTIVE" && !isPaused,
     voiceBaseUrl,
     authenticatedFetch,
     speaking: isSpeaking,
@@ -468,6 +468,7 @@ export function useInterviewSession(
     setAvailableSessions([]);
     setSessionId(null);
     setIsSessionStarted(false);
+    setIsPaused(false);
     setSessionStatus("CREATED");
     setProblem(null);
     setTranscript([]);
