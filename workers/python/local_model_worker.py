@@ -38,7 +38,7 @@ SPEECH_MODEL_IDENTITY = (
     "moonshine-tiny-en@35d84fc0eb2d7451da9973c990e8a77066abb105+"
     "silero-v6.2.1@7e30209a3e901f9842f81b225f3e93d8199902b1"
 )
-TTS_MODEL_IDENTITY = "kokoro-af-heart@35d84fc0eb2d7451da9973c990e8a77066abb105"
+TTS_MODEL_IDENTITY = "kokoro-af-heart+35d84fc0eb2d7451da9973c990e8a77066abb105"
 
 
 class ProtocolError(Exception):
