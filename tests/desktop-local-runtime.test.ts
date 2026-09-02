@@ -6,6 +6,7 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  SPEECH_VAD_TIMEOUT_ABORT_REASON,
   SpeechRequestIdSchema,
   SpeechUtteranceIdSchema,
   TtsRequestIdSchema
@@ -424,6 +425,56 @@ describe("desktop local model runtime", () => {
     );
     await expect(composition.stopWorkers()).resolves.toBeUndefined();
     expect(disposeCalls).toBe(2);
+  });
+
+  it("recycles Silero after a speech-core VAD timeout but not ordinary cancellation", async () => {
+    const token = "1".repeat(64);
+    const runtime = fixtureManager("speech-vad-core-timeout", "speech", "fixture-speech-1", token);
+    await runtime.start("speech-vad-core-timeout");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-vad-core-timeout",
+      "speech",
+      token
+    );
+    const workerInstance = client.workerInstanceIdentity();
+    let recycleCount = 0;
+    const mutable = client as unknown as {
+      postJson(): Promise<unknown>;
+      recycleAfterUncertainRequest(expectedWorkerInstance: string): Promise<void>;
+    };
+    mutable.postJson = async () => {
+      const error = new Error("synthetic caller abort");
+      error.name = "AbortError";
+      throw error;
+    };
+    mutable.recycleAfterUncertainRequest = async (expectedWorkerInstance) => {
+      expect(expectedWorkerInstance).toBe(workerInstance);
+      recycleCount += 1;
+    };
+    const vad = new ManagedSileroVadRuntime(client, "/verified/silero.onnx");
+
+    const timeout = new AbortController();
+    timeout.abort(SPEECH_VAD_TIMEOUT_ABORT_REASON);
+    await expect(vad.score({
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      streamId: "stream-vad-core-timeout",
+      modelPath: "/verified/silero.onnx",
+      signal: timeout.signal
+    })).rejects.toMatchObject({ name: "AbortError" });
+    expect(recycleCount).toBe(1);
+
+    const ordinaryCancel = new AbortController();
+    ordinaryCancel.abort();
+    await expect(vad.score({
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      streamId: "stream-vad-ordinary-cancel",
+      modelPath: "/verified/silero.onnx",
+      signal: ordinaryCancel.signal
+    })).rejects.toMatchObject({ name: "AbortError" });
+    expect(recycleCount).toBe(1);
   });
 
   it("recycles the exact supervised worker after an internal model request deadline", async () => {
