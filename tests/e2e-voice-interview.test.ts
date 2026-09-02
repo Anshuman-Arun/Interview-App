@@ -14,6 +14,8 @@ import {
   SpeechWorkerCore,
   TtsWorkerCore,
   type RecognizerAudioInput,
+  type SynthesizedPcm,
+  type TtsSegmentSynthesisRequest,
   type VadBackend
 } from "../packages/local-compute/src/index.js";
 import {
@@ -106,8 +108,8 @@ class BlockingFakeSpeechSynthesizer extends DeterministicFakeSpeechSynthesizer {
   });
 
   public override async synthesize(
-    request: Parameters<DeterministicFakeSpeechSynthesizer["synthesize"]>[0]
-  ) {
+    request: TtsSegmentSynthesisRequest
+  ): Promise<SynthesizedPcm> {
     this.signalStarted();
     await this.gate;
     return super.synthesize(request);
