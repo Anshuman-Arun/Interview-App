@@ -14,6 +14,7 @@ import type {
   NormalizedStudentShapeChange
 } from "../whiteboard/normalized-board.js";
 import { useOptionalTheme } from "../theme/ThemeProvider.js";
+import styles from "./WhiteboardCanvas.module.css";
 
 export interface WhiteboardCanvasProps {
   readonly adapter?: TldrawWhiteboardAdapter;
@@ -72,12 +73,12 @@ export function createWhiteboardCanvasMount(props: WhiteboardCanvasProps): White
   };
 }
 
-export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
+const WhiteboardCanvasComponent: React.FC<WhiteboardCanvasProps> = ({
   adapter,
   onEditorMount,
   onBoardChange,
   onNormalizedBoardChange,
-  className = "whiteboard-canvas-container w-full h-full min-h-[380px]",
+  className = styles.canvas ?? "",
   style,
   readOnly = false
 }) => {
@@ -169,4 +170,7 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
     </div>
   );
 };
+
+export const WhiteboardCanvas = React.memo(WhiteboardCanvasComponent);
+WhiteboardCanvas.displayName = "WhiteboardCanvas";
 

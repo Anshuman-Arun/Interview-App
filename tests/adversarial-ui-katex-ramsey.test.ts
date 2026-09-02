@@ -231,7 +231,7 @@ describe("Adversarial Test Suite 1: KaTeX Math Rendering Stress & Pathological I
 
     const element = React.createElement(MathText, { text: brokenLaTeX });
     const markup = renderToStaticMarkup(element);
-    expect(markup).toContain("math-text-container");
+    expect(markup).toContain("katex");
   });
 });
 

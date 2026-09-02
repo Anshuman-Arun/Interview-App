@@ -8,7 +8,7 @@ export interface ProblemCardProps {
   readonly className?: string;
 }
 
-export const ProblemCard: React.FC<ProblemCardProps> = ({
+const ProblemCardComponent: React.FC<ProblemCardProps> = ({
   problem = null,
   className = ""
 }) => {
@@ -72,3 +72,6 @@ export const ProblemCard: React.FC<ProblemCardProps> = ({
     </section>
   );
 };
+
+export const ProblemCard = React.memo(ProblemCardComponent);
+ProblemCard.displayName = "ProblemCard";

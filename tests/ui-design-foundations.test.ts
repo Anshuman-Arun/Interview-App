@@ -16,6 +16,9 @@ const FOUNDATION_FILES = [
   "apps/web/src/components/SessionReviewModal.module.css",
   "apps/web/src/components/ThemeControl.module.css",
   "apps/web/src/components/BrandMark.module.css",
+  "apps/web/src/components/MathText.module.css",
+  "apps/web/src/components/WhiteboardCanvas.module.css",
+  "apps/web/src/AppShell.module.css",
   "apps/web/src/theme/ThemeProvider.tsx"
 ] as const;
 
@@ -76,6 +79,76 @@ describe("professional UI foundation invariants", () => {
     expect(favicon).not.toContain("<text");
     expect(favicon).not.toContain("gradient");
     expect(html).toContain('href="/brand-mark.svg"');
+  });
+
+  it("keeps the live shell free of prototype runtime chrome and decorative animation", () => {
+    const appSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(appSource).not.toContain("Technical Interview Runtime");
+    expect(appSource).not.toContain("Durable Runtime");
+    expect(appSource).not.toContain("animate-pulse");
+    expect(appSource).not.toContain("Interactive tldraw Whiteboard");
+    expect(appSource).not.toContain("AI Overlay Protected Layer");
+    expect(appSource).toContain("<BrandMark");
+    expect(appSource).toContain("End interview");
+    expect(appSource).toContain('data-testid="tab-whiteboard"');
+    expect(appSource).toContain('data-testid="tab-formulation"');
+    expect(appSource).toContain("Whiteboard");
+    expect(appSource).toContain("Details");
+  });
+
+  it("keeps the live shell independent from legacy global utility styles", () => {
+    const appSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const mathSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/MathText.tsx"),
+      "utf8"
+    );
+    const whiteboardSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),
+      "utf8"
+    );
+
+    expect(appSource).not.toContain('import "./styles/app.css"');
+    expect(appSource).not.toContain('import "./styles/transcript.css"');
+    expect(mathSource).toContain('import styles from "./MathText.module.css"');
+    expect(whiteboardSource).toContain('import styles from "./WhiteboardCanvas.module.css"');
+  });
+
+  it("isolates the native whiteboard surface from unrelated shell rerenders", () => {
+    const whiteboardSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/WhiteboardCanvas.tsx"),
+      "utf8"
+    );
+    const appSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    const problemSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/ProblemCard.tsx"),
+      "utf8"
+    );
+    const transcriptSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/TranscriptFeed.tsx"),
+      "utf8"
+    );
+    const composerSource = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/components/StudentInputArea.tsx"),
+      "utf8"
+    );
+
+    expect(whiteboardSource).toContain("React.memo(WhiteboardCanvasComponent)");
+    expect(problemSource).toContain("React.memo(ProblemCardComponent)");
+    expect(transcriptSource).toContain("React.memo(TranscriptFeedComponent)");
+    expect(composerSource).toContain("React.memo(StudentInputAreaComponent)");
+    expect(appSource).toContain('className={styles.app ?? ""}');
+    expect(appSource).toContain("onSubmit={handleSubmitReasoning}");
   });
 
   it("rejects expensive decorative effects from the stage-A foundation surface", () => {

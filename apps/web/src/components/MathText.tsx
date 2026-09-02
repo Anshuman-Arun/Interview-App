@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import katex from "katex";
+import styles from "./MathText.module.css";
 
 export type MathSegmentType = "text" | "inline-math" | "block-math";
 
@@ -100,7 +101,7 @@ export const MathText: React.FC<MathTextProps> = ({
   const segments = useMemo(() => parseMathSegments(text), [text]);
 
   return (
-    <span className={`math-text-container ${className}`}>
+    <span className={`${styles.container ?? ""} ${className}`}>
       {segments.map((segment, index) => {
         if (segment.type === "text") {
           return <span key={index}>{segment.content}</span>;
@@ -113,7 +114,7 @@ export const MathText: React.FC<MathTextProps> = ({
           return (
             <code
               key={index}
-              className="katex-fallback text-red-600 font-mono text-sm px-1 py-0.5 bg-red-50 rounded"
+              className={styles.fallback}
             >
               {segment.content}
             </code>
@@ -125,8 +126,8 @@ export const MathText: React.FC<MathTextProps> = ({
             key={index}
             className={
               isBlock
-                ? "katex-block-wrapper my-2 block overflow-x-auto text-center"
-                : "katex-inline-wrapper inline align-baseline"
+                ? styles.block
+                : styles.inline
             }
             dangerouslySetInnerHTML={{ __html: html }}
           />

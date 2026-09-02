@@ -129,9 +129,9 @@ describe("UI Shell & KaTeX Math Rendering", () => {
       const rendered = renderToStaticMarkup(element);
 
       expect(rendered).toContain("Consider complete graph");
-      expect(rendered).toContain("katex-inline-wrapper");
       expect(rendered).toContain("where");
       expect(rendered).toContain("katex");
+      expect(rendered).not.toContain("katex-display");
     });
 
     it("gracefully falls back when invalid syntax is provided to KaTeX", () => {

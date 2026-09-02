@@ -35,7 +35,7 @@ function isNormalDeliveryStatus(status: MessageDeliveryStatus): boolean {
     || status === "EXPOSED";
 }
 
-export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
+const TranscriptFeedComponent: React.FC<TranscriptFeedProps> = ({
   items,
   onRetry,
   className = ""
@@ -172,3 +172,6 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
     </section>
   );
 };
+
+export const TranscriptFeed = React.memo(TranscriptFeedComponent);
+TranscriptFeed.displayName = "TranscriptFeed";

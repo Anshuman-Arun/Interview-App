@@ -4,11 +4,10 @@ import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
 import { StudentInputArea } from "./components/StudentInputArea.js";
 import { VoiceControls } from "./components/VoiceControls.js";
+import { BrandMark } from "./components/BrandMark.js";
+import { ThemeControl } from "./components/ThemeControl.js";
 import { WhiteboardCanvas } from "./components/WhiteboardCanvas.js";
-import {
-  TldrawWhiteboardAdapter,
-  type TldrawEditor
-} from "./tldraw-whiteboard-adapter.js";
+import { TldrawWhiteboardAdapter } from "./tldraw-whiteboard-adapter.js";
 import { useInterviewSession } from "./hooks/useInterviewSession.js";
 import {
   SessionReviewModal,
@@ -16,14 +15,14 @@ import {
 } from "./components/SessionReviewModal.js";
 import type { SessionHistoryReadResponse } from "../../../packages/replay/src/index.js";
 import { isSessionIdAddressableForRead } from "./session-read-client.js";
-import "./styles/app.css";
-import "./styles/transcript.css";
+import styles from "./AppShell.module.css";
 
 export const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
   const [activeTab, setActiveTab] = useState<"whiteboard" | "formulation">("whiteboard");
+  const [compactWorkspace, setCompactWorkspace] = useState<"interview" | "whiteboard">("interview");
   const [reviewTarget, setReviewTarget] = useState<{
     readonly sessionId: SessionId;
     readonly tab: SessionReviewTab;
@@ -32,6 +31,12 @@ export const App: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const historyAbortRef = useRef<AbortController | null>(null);
+  const sessionsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const sessionsCloseRef = useRef<HTMLButtonElement | null>(null);
+  const sessionsDialogRef = useRef<HTMLDivElement | null>(null);
+  const moreMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const whiteboardTabRef = useRef<HTMLButtonElement | null>(null);
+  const detailsTabRef = useRef<HTMLButtonElement | null>(null);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -51,6 +56,10 @@ export const App: React.FC = () => {
       // Error handled in session.error
     }
   };
+
+  const handleSubmitReasoning = useCallback((text: string): Promise<void> => {
+    return session.submitTypedInput(text);
+  }, [session.submitTypedInput]);
 
   const handleCompleteSession = async (): Promise<void> => {
     const targetSessionId = session.sessionId;
@@ -125,9 +134,76 @@ export const App: React.FC = () => {
   };
 
   const openSessionsModal = (): void => {
+    setShowSettings(false);
     refreshStoredSessions();
     setShowSessionsModal(true);
   };
+
+  const closeSessionsModal = useCallback((): void => {
+    setShowSessionsModal(false);
+    queueMicrotask(() => sessionsTriggerRef.current?.focus());
+  }, []);
+
+  const closeReview = useCallback((): void => {
+    setReviewTarget(null);
+    queueMicrotask(() => sessionsTriggerRef.current?.focus());
+  }, []);
+
+  const closeMoreMenu = useCallback((): void => {
+    moreMenuRef.current?.removeAttribute("open");
+  }, []);
+
+  const handleWorkspaceTabKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+
+      const next = event.currentTarget.id === "workspace-tab-whiteboard"
+        ? "formulation"
+        : "whiteboard";
+      setActiveTab(next);
+      queueMicrotask(() => {
+        if (next === "whiteboard") {
+          whiteboardTabRef.current?.focus();
+        } else {
+          detailsTabRef.current?.focus();
+        }
+      });
+    },
+    []
+  );
+
+  const handleSessionsDialogKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      if (event.key !== "Tab") return;
+
+      const dialog = sessionsDialogRef.current;
+      if (dialog === null) return;
+
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first === undefined || last === undefined) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+
+      if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     historyAbortRef.current?.abort();
@@ -144,169 +220,183 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!showSessionsModal) return;
+    sessionsCloseRef.current?.focus();
+  }, [showSessionsModal]);
 
-  const handleWhiteboardEditorMount = useCallback((editor: TldrawEditor): void => {
-    if (editor.getCurrentPageShapes().length > 0) return;
+  useEffect(() => {
+    if (!showSessionsModal && !showSettings) return;
 
-    whiteboardAdapter.createStudentShape({
-      type: "geo",
-      x: 80,
-      y: 80,
-      props: {
-        w: 220,
-        h: 120,
-        geo: "rectangle",
-        color: "blue",
-        text: "Let V = {v1, v2, v3, v4, v5, v6}\nComplete graph K6"
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+
+      if (showSessionsModal) {
+        event.preventDefault();
+        closeSessionsModal();
+        return;
       }
-    });
-  }, [whiteboardAdapter]);
 
-  const getStatusBadgeClass = (status: string) => {
+      if (showSettings) {
+        event.preventDefault();
+        setShowSettings(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [closeSessionsModal, showSessionsModal, showSettings]);
+
+
+  const getStatusBadgeClass = (status: string): string => {
     switch (status) {
       case "ACTIVE":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+        return styles.statusActive ?? "";
       case "COMPLETED":
-        return "bg-blue-50 text-blue-700 border-blue-200";
+        return styles.statusCompleted ?? "";
       case "ARCHIVED":
-        return "bg-slate-100 text-slate-600 border-slate-200";
+        return styles.statusArchived ?? "";
       default:
-        return "bg-amber-50 text-amber-700 border-amber-200";
+        return styles.statusOther ?? "";
     }
   };
 
   return (
-    <div className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
+    <div className={styles.app ?? ""}>
       {/* Top Header Bar */}
-      <header className="app-header bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-xs z-10 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold shadow-xs text-sm">
-            IV
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span>Technical Interview Runtime</span>
-              <span className="text-xs font-normal text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                Durable Runtime
-              </span>
-            </h1>
-            <p className="text-xs text-slate-500">
-              {session.problem?.title ?? "Application-owned interview session composition"}
+      <header className={styles.header}>
+        <div className={styles.identity}>
+          <BrandMark size={26} />
+          <div className={styles.identityCopy}>
+            <div className={styles.identityLine}>
+              <h1 className={styles.productName}>Interview</h1>
+              {session.isSessionStarted && (
+                <span className={styles.sessionState}>
+                  {session.sessionStatus.toLowerCase()}
+                </span>
+              )}
+            </div>
+            <p className={styles.problemName}>
+              {session.problem?.title ?? "Technical interview practice"}
             </p>
           </div>
         </div>
 
-        {/* Status Indicators & Controls */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ${
-                session.isConnected
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-slate-100 text-slate-600 border border-slate-200"
-              }`}
-              data-testid="connection-status"
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  session.isConnected ? "bg-emerald-500" : "bg-slate-400"
-                }`}
-              />
-              <span>{session.isConnected ? "Connected" : "Disconnected"}</span>
+        <div className={styles.headerActions}>
+          <span
+            className={
+              session.isConnected
+                ? styles.connectionOnline
+                : styles.connectionOffline
+            }
+            data-testid="connection-status"
+            role="status"
+            aria-live="polite"
+          >
+            <span className={styles.statusDot} aria-hidden="true" />
+            {session.isConnected ? "Connected" : "Disconnected"}
+          </span>
+
+          {session.isStreaming && (
+            <span className={styles.streamingState} role="status" aria-live="polite">
+              Responding
             </span>
-
-            {session.isStreaming && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">
-                <span>⚡ Stream Active</span>
-              </span>
-            )}
-          </div>
-
-          {session.sessionId !== null && (
-            <div className="text-xs font-mono bg-slate-50 px-2.5 py-1 rounded border border-slate-200 flex items-center gap-2">
-              <span className="text-slate-400">Session:</span>
-              <span className="font-semibold text-slate-800">{session.sessionId}</span>
-              <span className="text-slate-300">|</span>
-              <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border ${getStatusBadgeClass(session.sessionStatus)}`}>
-                {session.sessionStatus}
-              </span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-400">Seq:</span>
-              <span className="font-semibold text-slate-800">{session.sequence}</span>
-            </div>
           )}
 
           {session.isSessionStarted && session.sessionStatus === "ACTIVE" && (
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => void handleCompleteSession()}
-                className="text-xs font-medium text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded border border-emerald-200 transition-colors"
-                title="Complete interview session"
-              >
-                ✓ Complete
-              </button>
-              <button
-                type="button"
-                onClick={() => void session.archiveSession()}
-                className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded border border-slate-200 transition-colors"
-                title="Archive interview session"
-              >
-                Archive
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void handleCompleteSession()}
+              className={styles.endInterviewButton}
+              title="Complete interview session"
+            >
+              End interview
+            </button>
           )}
 
           <button
+            ref={sessionsTriggerRef}
             type="button"
             onClick={openSessionsModal}
-            className="text-xs font-medium text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md border border-indigo-200 transition-colors"
+            className={styles.headerButton}
             data-testid="sessions-btn"
           >
-            📋 Sessions
+            Sessions
           </button>
 
-          {!session.isTransportManaged && (
-            <button
-              type="button"
-              onClick={() => setShowSettings((prev) => !prev)}
-              className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md border border-slate-200 transition-colors"
-              data-testid="settings-btn"
-            >
-              ⚙️ Config
-            </button>
-          )}
+          <details ref={moreMenuRef} className={styles.moreMenu}>
+            <summary aria-label="More options">•••</summary>
+            <div className={styles.morePopover}>
+              <div className={styles.menuSection}>
+                <span className={styles.menuLabel}>Appearance</span>
+                <ThemeControl compact />
+              </div>
+
+              {session.isSessionStarted && session.sessionStatus === "ACTIVE" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMoreMenu();
+                    void session.archiveSession();
+                  }}
+                  className={styles.menuItem}
+                >
+                  Archive session
+                </button>
+              )}
+
+              {!session.isTransportManaged && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMoreMenu();
+                    setShowSettings((prev) => !prev);
+                  }}
+                  className={styles.menuItem}
+                  data-testid="settings-btn"
+                >
+                  Connection settings
+                </button>
+              )}
+
+              {session.sessionId !== null && (
+                <div className={styles.menuDiagnostics}>
+                  <span>{session.sessionId}</span>
+                  <span>Seq {session.sequence}</span>
+                </div>
+              )}
+            </div>
+          </details>
         </div>
       </header>
 
       {/* Settings Modal / Drawer */}
       {showSettings && !session.isTransportManaged && (
-        <div className="settings-drawer bg-slate-800 text-white px-6 py-4 border-b border-slate-700 flex items-center justify-between gap-6 shrink-0 shadow-md">
-          <form onSubmit={handleSaveSettings} className="flex flex-wrap items-center gap-4 flex-1">
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">
-                Loopback Command URL
-              </label>
+        <div className={styles.settingsDrawer}>
+          <form onSubmit={handleSaveSettings} className={styles.settingsForm}>
+            <div className={styles.settingsCopy}>
+              <strong>Connection settings</strong>
+              <span>Browser-only loopback transport configuration.</span>
+            </div>
+            <div className={styles.settingsField}>
+              <label htmlFor="loopback-command-url">Loopback command URL</label>
               <input
+                id="loopback-command-url"
                 type="text"
                 value={inputUrl}
-                onChange={(e) => setInputUrl(e.target.value)}
-                className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono w-56 focus:outline-none focus:border-indigo-400"
+                onChange={(event) => setInputUrl(event.target.value)}
+                className={styles.settingsInput}
                 placeholder="http://127.0.0.1:43123"
               />
             </div>
-
-            <div className="flex items-end gap-2 pt-4">
-              <button
-                type="submit"
-                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold"
-              >
-                Apply Config
+            <div className={styles.settingsActions}>
+              <button type="submit" className={styles.primaryButton}>
+                Apply
               </button>
               <button
                 type="button"
                 onClick={() => setShowSettings(false)}
-                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs"
+                className={styles.secondaryButton}
               >
                 Close
               </button>
@@ -317,183 +407,195 @@ export const App: React.FC = () => {
 
       {/* Sessions Management Modal */}
       {showSessionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden border border-slate-200">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-2">
-                <span className="text-base font-bold text-slate-900">Stored Interview Sessions</span>
-                <span className="text-xs text-slate-500 font-mono">
-                  ({session.availableSessions.length})
-                </span>
+        <div className={styles.sessionOverlay}>
+          <div
+            ref={sessionsDialogRef}
+            className={styles.sessionsDialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sessions-dialog-title"
+            onKeyDown={handleSessionsDialogKeyDown}
+          >
+            <header className={styles.sessionsHeader}>
+              <div>
+                <div className={styles.sessionsTitleLine}>
+                  <h2 id="sessions-dialog-title">Sessions</h2>
+                  <span>{session.availableSessions.length}</span>
+                </div>
+                <p>Resume active work or inspect a grounded completed session.</p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowSessionsModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+                ref={sessionsCloseRef}
+                onClick={closeSessionsModal}
+                className={styles.dialogClose}
+                aria-label="Close sessions"
               >
-                ✕
+                ×
+              </button>
+            </header>
+
+            <div className={styles.sessionsToolbar}>
+              <button
+                type="button"
+                onClick={() => void handleStartSession()}
+                className={styles.primaryButton}
+              >
+                New interview
+              </button>
+              <button
+                type="button"
+                onClick={refreshStoredSessions}
+                className={styles.quietButton}
+              >
+                Refresh
               </button>
             </div>
 
-            <div className="p-4 overflow-y-auto flex-1 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => void handleStartSession()}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors"
-                >
-                  + Start New Interview Session
-                </button>
-                <button
-                  type="button"
-                  onClick={refreshStoredSessions}
-                  className="text-xs text-slate-500 hover:text-slate-700 underline"
-                >
-                  Refresh List
-                </button>
-              </div>
-
+            <div className={styles.sessionsBody}>
               {historyLoading && historyRead === null ? (
-                <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
-                  Loading grounded history…
-                </div>
+                <div className={styles.inlineState}>Loading grounded history…</div>
               ) : historyError !== null && historyRead === null ? (
-                <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-                  {historyError}
-                </div>
+                <div className={styles.inlineError}>{historyError}</div>
               ) : null}
 
-              {historyRead !== null ? (
+              {historyRead !== null && (
                 <section
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                  className={styles.historySummary}
                   data-testid="longitudinal-history-panel"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-bold text-slate-900">Grounded history</h3>
-                    <span className="text-[10px] text-slate-500">
-                      {historyRead.longitudinal.includedSessionCount} bounded session projection(s)
+                  <div className={styles.historyHeading}>
+                    <div>
+                      <h3>Grounded history</h3>
+                      <p>Exact problem/version comparisons only.</p>
+                    </div>
+                    <span>
+                      {historyRead.longitudinal.includedSessionCount} bounded session
+                      {historyRead.longitudinal.includedSessionCount === 1 ? "" : "s"}
                     </span>
                   </div>
+
                   {historyRead.longitudinal.evaluationStatistics.some(
                     (item) => item.average.compositeScore !== null
                   ) ? (
-                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className={styles.historyMetrics}>
                       {historyRead.longitudinal.evaluationStatistics
                         .filter((item) => item.average.compositeScore !== null)
                         .slice(0, 4)
                         .map((item) => (
                           <div
                             key={`${item.problemId}:${item.problemVersion}`}
-                            className="rounded border border-slate-200 bg-white p-2 text-[11px]"
+                            className={styles.historyMetric}
                           >
-                            <div className="font-mono text-[10px] text-slate-500 break-all">
-                              {item.problemId} @ {item.problemVersion}
+                            <div>
+                              <code>{item.problemId}</code>
+                              <span>v{item.problemVersion}</span>
                             </div>
-                            <div className="mt-1 font-semibold text-slate-800">
-                              Composite average: {item.average.compositeScore}
-                            </div>
-                            <div className="text-slate-500">
-                              {item.scoredSessionCount["compositeScore"]} scored / {item.sessionCount} evaluated
-                            </div>
+                            <strong>{item.average.compositeScore}</strong>
+                            <span>
+                              {item.scoredSessionCount["compositeScore"]} scored / {item.sessionCount}
+                            </span>
                           </div>
                         ))}
                     </div>
                   ) : (
-                    <p className="mt-2 text-[11px] text-slate-500">
+                    <p className={styles.historyEmpty}>
                       No supported cross-session score trend is currently grounded.
                     </p>
                   )}
-                  {historyRead.longitudinal.improvement.length > 0 ? (
-                    <div className="mt-2 text-[11px] text-slate-600">
+
+                  {historyRead.longitudinal.improvement.length > 0 && (
+                    <div className={styles.historyChanges}>
                       {historyRead.longitudinal.improvement.slice(0, 3).map((item) => (
-                        <div key={`${item.fromSessionId}:${item.toSessionId}`}>
-                          Exact-problem composite change:{" "}
-                          {item.compositeScoreDelta > 0 ? "+" : ""}
-                          {item.compositeScoreDelta}
-                        </div>
+                        <span key={`${item.fromSessionId}:${item.toSessionId}`}>
+                          Composite change{" "}
+                          <strong>
+                            {item.compositeScoreDelta > 0 ? "+" : ""}
+                            {item.compositeScoreDelta}
+                          </strong>
+                        </span>
                       ))}
                     </div>
-                  ) : null}
-                  {historyRead.longitudinal.sessionTruncation.truncated ? (
-                    <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
-                      {historyRead.longitudinal.sessionTruncation.remainingCount} session(s) are outside the current grounded aggregate coverage.
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-[10px] text-slate-400">
-                    Comparisons require exact problem ID and version. Unsupported dimensions remain excluded.
-                  </p>
-                </section>
-              ) : null}
+                  )}
 
-              {session.availableSessions.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-xs">
-                  No local sessions found. Start a new session to begin.
-                </div>
-              ) : (
-                session.availableSessions.map((s) => (
-                  <div
-                    key={s.sessionId}
-                    className="p-3 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors flex items-center justify-between bg-white shadow-2xs"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-slate-900">{s.sessionId}</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(s.status)}`}>
-                          {s.status}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 flex items-center gap-3">
-                        <span>Problem: {s.problemId ?? "Configured session"}</span>
-                        <span>•</span>
-                        <span>Events: {s.eventCount}</span>
-                        <span>•</span>
-                        <span>Updated: {new Date(s.updatedAt).toLocaleTimeString()}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={
-                        s.status === "ACTIVE"
-                          ? () => void handleRecoverSession(s.sessionId)
-                          : (
-                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
-                              && isSessionIdAddressableForRead(s.sessionId)
-                            )
-                            ? () => openHistoricalReview(s.sessionId)
-                            : undefined
-                      }
-                      disabled={
-                        s.status !== "ACTIVE"
-                        && (
-                          (s.status !== "COMPLETED" && s.status !== "ARCHIVED")
-                          || !isSessionIdAddressableForRead(s.sessionId)
-                        )
-                      }
-                      className={`px-3 py-1 border rounded text-xs font-semibold transition-colors ${
-                        s.status === "ACTIVE"
-                          ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
-                          : (
-                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
-                              && isSessionIdAddressableForRead(s.sessionId)
-                            )
-                            ? "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
-                            : "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                      }`}
-                    >
-                      {s.sessionId === session.sessionId && s.status === "ACTIVE"
-                        ? "Current"
-                        : s.status === "ACTIVE"
-                          ? "Resume"
-                          : (
-                              (s.status === "COMPLETED" || s.status === "ARCHIVED")
-                              && isSessionIdAddressableForRead(s.sessionId)
-                            )
-                            ? "Review"
-                            : "Unavailable"}
-                    </button>
-                  </div>
-                ))
+                  {historyRead.longitudinal.sessionTruncation.truncated && (
+                    <p className={styles.historyWarning}>
+                      {historyRead.longitudinal.sessionTruncation.remainingCount} additional
+                      session(s) are outside the current grounded aggregate coverage.
+                    </p>
+                  )}
+                </section>
               )}
+
+              <section className={styles.sessionListSection}>
+                <div className={styles.sessionListHeading}>
+                  <h3>Local sessions</h3>
+                </div>
+
+                {session.availableSessions.length === 0 ? (
+                  <div className={styles.sessionEmpty}>
+                    No local sessions found. Start a new interview to begin.
+                  </div>
+                ) : (
+                  <div className={styles.sessionList}>
+                    <div className={styles.sessionTableHeader} aria-hidden="true">
+                      <span>Session</span>
+                      <span>Status</span>
+                      <span>Events</span>
+                      <span>Updated</span>
+                      <span />
+                    </div>
+
+                    {session.availableSessions.map((stored) => {
+                      const reviewable =
+                        (stored.status === "COMPLETED" || stored.status === "ARCHIVED")
+                        && isSessionIdAddressableForRead(stored.sessionId);
+                      const actionable = stored.status === "ACTIVE" || reviewable;
+
+                      return (
+                        <div key={stored.sessionId} className={styles.sessionRow}>
+                          <div className={styles.sessionIdentity}>
+                            <strong>{stored.problemId ?? "Configured session"}</strong>
+                            <code>{stored.sessionId}</code>
+                          </div>
+                          <span
+                            className={`${styles.statusBadge ?? ""} ${getStatusBadgeClass(stored.status)}`}
+                          >
+                            {stored.status.toLowerCase()}
+                          </span>
+                          <span className={styles.sessionEvents}>{stored.eventCount}</span>
+                          <time className={styles.sessionUpdated} dateTime={stored.updatedAt}>
+                            {new Date(stored.updatedAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            })}
+                          </time>
+                          <button
+                            type="button"
+                            onClick={
+                              stored.status === "ACTIVE"
+                                ? () => void handleRecoverSession(stored.sessionId)
+                                : reviewable
+                                  ? () => openHistoricalReview(stored.sessionId)
+                                  : undefined
+                            }
+                            disabled={!actionable}
+                            className={styles.sessionAction}
+                          >
+                            {stored.sessionId === session.sessionId && stored.status === "ACTIVE"
+                              ? "Current"
+                              : stored.status === "ACTIVE"
+                                ? "Resume"
+                                : reviewable
+                                  ? "Review"
+                                  : "Unavailable"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
             </div>
           </div>
         </div>
@@ -501,58 +603,87 @@ export const App: React.FC = () => {
 
       {/* Error Banner */}
       {session.error !== null && (
-        <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 flex items-center justify-between text-xs text-rose-800 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="font-bold">⚠️ Notice:</span>
-            <span>{session.error}</span>
-          </div>
+        <div className={styles.errorBanner} role="status">
+          <span className={styles.errorLabel}>Notice</span>
+          <span className={styles.errorMessage}>{session.error}</span>
           <button
             type="button"
             onClick={session.clearError}
-            className="text-rose-600 hover:text-rose-900 font-bold px-2"
+            className={styles.errorDismiss}
+            aria-label="Dismiss notice"
           >
-            ✕
+            ×
           </button>
         </div>
       )}
 
+      <nav className={styles.compactWorkspaceTabs} aria-label="Compact workspace view">
+        <button
+          type="button"
+          aria-pressed={compactWorkspace === "interview"}
+          onClick={() => setCompactWorkspace("interview")}
+          className={
+            compactWorkspace === "interview"
+              ? styles.compactWorkspaceTabActive
+              : styles.compactWorkspaceTab
+          }
+        >
+          Interview
+        </button>
+        <button
+          type="button"
+          aria-pressed={compactWorkspace === "whiteboard"}
+          onClick={() => setCompactWorkspace("whiteboard")}
+          className={
+            compactWorkspace === "whiteboard"
+              ? styles.compactWorkspaceTabActive
+              : styles.compactWorkspaceTab
+          }
+        >
+          Whiteboard
+        </button>
+      </nav>
+
       {/* Main Split-Pane Workspace */}
-      <main className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Problem, Transcript, Input */}
-        <section className="left-panel w-1/2 flex flex-col border-r border-slate-200 bg-white overflow-hidden">
-          {/* Top Session Actions if not started */}
+      <main className={styles.workspace}>
+        <section
+          className={styles.reasoningPane}
+          aria-label="Interview reasoning"
+          data-compact-visible={String(compactWorkspace === "interview")}
+        >
           {!session.isSessionStarted && (
-            <div className="p-4 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between shrink-0">
-              <div>
-                <p className="text-xs font-semibold text-indigo-950">Ready to begin your interview?</p>
-                <p className="text-[11px] text-indigo-700">Start an interview session or recover an existing one.</p>
+            <div className={styles.sessionStart}>
+              <div className={styles.sessionStartCopy}>
+                <strong>Ready for an interview</strong>
+                <span>Start a new session or recover an existing one.</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className={styles.sessionStartActions}>
                 <button
                   type="button"
                   onClick={() => void handleStartSession()}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+                  className={styles.primaryButton}
                   data-testid="start-session-btn"
                 >
-                  Start Session
+                  Start interview
                 </button>
                 <form
-                  onSubmit={(e) => {
-                    void handleManualRecover(e);
+                  onSubmit={(event) => {
+                    void handleManualRecover(event);
                   }}
-                  className="flex items-center gap-1"
+                  className={styles.recoveryForm}
                 >
+                  <label className={styles.srOnly} htmlFor="recover-session-id">
+                    Session ID
+                  </label>
                   <input
+                    id="recover-session-id"
                     type="text"
                     value={recoverySessionInput}
-                    onChange={(e) => setRecoverySessionInput(e.target.value)}
-                    placeholder="session_..."
-                    className="w-28 px-2 py-1 text-xs border border-indigo-200 rounded bg-white font-mono"
+                    onChange={(event) => setRecoverySessionInput(event.target.value)}
+                    placeholder="session_…"
+                    className={styles.recoveryInput}
                   />
-                  <button
-                    type="submit"
-                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 text-xs font-medium rounded"
-                  >
+                  <button type="submit" className={styles.secondaryButton}>
                     Recover
                   </button>
                 </form>
@@ -560,157 +691,193 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* Scrollable Problem & Transcript Section */}
-          <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto min-h-0">
-            <ProblemCard problem={session.problem} className="shrink-0" />
-            <div className="flex-1 min-h-[220px]">
+          <div className={styles.reasoningContent}>
+            <div className={styles.problemRegion}>
+              <ProblemCard problem={session.problem} />
+            </div>
+            <div className={styles.transcriptRegion}>
               <TranscriptFeed
                 items={session.transcript}
                 onRetry={session.retrySubmission}
-                className="h-full"
               />
             </div>
           </div>
 
-          {/* Bottom Reasoning Input Area */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50/50 shrink-0">
+          <div className={styles.composerDock}>
             <VoiceControls
               state={session.voice}
               controls={session.voiceControls}
               disabled={!session.isSessionStarted || session.sessionStatus !== "ACTIVE"}
             />
             <StudentInputArea
-              onSubmit={(text) => session.submitTypedInput(text)}
-              disabled={!session.isSessionStarted || session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"}
+              onSubmit={handleSubmitReasoning}
+              disabled={
+                !session.isSessionStarted
+                || session.sessionStatus === "COMPLETED"
+                || session.sessionStatus === "ARCHIVED"
+              }
               placeholder={
                 session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"
                   ? `Session is ${session.sessionStatus.toLowerCase()}. Reasoning input is closed.`
                   : session.isSessionStarted
-                  ? "Enter your proof step (e.g. Choose $v_1 \\in V$. Since $\\deg(v_1) = 5$, by PHP...)"
-                  : "Start or recover a session above to submit reasoning."
+                    ? "Explain your next reasoning step…"
+                    : "Start or recover a session to submit reasoning."
               }
             />
           </div>
         </section>
 
-        {/* Right Panel: Whiteboard & Formulation Inspector */}
-        <section className="right-panel w-1/2 flex flex-col bg-slate-50 overflow-hidden">
-          {/* Panel Tab Header */}
-          <div className="panel-tabs bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
+        <section
+          className={styles.boardPane}
+          aria-label="Interview workspace"
+          data-compact-visible={String(compactWorkspace === "whiteboard")}
+        >
+          <div className={styles.boardHeader}>
+            <div className={styles.tabs} role="tablist" aria-label="Workspace view">
               <button
                 type="button"
+                ref={whiteboardTabRef}
+                id="workspace-tab-whiteboard"
+                role="tab"
+                aria-selected={activeTab === "whiteboard"}
+                aria-controls="workspace-panel"
+                tabIndex={activeTab === "whiteboard" ? 0 : -1}
                 onClick={() => setActiveTab("whiteboard")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                onKeyDown={handleWorkspaceTabKeyDown}
+                className={
                   activeTab === "whiteboard"
-                    ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                    ? styles.tabActive
+                    : styles.tab
+                }
                 data-testid="tab-whiteboard"
               >
-                🎨 Interactive tldraw Whiteboard
+                Whiteboard
               </button>
               <button
                 type="button"
+                ref={detailsTabRef}
+                id="workspace-tab-details"
+                role="tab"
+                aria-selected={activeTab === "formulation"}
+                aria-controls="workspace-panel"
+                tabIndex={activeTab === "formulation" ? 0 : -1}
                 onClick={() => setActiveTab("formulation")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                onKeyDown={handleWorkspaceTabKeyDown}
+                className={
                   activeTab === "formulation"
-                    ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                    ? styles.tabActive
+                    : styles.tab
+                }
                 data-testid="tab-formulation"
               >
-                📊 Session Context
+                Details
               </button>
             </div>
 
-            <div className="text-[11px] text-slate-400 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-violet-400" />
-              <span>AI Overlay Protected Layer</span>
+            <div className={styles.boardHeaderActions}>
+              {activeTab === "whiteboard" && (
+                <button
+                  type="button"
+                  onClick={() => void whiteboardAdapter.clearAiOverlay()}
+                  className={styles.quietButton}
+                >
+                  Clear overlays
+                </button>
+              )}
+              <span className={styles.protectedState}>
+                <span className={styles.protectedDot} aria-hidden="true" />
+                Protected overlays
+              </span>
             </div>
           </div>
 
-          {/* Panel Content */}
-          <div className="flex-1 p-4 overflow-hidden flex flex-col">
+          <div
+            id="workspace-panel"
+            className={styles.boardContent}
+            role="tabpanel"
+            aria-labelledby={
+              activeTab === "whiteboard"
+                ? "workspace-tab-whiteboard"
+                : "workspace-tab-details"
+            }
+          >
             {activeTab === "whiteboard" ? (
-              <div className="whiteboard-wrapper flex-1 bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden flex flex-col">
-                <div className="whiteboard-toolbar px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
-                  <span className="font-semibold flex items-center gap-1.5">
-                    <span>Interview Whiteboard</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void whiteboardAdapter.clearAiOverlay()}
-                      className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-medium"
-                    >
-                      Clear AI Overlays
-                    </button>
-                  </div>
-                </div>
-                <div className="flex-1 relative bg-slate-100/50">
-                  <WhiteboardCanvas
-                    adapter={whiteboardAdapter}
-                    onEditorMount={handleWhiteboardEditorMount}
-                    className="w-full h-full min-h-[380px]"
-                  />
-                </div>
-              </div>
+              <WhiteboardCanvas
+                adapter={whiteboardAdapter}
+                className={styles.whiteboardCanvas ?? ""}
+              />
             ) : (
-              <div className="formulation-inspector flex-1 bg-white border border-slate-200 rounded-lg p-5 overflow-y-auto space-y-4 shadow-xs">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 mb-1">
-                    Session Context
-                  </h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Safe public identity for the problem bound to this session.
-                  </p>
-                </div>
-
-                {session.problem === null ? (
-                  <div className="border border-slate-200 rounded-md p-4 bg-slate-50 text-sm text-slate-500">
-                    This session does not expose an Oxford Mathematics problem view.
+              <div className={styles.detailsPane}>
+                <section className={styles.detailsSection}>
+                  <div className={styles.detailsHeading}>
+                    <h2>Session details</h2>
+                    <p>Public problem identity and local runtime context.</p>
                   </div>
-                ) : (
-                  <>
-                    <div className="border border-slate-200 rounded-md p-4 bg-slate-50">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Problem ID</div>
-                          <div className="font-mono text-slate-800 mt-1">{session.problem.id}</div>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Version</div>
-                          <div className="font-mono text-slate-800 mt-1">{session.problem.version}</div>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Difficulty</div>
-                          <div className="text-slate-800 mt-1">{session.problem.difficulty}</div>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-500 uppercase tracking-wider">Category</div>
-                          <div className="text-slate-800 mt-1">{session.problem.category}</div>
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="border border-slate-200 rounded-md p-4 bg-indigo-50/50">
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-indigo-900 mb-2">
-                        Topics
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {session.problem.topics.map((topic) => (
-                          <span
-                            key={topic}
-                            className="text-xs bg-white border border-indigo-100 rounded px-2 py-1 text-slate-700"
-                          >
-                            {topic}
-                          </span>
-                        ))}
-                      </div>
+                  <dl className={styles.detailList}>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{session.sessionStatus}</dd>
                     </div>
-                  </>
-                )}
+                    <div>
+                      <dt>Connection</dt>
+                      <dd>{session.isConnected ? "Connected" : "Disconnected"}</dd>
+                    </div>
+                    {session.sessionId !== null && (
+                      <div>
+                        <dt>Session ID</dt>
+                        <dd><code>{session.sessionId}</code></dd>
+                      </div>
+                    )}
+                    {session.sessionId !== null && (
+                      <div>
+                        <dt>Sequence</dt>
+                        <dd><code>{session.sequence}</code></dd>
+                      </div>
+                    )}
+                  </dl>
+                </section>
+
+                <section className={styles.detailsSection}>
+                  <div className={styles.detailsHeading}>
+                    <h2>Problem</h2>
+                  </div>
+
+                  {session.problem === null ? (
+                    <p className={styles.emptyDetails}>
+                      No Oxford Mathematics problem view is exposed for this session.
+                    </p>
+                  ) : (
+                    <>
+                      <dl className={styles.detailList}>
+                        <div>
+                          <dt>Problem ID</dt>
+                          <dd><code>{session.problem.id}</code></dd>
+                        </div>
+                        <div>
+                          <dt>Version</dt>
+                          <dd><code>{session.problem.version}</code></dd>
+                        </div>
+                        <div>
+                          <dt>Difficulty</dt>
+                          <dd>{session.problem.difficulty}</dd>
+                        </div>
+                        <div>
+                          <dt>Category</dt>
+                          <dd>{session.problem.category}</dd>
+                        </div>
+                      </dl>
+
+                      {session.problem.topics.length > 0 && (
+                        <div className={styles.topicList} aria-label="Problem topics">
+                          {session.problem.topics.map((topic) => (
+                            <span key={topic}>{topic}</span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
               </div>
             )}
           </div>
@@ -722,7 +889,7 @@ export const App: React.FC = () => {
           initialTab={reviewTarget.tab}
           readEvaluation={session.readSessionEvaluation}
           readReplay={session.readSessionReplay}
-          onClose={() => setReviewTarget(null)}
+          onClose={closeReview}
         />
       ) : null}
     </div>

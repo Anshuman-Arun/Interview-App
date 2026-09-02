@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   EvidenceKey,
   SessionId
@@ -579,6 +579,56 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
   const [replayError, setReplayError] = useState<string | null>(null);
   const [evaluationLoading, setEvaluationLoading] = useState(false);
   const [replayLoading, setReplayLoading] = useState(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const evaluationTabRef = useRef<HTMLButtonElement | null>(null);
+  const replayTabRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleDialogKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (dialog === null) return;
+
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first === undefined || last === undefined) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    []
+  );
+
+  const handleTabKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+
+      const next = event.currentTarget.id === "session-review-tab-evaluation"
+        ? "replay"
+        : "evaluation";
+      setActiveTab(next);
+      queueMicrotask(() => {
+        if (next === "evaluation") {
+          evaluationTabRef.current?.focus();
+        } else {
+          replayTabRef.current?.focus();
+        }
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -589,6 +639,10 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
     setEvaluationLoading(false);
     setReplayLoading(false);
   }, [initialTab, sessionId]);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent): void => {
@@ -660,10 +714,12 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
   return (
     <div className={styles.overlay}>
       <div
+        ref={dialogRef}
         className={styles.modal}
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-review-title"
+        onKeyDown={handleDialogKeyDown}
       >
         <header className={styles.modalHeader}>
           <div>
@@ -671,6 +727,7 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
             <code>{sessionId}</code>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className={styles.closeButton}
@@ -686,10 +743,15 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
           aria-label="Session review views"
         >
           <button
+            ref={evaluationTabRef}
+            id="session-review-tab-evaluation"
             type="button"
             role="tab"
             aria-selected={activeTab === "evaluation"}
+            aria-controls="session-review-panel"
+            tabIndex={activeTab === "evaluation" ? 0 : -1}
             onClick={() => setActiveTab("evaluation")}
+            onKeyDown={handleTabKeyDown}
             className={
               activeTab === "evaluation"
                 ? styles.tabActive
@@ -699,10 +761,15 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
             Evaluation
           </button>
           <button
+            ref={replayTabRef}
+            id="session-review-tab-replay"
             type="button"
             role="tab"
             aria-selected={activeTab === "replay"}
+            aria-controls="session-review-panel"
+            tabIndex={activeTab === "replay" ? 0 : -1}
             onClick={() => setActiveTab("replay")}
+            onKeyDown={handleTabKeyDown}
             className={
               activeTab === "replay"
                 ? styles.tabActive
@@ -713,7 +780,16 @@ export const SessionReviewModal: React.FC<SessionReviewModalProps> = ({
           </button>
         </div>
 
-        <div className={styles.modalBody}>
+        <div
+          id="session-review-panel"
+          className={styles.modalBody}
+          role="tabpanel"
+          aria-labelledby={
+            activeTab === "evaluation"
+              ? "session-review-tab-evaluation"
+              : "session-review-tab-replay"
+          }
+        >
           {activeTab === "evaluation" ? (
             evaluationLoading ? (
               <p className={styles.loadingState}>

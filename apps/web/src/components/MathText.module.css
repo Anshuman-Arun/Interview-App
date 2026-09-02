@@ -1,0 +1,28 @@
+.container {
+  display: inline;
+}
+
+.inline {
+  display: inline-block;
+  padding: 0 0.15rem;
+  vertical-align: -0.1em;
+  font-size: 1.05em;
+}
+
+.block {
+  display: block;
+  margin: 0.5rem 0;
+  padding: 0.25rem 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.fallback {
+  display: inline-block;
+  padding: 1px 4px;
+  border: 1px solid var(--danger-border);
+  border-radius: 4px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font: 400 0.82em/1.4 var(--ui-font-mono);
+}

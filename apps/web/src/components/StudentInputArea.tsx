@@ -19,7 +19,7 @@ const MAX_INPUT_CHARS = 20_000;
 const CHARACTER_WARNING_THRESHOLD = MAX_INPUT_CHARS * 0.8;
 const MAX_TEXTAREA_HEIGHT_PX = 220;
 
-export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
+const StudentInputAreaComponent: React.FC<StudentInputAreaProps> = ({
   onSubmit,
   disabled = false,
   isSubmitting = false,
@@ -137,3 +137,6 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
     </section>
   );
 };
+
+export const StudentInputArea = React.memo(StudentInputAreaComponent);
+StudentInputArea.displayName = "StudentInputArea";
