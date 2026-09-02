@@ -315,7 +315,7 @@ describe("interview session transition authority", () => {
       .rejects.toThrow("Cannot start a new session while an active session is attached or awaiting recovery");
     expect(startCalls).toBe(1);
     expect(rendered.current().sessionId).toBe(firstSession);
-    expect(rendered.current().whiteboardSync.status).toBe("PENDING");
+    expect(rendered.current().whiteboardSync.status).toBe("UNINITIALIZED");
 
     if (releaseFirstBoardState === undefined) {
       throw new Error("First board-state request was not deferred");
