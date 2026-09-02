@@ -9,6 +9,17 @@ import type { AudioFrame } from "../apps/web/src/audio/types.js";
 
 const BASE_URL = "http://127.0.0.1:43125";
 
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+function jsonBody(init: RequestInit): unknown {
+  if (typeof init.body !== "string") return undefined;
+  return JSON.parse(init.body) as unknown;
+}
+
 function frame(sampleRate: number, sampleCount = 1): AudioFrame {
   return {
     sequence: 0,
@@ -50,10 +61,8 @@ describe("browser voice client adversarial boundaries", () => {
   it("retires a known stream identity when an open success response is unusable", async () => {
     const requests: Array<{ readonly url: string; readonly body: unknown }> = [];
     const authenticatedFetch: typeof fetch = async (input, init = {}) => {
-      const url = String(input);
-      const body = init.body === undefined
-        ? undefined
-        : JSON.parse(String(init.body)) as unknown;
+      const url = requestUrl(input);
+      const body = jsonBody(init);
       requests.push({ url, body });
 
       if (url.endsWith("/v1/voice/streams")) {
@@ -91,10 +100,8 @@ describe("browser voice client adversarial boundaries", () => {
   it("rejects a successful open response bound to the wrong stream identity", async () => {
     let requestedStreamId: string | undefined;
     const authenticatedFetch: typeof fetch = async (input, init = {}) => {
-      const url = String(input);
-      const body = init.body === undefined
-        ? undefined
-        : JSON.parse(String(init.body)) as { sessionId?: string; streamId?: string };
+      const url = requestUrl(input);
+      const body = jsonBody(init) as { sessionId?: string; streamId?: string } | undefined;
       if (url.endsWith("/v1/voice/streams")) {
         requestedStreamId = body?.streamId;
         return new Response(JSON.stringify({
@@ -132,7 +139,7 @@ describe("browser voice client adversarial boundaries", () => {
     let frameRequest = 0;
     const streamId = "speech_stream_max_duration_carry";
     const authenticatedFetch: typeof fetch = async (input) => {
-      if (!String(input).endsWith("/v1/voice/frames")) {
+      if (!requestUrl(input).endsWith("/v1/voice/frames")) {
         throw new Error("Unexpected browser voice carry test request");
       }
       frameRequest += 1;
