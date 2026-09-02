@@ -243,14 +243,20 @@ export class SupervisedProcessRunner {
   }
 
   private async drainActiveOperations(): Promise<void> {
+    if (this.quarantinedExecutableIds.size !== 0) {
+      throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+    }
     for (const controller of this.activeControllers) controller.abort();
     const operations = [...this.activeOperations];
     const results = await Promise.allSettled(operations);
-    if (results.some(
-      (result) =>
-        result.status === "rejected"
-        && isProcessTreeCleanupError(result.reason)
-    )) {
+    if (
+      this.quarantinedExecutableIds.size !== 0
+      || results.some(
+        (result) =>
+          result.status === "rejected"
+          && isProcessTreeCleanupError(result.reason)
+      )
+    ) {
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
     }
   }
