@@ -125,7 +125,6 @@ export function ProductPageRouter({
       activePage = null;
       content = (
         <ReviewPageShell
-          sessionId={route.sessionId}
           view={route.view}
           onViewChange={(view) =>
             onReview(route.sessionId, view, { replace: true })
