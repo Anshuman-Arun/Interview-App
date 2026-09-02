@@ -35,9 +35,9 @@ const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
     ]
   }
 });
-const ANTIGRAVITY_SAFE_SETTINGS_JSON =
+export const ANTIGRAVITY_SUPERVISED_SETTINGS_JSON =
   JSON.stringify(ANTIGRAVITY_SAFE_SETTINGS) + "\n";
-const ANTIGRAVITY_REALIZER_AGENT = `---
+export const ANTIGRAVITY_REALIZER_AGENT_MARKDOWN = `---
 name: interview-realizer
 description: Stateless interviewer proposal realization engine.
 tools: []
@@ -70,8 +70,9 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
     environment: antigravityEnvironment(),
     isolatedWorkingDirectory: true,
     isolatedHomeFiles: {
-      ".gemini/antigravity-cli/settings.json": ANTIGRAVITY_SAFE_SETTINGS_JSON,
-      ".gemini/config/agents/interview-realizer/agent.md": ANTIGRAVITY_REALIZER_AGENT
+      ".gemini/antigravity-cli/settings.json": ANTIGRAVITY_SUPERVISED_SETTINGS_JSON,
+      ".gemini/config/agents/interview-realizer/agent.md":
+        ANTIGRAVITY_REALIZER_AGENT_MARKDOWN
     }
   }]);
 
