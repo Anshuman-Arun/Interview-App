@@ -101,6 +101,29 @@ class ControlledAudioElement implements BrowserAudioElementLike {
   }
 }
 
+class CountingPermissiveOnsetWorker extends SpeechWorkerCore {
+  public submitCalls = 0;
+
+  public override async submitFrame(
+    envelopeInput: unknown,
+    _payload: unknown,
+    _heuristicsInput: unknown = {}
+  ): Promise<readonly SpeechWorkerEvent[]> {
+    void _payload;
+    void _heuristicsInput;
+    this.submitCalls += 1;
+    const envelope = SpeechPcmFrameEnvelopeSchema.parse(envelopeInput);
+    return [{
+      protocolVersion: 1,
+      type: "SPEECH_STARTED",
+      requestId: envelope.requestId,
+      streamId: envelope.streamId,
+      utteranceId: newUtteranceId(),
+      atTimestampMs: envelope.timestampMs
+    }];
+  }
+}
+
 class DuplicateOnsetWorker extends SpeechWorkerCore {
   public override async submitFrame(
     envelopeInput: unknown,
@@ -1216,6 +1239,67 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.values(state.utterances).some(
       (utterance) => utterance.status === "DISCARDED"
     )).toBe(true);
+  });
+
+  it("rejects non-finite PCM before an injected speech worker can authorize onset", async () => {
+    const speechWorker = new CountingPermissiveOnsetWorker({
+      vadBackend: new ScriptedVadBackend([0]),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const stream = await new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: fetchWithAuth
+    }).openStream(sessionId);
+
+    const payload = new Uint8Array(960 * Float32Array.BYTES_PER_ELEMENT);
+    new DataView(payload.buffer).setFloat32(0, Number.NaN, true);
+    const response = await fetchWithAuth(`${server.bound.voice.url}/v1/voice/frames`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-interview-session-id": sessionId,
+        "x-speech-stream-id": stream.streamId,
+        "x-speech-request-id": "request_nonfinite_pcm",
+        "x-speech-sequence": "0",
+        "x-speech-sample-rate": "48000",
+        "x-speech-frame-samples": "960",
+        "x-speech-timestamp-ms": "0"
+      },
+      body: payload
+    });
+
+    expect(response.status).toBe(400);
+    expect(speechWorker.submitCalls).toBe(0);
+    expect(Object.values(server.registry.get(sessionId).getState().utterances)).toHaveLength(0);
+    await stream.cancel();
   });
 
   it("enforces voice transport origin, authentication, frame size, and sequence binding", async () => {
