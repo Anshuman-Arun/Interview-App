@@ -107,12 +107,15 @@ export class BrowserCommandProtocolError extends Error {
 
 export class BrowserCommandClient {
   readonly #commandUrl: string;
+  readonly #whiteboardMutationUrl: string;
   readonly #authenticationHeaderValue: string;
   readonly #fetchImpl: typeof fetch;
   readonly #requestIdFactory: () => RequestId;
 
   public constructor(options: BrowserCommandClientOptions) {
-    this.#commandUrl = `${normalizeLoopbackBaseUrl(options.baseUrl)}/v1/commands`;
+    const baseUrl = normalizeLoopbackBaseUrl(options.baseUrl);
+    this.#commandUrl = `${baseUrl}/v1/commands`;
+    this.#whiteboardMutationUrl = `${baseUrl}/v1/whiteboard-mutations`;
     if (
       options.clientToken !== undefined
       && options.externalAuthenticationHeaderValue !== undefined
@@ -371,7 +374,8 @@ export class BrowserCommandClient {
     const result = await this.send(
       command,
       (value) => BoardMutationCommittedResponseSchema.parse(value),
-      options.signal
+      options.signal,
+      this.#whiteboardMutationUrl
     );
     if (result.sessionId !== sessionId) {
       throw new BrowserCommandResponseError(
@@ -518,7 +522,8 @@ export class BrowserCommandClient {
   private async send<TResult extends ProtocolSuccessResponse>(
     command: ClientCommand,
     parseSuccess: (value: unknown) => TResult,
-    signal: AbortSignal | undefined
+    signal: AbortSignal | undefined,
+    endpoint: string = this.#commandUrl
   ): Promise<TResult> {
     if (isSignalAborted(signal)) {
       throw new BrowserCommandTransportError("ABORTED", command.requestId);
@@ -541,7 +546,7 @@ export class BrowserCommandClient {
 
     let response: Response;
     try {
-      response = await this.#fetchImpl(this.#commandUrl, init);
+      response = await this.#fetchImpl(endpoint, init);
     } catch {
       throw new BrowserCommandTransportError(
         isSignalAborted(signal) ? "ABORTED" : "NETWORK",

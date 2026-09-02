@@ -36,7 +36,9 @@ import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compat
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const COMMAND_PATH = "/v1/commands";
+const WHITEBOARD_MUTATION_PATH = "/v1/whiteboard-mutations";
 const WHITEBOARD_VISION_PATH = "/v1/whiteboard-vision";
+const MAX_WHITEBOARD_MUTATION_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_WHITEBOARD_VISION_BODY_BYTES = MAX_WHITEBOARD_VISION_BASE64_LENGTH + 64 * 1024;
 const SESSION_READ_HISTORY_PATH = "/v1/read/sessions";
 const CORS_COMMAND_METHOD = "POST";
@@ -152,7 +154,11 @@ export class LoopbackCommandServer {
 
       if (
         request.method !== CORS_COMMAND_METHOD
-        || (request.url !== COMMAND_PATH && request.url !== WHITEBOARD_VISION_PATH)
+        || (
+          request.url !== COMMAND_PATH
+          && request.url !== WHITEBOARD_MUTATION_PATH
+          && request.url !== WHITEBOARD_VISION_PATH
+        )
       ) {
         throw new ProtocolHttpError(404, "NOT_FOUND", "Endpoint not found");
       }
@@ -186,7 +192,19 @@ export class LoopbackCommandServer {
         return;
       }
 
-      const command = parseCommand(await readBody(request));
+      const isWhiteboardMutation = request.url === WHITEBOARD_MUTATION_PATH;
+      const command = parseCommand(await readBody(
+        request,
+        isWhiteboardMutation ? MAX_WHITEBOARD_MUTATION_BODY_BYTES : MAX_COMMAND_BYTES,
+        isWhiteboardMutation ? "Whiteboard mutation body" : "Command body"
+      ));
+      if (isWhiteboardMutation && command.type !== "COMMIT_BOARD_MUTATION") {
+        throw new ProtocolHttpError(
+          400,
+          "INVALID_COMMAND",
+          "Whiteboard mutation endpoint accepts only COMMIT_BOARD_MUTATION"
+        );
+      }
       const result = await this.dispatch(command);
       sendJson(response, 200, ProtocolSuccessResponseSchema.parse(result), origin);
     } catch (error) {
@@ -567,7 +585,11 @@ function containsUnsafeReadPathCharacter(value: string): boolean {
 }
 
 function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | undefined {
-  if (rawUrl === COMMAND_PATH || rawUrl === WHITEBOARD_VISION_PATH) return CORS_COMMAND_METHOD;
+  if (
+    rawUrl === COMMAND_PATH
+    || rawUrl === WHITEBOARD_MUTATION_PATH
+    || rawUrl === WHITEBOARD_VISION_PATH
+  ) return CORS_COMMAND_METHOD;
   return parseReadRoute(rawUrl) === undefined ? undefined : CORS_READ_METHOD;
 }
 
