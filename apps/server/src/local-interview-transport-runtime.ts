@@ -159,11 +159,6 @@ export class LocalInterviewTransportRuntime {
   }
 
   public start(): Promise<BoundLocalInterviewTransport> {
-    if (this.voiceWorkersTerminated) {
-      return Promise.reject(new Error(
-        "Local interview transport cannot restart after voice worker shutdown; construct a new runtime"
-      ));
-    }
     if (this.stopping !== undefined) {
       return this.stopping.then(async () => this.start());
     }
@@ -171,6 +166,11 @@ export class LocalInterviewTransportRuntime {
       return Promise.reject(new Error(
         "Local interview transport cannot restart after a failed shutdown until stop succeeds",
         { cause: this.stopFailure }
+      ));
+    }
+    if (this.voiceWorkersTerminated) {
+      return Promise.reject(new Error(
+        "Local interview transport cannot restart after voice worker shutdown; construct a new runtime"
       ));
     }
     if (this.bound !== undefined) return Promise.resolve(this.bound);
