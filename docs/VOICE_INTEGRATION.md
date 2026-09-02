@@ -34,7 +34,7 @@ Every endpoint:
 - exposes no filesystem path;
 - has explicit cancellation and a bounded server-side idle lease.
 
-A dropped browser connection therefore cannot create an unbounded PCM backlog or leave a speech stream authoritative forever.
+If an in-flight PCM HTTP request is dropped, the transport immediately cancels the exact bound speech stream; the bounded server-side idle lease remains a second fail-closed backstop. A dropped browser connection therefore cannot create an unbounded PCM backlog or leave a speech stream authoritative forever.
 
 ## Browser microphone lifecycle
 
@@ -73,9 +73,15 @@ browser receives admitted onset
 QueuedRendererAudioPlayer.interruptCurrent()
         |
 clear audio no longer authorized to begin
+        |
+abort + replace the old renderer SSE connection
 ```
 
 The order is deliberate: authority changes before physical interruption.
+
+Barge-in also invalidates the browser's existing renderer-stream connection. This is an ordering barrier for commands that may already have been written to the old SSE socket but not yet processed by the browser. The old consumer stops processing buffered delivery blocks after abort; the replacement connection attaches only after the old consumer settles and server-side disconnect classification completes. Cancelled or `POSSIBLY_EXPOSED` output is therefore not replayed.
+
+The server closes the complementary write-side race as well: after `DeliveryCoordinator.reconnect()` persists `DELIVERING`, renderer transport re-reads the authoritative atom immediately before the synchronous physical SSE write. If `beginUtterance()` invalidated the delivery during that await boundary, no stale command is written.
 
 `beginUtterance()` retains the frozen semantics:
 
@@ -232,4 +238,4 @@ The deterministic voice E2E covers the complete integration sequence:
 11. new Turn commit;
 12. normal `ServerTurnOrchestrator` execution.
 
-Additional focused adversarial coverage verifies false onset, empty transcripts, origin/authentication rejection, frame-size limits, and sequence gaps. Existing audio lifecycle, renderer crash, speech-worker, VAD/STT, TTS, delivery crash/reconnect, and property suites remain part of the full CI gate.
+Additional focused adversarial coverage verifies false onset, empty transcripts, origin/authentication rejection, frame-size limits, sequence gaps, dropped PCM transport cancellation, buffered renderer-command suppression after barge-in, and the authority race between `DELIVERY_STARTED` persistence and physical SSE write. Existing audio lifecycle, renderer crash, speech-worker, VAD/STT, TTS, delivery crash/reconnect, and property suites remain part of the full CI gate.
