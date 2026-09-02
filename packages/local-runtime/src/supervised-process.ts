@@ -48,6 +48,7 @@ const ABORT_SIGNAL_ADD_EVENT_LISTENER_INTRINSIC =
 const ABORT_SIGNAL_REMOVE_EVENT_LISTENER_INTRINSIC =
   AbortSignal.prototype.removeEventListener;
 /* eslint-enable @typescript-eslint/unbound-method */
+// eslint-disable-next-line @typescript-eslint/unbound-method -- Captured getter is invoked only through Reflect.apply.
 const ABORT_SIGNAL_ABORTED_GETTER_INTRINSIC =
   Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
 
@@ -251,9 +252,16 @@ export class SupervisedProcessRunner {
     const forwardAbort = (): void => {
       controller.abort(new SupervisedProcessError("EXECUTION_CANCELLED"));
     };
+    let removeExternalAbortListener = (): void => undefined;
     if (externalSignal !== undefined) {
-      if (abortSignalAborted(externalSignal)) forwardAbort();
-      else addAbortSignalListener(externalSignal, forwardAbort);
+      if (abortSignalAborted(externalSignal)) {
+        forwardAbort();
+      } else {
+        addAbortSignalListener(externalSignal, forwardAbort);
+        removeExternalAbortListener = () => {
+          removeAbortSignalListener(externalSignal, forwardAbort);
+        };
+      }
     }
 
     const trackedRequest = Object.freeze({
@@ -264,7 +272,10 @@ export class SupervisedProcessRunner {
     const operation = this.executeSnapshot(trackedRequest);
     this.activeOperations.add(operation);
 
-    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadlineTimer = setTimeout(() => {
+      interruptionError = new SupervisedProcessError("EXECUTION_TIMEOUT");
+      controller.abort(interruptionError);
+    }, request.timeoutMs);
     let interruptionError =
       new SupervisedProcessError("EXECUTION_CANCELLED");
     let removeInterruptListener = (): void => undefined;
@@ -278,16 +289,12 @@ export class SupervisedProcessRunner {
       if (abortSignalAborted(controller.signal)) onInterrupt();
       else addAbortSignalListener(controller.signal, onInterrupt);
     });
-    deadlineTimer = setTimeout(() => {
-      interruptionError = new SupervisedProcessError("EXECUTION_TIMEOUT");
-      controller.abort(interruptionError);
-    }, request.timeoutMs);
     const publicOperation = Promise.race([operation, interrupted]);
 
     const cleanup = (): void => {
-      if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+      clearTimeout(deadlineTimer);
       removeInterruptListener();
-      if (externalSignal !== undefined) removeAbortSignalListener(externalSignal, forwardAbort);
+      removeExternalAbortListener();
       this.activeControllers.delete(controller);
       this.activeOperations.delete(operation);
     };
@@ -1149,11 +1156,12 @@ function snapshotArguments(
 function isTrustedAbortSignal(signal: AbortSignal): boolean {
   try {
     if (Object.getPrototypeOf(signal) !== AbortSignal.prototype) return false;
-    const descriptors = Object.getOwnPropertyDescriptors(signal);
-    return descriptors.aborted === undefined
-      && descriptors.reason === undefined
-      && descriptors.addEventListener === undefined
-      && descriptors.removeEventListener === undefined;
+    const descriptors: Readonly<Record<string, PropertyDescriptor | undefined>> =
+      Object.getOwnPropertyDescriptors(signal);
+    return descriptors["aborted"] === undefined
+      && descriptors["reason"] === undefined
+      && descriptors["addEventListener"] === undefined
+      && descriptors["removeEventListener"] === undefined;
   } catch {
     return false;
   }
