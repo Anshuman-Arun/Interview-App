@@ -1,5 +1,8 @@
 export * from "./types.js";
-export { verifyArtifactFile } from "./filesystem.js";
+export {
+  copyLocalArtifactBounded,
+  verifyArtifactFile
+} from "./filesystem.js";
 export type {
   FileVerificationExpectations,
   FileVerificationResult
