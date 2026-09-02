@@ -115,27 +115,27 @@ const INTERVIEWER_PROPOSAL_SCHEMA_ARGUMENT = JSON.stringify(
   INTERVIEWER_PROPOSAL_JSON_SCHEMA
 );
 
-const InitEventSchema = z.object({
+const InitEventSchema = z.looseObject({
   event: z.literal("init")
-}).passthrough();
+});
 
-const StepUpdateEventSchema = z.object({
+const StepUpdateEventSchema = z.looseObject({
   event: z.literal("step_update"),
-  step_update: z.object({
+  step_update: z.looseObject({
     step_type: z.string().min(1),
     tool_info: z.unknown().optional(),
     subagent_info: z.unknown().optional()
-  }).passthrough()
-}).passthrough();
+  })
+});
 
-const ResultEventSchema = z.object({
+const ResultEventSchema = z.looseObject({
   event: z.literal("result"),
-  result: z.object({
+  result: z.looseObject({
     status: z.string().min(1),
     num_turns: z.number().int().nonnegative(),
     structured_output: z.unknown().optional()
-  }).passthrough()
-}).passthrough();
+  })
+});
 
 export type AntigravityCliAdapterErrorCode =
   | "INVALID_RUNTIME"
@@ -223,7 +223,7 @@ export function createAntigravityCliReasoningProvider(
 }
 
 function captureExecutor(
-  executor: SupervisedCliExecutor
+  executor: unknown
 ): SupervisedCliExecutor["execute"] {
   if (typeof executor !== "object" || executor === null) {
     throw new AntigravityCliAdapterError("INVALID_RUNTIME");
@@ -320,7 +320,6 @@ function parseAntigravityStream(stdout: string): InterviewerProposal {
     if (result.success) {
       if (
         !sawInit
-        || sawResult
         || result.data.result.status !== "SUCCESS"
         || result.data.result.num_turns !== 1
       ) {
