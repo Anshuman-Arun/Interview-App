@@ -18,7 +18,9 @@ import {
 import { DeliveryCoordinator } from "../../../packages/delivery/src/index.js";
 import {
   TurnCoordinator,
-  createCommandEnvelope
+  createCommandEnvelope,
+  replayQuantResearchPublicState,
+  replayQuantTradingSessionState
 } from "../../../packages/interview-engine/src/index.js";
 import { RequestIdConflictError } from "../../../packages/persistence/src/index.js";
 import {
@@ -599,12 +601,13 @@ export class LoopbackCommandServer {
           command.expectedRound,
           envelope
         );
+        const committedState = writer.getStateAfterRequest(command.requestId);
+        if (committedState === undefined) {
+          throw new Error("Quant Trading RequestId has no authoritative event group");
+        }
+        const projected = replayQuantTradingSessionState(committedState);
         if (writer.getState().status === "COMPLETED") {
           this.scheduleSessionTerminalCleanup(command.sessionId);
-        }
-        const projected = this.productionRuntime.readQuantState(writer, composition);
-        if (projected.mode !== "QUANT_TRADING") {
-          throw new Error("Quant Trading command resolved to incompatible runtime state");
         }
         return {
           protocolVersion: 1,
@@ -612,7 +615,7 @@ export class LoopbackCommandServer {
           type: "QUANT_TRADING_STATE",
           requestId: command.requestId,
           sessionId: command.sessionId,
-          state: projected.state
+          state: projected
         };
       }
       case "SUBMIT_QUANT_RESEARCH_ACTION": {
@@ -630,12 +633,13 @@ export class LoopbackCommandServer {
           command.expectedActionCount,
           envelope
         );
+        const committedState = writer.getStateAfterRequest(command.requestId);
+        if (committedState === undefined) {
+          throw new Error("Quant Research RequestId has no authoritative event group");
+        }
+        const projected = replayQuantResearchPublicState(committedState);
         if (writer.getState().status === "COMPLETED") {
           this.scheduleSessionTerminalCleanup(command.sessionId);
-        }
-        const projected = this.productionRuntime.readQuantState(writer, composition);
-        if (projected.mode !== "QUANT_RESEARCH") {
-          throw new Error("Quant Research command resolved to incompatible runtime state");
         }
         return {
           protocolVersion: 1,
@@ -643,7 +647,7 @@ export class LoopbackCommandServer {
           type: "QUANT_RESEARCH_STATE",
           requestId: command.requestId,
           sessionId: command.sessionId,
-          state: projected.state
+          state: projected
         };
       }
       case "RECONNECT_DELIVERY": {
