@@ -5,4 +5,3 @@ export * from "./devices.js";
 export * from "./capture.js";
 export * from "./playback.js";
 export * from "./renderer-adapter.js";
-export * from "./voice-transport.js";
