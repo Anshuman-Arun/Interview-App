@@ -1492,6 +1492,8 @@ function inspectDefinition(definition: LocalComponentDefinition): LocalComponent
     : inspectKnownDataObject(top.expectedHandshake, "expectedHandshake", new Set([
         "componentVersion",
         "protocolVersion",
+        "workerType",
+        "runtimeVersion",
         "modelVersionOrHash",
         "capabilities"
       ]));
@@ -1762,6 +1764,17 @@ function validateExpectedHandshakeDefinition(expected: LocalExpectedHandshake | 
   if (expected.protocolVersion !== undefined) {
     validateVersionValue(expected.protocolVersion, "expectedHandshake.protocolVersion", invalid);
   }
+  for (const [value, label] of [
+    [expected.workerType, "expectedHandshake.workerType"],
+    [expected.runtimeVersion, "expectedHandshake.runtimeVersion"]
+  ] as const) {
+    if (value !== undefined
+        && (typeof value !== "string"
+          || value.length === 0
+          || value.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength)) {
+      invalid(`${label} must be a non-empty bounded string`);
+    }
+  }
   if (expected.modelVersionOrHash !== undefined) {
     if (typeof expected.modelVersionOrHash !== "string"
         || expected.modelVersionOrHash.length === 0
@@ -1952,6 +1965,8 @@ function cloneHandshake(handshake: LocalComponentHandshake): LocalComponentHands
   return Object.freeze({
     ...(handshake.componentVersion === undefined ? {} : { componentVersion: handshake.componentVersion }),
     ...(handshake.protocolVersion === undefined ? {} : { protocolVersion: handshake.protocolVersion }),
+    ...(handshake.workerType === undefined ? {} : { workerType: handshake.workerType }),
+    ...(handshake.runtimeVersion === undefined ? {} : { runtimeVersion: handshake.runtimeVersion }),
     ...(handshake.modelVersionOrHash === undefined ? {} : { modelVersionOrHash: handshake.modelVersionOrHash }),
     ...(handshake.capabilities === undefined ? {} : { capabilities: Object.freeze([...handshake.capabilities]) }),
     ...(handshake.metadata === undefined ? {} : { metadata: Object.freeze({ ...handshake.metadata }) })
@@ -1987,7 +2002,7 @@ function normalizeReportedHandshake(
   const descriptors = inspectReadinessObject(handshake, "handshake must be an object", fail);
   validateReadinessObjectFields(
     descriptors,
-    new Set(["componentVersion", "protocolVersion", "modelVersionOrHash", "capabilities", "metadata"]),
+    new Set(["componentVersion", "protocolVersion", "workerType", "runtimeVersion", "modelVersionOrHash", "capabilities", "metadata"]),
     fail
   );
 
@@ -2012,6 +2027,28 @@ function normalizeReportedHandshake(
   if (rawProtocolVersion !== undefined) {
     validateVersionValue(rawProtocolVersion, "protocolVersion", fail);
     protocolVersion = rawProtocolVersion as string | number;
+  }
+
+  const rawWorkerType = dataDescriptorValue(descriptors, "workerType", fail);
+  let workerType: string | undefined;
+  if (rawWorkerType !== undefined) {
+    if (typeof rawWorkerType !== "string"
+        || rawWorkerType.length === 0
+        || rawWorkerType.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      fail("workerType must be a non-empty bounded string");
+    }
+    workerType = rawWorkerType;
+  }
+
+  const rawRuntimeVersion = dataDescriptorValue(descriptors, "runtimeVersion", fail);
+  let runtimeVersion: string | undefined;
+  if (rawRuntimeVersion !== undefined) {
+    if (typeof rawRuntimeVersion !== "string"
+        || rawRuntimeVersion.length === 0
+        || rawRuntimeVersion.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      fail("runtimeVersion must be a non-empty bounded string");
+    }
+    runtimeVersion = rawRuntimeVersion;
   }
 
   const rawModelVersionOrHash = dataDescriptorValue(descriptors, "modelVersionOrHash", fail);
@@ -2050,6 +2087,8 @@ function normalizeReportedHandshake(
   return Object.freeze({
     ...(componentVersion === undefined ? {} : { componentVersion }),
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
+    ...(workerType === undefined ? {} : { workerType }),
+    ...(runtimeVersion === undefined ? {} : { runtimeVersion }),
     ...(modelVersionOrHash === undefined ? {} : { modelVersionOrHash }),
     ...(capabilities === undefined ? {} : { capabilities }),
     ...(metadata === undefined ? {} : { metadata })
@@ -2078,6 +2117,7 @@ function inspectHandshakeCapabilities(
     fail(`capabilities must contain at most ${String(MAX_CAPABILITIES)} items`);
   }
   const output: string[] = [];
+  const seen = new Set<string>();
   for (let index = 0; index < rawLength; index += 1) {
     const descriptor = descriptors[String(index)];
     if (descriptor === undefined || !("value" in descriptor)) {
@@ -2091,6 +2131,8 @@ function inspectHandshakeCapabilities(
       ) {
         fail("capabilities must contain only non-empty bounded strings");
       }
+      if (seen.has(capability)) fail("capabilities must not contain duplicates");
+      seen.add(capability);
       output.push(capability);
     } else {
       fail("capabilities must contain only non-empty bounded strings");
@@ -2174,6 +2216,12 @@ function validateExpectedHandshake(
   }
   if (expected.protocolVersion !== undefined && actual.protocolVersion !== expected.protocolVersion) {
     throw new LocalRuntimeError("HANDSHAKE_MISMATCH", `Component ${componentId} reported an unexpected protocol version`);
+  }
+  if (expected.workerType !== undefined && actual.workerType !== expected.workerType) {
+    throw new LocalRuntimeError("HANDSHAKE_MISMATCH", `Component ${componentId} reported an unexpected worker type`);
+  }
+  if (expected.runtimeVersion !== undefined && actual.runtimeVersion !== expected.runtimeVersion) {
+    throw new LocalRuntimeError("HANDSHAKE_MISMATCH", `Component ${componentId} reported an unexpected runtime version`);
   }
   if (expected.modelVersionOrHash !== undefined
       && actual.modelVersionOrHash !== expected.modelVersionOrHash) {
