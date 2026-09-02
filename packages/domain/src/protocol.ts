@@ -139,6 +139,7 @@ export const GetQuantSessionStateCommandSchema = ProtocolCommandBaseSchema.exten
 
 export const SubmitQuantTradingActionCommandSchema = ProtocolCommandBaseSchema.extend({
   type: z.literal("SUBMIT_QUANT_TRADING_ACTION"),
+  expectedRound: z.number().int().min(1).max(256),
   action: QuantTradingCandidateActionSchema
 }).strict();
 
