@@ -150,6 +150,7 @@ describe("application-owned ProviderCoordinator", () => {
         async *sendTurn() {
           signalTurnStarted?.();
           await never;
+          yield PROPOSAL;
         },
         async cancelTurn() {
           await never;
