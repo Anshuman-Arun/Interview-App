@@ -116,10 +116,14 @@ export function productRouteTitle(route: ProductRoute): string {
 
 export function routeForActiveInterview(
   route: ProductRoute,
-  hasActiveInterview: boolean
+  hasActiveInterview: boolean,
+  isPaused = false
 ): ProductRoute {
-  if (hasActiveInterview && route.page !== "interview") {
-    return { page: "interview" };
+  if (!hasActiveInterview) return route;
+  if (isPaused) {
+    return route.page === "interview" || route.page === "home"
+      ? route
+      : { page: "home" };
   }
-  return route;
+  return route.page === "interview" ? route : { page: "interview" };
 }
