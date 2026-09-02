@@ -24,7 +24,6 @@ import {
 } from "../../../packages/interview-engine/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 
-const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const DEFAULT_MAX_CONNECTIONS = 4;
 const DEFAULT_MAX_CONNECTIONS_PER_SESSION = 1;
 const RENDERER_DRAIN_TIMEOUT_MS = 2_000;
