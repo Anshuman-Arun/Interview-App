@@ -1218,12 +1218,12 @@ describe("interview session transition authority", () => {
     };
 
     const rendered = renderHook(fetchImpl);
-    let recoveredStatus: Awaited<ReturnType<UseInterviewSessionResult["recoverSession"]>>;
+    let recoveredStatus: Awaited<ReturnType<UseInterviewSessionResult["recoverSession"]>> = null;
     await act(async () => {
       recoveredStatus = await rendered.current().recoverSession(sessionId);
     });
 
-    expect(recoveredStatus!).toBe("COMPLETED");
+    expect(recoveredStatus).toBe("COMPLETED");
     expect(resumeCalls).toBe(0);
     expect(rendered.current().sessionId).toBe(sessionId);
     expect(rendered.current().sessionStatus).toBe("COMPLETED");
