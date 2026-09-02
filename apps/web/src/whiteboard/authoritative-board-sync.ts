@@ -323,21 +323,13 @@ async function shapesMatch(
   }[]
 ): Promise<boolean> {
   if (localShapes.length !== remote.length) return false;
-  const local = await Promise.all(localShapes.map(async (shape) => ({
-    shapeId: shape.id,
-    revision: shape.revision,
-    contentSha256: await shapeContentSha256(shape)
-  })));
-  local.sort((left, right) => left.shapeId.localeCompare(right.shapeId));
-  const remoteSorted = [...remote].sort((left, right) =>
-    left.shapeId.localeCompare(right.shapeId)
-  );
-  for (let index = 0; index < local.length; index += 1) {
-    if (
-      local[index]?.shapeId !== remoteSorted[index]?.shapeId
-      || local[index]?.revision !== remoteSorted[index]?.revision
-      || local[index]?.contentSha256 !== remoteSorted[index]?.contentSha256
-    ) return false;
+  const remoteById = new Map(remote.map((entry) => [entry.shapeId, entry] as const));
+  if (remoteById.size !== remote.length) return false;
+
+  for (const shape of localShapes) {
+    const expected = remoteById.get(shape.id);
+    if (expected === undefined || expected.revision !== shape.revision) return false;
+    if (await shapeContentSha256(shape) !== expected.contentSha256) return false;
   }
   return true;
 }
@@ -362,19 +354,15 @@ async function authoritativeSubsetOfLocal(
   localShapes: readonly StudentShape[]
 ): Promise<boolean> {
   if (remote.length > localShapes.length) return false;
-  const localEntries = await Promise.all(localShapes.map(async (shape) => [
-    shape.id,
-    {
-      revision: shape.revision,
-      contentSha256: await shapeContentSha256(shape)
-    }
-  ] as const));
-  const localById = new Map(localEntries);
-  return remote.every((entry) => {
+  const localById = new Map(localShapes.map((shape) => [shape.id, shape] as const));
+  if (localById.size !== localShapes.length) return false;
+
+  for (const entry of remote) {
     const local = localById.get(entry.shapeId);
-    return local?.revision === entry.revision
-      && local.contentSha256 === entry.contentSha256;
-  });
+    if (local === undefined || local.revision !== entry.revision) return false;
+    if (await shapeContentSha256(local) !== entry.contentSha256) return false;
+  }
+  return true;
 }
 
 async function shapeContentSha256(shape: StudentShape): Promise<string> {
