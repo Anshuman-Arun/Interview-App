@@ -13,7 +13,10 @@ import {
   type RequestId,
   type SessionId
 } from "../packages/domain/src/index.js";
-import type { SessionState } from "../packages/events/src/index.js";
+import {
+  QuantResearchAuthoritativeSnapshotEventSchema,
+  type SessionState
+} from "../packages/events/src/index.js";
 import {
   QuantResearchCoordinator,
   QuantTradingSessionCoordinator,
@@ -1516,7 +1519,9 @@ describe("adversarial quant lifecycle invariants", () => {
             type: "QUANT_RESEARCH_SCENARIO_INITIALIZED",
             payload: {
               definition,
-              authoritativeSnapshot: engine.getAuthoritativePersistenceSnapshot()
+              authoritativeSnapshot: QuantResearchAuthoritativeSnapshotEventSchema.parse(
+                engine.getAuthoritativePersistenceSnapshot()
+              )
             }
           }
         ],
