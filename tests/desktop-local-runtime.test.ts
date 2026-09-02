@@ -773,7 +773,9 @@ describe("desktop local model runtime", () => {
     });
     await waitForCondition(() => resolveActive !== undefined);
     ordinary.abort();
-    resolveActive?.({ text: "late but suppressible" });
+    const resolveLate = resolveActive as ((value: unknown) => void) | undefined;
+    if (resolveLate === undefined) throw new Error("Expected active Moonshine resolver");
+    resolveLate({ text: "late but suppressible" });
     await expect(cancelled).resolves.toEqual({ text: "late but suppressible" });
     expect(recycleCount).toBe(1);
   });
