@@ -147,7 +147,10 @@ export class BrowserVoiceStream {
   }
 
   public async cancel(signal?: AbortSignal): Promise<void> {
-    if (this.closed) return;
+    // Close frame admission immediately, but keep the transport cancellation
+    // itself retryable. A lost/aborted first cancel response must not make the
+    // known server-side stream identity impossible to retire on a later
+    // bounded attempt.
     this.closed = true;
     await this.client.cancel(this.sessionId, this.streamId, signal);
   }
