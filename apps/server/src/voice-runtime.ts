@@ -28,6 +28,7 @@ import {
   TtsVoiceSchema,
   TtsWorkerCore,
   planTtsRequest,
+  snapshotPcmFrame,
   type SourceAudioBasis,
   type SpeechPcmFrameEnvelope,
   type SpeechSampleRate,
@@ -970,19 +971,16 @@ export class VoiceInputCoordinator {
     envelope: SpeechPcmFrameEnvelope,
     payload: Uint8Array
   ): AdmittedPcmLedgerFrame {
-    if (
-      !(payload instanceof Uint8Array)
-      || payload.byteLength !== envelope.frameSamples * Float32Array.BYTES_PER_ELEMENT
-      || payload.byteLength > MAX_SPEECH_BUFFERED_PCM_BYTES
-    ) {
+    const snapshot = snapshotPcmFrame(envelope, payload);
+    if (snapshot.bytes.byteLength > MAX_SPEECH_BUFFERED_PCM_BYTES) {
       throw new Error("Admitted PCM frame cannot be represented in the bounded application ledger");
     }
     return {
-      sequence: envelope.sequence,
-      timestampMs: envelope.timestampMs,
-      sampleRate: envelope.sampleRate,
-      frameSamples: envelope.frameSamples,
-      bytes: Uint8Array.prototype.slice.call(payload) as Uint8Array
+      sequence: snapshot.envelope.sequence,
+      timestampMs: snapshot.envelope.timestampMs,
+      sampleRate: snapshot.envelope.sampleRate,
+      frameSamples: snapshot.envelope.frameSamples,
+      bytes: snapshot.bytes
     };
   }
 
