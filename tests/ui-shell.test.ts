@@ -265,9 +265,9 @@ describe("UI Shell & KaTeX Math Rendering", () => {
       expect(markup).toContain("Socratic Interviewer");
       expect(markup).toContain("student-math-bubble");
       expect(markup).toContain("ai-math-bubble");
-      expect(markup).toContain("Turn: turn_1");
-      expect(markup).toContain("Episode: input_ep_1");
-      expect(markup).toContain("Delivery: delivery_1");
+      expect(markup).not.toContain("Turn: turn_1");
+      expect(markup).not.toContain("Episode: input_ep_1");
+      expect(markup).not.toContain("Delivery: delivery_1");
       expect(markup).toContain("katex");
     });
   });
