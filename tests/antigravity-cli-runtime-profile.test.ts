@@ -44,21 +44,21 @@ describe("supervised Antigravity runtime profile", () => {
     expect(ANTIGRAVITY_SUPERVISED_SETTINGS_JSON).not.toContain("GEMINI_API_KEY");
   });
 
-  it("pins a primary-only custom agent with every optional capability disabled", () => {
+  it("pins a primary-only custom agent using only documented capability fields", () => {
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
       "name: interview-realizer"
     );
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("tools: []");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("mainAgent: true");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("subagent: false");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
-      'commandExecutionPolicy: "off"'
-    );
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("mcpServers: []");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("skills: []");
-    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain("plugins: []");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("run_command");
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("invoke_subagent");
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain(
+      "commandExecutionPolicy:"
+    );
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("mcpServers:");
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("skills:");
+    expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).not.toContain("plugins:");
   });
 
   it("fails closed for the concrete Antigravity runtime outside Windows", async () => {
@@ -77,6 +77,16 @@ describe("supervised Antigravity runtime profile", () => {
     } else {
       expect(runtime).toBeUndefined();
     }
+
+    expect(source.resolveRuntime({
+      providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+      modelId: "unexpected-model"
+    })).toBeUndefined();
+    expect(source.resolveRuntime({
+      providerId: "unexpected-provider",
+      modelId: ANTIGRAVITY_CLI_MODEL_ID
+    })).toBeUndefined();
+
     await expect(source.drain()).resolves.toBeUndefined();
   });
 });
