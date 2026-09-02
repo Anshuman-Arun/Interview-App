@@ -1,3 +1,4 @@
+import { types as utilTypes } from "node:util";
 import { z } from "zod";
 import { InterviewerProposalSchema } from "../../domain/src/index.js";
 import {
@@ -339,7 +340,12 @@ function invalidAntigravityRuntime(): never {
 }
 
 function snapshotAntigravityExecutor(value: unknown): SupervisedCliExecutor {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
     return invalidAntigravityRuntime();
   }
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
@@ -380,7 +386,12 @@ function snapshotAntigravityExecutor(value: unknown): SupervisedCliExecutor {
 function snapshotAntigravityFactoryRuntime(value: unknown): {
   readonly executor: SupervisedCliExecutor;
 } {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
     return invalidAntigravityRuntime();
   }
   let descriptors: Readonly<Record<string, PropertyDescriptor>>;
