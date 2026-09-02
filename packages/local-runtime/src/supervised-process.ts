@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { chmod, lstat, mkdtemp, realpath, rm } from "node:fs/promises";
+import { lstatSync, realpathSync } from "node:fs";
+import { chmod, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path, { win32 as win32Path } from "node:path";
 import process from "node:process";
@@ -17,6 +18,9 @@ const MAX_STDIN_BYTES = 256 * 1024;
 const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_STDERR_BYTES = 512 * 1024;
 const MAX_EXECUTION_MS = 5 * 60_000;
+const MAX_ISOLATED_HOME_FILES = 16;
+const MAX_ISOLATED_HOME_FILE_BYTES = 64 * 1024;
+const MAX_ISOLATED_HOME_TOTAL_BYTES = 128 * 1024;
 const TREE_GRACE_MS = 250;
 const TREE_FORCE_MS = 1_000;
 
@@ -49,6 +53,7 @@ export interface SupervisedExecutableDefinition {
   readonly fixedArgs?: readonly string[];
   readonly environment?: LocalEnvironmentDefinition;
   readonly isolatedWorkingDirectory?: boolean;
+  readonly isolatedHomeFiles?: Readonly<Record<string, string>>;
 }
 
 export interface SupervisedProcessExecutionRequest {
@@ -79,6 +84,7 @@ interface ExecutableDefinitionSnapshot {
   readonly fixedArgs: readonly string[];
   readonly environment?: LocalEnvironmentDefinition;
   readonly isolatedWorkingDirectory: boolean;
+  readonly isolatedHomeFiles?: readonly IsolatedHomeFile[];
 }
 
 interface RegisteredExecutable {
@@ -87,6 +93,12 @@ interface RegisteredExecutable {
   readonly fixedArgs: readonly string[];
   readonly environment: NodeJS.ProcessEnv;
   readonly isolatedWorkingDirectory: boolean;
+  readonly isolatedHomeFiles?: readonly IsolatedHomeFile[];
+}
+
+interface IsolatedHomeFile {
+  readonly relativePath: string;
+  readonly content: string;
 }
 
 interface ExecutableIdentity {
@@ -109,6 +121,7 @@ export class SupervisedProcessRunner {
   private readonly definitions = new Map<string, RegisteredExecutable>();
   private readonly parentEnvironment: NodeJS.ProcessEnv;
   private readonly platform: NodeJS.Platform;
+  private readonly pinnedIdentities = new Map<string, ExecutableIdentity>();
 
   public constructor(
     definitions: readonly SupervisedExecutableDefinition[],
@@ -143,8 +156,15 @@ export class SupervisedProcessRunner {
         executable: snapshot.executable,
         fixedArgs: snapshot.fixedArgs,
         environment,
-        isolatedWorkingDirectory: snapshot.isolatedWorkingDirectory
+        isolatedWorkingDirectory: snapshot.isolatedWorkingDirectory,
+        ...(snapshot.isolatedHomeFiles === undefined
+          ? {}
+          : { isolatedHomeFiles: snapshot.isolatedHomeFiles })
       }));
+      const initialIdentity = tryInspectExecutableSync(snapshot.executable, this.platform);
+      if (initialIdentity !== undefined) {
+        this.pinnedIdentities.set(snapshot.id, initialIdentity);
+      }
     }
   }
 
