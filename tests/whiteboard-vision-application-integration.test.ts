@@ -849,10 +849,30 @@ describe("application whiteboard vision integration", () => {
           expectedRevision: 2
         }]
       });
-      await expect(unavailable.process(unavailableRequest)).resolves.toMatchObject({
+      const unavailableResult = await unavailable.process(unavailableRequest);
+      expect(unavailableResult).toMatchObject({
         status: "VISION_UNAVAILABLE",
         reason: "No production vision inference backend is configured"
       });
+      expect(harness.writer.getState().visionRequests[unavailableRequest.requestId])
+        .toMatchObject({
+          status: "DISCARDED",
+          discardReason: "VISION_UNAVAILABLE"
+        });
+
+      unavailable.shutdown();
+      const callsBeforeRestart = backend.analyzeCallCount;
+      const restartedWithBackend = new WhiteboardVisionCoordinator({
+        sessions: harness.sessions,
+        backend
+      });
+      try {
+        await expect(restartedWithBackend.process(unavailableRequest))
+          .resolves.toEqual(unavailableResult);
+        expect(backend.analyzeCallCount).toBe(callsBeforeRestart);
+      } finally {
+        restartedWithBackend.shutdown();
+      }
     } finally {
       coordinator.shutdown();
       unavailable.shutdown();
