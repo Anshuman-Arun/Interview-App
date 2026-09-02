@@ -14,6 +14,8 @@ $configPath = $env:INTERVIEW_SUPERVISED_CONFIG
 if ([string]::IsNullOrWhiteSpace($configPath)) {
   exit 191
 }
+Remove-Item Env:INTERVIEW_SUPERVISED_CONFIG -ErrorAction SilentlyContinue
+Remove-Item Env:INTERVIEW_SUPERVISED_BOOTSTRAP -ErrorAction SilentlyContinue
 
 $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
