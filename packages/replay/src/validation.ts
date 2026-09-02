@@ -1287,8 +1287,12 @@ export function validateKnownReplayPrefix(
             (state.status !== "ACTIVE" && state.status !== "COMPLETED")
             || !terminalStateIsSettled(state)
             || (
-              (state.configuration?.mode === "QUANT_TRADING"
-                || state.configuration?.mode === "QUANT_RESEARCH")
+              (
+                state.configuration?.mode === "QUANT_TRADING"
+                || state.configuration?.mode === "QUANT_RESEARCH"
+                || state.quantTrading !== undefined
+                || state.quantResearch !== undefined
+              )
               && state.status !== "COMPLETED"
             )
           ) fail();
