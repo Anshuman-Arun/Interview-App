@@ -151,12 +151,12 @@ export class SupervisedProcessRunner {
     const request = snapshotExecutionRequest(input);
     const definition = this.definitions.get(request.executableId);
     if (definition === undefined) throw new SupervisedProcessError("UNKNOWN_EXECUTABLE");
-    if (request.signal?.aborted === true) {
+    if (request.signal?.aborted) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
     const before = await inspectExecutable(definition.executable, this.platform);
-    if (request.signal?.aborted === true) {
+    if (request.signal?.aborted) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
@@ -248,7 +248,7 @@ export class SupervisedProcessRunner {
       if (!sameExecutableIdentity(before, after, this.platform)) {
         requestCleanup("EXECUTABLE_UNSAFE");
       }
-      if (request.signal?.aborted === true) {
+      if (request.signal?.aborted) {
         requestCleanup("EXECUTION_CANCELLED");
       }
       if (pendingFailure === undefined && request.onProcessStart !== undefined) {
@@ -468,7 +468,7 @@ function snapshotArguments(
     throw new SupervisedProcessError(code);
   }
   const descriptors = Object.getOwnPropertyDescriptors(value);
-  const rawLength = descriptors.length?.value as unknown;
+  const rawLength = Object.getOwnPropertyDescriptor(value, "length")?.value as unknown;
   if (
     typeof rawLength !== "number"
     || !Number.isSafeInteger(rawLength)
