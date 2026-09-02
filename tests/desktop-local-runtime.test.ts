@@ -151,6 +151,8 @@ describe("desktop local model runtime", () => {
 
     const args = definition.args;
     if (args === undefined) throw new Error("Expected production worker arguments");
+    expect(definition.executable).toBe(process.execPath);
+    expect(definition.environment?.values?.["PATH"]).toBe(dirname(process.execPath));
     expect(args[0]).toBe("-I");
     expect(args[1]).toBe(PRODUCTION_WORKER);
   });
