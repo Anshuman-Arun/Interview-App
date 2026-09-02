@@ -209,10 +209,10 @@ function reconstructQuantTradingEngine(
   }
 
   if (
-    state.status === "COMPLETED"
+    (state.status === "COMPLETED" || state.status === "ARCHIVED")
     && (!engineTerminal || persisted.result === undefined)
   ) {
-    throw new Error("Completed Quant Trading session lacks deterministic terminal authority");
+    throw new Error("Terminal Quant Trading session lacks deterministic terminal authority");
   }
   if (
     persisted.result !== undefined
