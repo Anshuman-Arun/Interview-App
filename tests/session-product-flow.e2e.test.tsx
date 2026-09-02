@@ -191,8 +191,9 @@ describe("post-session product flow E2E", () => {
       );
     });
     await waitForSelector("[data-testid='session-replay-panel']");
-    expect(document.body.textContent).toContain("authoritative events");
     expect(document.body.textContent).toContain("Turn committed");
+    expect(document.body.textContent).toContain("Student");
+    expect(document.body.textContent).toContain("Interviewer");
     expect(evaluationReadCount).toBe(1);
     expect(replayReadCount).toBe(1);
     expect(server.store.eventCount(sessionId)).toBe(authoritativeEventCount);
