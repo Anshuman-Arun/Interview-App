@@ -213,6 +213,23 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("[session.baseUrl]");
   });
 
+  it("fails closed for live interaction states and validates manual recovery", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain('session.sessionStatus !== "ACTIVE"');
+    expect(app).toContain("const recoverySessionParse = SessionIdSchema.safeParse");
+    expect(app).toContain("recoverySessionId === null");
+    expect(app).toContain("aria-invalid={recoverySessionInputInvalid}");
+    expect(app).toContain('role="dialog"');
+    expect(app).toContain('aria-modal="true"');
+    expect(app).toContain('aria-label="Close stored sessions"');
+    expect(app).toContain('setActiveTab("whiteboard")');
+    expect(app).toContain('setCompactPane("whiteboard")');
+  });
+
   it("styles Whiteboard and Details from actual tab selection state", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
