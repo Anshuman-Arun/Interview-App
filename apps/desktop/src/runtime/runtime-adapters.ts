@@ -1,5 +1,6 @@
 import {
   MAX_SPEECH_CONCURRENT_STREAMS,
+  SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON,
   SPEECH_VAD_TIMEOUT_ABORT_REASON,
   TTS_LIMITS,
   type KokoroRuntime,
@@ -113,21 +114,65 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
     this.activeRequestIds.add(input.requestId);
     const operation = this.transcriptionTail.then(async () => {
       if (input.signal?.aborted === true) throw abortError();
-      // Once this request reaches the single native lane, do not wire the
-      // application AbortSignal into fetch. Moonshine batch STT is not
-      // preemptible; letting fetch reject early would falsely free the local
-      // lane while Python is still executing the same native call.
-      return runWithWorkerRecycleOnTimeout(this.client, () =>
-        this.client.postJson("/v1/stt", {
-          requestId: input.requestId,
-          utteranceId: input.utteranceId,
-          pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
-          sampleRate: input.sampleRate
-        }, {
-          timeoutMs: 60_000,
-          maxResponseBytes: 2 * 1024 * 1024
-        })
-      );
+
+      const workerInstance = this.client.workerInstanceIdentity();
+      const timeoutRecovery: { promise?: Promise<void> } = {};
+      const onAbort = (): void => {
+        if (input.signal?.reason !== SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON) return;
+        timeoutRecovery.promise ??=
+          this.client.recycleAfterUncertainRequest(workerInstance);
+      };
+
+      input.signal?.addEventListener("abort", onAbort, { once: true });
+      if (input.signal?.aborted === true) onAbort();
+
+      let outcome:
+        | { readonly ok: true; readonly value: unknown }
+        | { readonly ok: false; readonly error: unknown };
+      try {
+        // Once this request reaches the single native lane, do not wire the
+        // application AbortSignal into fetch. Moonshine batch STT is not
+        // preemptible in-process. A recognizer timeout instead recycles the
+        // exact worker process, while normal stream cancellation only suppresses
+        // the late result.
+        try {
+          outcome = {
+            ok: true,
+            value: await runWithWorkerRecycleOnTimeout(this.client, () =>
+              this.client.postJson("/v1/stt", {
+                requestId: input.requestId,
+                utteranceId: input.utteranceId,
+                pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
+                sampleRate: input.sampleRate
+              }, {
+                timeoutMs: 60_000,
+                maxResponseBytes: 2 * 1024 * 1024
+              })
+            )
+          };
+        } catch (error) {
+          outcome = { ok: false, error };
+        }
+
+        const recovery = timeoutRecovery.promise;
+        if (recovery !== undefined) {
+          try {
+            await recovery;
+          } catch (recycleError) {
+            throw new AggregateError(
+              outcome.ok
+                ? [recycleError]
+                : [outcome.error, recycleError],
+              "Moonshine recognition timed out and its worker could not be safely recycled",
+              { cause: recycleError }
+            );
+          }
+        }
+        if (!outcome.ok) throw outcome.error;
+        return outcome.value;
+      } finally {
+        input.signal?.removeEventListener("abort", onAbort);
+      }
     });
     this.transcriptionTail = operation.then(
       () => undefined,
