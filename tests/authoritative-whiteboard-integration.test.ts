@@ -421,6 +421,68 @@ describe("browser authoritative board synchronization", () => {
     expect(sync.currentAuthoritativeRevision()).toBe(BoardRevisionSchema.parse(1));
   });
 
+  it("deduplicates a delayed callback after reconnect proves a pending mutation already committed", async () => {
+    const sessionId = newSessionId();
+    type CommitResponse = Awaited<ReturnType<SyncClient["commitBoardMutation"]>>;
+    const acknowledgement = deferred<CommitResponse>();
+    const calls: Parameters<SyncClient["commitBoardMutation"]>[] = [];
+    let boardReads = 0;
+    const committedShape = shape("shape:queued", 1, 10);
+
+    const client: SyncClient = {
+      getBoardState: async () => {
+        boardReads += 1;
+        return boardReads === 1
+          ? boardStateResponse(sessionId, BoardRevisionSchema.parse(0), [])
+          : boardStateResponse(
+              sessionId,
+              BoardRevisionSchema.parse(1),
+              [{
+                shapeId: committedShape.id,
+                revision: committedShape.revision,
+                contentSha256: testShapeDigest(committedShape)
+              }]
+            );
+      },
+      commitBoardMutation: (...args) => {
+        calls.push(args);
+        return acknowledgement.promise;
+      }
+    };
+
+    const sync = new AuthoritativeBoardSyncCoordinator(client);
+    await sync.synchronize(sessionId, []);
+    const change = studentChange("ADD", 10);
+    const pending = sync.submit(change);
+    await Promise.resolve();
+    expect(calls).toHaveLength(1);
+
+    const recovered = await sync.synchronize(sessionId, [committedShape]);
+    expect(recovered).toMatchObject({
+      status: "SYNCED",
+      authoritativeRevision: BoardRevisionSchema.parse(1),
+      pendingMutationCount: 0
+    });
+    await pending;
+
+    await sync.submit(change);
+    expect(calls).toHaveLength(1);
+
+    const requestId = calls[0]?.[2]?.requestId;
+    if (requestId === undefined) throw new Error("Expected pending whiteboard request ID");
+    acknowledgement.resolve({
+      protocolVersion: 1,
+      ok: true,
+      type: "BOARD_MUTATION_COMMITTED",
+      requestId,
+      sessionId,
+      committed: true,
+      boardRevision: BoardRevisionSchema.parse(1)
+    });
+    await Promise.resolve();
+    expect(sync.currentAuthoritativeRevision()).toBe(BoardRevisionSchema.parse(1));
+  });
+
   it("does not let a late old-session acknowledgement resurrect synchronization after reset", async () => {
     const firstSessionId = newSessionId();
     const secondSessionId = newSessionId();
