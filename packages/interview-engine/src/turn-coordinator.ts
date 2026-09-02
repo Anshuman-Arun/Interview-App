@@ -5,6 +5,7 @@ import {
   NormalizedBoardMutationSchema,
   RequestIdSchema,
   VisionBoundsSchema,
+  VisionEvidenceInterpreterFingerprintSchema,
   VisionRequestedObservationKindSchema,
   VisionShapeRevisionBindingSchema,
   VisionSnapshotBasisSchema,
@@ -40,6 +41,7 @@ import {
   type BoardRevision,
   type NormalizedBoardMutation,
   type VisionBounds,
+  type VisionEvidenceInterpreterFingerprint,
   type VisionRequestedObservationKind,
   type VisionShapeRevisionBinding,
   type VisionSnapshotBasis,
@@ -95,6 +97,7 @@ const BoardMutationCommitResultSchema = z.object({
 });
 const VisionRequestedResultSchema = z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema }).strict();
 const VisionProcessedResultSchema = z.object({ accepted: z.boolean(), reason: z.string().min(1).optional() }).strict();
+const VisionEvidenceBridgeDecisionResultSchema = z.object({ recorded: z.literal(true) }).strict();
 const EvidenceProcessedResultSchema = z.object({ committed: z.boolean(), key: z.string().min(1), reason: z.string().min(1).optional() }).strict();
 const CompletedResultSchema = z.object({ completed: z.literal(true), completedAt: z.string() }).strict();
 const ArchivedResultSchema = z.object({ archived: z.literal(true), archivedAt: z.string() }).strict();
@@ -802,18 +805,27 @@ export class TurnCoordinator {
     readonly envelope: CommandEnvelope;
     readonly observation: BoardObservation;
     readonly admission?: AcceptedBoardObservation;
+    readonly evidenceInterpreterFingerprint?: VisionEvidenceInterpreterFingerprint | null;
   }): Promise<z.infer<typeof VisionProcessedResultSchema>> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const observation = BoardObservationSchema.parse(input.observation);
     const admission = input.admission === undefined
       ? undefined
       : AcceptedBoardObservationSchema.parse(input.admission);
+    const evidenceInterpreterFingerprint = input.evidenceInterpreterFingerprint === undefined
+      ? undefined
+      : input.evidenceInterpreterFingerprint === null
+        ? null
+        : VisionEvidenceInterpreterFingerprintSchema.parse(input.evidenceInterpreterFingerprint);
     const visionRequestId = envelope.correlationId;
     const result = await this.writer.execute(envelope, {
       operation: "PROCESS_VISION_RESULT",
       payload: {
         observation,
-        ...(admission === undefined ? {} : { admission })
+        ...(admission === undefined ? {} : { admission }),
+        ...(evidenceInterpreterFingerprint === undefined
+          ? {}
+          : { evidenceInterpreterFingerprint })
       }
     }, VisionProcessedResultSchema, (state) => {
       const request = state.visionRequests[visionRequestId];
@@ -888,10 +900,76 @@ export class TurnCoordinator {
           payload: {
             visionRequestId,
             observation,
-            ...(admission === undefined ? {} : { admission })
+            ...(admission === undefined ? {} : { admission }),
+            ...(evidenceInterpreterFingerprint === undefined
+              ? {}
+              : { evidenceInterpreterFingerprint })
           }
         }],
         result: { accepted: true }
+      };
+    });
+    return result.value;
+  }
+
+  public async recordVisionEvidenceBridgeDecision(input: {
+    readonly envelope: CommandEnvelope;
+    readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+    readonly proposal?: EvidenceProposal;
+  }): Promise<z.infer<typeof VisionEvidenceBridgeDecisionResultSchema>> {
+    const envelope = CommandEnvelopeSchema.parse(input.envelope);
+    const interpreterFingerprint = VisionEvidenceInterpreterFingerprintSchema.parse(
+      input.interpreterFingerprint
+    );
+    const proposal = input.proposal === undefined
+      ? undefined
+      : EvidenceProposalSchema.parse(input.proposal);
+    const visionRequestId = envelope.correlationId;
+
+    const result = await this.writer.execute(envelope, {
+      operation: "RECORD_VISION_EVIDENCE_BRIDGE_DECISION",
+      payload: {
+        visionRequestId,
+        interpreterFingerprint,
+        proposal: proposal === undefined ? null : commandIdentityValue(proposal)
+      }
+    }, VisionEvidenceBridgeDecisionResultSchema, (state) => {
+      const request = state.visionRequests[visionRequestId];
+      if (
+        request === undefined
+        || request.status !== "ACCEPTED"
+        || request.resultEventId === undefined
+        || request.acceptedObservation === undefined
+        || request.evidenceBridge?.status !== "PENDING"
+      ) {
+        throw new Error("Vision evidence bridge is not pending");
+      }
+      if (request.evidenceBridge.interpreterFingerprint !== interpreterFingerprint) {
+        throw new Error("Vision evidence interpreter fingerprint changed after acceptance");
+      }
+      if (
+        proposal !== undefined
+        && (
+          proposal.evidenceEventIds.length !== 1
+          || proposal.evidenceEventIds[0] !== request.resultEventId
+          || state.problem?.id !== proposal.key.problemId
+        )
+      ) {
+        throw new Error("Vision evidence proposal is not scoped to the accepted result");
+      }
+
+      return {
+        drafts: [{
+          source: "APPLICATION",
+          type: "VISION_EVIDENCE_BRIDGE_DECIDED",
+          payload: {
+            visionRequestId,
+            interpreterFingerprint,
+            decision: proposal === undefined ? "NO_PROPOSAL" as const : "PROPOSAL" as const,
+            ...(proposal === undefined ? {} : { proposal })
+          }
+        }],
+        result: { recorded: true as const }
       };
     });
     return result.value;
