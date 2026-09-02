@@ -121,6 +121,21 @@ export class RealTldrawEditorBridge implements TldrawEditor {
     }
   }
 
+  public restoreShapes(shapes: readonly TLShapePartialRecord[]): void {
+    for (const shape of shapes) this.assertValidPartialOwnership(shape);
+    const nativeShapes = shapes.map((shape) => this.toNativePartial(shape));
+
+    // Route remount restoration is presentation continuity, not a new student
+    // mutation. Never let Ctrl+Z erase the entire pre-pause canvas as one
+    // synthetic history entry.
+    this.runAdapterMutation(
+      () => {
+        this.nativeEditor.createShapes(nativeShapes);
+      },
+      true
+    );
+  }
+
   public deleteShapes(ids: readonly string[]): void {
     const classified = ids.map((id) => {
       const shape = this.nativeEditor.getShape(toShapeId(id));
