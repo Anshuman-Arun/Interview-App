@@ -31,39 +31,8 @@ import { terminalInvalidationDrafts } from "./turn-coordinator.js";
 
 const StartedResultSchema = z.object({ started: z.literal(true) }).strict();
 
-const QuantResearchFamilySchema = z.enum([
-  "BAYESIAN_UPDATING",
-  "SAMPLING_ESTIMATION",
-  "EXPERIMENTAL_ALLOCATION",
-  "MODEL_COMPARISON",
-  "CONSTRAINED_OPTIMIZATION"
-]);
-const QuantResearchPublicValueSchema = z.union([
-  z.number(),
-  z.string(),
-  z.boolean(),
-  z.array(z.number()).max(128),
-  z.array(z.string()).max(128)
-]);
-const QuantResearchPublicStateSchema = z.object({
-  family: QuantResearchFamilySchema,
-  version: z.string().min(1).max(64),
-  generatorVersion: z.string().min(1).max(64),
-  rngVersion: z.string().min(1).max(64),
-  status: z.enum(["IN_PROGRESS", "COMPLETE"]),
-  stage: z.string().min(1).max(64),
-  prompt: z.string().min(1).max(10_000),
-  visibleData: z.array(z.object({
-    key: z.string().min(1).max(128),
-    label: z.string().min(1).max(256),
-    value: QuantResearchPublicValueSchema
-  }).strict()).max(32),
-  acceptedActionCount: z.number().int().min(0).max(64),
-  actionLimit: z.number().int().min(1).max(64)
-}).strict();
-
 export const QuantResearchCoordinatorOutcomeSchema = z.object({
-  state: QuantResearchPublicStateSchema,
+  state: QuantResearchRuntimePublicStateSchema,
   result: QuantResearchResultEventSchema
 }).strict();
 export type QuantResearchCoordinatorOutcome = z.infer<typeof QuantResearchCoordinatorOutcomeSchema>;
@@ -93,6 +62,24 @@ function canonicalEventSnapshot(engine: QuantResearchEngine) {
 
 function canonicalEventResult(engine: QuantResearchEngine) {
   return QuantResearchResultEventSchema.parse(engine.getResult());
+}
+
+function runtimePublicState(
+  state: QuantResearchPublicState,
+  result: QuantResearchResult
+) {
+  return QuantResearchRuntimePublicStateSchema.parse({
+    ...state,
+    ...(result.status === "COMPLETE"
+      ? {
+          completion: {
+            overallScore: result.overallScore,
+            metrics: result.metrics,
+            evidence: result.evidence
+          }
+        }
+      : {})
+  });
 }
 
 function sameCanonicalJson(left: unknown, right: unknown): boolean {
@@ -254,7 +241,8 @@ export class QuantResearchCoordinator {
   }
 
   public getPublicState() {
-    return QuantResearchRuntimePublicStateSchema.parse(this.replay().state);
+    const replayed = this.replay();
+    return runtimePublicState(replayed.state, replayed.result);
   }
 
   public initialize(definitionInput: unknown, commandEnvelope?: CommandEnvelope) {
@@ -274,7 +262,10 @@ export class QuantResearchCoordinator {
       sessionId: this.writer.sessionId,
       producer: "quant-research-coordinator"
     }));
-    const outcome = QuantResearchCoordinatorOutcomeSchema.parse({ state: publicState, result });
+    const outcome = QuantResearchCoordinatorOutcomeSchema.parse({
+      state: runtimePublicState(publicState, result),
+      result
+    });
 
     return this.writer.execute(
       envelope,
@@ -416,7 +407,7 @@ export class QuantResearchCoordinator {
         return {
           drafts,
           result: QuantResearchCoordinatorOutcomeSchema.parse({
-            state: engine.getState(),
+            state: runtimePublicState(engine.getState(), result),
             result
           })
         };
