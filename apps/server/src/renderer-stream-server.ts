@@ -154,6 +154,18 @@ export class RendererStreamServer {
     return this.boundAddress;
   }
 
+  public closeSession(sessionId: SessionId): void {
+    const set = this.connections.get(sessionId);
+    if (set === undefined) return;
+    for (const connection of [...set]) {
+      // Terminal authority must not gracefully flush stale buffered commands.
+      // Destroy the transport and let disconnect classification preserve any
+      // already-started exposure uncertainty.
+      if (!connection.response.destroyed) connection.response.destroy();
+      this.removeConnection(connection);
+    }
+  }
+
   public stop(): Promise<void> {
     if (this.stoppingPromise !== undefined) return this.stoppingPromise;
 
@@ -463,6 +475,14 @@ export class RendererStreamServer {
 
       await this.awaitDisconnectClassification(attach.sessionId);
       await this.options.sessions.ensureRecovered(attach.sessionId);
+      const recoveredState = this.options.sessions.getWriter(attach.sessionId).getState();
+      if (!recoveredState.started || recoveredState.status !== "ACTIVE") {
+        throw new RendererStreamHttpError(
+          409,
+          "INVALID_STREAM_REQUEST",
+          "Renderer stream requires an active interview session"
+        );
+      }
       if (this.stoppingRequested) {
         throw new RendererStreamHttpError(
           503,
