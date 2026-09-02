@@ -65,6 +65,9 @@ switch (mode) {
       const payload = {
         home,
         cwd: process.cwd(),
+        temp: process.platform === "win32"
+          ? process.env.TEMP
+          : process.env.TMPDIR,
         configuredContent: readFileSync(target, "utf8"),
         mutationExisted: existsSync(marker)
       };
