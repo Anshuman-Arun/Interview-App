@@ -221,6 +221,16 @@ function terminalInvalidationDrafts(
 ): readonly EventDraft[] {
   const drafts: EventDraft[] = [];
 
+  for (const utterance of Object.values(state.utterances)) {
+    if (utterance.status === "CAPTURING") {
+      drafts.push({
+        source: "APPLICATION",
+        type: "UTTERANCE_DISCARDED",
+        payload: { utteranceId: utterance.utteranceId, reason }
+      });
+    }
+  }
+
   for (const generation of Object.values(state.generations)) {
     if (generation.status === "ACTIVE" || generation.status === "PROPOSAL_RECEIVED") {
       drafts.push({
@@ -400,6 +410,9 @@ export class TurnCoordinator {
       if (!state.started || state.status !== "ACTIVE") {
         throw new Error(`Cannot complete session in status ${state.status}`);
       }
+      if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
+        throw new Error("Cannot complete session while an input episode is active");
+      }
       const completedAt = new Date().toISOString();
       return {
         drafts: [
@@ -424,6 +437,9 @@ export class TurnCoordinator {
     }, ArchivedResultSchema, (state) => {
       if (!state.started || (state.status !== "ACTIVE" && state.status !== "COMPLETED")) {
         throw new Error(`Cannot archive session in status ${state.status}`);
+      }
+      if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
+        throw new Error("Cannot archive session while an input episode is active");
       }
       const archivedAt = new Date().toISOString();
       return {
