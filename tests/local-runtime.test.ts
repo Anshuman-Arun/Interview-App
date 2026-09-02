@@ -71,6 +71,9 @@ function readyDecision(message: unknown) {
     handshake: {
       ...(typeof value.componentVersion === "string" ? { componentVersion: value.componentVersion } : {}),
       ...(typeof value.protocolVersion === "number" ? { protocolVersion: value.protocolVersion } : {}),
+      ...(typeof value.modelVersionOrHash === "string"
+        ? { modelVersionOrHash: value.modelVersionOrHash }
+        : {}),
       capabilities: Array.isArray(value.capabilities)
         ? value.capabilities.filter((item): item is string => typeof item === "string")
         : []
@@ -215,7 +218,7 @@ describe("local worker lifecycle manager", () => {
   it("starts one process, coalesces duplicate starts, records readiness, and handshakes versions", async () => {
     const runtime = manager();
     runtime.register(definition("worker", "ready", {
-      expectedHandshake: { componentVersion: "fixture-1", protocolVersion: 1 }
+      expectedHandshake: {\n        componentVersion: "fixture-1",\n        protocolVersion: 1,\n        modelVersionOrHash: "fixture-model-1",\n        capabilities: ["FIXTURE"]\n      }
     }));
 
     const first = runtime.start("worker");
@@ -231,6 +234,34 @@ describe("local worker lifecycle manager", () => {
       protocolVersion: 1,
       capabilities: ["FIXTURE"]
     });
+  });
+
+  it("fails closed on model identity or capability mismatches", async () => {
+    const wrongModel = manager();
+    wrongModel.register(definition("wrong-model", "ready", {
+      expectedHandshake: {
+        protocolVersion: 1,
+        modelVersionOrHash: "fixture-model-2",
+        capabilities: ["FIXTURE"]
+      },
+      terminationTimeoutMs: 300
+    }));
+    await expect(wrongModel.start("wrong-model"))
+      .rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
+    expect(wrongModel.getStatus("wrong-model")).not.toHaveProperty("pid");
+
+    const wrongCapability = manager();
+    wrongCapability.register(definition("wrong-capability", "ready", {
+      expectedHandshake: {
+        protocolVersion: 1,
+        modelVersionOrHash: "fixture-model-1",
+        capabilities: ["FIXTURE", "EXTRA"]
+      },
+      terminationTimeoutMs: 300
+    }));
+    await expect(wrongCapability.start("wrong-capability"))
+      .rejects.toMatchObject({ code: "HANDSHAKE_MISMATCH" });
+    expect(wrongCapability.getStatus("wrong-capability")).not.toHaveProperty("pid");
   });
 
   it("returns deeply immutable observational status snapshots", async () => {
@@ -2658,6 +2689,12 @@ describe("local worker lifecycle manager", () => {
 
     expect(() => runtime.register(definition("oversized-expected-version", "ready", {
       expectedHandshake: { componentVersion: "x".repeat(2_001) }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(() => runtime.register(definition("duplicate-expected-capability", "ready", {
+      expectedHandshake: { capabilities: ["A", "A"] }
+    }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
+    expect(() => runtime.register(definition("oversized-expected-model", "ready", {
+      expectedHandshake: { modelVersionOrHash: "x".repeat(2_001) }
     }))).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
     expect(() => runtime.register(definition("implicit-backoff-cap", "ready", {
       restartPolicy: {
