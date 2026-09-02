@@ -10,7 +10,8 @@ import {
 import {
   MockModelAdapter,
   ProviderExecutionError,
-  openProviderExecutionSession
+  openProviderExecutionSession,
+  snapshotReasoningProviderName
 } from "../packages/providers/src/index.js";
 
 const NOW = new Date("2026-08-30T00:00:00.000Z");
@@ -275,6 +276,43 @@ describe("provider execution admission", () => {
     expect(session.capabilities.reasoningLevels).toEqual(["low"]);
 
     await session.close();
+  });
+
+  it("rejects accessor- and Proxy-backed provider names without invoking user code", () => {
+    let getterCalls = 0;
+    const accessorProvider = testProvider();
+    Object.defineProperty(accessorProvider, "name", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "must-not-run";
+      }
+    });
+
+    expect(() => snapshotReasoningProviderName(accessorProvider))
+      .toThrow(ProviderExecutionError);
+    expect(getterCalls).toBe(0);
+
+    let proxyTrapCalls = 0;
+    const proxyProvider = new Proxy(testProvider(), {
+      getOwnPropertyDescriptor() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getPrototypeOf() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    expect(() => snapshotReasoningProviderName(proxyProvider))
+      .toThrow(ProviderExecutionError);
+    expect(proxyTrapCalls).toBe(0);
+
+    const malformed = testProvider();
+    Reflect.set(malformed, "name", " name with spaces ");
+    expect(() => snapshotReasoningProviderName(malformed))
+      .toThrow(ProviderExecutionError);
   });
 
   it("rejects accessor-backed provider operations without invoking them", async () => {
