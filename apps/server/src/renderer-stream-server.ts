@@ -318,6 +318,7 @@ export class RendererStreamServer {
     }
 
     connection.sentDeliveryIds.add(deliveryId);
+    let physicalWriteAttempted = false;
     try {
       const envelope = createCommandEnvelope({
         sessionId,
@@ -365,6 +366,7 @@ export class RendererStreamServer {
 
       let acceptedWithoutBackpressure: boolean;
       try {
+        physicalWriteAttempted = true;
         acceptedWithoutBackpressure = connection.response.write(wire);
       } catch {
         await new DeliveryCoordinator(writer).markPossiblyExposed(
@@ -404,8 +406,26 @@ export class RendererStreamServer {
       }
       return { outcome: "SENT", deliveryId, status: "DELIVERING" };
     } catch (error) {
-      if (writer.getState().deliveries[deliveryId]?.status !== "DELIVERING") {
+      if (!physicalWriteAttempted) {
         connection.sentDeliveryIds.delete(deliveryId);
+      } else {
+        // Once response.write() was attempted, the browser may have received
+        // some or all of the command even if later transport/ledger work
+        // failed. Never reuse this connection for a same-ID "already sent"
+        // shortcut after an exceptional path.
+        this.removeConnection(connection);
+        const currentStatus = writer.getState().deliveries[deliveryId]?.status;
+        if (currentStatus === "DELIVERING") {
+          try {
+            await new DeliveryCoordinator(writer).markPossiblyExposed(
+              deliveryId,
+              "Renderer publication failed after the physical write became uncertain"
+            );
+          } catch {
+            // Preserve the original error. Disconnect recovery / restart will
+            // still fail closed rather than replay on this removed connection.
+          }
+        }
       }
       throw error;
     }
