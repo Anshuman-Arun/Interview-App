@@ -113,7 +113,10 @@ export class AuthoritativeBoardSyncCoordinator {
       && await shapesMatch(localShapes, state.shapeRevisions)
     ) {
       this.authoritativeRevision = state.boardRevision;
-      this.pending.splice(0).forEach((entry) => entry.resolve());
+      for (const entry of this.pending.splice(0)) {
+        rememberFingerprint(this.recentFingerprints, entry.fingerprint);
+        entry.resolve();
+      }
       this.status = "SYNCED";
       this.reason = undefined;
       return this.snapshot();
