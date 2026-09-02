@@ -1698,10 +1698,17 @@ async function runWindowsTaskkill(
 function minimalWindowsHelperEnvironment(
   environment: NodeJS.ProcessEnv
 ): NodeJS.ProcessEnv {
+  const allowed = new Set(["SYSTEMROOT", "WINDIR", "PATH", "PATHEXT"]);
   const output = Object.create(null) as NodeJS.ProcessEnv;
-  for (const key of ["SYSTEMROOT", "WINDIR", "PATH", "PATHEXT"]) {
-    const value = environment[key];
-    if (typeof value === "string") output[key] = value;
+  for (const [key, value] of Object.entries(environment)) {
+    const canonical = key.toUpperCase();
+    if (
+      allowed.has(canonical)
+      && typeof value === "string"
+      && output[canonical] === undefined
+    ) {
+      output[canonical] = value;
+    }
   }
   return Object.freeze(output);
 }
