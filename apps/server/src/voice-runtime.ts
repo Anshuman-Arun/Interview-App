@@ -855,11 +855,18 @@ function snapshotAssetMetadata(input: EphemeralAudioAssetMetadata): EphemeralAud
   const sessionId = SessionIdSchema.parse(input.sessionId);
   const generationId = GenerationIdSchema.parse(input.generationId);
   const sourceDeliveryId = DeliveryIdSchema.parse(input.sourceDeliveryId);
+  const hashes = [
+    input.textSha256,
+    input.requestBasisHash,
+    input.normalizedTextHash,
+    input.audioSha256
+  ];
   if (
-    !/^[0-9a-f]{64}$/u.test(input.textSha256)
-    || !/^[0-9a-f]{64}$/u.test(input.requestBasisHash)
-    || !/^[0-9a-f]{64}$/u.test(input.normalizedTextHash)
-    || !/^[0-9a-f]{64}$/u.test(input.audioSha256)
+    hashes.some((value) =>
+      typeof value !== "string"
+      || value.length !== 64
+      || !/^[0-9a-f]{64}$/u.test(value)
+    )
     || !Number.isFinite(input.durationMs)
     || input.durationMs <= 0
   ) {
