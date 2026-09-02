@@ -6,6 +6,9 @@ import {
 import type { BrowserAudioPlayback } from "./playback.js";
 import { AudioInfrastructureError } from "./types.js";
 
+const AUDIO_SOURCE_RESOLUTION_TIMEOUT_MS = 5_000;
+const AUDIO_PLAYBACK_START_TIMEOUT_MS = 5_000;
+
 export interface ResolvedAudioSource {
   readonly source: string;
   readonly release?: () => void;
@@ -69,9 +72,28 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
     let releaseResolved: (() => void) | undefined;
     try {
       const resolver = this.options.resolveAudioSource;
-      resolved = resolver === undefined
-        ? { source: input.audioRef }
-        : await resolver(input.audioRef, input.deliveryId, controller.signal);
+      if (resolver === undefined) {
+        resolved = { source: input.audioRef };
+      } else {
+        let resolutionTimedOut = false;
+        const resolutionTimeout = globalThis.setTimeout(() => {
+          resolutionTimedOut = true;
+          controller.abort();
+        }, AUDIO_SOURCE_RESOLUTION_TIMEOUT_MS);
+        try {
+          resolved = await resolver(input.audioRef, input.deliveryId, controller.signal);
+        } catch (error) {
+          if (resolutionTimedOut) {
+            throw new RendererPresentationNotExposedError(
+              "Audio source resolution timed out before physical playback",
+              { cause: error }
+            );
+          }
+          throw error;
+        } finally {
+          globalThis.clearTimeout(resolutionTimeout);
+        }
+      }
       validateResolvedSource(resolved);
       releaseResolved = createReleaseOnce(resolved);
 
@@ -133,8 +155,17 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
         }
       );
 
-      const started = await handle.started;
-      if (started) return;
+      const startOutcome = await waitForPlaybackStart(
+        handle.started,
+        AUDIO_PLAYBACK_START_TIMEOUT_MS
+      );
+      if (startOutcome === "STARTED") return;
+      if (startOutcome === "TIMED_OUT") {
+        handle.cancel();
+        throw new RendererPresentationNotExposedError(
+          "Audio playback did not begin within the bounded start deadline"
+        );
+      }
 
       const outcome = await handle.result;
       throw new RendererPresentationNotExposedError(
@@ -207,6 +238,24 @@ export class QueuedRendererAudioPlayer implements AudioPlayer {
       controller.abort();
     }
     this.pendingResolutions.clear();
+  }
+}
+
+async function waitForPlaybackStart(
+  started: Promise<boolean>,
+  timeoutMs: number
+): Promise<"STARTED" | "SETTLED_WITHOUT_START" | "TIMED_OUT"> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"TIMED_OUT">((resolve) => {
+    timeoutId = globalThis.setTimeout(() => resolve("TIMED_OUT"), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      started.then((value) => value ? "STARTED" as const : "SETTLED_WITHOUT_START" as const),
+      timeout
+    ]);
+  } finally {
+    if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
   }
 }
 
