@@ -125,8 +125,7 @@ async function main() {
   console.log("  Server is ready for authenticated client connections.");
 
   const handleShutdown = async (signal: string) => {
-    console.log(`
-Received ${signal}. Shutting down gracefully...`);
+    console.log(`\nReceived ${signal}. Shutting down gracefully...`);
     try {
       await instance.stop();
       console.log("Server stopped successfully.");
