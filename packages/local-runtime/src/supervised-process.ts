@@ -179,20 +179,33 @@ export class SupervisedProcessRunner {
     }
 
     const before = await inspectExecutable(definition.executable, this.platform);
+    const pinned = this.pinnedIdentities.get(definition.id);
+    if (pinned === undefined) {
+      this.pinnedIdentities.set(definition.id, before);
+    } else if (!sameExecutableIdentity(pinned, before, this.platform)) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
     if (request.signal?.aborted) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
     }
 
-    const workingDirectory = definition.isolatedWorkingDirectory
-      ? await createIsolatedWorkingDirectory()
-      : undefined;
+    const isolation = await createExecutionIsolation(definition, this.platform);
+    const expectedIdentity = this.pinnedIdentities.get(definition.id);
+    if (expectedIdentity === undefined) {
+      await cleanupExecutionIsolation(isolation);
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
 
     try {
-      return await this.runChild(definition, request, before, definition.environment, workingDirectory);
+      return await this.runChild(
+        definition,
+        request,
+        expectedIdentity,
+        isolation.environment,
+        isolation.workingDirectory
+      );
     } finally {
-      if (workingDirectory !== undefined) {
-        await rm(workingDirectory, { recursive: true, force: true }).catch(() => undefined);
-      }
+      await cleanupExecutionIsolation(isolation);
     }
   }
 
