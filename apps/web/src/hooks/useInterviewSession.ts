@@ -58,6 +58,15 @@ import type { TranscriptItem } from "../components/TranscriptFeed.js";
 const RENDERER_REATTACH_MAX_ATTEMPTS = 10;
 const RENDERER_REATTACH_DELAY_MS = 50;
 
+export class TerminalSessionOutcomeUnknownError extends Error {
+  public constructor() {
+    super(
+      "Terminal session outcome is unknown; live input remains locked until the session is recovered"
+    );
+    this.name = "TerminalSessionOutcomeUnknownError";
+  }
+}
+
 export interface UseInterviewSessionOptions {
   readonly baseUrl?: string;
   readonly rendererStreamUrl?: string;
@@ -1006,33 +1015,85 @@ export function useInterviewSession(
     synchronizeWhiteboardFor
   ]);
 
+  const settleTerminalSession = useCallback((
+    status: Extract<SessionStatus, "COMPLETED" | "ARCHIVED">
+  ): void => {
+    sessionMutationAdmissionRef.current = false;
+    resetBoardSync();
+    void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    stopRendererTransport();
+    setSessionStatus(status);
+  }, [
+    resetBoardSync,
+    stopRendererTransport,
+    voiceIntegration.voiceControls
+  ]);
+
+  const failClosedUnknownTerminalOutcome = useCallback((): never => {
+    sessionMutationAdmissionRef.current = false;
+    resetBoardSync();
+    void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    stopRendererTransport();
+    const unknown = new TerminalSessionOutcomeUnknownError();
+    setError(unknown.message);
+    throw unknown;
+  }, [
+    resetBoardSync,
+    stopRendererTransport,
+    voiceIntegration.voiceControls
+  ]);
+
+  const reconcileTerminalFailure = useCallback(async (
+    client: BrowserCommandClient,
+    targetSessionId: SessionId,
+    originalError: unknown
+  ): Promise<void> => {
+    try {
+      const summary = await client.getSessionSummary(targetSessionId);
+      if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
+        settleTerminalSession(summary.status);
+        setError(null);
+        return;
+      }
+      if (summary.started && summary.status === "ACTIVE") {
+        sessionMutationAdmissionRef.current = true;
+        setSessionStatus("ACTIVE");
+        const message = originalError instanceof Error
+          ? originalError.message
+          : "Terminal session command failed";
+        setError(message);
+        throw originalError;
+      }
+      failClosedUnknownTerminalOutcome();
+    } catch (reconciliationError) {
+      if (reconciliationError === originalError) throw originalError;
+      if (reconciliationError instanceof TerminalSessionOutcomeUnknownError) {
+        throw reconciliationError;
+      }
+      failClosedUnknownTerminalOutcome();
+    }
+  }, [failClosedUnknownTerminalOutcome, settleTerminalSession]);
+
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
       if (sessionId === null || sessionStatus !== "ACTIVE") return;
       sessionTransitionEpochRef.current += 1;
       sessionMutationAdmissionRef.current = false;
       setError(null);
+      const client = getCommandClient();
       try {
-        const client = getCommandClient();
         await client.completeSession(sessionId, summary);
-        resetBoardSync();
-        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
-        stopRendererTransport();
-        setSessionStatus("COMPLETED");
+        settleTerminalSession("COMPLETED");
       } catch (err) {
-        sessionMutationAdmissionRef.current = true;
-        const msg = err instanceof Error ? err.message : "Failed to complete session";
-        setError(msg);
-        throw err;
+        await reconcileTerminalFailure(client, sessionId, err);
       }
     },
     [
       getCommandClient,
-      resetBoardSync,
+      reconcileTerminalFailure,
       sessionId,
       sessionStatus,
-      stopRendererTransport,
-      voiceIntegration.voiceControls
+      settleTerminalSession
     ]
   );
 
@@ -1042,27 +1103,20 @@ export function useInterviewSession(
       sessionTransitionEpochRef.current += 1;
       sessionMutationAdmissionRef.current = false;
       setError(null);
+      const client = getCommandClient();
       try {
-        const client = getCommandClient();
         await client.archiveSession(sessionId, reason);
-        resetBoardSync();
-        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
-        stopRendererTransport();
-        setSessionStatus("ARCHIVED");
+        settleTerminalSession("ARCHIVED");
       } catch (err) {
-        sessionMutationAdmissionRef.current = true;
-        const msg = err instanceof Error ? err.message : "Failed to archive session";
-        setError(msg);
-        throw err;
+        await reconcileTerminalFailure(client, sessionId, err);
       }
     },
     [
       getCommandClient,
-      resetBoardSync,
+      reconcileTerminalFailure,
       sessionId,
       sessionStatus,
-      stopRendererTransport,
-      voiceIntegration.voiceControls
+      settleTerminalSession
     ]
   );
 
