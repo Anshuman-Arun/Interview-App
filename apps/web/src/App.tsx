@@ -1010,6 +1010,7 @@ export const App: React.FC = () => {
                       || session.sessionStatus !== "ACTIVE"
                       || sessionEntryPending
                       || sessionTerminalPending
+                      || session.whiteboardSync.status === "UNINITIALIZED"
                       || session.whiteboardSync.status === "UNSYNCHRONIZED"
                     }
                     onEditorMount={handleWhiteboardEditorMount}
