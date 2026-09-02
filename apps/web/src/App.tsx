@@ -111,7 +111,6 @@ export const App: React.FC = () => {
     whiteboardAdapter.setReadOnly(true);
     setSessionTerminalPending(true);
     try {
-      await session.voiceControls.disableMicrophone().catch(() => undefined);
       await session.completeSession();
       navigate({
         page: "review",
@@ -143,7 +142,6 @@ export const App: React.FC = () => {
     whiteboardAdapter.setReadOnly(true);
     setSessionTerminalPending(true);
     try {
-      await session.voiceControls.disableMicrophone().catch(() => undefined);
       await session.archiveSession();
       navigate({
         page: "review",
