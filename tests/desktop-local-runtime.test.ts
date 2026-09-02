@@ -104,6 +104,42 @@ describe("desktop local model runtime", () => {
     });
   });
 
+  it("aborts and joins startup before local runtime shutdown can complete", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-start-stop-race-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    let releaseCleanup: (() => void) | undefined;
+    const cleanupGate = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+    const mutable = composition as unknown as {
+      assetManager: { cleanupTemporary(): Promise<void> };
+    };
+    mutable.assetManager.cleanupTemporary = async () => cleanupGate;
+
+    const start = composition.start();
+    let stopSettled = false;
+    const stop = composition.stopWorkers().finally(() => {
+      stopSettled = true;
+    });
+    await Promise.resolve();
+    expect(stopSettled).toBe(false);
+
+    releaseCleanup?.();
+    await expect(start).resolves.toBeUndefined();
+    await expect(stop).resolves.toBeUndefined();
+    expect(composition.voiceRuntime).toBeUndefined();
+    await expect(composition.start()).rejects.toThrow(
+      "Desktop local runtime cannot start after shutdown"
+    );
+  });
+
   it("coalesces concurrent composition shutdown instead of double-closing worker cores", async () => {
     const composition = new DesktopLocalRuntimeComposition({
       appDataRoot: temporaryRoot("desktop-stop-coalesce-"),
