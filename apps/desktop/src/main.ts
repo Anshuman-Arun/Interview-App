@@ -128,6 +128,10 @@ async function startDesktop(): Promise<void> {
       if (startupAbort.signal.aborted) return;
       throw error;
     }
+    await runtime.stopWorkers();
+    shutdownComplete = true;
+    app.quit();
+    return;
   }
   const optionalRuntimeSignal = AbortSignal.any([
     startupAbort.signal,
