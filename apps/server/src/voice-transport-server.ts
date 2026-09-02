@@ -92,6 +92,7 @@ export class VoiceTransportServer {
   private activeFrameRequests = 0;
   private boundAddress: BoundVoiceTransportAddress | undefined;
   private stopping = false;
+  private stoppingPromise: Promise<void> | undefined;
 
   public constructor(private readonly options: VoiceTransportServerOptions) {
     validateSecurity(options.security);
@@ -128,20 +129,35 @@ export class VoiceTransportServer {
     return this.boundAddress;
   }
 
-  public async stop(): Promise<void> {
+  public stop(): Promise<void> {
+    if (this.stoppingPromise !== undefined) return this.stoppingPromise;
+    this.stopping = true;
+    const stopping = this.stopFully();
+    this.stoppingPromise = stopping;
+    const clearSuccess = (): void => {
+      if (this.stoppingPromise !== stopping) return;
+      this.stoppingPromise = undefined;
+      this.stopping = false;
+    };
+    const clearFailure = (): void => {
+      if (this.stoppingPromise === stopping) this.stoppingPromise = undefined;
+      // Keep the admission guard closed after an ambiguous shutdown failure.
+      // A later stop() retry may complete cleanup, but start()/handle() must not
+      // accept new work until that succeeds.
+    };
+    void stopping.then(clearSuccess, clearFailure);
+    return stopping;
+  }
+
+  private async stopFully(): Promise<void> {
     if (!this.server.listening) {
       this.boundAddress = undefined;
       return;
     }
-    this.stopping = true;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        this.server.close((error) => error === undefined ? resolve() : reject(error));
-      });
-      this.boundAddress = undefined;
-    } finally {
-      this.stopping = false;
-    }
+    await new Promise<void>((resolve, reject) => {
+      this.server.close((error) => error === undefined ? resolve() : reject(error));
+    });
+    this.boundAddress = undefined;
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
