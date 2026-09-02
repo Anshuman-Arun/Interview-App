@@ -81,9 +81,11 @@ There is no `latest` model identity. Moonshine assets are pinned to revision
 `7e30209a3e901f9842f81b225f3e93d8199902b1`.
 
 Before launch, installed assets are verified by `ModelAssetManager`, copied
-into a fresh bounded runtime view, and verified again. The Python worker then
+through the model-assets layer's bounded, identity-checked, cancellable stream
+copier into a fresh runtime view, and verified again. The Python worker then
 checks the exact size and SHA-256 of every file it will load before emitting
-readiness. Symlink/junction-like runtime paths are rejected.
+readiness. Symlink/junction-like runtime paths are rejected. Runtime-view disk
+space is compared with exact bigint filesystem accounting.
 
 The runtime view exists because Moonshine expects a fixed relative model
 layout. It is deleted only after `LocalRuntimeManager` has verified worker
@@ -125,10 +127,14 @@ utterance.
 
 Moonshine's batch transcription API does not expose a trustworthy in-flight
 interrupt primitive. The runtime therefore reports `supportsAbort = false`.
-Barge-in/session cancellation still invalidates the authoritative generation
-and rejects late STT results through the existing worker/session machinery.
-Desktop shutdown has a bounded process-level escalation if an inference call
-does not converge.
+The concrete desktop adapter owns a bounded single-lane STT queue matching the
+application speech-stream ceiling. It may observe an AbortSignal while a
+request is still queued and drop that request before worker/native dispatch,
+but once a batch reaches Moonshine it remains non-preemptible. Barge-in/session
+cancellation therefore still reports suppress-late-result semantics for active
+STT, while cancelled queued work does not consume a later native inference
+slot. Desktop shutdown retains a bounded process-level escalation if an active
+native call does not converge.
 
 ## TTS semantics and cancellation
 
@@ -152,6 +158,13 @@ TtsRequestManager
 Desktop v1 requests exactly 1.0x TTS speed. The streaming API does not offer
 safe per-request speed mutation, so other speeds fail closed instead of being
 silently approximated.
+
+The concrete Kokoro adapter also serializes its bounded admitted requests to
+the single native synthesizer. A queued request cancelled before native
+dispatch is tombstoned locally and never sent; an already-started request uses
+the authenticated worker cancellation endpoint. The Python worker maintains a
+separate bounded pre-registration tombstone as a second protection against the
+HTTP-handler race.
 
 Existing authoritative delivery admission still rejects any late audio after
 the corresponding text/generation was cancelled or superseded.
