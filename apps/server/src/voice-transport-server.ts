@@ -266,7 +266,7 @@ export class VoiceTransportServer {
 
     this.activeFrameRequests += 1;
     try {
-      const payload = await readBinaryBody(request, expectedBytes);
+      const payload = await readBinaryBody(request, expectedBytes, expectedBytes);
       const envelope = SpeechPcmFrameEnvelopeSchema.safeParse({
         protocolVersion: 1,
         requestId: requestId.data,
@@ -489,7 +489,11 @@ async function readBody(request: IncomingMessage, maximumBytes: number): Promise
   return Buffer.from(bytes).toString("utf8");
 }
 
-async function readBinaryBody(request: IncomingMessage, maximumBytes: number): Promise<Uint8Array> {
+async function readBinaryBody(
+  request: IncomingMessage,
+  maximumBytes: number,
+  exactBytes?: number
+): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of request) {
@@ -500,7 +504,7 @@ async function readBinaryBody(request: IncomingMessage, maximumBytes: number): P
     }
     chunks.push(buffer);
   }
-  if (total !== maximumBytes && maximumBytes <= MAX_FRAME_BYTES) {
+  if (exactBytes !== undefined && total !== exactBytes) {
     throw new VoiceHttpError(400, "INVALID_FRAME", "PCM body length does not match frame metadata");
   }
   return new Uint8Array(Buffer.concat(chunks));
