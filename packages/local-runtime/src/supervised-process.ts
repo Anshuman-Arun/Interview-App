@@ -821,7 +821,17 @@ async function createExecutionIsolation(
         definition.isolatedHomeFiles,
         platform
       );
-      applyIsolatedHomeEnvironment(environment, homeDirectory, platform);
+      const isolatedTempDirectory = path.join(homeDirectory, "tmp");
+      await mkdir(isolatedTempDirectory, {
+        recursive: true,
+        ...(platform === "win32" ? {} : { mode: 0o700 })
+      });
+      applyIsolatedHomeEnvironment(
+        environment,
+        homeDirectory,
+        isolatedTempDirectory,
+        platform
+      );
     }
 
     if (definition.isolatedWorkingDirectory) {
@@ -872,12 +882,15 @@ async function populateIsolatedHome(
 function applyIsolatedHomeEnvironment(
   environment: NodeJS.ProcessEnv,
   homeDirectory: string,
+  tempDirectory: string,
   platform: NodeJS.Platform
 ): void {
   if (platform === "win32") {
     environment.USERPROFILE = homeDirectory;
     environment.APPDATA = path.join(homeDirectory, "AppData", "Roaming");
     environment.LOCALAPPDATA = path.join(homeDirectory, "AppData", "Local");
+    environment.TEMP = tempDirectory;
+    environment.TMP = tempDirectory;
     return;
   }
 
@@ -885,6 +898,9 @@ function applyIsolatedHomeEnvironment(
   environment.XDG_CONFIG_HOME = path.join(homeDirectory, ".config");
   environment.XDG_DATA_HOME = path.join(homeDirectory, ".local", "share");
   environment.XDG_CACHE_HOME = path.join(homeDirectory, ".cache");
+  environment.TMPDIR = tempDirectory;
+  environment.TMP = tempDirectory;
+  environment.TEMP = tempDirectory;
 }
 
 async function cleanupExecutionIsolation(
