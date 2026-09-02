@@ -7,7 +7,7 @@ const ZOOM_CHANNEL = "interview-desktop:set-zoom";
 const ZOOM_CHANGED_CHANNEL = "interview-desktop:zoom-changed";
 const AUTH_HEADER_VALUE = "desktop-managed-v1";
 const MIN_ZOOM_FACTOR = 0.25;
-const MAX_ZOOM_FACTOR = 3;
+const MAX_ZOOM_FACTOR = 5;
 
 function isZoomFactor(value) {
   return typeof value === "number"
