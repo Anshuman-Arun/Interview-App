@@ -7,7 +7,16 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 35_000;
 const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
 const MAX_JSON_RESPONSE_CHUNKS = 1_024;
 
+export class ManagedWorkerRequestTimeoutError extends Error {
+  public constructor() {
+    super("Managed local model worker request exceeded its runtime deadline");
+    this.name = "ManagedWorkerRequestTimeoutError";
+  }
+}
+
 export class ManagedModelWorkerClient {
+  private recyclePromise: Promise<void> | undefined;
+
   public constructor(
     private readonly manager: LocalRuntimeManager,
     private readonly componentId: string,
@@ -61,7 +70,11 @@ export class ManagedModelWorkerClient {
     const controller = new AbortController();
     const unlink = linkAbort(options.signal, controller);
     const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -90,6 +103,9 @@ export class ManagedModelWorkerClient {
       }
       return parsed;
     } catch (error) {
+      if (timedOut) {
+        throw new ManagedWorkerRequestTimeoutError();
+      }
       if (controller.signal.aborted) {
         const aborted = new Error("Managed local model worker request was cancelled");
         aborted.name = "AbortError";
@@ -100,6 +116,16 @@ export class ManagedModelWorkerClient {
       clearTimeout(timer);
       unlink();
     }
+  }
+
+  public recycleAfterUncertainRequest(): Promise<void> {
+    if (this.recyclePromise !== undefined) return this.recyclePromise;
+    const operation = this.manager.restart(this.componentId).then(() => undefined);
+    this.recyclePromise = operation;
+    void operation.finally(() => {
+      if (this.recyclePromise === operation) this.recyclePromise = undefined;
+    }).catch(() => undefined);
+    return operation;
   }
 
   private readyStatus(): LocalComponentStatus {
