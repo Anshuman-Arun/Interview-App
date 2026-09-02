@@ -926,12 +926,12 @@ describe("adversarial quant lifecycle invariants", () => {
             evidence: {
               round: round.round,
               fairValue: tamperedFairValue,
-              marketEvents: round.marketEvents,
+              marketEvents: [...round.marketEvents],
               orderFlowType: round.orderFlowType,
               ...(round.incomingMarketSide === undefined
                 ? {}
                 : { incomingMarketSide: round.incomingMarketSide }),
-              studentFills: round.studentFills,
+              studentFills: [...round.studentFills],
               portfolio: round.portfolio,
               riskBreached: round.riskBreached,
               ...(round.riskReason === undefined ? {} : { riskReason: round.riskReason }),
