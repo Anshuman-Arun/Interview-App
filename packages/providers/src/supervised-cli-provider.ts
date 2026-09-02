@@ -207,7 +207,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
 
     try {
       const proposal = await completion;
-      if (record.cancelled) return;
+      if (executionWasCancelled(record)) return;
       yield proposal;
     } finally {
       if (this.active.get(input.generationId) === record) {
@@ -216,10 +216,25 @@ class SupervisedCliReasoningSession implements ReasoningSession {
     }
   }
 }
-async function *rejectedTurn(
+function executionWasCancelled(record: ActiveExecution): boolean {
+  return record.cancelled;
+}
+
+function rejectedTurn(
   error: unknown
 ): AsyncIterable<InterviewerProposal> {
-  throw error;
+  const rejection = error instanceof Error
+    ? error
+    : new Error("Supervised CLI turn input is invalid");
+  return Object.freeze({
+    [Symbol.asyncIterator](): AsyncIterator<InterviewerProposal> {
+      return Object.freeze({
+        next(): Promise<IteratorResult<InterviewerProposal>> {
+          return Promise.reject(rejection);
+        }
+      });
+    }
+  });
 }
 
 function snapshotReasoningTurnInput(input: unknown): ReasoningTurnInput {
