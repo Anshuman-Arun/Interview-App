@@ -221,16 +221,6 @@ function terminalInvalidationDrafts(
 ): readonly EventDraft[] {
   const drafts: EventDraft[] = [];
 
-  for (const utterance of Object.values(state.utterances)) {
-    if (utterance.status === "CAPTURING") {
-      drafts.push({
-        source: "APPLICATION",
-        type: "UTTERANCE_DISCARDED",
-        payload: { utteranceId: utterance.utteranceId, reason }
-      });
-    }
-  }
-
   for (const generation of Object.values(state.generations)) {
     if (
       generation.status === "ACTIVE"
