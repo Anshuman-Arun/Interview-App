@@ -246,18 +246,24 @@ export const QuantTradingPublicStateSchema = z.object({
         message: "Completed Quant Trading state must resolve every planned round"
       });
     }
-    if (
-      value.status === "RISK_STOPPED"
-      && (
+    if (value.status === "RISK_STOPPED") {
+      if (
         value.currentRound < value.completion.roundsCompleted
         || value.currentRound > value.completion.roundsCompleted + 1
-      )
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["currentRound"],
-        message: "Risk-stopped Quant Trading state has inconsistent round progress"
-      });
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["currentRound"],
+          message: "Risk-stopped Quant Trading state has inconsistent round progress"
+        });
+      }
+      if (value.completion.riskBreachCount === 0) {
+        context.addIssue({
+          code: "custom",
+          path: ["completion", "riskBreachCount"],
+          message: "Risk-stopped Quant Trading state requires a recorded risk breach"
+        });
+      }
     }
   }
 });
