@@ -224,6 +224,15 @@ describe("desktop local model runtime", () => {
       streamId: "stream-1"
     })).rejects.toThrow();
 
+    if (process.platform === "win32") {
+      await waitForStatus(runtime, "restart-fixture", (status) =>
+        status.state === "FAILED"
+        && status.failure?.code === "TERMINATION_FAILED"
+        && status.restartCount === 0
+      );
+      return;
+    }
+
     await waitForStatus(runtime, "restart-fixture", (status) =>
       status.state === "READY" && status.restartCount === 1
     );
