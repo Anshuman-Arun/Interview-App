@@ -102,7 +102,7 @@ export class EphemeralAudioAssetStore {
     if (
       !(bytesInput instanceof Uint8Array)
       || bytesInput.byteLength === 0
-      || bytesInput.byteLength > TTS_LIMITS.maxPcmBytes + 64 * 1024
+      || bytesInput.byteLength > Math.floor(TTS_LIMITS.maxPcmBytes / 2) + 44
     ) {
       throw new Error("Ephemeral audio asset exceeds its bounded size");
     }
