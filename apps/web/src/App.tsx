@@ -284,6 +284,9 @@ export const App: React.FC = () => {
   }, [session.baseUrl]);
 
   useEffect(() => {
+    if (session.isSessionStarted && session.sessionStatus === "ACTIVE") {
+      return;
+    }
     if (route.page === "home") {
       void session.fetchAvailableSessions();
       return;
@@ -291,7 +294,13 @@ export const App: React.FC = () => {
     if (route.page === "sessions") {
       refreshStoredSessions();
     }
-  }, [refreshStoredSessions, route.page, session.fetchAvailableSessions]);
+  }, [
+    refreshStoredSessions,
+    route.page,
+    session.fetchAvailableSessions,
+    session.isSessionStarted,
+    session.sessionStatus
+  ]);
 
   useEffect(() => {
     return () => {
