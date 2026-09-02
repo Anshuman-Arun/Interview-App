@@ -293,6 +293,99 @@ describe("Real tldraw mounted browser integration", () => {
     container.remove();
   });
 
+  it("coalesces an in-progress freehand stroke into one authoritative mutation", async () => {
+    const container = document.createElement("div");
+    container.style.width = "800px";
+    container.style.height = "600px";
+    document.body.appendChild(container);
+
+    const adapter = new TldrawWhiteboardAdapter();
+    const changes: NormalizedStudentShapeChange[] = [];
+    const handle = createWhiteboardCanvasMount({
+      adapter,
+      onNormalizedBoardChange: (change) => changes.push(change)
+    });
+
+    await act(async () => {
+      handle.mount(container);
+    });
+    const bridge = requireRealTldrawBridge(handle);
+    const editor = bridge.getNativeEditor();
+    const id = createShapeId("freehand-coalesced");
+
+    await act(async () => {
+      editor.createShapes([{
+        id,
+        type: "draw",
+        x: 20,
+        y: 30,
+        props: {
+          segments: [{
+            type: "free",
+            points: [{ x: 0, y: 0, z: 0.5 }]
+          }],
+          color: "black",
+          fill: "none",
+          dash: "draw",
+          size: "m",
+          isComplete: false,
+          isClosed: false,
+          isPen: false,
+          scale: 1
+        }
+      }]);
+    });
+
+    expect(bridge.getShape(id)?.meta?.["shapeRevision"]).toBe(1);
+    expect(adapter.getBoardRevision()).toBe(0);
+    expect(changes).toHaveLength(0);
+
+    for (let pointCount = 2; pointCount <= 80; pointCount += 1) {
+      await act(async () => {
+        editor.updateShapes([{
+          id,
+          type: "draw",
+          props: {
+            segments: [{
+              type: "free",
+              points: Array.from({ length: pointCount }, (_, index) => ({
+                x: index,
+                y: index / 2,
+                z: 0.5
+              }))
+            }]
+          }
+        }]);
+      });
+    }
+
+    expect(bridge.getShape(id)?.meta?.["shapeRevision"]).toBe(1);
+    expect(adapter.getBoardRevision()).toBe(0);
+    expect(changes).toHaveLength(0);
+
+    await act(async () => {
+      editor.updateShapes([{
+        id,
+        type: "draw",
+        props: { isComplete: true }
+      }]);
+    });
+
+    expect(adapter.getBoardRevision()).toBe(1);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.source).toBe("EDITOR");
+    expect(changes[0]?.added).toHaveLength(1);
+    expect(changes[0]?.added[0]?.id).toBe(id);
+    expect(changes[0]?.added[0]?.shapeRevision).toBe(1);
+    expect(changes[0]?.updated).toHaveLength(0);
+    expect(changes[0]?.deleted).toHaveLength(0);
+
+    await act(async () => {
+      handle.unmount();
+    });
+    container.remove();
+  });
+
   it("advances board and shape revisions through undo and redo without ABA regression", async () => {
     const container = document.createElement("div");
     container.style.width = "800px";
