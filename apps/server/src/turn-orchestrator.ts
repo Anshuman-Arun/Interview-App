@@ -133,6 +133,7 @@ export class ServerTurnOrchestrator {
   }
 
   public resumeAfterShutdown(): void {
+    if (this.acceptingWork) return;
     if (this.inFlight.size !== 0 || this.activeProviderExecutions.size !== 0) {
       throw new Error("Cannot resume provider orchestration while prior work is still active");
     }
