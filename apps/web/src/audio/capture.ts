@@ -952,7 +952,7 @@ export function defaultCaptureEnvironment(): BrowserMicrophoneCaptureEnvironment
         throw new AudioInfrastructureError("UNSUPPORTED", "Web Audio API is unavailable");
       }
 
-      const context = new AudioContextConstructor();
+      const context = new AudioContextConstructor({ sampleRate: 48_000 });
       const runtimeContext: unknown = context;
       if (!isCaptureAudioContextLike(runtimeContext)) {
         closeUnknownAudioContext(runtimeContext);
