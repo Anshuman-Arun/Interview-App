@@ -479,4 +479,125 @@ describe("interview session transition authority", () => {
     rendered.container.remove();
   });
 
+  it("revokes typed-input admission synchronously while terminal authority is pending", async () => {
+    const sessionId = newSessionId();
+    let releaseComplete: (() => void) | undefined;
+    let markCompleteSeen: (() => void) | undefined;
+    const completeSeen = new Promise<void>((resolve) => {
+      markCompleteSeen = resolve;
+    });
+    let commitCalls = 0;
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = (): void => {
+            const error = new Error("renderer stream aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (init.signal?.aborted === true) {
+            abort();
+            return;
+          }
+          init.signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") {
+        throw new Error("Command body must be JSON text");
+      }
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+        readonly sessionId?: SessionId;
+      };
+      if (typeof command.requestId !== "string") {
+        throw new Error("Command requestId is missing");
+      }
+
+      if (command.type === "START_SESSION") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_STARTED",
+          sessionId
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Context intentionally unavailable"
+          }
+        }, 500);
+      }
+      if (command.type === "COMPLETE_SESSION") {
+        markCompleteSeen?.();
+        return new Promise<Response>((resolve) => {
+          releaseComplete = () => resolve(jsonResponse({
+            protocolVersion: 1,
+            requestId: command.requestId,
+            ok: true,
+            type: "SESSION_COMPLETED",
+            sessionId,
+            completedAt: "2026-09-02T15:00:00.000Z"
+          }));
+        });
+      }
+      if (command.type === "COMMIT_TYPED_INPUT") {
+        commitCalls += 1;
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "INPUT_COMMITTED",
+          inputEpisodeId: "input_ep_terminal_race",
+          turnId: "turn_terminal_race"
+        });
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    await act(async () => {
+      await rendered.current().startSession(sessionId);
+    });
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+
+    let completing: Promise<void> | undefined;
+    await act(async () => {
+      completing = rendered.current().completeSession();
+      await completeSeen;
+    });
+
+    await expect(rendered.current().submitTypedInput("late input"))
+      .rejects.toThrow("Cannot submit input without an active session");
+    expect(commitCalls).toBe(0);
+
+    if (releaseComplete === undefined) {
+      throw new Error("COMPLETE_SESSION was not deferred");
+    }
+    releaseComplete();
+    await act(async () => {
+      await completing;
+    });
+    expect(rendered.current().sessionStatus).toBe("COMPLETED");
+
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
 });
