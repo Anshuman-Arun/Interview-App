@@ -129,6 +129,35 @@ describe("authoritative voice delivery admission", () => {
     }
   });
 
+  it("preserves persisted AUDIO exposure across a later barge-in", async () => {
+    const harness = await createCoreHarness();
+    try {
+      const source = await authorizeSafeProbe(harness);
+      const deliveries = new DeliveryCoordinator(harness.writer);
+      await deliveries.markStarted(source.deliveryId);
+      await deliveries.acknowledgeExposed(source.deliveryId);
+
+      const audio = await harness.turns.queueAudioDeliveryFromValidatedText({
+        sourceDeliveryId: source.deliveryId,
+        generationId: harness.generationId,
+        text: harness.safeProbe,
+        textSha256: sha256(harness.safeProbe),
+        audioRef: audioRef("already-exposed-audio")
+      });
+      if (audio === undefined) throw new Error("Expected authoritative AUDIO delivery");
+      await deliveries.markStarted(audio.deliveryId);
+      await deliveries.acknowledgeExposed(audio.deliveryId);
+
+      await harness.turns.beginUtterance();
+
+      expect(harness.writer.getState().deliveries[audio.deliveryId]?.status).toBe("EXPOSED");
+      expect(harness.writer.getState().deliveries[source.deliveryId]?.status).toBe("EXPOSED");
+      expect(harness.writer.getState().generations[harness.generationId]?.status).toBe("SUPERSEDED");
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("safely cancels queued audio on barge-in without rewriting it as exposed", async () => {
     const harness = await createCoreHarness();
     try {
