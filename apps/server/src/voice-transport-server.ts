@@ -246,9 +246,9 @@ export class VoiceTransportServer {
     const body = await readBody(request, MAX_CONTROL_BYTES);
     const parsed = OpenStreamSchema.safeParse(parseJson(body));
     if (!parsed.success) throw new VoiceHttpError(400, "INVALID_CONTROL", "Voice stream request is invalid");
-    let transportDropped = false;
+    const transportState = { dropped: false };
     const markTransportDropped = (): void => {
-      if (!response.writableEnded) transportDropped = true;
+      if (!response.writableEnded) transportState.dropped = true;
     };
     const onResponseClose = (): void => {
       if (!response.writableEnded) markTransportDropped();
@@ -259,10 +259,10 @@ export class VoiceTransportServer {
       try {
         await coordinator.openStream(parsed.data.sessionId, parsed.data.streamId, parsed.data.sampleRate);
       } catch (error) {
-        if (transportDropped) return;
+        if (transportState.dropped) return;
         throw classifyCoordinatorError(error);
       }
-      if (transportDropped || response.destroyed) {
+      if (transportState.dropped || response.destroyed) {
         await coordinator.cancelStream(
           parsed.data.sessionId,
           parsed.data.streamId,
@@ -325,10 +325,10 @@ export class VoiceTransportServer {
       }
     }
 
-    let transportDropped = false;
+    const transportState = { dropped: false };
     const cancelDroppedStream = (): void => {
-      if (transportDropped || response.writableEnded) return;
-      transportDropped = true;
+      if (transportState.dropped || response.writableEnded) return;
+      transportState.dropped = true;
       void coordinator.cancelStream(
         sessionId.data,
         streamId.data,
@@ -344,7 +344,7 @@ export class VoiceTransportServer {
     this.activeFrameRequests += 1;
     try {
       const payload = await readBinaryBody(request, expectedBytes, expectedBytes);
-      if (transportDropped) return;
+      if (transportState.dropped) return;
       const envelope = SpeechPcmFrameEnvelopeSchema.safeParse({
         protocolVersion: 1,
         requestId: requestId.data,
@@ -367,7 +367,7 @@ export class VoiceTransportServer {
       } catch (error) {
         throw classifyCoordinatorError(error);
       }
-      if (transportDropped || response.destroyed) return;
+      if (transportState.dropped || response.destroyed) return;
       sendJson(response, 200, {
         protocolVersion: 1,
         ok: true,
@@ -410,10 +410,10 @@ export class VoiceTransportServer {
       return;
     }
 
-    let transportDropped = false;
+    const transportState = { dropped: false };
     const cancelDroppedStream = (): void => {
-      if (transportDropped || response.writableEnded) return;
-      transportDropped = true;
+      if (transportState.dropped || response.writableEnded) return;
+      transportState.dropped = true;
       void coordinator.cancelStream(
         parsed.data.sessionId,
         parsed.data.streamId,
@@ -434,10 +434,10 @@ export class VoiceTransportServer {
           parsed.data.requestId
         );
       } catch (error) {
-        if (transportDropped) return;
+        if (transportState.dropped) return;
         throw classifyCoordinatorError(error);
       }
-      if (transportDropped || response.destroyed) return;
+      if (transportState.dropped || response.destroyed) return;
       sendJson(response, 200, {
         protocolVersion: 1,
         ok: true,
@@ -529,32 +529,43 @@ export class VoiceTransportServer {
   }
 }
 
-function snapshotSecurity(security: LocalTransportSecurity): LocalTransportSecurity {
-  if (
-    typeof security !== "object"
-    || security === null
-    || !LOOPBACK_HOSTS.has(security.host)
-  ) {
+function snapshotSecurity(securityInput: unknown): LocalTransportSecurity {
+  if (typeof securityInput !== "object" || securityInput === null) {
+    throw new Error("Voice transport security configuration must be an object");
+  }
+
+  let host: unknown;
+  let clientToken: unknown;
+  let allowedOrigins: unknown;
+  try {
+    host = Reflect.get(securityInput, "host");
+    clientToken = Reflect.get(securityInput, "clientToken");
+    allowedOrigins = Reflect.get(securityInput, "allowedOrigins");
+  } catch (error) {
+    throw new Error("Voice transport security configuration could not be inspected", { cause: error });
+  }
+
+  if (host !== "127.0.0.1" && host !== "::1") {
     throw new Error("Voice transport may bind only to a loopback address");
   }
   if (
-    typeof security.clientToken !== "string"
-    || security.clientToken.length < 32
-    || security.clientToken.length > MAX_CLIENT_TOKEN_CHARACTERS
-    || /[\r\n]/u.test(security.clientToken)
+    typeof clientToken !== "string"
+    || clientToken.length < 32
+    || clientToken.length > MAX_CLIENT_TOKEN_CHARACTERS
+    || /[\r\n]/u.test(clientToken)
   ) {
     throw new Error("Voice transport client token must contain between 32 and 256 safe characters");
   }
-  if (!(security.allowedOrigins instanceof Set)) {
+  if (!(allowedOrigins instanceof Set)) {
     throw new Error("Voice transport requires a Set of exact client origins");
   }
 
   const origins = new Set<string>();
   let iterator: IterableIterator<unknown>;
   try {
-    iterator = Set.prototype.values.call(security.allowedOrigins) as IterableIterator<unknown>;
-  } catch {
-    throw new Error("Voice transport origin allowlist could not be inspected");
+    iterator = Set.prototype.values.call(allowedOrigins) as IterableIterator<unknown>;
+  } catch (error) {
+    throw new Error("Voice transport origin allowlist could not be inspected", { cause: error });
   }
   try {
     for (const rawOrigin of iterator) {
@@ -571,8 +582,8 @@ function snapshotSecurity(security: LocalTransportSecurity): LocalTransportSecur
       let parsed: URL;
       try {
         parsed = new URL(rawOrigin);
-      } catch {
-        throw new Error("Voice allowed origin is not a valid URL origin");
+      } catch (error) {
+        throw new Error("Voice allowed origin is not a valid URL origin", { cause: error });
       }
       if (
         parsed.origin !== rawOrigin
@@ -587,15 +598,15 @@ function snapshotSecurity(security: LocalTransportSecurity): LocalTransportSecur
     }
   } catch (error) {
     if (error instanceof Error) throw error;
-    throw new Error("Voice transport origin allowlist could not be inspected");
+    throw new Error("Voice transport origin allowlist could not be inspected", { cause: error });
   }
   if (origins.size === 0) {
     throw new Error("Voice transport requires at least one exact client origin");
   }
 
   return Object.freeze({
-    host: security.host,
-    clientToken: security.clientToken,
+    host,
+    clientToken,
     allowedOrigins: origins
   });
 }
