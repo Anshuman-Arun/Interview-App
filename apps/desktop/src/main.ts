@@ -119,11 +119,13 @@ async function startDesktop(): Promise<void> {
   });
   await mkdir(paths.appDataRoot, { recursive: true });
 
+  const configuredPython = process.env["INTERVIEW_LOCAL_PYTHON"];
   const runtime = new DesktopLocalRuntimeComposition({
     appDataRoot: paths.appDataRoot,
     cwd: process.cwd(),
     resourcesPath: process.resourcesPath,
-    isPackaged: app.isPackaged
+    isPackaged: app.isPackaged,
+    ...(configuredPython === undefined ? {} : { pythonExecutable: configuredPython })
   });
   localRuntime = runtime;
   if (process.argv.includes("--install-local-models")) {
