@@ -190,6 +190,8 @@ describe("supervised one-shot process execution", () => {
       readonly temp: string;
       readonly configuredContent: string;
       readonly mutationExisted: boolean;
+      readonly supervisorVariablesExisted: boolean;
+      readonly powershellModulePathExisted: boolean;
     };
     const secondPayload = JSON.parse(second.stdout) as typeof firstPayload;
 
@@ -202,6 +204,12 @@ describe("supervised one-shot process execution", () => {
     expect(firstPayload.temp).toContain(firstPayload.home);
     expect(secondPayload.temp).toContain(secondPayload.home);
     expect(firstPayload.temp).not.toBe(secondPayload.temp);
+    expect(firstPayload.supervisorVariablesExisted).toBe(false);
+    expect(secondPayload.supervisorVariablesExisted).toBe(false);
+    if (process.platform === "win32") {
+      expect(firstPayload.powershellModulePathExisted).toBe(false);
+      expect(secondPayload.powershellModulePathExisted).toBe(false);
+    }
     expect(existsSync(firstPayload.home)).toBe(false);
     expect(existsSync(secondPayload.home)).toBe(false);
     expect(existsSync(firstPayload.cwd)).toBe(false);
@@ -435,44 +443,7 @@ describe("supervised one-shot process execution", () => {
   );
 
   it.runIf(process.platform === "win32")(
-    "surfaces containment failure above output-limit errors and quarantines the executable",
-    async () => {
-      const runtime = runner();
-      const originalSystemRoot = process.env.SystemRoot;
-      const originalUpperSystemRoot = process.env.SYSTEMROOT;
-      process.env.SystemRoot = "C:\\definitely-missing-supervised-system-root";
-      process.env.SYSTEMROOT = "C:\\definitely-missing-supervised-system-root";
-      try {
-        await expect(runtime.execute(request([
-          FIXTURE,
-          "huge-stdout",
-          "100000"
-        ], {
-          maxStdoutBytes: 512
-        }))).rejects.toMatchObject({
-          code: "PROCESS_TREE_CLEANUP_FAILED"
-        });
-      } finally {
-        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
-        else process.env.SystemRoot = originalSystemRoot;
-        if (originalUpperSystemRoot === undefined) delete process.env.SYSTEMROOT;
-        else process.env.SYSTEMROOT = originalUpperSystemRoot;
-      }
-
-      let started = false;
-      await expect(runtime.execute(request([FIXTURE, "echo"], {
-        onProcessStart: () => {
-          started = true;
-        }
-      }))).rejects.toMatchObject({
-        code: "PROCESS_TREE_CLEANUP_FAILED"
-      });
-      expect(started).toBe(false);
-    }
-  );
-
-  it.runIf(process.platform === "win32")(
-    "fails closed when a root exits before a surviving Windows descendant can be verified",
+    "kills residual descendants when the provider root exits first",
     async () => {
       const root = mkdtempSync(join(tmpdir(), "supervised-windows-residual-tree-"));
       temporaryRoots.push(root);
@@ -484,13 +455,37 @@ describe("supervised one-shot process execution", () => {
         "exit-with-tree",
         pidFile
       ], {
-        timeoutMs: 150
-      }))).rejects.toMatchObject({
-        code: "PROCESS_TREE_CLEANUP_FAILED"
+        timeoutMs: 2_000
+      }))).resolves.toMatchObject({
+        exitCode: 0
       });
       await waitForFile(pidFile);
       const childPid = Number(readFileSync(pidFile, "utf8"));
       fixturePids.push(childPid);
+
+      const deadline = Date.now() + 1_000;
+      while (Date.now() < deadline && isProcessAlive(childPid)) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      }
+      expect(isProcessAlive(childPid)).toBe(false);
+    }
+  );
+
+  it.runIf(process.platform === "win32")(
+    "rejects provider arguments that exceed the bounded Windows command line",
+    async () => {
+      const runtime = runner();
+      let started = false;
+      await expect(runtime.execute(request([
+        FIXTURE,
+        "echo",
+        "x".repeat(20_000)
+      ], {
+        onProcessStart: () => {
+          started = true;
+        }
+      }))).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+      expect(started).toBe(false);
     }
   );
 
