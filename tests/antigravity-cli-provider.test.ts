@@ -420,6 +420,66 @@ describe("Antigravity CLI one-turn protocol", () => {
     }
   });
 
+  it("rejects accessor/proxy executor results and lying byte counters without invoking traps", async () => {
+    let getterCalls = 0;
+    const accessorResult = Object.defineProperty({
+      exitCode: 0,
+      stdoutBytes: 0,
+      stderrBytes: 0
+    }, "stdout", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return antigravityStream();
+      }
+    });
+    const accessorProvider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () =>
+        accessorResult as unknown as SupervisedCliExecutionResult
+      )
+    );
+    const accessorSession = await accessorProvider.createSession();
+    await expect(collectProposals(
+      accessorSession.sendTurn(turnInput({ safe: true }))
+    )).rejects.toMatchObject({ code: "PROCESS_FAILED" });
+    expect(getterCalls).toBe(0);
+    await accessorSession.close();
+
+    let proxyTrapCalls = 0;
+    const proxyResult = new Proxy({}, {
+      ownKeys() {
+        proxyTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    });
+    const proxyProvider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () =>
+        proxyResult as unknown as SupervisedCliExecutionResult
+      )
+    );
+    const proxySession = await proxyProvider.createSession();
+    await expect(collectProposals(
+      proxySession.sendTurn(turnInput({ safe: true }))
+    )).rejects.toMatchObject({ code: "PROCESS_FAILED" });
+    expect(proxyTrapCalls).toBe(0);
+    await proxySession.close();
+
+    const stdout = antigravityStream();
+    const lyingProvider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async () => ({
+        exitCode: 0,
+        stdout,
+        stdoutBytes: 1,
+        stderrBytes: 0
+      }))
+    );
+    const lyingSession = await lyingProvider.createSession();
+    await expect(collectProposals(
+      lyingSession.sendTurn(turnInput({ safe: true }))
+    )).rejects.toMatchObject({ code: "PROCESS_FAILED" });
+    await lyingSession.close();
+  });
+
   it("does not surface stdout, stderr, or executor exception credentials in adapter errors", async () => {
     const secret = "SENSITIVE_EXECUTOR_SENTINEL";
     const provider = createAntigravityCliReasoningProvider(
