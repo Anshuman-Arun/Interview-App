@@ -242,6 +242,13 @@ export class SupervisedProcessRunner {
     return operation;
   }
 
+  private quarantineExecutable(executableId: string): void {
+    this.quarantinedExecutableIds.add(executableId);
+    for (const controller of this.activeControllers) {
+      controller.abort();
+    }
+  }
+
   private async drainActiveOperations(): Promise<void> {
     if (this.quarantinedExecutableIds.size !== 0) {
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
@@ -343,14 +350,14 @@ export class SupervisedProcessRunner {
       failed = true;
       failure = error;
       if (isProcessTreeCleanupError(error)) {
-        this.quarantinedExecutableIds.add(definition.id);
+        this.quarantineExecutable(definition.id);
       }
     }
 
     try {
       await cleanupExecutionIsolation(isolation);
     } catch {
-      this.quarantinedExecutableIds.add(definition.id);
+      this.quarantineExecutable(definition.id);
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
     }
 
