@@ -71,14 +71,10 @@ describe("supervised Antigravity runtime profile", () => {
         else process.env["SYSTEMROOT"] = originalUpperSystemRoot;
       }
 
-      expect(source.resolveRuntime({
+      expect(hasRuntimeExecutor(source.resolveRuntime({
         providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
         modelId: ANTIGRAVITY_CLI_MODEL_ID
-      })).toMatchObject({
-        executor: expect.objectContaining({
-          execute: expect.any(Function)
-        })
-      });
+      }))).toBe(true);
     }
   );
 
@@ -107,11 +103,7 @@ describe("supervised Antigravity runtime profile", () => {
     });
 
     if (process.platform === "win32") {
-      expect(runtime).toMatchObject({
-        executor: expect.objectContaining({
-          execute: expect.any(Function)
-        })
-      });
+      expect(hasRuntimeExecutor(runtime)).toBe(true);
     } else {
       expect(runtime).toBeUndefined();
     }
@@ -128,3 +120,24 @@ describe("supervised Antigravity runtime profile", () => {
     await expect(source.drain()).resolves.toBeUndefined();
   });
 });
+
+
+function hasRuntimeExecutor(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const executorDescriptor = Object.getOwnPropertyDescriptor(value, "executor");
+  if (
+    executorDescriptor === undefined
+    || !("value" in executorDescriptor)
+    || typeof executorDescriptor.value !== "object"
+    || executorDescriptor.value === null
+  ) {
+    return false;
+  }
+  const executeDescriptor = Object.getOwnPropertyDescriptor(
+    executorDescriptor.value,
+    "execute"
+  );
+  return executeDescriptor !== undefined
+    && "value" in executeDescriptor
+    && typeof executeDescriptor.value === "function";
+}
