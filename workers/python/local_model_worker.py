@@ -23,7 +23,7 @@ from typing import Any
 
 WORKER_COMPONENT_VERSION = "1"
 WORKER_PROTOCOL_VERSION = 1
-MOONSHINE_VERSION = "0.1.5"
+MOONSHINE_VERSION = "0.1.5"\nONNXRUNTIME_VERSION = "1.29.0"
 MAX_REQUEST_BYTES = 16 * 1024 * 1024
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 MAX_TRANSCRIPT_CHARS = 20_000
@@ -108,6 +108,8 @@ class SpeechRuntime:
 
         if getattr(moonshine_voice, "__version__", None) != MOONSHINE_VERSION:
             raise RuntimeError("moonshine-voice version mismatch")
+        if getattr(ort, "__version__", None) != ONNXRUNTIME_VERSION:
+            raise RuntimeError("onnxruntime version mismatch")
 
         providers = ["CPUExecutionProvider"] if "CPUExecutionProvider" in ort.get_available_providers() else None
         session_options = ort.SessionOptions()
@@ -121,7 +123,7 @@ class SpeechRuntime:
         self._states: OrderedDict[str, SileroState] = OrderedDict()
         self._lock = threading.Lock()
         self.runtime_version = (
-            f"moonshine-voice/{MOONSHINE_VERSION};onnxruntime/{getattr(ort, '__version__', 'unknown')}"
+            f"moonshine-voice/{MOONSHINE_VERSION};onnxruntime/{ONNXRUNTIME_VERSION}"
         )
 
     def close(self) -> None:
@@ -430,11 +432,11 @@ def main() -> int:
         "handshake": {
             "componentVersion": WORKER_COMPONENT_VERSION,
             "protocolVersion": WORKER_PROTOCOL_VERSION,
+            "workerType": args.component,
+            "runtimeVersion": runtime.runtime_version,
             "modelVersionOrHash": model_identity,
             "capabilities": capabilities,
             "metadata": {
-                "workerType": args.component,
-                "runtimeVersion": runtime.runtime_version,
                 "port": port,
             },
         },
