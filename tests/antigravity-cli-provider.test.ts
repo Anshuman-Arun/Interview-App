@@ -331,7 +331,9 @@ describe("Antigravity CLI one-turn protocol", () => {
     const completion = collectProposals(session.sendTurn(input));
 
     await started;
-    const cancellation = await session.cancelTurn(input.generationId);
+    const cancelTurn = session.cancelTurn;
+    if (cancelTurn === undefined) throw new Error("Antigravity session must support cancellation");
+    const cancellation = await cancelTurn(input.generationId);
     expect(cancellation).toEqual({
       semantics: "INTERRUPT_LOCAL_PROCESS",
       signalSent: true
