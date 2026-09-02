@@ -74,7 +74,8 @@ describe("expressive product page layer", () => {
         onOpenSessions: vi.fn(),
         onOpenSettings: vi.fn(),
         canReview: (session) => session.status === "COMPLETED",
-        onReview: vi.fn()
+        onReview: vi.fn(),
+        sessionEntryPending: false
       })
     );
 
