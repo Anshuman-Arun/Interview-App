@@ -162,8 +162,15 @@ interface WindowsSupervisorAssembly {
 }
 
 interface WindowsSupervisorAssemblyEntry {
-  readonly promise: Promise<WindowsSupervisorAssembly>;
+  promise: Promise<WindowsSupervisorAssembly>;
   readonly controller: AbortController;
+  consumers: number;
+  settled: boolean;
+}
+
+interface WindowsSupervisorAssemblyLease {
+  readonly entry: WindowsSupervisorAssemblyEntry;
+  readonly release: () => void;
 }
 
 const SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES =
@@ -820,36 +827,42 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
-    let assemblyEntry = getSharedWindowsSupervisorAssembly(
+    let assemblyLease = acquireSharedWindowsSupervisorAssembly(
       identity.canonicalPath,
       this.temporaryRoot,
       environment
     );
-    let assembly = await waitForOperationOrAbort(
-      assemblyEntry.promise,
-      request.signal
-    );
-    if (request.signal !== undefined && abortSignalAborted(request.signal)) {
-      throw new SupervisedProcessError("EXECUTION_CANCELLED");
-    }
-    if (!await verifyWindowsSupervisorAssembly(assembly, request.signal)) {
-      invalidateSharedWindowsSupervisorAssembly(
-        identity.canonicalPath,
-        this.temporaryRoot,
-        assemblyEntry
-      );
-      assemblyEntry = getSharedWindowsSupervisorAssembly(
-        identity.canonicalPath,
-        this.temporaryRoot,
-        environment
-      );
-        assembly = await waitForOperationOrAbort(
-        assemblyEntry.promise,
+    let assembly: WindowsSupervisorAssembly;
+    try {
+      assembly = await waitForOperationOrAbort(
+        assemblyLease.entry.promise,
         request.signal
       );
-      if (!await verifyWindowsSupervisorAssembly(assembly, request.signal)) {
-        throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+      if (request.signal !== undefined && abortSignalAborted(request.signal)) {
+        throw new SupervisedProcessError("EXECUTION_CANCELLED");
       }
+      if (!await verifyWindowsSupervisorAssembly(assembly, request.signal)) {
+        invalidateSharedWindowsSupervisorAssembly(
+          identity.canonicalPath,
+          this.temporaryRoot,
+          assemblyLease.entry
+        );
+        assemblyLease.release();
+        assemblyLease = acquireSharedWindowsSupervisorAssembly(
+          identity.canonicalPath,
+          this.temporaryRoot,
+          environment
+        );
+        assembly = await waitForOperationOrAbort(
+          assemblyLease.entry.promise,
+          request.signal
+        );
+        if (!await verifyWindowsSupervisorAssembly(assembly, request.signal)) {
+          throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+        }
+      }
+    } finally {
+      assemblyLease.release();
     }
 
     const stdinBytes = Buffer.from(request.stdin, "utf8");
@@ -918,30 +931,52 @@ export class SupervisedProcessRunner {
   }
 }
 
-function getSharedWindowsSupervisorAssembly(
+function acquireSharedWindowsSupervisorAssembly(
   powershell: string,
   temporaryRoot: string,
   environment: NodeJS.ProcessEnv
-): WindowsSupervisorAssemblyEntry {
+): WindowsSupervisorAssemblyLease {
   const key = windowsSupervisorAssemblyKey(powershell, temporaryRoot);
-  const existing = SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key);
-  if (existing !== undefined) return existing;
+  let entry = SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key);
+  if (entry === undefined) {
+    const controller = new AbortController();
+    const created: WindowsSupervisorAssemblyEntry = {
+      promise: Promise.resolve(undefined as never),
+      controller,
+      consumers: 0,
+      settled: false
+    };
+    created.promise = compileWindowsSupervisorAssembly(
+      powershell,
+      temporaryRoot,
+      environment,
+      controller.signal
+    );
+    entry = created;
+    SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.set(key, entry);
+    void created.promise.finally(() => {
+      created.settled = true;
+    }).catch(() => undefined);
+    void created.promise.catch(() => {
+      if (SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key) === created) {
+        SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.delete(key);
+      }
+    });
+  }
 
-  const controller = new AbortController();
-  const promise = compileWindowsSupervisorAssembly(
-    powershell,
-    temporaryRoot,
-    environment,
-    controller.signal
-  );
-  const entry = Object.freeze({ promise, controller });
-  SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.set(key, entry);
-  void promise.catch(() => {
-    if (SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.get(key) === entry) {
-      SHARED_WINDOWS_SUPERVISOR_ASSEMBLIES.delete(key);
+  entry.consumers += 1;
+  let released = false;
+  return Object.freeze({
+    entry,
+    release(): void {
+      if (released) return;
+      released = true;
+      entry.consumers -= 1;
+      if (entry.consumers === 0 && !entry.settled) {
+        entry.controller.abort();
+      }
     }
   });
-  return entry;
 }
 
 function windowsSupervisorAssemblyKey(
