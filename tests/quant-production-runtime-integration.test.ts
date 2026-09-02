@@ -436,7 +436,7 @@ describe("production quant runtime integration", () => {
     ).state).toEqual(beforeOverflow);
   });
 
-  it("reports an inter-round fair-value risk stop with its bounded public reason", async () => {
+  it("reports a reachable production risk stop with its bounded public reason", async () => {
     await server.stop();
     await registry.closeAll();
     registry = new SessionRuntimeRegistry(store);
@@ -463,34 +463,29 @@ describe("production quant runtime integration", () => {
         action: {
           type: "QUOTE",
           quote: {
-            bidPrice: 109,
-            bidSize: 4,
-            askPrice: 109.5,
-            askSize: 1
+            bidPrice: 50,
+            bidSize: 1,
+            askPrice: 50.5,
+            askSize: 4
           }
         }
       }))
     ).state;
 
     expect(stopped.status).toBe("RISK_STOPPED");
-    expect(stopped.currentRound).toBe(2);
-    expect(stopped.fairValue).toBe(98);
+    expect(stopped.currentRound).toBe(1);
+    expect(stopped.fairValue).toBe(100);
     expect(stopped.lastRound).toMatchObject({
       round: 1,
-      riskBreached: false
+      riskBreached: true
     });
-    expect(stopped.marketUpdates).toEqual([
-      {
-        type: "FAIR_VALUE_UPDATE",
-        round: 2,
-        previousFairValue: 100,
-        fairValue: 98,
-        label: "PUBLIC_INFORMATION_UPDATE"
-      }
+    expect(stopped.lastRound?.fills).toEqual([
+      { side: "SELL", price: 50.5, size: 4 }
     ]);
+    expect(stopped.marketUpdates).toEqual([]);
     expect(stopped.completion?.lastRiskBreach).toMatchObject({
-      round: 2,
-      source: "FAIR_VALUE_UPDATE"
+      round: 1,
+      source: "POST_ROUND"
     });
     expect(stopped.completion?.lastRiskBreach?.reason).toContain("stop-loss");
     expect(stopped.completion?.riskBreachCount).toBe(1);
