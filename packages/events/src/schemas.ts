@@ -26,8 +26,13 @@ import {
   TranscriptRevisionSchema,
   TurnIdSchema,
   UtteranceIdSchema,
+  AcceptedBoardObservationSchema,
   BoardObservationSchema,
   NormalizedBoardMutationSchema,
+  VisionBoundsSchema,
+  VisionObservationKindSchema,
+  VisionShapeRevisionBindingSchema,
+  VisionSnapshotBasisSchema,
   VerificationResultSchema
 } from "../../domain/src/index.js";
 
@@ -350,8 +355,21 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     summary: z.string().min(1),
     mutation: NormalizedBoardMutationSchema.optional()
   }).strict()),
-  event("VISION_REQUESTED", z.object({ visionRequestId: RequestIdSchema, sourceBoardRevision: BoardRevisionSchema, regionId: z.string().min(1), relevantShapeIds: z.array(z.string().min(1)).min(1) }).strict()),
-  event("VISION_RESULT_ACCEPTED", z.object({ visionRequestId: RequestIdSchema, observation: BoardObservationSchema }).strict()),
+  event("VISION_REQUESTED", z.object({
+    visionRequestId: RequestIdSchema,
+    sourceBoardRevision: BoardRevisionSchema,
+    regionId: z.string().min(1),
+    relevantShapeIds: z.array(z.string().min(1)).min(1),
+    snapshotBasis: VisionSnapshotBasisSchema.optional(),
+    relevantShapeRevisions: z.array(VisionShapeRevisionBindingSchema).optional(),
+    regionBounds: VisionBoundsSchema.optional(),
+    requestedObservationKind: VisionObservationKindSchema.optional()
+  }).strict()),
+  event("VISION_RESULT_ACCEPTED", z.object({
+    visionRequestId: RequestIdSchema,
+    observation: BoardObservationSchema,
+    admission: AcceptedBoardObservationSchema.optional()
+  }).strict()),
   event("VISION_RESULT_DISCARDED", z.object({ visionRequestId: RequestIdSchema, reason: z.string().min(1) }).strict()),
   event("LOCAL_COMPUTE_REQUESTED", z.object({
     computeRequestId: RequestIdSchema,

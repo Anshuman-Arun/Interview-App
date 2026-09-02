@@ -362,3 +362,68 @@ export const VisionDiagnosticSchema = z.discriminatedUnion("outcome", [
   }).strict()
 ]);
 export type VisionDiagnostic = z.infer<typeof VisionDiagnosticSchema>;
+
+
+export const MAX_WHITEBOARD_VISION_PNG_BYTES = 2 * 1024 * 1024;
+export const MAX_WHITEBOARD_VISION_BASE64_LENGTH =
+  Math.ceil(MAX_WHITEBOARD_VISION_PNG_BYTES / 3) * 4;
+
+export const WhiteboardVisionSnapshotUploadSchema = z.object({
+  protocolVersion: z.literal(VISION_PROTOCOL_VERSION),
+  requestId: VisionRequestIdSchema,
+  sessionId: VisionSessionIdSchema,
+  sourceBoardRevision: VisionBoardRevisionSchema,
+  snapshotId: boundedIdentifier(128),
+  capturedAtMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  declaredWidth: z.number().int().positive().max(8192),
+  declaredHeight: z.number().int().positive().max(8192),
+  region: VisionRegionSchema,
+  relevantShapeRevisions: z.array(VisionShapeRevisionBindingSchema)
+    .min(1)
+    .max(MAX_VISION_REGION_SHAPES),
+  requestedObservationKind: VisionObservationKindSchema,
+  pngBase64: z.string()
+    .min(4)
+    .max(MAX_WHITEBOARD_VISION_BASE64_LENGTH)
+    .regex(/^[A-Za-z0-9+/]+={0,2}$/u)
+}).strict().superRefine((upload, context) => {
+  if (upload.region.relevantShapeIds.length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["region", "relevantShapeIds"],
+      message: "Whiteboard vision requires at least one relevant shape"
+    });
+  }
+  const regionIds = new Set(upload.region.relevantShapeIds);
+  const bindingIds = upload.relevantShapeRevisions.map((binding) => binding.shapeId);
+  if (
+    new Set(bindingIds).size !== bindingIds.length
+    || bindingIds.length !== regionIds.size
+    || !bindingIds.every((shapeId) => regionIds.has(shapeId))
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["relevantShapeRevisions"],
+      message: "Whiteboard vision shape revisions must exactly cover the region shape set"
+    });
+  }
+});
+export type WhiteboardVisionSnapshotUpload = z.infer<typeof WhiteboardVisionSnapshotUploadSchema>;
+
+export const WhiteboardVisionSnapshotResponseSchema = z.object({
+  protocolVersion: z.literal(VISION_PROTOCOL_VERSION),
+  requestId: VisionRequestIdSchema,
+  sessionId: VisionSessionIdSchema,
+  status: z.enum(["ACCEPTED", "REJECTED", "VISION_UNAVAILABLE"]),
+  reason: z.string().min(1).max(240).optional(),
+  observationCount: z.number().int().nonnegative().max(1),
+  evidenceCommittedCount: z.number().int().nonnegative().max(1)
+}).strict().superRefine((response, context) => {
+  if (response.status === "ACCEPTED" && response.reason !== undefined) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "Accepted vision responses must not carry a rejection reason" });
+  }
+  if (response.status !== "ACCEPTED" && response.reason === undefined) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "Non-accepted vision responses require a reason" });
+  }
+});
+export type WhiteboardVisionSnapshotResponse = z.infer<typeof WhiteboardVisionSnapshotResponseSchema>;

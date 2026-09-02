@@ -252,7 +252,27 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     case "VISION_RESULT_ACCEPTED": {
       const request = state.visionRequests[event.payload.visionRequestId];
       if (request === undefined || request.status !== "PENDING") throw new Error("Vision request is not pending");
-      next = { ...state, visionRequests: { ...state.visionRequests, [event.payload.visionRequestId]: { ...request, status: "ACCEPTED", observation: event.payload.observation } } };
+      if (
+        event.payload.admission !== undefined
+        && event.payload.admission.requestId !== event.payload.visionRequestId
+      ) {
+        throw new Error("Accepted vision admission request does not match persisted request");
+      }
+      next = {
+        ...state,
+        visionRequests: {
+          ...state.visionRequests,
+          [event.payload.visionRequestId]: {
+            ...request,
+            status: "ACCEPTED",
+            observation: event.payload.observation,
+            ...(event.payload.admission === undefined
+              ? {}
+              : { acceptedObservation: event.payload.admission }),
+            resultEventId: event.id
+          }
+        }
+      };
       break;
     }
     case "VISION_RESULT_DISCARDED": {

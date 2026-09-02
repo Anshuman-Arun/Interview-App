@@ -21,9 +21,14 @@ import type {
   TranscriptRevision,
   TurnId,
   UtteranceId,
+  AcceptedBoardObservation,
   BoardObservation,
   AuthoritativeStudentShape,
   RequestId,
+  VisionBounds,
+  VisionObservationKind,
+  VisionShapeRevisionBinding,
+  VisionSnapshotBasis,
   VerificationResult,
   EvidenceKey
 } from "../../domain/src/index.js";
@@ -63,8 +68,14 @@ export interface VisionRequestState {
   readonly sourceBoardRevision: BoardRevision;
   readonly regionId: string;
   readonly relevantShapeIds: readonly string[];
+  readonly snapshotBasis?: VisionSnapshotBasis;
+  readonly relevantShapeRevisions?: readonly VisionShapeRevisionBinding[];
+  readonly regionBounds?: VisionBounds;
+  readonly requestedObservationKind?: VisionObservationKind;
   readonly status: "PENDING" | "ACCEPTED" | "DISCARDED";
   readonly observation?: BoardObservation;
+  readonly acceptedObservation?: AcceptedBoardObservation;
+  readonly resultEventId?: EventId;
   readonly discardReason?: string;
 }
 export interface LocalComputeRequestState {

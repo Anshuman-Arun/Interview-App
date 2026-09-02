@@ -1,7 +1,13 @@
 import {
+  AcceptedBoardObservationSchema,
   BoardRevisionSchema,
   BoardObservationSchema,
   NormalizedBoardMutationSchema,
+  RequestIdSchema,
+  VisionBoundsSchema,
+  VisionObservationKindSchema,
+  VisionShapeRevisionBindingSchema,
+  VisionSnapshotBasisSchema,
   MAX_AUTHORITATIVE_BOARD_SHAPES,
   CommandEnvelopeSchema,
   CommandIdentityValueSchema,
@@ -28,9 +34,14 @@ import {
   newRequestId,
   newTurnId,
   newUtteranceId,
+  type AcceptedBoardObservation,
   type BoardObservation,
   type BoardRevision,
   type NormalizedBoardMutation,
+  type VisionBounds,
+  type VisionObservationKind,
+  type VisionShapeRevisionBinding,
+  type VisionSnapshotBasis,
   type CommandEnvelope,
   type CommandIdentityValue,
   type DeliveryAtom,
@@ -648,44 +659,185 @@ export class TurnCoordinator {
     return result.value.turnId;
   }
 
-  public async requestVision(regionId: string, relevantShapeIds: readonly string[]): Promise<{ visionRequestId: RequestId; sourceBoardRevision: BoardRevision }> {
-    const visionRequestId = newRequestId();
-    const envelope = createCommandEnvelope({ sessionId: this.writer.sessionId, producer: "vision-coordinator", correlationId: visionRequestId });
+  public async requestVision(
+    regionId: string,
+    relevantShapeIds: readonly string[],
+    options: {
+      readonly visionRequestId?: RequestId;
+      readonly snapshotBasis?: VisionSnapshotBasis;
+      readonly relevantShapeRevisions?: readonly VisionShapeRevisionBinding[];
+      readonly regionBounds?: VisionBounds;
+      readonly requestedObservationKind?: VisionObservationKind;
+    } = {}
+  ): Promise<{ visionRequestId: RequestId; sourceBoardRevision: BoardRevision }> {
+    const visionRequestId = RequestIdSchema.parse(options.visionRequestId ?? newRequestId());
+    const snapshotBasis = options.snapshotBasis === undefined
+      ? undefined
+      : VisionSnapshotBasisSchema.parse(options.snapshotBasis);
+    const relevantShapeRevisions = options.relevantShapeRevisions === undefined
+      ? undefined
+      : options.relevantShapeRevisions.map((binding) =>
+          VisionShapeRevisionBindingSchema.parse(binding)
+        );
+    const regionBounds = options.regionBounds === undefined
+      ? undefined
+      : VisionBoundsSchema.parse(options.regionBounds);
+    const requestedObservationKind = options.requestedObservationKind === undefined
+      ? undefined
+      : VisionObservationKindSchema.parse(options.requestedObservationKind);
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "vision-coordinator",
+      requestId: visionRequestId,
+      correlationId: visionRequestId
+    });
     const result = await this.writer.execute(envelope, {
       operation: "REQUEST_VISION",
-      payload: { regionId, relevantShapeIds: [...relevantShapeIds] }
+      payload: {
+        regionId,
+        relevantShapeIds: [...relevantShapeIds],
+        ...(snapshotBasis === undefined ? {} : { snapshotBasis }),
+        ...(relevantShapeRevisions === undefined ? {} : { relevantShapeRevisions }),
+        ...(regionBounds === undefined ? {} : { regionBounds }),
+        ...(requestedObservationKind === undefined ? {} : { requestedObservationKind })
+      }
     }, VisionRequestedResultSchema, (state) => {
       assertSessionActive(state, "request vision");
+      if (
+        snapshotBasis !== undefined
+        && snapshotBasis.sourceBoardRevision !== state.boardRevision
+      ) {
+        throw new Error("Vision snapshot basis does not match authoritative board revision");
+      }
       return {
-      drafts: [{ source: "APPLICATION", type: "VISION_REQUESTED", payload: { visionRequestId, sourceBoardRevision: state.boardRevision, regionId, relevantShapeIds: [...relevantShapeIds] } }],
-      result: { visionRequestId, sourceBoardRevision: state.boardRevision }
+        drafts: [{
+          source: "APPLICATION",
+          type: "VISION_REQUESTED",
+          payload: {
+            visionRequestId,
+            sourceBoardRevision: state.boardRevision,
+            regionId,
+            relevantShapeIds: [...relevantShapeIds],
+            ...(snapshotBasis === undefined ? {} : { snapshotBasis }),
+            ...(relevantShapeRevisions === undefined ? {} : { relevantShapeRevisions }),
+            ...(regionBounds === undefined ? {} : { regionBounds }),
+            ...(requestedObservationKind === undefined ? {} : { requestedObservationKind })
+          }
+        }],
+        result: { visionRequestId, sourceBoardRevision: state.boardRevision }
       };
     });
     return result.value;
   }
 
-  public async processVisionResult(input: { readonly envelope: CommandEnvelope; readonly observation: BoardObservation }): Promise<z.infer<typeof VisionProcessedResultSchema>> {
+  public async processVisionResult(input: {
+    readonly envelope: CommandEnvelope;
+    readonly observation: BoardObservation;
+    readonly admission?: AcceptedBoardObservation;
+  }): Promise<z.infer<typeof VisionProcessedResultSchema>> {
     const envelope = CommandEnvelopeSchema.parse(input.envelope);
     const observation = BoardObservationSchema.parse(input.observation);
+    const admission = input.admission === undefined
+      ? undefined
+      : AcceptedBoardObservationSchema.parse(input.admission);
     const visionRequestId = envelope.correlationId;
     const result = await this.writer.execute(envelope, {
       operation: "PROCESS_VISION_RESULT",
-      payload: { observation }
+      payload: {
+        observation,
+        ...(admission === undefined ? {} : { admission })
+      }
     }, VisionProcessedResultSchema, (state) => {
       const request = state.visionRequests[visionRequestId];
-      if (request === undefined || request.status !== "PENDING") return { drafts: [], result: { accepted: false, reason: "Vision request is not pending" } };
+      if (request === undefined || request.status !== "PENDING") {
+        return {
+          drafts: [],
+          result: { accepted: false, reason: "Vision request is not pending" }
+        };
+      }
       const sameDependencySet = request.regionId === observation.regionId
         && request.relevantShapeIds.length === observation.relevantShapeIds.length
-        && request.relevantShapeIds.every((shapeId) => observation.relevantShapeIds.includes(shapeId));
-      const freshness = assessVisionFreshness(observation, state);
-      const sourceMatches = envelope.sourceRevision === request.sourceBoardRevision && observation.sourceBoardRevision === request.sourceBoardRevision;
-      if (freshness !== "FRESH" || !sourceMatches || !sameDependencySet) {
-        const reason = `Vision result rejected: freshness=${freshness}, sourceMatches=${String(sourceMatches)}, dependenciesMatch=${String(sameDependencySet)}`;
-        return { drafts: [{ source: "APPLICATION", type: "VISION_RESULT_DISCARDED", payload: { visionRequestId, reason } }], result: { accepted: false, reason } };
+        && request.relevantShapeIds.every((shapeId) =>
+          observation.relevantShapeIds.includes(shapeId)
+        );
+      const freshness = admission === undefined
+        ? assessVisionFreshness(observation, state)
+        : admission.admittedAtBoardRevision === state.boardRevision
+          ? "FRESH"
+          : "STALE";
+      const sourceMatches = envelope.sourceRevision === request.sourceBoardRevision
+        && observation.sourceBoardRevision === request.sourceBoardRevision;
+      const admissionMatches = admission === undefined || (
+        admission.requestId === visionRequestId
+        && admission.sessionId === state.sessionId
+        && admission.observation.sourceBoardRevision === request.sourceBoardRevision
+        && admission.observation.regionId === request.regionId
+        && (
+          request.snapshotBasis === undefined
+          || JSON.stringify(admission.snapshotBasis) === JSON.stringify(request.snapshotBasis)
+        )
+      );
+      if (
+        freshness !== "FRESH"
+        || !sourceMatches
+        || !sameDependencySet
+        || !admissionMatches
+      ) {
+        const reason =
+          `Vision result rejected: freshness=${freshness}, sourceMatches=${String(sourceMatches)}, dependenciesMatch=${String(sameDependencySet)}, admissionMatches=${String(admissionMatches)}`;
+        return {
+          drafts: [{
+            source: "APPLICATION",
+            type: "VISION_RESULT_DISCARDED",
+            payload: { visionRequestId, reason }
+          }],
+          result: { accepted: false, reason }
+        };
       }
-      return { drafts: [{ source: "WORKER", type: "VISION_RESULT_ACCEPTED", payload: { visionRequestId, observation } }], result: { accepted: true } };
+      return {
+        drafts: [{
+          source: "WORKER",
+          type: "VISION_RESULT_ACCEPTED",
+          payload: {
+            visionRequestId,
+            observation,
+            ...(admission === undefined ? {} : { admission })
+          }
+        }],
+        result: { accepted: true }
+      };
     });
     return result.value;
+  }
+
+  public async discardVisionRequest(
+    visionRequestIdInput: RequestId,
+    reasonInput: string
+  ): Promise<void> {
+    const visionRequestId = RequestIdSchema.parse(visionRequestIdInput);
+    const reason = z.string().min(1).max(240).parse(reasonInput);
+    const envelope = createCommandEnvelope({
+      sessionId: this.writer.sessionId,
+      producer: "vision-admission",
+      correlationId: visionRequestId
+    });
+    await this.writer.execute(envelope, {
+      operation: "DISCARD_VISION_REQUEST",
+      payload: { visionRequestId, reason }
+    }, z.object({ discarded: z.literal(true) }).strict(), (state) => {
+      const request = state.visionRequests[visionRequestId];
+      if (request === undefined || request.status !== "PENDING") {
+        return { drafts: [], result: { discarded: true as const } };
+      }
+      return {
+        drafts: [{
+          source: "APPLICATION",
+          type: "VISION_RESULT_DISCARDED",
+          payload: { visionRequestId, reason }
+        }],
+        result: { discarded: true as const }
+      };
+    });
   }
 
   public async processEvidenceProposal(input: { readonly envelope: CommandEnvelope; readonly proposal: EvidenceProposal }): Promise<z.infer<typeof EvidenceProcessedResultSchema>> {
