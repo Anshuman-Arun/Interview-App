@@ -189,7 +189,12 @@ export function SettingsPage({
                     event.currentTarget.value = String(settings.zoomPercent);
                     return;
                   }
-                  setZoomPercent(next);
+                  const normalized = Math.min(
+                    MAX_INTERFACE_ZOOM_PERCENT,
+                    Math.max(MIN_INTERFACE_ZOOM_PERCENT, Math.round(next))
+                  );
+                  event.currentTarget.value = String(normalized);
+                  setZoomPercent(normalized);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
