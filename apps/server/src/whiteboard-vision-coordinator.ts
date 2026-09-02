@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  AcceptedBoardObservationSchema,
   EvidenceProposalSchema,
   RequestIdSchema,
   MAX_VISION_REGION_SHAPES,
@@ -450,7 +451,7 @@ export class WhiteboardVisionCoordinator {
           return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
         }
         const candidate = interpreter.propose({
-          observation: request.acceptedObservation,
+          observation: AcceptedBoardObservationSchema.parse(request.acceptedObservation),
           problemId,
           evidenceEventId: request.resultEventId
         });

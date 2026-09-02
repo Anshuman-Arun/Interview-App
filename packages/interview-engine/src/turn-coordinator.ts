@@ -817,6 +817,9 @@ export class TurnCoordinator {
       : input.evidenceInterpreterFingerprint === null
         ? null
         : VisionEvidenceInterpreterFingerprintSchema.parse(input.evidenceInterpreterFingerprint);
+    if (evidenceInterpreterFingerprint !== undefined && admission === undefined) {
+      throw new Error("Vision evidence bridge authority requires an admitted observation");
+    }
     const visionRequestId = envelope.correlationId;
     const result = await this.writer.execute(envelope, {
       operation: "PROCESS_VISION_RESULT",

@@ -420,7 +420,18 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     observation: BoardObservationSchema,
     admission: AcceptedBoardObservationSchema.optional(),
     evidenceInterpreterFingerprint: VisionEvidenceInterpreterFingerprintSchema.nullable().optional()
-  }).strict()),
+  }).strict().superRefine((value, context) => {
+    if (
+      value.evidenceInterpreterFingerprint !== undefined
+      && value.admission === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidenceInterpreterFingerprint"],
+        message: "Vision evidence bridge authority requires an admitted observation"
+      });
+    }
+  })),
   event("VISION_EVIDENCE_BRIDGE_DECIDED", z.object({
     visionRequestId: RequestIdSchema,
     interpreterFingerprint: VisionEvidenceInterpreterFingerprintSchema,
