@@ -216,10 +216,10 @@ function stepDesktopZoom(window: BrowserWindow, direction: -1 | 1): void {
 
   if (direction > 0) {
     target = factors.find((factor) => factor > current + 0.001)
-      ?? factors[factors.length - 1];
+      ?? 1.25;
   } else {
     target = [...factors].reverse().find((factor) => factor < current - 0.001)
-      ?? factors[0];
+      ?? 0.875;
   }
 
   applyDesktopZoomFactor(window, target, true);
