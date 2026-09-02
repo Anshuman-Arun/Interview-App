@@ -299,11 +299,11 @@ describe("generic session composition + grounded product reads", () => {
       readStatus: "AVAILABLE"
     });
     expect(researchHistory).toMatchObject({
-      problemId: "MODEL_COMPARISON",
-      problemVersion: QUANT_RESEARCH_VERSION,
       status: "COMPLETED",
       readStatus: "AVAILABLE"
     });
+    expect(researchHistory?.problemId).toBeUndefined();
+    expect(researchHistory?.problemVersion).toBeUndefined();
     expect(history.longitudinal.includedSessionCount).toBe(0);
     expect(history.longitudinal.sessionTruncation.remainingCount).toBe(2);
     expect(server.store.eventCount(tradingId)).toBe(tradingCount);
