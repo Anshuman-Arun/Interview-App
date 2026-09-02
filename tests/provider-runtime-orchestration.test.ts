@@ -235,6 +235,13 @@ describe("production provider runtime resolution", () => {
         modelId: "unknown-model"
       }
     })).rejects.toMatchObject({ code: "UNKNOWN_PROVIDER" });
+    await expect(resolver.resolve({
+      selection: {
+        providerId: "mock-model",
+        modelId: "unknown-model"
+      },
+      mockProposal: safeProbeProposal()
+    })).rejects.toMatchObject({ code: "UNKNOWN_MODEL" });
 
     await expect(new ProviderRuntimeResolver({
       configurationSource: {
@@ -246,6 +253,28 @@ describe("production provider runtime resolution", () => {
       selection: MOCK_SELECTION,
       mockProposal: safeProbeProposal()
     })).rejects.toMatchObject({ code: "DISABLED" });
+
+    await expect(new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration() {
+          return { enabled: null };
+        }
+      }
+    }).resolve({
+      selection: MOCK_SELECTION,
+      mockProposal: safeProbeProposal()
+    })).rejects.toMatchObject({ code: "MALFORMED_CONFIGURATION" });
+
+    await expect(new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration() {
+          return { providerId: "gemini-api" };
+        }
+      }
+    }).resolve({
+      selection: MOCK_SELECTION,
+      mockProposal: safeProbeProposal()
+    })).rejects.toMatchObject({ code: "RUNTIME_CONFIGURATION_FAILED" });
 
     let getterCalls = 0;
     const hostile = Object.defineProperty({}, "enabled", {
@@ -266,6 +295,29 @@ describe("production provider runtime resolution", () => {
       mockProposal: safeProbeProposal()
     })).rejects.toBeInstanceOf(ProviderRuntimeResolutionError);
     expect(getterCalls).toBe(0);
+  });
+
+  it("fails closed when a selected credentialed provider has no secret resolver", async () => {
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: credentialReferenceSource(),
+      adapterRuntimeSource: {
+        resolveRuntime() {
+          return {
+            fetchImpl: async () => {
+              throw new Error("network must not be reached");
+            }
+          };
+        }
+      },
+      policySource: {
+        resolvePolicy() {
+          return REMOTE_NO_METERED_POLICY;
+        }
+      }
+    });
+
+    await expect(resolver.resolve({ selection: GEMINI_SELECTION }))
+      .rejects.toMatchObject({ code: "CREDENTIALS_REQUIRED" });
   });
 
   it("rejects a malicious Gemini adapter runtime before credential resolution or network access", async () => {
