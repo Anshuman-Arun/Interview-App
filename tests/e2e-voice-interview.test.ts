@@ -101,6 +101,28 @@ class ControlledAudioElement implements BrowserAudioElementLike {
   }
 }
 
+class DuplicateOnsetWorker extends SpeechWorkerCore {
+  public override async submitFrame(
+    envelopeInput: unknown,
+    _payload: unknown,
+    _heuristicsInput: unknown = {}
+  ): Promise<readonly SpeechWorkerEvent[]> {
+    void _payload;
+    void _heuristicsInput;
+    const envelope = SpeechPcmFrameEnvelopeSchema.parse(envelopeInput);
+    const utteranceId = newUtteranceId();
+    const onset: SpeechWorkerEvent = {
+      protocolVersion: 1,
+      type: "SPEECH_STARTED",
+      requestId: envelope.requestId,
+      streamId: envelope.streamId,
+      utteranceId,
+      atTimestampMs: envelope.timestampMs
+    };
+    return [onset, { ...onset }];
+  }
+}
+
 class TerminalThenStaleOnsetWorker extends SpeechWorkerCore {
   public override async submitFrame(
     envelopeInput: unknown,
@@ -711,6 +733,54 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     expect(Object.values(state.utterances).every(
       (utterance) => utterance.status !== "CAPTURING"
     )).toBe(true);
+  });
+
+  it("publishes only one admitted onset when a worker duplicates SPEECH_STARTED", async () => {
+    const speechWorker = new DuplicateOnsetWorker({
+      vadBackend: new ScriptedVadBackend([0]),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    server = await createAndStartServer({
+      host: "127.0.0.1",
+      commandPort: 0,
+      rendererStreamPort: 0,
+      voicePort: 0,
+      clientToken: TEST_CLIENT_TOKEN,
+      allowedOrigins: [TEST_ORIGIN],
+      databasePath: ":memory:",
+      voiceRuntime: {
+        speechWorker,
+        tts: {
+          worker: new TtsWorkerCore(new DeterministicFakeSpeechSynthesizer()),
+          voice: "fake-neutral",
+          language: "en-US",
+          sampleRate: 24_000,
+          speed: 1
+        }
+      }
+    });
+
+    const fetchWithAuth = authenticatedFetch();
+    const commandClient = new BrowserCommandClient({
+      baseUrl: server.bound.command.url,
+      clientToken: TEST_CLIENT_TOKEN,
+      fetchImpl: fetchWithAuth
+    });
+    const sessionId = newSessionId();
+    await commandClient.startSession(sessionId);
+    const speech = await new BrowserVoiceClient({
+      baseUrl: server.bound.voice.url,
+      authenticatedFetch: fetchWithAuth
+    }).openStream(sessionId);
+
+    const result = await speech.sendFrame(microphoneFrame(0.2));
+    expect(result.events.filter((event) => event.type === "SPEECH_STARTED")).toHaveLength(1);
+    const writer = server.registry.get(sessionId);
+    await writer.waitForIdle();
+    expect(Object.values(writer.getState().utterances)).toHaveLength(1);
+    expect(Object.values(writer.getState().utterances)[0]?.status).toBe("CAPTURING");
+
+    await speech.cancel();
   });
 
   it("does not expose trailing worker onset events after a terminal event revoked the stream", async () => {
