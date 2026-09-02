@@ -436,6 +436,9 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   event("QUANT_TRADING_SCENARIO_INITIALIZED", z.object({
     definition: QuantTradingScenarioDefinitionEventSchema
   }).strict()),
+  event("QUANT_TRADING_ACTION_ACCEPTED", z.object({
+    action: QuantTradingCandidateActionSchema
+  }).strict()),
   event("QUANT_TRADING_ROUND_RESOLVED", z.object({
     evidence: QuantTradingRoundEvidenceEventSchema
   }).strict()),
