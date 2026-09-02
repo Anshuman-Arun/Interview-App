@@ -7,6 +7,7 @@ import {
   type ModelCapabilities,
   type ReasoningProvider
 } from "../../domain/src/index.js";
+import { snapshotValidatedModelCapabilities } from "./runtime-capabilities.js";
 import {
   SafeProviderConfigurationRecordSchema,
   containsSecretLikeConfigurationText,
@@ -1068,8 +1069,7 @@ class RegisteredProviderAdapterFactory implements ProviderAdapterFactory {
       );
     }
 
-    assertAdapterMatchesResolvedDefinition(resolved, adapter);
-    return adapter;
+    return validateAndSnapshotAdapter(resolved, adapter);
   }
 }
 
@@ -1266,10 +1266,10 @@ function adapterDefinitionMismatch(): ProviderControlPlaneError {
   );
 }
 
-function assertAdapterMatchesResolvedDefinition(
+function validateAndSnapshotAdapter(
   resolved: ResolvedProviderConfiguration,
   adapter: ReasoningProvider
-): void {
+): ReasoningProvider {
   try {
     const adapterValue: unknown = adapter;
     if (typeof adapterValue !== "object" || adapterValue === null) {
@@ -1283,6 +1283,8 @@ function assertAdapterMatchesResolvedDefinition(
     if (
       name !== resolved.provider.id
       || adapterVersion !== resolved.provider.adapterVersion
+      || typeof name !== "string"
+      || typeof adapterVersion !== "string"
       || typeof verifyBillingSafety !== "function"
       || typeof createSession !== "function"
     ) {
@@ -1293,7 +1295,7 @@ function assertAdapterMatchesResolvedDefinition(
       snapshotAdapterCapabilities(capabilities)
     );
     if (!parsed.success) throw adapterDefinitionMismatch();
-    const execution = parsed.data;
+    const execution = snapshotValidatedModelCapabilities(parsed.data);
     const declared = resolved.model.capabilities;
     const executionReasoningLevels = sortedReasoningLevels(execution);
     let reasoningMatches: boolean;
@@ -1333,6 +1335,30 @@ function assertAdapterMatchesResolvedDefinition(
     ) {
       throw adapterDefinitionMismatch();
     }
+
+    const capturedVerifyBillingSafety =
+      verifyBillingSafety as ReasoningProvider["verifyBillingSafety"];
+    const capturedCreateSession = createSession as ReasoningProvider["createSession"];
+    const provider: ReasoningProvider = {
+      name,
+      adapterVersion,
+      capabilities: execution,
+      async verifyBillingSafety(input) {
+        return await REFLECT_APPLY_INTRINSIC(
+          capturedVerifyBillingSafety,
+          adapterValue,
+          [input]
+        );
+      },
+      async createSession() {
+        return await REFLECT_APPLY_INTRINSIC(
+          capturedCreateSession,
+          adapterValue,
+          []
+        );
+      }
+    };
+    return objectFreeze(provider);
   } catch (error) {
     if (
       isProviderControlPlaneError(error)

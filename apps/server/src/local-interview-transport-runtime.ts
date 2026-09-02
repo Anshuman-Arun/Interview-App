@@ -11,6 +11,7 @@ import {
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
+import type { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import {
   EphemeralAudioAssetStore,
@@ -35,6 +36,7 @@ export interface LocalInterviewTransportRuntimeOptions {
   readonly maxRendererConnectionsPerSession?: number;
   readonly maxRendererMessageBytes?: number;
   readonly orchestrator?: ServerTurnOrchestrator;
+  readonly providerRuntimeResolver?: ProviderRuntimeResolver;
   readonly readService?: SessionReadService;
 }
 
@@ -64,6 +66,14 @@ export class LocalInterviewTransportRuntime {
   private voiceDeliveryShutdown = false;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
+    if (
+      options.orchestrator !== undefined
+      && options.providerRuntimeResolver !== undefined
+    ) {
+      throw new Error(
+        "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
+      );
+    }
     const voiceRuntime = options.voiceRuntime;
     const speechWorker = voiceRuntime?.speechWorker;
     const ttsRuntime = voiceRuntime?.tts;
@@ -80,7 +90,12 @@ export class LocalInterviewTransportRuntime {
       );
     this.orchestrator =
       options.orchestrator ??
-      new ServerTurnOrchestrator(this.sessions, () => this.rendererStreamServer);
+      new ServerTurnOrchestrator(
+        this.sessions,
+        () => this.rendererStreamServer,
+        undefined,
+        options.providerRuntimeResolver
+      );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
     this.readService = options.readService ?? new SessionReadService({
       source: {
@@ -153,6 +168,7 @@ export class LocalInterviewTransportRuntime {
     }
     if (this.bound !== undefined) return Promise.resolve(this.bound);
     if (this.starting !== undefined) return this.starting;
+    this.orchestrator.resumeAfterShutdown();
     const starting = this.startBoth();
     this.starting = starting;
     const clearStarting = (): void => {
@@ -191,6 +207,7 @@ export class LocalInterviewTransportRuntime {
     } catch (error) {
       failures.push(error);
     }
+    this.orchestrator.requestCancellationForShutdown();
     // Begin closing voice HTTP admission without waiting for in-flight frame
     // handlers. Worker shutdown below must be able to cancel VAD/STT that an
     // accepted HTTP request is awaiting, otherwise server.close() could wait

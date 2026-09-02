@@ -13,8 +13,12 @@ import {
   type SessionWriter
 } from "../../../packages/interview-engine/src/index.js";
 
+export type TurnRecoveryDisposition = "COMPLETE" | "RETRYABLE" | "DEFERRED";
+
 export interface TurnRecoveryDelegate {
-  readonly recoverPendingTurns: (sessionId: SessionId) => Promise<void>;
+  readonly recoverPendingTurns: (
+    sessionId: SessionId
+  ) => Promise<TurnRecoveryDisposition>;
 }
 
 /**
@@ -23,6 +27,7 @@ export interface TurnRecoveryDelegate {
  */
 export class SessionRecoveryCoordinator {
   private readonly recoveries = new Map<SessionId, Promise<readonly DeliveryId[]>>();
+  private readonly retryableTurnRecoveries = new Set<SessionId>();
   private delegate: TurnRecoveryDelegate | undefined;
 
   public constructor(
@@ -116,6 +121,17 @@ export class SessionRecoveryCoordinator {
     return this.registry.getAsync(sessionId);
   }
 
+  public retryPendingTurnRecovery(
+    sessionId: SessionId
+  ): Promise<readonly DeliveryId[]> {
+    if (!this.retryableTurnRecoveries.has(sessionId)) {
+      return this.ensureRecovered(sessionId);
+    }
+    this.retryableTurnRecoveries.delete(sessionId);
+    this.recoveries.delete(sessionId);
+    return this.ensureRecovered(sessionId);
+  }
+
   public ensureRecovered(sessionId: SessionId): Promise<readonly DeliveryId[]> {
     if (!this.hasSession(sessionId)) {
       return Promise.reject(new Error("Session not found in authoritative event stream"));
@@ -128,7 +144,16 @@ export class SessionRecoveryCoordinator {
       const writer = await this.getWriterAsync(sessionId);
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.delegate !== undefined) {
-        await this.delegate.recoverPendingTurns(sessionId);
+        const disposition = await this.delegate.recoverPendingTurns(sessionId);
+        if (disposition === "DEFERRED") {
+          this.retryableTurnRecoveries.delete(sessionId);
+          throw new Error("Turn recovery was deferred during provider shutdown");
+        }
+        if (disposition === "RETRYABLE") {
+          this.retryableTurnRecoveries.add(sessionId);
+        } else {
+          this.retryableTurnRecoveries.delete(sessionId);
+        }
       }
       return deliveryIds;
     })();
