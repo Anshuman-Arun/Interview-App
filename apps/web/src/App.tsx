@@ -63,7 +63,7 @@ export const App: React.FC = () => {
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
     try {
-      const storedSessions = await session.fetchAvailableSessions();
+      const storedSessions = await session.fetchAvailableSessionsStrict();
       const existingActive = storedSessions.find(
         (storedSession) => storedSession.status === "ACTIVE"
       );
