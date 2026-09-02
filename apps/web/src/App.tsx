@@ -201,6 +201,28 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleResumePausedSession = async (): Promise<void> => {
+    if (
+      !session.isPaused
+      || session.sessionId === null
+      || sessionEntryPendingRef.current
+      || sessionTerminalPendingRef.current
+    ) {
+      return;
+    }
+    sessionEntryPendingRef.current = true;
+    setSessionEntryPending(true);
+    try {
+      await session.resumePausedSession();
+      navigate({ page: "interview" });
+    } catch {
+      // Error handled in session.error; the session remains safely paused.
+    } finally {
+      sessionEntryPendingRef.current = false;
+      setSessionEntryPending(false);
+    }
+  };
+
   const handleManualRecover = async (e: React.SyntheticEvent): Promise<void> => {
     e.preventDefault();
     if (
@@ -340,12 +362,34 @@ export const App: React.FC = () => {
     hasActiveInterview && session.sessionId !== null
       ? session.sessionId
       : storedActiveSession?.sessionId ?? null;
-  const displayRoute = routeForActiveInterview(route, hasActiveInterview);
+  const displayRoute = routeForActiveInterview(
+    route,
+    hasActiveInterview,
+    session.isPaused
+  );
 
   useEffect(() => {
-    if (!hasActiveInterview || route.page === "interview") return;
-    navigate({ page: "interview" }, { replace: true });
-  }, [hasActiveInterview, navigate, route.page]);
+    if (!hasActiveInterview) return;
+    if (route.page === "home" && !session.isPaused) {
+      session.pauseSession();
+      return;
+    }
+    if (session.isPaused) {
+      if (route.page !== "home" && route.page !== "interview") {
+        navigate({ page: "home" }, { replace: true });
+      }
+      return;
+    }
+    if (route.page !== "interview") {
+      navigate({ page: "interview" }, { replace: true });
+    }
+  }, [
+    hasActiveInterview,
+    navigate,
+    route.page,
+    session.isPaused,
+    session.pauseSession
+  ]);
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -381,7 +425,11 @@ export const App: React.FC = () => {
           void handleStartSession();
         }}
         onResume={(sessionId) => {
-          void handleRecoverSession(sessionId);
+          if (session.isPaused && session.sessionId === sessionId) {
+            void handleResumePausedSession();
+          } else {
+            void handleRecoverSession(sessionId);
+          }
         }}
         onReview={(sessionId, view, options) => {
           navigate(
@@ -431,9 +479,12 @@ export const App: React.FC = () => {
         <button
           type="button"
           className="app-header__identity"
-          disabled={hasActiveInterview}
-          onClick={() => navigateProductPage("home")}
-          aria-label={hasActiveInterview ? "Interview in progress" : "Open Home"}
+          disabled={sessionEntryPending || sessionTerminalPending}
+          onClick={() => {
+            if (hasActiveInterview) session.pauseSession();
+            navigateProductPage("home");
+          }}
+          aria-label={hasActiveInterview ? "Pause interview and open Home" : "Open Home"}
         >
           <BrandMark size={28} title="Interview" />
           <span className="app-header__identity-copy">
@@ -896,6 +947,7 @@ export const App: React.FC = () => {
               disabled={
                 !session.isSessionStarted
                 || session.sessionStatus !== "ACTIVE"
+                || session.isPaused
                 || sessionEntryPending
                 || sessionTerminalPending
               }
@@ -913,6 +965,7 @@ export const App: React.FC = () => {
               disabled={
                 !session.isSessionStarted
                 || session.sessionStatus !== "ACTIVE"
+                || session.isPaused
                 || sessionEntryPending
                 || sessionTerminalPending
               }
@@ -1008,6 +1061,7 @@ export const App: React.FC = () => {
                     readOnly={
                       !session.isSessionStarted
                       || session.sessionStatus !== "ACTIVE"
+                      || session.isPaused
                       || sessionEntryPending
                       || sessionTerminalPending
                       || session.whiteboardSync.status === "UNINITIALIZED"
