@@ -998,22 +998,22 @@ async function compileWindowsSupervisorAssembly(
     path.join(temporaryRoot, "interview-job-supervisor-")
   );
   const output = path.join(directory, "InterviewJobSupervisor.dll");
-  const compilerEnvironment = windowsSupervisorCompilerEnvironment(
-    environment,
-    temporaryRoot,
-    output
-  );
-  const args = [
-    "-NoLogo",
-    "-NoProfile",
-    "-NonInteractive",
-    "-Command",
-    "$ErrorActionPreference='Stop'; Add-Type -TypeDefinition $env:INTERVIEW_SUPERVISOR_SOURCE -Language CSharp -OutputAssembly $env:INTERVIEW_SUPERVISOR_OUTPUT -OutputType Library"
-  ];
-
   let child: ChildProcessWithoutNullStreams | undefined;
   let succeeded = false;
   try {
+    const compilerEnvironment = windowsSupervisorCompilerEnvironment(
+      environment,
+      temporaryRoot,
+      output
+    );
+    const args = [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "$ErrorActionPreference='Stop'; Add-Type -TypeDefinition $env:INTERVIEW_SUPERVISOR_SOURCE -Language CSharp -OutputAssembly $env:INTERVIEW_SUPERVISOR_OUTPUT -OutputType Library"
+    ];
+
     child = spawn(powershell, args, {
       env: compilerEnvironment,
       shell: false,
