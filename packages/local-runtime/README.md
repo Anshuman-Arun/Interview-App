@@ -72,12 +72,18 @@ On POSIX, each one-shot process receives its own process group. Cancellation esc
 group SIGTERM to SIGKILL, and a normally exiting root is followed by a residual process-group
 check so descendants cannot intentionally remain in that owned group.
 
-On Windows, cancellation uses the same absolute System32 `taskkill.exe /T` mechanism as the
-long-lived manager while the root process is alive. Node core still cannot prove descendant
-absence after a Windows root exits before tree-aware cleanup owns it; one-shot providers must
-therefore not intentionally daemonize or detach descendants. A provider requiring a stronger
-Windows guarantee must use a runtime with Job Object ownership rather than claiming this runner
-provides that guarantee.
+On Windows, one-shot executions are launched through an application-owned Windows PowerShell
+bootstrap that creates a kernel Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The
+provider image is opened read-only, checked against the application-pinned SHA-256, created
+suspended, assigned to the Job Object before it executes, and only then resumed. A
+`STARTUPINFOEX` handle list restricts inherited handles to stdin/stdout/stderr. Killing or
+crashing the bootstrap closes the sole Job handle and the kernel terminates remaining processes
+in that job, including descendants after the original provider root exits.
+
+The generic POSIX path still uses a dedicated process group and can verify ordinary residual
+members of that group, but it does not claim kernel ownership of descendants that deliberately
+escape into another session. The concrete supervised Antigravity runtime therefore remains
+Windows-only until an equivalently strong non-Windows containment owner is available.
 
 The one-shot boundary is non-authoritative. It does not parse provider semantics, own interview
 state, or decide billing/data-use policy.
