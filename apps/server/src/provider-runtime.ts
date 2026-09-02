@@ -1,4 +1,5 @@
 import process from "node:process";
+import { types as utilTypes } from "node:util";
 import {
   DataUsePolicySchema,
   type InterviewerProposal,
@@ -249,6 +250,9 @@ function captureRuntimeSourceOperation(
     | "POLICY_RESOLUTION_FAILED"
 ): CapturedRuntimeSourceOperation | undefined {
   if (source === undefined) return undefined;
+  if (utilTypes.isProxy(source)) {
+    throw new ProviderRuntimeResolutionError(errorCode);
+  }
 
   let current: object | null = source;
   for (let depth = 0; depth < 16 && current !== null; depth += 1) {
@@ -405,7 +409,12 @@ function inspectPlainOwnDataRecord(
   allowedKeys: ReadonlySet<string>,
   errorCode: ProviderRuntimeResolutionErrorCode
 ): Readonly<Record<string, PropertyDescriptor>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
     throw new ProviderRuntimeResolutionError(errorCode);
   }
 
