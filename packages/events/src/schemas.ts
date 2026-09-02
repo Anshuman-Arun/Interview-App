@@ -533,7 +533,13 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
     action: QuantResearchActionEventSchema
   }).strict()),
   event("QUANT_RESEARCH_SCENARIO_COMPLETED", z.object({
-    result: QuantResearchResultEventSchema
+    result: QuantResearchResultEventSchema.refine(
+      (result) => result.status === "COMPLETE",
+      {
+        path: ["status"],
+        message: "Quant Research completion event requires a complete result"
+      }
+    )
   }).strict()),
   event("UTTERANCE_STARTED", z.object({ utteranceId: UtteranceIdSchema }).strict()),
   event("UTTERANCE_DISCARDED", z.object({ utteranceId: UtteranceIdSchema, reason: z.string().min(1) }).strict()),
