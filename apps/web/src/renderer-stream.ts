@@ -39,6 +39,8 @@ export async function consumeAuthenticatedRendererStream(
   renderer: RendererClient
 ): Promise<void> {
   const fetchImpl = options.authenticatedFetch;
+  const streamUrl = exactLoopbackEndpoint(options.streamUrl, "/v1/renderer-stream", "Renderer stream");
+  const signal = options.signal;
   const attach = RendererStreamAttachRequestSchema.parse({
     protocolVersion: 1,
     type: "ATTACH_RENDERER_STREAM",
@@ -53,13 +55,13 @@ export async function consumeAuthenticatedRendererStream(
     },
     body: JSON.stringify(attach)
   };
-  if (options.signal !== undefined) requestInit.signal = options.signal;
+  if (signal !== undefined) requestInit.signal = signal;
 
   let response: Response;
   try {
-    response = await fetchImpl(options.streamUrl, requestInit);
+    response = await fetchImpl(streamUrl, requestInit);
   } catch (error) {
-    if (isSignalAborted(options.signal)) return;
+    if (isSignalAborted(signal)) return;
     throw error;
   }
 
@@ -69,13 +71,13 @@ export async function consumeAuthenticatedRendererStream(
   if (response.body === null) throw new Error("Renderer stream response has no body");
 
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   let buffer = "";
 
   try {
     for (;;) {
       const chunk = await reader.read();
-      if (isSignalAborted(options.signal)) return;
+      if (isSignalAborted(signal)) return;
       if (chunk.done) break;
       buffer += decoder.decode(chunk.value, { stream: true });
       if (byteLength(buffer) > MAX_RENDERER_STREAM_MESSAGE_BYTES * 2) {
@@ -86,9 +88,9 @@ export async function consumeAuthenticatedRendererStream(
       while (boundary !== undefined) {
         const block = buffer.slice(0, boundary.index);
         buffer = buffer.slice(boundary.index + boundary.length);
-        if (isSignalAborted(options.signal)) return;
+        if (isSignalAborted(signal)) return;
         if (block.length > 0) await handleSseBlock(block, renderer);
-        if (isSignalAborted(options.signal)) return;
+        if (isSignalAborted(signal)) return;
         boundary = findEventBoundary(buffer);
       }
     }
@@ -98,7 +100,7 @@ export async function consumeAuthenticatedRendererStream(
       throw new Error("Renderer stream ended with an incomplete event");
     }
   } catch (error) {
-    if (isSignalAborted(options.signal)) return;
+    if (isSignalAborted(signal)) return;
     if (error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted") || error.message.includes("terminated"))) {
       return;
     }
@@ -121,6 +123,7 @@ export function createLoopbackAcknowledgementSender(
   options: LoopbackAcknowledgementSenderOptions
 ): RendererAcknowledgementSender {
   const fetchImpl = options.authenticatedFetch;
+  const commandUrl = exactLoopbackEndpoint(options.commandUrl, "/v1/commands", "Renderer acknowledgement");
 
   return {
     send: async (input: RendererAcknowledgementCommand): Promise<void> => {
@@ -133,7 +136,7 @@ export function createLoopbackAcknowledgementSender(
       }, RENDERER_ACK_TIMEOUT_MS);
       let responseJson: unknown;
       try {
-        const response = await fetchImpl(options.commandUrl, {
+        const response = await fetchImpl(commandUrl, {
           method: "POST",
           headers: {
             "content-type": "application/json"
@@ -142,6 +145,10 @@ export function createLoopbackAcknowledgementSender(
           signal: controller.signal
         });
         if (!response.ok) throw new Error("Renderer acknowledgement was not accepted");
+        const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+        if (contentType !== "application/json") {
+          throw new Error("Renderer acknowledgement response had an invalid content type");
+        }
         const responseText = await readBoundedUtf8Response(
           response,
           MAX_RENDERER_ACK_RESPONSE_BYTES,
@@ -181,14 +188,20 @@ async function readBoundedUtf8Response(
   label: string
 ): Promise<string> {
   const declared = response.headers.get("content-length");
+  let declaredBytes: number | undefined;
   if (declared !== null) {
-    if (!/^(?:0|[1-9][0-9]*)$/u.test(declared)) {
+    if (
+      declared.length === 0
+      || declared.length > 16
+      || !/^(?:0|[1-9][0-9]*)$/u.test(declared)
+    ) {
       throw new Error(`${label} declared size is malformed`);
     }
     const parsed = Number(declared);
     if (!Number.isSafeInteger(parsed) || parsed > maximumBytes) {
       throw new Error(`${label} declared size exceeds its bound`);
     }
+    declaredBytes = parsed;
   }
   if (response.body === null) throw new Error(`${label} has no body`);
 
@@ -210,6 +223,9 @@ async function readBoundedUtf8Response(
       text += decoder.decode(result.value, { stream: true });
     }
     text += decoder.decode();
+    if (declaredBytes !== undefined && totalBytes !== declaredBytes) {
+      throw new Error(`${label} body length does not match Content-Length`);
+    }
   } catch (error) {
     if (error instanceof TypeError) {
       throw new Error(`${label} was not valid UTF-8`, { cause: error });
@@ -272,6 +288,34 @@ function findEventBoundary(buffer: string): { readonly index: number; readonly l
   return lf < crlf
     ? { index: lf, length: 2 }
     : { index: crlf, length: 4 };
+}
+
+function exactLoopbackEndpoint(
+  value: string,
+  expectedPath: string,
+  label: string
+): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2_048) {
+    throw new Error(`${label} URL must be a bounded string`);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch (error) {
+    throw new Error(`${label} URL is invalid`, { cause: error });
+  }
+  if (
+    parsed.protocol !== "http:"
+    || (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "[::1]")
+    || parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.pathname !== expectedPath
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+  ) {
+    throw new Error(`${label} URL must be an exact HTTP loopback endpoint`);
+  }
+  return parsed.toString();
 }
 
 function byteLength(value: string): number {
