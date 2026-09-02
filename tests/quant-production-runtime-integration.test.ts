@@ -894,7 +894,7 @@ describe("adversarial quant lifecycle invariants", () => {
 });
 
 describe("production quant start seed lifecycle", () => {
-  it("does not invoke the seed source again for an idempotent Trading start retry", async () => {
+  it("invokes the Trading seed source exactly once across concurrent duplicate starts", async () => {
     const store = new SqliteEventStore(":memory:");
     const sessionId = newSessionId();
     const writer = SessionWriter.open(store, sessionId);
@@ -913,7 +913,10 @@ describe("production quant start seed lifecycle", () => {
     });
 
     try {
-      await runtime.startConfigured(writer, composition, envelope);
+      await Promise.all([
+        runtime.startConfigured(writer, composition, envelope),
+        runtime.startConfigured(writer, composition, envelope)
+      ]);
       expect(seedCalls).toBe(1);
       const persistedSeed = writer.getState().quantTrading?.definition.seed;
       expect(persistedSeed).toBe(123_456);
@@ -921,6 +924,71 @@ describe("production quant start seed lifecycle", () => {
       await runtime.startConfigured(writer, composition, envelope);
       expect(seedCalls).toBe(1);
       expect(writer.getState().quantTrading?.definition.seed).toBe(persistedSeed);
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
+  it("does not consume another seed for a losing concurrent start with a different RequestId", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    let seedCalls = 0;
+    const runtime = new ProductionSessionRuntime({
+      seedSource: () => {
+        seedCalls += 1;
+        return 456_789;
+      }
+    });
+    const composition = resolveInterviewSessionConfiguration(tradingConfiguration());
+    try {
+      const outcomes = await Promise.allSettled([
+        runtime.startConfigured(writer, composition, createCommandEnvelope({
+          sessionId,
+          requestId: newRequestId(),
+          producer: "quant-runtime-test"
+        })),
+        runtime.startConfigured(writer, composition, createCommandEnvelope({
+          sessionId,
+          requestId: newRequestId(),
+          producer: "quant-runtime-test"
+        }))
+      ]);
+      expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.status === "rejected")).toHaveLength(1);
+      expect(seedCalls).toBe(1);
+      expect(writer.getState().quantTrading?.definition.seed).toBe(456_789);
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
+  it("invokes the Research seed source exactly once across concurrent duplicate starts", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    let seedCalls = 0;
+    const runtime = new ProductionSessionRuntime({
+      seedSource: () => {
+        seedCalls += 1;
+        return 42;
+      }
+    });
+    const composition = resolveInterviewSessionConfiguration(researchConfiguration());
+    const envelope = createCommandEnvelope({
+      sessionId,
+      requestId: newRequestId(),
+      producer: "quant-runtime-test"
+    });
+    try {
+      await Promise.all([
+        runtime.startConfigured(writer, composition, envelope),
+        runtime.startConfigured(writer, composition, envelope)
+      ]);
+      expect(seedCalls).toBe(1);
+      expect(writer.getState().quantResearch?.definition.seed).toEqual(expect.any(Number));
     } finally {
       await writer.close();
       store.close();
