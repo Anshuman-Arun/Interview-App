@@ -15,7 +15,9 @@ import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   ANTIGRAVITY_CLI_MODEL_ID,
   ANTIGRAVITY_CLI_PROVIDER_ID,
-  type ProviderSecretResolver
+  type ProviderSecretResolver,
+  type SupervisedCliExecutionRequest,
+  type SupervisedCliExecutionResult
 } from "../packages/providers/src/index.js";
 import {
   LocalInterviewTransportRuntime,
@@ -260,6 +262,69 @@ describe("production provider runtime resolution", () => {
       expect(aborted).toBe(true);
       expect(Object.values(writer.getState().generations)).toEqual([
         expect.objectContaining({ provider: "gemini-api", status: "SUPERSEDED" })
+      ]);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("graceful shutdown interrupts active Antigravity local execution and supersedes its generation", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const registry = new SessionRuntimeRegistry(store);
+    let executionEntered: (() => void) | undefined;
+    const entered = new Promise<void>((resolve) => {
+      executionEntered = resolve;
+    });
+    let aborted = false;
+    const providerRuntimeResolver = antigravityResolver(async (request) => {
+      request.onProcessStart();
+      executionEntered?.();
+      return await new Promise<SupervisedCliExecutionResult>((_resolve, reject) => {
+        const onAbort = (): void => {
+          aborted = true;
+          reject(new Error("supervised execution cancelled"));
+        };
+        if (request.signal.aborted) {
+          onAbort();
+          return;
+        }
+        request.signal.addEventListener("abort", onAbort, { once: true });
+      });
+    });
+    const runtime = new LocalInterviewTransportRuntime({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: new Set(["http://127.0.0.1:5173"]),
+        clientToken: "antigravity-runtime-active-shutdown-token-long-enough"
+      },
+      registry,
+      store,
+      providerRuntimeResolver
+    });
+
+    try {
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const committed = await startConfiguredTurnForWriter(
+        writer,
+        ANTIGRAVITY_SELECTION
+      );
+      const orchestration = runtime.orchestrator.orchestrateTurn({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+
+      await entered;
+      await expect(runtime.stop()).resolves.toBeUndefined();
+      await expect(orchestration).resolves.toBeUndefined();
+      expect(aborted).toBe(true);
+      expect(Object.values(writer.getState().generations)).toEqual([
+        expect.objectContaining({
+          provider: ANTIGRAVITY_CLI_PROVIDER_ID,
+          status: "SUPERSEDED"
+        })
       ]);
     } finally {
       store.close();
@@ -1060,6 +1125,86 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("retries Antigravity recovery only explicitly after the supervised runtime becomes available", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    let registry = new SessionRuntimeRegistry(store);
+    try {
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      await turns.startConfiguredSession({
+        configuration: configuredOxford(ANTIGRAVITY_SELECTION),
+        problem: sixPeopleProblem
+      });
+      const committed = await turns.commitInput(STUDENT_TEXT);
+      const request = await turns.selectAction(committed.turnId, sixPeopleProblem);
+      const proposal = realizeProblemInterviewerProposal(
+        sixPeopleProblem,
+        STUDENT_TEXT,
+        request
+      );
+
+      await registry.closeAll();
+      registry = new SessionRuntimeRegistry(store);
+      const sessions = new SessionRecoveryCoordinator(registry, store);
+      let runtimeAvailable = false;
+      let executeCalls = 0;
+      const resolver = antigravityResolver(async (executionRequest) => {
+        executeCalls += 1;
+        executionRequest.onProcessStart();
+        if (!runtimeAvailable) {
+          throw new Error("supervised runtime unavailable");
+        }
+        const stdout = createAntigravityResponse(proposal);
+        return {
+          exitCode: 0,
+          stdout,
+          stdoutBytes: new TextEncoder().encode(stdout).byteLength,
+          stderrBytes: 0
+        };
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+      sessions.setTurnRecoveryDelegate(orchestrator);
+
+      await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+      expect(executeCalls).toBe(1);
+      expect(Object.values(sessions.getWriter(sessionId).getState().generations))
+        .toEqual([
+          expect.objectContaining({
+            provider: ANTIGRAVITY_CLI_PROVIDER_ID,
+            status: "SUPERSEDED"
+          })
+        ]);
+
+      runtimeAvailable = true;
+      await expect(sessions.ensureRecovered(sessionId)).resolves.toEqual([]);
+      expect(executeCalls).toBe(1);
+
+      await expect(sessions.retryPendingTurnRecovery(sessionId)).resolves.toEqual([]);
+      expect(executeCalls).toBe(2);
+      const recovered = sessions.getWriter(sessionId).getState();
+      expect(recovered.configuration?.providerSelection)
+        .toEqual(ANTIGRAVITY_SELECTION);
+      expect(Object.values(recovered.generations).filter(
+        (generation) => generation.provider === ANTIGRAVITY_CLI_PROVIDER_ID
+      )).toEqual([
+        expect.objectContaining({ status: "SUPERSEDED" }),
+        expect.objectContaining({ status: "VALIDATED" })
+      ]);
+      expect(Object.values(recovered.generations).some(
+        (generation) => generation.provider === "mock-model"
+      )).toBe(false);
+    } finally {
+      await registry.closeAll();
+      store.close();
+    }
+  });
+
   it("retries restart recovery after a provider stream crash without persisting raw provider errors", async () => {
     const store = new SqliteEventStore(":memory:");
     const sessionId = newSessionId();
@@ -1402,6 +1547,43 @@ function credentialReferenceSource() {
       };
     }
   };
+}
+
+function antigravityResolver(
+  execute: (
+    request: SupervisedCliExecutionRequest
+  ) => Promise<SupervisedCliExecutionResult>
+): ProviderRuntimeResolver {
+  return new ProviderRuntimeResolver({
+    adapterRuntimeSource: {
+      resolveRuntime(selection) {
+        if (
+          selection.providerId !== ANTIGRAVITY_SELECTION.providerId
+          || selection.modelId !== ANTIGRAVITY_SELECTION.modelId
+        ) {
+          return undefined;
+        }
+        return {
+          executor: Object.freeze({ execute })
+        };
+      }
+    },
+    policySource: {
+      resolvePolicy(selection) {
+        return selection.providerId === ANTIGRAVITY_SELECTION.providerId
+          ? {
+              allowMeteredUsage: true,
+              maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT" as const,
+              billingVerificationMaxAgeMs: 60_000
+            }
+          : {
+              allowMeteredUsage: false,
+              maximumDataUse: "LOCAL_ONLY" as const,
+              billingVerificationMaxAgeMs: 60_000
+            };
+      }
+    }
+  });
 }
 
 function geminiResolver(input: {
