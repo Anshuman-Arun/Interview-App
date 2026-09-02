@@ -73,14 +73,13 @@ export class ServerTurnOrchestrator {
   }
 
   /**
-   * Reconciles physical provider execution with authoritative generation state.
-   * Voice/whiteboard integrations may call this immediately after authoritative
-   * invalidation so a superseded remote request is aborted rather than merely
-   * prevented from delivering late output.
+   * Requests physical provider cancellation after authoritative invalidation.
+   * This never waits for a fallible provider to acknowledge cancellation, so
+   * new authoritative work cannot be blocked by an uncooperative remote.
    */
-  public async cancelSupersededGenerations(
+  public requestCancellationForSupersededGenerations(
     sessionId: SessionId
-  ): Promise<void> {
+  ): void {
     const writer = this.sessions.getWriter(sessionId);
     const state = writer.getState();
     const records = Array.from(this.activeProviderExecutions.values())
@@ -95,7 +94,7 @@ export class ServerTurnOrchestrator {
       ) {
         continue;
       }
-      await record.coordinator.cancelGeneration(
+      void record.coordinator.cancelGeneration(
         record.generationId,
         "Authoritative state superseded provider execution"
       ).catch(() => undefined);
@@ -171,7 +170,7 @@ export class ServerTurnOrchestrator {
     // A new authoritative turn normally arrives after commitInput has already
     // superseded old generations. Reconcile physical execution before starting
     // more provider work.
-    await this.cancelSupersededGenerations(input.sessionId);
+    this.requestCancellationForSupersededGenerations(input.sessionId);
 
     const key = `${input.sessionId}:${input.turnId}`;
     const existing = this.inFlight.get(key);
@@ -282,7 +281,7 @@ export class ServerTurnOrchestrator {
     try {
       // Close the race where authoritative invalidation happens between
       // startGeneration and registration in activeProviderExecutions.
-      await this.cancelExecutionIfSuperseded(activeRecord);
+      this.requestCancellationIfSuperseded(activeRecord);
 
       const outcome = await execution.completion;
       if (outcome.status === "FAILED") {
@@ -321,9 +320,9 @@ export class ServerTurnOrchestrator {
     }
   }
 
-  private async cancelExecutionIfSuperseded(
+  private requestCancellationIfSuperseded(
     record: ActiveProviderExecution
-  ): Promise<void> {
+  ): void {
     const writer = this.sessions.getWriter(record.sessionId);
     const status = writer.getState().generations[record.generationId]?.status;
     if (
@@ -333,7 +332,7 @@ export class ServerTurnOrchestrator {
     ) {
       return;
     }
-    await record.coordinator.cancelGeneration(
+    void record.coordinator.cancelGeneration(
       record.generationId,
       "Authoritative state superseded provider execution"
     ).catch(() => undefined);
