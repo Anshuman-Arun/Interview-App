@@ -26,6 +26,7 @@ export function installDesktopClientTokenInjector(
   input: {
     readonly commandUrl: string;
     readonly rendererStreamUrl: string;
+    readonly voiceBaseUrl: string;
     readonly clientToken: string;
     readonly webContentsId: number;
     readonly getTrustedMainFrame: () => object | null;
@@ -50,10 +51,12 @@ export function installDesktopClientTokenInjector(
     input.rendererStreamUrl,
     "/v1/renderer-stream"
   );
+  const voiceOrigin = exactDesktopOrigin(input.voiceBaseUrl);
   const endpoints = new Set([commandUrl, rendererStreamUrl]);
   const commandOrigin = new URL(commandUrl).origin;
   const filterOrigins = [...new Set(
     [...endpoints].map((endpoint) => `${new URL(endpoint).origin}/*`)
+      .concat([`${voiceOrigin}/*`])
   )];
 
   const listener = (
@@ -69,7 +72,8 @@ export function installDesktopClientTokenInjector(
         details.method,
         details.url,
         endpoints,
-        commandOrigin
+        commandOrigin,
+        voiceOrigin
       )
       || !hasExactSingleHeaderValue(
         details.requestHeaders,
@@ -159,11 +163,15 @@ function isAllowedBackendRequest(
   method: string,
   url: string,
   postEndpoints: ReadonlySet<string>,
-  commandOrigin: string
+  commandOrigin: string,
+  voiceOrigin: string
 ): boolean {
-  if (method === "POST") return postEndpoints.has(url);
+  if (method === "POST") {
+    return postEndpoints.has(url) || isExactVoicePostEndpoint(url, voiceOrigin);
+  }
   if (method !== "GET") return false;
-  return isExactSessionReadEndpoint(url, commandOrigin);
+  return isExactSessionReadEndpoint(url, commandOrigin)
+    || isExactVoiceAudioEndpoint(url, voiceOrigin);
 }
 
 function isExactSessionReadEndpoint(value: string, commandOrigin: string): boolean {
@@ -212,4 +220,65 @@ function containsUnsafeReadPathCharacter(value: string): boolean {
     }
   }
   return false;
+}
+
+function exactDesktopOrigin(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Desktop token injection origin must be a valid URL");
+  }
+  if (
+    parsed.protocol !== "http:"
+    || (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "[::1]")
+    || parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.pathname !== "/"
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+  ) {
+    throw new Error("Desktop token injection origin must be an exact HTTP loopback origin");
+  }
+  return parsed.origin;
+}
+
+function isExactVoicePostEndpoint(value: string, voiceOrigin: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  return parsed.origin === voiceOrigin
+    && parsed.username.length === 0
+    && parsed.password.length === 0
+    && parsed.search.length === 0
+    && parsed.hash.length === 0
+    && (
+      parsed.pathname === "/v1/voice/streams"
+      || parsed.pathname === "/v1/voice/frames"
+      || parsed.pathname === "/v1/voice/flush"
+      || parsed.pathname === "/v1/voice/cancel"
+    );
+}
+
+function isExactVoiceAudioEndpoint(value: string, voiceOrigin: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (
+    parsed.origin !== voiceOrigin
+    || parsed.username.length > 0
+    || parsed.password.length > 0
+    || parsed.search.length > 0
+    || parsed.hash.length > 0
+  ) {
+    return false;
+  }
+  const match = /^\/v1\/voice\/audio\/(audio_v1_[0-9a-f]{64})$/u.exec(parsed.pathname);
+  return match !== null;
 }
