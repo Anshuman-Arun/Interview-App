@@ -6,10 +6,10 @@
 
 .expressive-review__hero {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) minmax(180px, 330px);
+  grid-template-columns: 110px minmax(0, 1fr);
   gap: 22px;
   align-items: start;
-  padding: 20px 0 30px;
+  padding: 16px 0 22px;
   border-top: 1px solid var(--border-default);
   border-bottom: 1px solid var(--border-default);
 }
@@ -24,28 +24,17 @@
   font: 570 8.5px/1.4 var(--font-ui);
 }
 
-.expressive-review__hero span {
-  color: var(--accent);
-  font: 650 7px/1 var(--font-mono);
-  letter-spacing: 0.08em;
-}
-
 .expressive-review__hero h2 {
-  max-width: 18ch;
-  margin: 8px 0 0;
+  margin: 0;
   color: var(--text-primary);
-  font: 650 29px/1.03 var(--font-display);
-  letter-spacing: -0.045em;
+  font: 650 25px/1.05 var(--font-display);
+  letter-spacing: -0.035em;
 }
 
-.expressive-review__hero code {
-  justify-self: end;
-  max-width: 100%;
-  overflow: hidden;
+.expressive-review__hero p {
+  margin: 5px 0 0;
   color: var(--text-muted);
-  font: 450 7.5px/1.4 var(--font-mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font: 500 9px/1.45 var(--font-ui);
 }
 
 .expressive-review__tabs {
@@ -66,10 +55,6 @@
   color: var(--text-muted);
   cursor: pointer;
   font: 590 9px/1 var(--font-ui);
-}
-
-.expressive-review__tabs button span {
-  font: 500 7px/1 var(--font-mono);
 }
 
 .expressive-review__tabs button[aria-selected="true"] {
@@ -95,9 +80,6 @@
     grid-template-columns: 1fr;
   }
 
-  .expressive-review__hero code {
-    justify-self: start;
-  }
 }
 
 
