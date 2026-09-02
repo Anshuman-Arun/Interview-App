@@ -94,7 +94,7 @@ describe("provider control plane registry", () => {
     registry.register(GEMINI_API_PROVIDER_DEFINITION);
 
     expect(registry.enumerateProviders().map((provider) => provider.id))
-      .toEqual(["gemini-api", "mock-model"]);
+      .toEqual(["antigravity-cli", "gemini-api", "mock-model"]);
     expect(registry.enumerateModels("gemini-api").map((model) => model.id))
       .toEqual(["gemini-2.5-flash"]);
     expect(registry.getModel("mock-model", "mock-default").displayName)
