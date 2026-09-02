@@ -132,6 +132,29 @@ export const AuthoritativeStudentShapeSchema = z.object({
 });
 export type AuthoritativeStudentShape = z.infer<typeof AuthoritativeStudentShapeSchema>;
 
+export function authoritativeBoardShapeCanonicalJson(
+  input: AuthoritativeStudentShape
+): string {
+  const shape = AuthoritativeStudentShapeSchema.parse(input);
+  return JSON.stringify({
+    id: shape.id,
+    type: shape.type,
+    bounds: {
+      x: shape.bounds.x,
+      y: shape.bounds.y,
+      width: shape.bounds.width,
+      height: shape.bounds.height
+    },
+    points: shape.points === undefined
+      ? null
+      : shape.points.map((point) => ({ x: point.x, y: point.y })),
+    text: shape.text ?? null,
+    revision: shape.revision,
+    createdAt: shape.createdAt,
+    lastModifiedAt: shape.lastModifiedAt
+  });
+}
+
 export const NormalizedBoardMutationSchema = z.object({
   baseBoardRevision: BoardRevisionSchema.refine(Number.isSafeInteger, {
     message: "Board mutation basis must be a safe integer"
