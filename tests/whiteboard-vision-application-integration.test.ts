@@ -467,6 +467,145 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
+  it("coalesces concurrent identical snapshot requests into one backend execution", async () => {
+    const harness = await startedBoardSession();
+    const fake = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "One shared inference.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const started = deferred<undefined>();
+    const release = deferred<undefined>();
+    const backend: VisionInferenceBackend = {
+      provenance: fake.provenance,
+      analyze: async (request) => {
+        started.resolve(undefined);
+        await release.promise;
+        return fake.analyze(request, { signal: new AbortController().signal });
+      }
+    };
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      const first = coordinator.process(request);
+      await started.promise;
+      const duplicate = coordinator.process(request);
+      release.resolve(undefined);
+
+      const [firstResult, duplicateResult] = await Promise.all([first, duplicate]);
+      expect(duplicateResult).toEqual(firstResult);
+      expect(firstResult.status).toBe("ACCEPTED");
+      expect(fake.analyzeCallCount).toBe(1);
+      expect(harness.writer.getState().visionRequests[request.requestId]?.status)
+        .toBe("ACCEPTED");
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("replays a durable accepted outcome after coordinator restart without requiring a backend", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "Durable accepted graph observation.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const request = upload(harness.sessionId);
+    const firstCoordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend
+    });
+
+    try {
+      const first = await firstCoordinator.process(request);
+      expect(first.status).toBe("ACCEPTED");
+      expect(backend.analyzeCallCount).toBe(1);
+      firstCoordinator.shutdown();
+
+      await harness.turns.commitBoardMutation({
+        baseBoardRevision: BoardRevisionSchema.parse(1),
+        added: [{
+          id: "shape:later-unrelated",
+          type: "rectangle",
+          bounds: { x: 500, y: 500, width: 20, height: 20 },
+          revision: 1,
+          createdAt: 1,
+          lastModifiedAt: 1
+        }],
+        updated: [],
+        deleted: []
+      });
+
+      const restarted = new WhiteboardVisionCoordinator({
+        sessions: harness.sessions
+      });
+      try {
+        const replay = await restarted.process(request);
+        expect(replay).toEqual(first);
+        expect(backend.analyzeCallCount).toBe(1);
+
+        const conflict = await restarted.process({
+          ...request,
+          snapshotId: "snapshot-conflicting-after-restart"
+        });
+        expect(conflict).toMatchObject({
+          status: "REJECTED",
+          reason: "CONFLICTING_REQUEST_ID"
+        });
+
+        const replayAgain = await restarted.process(request);
+        expect(replayAgain).toEqual(first);
+      } finally {
+        restarted.shutdown();
+      }
+    } finally {
+      firstCoordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("treats a throwing vision evidence interpreter as no evidence without losing an accepted observation", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "Observation remains authoritative even if interpretation policy fails.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      evidenceInterpreter: {
+        propose: () => {
+          throw new Error("malicious evidence interpreter");
+        }
+      }
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      const result = await coordinator.process(request);
+      expect(result).toMatchObject({
+        status: "ACCEPTED",
+        observationCount: 1,
+        evidenceCommittedCount: 0
+      });
+      expect(harness.writer.getState().visionRequests[request.requestId]?.status)
+        .toBe("ACCEPTED");
+      expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
   it("keeps the first request-ID tombstone immutable when a conflicting duplicate arrives", async () => {
     const harness = await startedBoardSession();
     const backend = new DeterministicFakeVisionBackend([{
