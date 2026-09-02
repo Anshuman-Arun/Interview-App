@@ -719,6 +719,7 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.completeSession(sessionId, summary);
+        resetBoardSync();
         setSessionStatus("COMPLETED");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to complete session";
@@ -726,7 +727,7 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, getCommandClient]
+    [sessionId, getCommandClient, resetBoardSync]
   );
 
   const archiveSession = useCallback(
@@ -736,6 +737,7 @@ export function useInterviewSession(
       try {
         const client = getCommandClient();
         await client.archiveSession(sessionId, reason);
+        resetBoardSync();
         setSessionStatus("ARCHIVED");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to archive session";
@@ -743,7 +745,7 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, getCommandClient]
+    [sessionId, getCommandClient, resetBoardSync]
   );
 
   const submitTypedInput = useCallback(
