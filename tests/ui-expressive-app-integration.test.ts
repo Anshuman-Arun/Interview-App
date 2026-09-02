@@ -234,10 +234,24 @@ describe("expressive product integration invariants", () => {
       app.indexOf("const handleArchiveSession")
     );
 
+    const hook = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/hooks/useInterviewSession.ts"),
+      "utf8"
+    );
+    const hookComplete = hook.slice(
+      hook.indexOf("const completeSession = useCallback"),
+      hook.indexOf("const archiveSession = useCallback")
+    );
+
     expect(complete.indexOf("whiteboardAdapter.setReadOnly(true)"))
       .toBeGreaterThan(-1);
     expect(complete.indexOf("whiteboardAdapter.setReadOnly(true)"))
-      .toBeLessThan(complete.indexOf("await session.voiceControls.disableMicrophone()"));
+      .toBeLessThan(complete.indexOf("await session.completeSession()"));
+    expect(hookComplete.indexOf("stopRendererTransport()"))
+      .toBeGreaterThan(-1);
+    expect(hookComplete.indexOf("stopRendererTransport()"))
+      .toBeLessThan(hookComplete.indexOf("await client.completeSession"));
+    expect(hookComplete).toContain("voiceControls.disableMicrophone()");
     expect(app).toContain("retryDisabled={sessionEntryPending || sessionTerminalPending}");
     expect(app).toContain("|| sessionTerminalPending");
   });
