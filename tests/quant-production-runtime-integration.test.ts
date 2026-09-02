@@ -555,7 +555,15 @@ describe("production quant runtime integration", () => {
         requestId: newRequestId(),
         sessionId,
         expectedRound: initial.currentRound,
-        action: { type: "PASS" }
+        action: {
+          type: "QUOTE",
+          quote: {
+            bidPrice: initial.fairValue - 1,
+            bidSize: 1,
+            askPrice: initial.fairValue + 1,
+            askSize: 1
+          }
+        }
       })
     ]);
     const decoded = await Promise.all(responses.map(async (response) => ({
@@ -577,6 +585,7 @@ describe("production quant runtime integration", () => {
     ).state.currentRound).toBe(2);
     expect(store.load(sessionId).filter((event) => event.type === "QUANT_TRADING_ACTION_ACCEPTED"))
       .toHaveLength(1);
+    expect(registry.get(sessionId).getState().quantTrading?.rounds).toHaveLength(1);
   });
 
   it("routes Quant Research structured actions through the existing deterministic coordinator with mode isolation", async () => {
@@ -756,59 +765,6 @@ describe("production quant runtime integration", () => {
       await responseJson(await post(terminalCommand))
     ).state).toEqual(completed);
     expect(store.eventCount(researchSession)).toBe(terminalEventCount);
-  });
-
-  it("admits only one of two simultaneous Trading actions bound to the same round", async () => {
-    const sessionId = newSessionId();
-    await expectStatus(postStart(sessionId, tradingConfiguration()), 200);
-    const initial = QuantTradingStateResponseSchema.parse(
-      await responseJson(await getQuantState(sessionId))
-    ).state;
-
-    const responses = await Promise.all([
-      post({
-        protocolVersion: 1,
-        type: "SUBMIT_QUANT_TRADING_ACTION",
-        requestId: newRequestId(),
-        sessionId,
-        expectedRound: initial.currentRound,
-        action: { type: "PASS" }
-      }),
-      post({
-        protocolVersion: 1,
-        type: "SUBMIT_QUANT_TRADING_ACTION",
-        requestId: newRequestId(),
-        sessionId,
-        expectedRound: initial.currentRound,
-        action: {
-          type: "QUOTE",
-          quote: {
-            bidPrice: initial.fairValue - 1,
-            bidSize: 1,
-            askPrice: initial.fairValue + 1,
-            askSize: 1
-          }
-        }
-      })
-    ]);
-    const decoded = await Promise.all(responses.map(async (response) => ({
-      status: response.status,
-      body: await responseJson(response)
-    })));
-    expect(decoded.map((item) => item.status).sort((left, right) => left - right))
-      .toEqual([200, 409]);
-
-    const success = decoded.find((item) => item.status === 200);
-    const conflict = decoded.find((item) => item.status === 409);
-    if (success === undefined || conflict === undefined) {
-      throw new Error("Expected one admitted Trading action and one stale conflict");
-    }
-    expect(QuantTradingStateResponseSchema.parse(success.body).state.currentRound).toBe(2);
-    expect(ProtocolErrorResponseSchema.parse(conflict.body).error.code).toBe("CONFLICT");
-    expect(registry.get(sessionId).getState().quantTrading?.rounds).toHaveLength(1);
-    expect(QuantTradingStateResponseSchema.parse(
-      await responseJson(await getQuantState(sessionId))
-    ).state.currentRound).toBe(2);
   });
 
   it("admits only one of two simultaneous Research actions bound to the same progress", async () => {
