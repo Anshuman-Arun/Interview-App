@@ -1069,6 +1069,19 @@ describe("interview session transition authority", () => {
           shapeRevisions: []
         });
       }
+      if (command.type === "ARCHIVE_SESSION") {
+        if (command.sessionId !== firstSession) {
+          throw new Error("Only the first session should be archived in this test");
+        }
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_ARCHIVED",
+          sessionId: firstSession,
+          archivedAt: "2026-09-02T15:10:00.000Z"
+        });
+      }
       if (command.type === "COMMIT_BOARD_MUTATION") {
         if (command.sessionId !== firstSession) {
           throw new Error("Only the first session mutation should be deferred");
@@ -1120,6 +1133,15 @@ describe("interview session transition authority", () => {
       await mutationSeen;
     });
     expect(rendered.current().whiteboardSync.status).toBe("PENDING");
+    if (pendingMutation === undefined) {
+      throw new Error("First-session board mutation promise was not created");
+    }
+    const settledMutation = pendingMutation.catch(() => undefined);
+
+    await act(async () => {
+      await rendered.current().archiveSession();
+    });
+    expect(rendered.current().sessionStatus).toBe("ARCHIVED");
 
     await act(async () => {
       await rendered.current().startSession(secondSession);
@@ -1135,7 +1157,7 @@ describe("interview session transition authority", () => {
     }
     releaseMutation();
     await act(async () => {
-      await pendingMutation?.catch(() => undefined);
+      await settledMutation;
       await Promise.resolve();
     });
 
