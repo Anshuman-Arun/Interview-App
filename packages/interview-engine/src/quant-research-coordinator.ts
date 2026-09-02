@@ -153,6 +153,11 @@ export function replayQuantResearchSessionState(state: Readonly<SessionState>): 
   };
 }
 
+export function replayQuantResearchPublicState(state: Readonly<SessionState>) {
+  const replayed = replayQuantResearchSessionState(state);
+  return runtimePublicState(replayed.state, replayed.result);
+}
+
 export class QuantResearchCoordinator {
   public constructor(private readonly writer: SessionWriter) {}
 
@@ -241,8 +246,7 @@ export class QuantResearchCoordinator {
   }
 
   public getPublicState() {
-    const replayed = this.replay();
-    return runtimePublicState(replayed.state, replayed.result);
+    return replayQuantResearchPublicState(this.writer.getState());
   }
 
   public initialize(definitionInput: unknown, commandEnvelope?: CommandEnvelope) {
