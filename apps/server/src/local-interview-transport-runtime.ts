@@ -156,6 +156,10 @@ export class LocalInterviewTransportRuntime {
     } catch (error) {
       failures.push(error);
     }
+    // No new commands can enter after command-server shutdown. Cancel any
+    // already admitted provider/resolver work before waiting so a hung remote
+    // or runtime dependency cannot pin graceful process shutdown forever.
+    this.orchestrator.requestCancellationForShutdown();
     try {
       await this.orchestrator.waitForAll();
     } catch (error) {
