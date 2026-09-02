@@ -369,11 +369,7 @@ export const App: React.FC = () => {
         sessions={session.availableSessions}
         activeSessionId={resumableActiveSessionId}
         currentSessionId={hasActiveInterview ? session.sessionId : null}
-        activeProblemTitle={
-          hasActiveInterview
-            ? session.problem?.title ?? null
-            : storedActiveSession?.problemId ?? null
-        }
+        activeProblemTitle={hasActiveInterview ? session.problem?.title ?? null : null}
         canReview={(storedSession) =>
           (
             storedSession.status === "COMPLETED"
