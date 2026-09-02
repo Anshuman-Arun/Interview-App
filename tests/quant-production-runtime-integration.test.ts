@@ -23,6 +23,7 @@ import {
 } from "../packages/events/src/index.js";
 import {
   QuantResearchCoordinator,
+  QuantResearchCoordinatorOutcomeSchema,
   QuantTradingSessionCoordinator,
   TurnCoordinator,
   SessionRuntimeRegistry,
@@ -776,6 +777,94 @@ describe("production quant runtime integration", () => {
       await responseJson(await post(terminalCommand))
     ).state).toEqual(state);
     expect(store.eventCount(sessionId)).toBe(terminalEventCount);
+  });
+
+  it("reprojects duplicate quant responses from authoritative events instead of cached JSON", async () => {
+    const tradingId = newSessionId();
+    await expectStatus(postStart(tradingId, tradingConfiguration()), 200);
+    const tradingInitial = QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(tradingId))
+    ).state;
+    const tradingRequestId = newRequestId();
+    const tradingCommand = {
+      protocolVersion: 1 as const,
+      type: "SUBMIT_QUANT_TRADING_ACTION" as const,
+      requestId: tradingRequestId,
+      sessionId: tradingId,
+      expectedRound: tradingInitial.currentRound,
+      action: { type: "PASS" as const }
+    };
+    const authoritativeTrading = QuantTradingStateResponseSchema.parse(
+      await responseJson(await post(tradingCommand))
+    ).state;
+    const tradingCount = store.eventCount(tradingId);
+    overwriteProcessedResult(store, tradingId, tradingRequestId, {
+      ...authoritativeTrading,
+      portfolio: {
+        ...authoritativeTrading.portfolio,
+        cash: authoritativeTrading.portfolio.cash + 1
+      }
+    });
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await post(tradingCommand))
+    ).state).toEqual(authoritativeTrading);
+    expect(store.eventCount(tradingId)).toBe(tradingCount);
+
+    const researchId = newSessionId();
+    await expectStatus(postStart(researchId, researchConfiguration()), 200);
+    const researchInitial = QuantResearchStateResponseSchema.parse(
+      await responseJson(await getQuantState(researchId))
+    ).state;
+    const first = QuantResearchStateResponseSchema.parse(
+      await responseJson(await post({
+        protocolVersion: 1,
+        type: "SUBMIT_QUANT_RESEARCH_ACTION",
+        requestId: newRequestId(),
+        sessionId: researchId,
+        expectedActionCount: researchInitial.acceptedActionCount,
+        action: {
+          actionId: "cached-result-first",
+          kind: "CHOOSE_OPTION",
+          option: "CONSTANT"
+        }
+      }))
+    ).state;
+    const terminalRequestId = newRequestId();
+    const terminalCommand = {
+      protocolVersion: 1 as const,
+      type: "SUBMIT_QUANT_RESEARCH_ACTION" as const,
+      requestId: terminalRequestId,
+      sessionId: researchId,
+      expectedActionCount: first.acceptedActionCount,
+      action: {
+        actionId: "cached-result-terminal",
+        kind: "CHOOSE_OPTION" as const,
+        option: "CONSTANT" as const
+      }
+    };
+    const authoritativeResearch = QuantResearchStateResponseSchema.parse(
+      await responseJson(await post(terminalCommand))
+    ).state;
+    const researchCount = store.eventCount(researchId);
+    const cached = store.getProcessedResult(researchId, terminalRequestId);
+    if (!cached.found) throw new Error("Expected persisted Research RequestId result");
+    const cachedOutcome = QuantResearchCoordinatorOutcomeSchema.parse(cached.result);
+    const completion = cachedOutcome.state.completion;
+    if (completion === undefined) throw new Error("Expected terminal Research cached completion");
+    overwriteProcessedResult(store, researchId, terminalRequestId, {
+      ...cachedOutcome,
+      state: {
+        ...cachedOutcome.state,
+        completion: {
+          ...completion,
+          overallScore: completion.overallScore === 0 ? 1 : 0
+        }
+      }
+    });
+    expect(QuantResearchStateResponseSchema.parse(
+      await responseJson(await post(terminalCommand))
+    ).state).toEqual(authoritativeResearch);
+    expect(store.eventCount(researchId)).toBe(researchCount);
   });
 
   it("admits only one of two simultaneous Trading actions bound to the same round", async () => {
@@ -2570,6 +2659,24 @@ describe("Quant Trading coordinator isolation and replay determinism", () => {
     }
   });
 });
+
+function overwriteProcessedResult(
+  store: SqliteEventStore,
+  sessionId: SessionId,
+  requestId: RequestId,
+  result: unknown
+): void {
+  const database = (store as unknown as {
+    readonly database: {
+      prepare(sql: string): {
+        run(...values: readonly unknown[]): unknown;
+      };
+    };
+  }).database;
+  database.prepare(
+    "UPDATE processed_requests SET result_json = ? WHERE session_id = ? AND request_id = ?"
+  ).run(JSON.stringify(result), sessionId, requestId);
+}
 
 function recoveryCoordinator(registry: SessionRuntimeRegistry): SessionRecoveryCoordinator {
   const sessions = new SessionRecoveryCoordinator(registry);
