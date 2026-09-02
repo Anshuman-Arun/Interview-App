@@ -13,6 +13,9 @@ import {
   type ReasoningTurnInput
 } from "../../domain/src/index.js";
 import { assertProviderPermitted, preflightProviderPolicy } from "./policy.js";
+import { snapshotValidatedModelCapabilities } from "./runtime-capabilities.js";
+
+const REFLECT_APPLY_INTRINSIC = Reflect.apply;
 
 export type ProviderExecutionErrorCode =
   | "INVALID_PROVIDER_IDENTITY"
@@ -48,42 +51,88 @@ export async function openProviderExecutionSession(input: {
   readonly policy: unknown;
   readonly now?: Date;
 }): Promise<ProviderExecutionSession> {
-  const providerName = parseProviderIdentity(input.provider.name);
-  const adapterVersion = parseProviderIdentity(input.provider.adapterVersion);
-  const capabilitiesResult = ModelCapabilitiesSchema.safeParse(input.provider.capabilities);
-  if (!capabilitiesResult.success) throw new ProviderExecutionError("INVALID_PROVIDER_CAPABILITIES");
-  const capabilities = capabilitiesResult.data;
+  const providerValue: unknown = input.provider;
+  if (typeof providerValue !== "object" || providerValue === null) {
+    throw new ProviderExecutionError("INVALID_PROVIDER_IDENTITY");
+  }
+
+  // Capture provider identity, capabilities, and session creation exactly once
+  // before any asynchronous billing-verification boundary. A mutable provider
+  // must not be able to pass admission and swap execution behavior afterward.
+  const providerName = parseProviderIdentity(
+    readProviderMember(providerValue, "name", "INVALID_PROVIDER_IDENTITY")
+  );
+  const adapterVersion = parseProviderIdentity(
+    readProviderMember(providerValue, "adapterVersion", "INVALID_PROVIDER_IDENTITY")
+  );
+  const capabilitiesResult = ModelCapabilitiesSchema.safeParse(
+    readProviderMember(providerValue, "capabilities", "INVALID_PROVIDER_CAPABILITIES")
+  );
+  if (!capabilitiesResult.success) {
+    throw new ProviderExecutionError("INVALID_PROVIDER_CAPABILITIES");
+  }
+  const capabilities = snapshotValidatedModelCapabilities(capabilitiesResult.data);
+
+  const createSessionCandidate = readProviderMember(
+    providerValue,
+    "createSession",
+    "SESSION_CREATION_FAILED"
+  );
+  if (typeof createSessionCandidate !== "function") {
+    throw new ProviderExecutionError("SESSION_CREATION_FAILED");
+  }
+  const createSession = createSessionCandidate as ReasoningProvider["createSession"];
+
   const preflight = preflightProviderPolicy({
     policy: input.policy,
     capabilities,
     adapterVersion,
     ...(input.now === undefined ? {} : { now: input.now })
   });
-  const now = preflight.now;
+  // Never lend the authoritative admission clock to provider code. Date is
+  // mutable, and the verifier is fallible/untrusted.
+  const admissionNow = new Date(preflight.now.getTime());
   let billingVerification: unknown;
 
   if (preflight.requiresBillingVerification) {
-    if (typeof input.provider.verifyBillingSafety !== "function") {
+    const verifyBillingSafetyCandidate = readProviderMember(
+      providerValue,
+      "verifyBillingSafety",
+      "MISSING_BILLING_VERIFIER"
+    );
+    if (typeof verifyBillingSafetyCandidate !== "function") {
       throw new ProviderExecutionError("MISSING_BILLING_VERIFIER");
     }
+    const verifyBillingSafety =
+      verifyBillingSafetyCandidate as ReasoningProvider["verifyBillingSafety"];
     try {
-      billingVerification = await input.provider.verifyBillingSafety({ now });
+      billingVerification = await REFLECT_APPLY_INTRINSIC(
+        verifyBillingSafety,
+        providerValue,
+        [{ now: new Date(admissionNow.getTime()) }]
+      );
     } catch {
       throw new ProviderExecutionError("BILLING_VERIFICATION_FAILED");
     }
   }
 
+  // Reuse the already parsed policy and our private clock snapshot. Re-reading
+  // mutable caller policy after the verifier await would reopen a TOCTOU gap.
   assertProviderPermitted({
-    policy: input.policy,
+    policy: preflight.policy,
     capabilities,
     adapterVersion,
-    now,
+    now: admissionNow,
     ...(billingVerification === undefined ? {} : { billingVerification })
   });
 
   let rawSession: ReasoningSession;
   try {
-    rawSession = await input.provider.createSession();
+    rawSession = await REFLECT_APPLY_INTRINSIC(
+      createSession,
+      providerValue,
+      []
+    );
   } catch {
     throw new ProviderExecutionError("SESSION_CREATION_FAILED");
   }
@@ -94,6 +143,50 @@ export async function openProviderExecutionSession(input: {
     capabilities,
     sessionOperations
   );
+}
+
+function readProviderMember(
+  value: object,
+  key: "name" | "adapterVersion" | "capabilities" | "verifyBillingSafety" | "createSession",
+  errorCode:
+    | "INVALID_PROVIDER_IDENTITY"
+    | "INVALID_PROVIDER_CAPABILITIES"
+    | "MISSING_BILLING_VERIFIER"
+    | "SESSION_CREATION_FAILED"
+): unknown {
+  const seen = new Set<object>();
+  let current: object | null = value;
+  for (let depth = 0; depth < 16 && current !== null; depth += 1) {
+    if (current === Object.prototype) break;
+    if (seen.has(current)) {
+      throw new ProviderExecutionError(errorCode);
+    }
+    seen.add(current);
+
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      throw new ProviderExecutionError(errorCode);
+    }
+    if (descriptor !== undefined) {
+      if (!("value" in descriptor)) {
+        throw new ProviderExecutionError(errorCode);
+      }
+      return descriptor.value;
+    }
+
+    try {
+      const prototypeCandidate: unknown = Object.getPrototypeOf(current);
+      if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+        throw new ProviderExecutionError(errorCode);
+      }
+      current = prototypeCandidate;
+    } catch {
+      throw new ProviderExecutionError(errorCode);
+    }
+  }
+  throw new ProviderExecutionError(errorCode);
 }
 
 interface ReasoningSessionOperations {
@@ -191,7 +284,7 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
     if (this.operations.cancelTurn !== undefined) {
       let rawResult: unknown;
       try {
-        rawResult = await Reflect.apply(
+        rawResult = await REFLECT_APPLY_INTRINSIC(
           this.operations.cancelTurn,
           this.operations.receiver,
           [generationId]
@@ -217,7 +310,7 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
     if (this.closed) return;
     this.closed = true;
     try {
-      await Reflect.apply(
+      await REFLECT_APPLY_INTRINSIC(
         this.operations.close,
         this.operations.receiver,
         []
@@ -235,7 +328,7 @@ class GuardedProviderExecutionSession implements ProviderExecutionSession {
     this.assertOpen();
     if (this.cancelled.has(input.generationId)) return;
     try {
-      const stream = Reflect.apply(
+      const stream = REFLECT_APPLY_INTRINSIC(
         this.operations.sendTurn,
         this.operations.receiver,
         [input]
