@@ -319,18 +319,21 @@ describe("provider execution admission", () => {
     let observedGenerationId: unknown;
     let observedContext: unknown;
     const provider = testProvider({
-      session: {
-        sendTurn(input) {
-          observedGenerationId = input.generationId;
-          observedContext = input.context;
-          return proposalStream(PROPOSAL);
-        },
-        async close() {}
+      async createSession() {
+        return {
+          async *sendTurn(input) {
+            observedGenerationId = input.generationId;
+            observedContext = input.context;
+            yield PROPOSAL;
+          },
+          async close() {}
+        };
       }
     });
     const session = await openProviderExecutionSession({
       provider,
-      policy: LOCAL_POLICY
+      policy: NO_METERED_POLICY,
+      now: NOW
     });
 
     const generationId = newGenerationId();
