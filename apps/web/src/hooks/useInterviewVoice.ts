@@ -194,11 +194,13 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     } finally {
       drainingRef.current = false;
       if (
-        epoch === epochRef.current
-        && microphoneEnabledRef.current
+        microphoneEnabledRef.current
         && frameQueueRef.current.length > 0
       ) {
-        void drainFrames(epoch);
+        // An older epoch may finish after a rapid disable/re-enable cycle.
+        // Hand any newly queued frames to the currently authoritative epoch
+        // rather than leaving them stranded behind the old drain flag.
+        void drainFrames(epochRef.current);
       }
     }
   }, [failVoiceCycle, processFrameResult]);
