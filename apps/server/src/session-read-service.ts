@@ -16,6 +16,7 @@ import {
 import {
   problemCatalog
 } from "../../../packages/problems/src/index.js";
+import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import {
   DEFAULT_REPLAY_BOUNDS,
   MAX_HISTORY_READ_SESSIONS,
@@ -556,6 +557,16 @@ export class SessionReadService {
     if (events === undefined) return undefined;
     try {
       const state = replaySession(sessionId, events);
+      if (
+        state.configuration?.mode === "QUANT_TRADING"
+        || state.configuration?.mode === "QUANT_RESEARCH"
+        || state.quantTrading !== undefined
+        || state.quantResearch !== undefined
+      ) {
+        // Generic event replay validates structure; deterministic quant replay
+        // additionally proves engine-authored outcomes and hidden scenario state.
+        resolveSessionStateComposition(state);
+      }
       const summary = summaryFromAuthoritativeEvents(sessionId, events, state);
       if (summary === undefined) return undefined;
       return { summary, events, state };
