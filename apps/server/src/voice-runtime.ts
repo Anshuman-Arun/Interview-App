@@ -708,6 +708,11 @@ export class VoiceInputCoordinator {
     context.active = false;
     this.releaseStreamBinding(context);
 
+    // Revoke and clean authoritative capture before awaiting fallible worker
+    // cancellation. A dropped transport must not leave CAPTURING state alive
+    // merely because STT ignores or delays cancellation.
+    await this.discardCapturingUtterance(context, "Speech stream cancelled");
+
     try {
       await this.speechWorker.cancel({
         protocolVersion: 1,
@@ -716,10 +721,8 @@ export class VoiceInputCoordinator {
         streamId
       });
     } catch {
-      // Suppression is already authoritative at this integration boundary.
+      // Suppression and authoritative utterance cleanup already happened.
     }
-
-    await this.discardCapturingUtterance(context, "Speech stream cancelled");
   }
 
   public async cancelSession(sessionIdInput: SessionId): Promise<void> {
@@ -737,6 +740,11 @@ export class VoiceInputCoordinator {
     context.active = false;
     this.releaseStreamBinding(context);
 
+    await this.discardCapturingUtterance(
+      context,
+      "Authoritative session became terminal"
+    );
+
     try {
       await this.speechWorker.cancel({
         protocolVersion: 1,
@@ -745,13 +753,8 @@ export class VoiceInputCoordinator {
         streamId
       });
     } catch {
-      // The authoritative integration binding is already revoked.
+      // The authoritative integration binding and utterance are already revoked.
     }
-
-    await this.discardCapturingUtterance(
-      context,
-      "Authoritative session became terminal"
-    );
   }
 
   public async shutdown(): Promise<void> {
@@ -1136,6 +1139,10 @@ export class VoiceInputCoordinator {
     }
     context.active = false;
     this.releaseStreamBinding(context);
+    await this.discardCapturingUtterance(
+      context,
+      "Speech stream expired after bounded transport inactivity"
+    );
     try {
       await this.speechWorker.cancel({
         protocolVersion: 1,
@@ -1144,13 +1151,8 @@ export class VoiceInputCoordinator {
         streamId: context.streamId
       });
     } catch {
-      // The local authority boundary below still discards any capturing
-      // utterance even if worker cancellation is unavailable.
+      // Authoritative capture has already been discarded.
     }
-    await this.discardCapturingUtterance(
-      context,
-      "Speech stream expired after bounded transport inactivity"
-    );
   }
 
   private releaseStreamBinding(context: VoiceStreamContext): void {
