@@ -210,6 +210,8 @@ That rule is conservative: regeneration may be added only when authoritative sem
 
 The production boundary accepts injected `SpeechWorkerCore` and `TtsWorkerCore` instances. This permits a later desktop/model-assets change to provide real Silero-, Moonshine-, and Kokoro-backed runtimes without changing session authority.
 
+Speech/TTS worker `shutdown()` is terminal. After an explicit application transport shutdown, the same `LocalInterviewTransportRuntime` therefore refuses to restart its HTTP transports around already-terminated voice workers; callers must construct a fresh runtime. This keeps restart behavior honest instead of exposing a superficially live voice endpoint backed by dead workers.
+
 This change does **not** install model assets and does **not** claim live production Silero/Moonshine/Kokoro inference. When no voice runtime is configured, the authenticated voice transport exists but input operations fail closed with `VOICE_RUNTIME_UNAVAILABLE`.
 
 Automated tests use deterministic/injected VAD, STT, and TTS implementations only.
