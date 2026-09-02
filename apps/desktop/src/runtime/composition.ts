@@ -213,10 +213,11 @@ export class DesktopLocalRuntimeComposition {
     if (ttsResult.status === "rejected" && this.ttsStatus.state === "UNAVAILABLE") {
       this.ttsStatus = failed("WORKER_START_FAILED");
     }
-    if (this.speechWorker !== undefined
-        && this.ttsWorker !== undefined
-        && this.liveStatus(SPEECH_COMPONENT_ID, this.speechStatus).state === "READY"
-        && this.liveStatus(TTS_COMPONENT_ID, this.ttsStatus).state === "READY") {
+    const speechReady = this.speechWorker !== undefined
+      && this.liveStatus(SPEECH_COMPONENT_ID, this.speechStatus).state === "READY";
+    const ttsReady = this.ttsWorker !== undefined
+      && this.liveStatus(TTS_COMPONENT_ID, this.ttsStatus).state === "READY";
+    if (speechReady && ttsReady && this.speechWorker !== undefined && this.ttsWorker !== undefined) {
       this.voiceRuntime = Object.freeze({
         speechWorker: this.speechWorker,
         tts: Object.freeze({
@@ -227,6 +228,24 @@ export class DesktopLocalRuntimeComposition {
           speed: 1
         })
       });
+      return;
+    }
+
+    // The authoritative server voice contract is intentionally all-or-nothing:
+    // browser microphone ingress and generated TTS share one VoiceRuntimeConfiguration.
+    // Do not leave one successfully loaded model resident when its counterpart
+    // is unavailable and the server therefore cannot expose voice at all.
+    if (speechReady) {
+      const cleaned = await this.cleanupCapability("speech");
+      this.speechStatus = cleaned
+        ? unavailable("VOICE_RUNTIME_INCOMPLETE", SPEECH_WORKER_MODEL_IDENTITY)
+        : failed("WORKER_CLEANUP_FAILED", SPEECH_WORKER_MODEL_IDENTITY);
+    }
+    if (ttsReady) {
+      const cleaned = await this.cleanupCapability("tts");
+      this.ttsStatus = cleaned
+        ? unavailable("VOICE_RUNTIME_INCOMPLETE", TTS_WORKER_MODEL_IDENTITY)
+        : failed("WORKER_CLEANUP_FAILED", TTS_WORKER_MODEL_IDENTITY);
     }
   }
 
@@ -294,10 +313,12 @@ export class DesktopLocalRuntimeComposition {
         client.runtimeVersion()
       );
     } catch (error) {
-      await this.runtimeManager.stop(SPEECH_COMPONENT_ID).catch(() => undefined);
+      const cleaned = await this.cleanupCapability("speech");
       this.speechStatus = abortRequested(signal)
         ? unavailable("START_CANCELLED")
-        : failed(error instanceof ModelAssetError ? "ASSET_FAILURE" : "WORKER_START_FAILED");
+        : cleaned
+          ? failed(error instanceof ModelAssetError ? "ASSET_FAILURE" : "WORKER_START_FAILED")
+          : failed("WORKER_CLEANUP_FAILED");
       throw error;
     }
   }
@@ -358,12 +379,48 @@ export class DesktopLocalRuntimeComposition {
         client.runtimeVersion()
       );
     } catch (error) {
-      await this.runtimeManager.stop(TTS_COMPONENT_ID).catch(() => undefined);
+      const cleaned = await this.cleanupCapability("tts");
       this.ttsStatus = abortRequested(signal)
         ? unavailable("START_CANCELLED")
-        : failed(error instanceof ModelAssetError ? "ASSET_FAILURE" : "WORKER_START_FAILED");
+        : cleaned
+          ? failed(error instanceof ModelAssetError ? "ASSET_FAILURE" : "WORKER_START_FAILED")
+          : failed("WORKER_CLEANUP_FAILED");
       throw error;
     }
+  }
+
+  private async cleanupCapability(component: "speech" | "tts"): Promise<boolean> {
+    const componentId = component === "speech" ? SPEECH_COMPONENT_ID : TTS_COMPONENT_ID;
+    const worker = component === "speech" ? this.speechWorker : this.ttsWorker;
+    let coreShutdownFailed = false;
+    if (worker !== undefined) {
+      try {
+        await worker.shutdown();
+      } catch {
+        coreShutdownFailed = true;
+      }
+    }
+
+    try {
+      await this.runtimeManager.stop(componentId);
+    } catch {
+      return false;
+    }
+
+    if (component === "speech") this.speechWorker = undefined;
+    else this.ttsWorker = undefined;
+
+    const view = component === "speech" ? this.speechView : this.ttsView;
+    if (view !== undefined) {
+      try {
+        await view.dispose();
+      } catch {
+        return false;
+      }
+    }
+    if (component === "speech") this.speechView = undefined;
+    else this.ttsView = undefined;
+    return !coreShutdownFailed;
   }
 
   private async inspectAssets(
