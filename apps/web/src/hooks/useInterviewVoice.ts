@@ -92,6 +92,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
   const devicesRef = useRef<BrowserAudioDeviceManager | null>(null);
   const clientRef = useRef<BrowserVoiceClient | null>(null);
   const streamRef = useRef<BrowserVoiceStream | null>(null);
+  const transportAbortRef = useRef<AbortController | null>(null);
   const frameQueueRef = useRef<AudioFrame[]>([]);
   const drainingRef = useRef(false);
   const epochRef = useRef(0);
@@ -130,6 +131,8 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     epochRef.current = nextEpoch;
     microphoneEnabledRef.current = false;
     frameQueueRef.current.length = 0;
+    transportAbortRef.current?.abort();
+    transportAbortRef.current = null;
     if (mountedRef.current) {
       setMicrophoneEnabled(false);
       setListening(false);
@@ -186,6 +189,9 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
           return;
         }
 
+        const transportSignal = transportAbortRef.current?.signal;
+        if (transportSignal === undefined || transportSignal.aborted) return;
+
         let stream = streamRef.current;
         if (stream !== null && stream.sessionId !== sessionId) {
           streamRef.current = null;
@@ -194,7 +200,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
         }
         if (stream === null || stream.isClosed) {
           try {
-            stream = await client.openStream(sessionId);
+            stream = await client.openStream(sessionId, transportSignal);
           } catch (openError) {
             if (
               epoch !== epochRef.current
@@ -219,7 +225,7 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
         const frame = frameQueueRef.current.shift();
         if (frame === undefined) continue;
         try {
-          const result = await stream.sendFrame(frame);
+          const result = await stream.sendFrame(frame, transportSignal);
           processFrameResult(result, epoch, stream.sessionId);
         } catch (frameError) {
           if (
@@ -267,6 +273,9 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     microphoneEnabledRef.current = true;
     frameQueueRef.current.length = 0;
     streamRef.current = null;
+    transportAbortRef.current?.abort();
+    const transportController = new AbortController();
+    transportAbortRef.current = transportController;
     safelySetError(null);
     if (mountedRef.current) {
       setMicrophoneEnabled(true);
@@ -405,6 +414,8 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     epochRef.current += 1;
     microphoneEnabledRef.current = false;
     frameQueueRef.current.length = 0;
+    transportAbortRef.current?.abort();
+    transportAbortRef.current = null;
     const stream = streamRef.current;
     streamRef.current = null;
     if (stream !== null) void cancelStreamBounded(stream);
