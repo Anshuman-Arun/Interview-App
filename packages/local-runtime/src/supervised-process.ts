@@ -1031,7 +1031,7 @@ async function compileWindowsSupervisorAssembly(
       waitForClose(child),
       new Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>(
         (resolve) => {
-          child?.once("error", () => resolve(
+          child.once("error", () => resolve(
             Object.freeze({ code: null, signal: null })
           ));
         }
