@@ -32,8 +32,10 @@ import {
 } from "../packages/replay/src/index.js";
 import {
   LoopbackCommandServer,
+  ProductionSessionRuntime,
   ServerTurnOrchestrator,
-  SessionRecoveryCoordinator
+  SessionRecoveryCoordinator,
+  resolveInterviewSessionConfiguration
 } from "../apps/server/src/index.js";
 
 const CLIENT_TOKEN = "quant-runtime-integration-token-that-is-long-enough";
@@ -549,6 +551,41 @@ describe("production quant runtime integration", () => {
       body
     });
   }
+});
+
+describe("production quant start seed lifecycle", () => {
+  it("does not invoke the seed source again for an idempotent Trading start retry", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    let seedCalls = 0;
+    const runtime = new ProductionSessionRuntime({
+      seedSource: () => {
+        seedCalls += 1;
+        return 123_456;
+      }
+    });
+    const composition = resolveInterviewSessionConfiguration(tradingConfiguration());
+    const envelope = createCommandEnvelope({
+      sessionId,
+      requestId: newRequestId(),
+      producer: "quant-runtime-test"
+    });
+
+    try {
+      await runtime.startConfigured(writer, composition, envelope);
+      expect(seedCalls).toBe(1);
+      const persistedSeed = writer.getState().quantTrading?.definition.seed;
+      expect(persistedSeed).toBe(123_456);
+
+      await runtime.startConfigured(writer, composition, envelope);
+      expect(seedCalls).toBe(1);
+      expect(writer.getState().quantTrading?.definition.seed).toBe(persistedSeed);
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
 });
 
 describe("production Quant Research definition admission", () => {
