@@ -25,6 +25,14 @@ export class ManagedModelWorkerClient {
     return runtimeVersion;
   }
 
+  public restartCount(): number {
+    const restartCount = this.readyStatus().restartCount;
+    if (!Number.isSafeInteger(restartCount) || restartCount < 0) {
+      throw new Error("Managed local model worker reported an invalid restart count");
+    }
+    return restartCount;
+  }
+
   public async postJson(
     pathname: "/v1/vad" | "/v1/stt" | "/v1/tts" | "/v1/tts/cancel",
     body: unknown,
