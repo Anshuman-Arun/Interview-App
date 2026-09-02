@@ -203,6 +203,10 @@ export class SupervisedProcessRunner {
       await cleanupExecutionIsolation(isolation);
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
+    if (request.signal?.aborted) {
+      await cleanupExecutionIsolation(isolation);
+      throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
 
     try {
       return await this.runChild(
