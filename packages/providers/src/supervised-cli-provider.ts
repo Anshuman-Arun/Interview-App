@@ -2,6 +2,7 @@ import { types as utilTypes } from "node:util";
 import {
   GenerationIdSchema,
   ModelCapabilitiesSchema,
+  ProviderRuntimeNameSchema,
   type GenerationId,
   type InterviewerProposal,
   type ModelCapabilities,
@@ -71,25 +72,39 @@ export class SupervisedCliReasoningProvider implements ReasoningProvider {
   private readonly turnExecutor: SupervisedCliProviderDefinition["executeTurn"];
 
   public constructor(definition: SupervisedCliProviderDefinition) {
-    const parsedCapabilities = ModelCapabilitiesSchema.safeParse(definition.capabilities);
+    const snapshot = snapshotProviderDefinition(definition);
+    const parsedCapabilities = ModelCapabilitiesSchema.safeParse(
+      snapshot.capabilities
+    );
+    const parsedProviderId = ProviderRuntimeNameSchema.safeParse(
+      snapshot.providerId
+    );
     if (
-      typeof definition.providerId !== "string"
-      || definition.providerId.trim().length === 0
-      || typeof definition.adapterVersion !== "string"
-      || definition.adapterVersion.trim().length === 0
+      !parsedProviderId.success
+      || typeof snapshot.adapterVersion !== "string"
+      || snapshot.adapterVersion.trim().length === 0
       || !parsedCapabilities.success
-      || typeof definition.verifyBillingSafety !== "function"
-      || typeof definition.snapshotTurnInput !== "function"
-      || typeof definition.executeTurn !== "function"
+      || typeof snapshot.verifyBillingSafety !== "function"
+      || typeof snapshot.snapshotTurnInput !== "function"
+      || typeof snapshot.executeTurn !== "function"
     ) {
       throw new Error("Supervised CLI provider definition is invalid");
     }
-    this.name = definition.providerId;
-    this.adapterVersion = definition.adapterVersion;
+    this.name = parsedProviderId.data;
+    this.adapterVersion = snapshot.adapterVersion;
     this.capabilities = snapshotValidatedModelCapabilities(parsedCapabilities.data);
-    this.billingVerifier = definition.verifyBillingSafety;
-    this.turnInputSnapshotter = definition.snapshotTurnInput;
-    this.turnExecutor = definition.executeTurn;
+    this.billingVerifier = bindDefinitionOperation(
+      definition,
+      snapshot.verifyBillingSafety
+    );
+    this.turnInputSnapshotter = bindDefinitionOperation(
+      definition,
+      snapshot.snapshotTurnInput
+    );
+    this.turnExecutor = bindDefinitionOperation(
+      definition,
+      snapshot.executeTurn
+    );
     Object.freeze(this);
   }
 
@@ -105,6 +120,68 @@ export class SupervisedCliReasoningProvider implements ReasoningProvider {
       this.turnInputSnapshotter
     );
   }
+}
+
+function snapshotProviderDefinition(
+  definition: unknown
+): Readonly<Record<string, unknown>> {
+  if (
+    typeof definition !== "object"
+    || definition === null
+    || utilTypes.isProxy(definition)
+    || Array.isArray(definition)
+  ) {
+    throw new Error("Supervised CLI provider definition is invalid");
+  }
+  let prototype: object | null;
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  try {
+    prototype = Object.getPrototypeOf(definition) as object | null;
+    descriptors = Object.getOwnPropertyDescriptors(definition);
+    symbols = Object.getOwnPropertySymbols(definition);
+  } catch {
+    throw new Error("Supervised CLI provider definition is invalid");
+  }
+  const allowed = new Set([
+    "providerId",
+    "adapterVersion",
+    "capabilities",
+    "verifyBillingSafety",
+    "snapshotTurnInput",
+    "executeTurn"
+  ]);
+  if (
+    (prototype !== Object.prototype && prototype !== null)
+    || symbols.length !== 0
+    || Object.keys(descriptors).length !== allowed.size
+  ) {
+    throw new Error("Supervised CLI provider definition is invalid");
+  }
+  const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const key of allowed) {
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined
+      || descriptor.enumerable !== true
+      || !("value" in descriptor)
+    ) {
+      throw new Error("Supervised CLI provider definition is invalid");
+    }
+    output[key] = descriptor.value;
+  }
+  return Object.freeze(output);
+}
+
+function bindDefinitionOperation<T extends (...args: never[]) => unknown>(
+  receiver: object,
+  operation: unknown
+): T {
+  if (typeof operation !== "function") {
+    throw new Error("Supervised CLI provider definition is invalid");
+  }
+  return ((...args: never[]) =>
+    Reflect.apply(operation, receiver, args)) as T;
 }
 
 class SupervisedCliReasoningSession implements ReasoningSession {
