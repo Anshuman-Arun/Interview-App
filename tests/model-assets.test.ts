@@ -98,6 +98,9 @@ describe("local model asset manager", () => {
     await expect(manager.getInstalledPath(manifest, controller.signal)).rejects.toMatchObject({
       code: "CANCELLED"
     });
+    await expect(manager.cleanupTemporary(controller.signal)).rejects.toMatchObject({
+      code: "CANCELLED"
+    });
   });
 
   it("rejects inherited and accessor-backed manifest data without invoking getters", () => {
