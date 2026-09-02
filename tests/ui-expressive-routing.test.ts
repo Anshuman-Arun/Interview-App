@@ -32,7 +32,7 @@ describe("expressive product routing", () => {
       "#/wat",
       "#/settings/extra",
       "#/review",
-      "#/review/not-a-session",
+      "#/review/%2F",
       "#/review/%E0%A4%A",
       `#/review/${sessionId}/other`
     ]) {

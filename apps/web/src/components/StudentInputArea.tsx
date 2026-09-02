@@ -120,7 +120,11 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
           type="button"
           onClick={() => void handleSubmit()}
           disabled={!canSubmit}
-          className="reasoning-composer__submit"
+          className={
+            canSubmit
+              ? "reasoning-composer__submit"
+              : "reasoning-composer__submit cursor-not-allowed"
+          }
           data-testid="submit-reasoning-btn"
         >
           {isSubmitting ? "Sending..." : "Submit Reasoning"}

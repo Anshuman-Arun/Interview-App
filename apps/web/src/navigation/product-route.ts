@@ -2,6 +2,7 @@ import {
   SessionIdSchema,
   type SessionId
 } from "../../../../packages/domain/src/index.js";
+import { isSessionIdAddressableForRead } from "../session-read-client.js";
 
 export type ProductRoute =
   | { readonly page: "home" }
@@ -47,7 +48,12 @@ export function parseProductRoute(hash: string): ProductRoute {
     const decoded = safeDecode(encoded);
     if (decoded === null) return DEFAULT_PRODUCT_ROUTE;
     const parsed = SessionIdSchema.safeParse(decoded);
-    if (!parsed.success) return DEFAULT_PRODUCT_ROUTE;
+    if (
+      !parsed.success
+      || !isSessionIdAddressableForRead(parsed.data)
+    ) {
+      return DEFAULT_PRODUCT_ROUTE;
+    }
     const requestedView = parts[2];
     if (
       requestedView !== undefined
