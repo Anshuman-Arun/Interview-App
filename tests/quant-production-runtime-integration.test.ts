@@ -544,6 +544,132 @@ describe("production quant runtime integration", () => {
     expect(registry.get(researchSession).getState().status).toBe("COMPLETED");
   });
 
+  it("admits only one of two simultaneous Research actions bound to the same progress", async () => {
+    const sessionId = newSessionId();
+    await expectStatus(postStart(sessionId, researchConfiguration()), 200);
+    const initial = QuantResearchStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state;
+
+    const responses = await Promise.all([
+      post({
+        protocolVersion: 1,
+        type: "SUBMIT_QUANT_RESEARCH_ACTION",
+        requestId: newRequestId(),
+        sessionId,
+        expectedActionCount: initial.acceptedActionCount,
+        action: {
+          actionId: "concurrent-choice-left",
+          kind: "CHOOSE_OPTION",
+          option: "CONSTANT"
+        }
+      }),
+      post({
+        protocolVersion: 1,
+        type: "SUBMIT_QUANT_RESEARCH_ACTION",
+        requestId: newRequestId(),
+        sessionId,
+        expectedActionCount: initial.acceptedActionCount,
+        action: {
+          actionId: "concurrent-choice-right",
+          kind: "CHOOSE_OPTION",
+          option: "LINEAR"
+        }
+      })
+    ]);
+    const decoded = await Promise.all(responses.map(async (response) => ({
+      status: response.status,
+      body: await responseJson(response)
+    })));
+    expect(decoded.map((item) => item.status).sort((left, right) => left - right))
+      .toEqual([200, 409]);
+
+    const success = decoded.find((item) => item.status === 200);
+    const conflict = decoded.find((item) => item.status === 409);
+    if (success === undefined || conflict === undefined) {
+      throw new Error("Expected one admitted Research action and one stale conflict");
+    }
+    expect(QuantResearchStateResponseSchema.parse(success.body).state.acceptedActionCount).toBe(1);
+    expect(ProtocolErrorResponseSchema.parse(conflict.body).error.code).toBe("CONFLICT");
+    expect(QuantResearchStateResponseSchema.parse(
+      await responseJson(await getQuantState(sessionId))
+    ).state.acceptedActionCount).toBe(1);
+  });
+
+  it("rejects active quant archive and allows archive only after deterministic completion", async () => {
+    const tradingId = newSessionId();
+    const researchId = newSessionId();
+    await expectStatus(postStart(tradingId, tradingConfiguration()), 200);
+    await expectStatus(postStart(researchId, researchConfiguration()), 200);
+
+    for (const sessionId of [tradingId, researchId]) {
+      await expectProtocolError(post({
+        protocolVersion: 1,
+        type: "ARCHIVE_SESSION",
+        requestId: newRequestId(),
+        sessionId,
+        reason: "premature"
+      }), 409, "CONFLICT");
+      expect(registry.get(sessionId).getState().status).toBe("ACTIVE");
+    }
+
+    let trading = QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(tradingId))
+    ).state;
+    while (trading.actionRequired) {
+      trading = QuantTradingStateResponseSchema.parse(
+        await responseJson(await post({
+          protocolVersion: 1,
+          type: "SUBMIT_QUANT_TRADING_ACTION",
+          requestId: newRequestId(),
+          sessionId: tradingId,
+          expectedRound: trading.currentRound,
+          action: { type: "PASS" }
+        }))
+      ).state;
+    }
+
+    let research = QuantResearchStateResponseSchema.parse(
+      await responseJson(await getQuantState(researchId))
+    ).state;
+    for (const [actionId, option] of [
+      ["archive-research-1", "CONSTANT"],
+      ["archive-research-2", "CONSTANT"]
+    ] as const) {
+      research = QuantResearchStateResponseSchema.parse(
+        await responseJson(await post({
+          protocolVersion: 1,
+          type: "SUBMIT_QUANT_RESEARCH_ACTION",
+          requestId: newRequestId(),
+          sessionId: researchId,
+          expectedActionCount: research.acceptedActionCount,
+          action: { actionId, kind: "CHOOSE_OPTION", option }
+        }))
+      ).state;
+    }
+
+    expect(trading.status).toBe("COMPLETED");
+    expect(research.status).toBe("COMPLETE");
+    for (const sessionId of [tradingId, researchId]) {
+      await expectStatus(post({
+        protocolVersion: 1,
+        type: "ARCHIVE_SESSION",
+        requestId: newRequestId(),
+        sessionId,
+        reason: "finished"
+      }), 200);
+      expect(registry.get(sessionId).getState().status).toBe("ARCHIVED");
+    }
+
+    await restart();
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await getQuantState(tradingId))
+    ).state.status).toBe("COMPLETED");
+    expect(QuantResearchStateResponseSchema.parse(
+      await responseJson(await getQuantState(researchId))
+    ).state.status).toBe("COMPLETE");
+  });
+
   async function restart(): Promise<void> {
     await server.stop();
     await registry.closeAll();
