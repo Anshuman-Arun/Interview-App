@@ -190,14 +190,21 @@ export class ServerTurnOrchestrator {
     // 4. ProviderCoordinator owns policy/billing admission, context compilation,
     // provider execution, proposal admission, and delivery validation.
     const coordinator = new ProviderCoordinator(writer);
-    const execution = await coordinator.start({
-      inputEpisodeId: authoritativeTurn.inputEpisodeId,
-      turnId: authoritativeTurn.turnId,
-      provider: runtimeResolution.provider,
-      policy: runtimeResolution.policy,
-      problem,
-      validator: this.validator
-    });
+    let execution: Awaited<ReturnType<ProviderCoordinator["start"]>>;
+    try {
+      execution = await coordinator.start({
+        inputEpisodeId: authoritativeTurn.inputEpisodeId,
+        turnId: authoritativeTurn.turnId,
+        provider: runtimeResolution.provider,
+        policy: runtimeResolution.policy,
+        problem,
+        validator: this.validator
+      });
+    } catch {
+      // The authoritative turn may have changed while runtime credentials or
+      // dependencies were resolving. Never surface raw setup/state errors.
+      return;
+    }
 
     try {
       const outcome = await execution.completion;
