@@ -257,9 +257,10 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
   }
 
   /**
-   * Records one normalized student mutation observed from the real editor.
-   * Adapter-originated mutations are already counted by create/update methods;
-   * direct editor transactions advance the sole BoardRevision authority once.
+   * Records one normalized student mutation in the adapter's browser-local
+   * revision mirror. Application authority lives in the event-sourced session;
+   * AuthoritativeBoardSyncCoordinator binds this canvas to that BoardRevision.
+   * Adapter-originated mutations are already counted by create/update methods.
    */
   public observeNormalizedStudentMutation(source: NormalizedStudentMutationSource): void {
     if (source === "ADAPTER") return;
@@ -571,7 +572,7 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
       || this.localBoardRevision < 0
       || this.localBoardRevision >= Number.MAX_SAFE_INTEGER
     ) {
-      throw new Error("BoardRevision cannot exceed Number.MAX_SAFE_INTEGER");
+      throw new Error("Local whiteboard revision mirror cannot exceed Number.MAX_SAFE_INTEGER");
     }
   }
 
