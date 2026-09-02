@@ -1,6 +1,7 @@
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import {
+  AcceptedBoardObservationSchema,
   BoardRevisionSchema,
   evidenceKeyToString,
   newRequestId,
@@ -104,6 +105,84 @@ function progressInterpreter(): RuleBasedVisionEvidenceInterpreter {
     proposedValue: "PROGRESSING",
     minConfidence: 0.8
   }]);
+}
+
+async function persistAcceptedPendingEvidenceBridge(input: {
+  readonly turns: TurnCoordinator;
+  readonly sessionId: SessionId;
+  readonly request: WhiteboardVisionSnapshotUpload;
+  readonly interpreterFingerprint: string;
+}): Promise<void> {
+  const encodedBytes = Buffer.from(input.request.pngBase64, "base64");
+  const snapshot = createValidatedImageSnapshot({
+    snapshotId: input.request.snapshotId,
+    sourceType: "WHITEBOARD_SNAPSHOT",
+    sourceRevision: input.request.sourceBoardRevision,
+    capturedAtMs: input.request.capturedAtMs,
+    mimeType: "image/png",
+    declaredWidth: input.request.declaredWidth,
+    declaredHeight: input.request.declaredHeight,
+    encodedBytes
+  });
+  const snapshotBasis = {
+    snapshotId: input.request.snapshotId,
+    snapshotHash: snapshot.metadata.contentDigest,
+    preprocessingVersion: "whiteboard-snapshot-v1",
+    sourceBoardRevision: input.request.sourceBoardRevision
+  };
+
+  await input.turns.requestVision(
+    input.request.region.regionId,
+    input.request.region.relevantShapeIds,
+    {
+      visionRequestId: input.request.requestId,
+      snapshotBasis,
+      relevantShapeRevisions: input.request.relevantShapeRevisions,
+      regionBounds: input.request.region.bounds,
+      requestedObservationKind: input.request.requestedObservationKind
+    }
+  );
+
+  const accepted = AcceptedBoardObservationSchema.parse({
+    requestId: input.request.requestId,
+    sessionId: input.sessionId,
+    proposalId: "proposal-crash-boundary",
+    observationKind: "DIAGRAM_RELATION",
+    observation: {
+      regionId: input.request.region.regionId,
+      sourceBoardRevision: input.request.sourceBoardRevision,
+      relevantShapeIds: ["shape:graph-model"],
+      bounds: input.request.region.bounds,
+      interpretation: "The graph representation is productive.",
+      confidence: 0.95
+    },
+    snapshotBasis,
+    sourceRelevantShapeIds: input.request.region.relevantShapeIds,
+    shapeRevisionBindings: input.request.relevantShapeRevisions,
+    backend: {
+      backendId: "crash-boundary-fixture",
+      backendVersion: "1",
+      providerId: "fixture",
+      modelId: "fixture-model",
+      modelVersion: "1",
+      visionCapabilityVersion: "1"
+    },
+    admittedAtBoardRevision: input.request.sourceBoardRevision,
+    freshnessProof: "EXACT_BOARD_REVISION"
+  });
+
+  const persisted = await input.turns.processVisionResult({
+    envelope: createCommandEnvelope({
+      sessionId: input.sessionId,
+      producer: "test-vision-admission",
+      correlationId: input.request.requestId,
+      sourceRevision: input.request.sourceBoardRevision
+    }),
+    observation: accepted.observation,
+    admission: accepted,
+    evidenceInterpreterFingerprint: input.interpreterFingerprint
+  });
+  if (!persisted.accepted) throw new Error("Crash-boundary fixture vision result was not accepted");
 }
 
 describe("application whiteboard vision integration", () => {
@@ -639,52 +718,34 @@ describe("application whiteboard vision integration", () => {
 
   it("resumes an accepted-but-pending evidence bridge after restart without rerunning vision", async () => {
     const harness = await startedBoardSession();
+    const request = upload(harness.sessionId);
+    const acceptedFingerprint = "a".repeat(64);
+    await persistAcceptedPendingEvidenceBridge({
+      turns: harness.turns,
+      sessionId: harness.sessionId,
+      request,
+      interpreterFingerprint: acceptedFingerprint
+    });
+
+    const interruptedState = harness.writer.getState();
+    expect(interruptedState.visionRequests[request.requestId]).toMatchObject({
+      status: "ACCEPTED",
+      evidenceBridge: {
+        status: "PENDING",
+        interpreterFingerprint: acceptedFingerprint
+      }
+    });
+    expect(Object.keys(interruptedState.studentEvidence)).toHaveLength(0);
+
     const backend = new DeterministicFakeVisionBackend([{
       observationKind: "DIAGRAM_RELATION",
-      interpretation: "The graph representation is productive.",
+      interpretation: "This backend must not be called during accepted-result recovery.",
       confidence: 0.95,
       relevantShapeIds: ["shape:graph-model"]
     }]);
-    const acceptedFingerprint = "a".repeat(64);
-    const changedFingerprint = "b".repeat(64);
-    let fingerprintReads = 0;
-    const firstCoordinator = new WhiteboardVisionCoordinator({
-      sessions: harness.sessions,
-      backend,
-      evidenceInterpreter: {
-        get fingerprint() {
-          fingerprintReads += 1;
-          return fingerprintReads === 1 ? acceptedFingerprint : changedFingerprint;
-        },
-        propose: () => {
-          throw new Error("Interpreter must not run after its fingerprint changes");
-        }
-      }
-    });
-
-    const request = upload(harness.sessionId);
-    try {
-      const interrupted = await firstCoordinator.process(request);
-      expect(interrupted).toMatchObject({
-        status: "REJECTED",
-        reason: "EVIDENCE_INTERPRETER_MISMATCH"
-      });
-      expect(backend.analyzeCallCount).toBe(1);
-      const interruptedState = harness.writer.getState();
-      expect(interruptedState.visionRequests[request.requestId]).toMatchObject({
-        status: "ACCEPTED",
-        evidenceBridge: {
-          status: "PENDING",
-          interpreterFingerprint: acceptedFingerprint
-        }
-      });
-      expect(Object.keys(interruptedState.studentEvidence)).toHaveLength(0);
-    } finally {
-      firstCoordinator.shutdown();
-    }
-
     const resumedCoordinator = new WhiteboardVisionCoordinator({
       sessions: harness.sessions,
+      backend,
       evidenceInterpreter: {
         fingerprint: acceptedFingerprint,
         propose: (context) => progressInterpreter().propose(context)
@@ -697,7 +758,7 @@ describe("application whiteboard vision integration", () => {
         observationCount: 1,
         evidenceCommittedCount: 1
       });
-      expect(backend.analyzeCallCount).toBe(1);
+      expect(backend.analyzeCallCount).toBe(0);
       expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
         .toMatchObject({
           status: "DECIDED",
@@ -710,42 +771,68 @@ describe("application whiteboard vision integration", () => {
     }
   });
 
-  it("resumes a durable evidence decision after restart without rerunning the interpreter", async () => {
+  it("fails closed under a changed interpreter fingerprint and remains resumable by the original interpreter", async () => {
     const harness = await startedBoardSession();
-    const backend = new DeterministicFakeVisionBackend([{
-      observationKind: "DIAGRAM_RELATION",
-      interpretation: "The graph representation is productive.",
-      confidence: 0.95,
-      relevantShapeIds: ["shape:graph-model"]
-    }]);
-    const acceptedFingerprint = "c".repeat(64);
-    let fingerprintReads = 0;
-    const firstCoordinator = new WhiteboardVisionCoordinator({
+    const request = upload(harness.sessionId);
+    const acceptedFingerprint = "b".repeat(64);
+    await persistAcceptedPendingEvidenceBridge({
+      turns: harness.turns,
+      sessionId: harness.sessionId,
+      request,
+      interpreterFingerprint: acceptedFingerprint
+    });
+
+    const mismatched = new WhiteboardVisionCoordinator({
       sessions: harness.sessions,
-      backend,
       evidenceInterpreter: {
-        get fingerprint() {
-          fingerprintReads += 1;
-          return fingerprintReads === 1 ? acceptedFingerprint : "d".repeat(64);
-        },
+        fingerprint: "c".repeat(64),
         propose: () => {
-          throw new Error("Interpreter must not run while forcing the crash boundary");
+          throw new Error("Mismatched interpreter must never execute");
         }
       }
     });
-
-    const request = upload(harness.sessionId);
     try {
-      expect(await firstCoordinator.process(request)).toMatchObject({
+      expect(await mismatched.process(request)).toMatchObject({
         status: "REJECTED",
         reason: "EVIDENCE_INTERPRETER_MISMATCH"
       });
+      expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
+        .toMatchObject({ status: "PENDING", interpreterFingerprint: acceptedFingerprint });
+      expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
     } finally {
-      firstCoordinator.shutdown();
+      mismatched.shutdown();
     }
 
-    const interruptedState = harness.writer.getState();
-    const requestState = interruptedState.visionRequests[request.requestId];
+    const resumed = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      evidenceInterpreter: {
+        fingerprint: acceptedFingerprint,
+        propose: (context) => progressInterpreter().propose(context)
+      }
+    });
+    try {
+      expect(await resumed.process(request)).toMatchObject({
+        status: "ACCEPTED",
+        evidenceCommittedCount: 1
+      });
+    } finally {
+      resumed.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("resumes a durable evidence decision after restart without rerunning the interpreter", async () => {
+    const harness = await startedBoardSession();
+    const request = upload(harness.sessionId);
+    const acceptedFingerprint = "d".repeat(64);
+    await persistAcceptedPendingEvidenceBridge({
+      turns: harness.turns,
+      sessionId: harness.sessionId,
+      request,
+      interpreterFingerprint: acceptedFingerprint
+    });
+
+    const requestState = harness.writer.getState().visionRequests[request.requestId];
     if (
       requestState?.acceptedObservation === undefined
       || requestState.resultEventId === undefined
@@ -792,7 +879,6 @@ describe("application whiteboard vision integration", () => {
         evidenceCommittedCount: 1
       });
       expect(proposeCalls).toBe(0);
-      expect(backend.analyzeCallCount).toBe(1);
 
       const replay = await resumedCoordinator.process(request);
       expect(replay).toEqual(resumed);
