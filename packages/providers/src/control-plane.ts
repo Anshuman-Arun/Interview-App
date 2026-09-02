@@ -1347,14 +1347,14 @@ function validateAndSnapshotAdapter(
           capturedVerifyBillingSafety,
           adapterValue,
           [input]
-        ) as unknown;
+        );
       },
       async createSession() {
         return await REFLECT_APPLY_INTRINSIC(
           capturedCreateSession,
           adapterValue,
           []
-        ) as Awaited<ReturnType<ReasoningProvider["createSession"]>>;
+        );
       }
     };
     return objectFreeze(provider);
