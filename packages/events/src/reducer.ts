@@ -323,30 +323,20 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         ) {
           throw new Error("Accepted vision admission identity does not match replay authority");
         }
-        if (
-          request.snapshotBasis !== undefined
-          && !jsonDataEqual(admission.snapshotBasis, request.snapshotBasis)
-        ) {
+        if (!jsonDataEqual(admission.snapshotBasis, request.snapshotBasis)) {
           throw new Error("Accepted vision snapshot basis does not match the persisted request");
         }
-        if (
-          request.relevantShapeRevisions !== undefined
-          && !sameShapeRevisionBindings(
-            admission.shapeRevisionBindings,
-            request.relevantShapeRevisions
-          )
-        ) {
+        if (!sameShapeRevisionBindings(
+          admission.shapeRevisionBindings,
+          request.relevantShapeRevisions
+        )) {
           throw new Error("Accepted vision shape revisions do not match the persisted request");
         }
-        if (
-          request.regionBounds !== undefined
-          && !jsonDataEqual(admission.observation.bounds, request.regionBounds)
-        ) {
+        if (!jsonDataEqual(admission.observation.bounds, request.regionBounds)) {
           throw new Error("Accepted vision region bounds do not match the persisted request");
         }
         if (
-          request.requestedObservationKind !== undefined
-          && request.requestedObservationKind !== "ANY"
+          request.requestedObservationKind !== "ANY"
           && admission.observationKind !== request.requestedObservationKind
         ) {
           throw new Error("Accepted vision observation kind does not match the persisted request");

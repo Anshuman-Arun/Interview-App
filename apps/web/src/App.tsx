@@ -4,10 +4,7 @@ import { ProblemCard } from "./components/ProblemCard.js";
 import { TranscriptFeed } from "./components/TranscriptFeed.js";
 import { StudentInputArea } from "./components/StudentInputArea.js";
 import { WhiteboardCanvas } from "./components/WhiteboardCanvas.js";
-import {
-  TldrawWhiteboardAdapter,
-  type TldrawEditor
-} from "./tldraw-whiteboard-adapter.js";
+import { TldrawWhiteboardAdapter } from "./tldraw-whiteboard-adapter.js";
 import { useInterviewSession } from "./hooks/useInterviewSession.js";
 import {
   SessionReviewModal,
@@ -144,7 +141,7 @@ export const App: React.FC = () => {
   }, []);
 
 
-  const handleWhiteboardEditorMount = useCallback((_editor: TldrawEditor): void => {
+  const handleWhiteboardEditorMount = useCallback((): void => {
     void session.synchronizeWhiteboard().catch(() => {
       // The sync status remains fail-closed and is surfaced by the session hook.
     });
