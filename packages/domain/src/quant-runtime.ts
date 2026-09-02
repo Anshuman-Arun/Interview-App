@@ -100,7 +100,6 @@ export const QuantTradingRoundPublicSchema = z.object({
   fills: z.array(QuantTradingFillPublicSchema).max(64),
   portfolio: QuantTradingPortfolioPublicSchema,
   riskBreached: z.boolean(),
-  riskReason: z.string().min(1).max(240).optional(),
   accountingInvariantHolds: z.boolean()
 }).strict();
 
