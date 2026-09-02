@@ -482,6 +482,72 @@ describe("provider execution admission", () => {
     expect(getterCalls).toBe(0);
   });
 
+  it("rejects Proxy/accessor provider data before schema validation invokes traps", async () => {
+    let proposalGetterCalls = 0;
+    const accessorProposal = Object.defineProperty({
+      realizedAction: "WAIT",
+      claimedDisclosureLevel: 0,
+      claimedDisclosureIds: []
+    }, "speechText", {
+      enumerable: true,
+      get() {
+        proposalGetterCalls += 1;
+        return "must-not-run";
+      }
+    }) as unknown as InterviewerProposal;
+    const proposalProvider = testProvider({
+      createSession: async () => ({
+        async *sendTurn() {
+          yield accessorProposal;
+        },
+        async close() {}
+      })
+    });
+    const proposalSessionGuard = await openProviderExecutionSession({
+      provider: proposalProvider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+    await expect(collect(proposalSessionGuard.sendTurn({
+      context: {},
+      generationId: newGenerationId()
+    }))).rejects.toMatchObject({ code: "INVALID_PROVIDER_OUTPUT" });
+    expect(proposalGetterCalls).toBe(0);
+    await proposalSessionGuard.close();
+
+    let cancellationTrapCalls = 0;
+    const cancellationProxy = new Proxy({}, {
+      ownKeys() {
+        cancellationTrapCalls += 1;
+        throw new Error("must-not-run");
+      },
+      getOwnPropertyDescriptor() {
+        cancellationTrapCalls += 1;
+        throw new Error("must-not-run");
+      }
+    }) as unknown as ProviderCancellationResult;
+    const cancellationProvider = testProvider({
+      createSession: async () => ({
+        async *sendTurn() {
+          yield PROPOSAL;
+        },
+        async cancelTurn() {
+          return cancellationProxy;
+        },
+        async close() {}
+      })
+    });
+    const cancellationSession = await openProviderExecutionSession({
+      provider: cancellationProvider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+    await expect(cancellationSession.cancelTurn(newGenerationId()))
+      .rejects.toMatchObject({ code: "INVALID_CANCELLATION_RESULT" });
+    expect(cancellationTrapCalls).toBe(0);
+    await cancellationSession.close();
+  });
+
   it("runtime-validates provider output and suppresses provider error secrets", async () => {
     const outputSecret = "malformed-output-secret";
     const outputProvider = testProvider({
