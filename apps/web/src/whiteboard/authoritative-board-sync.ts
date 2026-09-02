@@ -329,11 +329,14 @@ async function shapesMatch(
     contentSha256: await shapeContentSha256(shape)
   })));
   local.sort((left, right) => left.shapeId.localeCompare(right.shapeId));
+  const remoteSorted = [...remote].sort((left, right) =>
+    left.shapeId.localeCompare(right.shapeId)
+  );
   for (let index = 0; index < local.length; index += 1) {
     if (
-      local[index]?.shapeId !== remote[index]?.shapeId
-      || local[index]?.revision !== remote[index]?.revision
-      || local[index]?.contentSha256 !== remote[index]?.contentSha256
+      local[index]?.shapeId !== remoteSorted[index]?.shapeId
+      || local[index]?.revision !== remoteSorted[index]?.revision
+      || local[index]?.contentSha256 !== remoteSorted[index]?.contentSha256
     ) return false;
   }
   return true;
