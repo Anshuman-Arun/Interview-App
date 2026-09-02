@@ -40,11 +40,15 @@ import {
   type InterviewVoiceState
 } from "./useInterviewVoice.js";
 import {
+  RendererStreamConnectionError,
   consumeAuthenticatedRendererStream,
   createLoopbackAcknowledgementSender
 } from "../renderer-stream.js";
 import type { TldrawWhiteboardAdapter } from "../tldraw-whiteboard-adapter.js";
 import type { TranscriptItem } from "../components/TranscriptFeed.js";
+
+const RENDERER_REATTACH_MAX_ATTEMPTS = 10;
+const RENDERER_REATTACH_DELAY_MS = 50;
 
 export interface UseInterviewSessionOptions {
   readonly baseUrl?: string;
@@ -509,9 +513,7 @@ export function useInterviewSession(
           signal: controller.signal
         }, client);
       } catch (err) {
-        if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : "Renderer stream disconnected");
-        }
+        if (!controller.signal.aborted) throw err;
       } finally {
         audioPlayer.dispose();
         if (rendererAudioPlayerRef.current === audioPlayer) {
@@ -540,7 +542,24 @@ export function useInterviewSession(
         await priorTask.catch(() => undefined);
       }
       if (rendererLaunchEpochRef.current !== launchEpoch) return;
-      await attachRendererStream(targetSessionId);
+
+      for (let attempt = 0; attempt < RENDERER_REATTACH_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          await attachRendererStream(targetSessionId);
+          return;
+        } catch (err) {
+          if (rendererLaunchEpochRef.current !== launchEpoch) return;
+          const retryableReplacementRace =
+            err instanceof RendererStreamConnectionError
+            && err.status === 409
+            && attempt + 1 < RENDERER_REATTACH_MAX_ATTEMPTS;
+          if (!retryableReplacementRace) {
+            setError(err instanceof Error ? err.message : "Renderer stream disconnected");
+            return;
+          }
+          await delay(RENDERER_REATTACH_DELAY_MS);
+        }
+      }
     })();
     rendererStreamTaskRef.current = task;
     void task.finally(() => {
@@ -856,6 +875,12 @@ export function useInterviewSession(
     clearError,
     disconnect
   };
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, milliseconds);
+  });
 }
 
 function historyEntryToTranscriptItem(entry: SessionHistoryEntry): TranscriptItem {
