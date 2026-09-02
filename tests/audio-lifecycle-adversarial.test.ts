@@ -647,6 +647,39 @@ describe("QueuedRendererAudioPlayer exposure semantics", () => {
     }
   });
 
+  it("reclaims started voice audio that never emits ended without claiming completion", async () => {
+    vi.useFakeTimers();
+    try {
+      const element = new AudioElement();
+      const playback = new BrowserAudioPlayback(() => element);
+      const adapter = new QueuedRendererAudioPlayer(playback);
+      const onStarted = vi.fn();
+      const onCompleted = vi.fn();
+      const presentation = adapter.playAudio({
+        deliveryId: newDeliveryId(),
+        audioRef: "never-ends.wav",
+        text: "bounded completion",
+        callbacks: { onStarted, onCompleted }
+      });
+
+      await Promise.resolve();
+      element.emit("playing");
+      await presentation;
+      expect(onStarted).toHaveBeenCalledTimes(1);
+      expect(onCompleted).not.toHaveBeenCalled();
+      expect(playback.snapshot().currentId).toBeDefined();
+
+      await vi.advanceTimersByTimeAsync(130_000);
+      await Promise.resolve();
+
+      expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
+      expect(onStarted).toHaveBeenCalledTimes(1);
+      expect(onCompleted).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("preserves FIFO order, rejects duplicate pending ids, and disposal clears owned elements", async () => {
     const elements: AudioElement[] = [];
     const playback = new BrowserAudioPlayback(() => {
