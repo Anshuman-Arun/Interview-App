@@ -186,11 +186,11 @@ export class LocalInterviewTransportRuntime {
     } catch (error) {
       failures.push(error);
     }
-    try {
-      await this.voiceTransportServer.stop();
-    } catch (error) {
-      failures.push(error);
-    }
+    // Begin closing voice HTTP admission without waiting for in-flight frame
+    // handlers. Worker shutdown below must be able to cancel VAD/STT that an
+    // accepted HTTP request is awaiting, otherwise server.close() could wait
+    // on the very work that teardown has not yet been allowed to cancel.
+    const voiceTransportStopping = this.voiceTransportServer.stop();
     this.voiceDeliveryShutdown = true;
     try {
       await this.voiceInput?.shutdown();
@@ -198,13 +198,17 @@ export class LocalInterviewTransportRuntime {
       failures.push(error);
     }
     try {
-      await this.orchestrator.waitForAll();
+      await this.voiceSynthesis?.shutdown();
     } catch (error) {
       failures.push(error);
     }
     try {
-      await this.voiceSynthesis?.cancelAll();
-      await this.voiceSynthesis?.shutdown();
+      await voiceTransportStopping;
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await this.orchestrator.waitForAll();
     } catch (error) {
       failures.push(error);
     }
