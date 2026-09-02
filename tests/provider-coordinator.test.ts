@@ -106,6 +106,48 @@ describe("application-owned ProviderCoordinator", () => {
     }
   });
 
+  it("completes authoritative cancellation even when provider stream, cancel, and close never resolve", async () => {
+    const harness = await coordinatorHarness();
+    try {
+      let signalTurnStarted: (() => void) | undefined;
+      const turnStarted = new Promise<void>((resolve) => {
+        signalTurnStarted = resolve;
+      });
+      const never = new Promise<never>(() => undefined);
+      const provider = testProvider(async () => ({
+        async *sendTurn() {
+          signalTurnStarted?.();
+          await never;
+        },
+        async cancelTurn() {
+          await never;
+          return { semantics: "NONE" as const };
+        },
+        async close() {
+          await never;
+        }
+      }));
+
+      const execution = await harness.coordinator.start(startInput(harness, provider));
+      await turnStarted;
+      void harness.coordinator.cancelGeneration(
+        execution.generationId,
+        "student barge-in"
+      );
+
+      const outcome = await execution.completion;
+      expect(outcome).toEqual({
+        status: "CANCELLED",
+        generationId: execution.generationId
+      });
+      expect(harness.writer.getState().generations[execution.generationId]?.status)
+        .toBe("SUPERSEDED");
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      harness.store.close();
+    }
+  });
+
   it("rejects a late proposal after a basis-changing mutation proactively supersedes its generation", async () => {
     const harness = await coordinatorHarness();
     try {
