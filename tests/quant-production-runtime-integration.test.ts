@@ -302,6 +302,12 @@ describe("production quant runtime integration", () => {
 
     await expectProtocolError(post({
       ...passCommand,
+      expectedRound: first.state.currentRound
+    }), 409, "CONFLICT");
+    expect(store.eventCount(sessionId)).toBe(eventCountAfterFirst);
+
+    await expectProtocolError(post({
+      ...passCommand,
       action: {
         type: "QUOTE",
         quote: {
@@ -505,6 +511,12 @@ describe("production quant runtime integration", () => {
         kind: "CHOOSE_OPTION",
         option: "LINEAR"
       }
+    }), 409, "CONFLICT");
+    expect(store.eventCount(researchSession)).toBe(countAfterFirst);
+
+    await expectProtocolError(post({
+      ...firstCommand,
+      expectedActionCount: first.acceptedActionCount
     }), 409, "CONFLICT");
     expect(store.eventCount(researchSession)).toBe(countAfterFirst);
 
