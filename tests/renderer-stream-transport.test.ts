@@ -416,7 +416,7 @@ describe("authenticated renderer stream transport", () => {
     const originalExecute = writer.execute.bind(writer);
     let injectedInvalidation = false;
     const executeSpy = vi.spyOn(writer, "execute").mockImplementation(
-      (async (...args: Parameters<typeof writer.execute>) => {
+      async (...args: Parameters<typeof writer.execute>) => {
         const result = await originalExecute(...args);
         const identity = args[1];
         if (!injectedInvalidation && identity.operation === "RECONNECT_DELIVERY") {
@@ -424,7 +424,7 @@ describe("authenticated renderer stream transport", () => {
           await turns.beginUtterance();
         }
         return result;
-      }) as typeof writer.execute
+      }
     );
 
     const published = await streamServer.publishDelivery(sessionId, atom.deliveryId);
