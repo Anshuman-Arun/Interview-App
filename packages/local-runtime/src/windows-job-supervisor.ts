@@ -22,6 +22,8 @@ Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
 
 $source = @'
 using System;
+using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Runtime.InteropServices;
 
@@ -218,7 +220,23 @@ public static class InterviewJobSupervisor
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     }
 
-    public static int Run(string executable, string[] arguments, string currentDirectory)
+    private static string Sha256Hex(Stream stream)
+    {
+        using (SHA256 algorithm = SHA256.Create())
+        {
+            byte[] digest = algorithm.ComputeHash(stream);
+            var output = new StringBuilder(digest.Length * 2);
+            foreach (byte value in digest)
+                output.Append(value.ToString("x2"));
+            return output.ToString();
+        }
+    }
+
+    public static int Run(
+        string executable,
+        string[] arguments,
+        string currentDirectory,
+        string expectedSha256)
     {
         IntPtr job = IntPtr.Zero;
         IntPtr process = IntPtr.Zero;
@@ -226,7 +244,22 @@ public static class InterviewJobSupervisor
         bool resumed = false;
         try
         {
-            job = CreateJobObjectW(IntPtr.Zero, null);
+            using (FileStream executableLock = new FileStream(
+                executable,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read))
+            {
+                string actualSha256 = Sha256Hex(executableLock);
+                if (!String.Equals(
+                    actualSha256,
+                    expectedSha256,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("executable identity mismatch");
+                }
+
+                job = CreateJobObjectW(IntPtr.Zero, null);
             if (job == IntPtr.Zero)
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
 
@@ -306,7 +339,8 @@ public static class InterviewJobSupervisor
             if (!GetExitCodeProcess(process, out exitCode))
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
 
-            return unchecked((int)exitCode);
+                return unchecked((int)exitCode);
+            }
         }
         finally
         {
@@ -342,7 +376,8 @@ try {
   $exitCode = [InterviewJobSupervisor]::Run(
     [string]$config.executable,
     [string[]]$arguments,
-    $currentDirectory
+    $currentDirectory,
+    [string]$config.expectedSha256
   )
   exit $exitCode
 }
