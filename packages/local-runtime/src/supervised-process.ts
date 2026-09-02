@@ -1020,18 +1020,19 @@ async function compileWindowsSupervisorAssembly(
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"]
     });
-    child.stdin.on("error", () => undefined);
-    child.stdout.on("error", () => undefined);
-    child.stderr.on("error", () => undefined);
-    child.stdin.end();
-    child.stdout.resume();
-    child.stderr.resume();
+    const compilerChild = child;
+    compilerChild.stdin.on("error", () => undefined);
+    compilerChild.stdout.on("error", () => undefined);
+    compilerChild.stderr.on("error", () => undefined);
+    compilerChild.stdin.end();
+    compilerChild.stdout.resume();
+    compilerChild.stderr.resume();
 
     const close = Promise.race([
-      waitForClose(child),
+      waitForClose(compilerChild),
       new Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>(
         (resolve) => {
-          child.once("error", () => resolve(
+          compilerChild.once("error", () => resolve(
             Object.freeze({ code: null, signal: null })
           ));
         }
