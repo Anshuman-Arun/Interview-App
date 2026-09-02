@@ -315,6 +315,38 @@ describe("provider execution admission", () => {
       .toThrow(ProviderExecutionError);
   });
 
+  it("snapshots guarded turn input before async iteration begins", async () => {
+    let observedGenerationId: unknown;
+    let observedContext: unknown;
+    const provider = testProvider({
+      session: {
+        sendTurn(input) {
+          observedGenerationId = input.generationId;
+          observedContext = input.context;
+          return proposalStream(PROPOSAL);
+        },
+        async close() {}
+      }
+    });
+    const session = await openProviderExecutionSession({
+      provider,
+      policy: LOCAL_POLICY
+    });
+
+    const generationId = newGenerationId();
+    const mutable = {
+      generationId,
+      context: { marker: "original" }
+    };
+    const stream = session.sendTurn(mutable);
+    mutable.context = { marker: "mutated" };
+
+    await expect(collect(stream)).resolves.toEqual([PROPOSAL]);
+    expect(observedGenerationId).toBe(generationId);
+    expect(observedContext).toEqual({ marker: "original" });
+    await session.close();
+  });
+
   it("rejects accessor-backed provider operations without invoking them", async () => {
     let getterCalls = 0;
     const provider = testProvider();
