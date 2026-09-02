@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { newSessionId } from "../packages/domain/src/index.js";
+import { newDeliveryId, newSessionId } from "../packages/domain/src/index.js";
 import {
   BrowserVoiceClient,
   BrowserVoiceStream
@@ -99,7 +99,7 @@ describe("browser voice client adversarial boundaries", () => {
     await expect(client.resolveAudioSource(
       newSessionId(),
       `audio_v1_${"b".repeat(64)}`,
-      "delivery_browser_voice_asset_bound" as never,
+      newDeliveryId(),
       controller.signal
     )).rejects.toThrow(/browser bound/u);
   });
