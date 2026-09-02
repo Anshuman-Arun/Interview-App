@@ -278,6 +278,14 @@ describe("production provider runtime resolution", () => {
       executionEntered = resolve;
     });
     let aborted = false;
+    let markDrainEntered: (() => void) | undefined;
+    const drainEntered = new Promise<void>((resolve) => {
+      markDrainEntered = resolve;
+    });
+    let releaseDrain: (() => void) | undefined;
+    const drainRelease = new Promise<void>((resolve) => {
+      releaseDrain = resolve;
+    });
     const providerRuntimeResolver = antigravityResolver(async (request) => {
       request.onProcessStart();
       executionEntered?.();
@@ -292,6 +300,9 @@ describe("production provider runtime resolution", () => {
         }
         request.signal.addEventListener("abort", onAbort, { once: true });
       });
+    }, async () => {
+      markDrainEntered?.();
+      await drainRelease;
     });
     const runtime = new LocalInterviewTransportRuntime({
       security: {
@@ -319,7 +330,21 @@ describe("production provider runtime resolution", () => {
       });
 
       await entered;
-      await expect(runtime.stop()).resolves.toBeUndefined();
+      const stopping = runtime.stop();
+      await drainEntered;
+      let stopSettled = false;
+      void stopping.then(
+        () => {
+          stopSettled = true;
+        },
+        () => {
+          stopSettled = true;
+        }
+      );
+      await Promise.resolve();
+      expect(stopSettled).toBe(false);
+      releaseDrain?.();
+      await expect(stopping).resolves.toBeUndefined();
       await expect(orchestration).resolves.toBeUndefined();
       expect(aborted).toBe(true);
       expect(Object.values(writer.getState().generations)).toEqual([
@@ -1554,7 +1579,8 @@ function credentialReferenceSource() {
 function antigravityResolver(
   execute: (
     request: SupervisedCliExecutionRequest
-  ) => Promise<SupervisedCliExecutionResult>
+  ) => Promise<SupervisedCliExecutionResult>,
+  drain?: () => Promise<void> | void
 ): ProviderRuntimeResolver {
   return new ProviderRuntimeResolver({
     adapterRuntimeSource: {
@@ -1568,7 +1594,8 @@ function antigravityResolver(
         return {
           executor: Object.freeze({ execute })
         };
-      }
+      },
+      ...(drain === undefined ? {} : { drain })
     },
     policySource: {
       resolvePolicy(selection) {
