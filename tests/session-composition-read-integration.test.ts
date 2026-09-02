@@ -287,6 +287,12 @@ describe("generic session composition + grounded product reads", () => {
     });
     expect(tradingReplay.available).toBe(true);
     expect(researchReplay.available).toBe(true);
+    if (tradingReplay.available) {
+      expect(tradingReplay.replay.problem).toBeUndefined();
+    }
+    if (researchReplay.available) {
+      expect(researchReplay.replay.problem).toBeUndefined();
+    }
 
     const tradingHistory = history.sessions.find(
       (entry) => entry.sessionId === tradingId
