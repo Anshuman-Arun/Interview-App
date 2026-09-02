@@ -442,6 +442,10 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
     ) {
       selectedInputRef.current = undefined;
       setInputDeviceId(undefined);
+      if (inputDeviceSwitchPendingRef.current) {
+        inputDeviceSwitchEpochRef.current += 1;
+        inputDeviceSwitchPendingRef.current = false;
+      }
       if (microphoneEnabledRef.current) {
         failVoiceCycle("Selected microphone disappeared");
       }
