@@ -101,16 +101,17 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
       throw new Error("Kokoro runtime rejected unexpected model configuration");
     }
     const runtimeVersion = this.client.runtimeVersion();
-    return Object.freeze({
-      modelId: "kokoro-af-heart",
-      modelVersion: KOKORO_MODEL_VERSION,
-      runtimeVersion,
-      supportedVoices: Object.freeze(["kokoro_af_heart"]),
-      supportedLanguages: Object.freeze(["en-US"] as const),
-      supportedSampleRates: Object.freeze([24_000] as const),
-      synthesize: async (
-        input: Parameters<KokoroRuntimeSession["synthesize"]>[0]
-      ): Promise<KokoroRuntimeSynthesisResult> => {
+    let synthesisTail: Promise<void> = Promise.resolve();
+    let synthesisReservations = 0;
+
+    const synthesizeSerialized = (
+      input: Parameters<KokoroRuntimeSession["synthesize"]>[0]
+    ): Promise<KokoroRuntimeSynthesisResult> => {
+      if (synthesisReservations >= TTS_LIMITS.maxConcurrentRequests) {
+        return Promise.reject(new Error("Kokoro runtime synthesis queue is full"));
+      }
+      synthesisReservations += 1;
+      const operation = synthesisTail.then(async () => {
         const result = await this.client.postJson("/v1/tts", {
           requestId: input.requestId,
           text: input.text,
@@ -126,7 +127,24 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
           )
         });
         return parseTtsResult(result);
-      },
+      });
+      synthesisTail = operation.then(
+        () => undefined,
+        () => undefined
+      );
+      return operation.finally(() => {
+        synthesisReservations = Math.max(0, synthesisReservations - 1);
+      });
+    };
+
+    return Object.freeze({
+      modelId: "kokoro-af-heart",
+      modelVersion: KOKORO_MODEL_VERSION,
+      runtimeVersion,
+      supportedVoices: Object.freeze(["kokoro_af_heart"]),
+      supportedLanguages: Object.freeze(["en-US"] as const),
+      supportedSampleRates: Object.freeze([24_000] as const),
+      synthesize: synthesizeSerialized,
       cancel: async (
         requestId: Parameters<NonNullable<KokoroRuntimeSession["cancel"]>>[0]
       ): Promise<void> => {
