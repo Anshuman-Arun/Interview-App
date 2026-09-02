@@ -530,19 +530,21 @@ describe("production quant runtime integration", () => {
       }
     }), 409, "CONFLICT");
 
+    const terminalRequestId = newRequestId();
+    const terminalCommand = {
+      protocolVersion: 1 as const,
+      type: "SUBMIT_QUANT_RESEARCH_ACTION" as const,
+      requestId: terminalRequestId,
+      sessionId: researchSession,
+      expectedActionCount: first.acceptedActionCount,
+      action: {
+        actionId: "model-choice-2",
+        kind: "CHOOSE_OPTION" as const,
+        option: "CONSTANT" as const
+      }
+    };
     const completed = QuantResearchStateResponseSchema.parse(
-      await responseJson(await post({
-        protocolVersion: 1,
-        type: "SUBMIT_QUANT_RESEARCH_ACTION",
-        requestId: newRequestId(),
-        sessionId: researchSession,
-        expectedActionCount: first.acceptedActionCount,
-        action: {
-          actionId: "model-choice-2",
-          kind: "CHOOSE_OPTION",
-          option: "CONSTANT"
-        }
-      }))
+      await responseJson(await post(terminalCommand))
     ).state;
     expect(completed.status).toBe("COMPLETE");
     expect(completed.acceptedActionCount).toBe(2);
@@ -573,11 +575,16 @@ describe("production quant runtime integration", () => {
     expect(tradingStillInitial.currentRound).toBe(1);
     expect(tradingStillInitial.actionRequired).toBe(true);
 
+    const terminalEventCount = store.eventCount(researchSession);
     await restart();
     expect(QuantResearchStateResponseSchema.parse(
       await responseJson(await getQuantState(researchSession))
     ).state).toEqual(completed);
     expect(registry.get(researchSession).getState().status).toBe("COMPLETED");
+    expect(QuantResearchStateResponseSchema.parse(
+      await responseJson(await post(terminalCommand))
+    ).state).toEqual(completed);
+    expect(store.eventCount(researchSession)).toBe(terminalEventCount);
   });
 
   it("admits only one of two simultaneous Research actions bound to the same progress", async () => {
