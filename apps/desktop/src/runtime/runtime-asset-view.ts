@@ -29,14 +29,20 @@ export interface RuntimeAssetView {
   dispose(): Promise<void>;
 }
 
-export async function cleanupStaleRuntimeAssetViews(baseRoot: string): Promise<void> {
+export async function cleanupStaleRuntimeAssetViews(
+  baseRoot: string,
+  signal?: AbortSignal
+): Promise<void> {
+  if (abortRequested(signal)) throw abortError();
   await ensureOwnedDirectory(baseRoot);
+  if (abortRequested(signal)) throw abortError();
   const entries = await readdir(baseRoot, { withFileTypes: true });
   if (entries.length > MAX_RUNTIME_VIEW_DIRECTORY_ENTRIES) {
     throw new Error("Local runtime asset-view directory exceeds the hard inspection limit");
   }
   let deleted = 0;
   for (const entry of entries) {
+    if (abortRequested(signal)) throw abortError();
     if (!entry.name.startsWith("run-")) continue;
     const candidate = resolveWithinRoot(baseRoot, entry.name);
     const metadata = await lstat(candidate);
@@ -56,6 +62,7 @@ export async function cleanupStaleRuntimeAssetViews(baseRoot: string): Promise<v
     await rm(candidate, { recursive: true, force: true });
     deleted += 1;
   }
+  if (abortRequested(signal)) throw abortError();
 }
 
 export async function materializeRuntimeAssetView(input: {
