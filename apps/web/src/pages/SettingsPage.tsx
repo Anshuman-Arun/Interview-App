@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import type {
   BorderStyle,
   CornerStyle,
-  InterfaceScale,
   ThemeMode
 } from "../appearance/appearance.js";
-import { ACCENT_OPTIONS } from "../appearance/appearance.js";
+import {
+  ACCENT_OPTIONS,
+  MAX_INTERFACE_ZOOM_PERCENT,
+  MIN_INTERFACE_ZOOM_PERCENT
+} from "../appearance/appearance.js";
 import { useAppearance } from "../appearance/AppearanceProvider.js";
 import "./SettingsPage.css";
 
@@ -30,14 +33,13 @@ export function SettingsPage({
     setTheme,
     setAccent,
     setAccentIntensity,
-    setScale,
+    setZoomPercent,
     setCorners,
     setBorders,
     reset
   } = useAppearance();
 
   const themes: readonly ThemeMode[] = ["system", "light", "dark"];
-  const scales: readonly InterfaceScale[] = ["s", "m", "l", "xl"];
   const corners: readonly CornerStyle[] = ["square", "soft", "round", "generous"];
   const borders: readonly BorderStyle[] = ["quiet", "regular", "strong", "contrast"];
 
@@ -153,21 +155,58 @@ export function SettingsPage({
         <div className="expressive-settings__copy">
           <span>04</span>
           <div>
-            <h3>Interface scale</h3>
-            <p>This is the native whole-app zoom control: S, M, L, or XL.</p>
+            <h3>Zoom</h3>
+            <p>Use any percentage, just like a normal app zoom control.</p>
           </div>
         </div>
-        <div className="expressive-settings__control expressive-settings__scale">
-          {scales.map((scale) => (
+        <div className="expressive-settings__control expressive-settings__zoom">
+          <div className="expressive-settings__zoom-stepper">
             <button
-              key={scale}
               type="button"
-              aria-pressed={settings.scale === scale}
-              onClick={() => setScale(scale)}
+              aria-label="Zoom out"
+              onClick={() => setZoomPercent(settings.zoomPercent - 10)}
+              disabled={settings.zoomPercent <= MIN_INTERFACE_ZOOM_PERCENT}
             >
-              {scale.toUpperCase()}
+              −
             </button>
-          ))}
+            <label>
+              <input
+                type="number"
+                min={MIN_INTERFACE_ZOOM_PERCENT}
+                max={MAX_INTERFACE_ZOOM_PERCENT}
+                step="1"
+                value={settings.zoomPercent}
+                aria-label="Interface zoom percent"
+                onChange={(event) => setZoomPercent(Number(event.target.value))}
+              />
+              <span>%</span>
+            </label>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              onClick={() => setZoomPercent(settings.zoomPercent + 10)}
+              disabled={settings.zoomPercent >= MAX_INTERFACE_ZOOM_PERCENT}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="expressive-settings__zoom-reset"
+              onClick={() => setZoomPercent(100)}
+              disabled={settings.zoomPercent === 100}
+            >
+              Reset
+            </button>
+          </div>
+          <input
+            type="range"
+            min={MIN_INTERFACE_ZOOM_PERCENT}
+            max={MAX_INTERFACE_ZOOM_PERCENT}
+            step="1"
+            value={settings.zoomPercent}
+            aria-label="Interface zoom"
+            onChange={(event) => setZoomPercent(Number(event.target.value))}
+          />
         </div>
       </section>
 
