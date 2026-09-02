@@ -1491,7 +1491,9 @@ function inspectDefinition(definition: LocalComponentDefinition): LocalComponent
     ? undefined
     : inspectKnownDataObject(top.expectedHandshake, "expectedHandshake", new Set([
         "componentVersion",
-        "protocolVersion"
+        "protocolVersion",
+        "modelVersionOrHash",
+        "capabilities"
       ]));
   const output = top.output === undefined
     ? undefined
@@ -1603,7 +1605,12 @@ function freezeDefinition(definition: LocalComponentDefinition): LocalComponentD
     : Object.freeze({ ...definition.restartPolicy }) as LocalRestartPolicy;
   const expectedHandshake = definition.expectedHandshake === undefined
     ? undefined
-    : Object.freeze({ ...definition.expectedHandshake });
+    : Object.freeze({
+        ...definition.expectedHandshake,
+        ...(definition.expectedHandshake.capabilities === undefined
+          ? {}
+          : { capabilities: Object.freeze([...definition.expectedHandshake.capabilities]) })
+      });
   const output = definition.output === undefined
     ? undefined
     : Object.freeze({ ...definition.output });
@@ -1754,6 +1761,32 @@ function validateExpectedHandshakeDefinition(expected: LocalExpectedHandshake | 
   }
   if (expected.protocolVersion !== undefined) {
     validateVersionValue(expected.protocolVersion, "expectedHandshake.protocolVersion", invalid);
+  }
+  if (expected.modelVersionOrHash !== undefined) {
+    if (typeof expected.modelVersionOrHash !== "string"
+        || expected.modelVersionOrHash.length === 0
+        || expected.modelVersionOrHash.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+      invalid("expectedHandshake.modelVersionOrHash must be a non-empty bounded string");
+    }
+  }
+  if (expected.capabilities !== undefined) {
+    const capabilitiesValue: unknown = expected.capabilities;
+    if (!Array.isArray(capabilitiesValue)
+        || capabilitiesValue.length > MAX_CAPABILITIES) {
+      invalid("expectedHandshake.capabilities must be a bounded array");
+    }
+    const seen = new Set<string>();
+    for (const capability of capabilitiesValue) {
+      if (typeof capability !== "string"
+          || capability.length === 0
+          || capability.length > DIAGNOSTIC_SANITIZATION_LIMITS.maxStringLength) {
+        invalid("expectedHandshake.capabilities must contain non-empty bounded strings");
+      }
+      if (seen.has(capability)) {
+        invalid("expectedHandshake.capabilities must not contain duplicates");
+      }
+      seen.add(capability);
+    }
   }
 }
 
@@ -2141,6 +2174,25 @@ function validateExpectedHandshake(
   }
   if (expected.protocolVersion !== undefined && actual.protocolVersion !== expected.protocolVersion) {
     throw new LocalRuntimeError("HANDSHAKE_MISMATCH", `Component ${componentId} reported an unexpected protocol version`);
+  }
+  if (expected.modelVersionOrHash !== undefined
+      && actual.modelVersionOrHash !== expected.modelVersionOrHash) {
+    throw new LocalRuntimeError(
+      "HANDSHAKE_MISMATCH",
+      `Component ${componentId} reported an unexpected model version or hash`
+    );
+  }
+  if (expected.capabilities !== undefined) {
+    const actualCapabilities = actual.capabilities;
+    const expectedSet = new Set(expected.capabilities);
+    if (actualCapabilities === undefined
+        || actualCapabilities.length !== expected.capabilities.length
+        || actualCapabilities.some((capability) => !expectedSet.has(capability))) {
+      throw new LocalRuntimeError(
+        "HANDSHAKE_MISMATCH",
+        `Component ${componentId} reported unexpected capabilities`
+      );
+    }
   }
 }
 
