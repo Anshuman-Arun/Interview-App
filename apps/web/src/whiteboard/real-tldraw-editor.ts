@@ -70,6 +70,16 @@ export class RealTldrawEditorBridge implements TldrawEditor {
     return this.nativeEditor;
   }
 
+  public setReadOnly(readOnly: boolean): void {
+    this.nativeEditor.updateInstanceState({ isReadonly: readOnly });
+    if (!readOnly) {
+      // tldraw may fall back to Select while the editor is readonly. Re-enter
+      // Pencil/Draw only at the readonly -> editable boundary; subsequent tool
+      // choices remain entirely under user control.
+      this.nativeEditor.setCurrentTool("draw");
+    }
+  }
+
   public getShape(id: string): TLShapeRecord | undefined {
     const shape = this.nativeEditor.getShape(toShapeId(id));
     return shape === undefined ? undefined : this.toLegacyShape(shape);

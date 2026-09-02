@@ -1,0 +1,24 @@
+.review-read-state {
+  display: grid;
+  max-width: 640px;
+  gap: 8px;
+  padding: 24px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.review-read-state > span {
+  color: var(--accent);
+  font: 650 7px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.review-read-state > p {
+  margin: 0;
+  color: var(--text-secondary);
+  font: 540 10px/1.55 var(--font-ui);
+}
+
+.review-read-state--error > span,
+.review-read-state--error > p {
+  color: var(--danger);
+}

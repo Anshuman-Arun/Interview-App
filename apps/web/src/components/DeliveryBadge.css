@@ -1,0 +1,28 @@
+.delivery-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font: 560 6.5px/1 var(--font-ui);
+}
+
+.delivery-badge__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.delivery-badge--neutral { color: var(--text-muted); }
+.delivery-badge--info { color: var(--info); }
+.delivery-badge--success { color: var(--success); }
+.delivery-badge--warning { color: var(--warning); }
+.delivery-badge--danger { color: var(--danger); }
+
+.delivery-badge[data-status="POSSIBLY_EXPOSED"] {
+  padding: 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border-subtle));
+  border-radius: var(--radius-control);
+  background: var(--warning-soft);
+}

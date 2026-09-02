@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import type { DeliveryId, InputEpisodeId, TurnId } from "../../../../packages/domain/src/index.js";
 import { MathText } from "./MathText.js";
 import { DeliveryBadge, type MessageDeliveryStatus } from "./DeliveryBadge.js";
+import "./TranscriptFeed.css";
 
 export interface TranscriptItem {
   readonly id: string;
@@ -18,18 +19,20 @@ export interface TranscriptItem {
 export interface TranscriptFeedProps {
   readonly items: readonly TranscriptItem[];
   readonly onRetry?: (itemId: string) => void | Promise<void>;
+  readonly retryDisabled?: boolean;
   readonly className?: string;
 }
 
 export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   items,
   onRetry,
+  retryDisabled = false,
   className = ""
 }) => {
   const feedEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    feedEndRef.current?.scrollIntoView({ block: "end" });
   }, [items]);
 
   const formatTimestamp = (timestamp: number): string => {
@@ -42,85 +45,95 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
 
   return (
     <div
-      className={`transcript-feed-container bg-slate-50/50 border border-slate-200 rounded-lg flex flex-col h-full overflow-hidden ${className}`}
+      className={`transcript-feed transcript-feed-container ${className}`}
       data-testid="transcript-feed"
     >
-      <div className="transcript-feed-header px-4 py-2.5 bg-white border-b border-slate-200 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 flex items-center gap-2">
-          <span>Interview Transcript</span>
-          <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">
-            {items.length} {items.length === 1 ? "entry" : "entries"}
-          </span>
+      <header className="transcript-feed__header">
+        <div>
+          <span className="transcript-feed__index">02 / DIALOGUE</span>
+          <strong>Interview transcript</strong>
+        </div>
+        <span className="transcript-feed__count">
+          {items.length} {items.length === 1 ? "entry" : "entries"}
         </span>
-      </div>
+      </header>
 
-      <div className="transcript-feed-messages flex-1 p-4 overflow-y-auto space-y-4">
+      <div className="transcript-feed__messages">
         {items.length === 0 ? (
-          <div className="empty-transcript-state text-center py-12 px-4 text-slate-400">
-            <div className="text-3xl mb-2">💬</div>
-            <p className="text-sm font-medium text-slate-600">The interview dialogue has not started yet.</p>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              Start the session or submit your initial reasoning step about Oxford Ramsey $R(3,3)$ below.
-            </p>
+          <div className="transcript-feed__empty">
+            <span className="transcript-feed__empty-index">00</span>
+            <div>
+              <p>The interview dialogue has not started yet.</p>
+              <span>
+                Start the session, then explain the first thing you know rather than
+                waiting for a perfect proof.
+              </span>
+            </div>
           </div>
         ) : (
-          items.map((item) => {
+          items.map((item, index) => {
             const isStudent = item.role === "student";
 
             return (
-              <div
+              <article
                 key={item.id}
                 data-testid={`transcript-bubble-${item.id}`}
-                className={`transcript-message flex flex-col ${
-                  isStudent ? "items-end" : "items-start"
-                }`}
+                className="transcript-entry transcript-message"
+                data-role={item.role}
               >
-                <div className="flex items-center gap-2 mb-1 px-1">
-                  <span className="text-[11px] font-semibold text-slate-600">
+                <div className="transcript-entry__rail">
+                  <span className="transcript-entry__number">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="transcript-entry__speaker">
                     {isStudent ? "Student (You)" : "Socratic Interviewer"}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <time dateTime={new Date(item.timestamp).toISOString()}>
                     {formatTimestamp(item.timestamp)}
-                  </span>
+                  </time>
                   <DeliveryBadge status={item.status} />
                 </div>
 
-                <div
-                  className={`message-bubble max-w-[85%] rounded-2xl px-4 py-3 shadow-xs text-sm leading-relaxed ${
-                    isStudent
-                      ? "bg-indigo-600 text-white rounded-br-xs"
-                      : "bg-white text-slate-900 border border-slate-200 rounded-bl-xs"
-                  }`}
-                >
-                  <div className={`message-content ${isStudent ? "student-math-bubble" : "ai-math-bubble"}`}>
+                <div className="transcript-entry__body">
+                  <div
+                    className={
+                      isStudent
+                        ? "message-content student-math-bubble"
+                        : "message-content ai-math-bubble"
+                    }
+                  >
                     <MathText text={item.text} />
                     {!isStudent && item.status === "DELIVERING" && (
-                      <span className="inline-block w-2 h-4 ml-1 bg-indigo-500 animate-pulse align-middle" />
+                      <span className="transcript-entry__streaming" aria-label="Responding">
+                        ▌
+                      </span>
                     )}
                   </div>
 
                   {item.errorMessage !== undefined && (
-                    <div className="mt-2 text-xs bg-rose-50 text-rose-700 p-2 rounded border border-rose-200 flex items-center justify-between gap-2">
+                    <div className="transcript-entry__error" role="status">
                       <span>Error: {item.errorMessage}</span>
                       {onRetry !== undefined && (
                         <button
                           type="button"
-                          onClick={() => void onRetry(item.id)}
-                          className="px-2 py-0.5 bg-rose-600 text-white font-medium rounded text-[11px] hover:bg-rose-700 cursor-pointer"
+                          disabled={retryDisabled}
+                          onClick={() => {
+                            if (!retryDisabled) void onRetry(item.id);
+                          }}
                         >
                           Retry
                         </button>
                       )}
                     </div>
                   )}
-                </div>
 
-                <div className="metadata-bar mt-1 px-1 text-[10px] text-slate-400 font-mono flex items-center gap-2">
-                  {item.turnId !== undefined && <span>Turn: {item.turnId}</span>}
-                  {item.inputEpisodeId !== undefined && <span>Episode: {item.inputEpisodeId}</span>}
-                  {item.deliveryId !== undefined && <span>Delivery: {item.deliveryId}</span>}
+                  <div className="metadata-bar transcript-entry__meta">
+                    {item.turnId !== undefined && <span>Turn: {item.turnId}</span>}
+                    {item.inputEpisodeId !== undefined && <span>Episode: {item.inputEpisodeId}</span>}
+                    {item.deliveryId !== undefined && <span>Delivery: {item.deliveryId}</span>}
+                  </div>
                 </div>
-              </div>
+              </article>
             );
           })
         )}

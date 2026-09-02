@@ -58,6 +58,22 @@ import type { TranscriptItem } from "../components/TranscriptFeed.js";
 const RENDERER_REATTACH_MAX_ATTEMPTS = 10;
 const RENDERER_REATTACH_DELAY_MS = 50;
 
+export class TerminalSessionOutcomeUnknownError extends Error {
+  public constructor() {
+    super(
+      "Terminal session outcome is unknown; live input remains locked until the session is recovered"
+    );
+    this.name = "TerminalSessionOutcomeUnknownError";
+  }
+}
+
+export class TerminalSessionTransitionSupersededError extends Error {
+  public constructor() {
+    super("Terminal session transition was superseded by a newer session transition");
+    this.name = "TerminalSessionTransitionSupersededError";
+  }
+}
+
 export interface UseInterviewSessionOptions {
   readonly baseUrl?: string;
   readonly rendererStreamUrl?: string;
@@ -86,6 +102,7 @@ export interface UseInterviewSessionResult {
   readonly isTransportManaged: boolean;
   readonly setBaseUrl: (url: string) => void;
   readonly fetchAvailableSessions: () => Promise<readonly StoredSessionSummary[]>;
+  readonly fetchAvailableSessionsStrict: () => Promise<readonly StoredSessionSummary[]>;
   readonly readSessionEvaluation: (
     sessionId: SessionId,
     signal?: AbortSignal
@@ -98,7 +115,7 @@ export interface UseInterviewSessionResult {
     signal?: AbortSignal
   ) => Promise<SessionHistoryReadResponse>;
   readonly startSession: (customSessionId?: SessionId) => Promise<void>;
-  readonly recoverSession: (sessionId: SessionId) => Promise<void>;
+  readonly recoverSession: (sessionId: SessionId) => Promise<SessionStatus | null>;
   readonly completeSession: (summary?: string) => Promise<void>;
   readonly archiveSession: (reason?: string) => Promise<void>;
   readonly whiteboardSync: AuthoritativeBoardSyncSnapshot;
@@ -326,6 +343,9 @@ export function useInterviewSession(
   const rendererStreamTaskRef = useRef<Promise<void> | null>(null);
   const rendererLaunchEpochRef = useRef(0);
   const sessionTransitionEpochRef = useRef(0);
+  const sessionMutationAdmissionRef = useRef(false);
+  const transportEpochRef = useRef(0);
+  const sessionListRequestEpochRef = useRef(0);
   const rendererRestartRef = useRef<((targetSessionId: SessionId) => void) | null>(null);
   const rendererClientRef = useRef<RendererClient | null>(null);
   const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
@@ -413,9 +433,52 @@ export function useInterviewSession(
     if (desktopBootstrap !== undefined) {
       throw new Error("Desktop-managed command endpoint cannot be changed by renderer state");
     }
+    if (sessionId !== null && sessionStatus === "ACTIVE") {
+      setError(
+        "Command server URL cannot change while an active session is attached or awaiting recovery"
+      );
+      return;
+    }
+
+    const candidate = url.trim();
+    try {
+      deriveDefaultRendererStreamUrl(candidate);
+      deriveDefaultVoiceBaseUrl(candidate);
+    } catch {
+      setError("Command server URL must be an exact HTTP loopback origin with usable renderer and voice ports");
+      return;
+    }
+
+    const normalized = new URL(candidate).origin;
+    setError(null);
+    if (normalized === baseUrl) return;
+
+    // Endpoint changes are authority boundaries. Invalidate every in-flight
+    // transition/list read before clearing state from the previous server.
+    transportEpochRef.current += 1;
+    sessionListRequestEpochRef.current += 1;
+    sessionTransitionEpochRef.current += 1;
+    sessionMutationAdmissionRef.current = false;
+    pendingSubmissionsRef.current.clear();
     resetBoardSync();
-    setBaseUrlState(url);
-  }, [desktopBootstrap, resetBoardSync]);
+    setAvailableSessions([]);
+    setSessionId(null);
+    setIsSessionStarted(false);
+    setSessionStatus("CREATED");
+    setProblem(null);
+    setTranscript([]);
+    setSequence(0);
+    setContextEpoch(0);
+    setIsConnected(false);
+    setIsStreaming(false);
+    setBaseUrlState(normalized);
+  }, [
+    baseUrl,
+    desktopBootstrap,
+    resetBoardSync,
+    sessionId,
+    sessionStatus
+  ]);
 
   const getCommandClient = useCallback((): BrowserCommandClient => {
     return new BrowserCommandClient({
@@ -538,16 +601,42 @@ export function useInterviewSession(
     return getSessionReadClient().getHistory(signal);
   }, [getSessionReadClient]);
 
+  const listAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
+    const transportEpoch = transportEpochRef.current;
+    const requestEpoch = sessionListRequestEpochRef.current + 1;
+    sessionListRequestEpochRef.current = requestEpoch;
+    const client = getCommandClient();
+    const sessions = await client.listSessions();
+
+    if (transportEpochRef.current !== transportEpoch) {
+      throw new Error("Command server changed while stored sessions were being read");
+    }
+    if (sessionListRequestEpochRef.current !== requestEpoch) {
+      throw new Error("Stored session read was superseded by a newer request");
+    }
+    setAvailableSessions(sessions);
+    return sessions;
+  }, [getCommandClient]);
+
   const fetchAvailableSessions = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
     try {
-      const client = getCommandClient();
-      const sessions = await client.listSessions();
-      setAvailableSessions(sessions);
-      return sessions;
+      return await listAvailableSessions();
     } catch {
       return [];
     }
-  }, [getCommandClient]);
+  }, [listAvailableSessions]);
+
+  const fetchAvailableSessionsStrict = useCallback(async (): Promise<readonly StoredSessionSummary[]> => {
+    try {
+      return await listAvailableSessions();
+    } catch (err) {
+      const message = err instanceof Error
+        ? err.message
+        : "Failed to verify stored sessions";
+      setError(message);
+      throw err;
+    }
+  }, [listAvailableSessions]);
 
   const attachRendererStream = useCallback(
     async (targetSessionId: SessionId): Promise<void> => {
@@ -738,6 +827,7 @@ export function useInterviewSession(
   const beginSessionTransition = useCallback(async (): Promise<number> => {
     const transitionEpoch = sessionTransitionEpochRef.current + 1;
     sessionTransitionEpochRef.current = transitionEpoch;
+    sessionMutationAdmissionRef.current = false;
 
     // Session replacement is an authority boundary, not merely a React state
     // change. Revoke the old renderer synchronously and begin bounded
@@ -750,6 +840,11 @@ export function useInterviewSession(
 
   const startSession = useCallback(
     async (customSessionId?: SessionId): Promise<void> => {
+      if (sessionId !== null && sessionStatus === "ACTIVE") {
+        throw new Error(
+          "Cannot start a new session while an active session is attached or awaiting recovery"
+        );
+      }
       setError(null);
       const targetSessionId =
         customSessionId ??
@@ -758,6 +853,10 @@ export function useInterviewSession(
       if (sessionTransitionEpochRef.current !== transitionEpoch) return;
 
       try {
+        if (sessionId !== null && sessionId !== targetSessionId) {
+          options.whiteboardAdapter?.resetForNewSession();
+          resetBoardSync();
+        }
         const client = getCommandClient();
         await client.startSession(targetSessionId);
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
@@ -798,6 +897,7 @@ export function useInterviewSession(
           });
         }
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        sessionMutationAdmissionRef.current = true;
         launchRendererStream(targetSessionId);
       } catch (err) {
         if (sessionTransitionEpochRef.current !== transitionEpoch) return;
@@ -817,21 +917,53 @@ export function useInterviewSession(
       launchRendererStream,
       resetBoardSync,
       sessionId,
+      sessionStatus,
       synchronizeWhiteboardFor
     ]
   );
 
   const recoverSession = useCallback(
-    async (targetSessionId: SessionId): Promise<void> => {
+    async (targetSessionId: SessionId): Promise<SessionStatus | null> => {
+      if (
+        sessionId !== null
+        && sessionStatus === "ACTIVE"
+        && sessionId !== targetSessionId
+      ) {
+        throw new Error(
+          "Cannot replace an active or unresolved interview with another session"
+        );
+      }
       setError(null);
       const transitionEpoch = await beginSessionTransition();
-      if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+      if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
       try {
         const client = getCommandClient();
+        const summary = await client.getSessionSummary(targetSessionId);
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
+
+        if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
+          pendingSubmissionsRef.current.clear();
+          resetBoardSync();
+          sessionMutationAdmissionRef.current = false;
+          setSessionId(targetSessionId);
+          setIsSessionStarted(summary.started);
+          setSessionStatus(summary.status);
+          setSequence(summary.sequence);
+          setContextEpoch(summary.contextEpoch);
+          setProblem(null);
+          setTranscript(summary.history.map(historyEntryToTranscriptItem));
+          stopRendererTransport();
+          return summary.status;
+        }
+
+        if (!summary.started || summary.status !== "ACTIVE") {
+          throw new Error("Session is not in a recoverable ACTIVE or terminal state");
+        }
+
         const context = await client.getInterviewSessionContext(targetSessionId);
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         const response = await client.resumeSession(targetSessionId);
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (sessionId !== targetSessionId) {
           pendingSubmissionsRef.current.clear();
           resetBoardSync();
@@ -848,21 +980,24 @@ export function useInterviewSession(
         try {
           await synchronizeWhiteboardFor(targetSessionId);
         } catch {
-          if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+          if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
           setWhiteboardSync({
             status: "UNSYNCHRONIZED",
             pendingMutationCount: 0,
             reason: "Recovered whiteboard does not have a verified local revision correspondence"
           });
         }
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (response.status === "ACTIVE") {
+          sessionMutationAdmissionRef.current = true;
           launchRendererStream(targetSessionId);
         } else {
+          sessionMutationAdmissionRef.current = false;
           stopRendererTransport();
         }
+        return response.status;
       } catch (err) {
-        if (sessionTransitionEpochRef.current !== transitionEpoch) return;
+        if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         let msg = "Failed to recover session";
         if (err instanceof BrowserCommandProtocolError) {
           msg = `Recovery error [${err.code}]: HTTP ${String(err.status)}`;
@@ -879,26 +1014,57 @@ export function useInterviewSession(
       launchRendererStream,
       resetBoardSync,
       sessionId,
+      sessionStatus,
       stopRendererTransport,
       synchronizeWhiteboardFor
     ]
   );
 
   const synchronizeWhiteboard = useCallback(async (): Promise<void> => {
-    if (sessionId === null || sessionStatus !== "ACTIVE") return;
+    if (
+      sessionId === null
+      || sessionStatus !== "ACTIVE"
+      || !isSessionStarted
+      || !sessionMutationAdmissionRef.current
+    ) return;
     await synchronizeWhiteboardFor(sessionId);
-  }, [sessionId, sessionStatus, synchronizeWhiteboardFor]);
+  }, [
+    isSessionStarted,
+    sessionId,
+    sessionStatus,
+    synchronizeWhiteboardFor
+  ]);
 
   const submitWhiteboardMutation = useCallback(async (
     change: NormalizedStudentShapeChange
   ): Promise<void> => {
-    if (sessionId === null || sessionStatus !== "ACTIVE") return;
-    const coordinator = getBoardSyncCoordinator(sessionId);
-    const scheduler = getVisionScheduler(sessionId);
+    if (
+      sessionId === null
+      || sessionStatus !== "ACTIVE"
+      || !sessionMutationAdmissionRef.current
+    ) return;
+    const targetSessionId = sessionId;
+    const coordinator = getBoardSyncCoordinator(targetSessionId);
+    const scheduler = getVisionScheduler(targetSessionId);
+    const isCurrentCoordinator = (): boolean =>
+      sessionMutationAdmissionRef.current
+      && boardSyncRef.current === coordinator
+      && boardSyncSessionRef.current === targetSessionId;
+    const wakeCurrentScheduler = (): void => {
+      if (
+        isCurrentCoordinator()
+        && scheduler !== undefined
+        && visionSchedulerRef.current === scheduler
+        && visionSchedulerSessionRef.current === targetSessionId
+      ) {
+        scheduler.wake();
+      }
+    };
+
     if (coordinator.snapshot().status === "UNINITIALIZED") {
       scheduler?.record(change);
-      await synchronizeWhiteboardFor(sessionId);
-      scheduler?.wake();
+      await synchronizeWhiteboardFor(targetSessionId);
+      wakeCurrentScheduler();
       return;
     }
     try {
@@ -906,12 +1072,18 @@ export function useInterviewSession(
       // any vision work so the server can supersede stale inference promptly.
       const pending = coordinator.submit(change);
       scheduler?.record(change);
-      setWhiteboardSync(coordinator.snapshot());
+      if (isCurrentCoordinator()) {
+        setWhiteboardSync(coordinator.snapshot());
+      }
       await pending;
-      setWhiteboardSync(coordinator.snapshot());
-      scheduler?.wake();
+      if (isCurrentCoordinator()) {
+        setWhiteboardSync(coordinator.snapshot());
+      }
+      wakeCurrentScheduler();
     } catch (error) {
-      setWhiteboardSync(coordinator.snapshot());
+      if (isCurrentCoordinator()) {
+        setWhiteboardSync(coordinator.snapshot());
+      }
       throw error;
     }
   }, [
@@ -922,63 +1094,162 @@ export function useInterviewSession(
     synchronizeWhiteboardFor
   ]);
 
+  const settleTerminalSession = useCallback((
+    status: Extract<SessionStatus, "COMPLETED" | "ARCHIVED">
+  ): void => {
+    sessionMutationAdmissionRef.current = false;
+    resetBoardSync();
+    void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    stopRendererTransport();
+    setSessionStatus(status);
+  }, [
+    resetBoardSync,
+    stopRendererTransport,
+    voiceIntegration.voiceControls
+  ]);
+
+  const failClosedUnknownTerminalOutcome = useCallback((): never => {
+    sessionMutationAdmissionRef.current = false;
+    // Detach from the last-known ACTIVE lifecycle instead of route-locking the
+    // UI into a state that cannot be recovered. sessionStatus remains the
+    // last authoritative status we observed; isSessionStarted=false means no
+    // live mutation/renderer authority is currently attached.
+    setIsSessionStarted(false);
+    resetBoardSync();
+    void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
+    stopRendererTransport();
+    const unknown = new TerminalSessionOutcomeUnknownError();
+    setError(unknown.message);
+    throw unknown;
+  }, [
+    resetBoardSync,
+    stopRendererTransport,
+    voiceIntegration.voiceControls
+  ]);
+
+  const reconcileTerminalFailure = useCallback(async (
+    client: BrowserCommandClient,
+    targetSessionId: SessionId,
+    transitionEpoch: number,
+    originalError: unknown
+  ): Promise<void> => {
+    if (sessionTransitionEpochRef.current !== transitionEpoch) {
+      throw new TerminalSessionTransitionSupersededError();
+    }
+    try {
+      const summary = await client.getSessionSummary(targetSessionId);
+      if (sessionTransitionEpochRef.current !== transitionEpoch) {
+        throw new TerminalSessionTransitionSupersededError();
+      }
+      if (summary.status === "COMPLETED" || summary.status === "ARCHIVED") {
+        settleTerminalSession(summary.status);
+        setError(null);
+        return;
+      }
+      if (summary.started && summary.status === "ACTIVE") {
+        sessionMutationAdmissionRef.current = true;
+        setSessionStatus("ACTIVE");
+        launchRendererStream(targetSessionId);
+        const message = originalError instanceof Error
+          ? originalError.message
+          : "Terminal session command failed";
+        setError(message);
+        throw originalError;
+      }
+      failClosedUnknownTerminalOutcome();
+    } catch (reconciliationError) {
+      if (reconciliationError === originalError) throw originalError;
+      if (
+        reconciliationError instanceof TerminalSessionOutcomeUnknownError
+        || reconciliationError instanceof TerminalSessionTransitionSupersededError
+      ) {
+        throw reconciliationError;
+      }
+      failClosedUnknownTerminalOutcome();
+    }
+  }, [
+    failClosedUnknownTerminalOutcome,
+    launchRendererStream,
+    settleTerminalSession
+  ]);
+
   const completeSession = useCallback(
     async (summary?: string): Promise<void> => {
-      if (sessionId === null) return;
-      sessionTransitionEpochRef.current += 1;
+      if (
+        sessionId === null
+        || sessionStatus !== "ACTIVE"
+        || !isSessionStarted
+        || !sessionMutationAdmissionRef.current
+      ) return;
+      const transitionEpoch = sessionTransitionEpochRef.current + 1;
+      sessionTransitionEpochRef.current = transitionEpoch;
+      sessionMutationAdmissionRef.current = false;
+      stopRendererTransport();
+      void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
       setError(null);
+      const client = getCommandClient();
       try {
-        const client = getCommandClient();
         await client.completeSession(sessionId, summary);
-        resetBoardSync();
-        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
-        stopRendererTransport();
-        setSessionStatus("COMPLETED");
+        if (sessionTransitionEpochRef.current !== transitionEpoch) {
+          throw new TerminalSessionTransitionSupersededError();
+        }
+        settleTerminalSession("COMPLETED");
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed to complete session";
-        setError(msg);
-        throw err;
+        await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
       }
     },
     [
       getCommandClient,
-      resetBoardSync,
+      isSessionStarted,
+      reconcileTerminalFailure,
       sessionId,
-      stopRendererTransport,
-      voiceIntegration.voiceControls
+      sessionStatus,
+      settleTerminalSession
     ]
   );
 
   const archiveSession = useCallback(
     async (reason?: string): Promise<void> => {
-      if (sessionId === null) return;
-      sessionTransitionEpochRef.current += 1;
+      if (
+        sessionId === null
+        || sessionStatus !== "ACTIVE"
+        || !isSessionStarted
+        || !sessionMutationAdmissionRef.current
+      ) return;
+      const transitionEpoch = sessionTransitionEpochRef.current + 1;
+      sessionTransitionEpochRef.current = transitionEpoch;
+      sessionMutationAdmissionRef.current = false;
+      stopRendererTransport();
+      void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
       setError(null);
+      const client = getCommandClient();
       try {
-        const client = getCommandClient();
         await client.archiveSession(sessionId, reason);
-        resetBoardSync();
-        void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
-        stopRendererTransport();
-        setSessionStatus("ARCHIVED");
+        if (sessionTransitionEpochRef.current !== transitionEpoch) {
+          throw new TerminalSessionTransitionSupersededError();
+        }
+        settleTerminalSession("ARCHIVED");
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed to archive session";
-        setError(msg);
-        throw err;
+        await reconcileTerminalFailure(client, sessionId, transitionEpoch, err);
       }
     },
     [
       getCommandClient,
-      resetBoardSync,
+      isSessionStarted,
+      reconcileTerminalFailure,
       sessionId,
-      stopRendererTransport,
-      voiceIntegration.voiceControls
+      sessionStatus,
+      settleTerminalSession
     ]
   );
 
   const submitTypedInput = useCallback(
     async (text: string): Promise<void> => {
-      if (sessionId === null) {
+      if (
+        sessionId === null
+        || sessionStatus !== "ACTIVE"
+        || !sessionMutationAdmissionRef.current
+      ) {
         throw new Error("Cannot submit input without an active session");
       }
 
@@ -1035,12 +1306,16 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [sessionId, getCommandClient]
+    [sessionId, sessionStatus, getCommandClient]
   );
 
   const retrySubmission = useCallback(
     async (itemId: string): Promise<void> => {
-      if (sessionId === null) return;
+      if (
+        sessionId === null
+        || sessionStatus !== "ACTIVE"
+        || !sessionMutationAdmissionRef.current
+      ) return;
       const record = pendingSubmissionsRef.current.get(itemId);
       if (record === undefined) return;
       if (record.sessionId !== sessionId) {
@@ -1102,11 +1377,12 @@ export function useInterviewSession(
         );
       }
     },
-    [sessionId, getCommandClient]
+    [sessionId, sessionStatus, getCommandClient]
   );
 
   const disconnect = useCallback((): void => {
     sessionTransitionEpochRef.current += 1;
+    sessionMutationAdmissionRef.current = false;
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
   }, [stopRendererTransport, voiceIntegration.voiceControls]);
@@ -1118,6 +1394,7 @@ export function useInterviewSession(
   useEffect(() => {
     return () => {
       sessionTransitionEpochRef.current += 1;
+      sessionMutationAdmissionRef.current = false;
       rendererLaunchEpochRef.current += 1;
       rendererRestartRef.current = null;
       if (abortControllerRef.current !== null) {
@@ -1154,6 +1431,7 @@ export function useInterviewSession(
     isTransportManaged: desktopBootstrap !== undefined,
     setBaseUrl,
     fetchAvailableSessions,
+    fetchAvailableSessionsStrict,
     readSessionEvaluation,
     readSessionReplay,
     readSessionHistory,

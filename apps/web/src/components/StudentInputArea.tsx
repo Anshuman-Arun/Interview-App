@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { MathText } from "./MathText.js";
+import "./StudentInputArea.css";
 
 export interface StudentInputAreaProps {
   readonly onSubmit: (text: string) => Promise<void> | void;
@@ -20,115 +21,109 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
 }) => {
   const [draftText, setDraftText] = useState("");
   const [showPreview, setShowPreview] = useState(true);
+  const [localSubmitting, setLocalSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const submissionPendingRef = useRef(false);
 
   const charCount = draftText.length;
   const isTooLong = charCount > MAX_INPUT_CHARS;
   const isEmpty = draftText.trim().length === 0;
-  const canSubmit = !isEmpty && !isTooLong && !disabled && !isSubmitting;
+  const submissionLocked = isSubmitting || localSubmitting;
+  const canSubmit =
+    !isEmpty && !isTooLong && !disabled && !submissionLocked;
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submissionPendingRef.current) return;
+
     const textToSend = draftText.trim();
+    submissionPendingRef.current = true;
+    setLocalSubmitting(true);
     setDraftText("");
+
     try {
       await onSubmit(textToSend);
     } catch {
-      // Restore draft text if submission fails
-      setDraftText(textToSend);
+      setDraftText((current) => current.length === 0 ? textToSend : current);
+    } finally {
+      submissionPendingRef.current = false;
+      setLocalSubmitting(false);
     }
   }, [canSubmit, draftText, onSubmit]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Hotkey: Ctrl+Enter or Cmd+Enter to submit immediately
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        e.preventDefault();
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
         void handleSubmit();
       }
     },
     [handleSubmit]
   );
 
-  // Auto-resize textarea height as user types
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea !== null) {
       textarea.style.height = "auto";
-      textarea.style.height = `${String(Math.min(textarea.scrollHeight, 240))}px`;
+      textarea.style.height = `${String(Math.min(textarea.scrollHeight, 210))}px`;
     }
   }, [draftText]);
 
   return (
     <div
-      className={`student-input-area bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex flex-col gap-3 ${className}`}
+      className={`reasoning-composer student-input-area ${className}`}
       data-testid="student-input-area"
     >
-      <div className="flex items-center justify-between">
-        <label
-          htmlFor="student-reasoning-input"
-          className="text-xs font-semibold uppercase tracking-wider text-slate-700 flex items-center gap-1.5"
-        >
+      <div className="reasoning-composer__head">
+        <label htmlFor="student-reasoning-input">
           <span>Your Mathematical Reasoning</span>
-          <span className="text-slate-400 text-[11px] font-normal lowercase">
-            (Supports LaTeX math: $...$ or $$...$$)
-          </span>
+          <small>LaTeX supported · $...$ or $$...$$</small>
         </label>
+
         <button
           type="button"
-          onClick={() => setShowPreview((prev) => !prev)}
-          className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+          onClick={() => setShowPreview((previous) => !previous)}
           data-testid="toggle-math-preview"
         >
           {showPreview ? "Hide Math Preview" : "Show Math Preview"}
         </button>
       </div>
 
-      <div className="relative">
-        <textarea
-          id="student-reasoning-input"
-          ref={textareaRef}
-          value={draftText}
-          onChange={(e) => setDraftText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={disabled || isSubmitting}
-          placeholder={placeholder}
-          rows={3}
-          className="w-full px-3 py-2 text-sm text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-none font-sans leading-relaxed disabled:bg-slate-100 disabled:text-slate-500 transition-shadow"
-          data-testid="reasoning-textarea"
-        />
-      </div>
+      <textarea
+        id="student-reasoning-input"
+        ref={textareaRef}
+        value={draftText}
+        onChange={(event) => setDraftText(event.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={disabled || submissionLocked}
+        placeholder={placeholder}
+        rows={3}
+        className="reasoning-composer__textarea"
+        data-testid="reasoning-textarea"
+      />
 
       {showPreview && draftText.trim().length > 0 && (
         <div
-          className="live-math-preview bg-slate-50 border border-slate-200/80 rounded-md p-3 text-sm text-slate-800 max-h-36 overflow-y-auto"
+          className="reasoning-composer__preview live-math-preview"
           data-testid="live-math-preview"
         >
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-            Live Math Preview
-          </div>
-          <div className="preview-content font-serif leading-relaxed">
+          <span>Preview</span>
+          <div className="preview-content">
             <MathText text={draftText} />
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-        <div className="flex items-center gap-2">
+      <div className="reasoning-composer__foot">
+        <div className="reasoning-composer__meta">
           <span
-            className={`text-xs font-mono ${
-              isTooLong
-                ? "text-rose-600 font-semibold"
-                : charCount > MAX_INPUT_CHARS * 0.9
-                ? "text-amber-600"
-                : "text-slate-400"
-            }`}
             data-testid="char-counter"
+            data-warning={String(charCount > MAX_INPUT_CHARS * 0.9)}
+            data-error={String(isTooLong)}
           >
             {charCount.toLocaleString()} / {MAX_INPUT_CHARS.toLocaleString()} chars
           </span>
-          <span className="text-[11px] text-slate-400 hidden sm:inline">
-            • Press <kbd className="px-1 py-0.5 bg-slate-100 rounded border text-slate-600">Ctrl+Enter</kbd> to submit
+          <span>
+            Press <kbd>Ctrl+Enter</kbd> to submit
           </span>
         </div>
 
@@ -136,21 +131,14 @@ export const StudentInputArea: React.FC<StudentInputAreaProps> = ({
           type="button"
           onClick={() => void handleSubmit()}
           disabled={!canSubmit}
-          className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+          className={
             canSubmit
-              ? "bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
-              : "bg-slate-200 text-slate-400 cursor-not-allowed"
-          }`}
+              ? "reasoning-composer__submit"
+              : "reasoning-composer__submit cursor-not-allowed"
+          }
           data-testid="submit-reasoning-btn"
         >
-          {isSubmitting ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Sending...</span>
-            </span>
-          ) : (
-            <span>Submit Reasoning</span>
-          )}
+          {submissionLocked ? "Sending..." : "Submit Reasoning"}
         </button>
       </div>
     </div>

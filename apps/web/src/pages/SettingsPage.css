@@ -1,0 +1,254 @@
+.expressive-settings {
+  width: min(100%, 980px);
+  margin: 0 auto;
+  padding-top: 26px;
+  border-top: 1px solid var(--border-default);
+}
+
+.expressive-settings__intro {
+  display: flex;
+  min-height: 130px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 0 28px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.expressive-settings__intro span {
+  color: var(--accent);
+  font: 650 7px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.expressive-settings__intro h2 {
+  max-width: 17ch;
+  margin: 8px 0 0;
+  color: var(--text-primary);
+  font: 650 28px/1.05 var(--font-display);
+  letter-spacing: -0.045em;
+}
+
+.expressive-settings__intro button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 560 8.5px/1 var(--font-ui);
+}
+
+.expressive-settings__row {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 34px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.expressive-settings__copy {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.expressive-settings__copy > span {
+  padding-top: 2px;
+  color: var(--text-muted);
+  font: 500 7px/1 var(--font-mono);
+}
+
+.expressive-settings__copy h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font: 620 12px/1.25 var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+.expressive-settings__copy p {
+  max-width: 45ch;
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.expressive-settings__control {
+  min-width: 0;
+}
+
+.expressive-settings__segments,
+.expressive-settings__scale {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.expressive-settings__segments button,
+.expressive-settings__scale button,
+.expressive-settings__chips button {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-control) - 2px);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 580 8.5px/1 var(--font-ui);
+  text-transform: capitalize;
+}
+
+.expressive-settings__segments button[aria-pressed="true"],
+.expressive-settings__scale button[aria-pressed="true"],
+.expressive-settings__chips button[aria-pressed="true"] {
+  border-color: var(--border-default);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+}
+
+.expressive-settings__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.expressive-settings__swatches button {
+  position: relative;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+}
+
+.expressive-settings__swatches button[aria-pressed="true"]::after {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid var(--text-primary);
+  border-radius: 50%;
+  content: "";
+}
+
+.expressive-settings__range {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--text-muted);
+  font: 550 8px/1 var(--font-ui);
+}
+
+.expressive-settings__range input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.expressive-settings__dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.expressive-settings__dual small {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font: 650 7px/1 var(--font-mono);
+  text-transform: uppercase;
+}
+
+.expressive-settings__chips {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px;
+}
+
+.expressive-settings__connection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expressive-settings__connection code {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font: 450 8.5px/1 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expressive-settings__connection button {
+  min-height: 29px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 580 8.5px/1 var(--font-ui);
+}
+
+@media (max-width: 720px) {
+  .expressive-settings__row {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .expressive-settings__dual {
+    grid-template-columns: 1fr;
+  }
+}
+
+.expressive-settings__connection form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.expressive-settings__connection input {
+  min-height: 31px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: 500 8.5px/1 var(--font-mono);
+}
+
+.expressive-settings__connection input:focus {
+  border-color: var(--accent);
+}
+
+.expressive-settings__connection input:disabled {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.expressive-settings__connection button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.expressive-settings__managed {
+  display: grid;
+  gap: 5px;
+}
+
+.expressive-settings__managed > span {
+  color: var(--success);
+  font: 650 7px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

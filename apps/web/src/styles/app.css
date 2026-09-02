@@ -223,3 +223,820 @@ body, html {
 .space-y-3 > * + * { margin-top: 0.75rem; }
 .space-y-2 > * + * { margin-top: 0.5rem; }
 .space-y-1 > * + * { margin-top: 0.25rem; }
+
+
+/* -------------------------------------------------------------------------- */
+/* Appearance compatibility layer                                             */
+/* -------------------------------------------------------------------------- */
+
+html,
+body {
+  font-family: var(--font-ui);
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+
+body {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.interview-app-container {
+  background: var(--surface-app) !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-ui) !important;
+}
+
+.app-header,
+.bg-white {
+  background-color: var(--surface-panel) !important;
+}
+
+.bg-slate-50,
+.bg-slate-100 {
+  background-color: var(--surface-raised) !important;
+}
+
+.bg-slate-200 {
+  background-color: var(--surface-active) !important;
+}
+
+.bg-slate-700,
+.bg-slate-800,
+.bg-slate-900 {
+  background-color: var(--surface-active) !important;
+}
+
+.text-slate-900,
+.text-slate-800 {
+  color: var(--text-primary) !important;
+}
+
+.text-slate-700,
+.text-slate-600 {
+  color: var(--text-secondary) !important;
+}
+
+.text-slate-500,
+.text-slate-400,
+.text-slate-300 {
+  color: var(--text-muted) !important;
+}
+
+.border-slate-100,
+.border-slate-200 {
+  border-color: var(--border-subtle) !important;
+}
+
+.border-slate-300,
+.border-slate-700 {
+  border-color: var(--border-default) !important;
+}
+
+.bg-indigo-50 {
+  background-color: var(--accent-soft) !important;
+}
+
+.bg-indigo-600,
+.bg-indigo-700 {
+  background-color: var(--accent) !important;
+}
+
+.text-indigo-600,
+.text-indigo-700 {
+  color: var(--accent) !important;
+}
+
+.border-indigo-100,
+.border-indigo-200 {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle)) !important;
+}
+
+.bg-emerald-50 {
+  background-color: var(--success-soft) !important;
+}
+.text-emerald-700 {
+  color: var(--success) !important;
+}
+.bg-rose-50 {
+  background-color: var(--danger-soft) !important;
+}
+.text-rose-600,
+.text-rose-800 {
+  color: var(--danger) !important;
+}
+.border-rose-200 {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--border-subtle)) !important;
+}
+
+.rounded,
+.rounded-md {
+  border-radius: var(--radius-control) !important;
+}
+
+.rounded-lg {
+  border-radius: var(--radius-panel) !important;
+}
+
+.whiteboard-canvas-container,
+[data-whiteboard-canvas="true"] {
+  background: var(--surface-panel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Expressive live shell compatibility (no App.tsx ownership required)        */
+/* -------------------------------------------------------------------------- */
+
+.app-header {
+  min-height: 52px;
+  padding: 0 14px !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  background: var(--surface-panel) !important;
+  box-shadow: none !important;
+}
+
+.app-header > div:first-child {
+  min-width: 0;
+  gap: 9px !important;
+}
+
+.app-header > div:first-child > div:first-child {
+  width: 28px !important;
+  height: 28px !important;
+  flex: 0 0 28px;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  background-image: url("/brand-mark.svg") !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: contain !important;
+  box-shadow: none !important;
+  color: transparent !important;
+  overflow: hidden;
+}
+
+.app-header h1 {
+  margin: 0;
+  font: 650 12px/1.2 var(--font-display) !important;
+  letter-spacing: -0.02em;
+}
+
+.app-header h1 > span:first-child {
+  font-size: 0;
+}
+
+.app-header h1 > span:first-child::after {
+  content: "Interview";
+  color: var(--text-primary);
+  font: 650 12px/1.2 var(--font-display);
+}
+
+.app-header h1 > span:nth-child(2) {
+  display: none !important;
+}
+
+.app-header > div:first-child p {
+  max-width: 48vw;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--text-muted) !important;
+  font-size: 8.5px !important;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header > div:last-child {
+  gap: 7px !important;
+}
+
+/* Keep live status useful; remove engineering-console density. */
+.app-header [data-testid="connection-status"] {
+  min-height: 26px;
+  padding: 0 7px !important;
+  border-color: var(--border-subtle) !important;
+  border-radius: var(--radius-control) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text-secondary) !important;
+  font-size: 8px !important;
+}
+
+.app-header [data-testid="connection-status"] > span:first-child {
+  width: 5px !important;
+  height: 5px !important;
+}
+
+.app-header > div:last-child > div.text-xs.font-mono {
+  display: none !important;
+}
+
+.app-header button {
+  min-height: 29px;
+  border-radius: var(--radius-control) !important;
+  box-shadow: none !important;
+  font-size: 8.5px !important;
+}
+
+.app-header [data-testid="sessions-btn"] {
+  border-color: var(--border-default) !important;
+  background: var(--surface-panel) !important;
+  color: var(--text-secondary) !important;
+}
+
+.app-header [data-testid="settings-btn"] {
+  border-color: var(--border-subtle) !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+}
+
+.app-header .animate-pulse {
+  animation: none !important;
+}
+
+/* Workspace proportion: reasoning stays readable, board gets the larger surface. */
+.interview-app-container > main {
+  min-height: 0;
+  gap: 0 !important;
+}
+
+.left-panel {
+  width: 44% !important;
+  min-width: 420px;
+  border-right: 1px solid var(--border-subtle) !important;
+  background: var(--surface-panel) !important;
+}
+
+.right-panel {
+  width: 56% !important;
+  min-width: 520px;
+  background: var(--surface-app) !important;
+}
+
+/* Problem as an editorial document, not a dashboard card. */
+.problem-card-container {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--surface-panel) !important;
+  box-shadow: none !important;
+  padding: 18px 18px 16px !important;
+}
+
+.problem-card-container .problem-header {
+  margin-bottom: 13px !important;
+  align-items: flex-start !important;
+}
+
+.problem-card-container .problem-header__eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font: 650 7px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.problem-card-container .problem-header__eyebrow > span:first-child {
+  color: var(--accent);
+}
+
+.problem-card-container .problem-header h2 {
+  margin-top: 0 !important;
+  color: var(--text-primary) !important;
+  font: 650 20px/1.08 var(--font-display) !important;
+  letter-spacing: -0.035em;
+}
+
+.problem-card-container .problem-statement {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  font-size: 12px !important;
+  line-height: 1.65 !important;
+}
+
+.problem-card-container .given-information {
+  margin: 16px 0 0 !important;
+  padding-top: 13px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.problem-card-container .given-information > h3 {
+  margin-bottom: 7px !important;
+  color: var(--text-muted) !important;
+  font: 650 7px/1 var(--font-mono) !important;
+  letter-spacing: 0.08em !important;
+}
+
+.problem-card-container .given-information ul {
+  margin: 0 !important;
+  padding: 0 0 0 17px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  font-size: 9.5px !important;
+  line-height: 1.5;
+}
+
+/* Main left stack: less card padding, transcript gets the visual center. */
+.left-panel > .p-4,
+.left-panel > div.p-4 {
+  padding: 0 !important;
+}
+
+.left-panel .student-input-area {
+  margin: 0 12px 12px;
+}
+
+/* Whiteboard chrome should frame the canvas, not compete with it. */
+.panel-tabs {
+  min-height: 40px;
+  padding: 0 10px !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  background: var(--surface-panel) !important;
+}
+
+.panel-tabs button {
+  min-height: 39px;
+  padding: 0 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  font: 590 8.5px/1 var(--font-ui) !important;
+}
+
+.panel-tabs button[aria-selected="true"] {
+  border-bottom: 2px solid var(--accent) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text-primary) !important;
+}
+
+.panel-tabs button[aria-selected="false"] {
+  color: var(--text-muted) !important;
+}
+
+.panel-tabs > .text-\[11px\] {
+  color: var(--text-muted) !important;
+  font-size: 7.5px !important;
+}
+
+.right-panel > .flex-1.p-4 {
+  padding: 0 !important;
+}
+
+.whiteboard-wrapper {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.whiteboard-toolbar {
+  min-height: 32px;
+  padding: 0 9px !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text-muted) !important;
+  font-size: 8px !important;
+}
+
+.whiteboard-toolbar button {
+  min-height: 24px;
+  padding: 0 7px !important;
+  border: 1px solid var(--border-subtle) !important;
+  background: var(--surface-panel) !important;
+  color: var(--text-secondary) !important;
+  font-size: 7.5px !important;
+}
+
+/* Existing formulation context gets the same surface language until #86 lands. */
+.formulation-inspector {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--surface-panel) !important;
+  box-shadow: none !important;
+}
+
+/* Drawer and modal cleanup without changing their behavior. */
+.settings-drawer {
+  border-bottom: 1px solid var(--border-default) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+
+.settings-drawer input {
+  border-color: var(--border-default) !important;
+  background: var(--surface-panel) !important;
+  color: var(--text-primary) !important;
+}
+
+.fixed.inset-0.z-50 {
+  background: color-mix(in srgb, var(--text-primary) 28%, transparent) !important;
+}
+
+.fixed.inset-0.z-50 > div {
+  border-color: var(--border-default) !important;
+  border-radius: var(--radius-dialog) !important;
+  background: var(--surface-panel) !important;
+  box-shadow: var(--shadow-popover) !important;
+}
+
+/* Global focus treatment. */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+@media (max-width: 1040px) {
+  .left-panel {
+    min-width: 390px;
+  }
+
+  .right-panel {
+    min-width: 470px;
+  }
+
+  .app-header > div:first-child p {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .interview-app-container > main {
+    position: relative;
+    display: block !important;
+  }
+
+  .left-panel,
+  .right-panel {
+    width: 100% !important;
+    min-width: 0;
+    height: 100% !important;
+  }
+
+  .interview-app-container > main[data-compact-pane="interview"] .right-panel,
+  .interview-app-container > main[data-compact-pane="whiteboard"] .left-panel {
+    display: none !important;
+  }
+}
+
+
+/* Semantic live header after product-route integration. */
+.app-header {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.app-header__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 5px 3px 3px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.app-header__identity:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.app-header__identity:disabled {
+  cursor: default;
+}
+
+.app-header__identity-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.app-header__identity-copy strong {
+  color: var(--text-primary);
+  font: 650 11px/1.15 var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.app-header__identity-copy small {
+  max-width: 38vw;
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 450 7.5px/1.2 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header__actions,
+.app-header__session-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-header__connection,
+.app-header__streaming {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font: 560 7.5px/1 var(--font-ui);
+}
+
+.app-header__connection > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.app-header__connection[data-connected="true"] {
+  color: var(--success);
+}
+
+.app-header__connection[data-connected="true"] > span {
+  background: var(--success);
+}
+
+.app-header__streaming {
+  color: var(--info);
+}
+
+.app-header__quiet,
+.app-header__end {
+  min-height: 29px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 590 8px/1 var(--font-ui);
+}
+
+.app-header__quiet:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.app-header__quiet:disabled {
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.58;
+}
+
+.app-header__end {
+  border-color: color-mix(in srgb, var(--success) 38%, var(--border-default));
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.app-header__end:hover {
+  border-color: var(--success);
+}
+
+.panel-tabs [data-sync="SYNCED"] {
+  background: var(--success) !important;
+}
+
+.panel-tabs [data-sync="PENDING"] {
+  background: var(--warning) !important;
+}
+
+.panel-tabs [data-sync="UNSYNCHRONIZED"] {
+  background: var(--danger) !important;
+}
+
+.panel-tabs [data-sync="UNINITIALIZED"] {
+  background: var(--text-muted) !important;
+}
+
+@media (max-width: 820px) {
+  .app-header__identity-copy small,
+  .app-header__streaming {
+    display: none;
+  }
+
+  .app-header__actions {
+    gap: 4px;
+  }
+
+  .app-header__quiet,
+  .app-header__end {
+    padding: 0 6px;
+  }
+}
+
+
+.compact-workspace-tabs {
+  display: none;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.compact-workspace-tabs button {
+  min-height: 27px;
+  flex: 1 1 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 590 8px/1 var(--font-ui);
+}
+
+.compact-workspace-tabs button[aria-selected="true"] {
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+@media (max-width: 960px) {
+  .compact-workspace-tabs {
+    display: flex;
+  }
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Bounded legacy utility compatibility                                       */
+/* -------------------------------------------------------------------------- */
+/* A few authoritative review/modal surfaces predate the semantic CSS layer   */
+/* and still use Tailwind-shaped class names. The app does not ship Tailwind. */
+/* Keep this list deliberately small and token-backed until those surfaces are */
+/* fully migrated; do not grow this into a second styling framework.          */
+
+.grid { display: grid; }
+.inline-flex { display: inline-flex; }
+.items-baseline { align-items: baseline; }
+.relative { position: relative; }
+.text-center { text-align: center; }
+.uppercase { text-transform: uppercase; }
+.underline { text-decoration: underline; }
+.break-all { word-break: break-all; }
+.whitespace-pre-wrap { white-space: pre-wrap; }
+.list-none { list-style: none; }
+.leading-relaxed { line-height: 1.625; }
+.tracking-wider { letter-spacing: 0.05em; }
+
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.gap-x-3 { column-gap: 0.75rem; }
+.gap-y-1 { row-gap: 0.25rem; }
+
+.h-screen { height: 100vh; }
+.w-screen { width: 100vw; }
+.h-2 { height: 0.5rem; }
+.w-2 { width: 0.5rem; }
+.w-28 { width: 7rem; }
+.w-56 { width: 14rem; }
+.max-w-2xl { max-width: 42rem; }
+.max-w-5xl { max-width: 64rem; }
+.max-h-\[80vh\] { max-height: 80vh; }
+.max-h-\[92vh\] { max-height: 92vh; }
+.min-h-\[220px\] { min-height: 220px; }
+.min-h-\[380px\] { min-height: 380px; }
+
+.mt-0\.5 { margin-top: 0.125rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.pt-2 { padding-top: 0.5rem; }
+.pt-4 { padding-top: 1rem; }
+.pb-2 { padding-bottom: 0.5rem; }
+.px-1\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
+.px-3\.5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+.px-5 { padding-left: 1.25rem; padding-right: 1.25rem; }
+.py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+.py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+
+.space-y-1\.5 > * + * { margin-top: 0.375rem; }
+.space-y-5 > * + * { margin-top: 1.25rem; }
+
+.text-\[10px\] { font-size: 10px; line-height: 1.35; }
+.text-lg { font-size: 1.125rem; line-height: 1.45; }
+.text-xl { font-size: 1.25rem; line-height: 1.4; }
+.text-3xl { font-size: 1.875rem; line-height: 1.15; }
+
+.rounded-xl { border-radius: var(--radius-dialog) !important; }
+
+.bg-blue-50 { background-color: var(--info-soft) !important; }
+.text-blue-700 { color: var(--info) !important; }
+.border-blue-200 {
+  border-color: color-mix(in srgb, var(--info) 32%, var(--border-subtle)) !important;
+}
+
+.bg-amber-50,
+.bg-amber-50\/50 { background-color: var(--warning-soft) !important; }
+.text-amber-700,
+.text-amber-800 { color: var(--warning) !important; }
+.border-amber-100,
+.border-amber-200,
+.border-amber-100\/80 {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border-subtle)) !important;
+}
+
+.bg-violet-50 { background-color: var(--accent-soft) !important; }
+.text-violet-700 { color: var(--accent) !important; }
+.border-violet-200 {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle)) !important;
+}
+
+.text-indigo-950 { color: var(--text-primary) !important; }
+.bg-indigo-50\/70 { background-color: var(--accent-soft) !important; }
+.bg-slate-50\/50,
+.bg-slate-100\/50 { background-color: var(--surface-raised) !important; }
+
+.bg-black\/40 { background-color: rgb(0 0 0 / 40%) !important; }
+.bg-black\/50 { background-color: rgb(0 0 0 / 50%) !important; }
+
+.shadow-2xs,
+.shadow-sm { box-shadow: none !important; }
+.shadow-xl,
+.shadow-2xl { box-shadow: var(--shadow-popover) !important; }
+
+.z-\[60\] { z-index: 60; }
+
+.cursor-not-allowed { cursor: not-allowed; }
+
+.hover\:bg-slate-50:hover,
+.hover\:bg-slate-100:hover,
+.hover\:bg-slate-200:hover,
+.hover\:bg-slate-300:hover {
+  background-color: var(--surface-hover) !important;
+}
+.hover\:bg-slate-600:hover,
+.hover\:bg-slate-700:hover {
+  background-color: var(--surface-active) !important;
+}
+.hover\:bg-indigo-100:hover,
+.hover\:bg-indigo-500:hover,
+.hover\:bg-indigo-700:hover {
+  background-color: var(--accent-hover) !important;
+}
+.hover\:border-indigo-300:hover {
+  border-color: var(--accent) !important;
+}
+.hover\:text-slate-600:hover,
+.hover\:text-slate-700:hover,
+.hover\:text-slate-800:hover,
+.hover\:text-slate-900:hover {
+  color: var(--text-primary) !important;
+}
+.hover\:text-rose-900:hover {
+  color: var(--danger) !important;
+}
+
+.focus\:outline-none:focus { outline: none; }
+.focus\:border-indigo-400:focus { border-color: var(--accent) !important; }
+
+@media (min-width: 640px) {
+  .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 768px) {
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.expressive-home__primary:disabled,
+.expressive-home__active button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.app-header button:disabled,
+.fixed.inset-0.z-50 button:disabled {
+  cursor: not-allowed;
+}

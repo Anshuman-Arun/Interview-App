@@ -91,6 +91,7 @@ export interface TldrawEditor {
   createShapes: (shapes: readonly TLShapePartialRecord[]) => void;
   deleteShapes: (ids: readonly string[]) => void;
   updateShapes: (shapes: readonly TLShapePartialRecord[]) => void;
+  setReadOnly?: (readOnly: boolean) => void;
   exportStudentShapesPng?: (
     shapeIds: readonly string[],
     bounds: TLShapeBounds
@@ -250,6 +251,19 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
 
   public getEditor(): TldrawEditor | null {
     return this.editor;
+  }
+
+  public setReadOnly(readOnly: boolean): void {
+    this.editor?.setReadOnly?.(readOnly);
+  }
+
+  public resetForNewSession(): void {
+    const editor = this.editor;
+    if (editor !== null) {
+      const ids = editor.getCurrentPageShapes().map((shape) => shape.id);
+      if (ids.length > 0) editor.deleteShapes(ids);
+    }
+    this.localBoardRevision = 0;
   }
 
   public getBoardRevision(): number {

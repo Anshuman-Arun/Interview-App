@@ -11,10 +11,15 @@ import {
 import { DesktopBackendController } from "./backend-controller.js";
 import {
   DESKTOP_BOOTSTRAP_CHANNEL,
+  DESKTOP_ZOOM_CHANGED_CHANNEL,
+  DESKTOP_ZOOM_CHANNEL,
+  DESKTOP_ZOOM_FACTORS,
   createDesktopRendererBootstrap,
   isAuthorizedDesktopBootstrapRequest,
+  isDesktopZoomFactor,
   isTrustedDesktopNavigation,
-  type DesktopRendererBootstrap
+  type DesktopRendererBootstrap,
+  type DesktopZoomFactor
 } from "./bootstrap.js";
 import {
   installDesktopClientTokenInjector
@@ -132,6 +137,7 @@ async function startDesktop(): Promise<void> {
   });
 
   installBootstrapHandler();
+  installZoomHandler();
   await createMainWindow(paths.preloadPath);
 }
 
@@ -159,6 +165,90 @@ function installBootstrapHandler(): void {
       return;
     }
     event.returnValue = currentBootstrap;
+  });
+}
+
+function installZoomHandler(): void {
+  ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
+  ipcMain.on(DESKTOP_ZOOM_CHANNEL, (event: IpcMainEvent, requestedFactor: unknown) => {
+    const currentWindow = mainWindow;
+    const currentBootstrap = bootstrap;
+    const currentFrontendUrl = frontendUrl;
+    if (
+      currentWindow === undefined
+      || currentBootstrap === undefined
+      || currentFrontendUrl === undefined
+      || !isAuthorizedDesktopBootstrapRequest({
+        shuttingDown,
+        senderWebContentsId: event.sender.id,
+        trustedWebContentsId: currentWindow.webContents.id,
+        senderFrame: event.senderFrame,
+        trustedMainFrame: currentWindow.webContents.mainFrame,
+        senderFrameUrl: event.senderFrame?.url,
+        trustedFrontendUrl: currentFrontendUrl
+      })
+      || !isDesktopZoomFactor(requestedFactor)
+    ) {
+      event.returnValue = false;
+      return;
+    }
+
+    applyDesktopZoomFactor(currentWindow, requestedFactor, false);
+    event.returnValue = true;
+  });
+}
+
+function applyDesktopZoomFactor(
+  window: BrowserWindow,
+  factor: DesktopZoomFactor,
+  notifyRenderer: boolean
+): void {
+  window.webContents.setZoomFactor(factor);
+  if (notifyRenderer) {
+    window.webContents.send(DESKTOP_ZOOM_CHANGED_CHANNEL, factor);
+  }
+}
+
+function stepDesktopZoom(window: BrowserWindow, direction: -1 | 1): void {
+  const current = window.webContents.getZoomFactor();
+  const factors = DESKTOP_ZOOM_FACTORS;
+  let target: DesktopZoomFactor;
+
+  if (direction > 0) {
+    target = factors.find((factor) => factor > current + 0.001)
+      ?? 1.25;
+  } else {
+    target = [...factors].reverse().find((factor) => factor < current - 0.001)
+      ?? 0.875;
+  }
+
+  applyDesktopZoomFactor(window, target, true);
+}
+
+function installDesktopZoomShortcuts(window: BrowserWindow): void {
+  window.webContents.on("before-input-event", (event, input) => {
+    if (
+      input.type !== "keyDown"
+      || (!input.control && !input.meta)
+      || input.alt
+    ) {
+      return;
+    }
+
+    if (input.key === "+" || input.key === "=") {
+      event.preventDefault();
+      stepDesktopZoom(window, 1);
+      return;
+    }
+    if (input.key === "-") {
+      event.preventDefault();
+      stepDesktopZoom(window, -1);
+      return;
+    }
+    if (input.key === "0") {
+      event.preventDefault();
+      applyDesktopZoomFactor(window, 1, true);
+    }
   });
 }
 
@@ -216,7 +306,8 @@ async function createMainWindow(preloadPath?: string): Promise<void> {
   );
   removePermissionCapability = thisRemovePermissionCapability;
 
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  installDesktopZoomShortcuts(window);
+    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const guardNavigation = (details: { preventDefault(): void; url: string }): void => {
     if (!isTrustedDesktopNavigation(details.url, targetUrl)) details.preventDefault();
   };
@@ -275,6 +366,7 @@ function shutdownDesktop(): Promise<void> {
   shuttingDown = true;
   bootstrap = undefined;
   ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
+  ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
 
   const failures: unknown[] = [];
 
