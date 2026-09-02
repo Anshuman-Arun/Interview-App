@@ -42,6 +42,7 @@ import type { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 
 const MAX_EPHEMERAL_AUDIO_ASSETS = 32;
 const MAX_EPHEMERAL_AUDIO_BYTES = 32 * 1024 * 1024;
+const VOICE_STREAM_IDLE_TIMEOUT_MS = 5_000;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
 
 export interface VoiceTtsRuntimeConfiguration {
@@ -189,7 +190,7 @@ interface TtsAssembly {
 
 export class VoiceSynthesisCoordinator {
   private readonly activeBySession = new Map<SessionId, Set<string>>();
-  private readonly triggeredSourceDeliveries = new Set<DeliveryId>();
+  private readonly inFlightSourceDeliveries = new Set<DeliveryId>();
 
   public constructor(
     private readonly sessions: SessionRecoveryCoordinator,
@@ -207,11 +208,12 @@ export class VoiceSynthesisCoordinator {
   ): Promise<DeliveryAtom | undefined> {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const sourceDeliveryId = DeliveryIdSchema.parse(sourceDeliveryIdInput);
-    if (this.triggeredSourceDeliveries.has(sourceDeliveryId)) return undefined;
-    this.triggeredSourceDeliveries.add(sourceDeliveryId);
+    if (this.inFlightSourceDeliveries.has(sourceDeliveryId)) return undefined;
+    this.inFlightSourceDeliveries.add(sourceDeliveryId);
     await this.sessions.ensureRecovered(sessionId);
     const writer = this.sessions.getWriter(sessionId);
-    const source = writer.getState().deliveries[sourceDeliveryId];
+    const initialState = writer.getState();
+    const source = initialState.deliveries[sourceDeliveryId];
     if (
       source === undefined
       || source.content.medium !== "TEXT"
@@ -226,6 +228,16 @@ export class VoiceSynthesisCoordinator {
 
     const generationId = GenerationIdSchema.parse(source.generationId);
     const exactText = source.content.text;
+    const existingAudio = Object.values(initialState.deliveries).find((atom) =>
+      atom.content.medium === "AUDIO"
+      && atom.generationId === generationId
+      && atom.content.text === exactText
+      && atom.status !== "CANCELLED"
+    );
+    if (existingAudio !== undefined) {
+      this.inFlightSourceDeliveries.delete(sourceDeliveryId);
+      return undefined;
+    }
     const textSha256 = sha256Utf8(exactText);
     const request = TtsSynthesizeRequestSchema.parse({
       protocolVersion: 1,
@@ -335,6 +347,7 @@ export class VoiceSynthesisCoordinator {
       return undefined;
     } finally {
       this.forgetActive(sessionId, request.requestId);
+      this.inFlightSourceDeliveries.delete(sourceDeliveryId);
     }
   }
 
@@ -353,6 +366,12 @@ export class VoiceSynthesisCoordinator {
         // invalidation still blocks late TTS admission.
       }
     }));
+  }
+
+  public async cancelAll(): Promise<void> {
+    await Promise.all([...this.activeBySession.keys()].map(async (sessionId) =>
+      this.cancelSession(sessionId)
+    ));
   }
 
   public async shutdown(): Promise<void> {
@@ -384,6 +403,7 @@ interface VoiceStreamContext {
   authoritativeUtteranceId: UtteranceId | undefined;
   workerUtteranceId: UtteranceId | undefined;
   finalizedBasis: SourceAudioBasis | undefined;
+  idleTimer: ReturnType<typeof setTimeout> | undefined;
 }
 
 export interface VoiceInputCommit {
@@ -452,10 +472,12 @@ export class VoiceInputCoordinator {
       active: true,
       authoritativeUtteranceId: undefined,
       workerUtteranceId: undefined,
-      finalizedBasis: undefined
+      finalizedBasis: undefined,
+      idleTimer: undefined
     };
     this.streams.set(streamId, context);
     this.sessionStreams.set(sessionId, streamId);
+    this.refreshIdleLease(context);
   }
 
   public async submitFrame(
@@ -477,6 +499,7 @@ export class VoiceInputCoordinator {
     }
 
     context.frameInFlight = true;
+    this.refreshIdleLease(context);
     const token = context.token;
     try {
       const events = await this.speechWorker.submitFrame(envelope, payload);
@@ -496,6 +519,7 @@ export class VoiceInputCoordinator {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const streamId = SpeechStreamIdSchema.parse(streamIdInput);
     const context = this.requireActiveStream(sessionId, streamId);
+    this.refreshIdleLease(context);
     const token = context.token;
     const events = await this.speechWorker.flush({
       protocolVersion: 1,
@@ -723,7 +747,40 @@ export class VoiceInputCoordinator {
     this.releaseStreamBinding(context);
   }
 
+  private refreshIdleLease(context: VoiceStreamContext): void {
+    if (context.idleTimer !== undefined) clearTimeout(context.idleTimer);
+    const token = context.token;
+    context.idleTimer = setTimeout(() => {
+      void this.expireIdleStream(context, token);
+    }, VOICE_STREAM_IDLE_TIMEOUT_MS);
+  }
+
+  private async expireIdleStream(context: VoiceStreamContext, token: object): Promise<void> {
+    if (!this.isCurrent(context, token)) return;
+    context.active = false;
+    this.releaseStreamBinding(context);
+    try {
+      await this.speechWorker.cancel({
+        protocolVersion: 1,
+        type: "CANCEL_SPEECH",
+        requestId: newRequestId(),
+        streamId: context.streamId
+      });
+    } catch {
+      // The local authority boundary below still discards any capturing
+      // utterance even if worker cancellation is unavailable.
+    }
+    await this.discardCapturingUtterance(
+      context,
+      "Speech stream expired after bounded transport inactivity"
+    );
+  }
+
   private releaseStreamBinding(context: VoiceStreamContext): void {
+    if (context.idleTimer !== undefined) {
+      clearTimeout(context.idleTimer);
+      context.idleTimer = undefined;
+    }
     if (this.streams.get(context.streamId) === context) this.streams.delete(context.streamId);
     if (this.sessionStreams.get(context.sessionId) === context.streamId) {
       this.sessionStreams.delete(context.sessionId);
