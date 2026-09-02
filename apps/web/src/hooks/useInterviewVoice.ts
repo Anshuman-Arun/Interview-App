@@ -15,6 +15,7 @@ import {
 import {
   BrowserVoiceClient,
   type BrowserVoiceCommit,
+  type BrowserVoiceFrameResult,
   type BrowserVoiceStream
 } from "../voice-client.js";
 
@@ -62,6 +63,19 @@ export interface UseInterviewVoiceOptions {
 export interface UseInterviewVoiceResult {
   readonly voice: InterviewVoiceState;
   readonly voiceControls: InterviewVoiceControls;
+}
+
+export function applyAdmittedVoiceFrameResult(
+  result: BrowserVoiceFrameResult,
+  callbacks: {
+    readonly interruptPlaybackForBargeIn: () => void;
+    readonly onVoiceCommit: (commit: BrowserVoiceCommit) => void;
+  }
+): void {
+  if (result.events.some((event) => event.type === "SPEECH_STARTED")) {
+    callbacks.interruptPlaybackForBargeIn();
+  }
+  if (result.commit !== undefined) callbacks.onVoiceCommit(result.commit);
 }
 
 export function useInterviewVoice(options: UseInterviewVoiceOptions): UseInterviewVoiceResult {
@@ -136,15 +150,13 @@ export function useInterviewVoice(options: UseInterviewVoiceOptions): UseIntervi
 
   const processFrameResult = useCallback((result: Awaited<ReturnType<BrowserVoiceStream["sendFrame"]>>, epoch: number): void => {
     if (epoch !== epochRef.current || !microphoneEnabledRef.current) return;
-    if (result.events.some((event) => event.type === "SPEECH_STARTED")) {
-      // The server emitted this event only after beginUtterance() committed the
-      // authoritative invalidation. Physical interruption therefore follows,
-      // rather than races ahead of, authority.
-      optionsRef.current.interruptPlaybackForBargeIn();
-    }
-    if (result.commit !== undefined) {
-      optionsRef.current.onVoiceCommit(result.commit);
-    }
+    // The server emits SPEECH_STARTED only after beginUtterance() commits the
+    // authoritative invalidation. The same bridge used by tests performs the
+    // physical interruption only after that authority transition.
+    applyAdmittedVoiceFrameResult(result, {
+      interruptPlaybackForBargeIn: optionsRef.current.interruptPlaybackForBargeIn,
+      onVoiceCommit: optionsRef.current.onVoiceCommit
+    });
     if (result.terminal) streamRef.current = null;
   }, []);
 
