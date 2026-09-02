@@ -128,6 +128,7 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         runtime._np = np
         runtime._silero = _FakeSilero()
         runtime._states = OrderedDict()
+        runtime._evicted_streams = OrderedDict()
         runtime._vad_lock = threading.Lock()
         runtime._vad_slots = threading.BoundedSemaphore(
             worker.MAX_SPEECH_NATIVE_RESERVATIONS
@@ -190,6 +191,7 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         runtime._np = np
         runtime._silero = _FakeSilero()
         runtime._states = OrderedDict()
+        runtime._evicted_streams = OrderedDict()
         runtime._vad_lock = threading.Lock()
         runtime._vad_slots = threading.BoundedSemaphore(
             worker.MAX_SPEECH_NATIVE_RESERVATIONS
