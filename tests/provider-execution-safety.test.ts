@@ -162,6 +162,140 @@ describe("provider execution admission", () => {
     expect(sessionCreations).toBe(0);
   });
 
+
+  it("captures provider operations before billing verification can swap execution behavior", async () => {
+    let verificationEntered: (() => void) | undefined;
+    let releaseVerification: (() => void) | undefined;
+    let originalSessionCreations = 0;
+    let replacementSessionCreations = 0;
+    const entered = new Promise<void>((resolve) => {
+      verificationEntered = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      releaseVerification = resolve;
+    });
+    const provider = testProvider({
+      async verifyBillingSafety({ now }) {
+        verificationEntered?.();
+        await blocked;
+        return validVerification(now);
+      },
+      async createSession() {
+        originalSessionCreations += 1;
+        return proposalSession();
+      }
+    });
+
+    const opening = openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+    await entered;
+    Reflect.set(provider, "createSession", async () => {
+      replacementSessionCreations += 1;
+      throw new Error("replacement createSession must not execute");
+    });
+    releaseVerification?.();
+
+    const session = await opening;
+    expect(originalSessionCreations).toBe(1);
+    expect(replacementSessionCreations).toBe(0);
+    expect(await collect(session.sendTurn({
+      context: {},
+      generationId: newGenerationId()
+    }))).toEqual([PROPOSAL]);
+    await session.close();
+  });
+
+  it("keeps the parsed policy authoritative when caller policy mutates during billing verification", async () => {
+    const mutablePolicy = {
+      allowMeteredUsage: false,
+      maximumDataUse: "LOCAL_ONLY" as const,
+      billingVerificationMaxAgeMs: 1_000
+    };
+    const provider = testProvider({
+      async verifyBillingSafety() {
+        mutablePolicy.billingVerificationMaxAgeMs = 1_000_000;
+        return validVerification(new Date(NOW.getTime() - 1_001));
+      }
+    });
+
+    await expect(openProviderExecutionSession({
+      provider,
+      policy: mutablePolicy,
+      now: NOW
+    })).rejects.toMatchObject({ code: "VERIFICATION_STALE" });
+  });
+
+  it("does not lend the authoritative admission clock to provider billing code", async () => {
+    const callerNow = new Date(NOW.getTime());
+    const originalTime = callerNow.getTime();
+    const provider = testProvider({
+      async verifyBillingSafety({ now }) {
+        now.setTime(originalTime - 10_000);
+        return validVerification(now);
+      }
+    });
+
+    await expect(openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: callerNow
+    })).rejects.toMatchObject({ code: "VERIFICATION_STALE" });
+    expect(callerNow.getTime()).toBe(originalTime);
+  });
+
+  it("returns an immutable capability snapshot that cannot change cancellation or modality semantics", async () => {
+    const provider = testProvider({
+      capabilities: {
+        ...CAPABILITIES,
+        reasoningLevels: ["low"]
+      }
+    });
+    const session = await openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    });
+
+    expect(Reflect.set(session.capabilities, "cancellation", "CANCEL_PROVIDER_COMPUTE"))
+      .toBe(false);
+    expect(session.capabilities.cancellation).toBe("NONE");
+    expect(() => session.capabilities.inputModalities.add("image")).toThrow(TypeError);
+    expect(() => session.capabilities.inputModalities.delete("text")).toThrow(TypeError);
+    expect(() => session.capabilities.inputModalities.clear()).toThrow(TypeError);
+    expect(() => Set.prototype.add.call(
+      session.capabilities.inputModalities,
+      "image"
+    )).toThrow(TypeError);
+    expect([...session.capabilities.inputModalities]).toEqual(["text"]);
+    expect(() => session.capabilities.reasoningLevels?.push("high")).toThrow(TypeError);
+    expect(session.capabilities.reasoningLevels).toEqual(["low"]);
+
+    await session.close();
+  });
+
+  it("rejects accessor-backed provider operations without invoking them", async () => {
+    let getterCalls = 0;
+    const provider = testProvider();
+    Object.defineProperty(provider, "createSession", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return async () => proposalSession();
+      }
+    });
+
+    await expect(openProviderExecutionSession({
+      provider,
+      policy: NO_METERED_POLICY,
+      now: NOW
+    })).rejects.toMatchObject({ code: "SESSION_CREATION_FAILED" });
+    expect(getterCalls).toBe(0);
+  });
+
   it("drops a provider result released after cancellation even when the provider ignores cancellation", async () => {
     let release: (() => void) | undefined;
     const blocked = new Promise<void>((resolve) => { release = resolve; });
