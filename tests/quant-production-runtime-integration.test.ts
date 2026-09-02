@@ -1399,7 +1399,7 @@ describe("adversarial quant lifecycle invariants", () => {
     }
   });
 
-  it("rejects a second persisted Quant completion transition during replay", async () => {
+  it("rejects a persisted Quant completion transition after archival during replay", async () => {
     const store = new SqliteEventStore(":memory:");
     const sessionId = newSessionId();
     const writer = SessionWriter.open(store, sessionId);
@@ -1419,6 +1419,11 @@ describe("adversarial quant lifecycle invariants", () => {
         )).value;
       }
       expect(writer.getState().status).toBe("COMPLETED");
+      await new TurnCoordinator(writer).archiveSession(
+        createCommandEnvelope({ sessionId, producer: "quant-terminal-replay-test" }),
+        "terminal lifecycle monotonicity test"
+      );
+      expect(writer.getState().status).toBe("ARCHIVED");
       await writer.close();
 
       const duplicateRequestId = newRequestId();
