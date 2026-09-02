@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { lstatSync, realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, lstatSync, realpathSync } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path, { win32 as win32Path } from "node:path";
@@ -10,10 +11,13 @@ import {
   snapshotParentEnvironmentRecord
 } from "./environment.js";
 import type { LocalEnvironmentDefinition } from "./types.js";
+import { WINDOWS_JOB_SUPERVISOR_ENCODED_COMMAND } from "./windows-job-supervisor.js";
 
 const MAX_EXECUTABLES = 32;
 const MAX_ARGUMENTS = 64;
 const MAX_ARGUMENT_BYTES = 128 * 1024;
+const MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS = 24_000;
+const MAX_WINDOWS_SUPERVISOR_COMMAND_LINE_CHARACTERS = 31_500;
 const MAX_STDIN_BYTES = 256 * 1024;
 const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_STDERR_BYTES = 512 * 1024;
@@ -111,6 +115,7 @@ interface ExecutionIsolation {
   readonly environment: NodeJS.ProcessEnv;
   readonly workingDirectory?: string;
   readonly homeDirectory?: string;
+  readonly controlDirectory?: string;
 }
 
 interface ExecutableIdentity {
@@ -119,6 +124,14 @@ interface ExecutableIdentity {
   readonly size: bigint;
   readonly modifiedNanoseconds: bigint;
   readonly canonicalPath: string;
+  readonly contentSha256?: string;
+}
+
+interface WindowsSupervisorLaunch {
+  readonly executable: string;
+  readonly args: readonly string[];
+  readonly environment: NodeJS.ProcessEnv;
+  readonly identity: ExecutableIdentity;
 }
 
 type PendingFailure =
@@ -135,6 +148,7 @@ export class SupervisedProcessRunner {
   private readonly platform: NodeJS.Platform;
   private readonly pinnedIdentities = new Map<string, ExecutableIdentity>();
   private readonly quarantinedExecutableIds = new Set<string>();
+  private windowsSupervisorIdentity: ExecutableIdentity | undefined;
   private readonly activeControllers = new Set<AbortController>();
   private readonly activeOperations = new Set<Promise<SupervisedProcessExecutionResult>>();
   private draining: Promise<void> | undefined;
@@ -258,8 +272,34 @@ export class SupervisedProcessRunner {
     } else if (!sameExecutableIdentity(pinned, before, this.platform)) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
+
+    if (
+      this.platform === "win32"
+      && this.pinnedIdentities.get(definition.id)?.contentSha256 === undefined
+    ) {
+      const contentSha256 = await sha256Executable(definition.executable);
+      const afterHash = await inspectExecutable(definition.executable, this.platform);
+      if (!sameExecutableIdentity(before, afterHash, this.platform)) {
+        throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+      }
+      this.pinnedIdentities.set(definition.id, Object.freeze({
+        ...afterHash,
+        contentSha256
+      }));
+    }
+
     if (request.signal?.aborted) {
       throw new SupervisedProcessError("EXECUTION_CANCELLED");
+    }
+
+    if (
+      this.platform === "win32"
+      && !windowsCommandLineWithinBudget(
+        definition.executable,
+        [...definition.fixedArgs, ...request.args]
+      )
+    ) {
+      throw new SupervisedProcessError("INVALID_REQUEST");
     }
 
     const isolation = await createExecutionIsolation(definition, this.platform);
@@ -279,7 +319,8 @@ export class SupervisedProcessRunner {
         request,
         expectedIdentity,
         isolation.environment,
-        isolation.workingDirectory
+        isolation.workingDirectory,
+        isolation.controlDirectory
       );
     } catch (error) {
       if (isProcessTreeCleanupError(error)) {
@@ -301,16 +342,37 @@ export class SupervisedProcessRunner {
     request: ReturnType<typeof snapshotExecutionRequest>,
     before: ExecutableIdentity,
     environment: NodeJS.ProcessEnv,
-    workingDirectory: string | undefined
+    workingDirectory: string | undefined,
+    controlDirectory: string | undefined
   ): Promise<SupervisedProcessExecutionResult> {
+    let launchExecutable = definition.executable;
+    let launchArgs: readonly string[] = [...definition.fixedArgs, ...request.args];
+    let launchEnvironment = environment;
+    let launchIdentity = before;
+
+    if (this.platform === "win32") {
+      const launch = await this.prepareWindowsSupervisorLaunch(
+        definition,
+        request,
+        before,
+        environment,
+        workingDirectory,
+        controlDirectory
+      );
+      launchExecutable = launch.executable;
+      launchArgs = launch.args;
+      launchEnvironment = launch.environment;
+      launchIdentity = launch.identity;
+    }
+
     let child: ChildProcessWithoutNullStreams;
     try {
       child = spawn(
-        definition.executable,
-        [...definition.fixedArgs, ...request.args],
+        launchExecutable,
+        [...launchArgs],
         {
           ...(workingDirectory === undefined ? {} : { cwd: workingDirectory }),
-          env: environment,
+          env: launchEnvironment,
           shell: false,
           detached: this.platform !== "win32",
           stdio: ["pipe", "pipe", "pipe"],
@@ -406,7 +468,7 @@ export class SupervisedProcessRunner {
       }
 
       const identityOutcome = await Promise.race([
-        inspectExecutable(definition.executable, this.platform).then(
+        inspectExecutable(launchExecutable, this.platform).then(
           (identity) => ({ kind: "IDENTITY" as const, identity })
         ),
         failureRequested.then(() => ({ kind: "FAILED" as const }))
@@ -414,7 +476,7 @@ export class SupervisedProcessRunner {
       if (identityOutcome.kind === "FAILED") {
         return await throwPendingFailure();
       }
-      if (!sameExecutableIdentity(before, identityOutcome.identity, this.platform)) {
+      if (!sameExecutableIdentity(launchIdentity, identityOutcome.identity, this.platform)) {
         requestCleanup("EXECUTABLE_UNSAFE");
         return await throwPendingFailure();
       }
@@ -488,6 +550,74 @@ export class SupervisedProcessRunner {
       child.stdout.destroy();
       child.stderr.destroy();
     }
+  }
+
+  private async prepareWindowsSupervisorLaunch(
+    definition: RegisteredExecutable,
+    request: ReturnType<typeof snapshotExecutionRequest>,
+    expectedIdentity: ExecutableIdentity,
+    environment: NodeJS.ProcessEnv,
+    workingDirectory: string | undefined,
+    controlDirectory: string | undefined
+  ): Promise<WindowsSupervisorLaunch> {
+    if (
+      controlDirectory === undefined
+      || expectedIdentity.contentSha256 === undefined
+    ) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+
+    const powershell = windowsPowerShellExecutablePath(environment);
+    const identity = await inspectExecutable(powershell, "win32");
+    if (this.windowsSupervisorIdentity === undefined) {
+      this.windowsSupervisorIdentity = identity;
+    } else if (
+      !sameExecutableIdentity(this.windowsSupervisorIdentity, identity, "win32")
+    ) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+
+    const configPath = path.join(controlDirectory, "launch.json");
+    const configuration = JSON.stringify({
+      executable: definition.executable,
+      arguments: [...definition.fixedArgs, ...request.args],
+      cwd: workingDirectory ?? null,
+      expectedSha256: expectedIdentity.contentSha256,
+      environmentKeys: Object.keys(environment)
+    });
+    await writeFile(configPath, configuration, {
+      encoding: "utf8",
+      flag: "wx"
+    });
+
+    const args = Object.freeze([
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      WINDOWS_JOB_SUPERVISOR_ENCODED_COMMAND
+    ]);
+    const commandCharacters =
+      powershell.length + 1 + args.reduce(
+        (total, argument) => total + argument.length + 3,
+        0
+      );
+    if (commandCharacters > MAX_WINDOWS_SUPERVISOR_COMMAND_LINE_CHARACTERS) {
+      throw new SupervisedProcessError("INVALID_DEFINITION");
+    }
+
+    const supervisorEnvironment = Object.create(null) as NodeJS.ProcessEnv;
+    for (const [key, value] of Object.entries(environment)) {
+      if (typeof value === "string") supervisorEnvironment[key] = value;
+    }
+    supervisorEnvironment.INTERVIEW_SUPERVISED_CONFIG = configPath;
+
+    return Object.freeze({
+      executable: powershell,
+      args,
+      environment: Object.freeze(supervisorEnvironment),
+      identity
+    });
   }
 }
 
@@ -571,6 +701,12 @@ function snapshotExecutableDefinition(
   }
   const fixedArgs = snapshotArguments(record.fixedArgs, "INVALID_DEFINITION");
   const canonicalConfiguredPath = path.normalize(record.executable);
+  if (
+    platform === "win32"
+    && !windowsCommandLineWithinBudget(canonicalConfiguredPath, fixedArgs)
+  ) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
   if (
     platform === "win32"
       ? canonicalConfiguredPath.startsWith("\\\\")
@@ -908,6 +1044,60 @@ function tryInspectExecutableSync(
   }
 }
 
+async function sha256Executable(executable: string): Promise<string> {
+  const hash = createHash("sha256");
+  try {
+    const stream = createReadStream(executable);
+    for await (const chunk of stream) {
+      hash.update(chunk);
+    }
+    return hash.digest("hex");
+  } catch {
+    throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+  }
+}
+
+function windowsCommandLineWithinBudget(
+  executable: string,
+  args: readonly string[]
+): boolean {
+  let upperBound = executable.length * 2 + 2;
+  for (const argument of args) {
+    upperBound += argument.length * 2 + 3;
+    if (upperBound > MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS) return false;
+  }
+  return upperBound <= MAX_WINDOWS_PROVIDER_COMMAND_LINE_CHARACTERS;
+}
+
+function windowsPowerShellExecutablePath(
+  environment: NodeJS.ProcessEnv
+): string {
+  let systemRoot: string | undefined;
+  for (const [key, value] of Object.entries(environment)) {
+    if (key.toUpperCase() !== "SYSTEMROOT" || typeof value !== "string") continue;
+    if (systemRoot !== undefined && systemRoot !== value) {
+      throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+    }
+    systemRoot = value;
+  }
+  if (
+    systemRoot === undefined
+    || systemRoot.length === 0
+    || systemRoot.includes("\0")
+    || !win32Path.isAbsolute(systemRoot)
+    || systemRoot.startsWith("\\\\")
+  ) {
+    throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+  }
+  return win32Path.join(
+    systemRoot,
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe"
+  );
+}
+
 function normalizeWindowsIdentityPath(value: string): string {
   let normalized = win32Path.resolve(value).replaceAll("/", "\\");
   if (normalized.toLowerCase().startsWith("\\\\?\\unc\\")) {
@@ -940,7 +1130,13 @@ async function createExecutionIsolation(
 ): Promise<ExecutionIsolation> {
   let workingDirectory: string | undefined;
   let homeDirectory: string | undefined;
+  let controlDirectory: string | undefined;
   try {
+    if (platform === "win32") {
+      controlDirectory = await mkdtemp(
+        path.join(tmpdir(), "interview-provider-control-")
+      );
+    }
     const environment = Object.create(null) as NodeJS.ProcessEnv;
     for (const [key, value] of Object.entries(definition.environment)) {
       if (typeof value === "string") environment[key] = value;
@@ -974,14 +1170,16 @@ async function createExecutionIsolation(
     return Object.freeze({
       environment: Object.freeze(environment),
       ...(workingDirectory === undefined ? {} : { workingDirectory }),
-      ...(homeDirectory === undefined ? {} : { homeDirectory })
+      ...(homeDirectory === undefined ? {} : { homeDirectory }),
+      ...(controlDirectory === undefined ? {} : { controlDirectory })
     });
   } catch (error) {
     try {
       await cleanupExecutionIsolation({
         environment: Object.freeze(Object.create(null) as NodeJS.ProcessEnv),
         ...(workingDirectory === undefined ? {} : { workingDirectory }),
-        ...(homeDirectory === undefined ? {} : { homeDirectory })
+        ...(homeDirectory === undefined ? {} : { homeDirectory }),
+        ...(controlDirectory === undefined ? {} : { controlDirectory })
       });
     } catch {
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
@@ -1050,6 +1248,13 @@ async function cleanupExecutionIsolation(
   if (isolation.homeDirectory !== undefined) {
     try {
       await rm(isolation.homeDirectory, { recursive: true, force: true });
+    } catch {
+      failed = true;
+    }
+  }
+  if (isolation.controlDirectory !== undefined) {
+    try {
+      await rm(isolation.controlDirectory, { recursive: true, force: true });
     } catch {
       failed = true;
     }
@@ -1137,21 +1342,12 @@ async function terminateProcessTree(
   }
 
   if (platform === "win32") {
-    const gracefulRequested = await runTaskkill(pid, false, TREE_FORCE_MS);
-    if (
-      gracefulRequested
-      && await waitForChildExit(child, TREE_GRACE_MS)
-    ) {
-      return true;
-    }
-    const forced = await runTaskkill(pid, true, TREE_FORCE_MS);
-    if (forced && await waitForChildExit(child, TREE_FORCE_MS)) return true;
     try {
       child.kill();
     } catch {
-      // The root may already have exited. Tree containment is still unverified.
+      return !isProcessAlive(child);
     }
-    return false;
+    return await waitForChildExit(child, TREE_FORCE_MS);
   }
 
   signalPosixGroup(child, "SIGTERM");
@@ -1227,56 +1423,6 @@ function isMissingProcessError(error: unknown): boolean {
   } catch {
     return false;
   }
-}
-
-function runTaskkill(pid: number, force: boolean, timeoutMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const systemRoot = process.env["SystemRoot"] ?? process.env["SYSTEMROOT"];
-    if (
-      systemRoot === undefined
-      || systemRoot.length === 0
-      || systemRoot.includes("\0")
-      || !win32Path.isAbsolute(systemRoot)
-      || systemRoot.startsWith("\\\\")
-    ) {
-      resolve(false);
-      return;
-    }
-    const executable = win32Path.join(systemRoot, "System32", "taskkill.exe");
-    let task: ReturnType<typeof spawn>;
-    try {
-      task = spawn(
-        executable,
-        ["/pid", String(pid), "/t", ...(force ? ["/f"] : [])],
-        { shell: false, windowsHide: true, stdio: "ignore" }
-      );
-    } catch {
-      resolve(false);
-      return;
-    }
-
-    let settled = false;
-    const settle = (success: boolean): void => {
-      if (settled) return;
-      settled = true;
-      resolve(success);
-    };
-    const timer = setTimeout(() => {
-      try {
-        task.kill();
-      } catch {
-        // The helper may already have exited.
-      }
-      task.unref();
-      settle(false);
-    }, timeoutMs);
-    const finish = (success: boolean): void => {
-      clearTimeout(timer);
-      settle(success);
-    };
-    task.once("error", () => finish(false));
-    task.once("close", (code) => finish(code === 0));
-  });
 }
 
 function isProcessTreeCleanupError(
