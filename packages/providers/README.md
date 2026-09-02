@@ -14,7 +14,7 @@ The control plane provides:
 - informational readiness states;
 - deterministic capability requirement matching and configuration resolution;
 - adapter-factory resolution without executing interview turns;
-- built-in metadata/factories for the existing mock and Gemini API adapters;
+- built-in metadata/factories for the mock, Gemini API, and supervised Antigravity CLI adapters;
 - plain diagnostics metadata and deterministic configuration fingerprint material.
 
 ## Safety boundary
@@ -53,13 +53,35 @@ Raw credentials are obtained only at runtime through `ProviderSecretResolver`. F
 
 - `mock-model / mock-default`
 - `gemini-api / gemini-2.5-flash`
+- `antigravity-cli / gemini-3.7-flash-medium`
 
-The Gemini definition describes the existing adapter only. Registration does not mark Gemini
-as production-approved, does not bypass provider policy, and does not change its existing
+The Gemini definition describes the existing API-key adapter only. Registration does not mark
+Gemini as production-approved, does not bypass provider policy, and does not change its existing
 fail-closed behavior under no-metered policy.
 
-No automatic routing, fallback, escalation, settings UI, or interview-runtime integration is
-implemented here.
+The Antigravity definition describes the documented headless `agy` CLI contract rather than
+a generic shell command. It uses one fresh process per reasoning turn, one `stream-json`
+`user` event on stdin, native JSON-schema structured output, and no `--continue` or
+`--conversation` state. The adapter rejects tool/subagent events and validates the terminal
+`structured_output` again with the application-owned `InterviewerProposalSchema`. Process
+execution is injected by the trusted server/local-runtime layer; provider configuration cannot
+choose an executable path or arbitrary process environment.
+
+Antigravity authentication is deliberately outside provider/session state. The trusted runtime
+reuses the CLI's existing local authenticated account/session through the user's normal profile
+directories and does not inspect, copy, persist, or return those credentials.
+
+Antigravity remains a remote inference path even though the client process is local. Its model
+capabilities therefore declare both local process execution and remote execution, conservative
+remote data use, and unknown metered-execution status. The adapter's billing verification reports
+`spendImpossible: false`; invoking a subscription-backed CLI is not proof that paid overage is
+technically impossible. The server default policy consequently fails closed. Personal use
+requires the application-owned host opt-in
+`INTERVIEW_ALLOW_METERED_REMOTE_REASONING=1`, which permits the remote path without weakening
+the provider policy machinery or storing that choice in session configuration.
+
+No automatic routing, fallback, escalation, provider settings UI, or secret-bearing session
+configuration is implemented here.
 
 
 ## Registration and factory hardening
@@ -75,3 +97,17 @@ checks the returned adapter's execution identity/capabilities against registered
 the existing `ReasoningProvider` interface exposes a corresponding fact. It still does not call
 `createSession()`; production session creation remains exclusively behind the existing provider
 execution/policy boundary.
+
+
+## Supervised CLI trust boundary
+
+`SupervisedCliReasoningProvider` is the reusable provider-side half of the CLI boundary. It
+knows only a narrow injected executor contract: bounded argument strings, bounded stdin,
+bounded stdout/stderr byte budgets, an execution deadline, cancellation signal, and a
+process-start acknowledgement. It cannot import child-process APIs or select an executable.
+
+The trusted process half lives in `packages/local-runtime`. This split preserves the frozen
+architecture rule that provider adapters are untrusted realization engines and do not gain
+general filesystem/process authority. Future Ollama, llama.cpp, or Codex-like adapters can
+reuse the same executor seam while defining their own application-owned executable identities
+and exact output protocols.
