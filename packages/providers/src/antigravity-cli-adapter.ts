@@ -704,13 +704,37 @@ function parseStrictJson(raw: string): unknown {
   };
 
   const parseNumber = (): void => {
-    const match = raw.slice(index).match(
-      /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/u
-    );
-    if (match === null || match[0].length === 0) {
-      throw new Error("Invalid JSON number");
+    if (raw[index] === "-") index += 1;
+    if (raw[index] === "0") {
+      index += 1;
+      if (isAsciiDigit(raw.charCodeAt(index))) {
+        throw new Error("Invalid JSON leading zero");
+      }
+    } else {
+      const first = raw.charCodeAt(index);
+      if (first < 0x31 || first > 0x39) {
+        throw new Error("Invalid JSON number");
+      }
+      index += 1;
+      while (isAsciiDigit(raw.charCodeAt(index))) index += 1;
     }
-    index += match[0].length;
+
+    if (raw[index] === ".") {
+      index += 1;
+      if (!isAsciiDigit(raw.charCodeAt(index))) {
+        throw new Error("Invalid JSON fraction");
+      }
+      while (isAsciiDigit(raw.charCodeAt(index))) index += 1;
+    }
+
+    if (raw[index] === "e" || raw[index] === "E") {
+      index += 1;
+      if (raw[index] === "+" || raw[index] === "-") index += 1;
+      if (!isAsciiDigit(raw.charCodeAt(index))) {
+        throw new Error("Invalid JSON exponent");
+      }
+      while (isAsciiDigit(raw.charCodeAt(index))) index += 1;
+    }
   };
 
   const consumeLiteral = (literal: string): void => {
@@ -791,6 +815,10 @@ function parseStrictJson(raw: string): unknown {
   skipWhitespace();
   if (index !== raw.length) throw new Error("Trailing JSON content");
   return JSON.parse(raw) as unknown;
+}
+
+function isAsciiDigit(code: number): boolean {
+  return code >= 0x30 && code <= 0x39;
 }
 
 function firstNonBlankLineIndex(lines: readonly string[]): number {
