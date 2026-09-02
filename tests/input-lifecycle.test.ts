@@ -74,7 +74,7 @@ describe("utterance and multimodal InputEpisode lifecycle", () => {
     }
   });
 
-  it("discards capturing utterances when a terminal transition wins first", async () => {
+  it("rejects late finalization while still allowing producer-valid cleanup after terminal state", async () => {
     const store = new SqliteEventStore(":memory:");
     try {
       const writer = new SessionRuntimeRegistry(store).get(newSessionId());
@@ -85,11 +85,14 @@ describe("utterance and multimodal InputEpisode lifecycle", () => {
       await turns.completeSession();
 
       expect(writer.getState().status).toBe("COMPLETED");
-      expect(writer.getState().utterances[utteranceId]?.status).toBe("DISCARDED");
+      expect(writer.getState().utterances[utteranceId]?.status).toBe("CAPTURING");
       await expect(turns.finalizeUtterance({
         utteranceId,
         text: "late transcript"
-      })).rejects.toThrow();
+      })).rejects.toThrow(/active session/u);
+
+      await turns.discardUtterance(utteranceId, "late worker cleanup after completion");
+      expect(writer.getState().utterances[utteranceId]?.status).toBe("DISCARDED");
     } finally {
       store.close();
     }
