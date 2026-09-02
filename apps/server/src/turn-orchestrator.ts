@@ -113,6 +113,23 @@ export class ServerTurnOrchestrator {
     }
   }
 
+  /**
+   * Requests cancellation of every orchestration admitted before graceful
+   * shutdown. Command admission must already be closed by the caller.
+   * Provider acknowledgement is best effort and never gates process progress.
+   */
+  public requestCancellationForShutdown(): void {
+    for (const orchestration of this.inFlight.values()) {
+      orchestration.signalCancellation();
+    }
+    for (const record of this.activeProviderExecutions.values()) {
+      void record.coordinator.cancelGeneration(
+        record.generationId,
+        "Application shutdown cancelled provider execution"
+      ).catch(() => undefined);
+    }
+  }
+
   public async waitForAll(): Promise<void> {
     await Promise.all(
       Array.from(this.inFlight.values()).map((record) => record.completion)
