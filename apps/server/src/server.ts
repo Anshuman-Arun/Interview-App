@@ -1,7 +1,7 @@
 import path from "node:path";
 import process from "node:process";
 import { SqliteEventStore } from "../../../packages/persistence/src/index.js";
-import { SessionRuntimeRegistry } from "../../../packages/interview-engine/src/index.js";
+import {\n  SessionRuntimeRegistry,\n  type VisionInferenceBackend\n} from "../../../packages/interview-engine/src/index.js";
 import type { LocalTransportSecurity } from "../../../packages/domain/src/index.js";
 import { LocalInterviewTransportRuntime } from "./local-interview-transport-runtime.js";
 import type { ProviderRuntimeResolver } from "./provider-runtime.js";
