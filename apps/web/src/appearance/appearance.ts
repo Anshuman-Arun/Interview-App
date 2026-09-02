@@ -12,7 +12,7 @@ export type CornerStyle = "square" | "soft" | "round" | "generous";
 export type BorderStyle = "quiet" | "regular" | "strong" | "contrast";
 
 export const MIN_INTERFACE_ZOOM_PERCENT = 25;
-export const MAX_INTERFACE_ZOOM_PERCENT = 300;
+export const MAX_INTERFACE_ZOOM_PERCENT = 500;
 
 export interface AppearanceSettings {
   readonly theme: ThemeMode;
