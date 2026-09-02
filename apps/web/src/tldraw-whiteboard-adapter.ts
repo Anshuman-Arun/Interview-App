@@ -257,6 +257,15 @@ export class TldrawWhiteboardAdapter implements WhiteboardAdapter, WhiteboardPre
     this.editor?.setReadOnly?.(readOnly);
   }
 
+  public resetForNewSession(): void {
+    const editor = this.editor;
+    if (editor !== null) {
+      const ids = editor.getCurrentPageShapes().map((shape) => shape.id);
+      if (ids.length > 0) editor.deleteShapes(ids);
+    }
+    this.localBoardRevision = 0;
+  }
+
   public getBoardRevision(): number {
     return this.localBoardRevision;
   }
