@@ -67,9 +67,12 @@ export async function materializeRuntimeAssetView(input: {
   await ensureOwnedDirectory(input.baseRoot);
 
   const totalBytes = input.assets.reduce((sum, asset) => sum + asset.manifest.sizeBytes, 0);
-  const filesystem = await statfs(input.baseRoot);
+  if (!Number.isSafeInteger(totalBytes) || totalBytes < 0) {
+    throw new Error("Local runtime asset-view size exceeds safe integer accounting");
+  }
+  const filesystem = await statfs(input.baseRoot, { bigint: true });
   const availableBytes = filesystem.bavail * filesystem.bsize;
-  if (!Number.isFinite(availableBytes) || availableBytes < totalBytes) {
+  if (availableBytes < BigInt(totalBytes)) {
     throw new Error("Insufficient disk space for verified local runtime asset view");
   }
 
