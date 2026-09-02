@@ -39,6 +39,13 @@ const HISTORY_TOTAL_EVENT_BUDGET = 50_000;
 const HISTORY_TIMELINE_ENTRY_LIMIT = 1_000;
 const HISTORY_TEXT_PREVIEW_LIMIT = 512;
 
+function isDeterministicQuantState(state: Readonly<SessionState>): boolean {
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH"
+    || state.quantTrading !== undefined
+    || state.quantResearch !== undefined;
+}
+
 export interface SessionReadSource {
   readonly hasSession: (sessionId: SessionId) => boolean;
   readonly sessionCount: () => number;
@@ -447,11 +454,13 @@ export class SessionReadService {
         }
       }
 
-      // Longitudinal statistics are keyed by exact problem identity. Some
-      // authoritative configured modes (currently Quant Trading) intentionally
-      // have no InterviewProblem, so keep their history card/replay available
-      // without coercing them into problem-comparison statistics.
-      if (history.problem !== undefined) {
+      // Longitudinal statistics are Oxford exact-problem comparisons. Quant
+      // Research persists a synthetic problem identity for replay compatibility,
+      // so identity presence alone is not sufficient admission here.
+      if (
+        history.problem !== undefined
+        && !isDeterministicQuantState(loaded.state)
+      ) {
         longitudinalInputs.push(history);
       }
       cards.push({
@@ -558,12 +567,7 @@ export class SessionReadService {
     if (events === undefined) return undefined;
     try {
       const state = replaySession(sessionId, events);
-      if (
-        state.configuration?.mode === "QUANT_TRADING"
-        || state.configuration?.mode === "QUANT_RESEARCH"
-        || state.quantTrading !== undefined
-        || state.quantResearch !== undefined
-      ) {
+      if (isDeterministicQuantState(state)) {
         // Generic event replay validates structure; deterministic quant replay
         // additionally proves engine-authored outcomes and hidden scenario state.
         resolveSessionStateComposition(state);
@@ -591,12 +595,7 @@ export class SessionReadService {
     if (state.status !== "COMPLETED" && state.status !== "ARCHIVED") {
       return { available: false, reason: "SESSION_NOT_TERMINAL" };
     }
-    if (
-      state.configuration?.mode === "QUANT_TRADING"
-      || state.configuration?.mode === "QUANT_RESEARCH"
-      || state.quantTrading !== undefined
-      || state.quantResearch !== undefined
-    ) {
+    if (isDeterministicQuantState(state)) {
       // Deterministic Quant engines own their completion metrics. The generic
       // Oxford evaluator must never reinterpret synthetic Quant problem state,
       // even if a future catalog identity happens to collide.
