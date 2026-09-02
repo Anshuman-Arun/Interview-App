@@ -21,6 +21,10 @@ import {
   createCommandEnvelope
 } from "../../../packages/interview-engine/src/index.js";
 import { RequestIdConflictError } from "../../../packages/persistence/src/index.js";
+import {
+  QuantResearchError,
+  QuantTraderActionError
+} from "../../../packages/local-compute/src/index.js";
 import { MAX_REPLAY_IDENTIFIER_CHARS } from "../../../packages/replay/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import type { SessionReadService } from "./session-read-service.js";
@@ -33,6 +37,7 @@ import {
   toInterviewProblemPublicView
 } from "./interview-session-composition.js";
 import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
+import { ProductionSessionRuntime } from "./production-session-runtime.js";
 
 const MAX_COMMAND_BYTES = 64 * 1024;
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
@@ -78,6 +83,7 @@ class ProtocolHttpError extends Error {
 
 export class LoopbackCommandServer {
   private readonly server: Server;
+  private readonly productionRuntime = new ProductionSessionRuntime();
   private boundAddress: BoundLoopbackAddress | undefined;
 
   public constructor(private readonly options: LoopbackCommandServerOptions) {
@@ -355,12 +361,7 @@ export class LoopbackCommandServer {
         }
 
         try {
-          await new TurnCoordinator(writer).startConfiguredSession({
-            configuration: composition.configuration,
-            ...(composition.mode === "OXFORD_MATHEMATICS"
-              ? { problem: composition.problem }
-              : {})
-          }, envelope);
+          await this.productionRuntime.startConfigured(writer, composition, envelope);
         } catch (error) {
           if (error instanceof RequestIdConflictError) throw error;
           if (error instanceof Error && error.message === "Session already started") {
@@ -401,6 +402,16 @@ export class LoopbackCommandServer {
         };
       }
       case "COMPLETE_SESSION": {
+        if (
+          recoveredComposition !== undefined
+          && recoveredComposition.mode !== "OXFORD_MATHEMATICS"
+        ) {
+          throw new ProtocolHttpError(
+            409,
+            "CONFLICT",
+            "Quant sessions complete only through deterministic scenario progression"
+          );
+        }
         const completed = await new TurnCoordinator(writer).completeSession(envelope, command.summary);
         this.scheduleSessionTerminalCleanup(command.sessionId);
         return {
@@ -517,6 +528,85 @@ export class LoopbackCommandServer {
           sessionId: command.sessionId,
           configuration: composition.configuration,
           ...(problem === undefined ? {} : { problem })
+        };
+      }
+      case "GET_QUANT_SESSION_STATE": {
+        const composition = recoveredComposition;
+        if (composition === undefined) {
+          throw new Error("Recovered session composition is missing");
+        }
+        if (composition.mode === "OXFORD_MATHEMATICS") {
+          throw new ProtocolHttpError(409, "CONFLICT", "Session is not a quant session");
+        }
+        const quant = this.productionRuntime.readQuantState(writer, composition);
+        return quant.mode === "QUANT_TRADING"
+          ? {
+              protocolVersion: 1,
+              ok: true,
+              type: "QUANT_TRADING_STATE",
+              requestId: command.requestId,
+              sessionId: command.sessionId,
+              state: quant.state
+            }
+          : {
+              protocolVersion: 1,
+              ok: true,
+              type: "QUANT_RESEARCH_STATE",
+              requestId: command.requestId,
+              sessionId: command.sessionId,
+              state: quant.state
+            };
+      }
+      case "SUBMIT_QUANT_TRADING_ACTION": {
+        const composition = recoveredComposition;
+        if (composition === undefined) {
+          throw new Error("Recovered session composition is missing");
+        }
+        if (composition.mode !== "QUANT_TRADING") {
+          throw new ProtocolHttpError(409, "CONFLICT", "Session is not a Quant Trading session");
+        }
+        const applied = await this.productionRuntime.applyTradingAction(
+          writer,
+          composition,
+          command.action,
+          envelope
+        );
+        if (writer.getState().status === "COMPLETED") {
+          this.scheduleSessionTerminalCleanup(command.sessionId);
+        }
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "QUANT_TRADING_STATE",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          state: applied.value
+        };
+      }
+      case "SUBMIT_QUANT_RESEARCH_ACTION": {
+        const composition = recoveredComposition;
+        if (composition === undefined) {
+          throw new Error("Recovered session composition is missing");
+        }
+        if (composition.mode !== "QUANT_RESEARCH") {
+          throw new ProtocolHttpError(409, "CONFLICT", "Session is not a Quant Research session");
+        }
+        const applied = await this.productionRuntime.applyResearchAction(
+          writer,
+          composition,
+          command.action,
+          envelope
+        );
+        if (writer.getState().status === "COMPLETED") {
+          this.scheduleSessionTerminalCleanup(command.sessionId);
+        }
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "QUANT_RESEARCH_STATE",
+          requestId: command.requestId,
+          sessionId: command.sessionId,
+          state: applied.value.state
         };
       }
       case "RECONNECT_DELIVERY": {
@@ -668,6 +758,23 @@ function classifyError(error: unknown): ProtocolHttpError {
   if (error instanceof ProtocolHttpError) return error;
   if (error instanceof RequestIdConflictError) {
     return new ProtocolHttpError(409, "CONFLICT", "RequestId conflicts with an earlier command");
+  }
+  if (error instanceof QuantTraderActionError) {
+    const invalid = new Set([
+      "INVALID_ACTION",
+      "INVALID_QUOTE",
+      "INVALID_TICK",
+      "QUOTE_SIZE_LIMIT",
+      "HARD_POSITION_LIMIT"
+    ]);
+    return invalid.has(error.code)
+      ? new ProtocolHttpError(400, "INVALID_COMMAND", "Quant Trading action is invalid")
+      : new ProtocolHttpError(409, "CONFLICT", "Quant Trading action conflicts with current scenario state");
+  }
+  if (error instanceof QuantResearchError) {
+    return error.code === "INVALID_ACTION"
+      ? new ProtocolHttpError(400, "INVALID_COMMAND", "Quant Research action is invalid")
+      : new ProtocolHttpError(409, "CONFLICT", "Quant Research action conflicts with current scenario state");
   }
   if (error instanceof Error && (error.message === "Session already started" || error.message.startsWith("Cannot "))) {
     return new ProtocolHttpError(409, "CONFLICT", "Command conflicts with current session state");
