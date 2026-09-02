@@ -13,6 +13,7 @@ import {
 } from "../packages/domain/src/index.js";
 import type { SessionState } from "../packages/events/src/index.js";
 import {
+  QuantResearchCoordinator,
   QuantTradingSessionCoordinator,
   TurnCoordinator,
   SessionRuntimeRegistry,
@@ -719,6 +720,177 @@ describe("production quant runtime integration", () => {
       body
     });
   }
+});
+
+describe("adversarial quant lifecycle invariants", () => {
+  it("refuses deterministic Trading completion while a speech input episode is still active", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const trading = new QuantTradingSessionCoordinator(writer);
+    const turns = new TurnCoordinator(writer);
+    try {
+      await trading.initializeConfigured(
+        tradingConfiguration(),
+        321_654,
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      );
+      let state = trading.getPublicState();
+      while (state.currentRound < state.plannedRounds) {
+        state = (await trading.applyAction(
+          { type: "PASS" },
+          state.currentRound,
+          createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+        )).value;
+      }
+      expect(state.status).toBe("ACTIVE");
+
+      const utteranceId = await turns.beginUtterance();
+      const activeInput = await turns.finalizeUtterance({
+        utteranceId,
+        text: "unfinished spoken thought"
+      });
+      expect(writer.getState().inputEpisodes[activeInput.inputEpisodeId]?.status).toBe("ACTIVE");
+      const countBeforeRejectedTerminal = store.eventCount(sessionId);
+
+      await expect(trading.applyAction(
+        { type: "PASS" },
+        state.currentRound,
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      )).rejects.toThrow(/input episode is active/u);
+      expect(store.eventCount(sessionId)).toBe(countBeforeRejectedTerminal);
+      expect(writer.getState().quantTrading?.rounds).toHaveLength(state.plannedRounds - 1);
+
+      await turns.commitInputEpisode(activeInput.inputEpisodeId);
+      const completed = await trading.applyAction(
+        { type: "PASS" },
+        state.currentRound,
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      );
+      expect(completed.value.status).toBe("COMPLETED");
+      expect(writer.getState().status).toBe("COMPLETED");
+      expect(() => projectSessionHistory(store.load(sessionId))).not.toThrow();
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
+  it("refuses deterministic Research completion while a speech input episode is still active", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const research = new QuantResearchCoordinator(writer);
+    const turns = new TurnCoordinator(writer);
+    try {
+      await research.initializeConfigured(
+        researchConfiguration(),
+        createProductionQuantResearchDefinition("MODEL_COMPARISON", 777),
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      );
+      await research.applyActionAtExpectedCount({
+        actionId: "research-before-active-input",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }, 0, createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" }));
+
+      const utteranceId = await turns.beginUtterance();
+      const activeInput = await turns.finalizeUtterance({
+        utteranceId,
+        text: "unfinished research explanation"
+      });
+      const countBeforeRejectedTerminal = store.eventCount(sessionId);
+
+      await expect(research.applyActionAtExpectedCount({
+        actionId: "research-terminal-blocked",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }, 1, createCommandEnvelope({
+        sessionId,
+        producer: "quant-adversarial-test"
+      }))).rejects.toThrow(/input episode is active/u);
+      expect(store.eventCount(sessionId)).toBe(countBeforeRejectedTerminal);
+      expect(research.getPublicState().acceptedActionCount).toBe(1);
+
+      await turns.commitInputEpisode(activeInput.inputEpisodeId);
+      const completed = await research.applyActionAtExpectedCount({
+        actionId: "research-terminal-after-input",
+        kind: "CHOOSE_OPTION",
+        option: "CONSTANT"
+      }, 1, createCommandEnvelope({
+        sessionId,
+        producer: "quant-adversarial-test"
+      }));
+      expect(completed.value.state.status).toBe("COMPLETE");
+      expect(writer.getState().status).toBe("COMPLETED");
+      expect(() => projectSessionHistory(store.load(sessionId))).not.toThrow();
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
+
+  it("fails recovery and complete replay for configured quant streams missing deterministic initialization", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      for (const configuration of [tradingConfiguration(), researchConfiguration()]) {
+        const sessionId = newSessionId();
+        const writer = SessionWriter.open(store, sessionId);
+        try {
+          await new TurnCoordinator(writer).startConfiguredSession(
+            { configuration },
+            createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+          );
+          expect(() => resolveSessionStateComposition(writer.getState()))
+            .toThrow(/lacks authoritative scenario state/u);
+          expect(() => projectSessionHistory(store.load(sessionId))).toThrow();
+        } finally {
+          await writer.close();
+        }
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  it("rejects impossible cross-field combinations in public quant state", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const sessionId = newSessionId();
+    const writer = SessionWriter.open(store, sessionId);
+    const trading = new QuantTradingSessionCoordinator(writer);
+    try {
+      await trading.initializeConfigured(
+        tradingConfiguration(),
+        919_191,
+        createCommandEnvelope({ sessionId, producer: "quant-adversarial-test" })
+      );
+      const validTrading = trading.getPublicState();
+      expect(QuantTradingPublicStateSchema.safeParse(validTrading).success).toBe(true);
+      expect(QuantTradingPublicStateSchema.safeParse({
+        ...validTrading,
+        currentRound: validTrading.plannedRounds + 1
+      }).success).toBe(false);
+      expect(QuantTradingPublicStateSchema.safeParse({
+        ...validTrading,
+        quoteRequest: validTrading.quoteRequest === undefined
+          ? undefined
+          : { ...validTrading.quoteRequest, round: validTrading.currentRound + 1 }
+      }).success).toBe(false);
+
+      const validResearch = new QuantResearchEngine(
+        createProductionQuantResearchDefinition("MODEL_COMPARISON", 919_191)
+      ).getState();
+      expect(QuantResearchPublicStateSchema.safeParse(validResearch).success).toBe(true);
+      expect(QuantResearchPublicStateSchema.safeParse({
+        ...validResearch,
+        acceptedActionCount: 2,
+        actionLimit: 1
+      }).success).toBe(false);
+    } finally {
+      await writer.close();
+      store.close();
+    }
+  });
 });
 
 describe("production quant start seed lifecycle", () => {
