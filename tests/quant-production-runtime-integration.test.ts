@@ -427,19 +427,32 @@ describe("production quant runtime integration", () => {
     }), 409, "CONFLICT");
 
     let state = duplicateAfterRestart.state;
+    let terminalCommand:
+      | {
+          readonly protocolVersion: 1;
+          readonly type: "SUBMIT_QUANT_TRADING_ACTION";
+          readonly requestId: RequestId;
+          readonly sessionId: SessionId;
+          readonly expectedRound: number;
+          readonly action: { readonly type: "PASS" };
+        }
+      | undefined;
     while (state.actionRequired) {
+      const command = {
+        protocolVersion: 1 as const,
+        type: "SUBMIT_QUANT_TRADING_ACTION" as const,
+        requestId: newRequestId(),
+        sessionId,
+        expectedRound: state.currentRound,
+        action: { type: "PASS" as const }
+      };
+      if (state.currentRound === state.plannedRounds) terminalCommand = command;
       state = QuantTradingStateResponseSchema.parse(
-        await responseJson(await post({
-          protocolVersion: 1,
-          type: "SUBMIT_QUANT_TRADING_ACTION",
-          requestId: newRequestId(),
-          sessionId,
-          expectedRound: state.currentRound,
-          action: { type: "PASS" }
-        }))
+        await responseJson(await post(command))
       ).state;
     }
 
+    expect(terminalCommand).toBeDefined();
     expect(state.status).toBe("COMPLETED");
     expect(state.completion).toBeDefined();
     expect(state.completion?.roundsCompleted).toBe(state.plannedRounds);
@@ -497,12 +510,23 @@ describe("production quant runtime integration", () => {
       action: { type: "PASS" }
     }), 409, "CONFLICT");
 
+    const terminalEventCount = store.eventCount(sessionId);
+    if (terminalCommand === undefined) throw new Error("Expected terminal Trading command");
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await post(terminalCommand))
+    ).state).toEqual(state);
+    expect(store.eventCount(sessionId)).toBe(terminalEventCount);
+
     await restart();
     const recoveredTerminal = QuantTradingStateResponseSchema.parse(
       await responseJson(await getQuantState(sessionId))
     ).state;
     expect(recoveredTerminal).toEqual(state);
     expect(registry.get(sessionId).getState().status).toBe("COMPLETED");
+    expect(QuantTradingStateResponseSchema.parse(
+      await responseJson(await post(terminalCommand))
+    ).state).toEqual(state);
+    expect(store.eventCount(sessionId)).toBe(terminalEventCount);
   });
 
   it("routes Quant Research structured actions through the existing deterministic coordinator with mode isolation", async () => {
