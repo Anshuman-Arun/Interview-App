@@ -52,14 +52,21 @@ fresh bounded child process per request rather than a long-lived ready/degraded 
 Executable definitions are registered by trusted application code and snapshotted before use.
 The public execution request identifies only a registered executable ID plus bounded arguments,
 stdin, output budgets, deadline, and cancellation signal; it cannot supply an executable path,
-working directory, or environment. Executables must be absolute regular files, symbolic-link
-indirection is rejected, and the runner re-checks device/inode/size/mtime identity immediately
-after spawn to fail closed on detectable replacement races.
+working directory, environment, or home-profile contents. Executables must be absolute regular
+files and symbolic-link indirection is rejected. If the executable exists at runner construction,
+its device/inode/size/mtime identity is pinned immediately; if it is initially unavailable, the
+first successful execution pins it. Every later execution must match the pinned identity before
+spawn and is checked again immediately after spawn, so upgrades/replacements require an explicit
+application-runtime restart and detectable replacement races fail closed.
 
 Each execution uses `shell: false`, bounded stdin/stdout/stderr, fatal UTF-8 validation for
-returned stdout, and optional private temporary working directories. Stderr content is never
-returned through the result surface. Timeout, cancellation, output-budget violations, and
-unsafe executable replacement all trigger bounded process-tree cleanup.
+returned stdout, and optional private temporary working directories. Definitions may also request
+a fresh isolated home directory populated only with a bounded set of application-owned files.
+Home/profile environment variables are redirected to that temporary directory for the child and
+the directory is removed after every execution, preventing provider conversation/settings state
+from crossing turns through ordinary home-profile files. Stderr content is never returned through
+the result surface. Timeout, cancellation, output-budget violations, unsafe executable
+replacement, and unverifiable isolation cleanup fail closed.
 
 On POSIX, each one-shot process receives its own process group. Cancellation escalates from
 group SIGTERM to SIGKILL, and a normally exiting root is followed by a residual process-group
