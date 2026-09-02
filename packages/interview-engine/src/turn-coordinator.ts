@@ -70,11 +70,6 @@ const CorrectedResultSchema = z.object({ corrected: z.literal(true) }).strict();
 const UtteranceStartedResultSchema = z.object({ utteranceId: UtteranceIdSchema }).strict();
 const UtteranceDiscardedResultSchema = z.object({ discarded: z.literal(true) }).strict();
 const UtteranceFinalizedResultSchema = z.object({ inputEpisodeId: InputEpisodeIdSchema, transcriptRevision: TranscriptRevisionSchema }).strict();
-const UtteranceFinalizedAndCommittedResultSchema = z.object({
-  inputEpisodeId: InputEpisodeIdSchema,
-  transcriptRevision: TranscriptRevisionSchema,
-  turnId: TurnIdSchema
-}).strict();
 const AudioDeliveryQueuedResultSchema = z.object({
   queued: z.boolean(),
   atom: DeliveryAtomSchema.optional(),
@@ -573,67 +568,6 @@ export class TurnCoordinator {
         { source: "APPLICATION", type: "INPUT_EPISODE_UPDATED", payload: { inputEpisodeId, modality: "SPEECH", semanticContent: input.text } }
       ];
       return { drafts, result: { inputEpisodeId, transcriptRevision } };
-    });
-    return result.value;
-  }
-
-  public async finalizeAndCommitUtterance(input: {
-    readonly utteranceId: UtteranceId;
-    readonly text: string;
-  }): Promise<{
-    inputEpisodeId: InputEpisodeId;
-    transcriptRevision: TranscriptRevision;
-    turnId: TurnId;
-  }> {
-    const inputEpisodeId = newInputEpisodeId();
-    const turnId = newTurnId();
-    const envelope = createCommandEnvelope({
-      sessionId: this.writer.sessionId,
-      producer: "stt",
-      inputEpisodeId,
-      turnId
-    });
-    const result = await this.writer.execute(envelope, {
-      operation: "FINALIZE_AND_COMMIT_UTTERANCE",
-      payload: { utteranceId: input.utteranceId, text: input.text, inputEpisodeId, turnId }
-    }, UtteranceFinalizedAndCommittedResultSchema, (state) => {
-      assertSessionActive(state, "finalize and commit utterance");
-      const utterance = state.utterances[input.utteranceId];
-      if (utterance === undefined || utterance.status !== "CAPTURING") {
-        throw new Error("Utterance is not being captured");
-      }
-      const transcriptRevision = TranscriptRevisionSchema.parse(state.transcriptRevision + 1);
-      return {
-        drafts: [
-          { source: "APPLICATION", type: "INPUT_EPISODE_STARTED", payload: { inputEpisodeId } },
-          {
-            source: "WORKER",
-            type: "TRANSCRIPT_FINALIZED",
-            payload: {
-              utteranceId: input.utteranceId,
-              inputEpisodeId,
-              transcriptRevision,
-              text: input.text
-            }
-          },
-          {
-            source: "APPLICATION",
-            type: "INPUT_EPISODE_UPDATED",
-            payload: { inputEpisodeId, modality: "SPEECH", semanticContent: input.text }
-          },
-          ...invalidateUndeliveredPolicyOutput(
-            state,
-            "New committed input episode superseded prior undelivered output"
-          ),
-          { source: "APPLICATION", type: "INPUT_EPISODE_COMMITTED", payload: { inputEpisodeId } },
-          {
-            source: "APPLICATION",
-            type: "TURN_COMMITTED",
-            payload: { turnId, inputEpisodeId, studentText: input.text }
-          }
-        ],
-        result: { inputEpisodeId, transcriptRevision, turnId }
-      };
     });
     return result.value;
   }
