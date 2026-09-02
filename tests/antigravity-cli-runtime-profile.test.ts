@@ -44,6 +44,42 @@ describe("supervised Antigravity runtime profile", () => {
     expect(ANTIGRAVITY_SUPERVISED_SETTINGS_JSON).not.toContain("GEMINI_API_KEY");
   });
 
+  it.runIf(process.platform === "win32")(
+    "isolates Antigravity acquisition failure from other providers and retries cleanly",
+    () => {
+      const source = createApplicationProviderAdapterRuntimeSource();
+      const originalSystemRoot = process.env.SystemRoot;
+      const originalUpperSystemRoot = process.env.SYSTEMROOT;
+      try {
+        process.env.SystemRoot = "\\\\hostile-server\\share\\Windows";
+        process.env.SYSTEMROOT = "\\\\hostile-server\\share\\Windows";
+
+        expect(source.resolveRuntime({
+          providerId: "mock-model",
+          modelId: "mock-default"
+        })).toBeUndefined();
+        expect(() => source.resolveRuntime({
+          providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+          modelId: ANTIGRAVITY_CLI_MODEL_ID
+        })).toThrow();
+      } finally {
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
+        if (originalUpperSystemRoot === undefined) delete process.env.SYSTEMROOT;
+        else process.env.SYSTEMROOT = originalUpperSystemRoot;
+      }
+
+      expect(source.resolveRuntime({
+        providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+        modelId: ANTIGRAVITY_CLI_MODEL_ID
+      })).toMatchObject({
+        executor: expect.objectContaining({
+          execute: expect.any(Function)
+        })
+      });
+    }
+  );
+
   it("pins a primary-only custom agent using only documented capability fields", () => {
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
       "name: interview-realizer"
