@@ -6,11 +6,19 @@ import type {
 const DEFAULT_REQUEST_TIMEOUT_MS = 35_000;
 const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
 const MAX_JSON_RESPONSE_CHUNKS = 1_024;
+const MAX_CONSECUTIVE_UNCERTAIN_RECYCLES = 2;
 
 export class ManagedWorkerRequestTimeoutError extends Error {
   public constructor() {
     super("Managed local model worker request exceeded its runtime deadline");
     this.name = "ManagedWorkerRequestTimeoutError";
+  }
+}
+
+export class ManagedWorkerRecoveryExhaustedError extends Error {
+  public constructor() {
+    super("Managed local model worker exhausted uncertain-request recovery");
+    this.name = "ManagedWorkerRecoveryExhaustedError";
   }
 }
 
@@ -26,6 +34,7 @@ export class ManagedWorkerResponseError extends Error {
 
 export class ManagedModelWorkerClient {
   private recyclePromise: Promise<void> | undefined;
+  private consecutiveUncertainRecycles = 0;
 
   public constructor(
     private readonly manager: LocalRuntimeManager,
@@ -111,11 +120,13 @@ export class ManagedModelWorkerClient {
         throw new Error("Managed local model worker returned invalid JSON");
       }
       if (!response.ok) {
+        if (response.status < 500) this.consecutiveUncertainRecycles = 0;
         throw new ManagedWorkerResponseError(
           response.status,
           readWorkerErrorCode(parsed)
         );
       }
+      this.consecutiveUncertainRecycles = 0;
       return parsed;
     } catch (error) {
       if (controller.signal.reason === timeoutReason) {
@@ -145,8 +156,14 @@ export class ManagedModelWorkerClient {
     if (this.recyclePromise !== undefined) return this.recyclePromise;
 
     const operation = (async (): Promise<void> => {
+      const exhausted =
+        this.consecutiveUncertainRecycles >= MAX_CONSECUTIVE_UNCERTAIN_RECYCLES;
       await this.manager.stop(this.componentId);
       if (this.lifecycleSignal?.aborted === true) return;
+      if (exhausted) {
+        throw new ManagedWorkerRecoveryExhaustedError();
+      }
+      this.consecutiveUncertainRecycles += 1;
       await this.manager.start(
         this.componentId,
         this.lifecycleSignal === undefined ? {} : { signal: this.lifecycleSignal }
