@@ -12,7 +12,22 @@ import {
 import {
   RealTldrawEditorBridge
 } from "../apps/web/src/whiteboard/real-tldraw-editor.js";
-import type { BoardAction } from "../packages/domain/src/index.js";
+import {
+  BoardRevisionSchema,
+  newRequestId,
+  newSessionId,
+  type BoardAction
+} from "../packages/domain/src/index.js";
+import {
+  SessionRuntimeRegistry,
+  TurnCoordinator,
+  createCommandEnvelope
+} from "../packages/interview-engine/src/index.js";
+import { SqliteEventStore } from "../packages/persistence/src/index.js";
+import { sixPeopleProblem } from "../packages/problems/src/index.js";
+import {
+  AuthoritativeBoardSyncCoordinator
+} from "../apps/web/src/whiteboard/authoritative-board-sync.js";
 import type { NormalizedStudentShapeChange } from "../apps/web/src/whiteboard/normalized-board.js";
 
 function requireRealTldrawBridge(
@@ -945,6 +960,147 @@ describe("Real tldraw mounted browser integration", () => {
       handle.unmount();
     });
     container.remove();
+  });
+
+  it("routes a real mounted tldraw student mutation into authoritative BoardRevision exactly once", async () => {
+    const store = new SqliteEventStore(":memory:");
+    const container = document.createElement("div");
+    container.style.width = "800px";
+    container.style.height = "600px";
+    document.body.appendChild(container);
+
+    const sessionId = newSessionId();
+    const registry = new SessionRuntimeRegistry(store);
+    const writer = registry.get(sessionId);
+    const turns = new TurnCoordinator(writer);
+    await turns.startSession(sixPeopleProblem);
+
+    type SyncClient = ConstructorParameters<typeof AuthoritativeBoardSyncCoordinator>[0];
+    const syncClient: SyncClient = {
+      getBoardState: async (_targetSessionId, options = {}) => {
+        const state = writer.getState();
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_STATE",
+          requestId: options.requestId ?? newRequestId(),
+          sessionId,
+          boardRevision: state.boardRevision,
+          shapeAuthorityKnown: state.boardShapeAuthorityKnown,
+          shapeRevisions: Object.values(state.boardShapes)
+            .map((shape) => ({ shapeId: shape.id, revision: shape.revision }))
+            .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
+        };
+      },
+      commitBoardMutation: async (_targetSessionId, mutation, options = {}) => {
+        const requestId = options.requestId ?? newRequestId();
+        const committed = await turns.commitBoardMutation(
+          mutation,
+          createCommandEnvelope({
+            sessionId,
+            producer: "mounted-whiteboard-test",
+            requestId
+          })
+        );
+        return {
+          protocolVersion: 1,
+          ok: true,
+          type: "BOARD_MUTATION_COMMITTED",
+          requestId,
+          sessionId,
+          committed: committed.committed,
+          boardRevision: committed.boardRevision,
+          ...(committed.reason === undefined ? {} : { reason: committed.reason })
+        };
+      }
+    };
+
+    const sync = new AuthoritativeBoardSyncCoordinator(syncClient);
+    const adapter = new TldrawWhiteboardAdapter();
+    const pendingMutations: Promise<void>[] = [];
+    let authoritativeBridgeEnabled = false;
+    const handle = createWhiteboardCanvasMount({
+      adapter,
+      onNormalizedBoardChange: (change) => {
+        if (authoritativeBridgeEnabled) {
+          pendingMutations.push(sync.submit(change));
+        }
+      }
+    });
+
+    try {
+      await act(async () => {
+        handle.mount(container);
+      });
+      const bridge = requireRealTldrawBridge(handle);
+      await sync.synchronize(sessionId, adapter.getNormalizedStudentShapes());
+      authoritativeBridgeEnabled = true;
+
+      const studentId = createShapeId("authoritative-mounted-student");
+      await act(async () => {
+        bridge.getNativeEditor().createShapes([{
+          id: studentId,
+          type: "geo",
+          x: 40,
+          y: 50,
+          props: { geo: "rectangle", w: 120, h: 80 }
+        }]);
+      });
+      await Promise.all(pendingMutations.splice(0));
+
+      expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(1));
+      expect(writer.getState().boardShapes[studentId]?.revision).toBe(1);
+      const boardEventsAfterCreate = store.load(sessionId)
+        .filter((event) => event.type === "BOARD_PATCH_COMMITTED");
+      expect(boardEventsAfterCreate).toHaveLength(1);
+
+      await act(async () => {
+        bridge.getNativeEditor().updateShapes([{
+          id: studentId,
+          type: "geo",
+          x: 90
+        }]);
+      });
+      await Promise.all(pendingMutations.splice(0));
+
+      expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(2));
+      expect(writer.getState().boardShapes[studentId]?.revision).toBe(2);
+      const studentBeforeOverlay = bridge.getShape(studentId);
+
+      await expect(adapter.applyAiOverlayAction({
+        operation: "circle",
+        layer: "AI_ANNOTATION",
+        annotationPurpose: "stale mounted target must reject",
+        targetShapeId: studentId,
+        expectedShapeRevision: 1
+      })).rejects.toThrow(/revision mismatch/u);
+      expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(2));
+
+      await act(async () => {
+        await adapter.applyAiOverlayAction({
+          operation: "circle",
+          layer: "AI_ANNOTATION",
+          annotationPurpose: "authorized mounted overlay",
+          targetShapeId: studentId,
+          expectedShapeRevision: 2
+        });
+      });
+      await Promise.resolve();
+
+      expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(2));
+      expect(bridge.getShape(studentId)).toEqual(studentBeforeOverlay);
+      expect(adapter.getCanvasSnapshot().aiAnnotations).toHaveLength(1);
+      expect(store.load(sessionId)
+        .filter((event) => event.type === "BOARD_PATCH_COMMITTED"))
+        .toHaveLength(2);
+    } finally {
+      sync.reset();
+      await act(async () => {
+        handle.unmount();
+      });
+      container.remove();
+      store.close();
+    }
   });
 
 });
