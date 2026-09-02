@@ -7,7 +7,10 @@ import {
   type MoonshineRuntime,
   type SileroVadRuntime
 } from "../../../../packages/local-compute/src/index.js";
-import type { ManagedModelWorkerClient } from "./managed-worker-client.js";
+import {
+  ManagedWorkerRequestTimeoutError,
+  type ManagedModelWorkerClient
+} from "./managed-worker-client.js";
 
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
 const MOONSHINE_RECOGNIZER_VERSION = "tiny-en-35d84fc0eb2d7451";
@@ -42,15 +45,17 @@ export class ManagedSileroVadRuntime implements SileroVadRuntime {
       if (oldest === undefined) break;
       this.streamWorkerInstances.delete(oldest);
     }
-    const result = await this.client.postJson("/v1/vad", {
-      pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
-      sampleRate: input.sampleRate,
-      streamId: input.streamId
-    }, {
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
-      timeoutMs: 5_000,
-      maxResponseBytes: 1_024
-    });
+    const result = await runWithWorkerRecycleOnTimeout(this.client, () =>
+      this.client.postJson("/v1/vad", {
+        pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
+        sampleRate: input.sampleRate,
+        streamId: input.streamId
+      }, {
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
+        timeoutMs: 5_000,
+        maxResponseBytes: 1_024
+      })
+    );
     if (!isRecord(result) || Object.keys(result).length !== 1) {
       throw new Error("Silero worker returned invalid output");
     }
@@ -92,15 +97,17 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
       // application AbortSignal into fetch. Moonshine batch STT is not
       // preemptible; letting fetch reject early would falsely free the local
       // lane while Python is still executing the same native call.
-      return this.client.postJson("/v1/stt", {
-        requestId: input.requestId,
-        utteranceId: input.utteranceId,
-        pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
-        sampleRate: input.sampleRate
-      }, {
-        timeoutMs: 60_000,
-        maxResponseBytes: 2 * 1024 * 1024
-      });
+      return runWithWorkerRecycleOnTimeout(this.client, () =>
+        this.client.postJson("/v1/stt", {
+          requestId: input.requestId,
+          utteranceId: input.utteranceId,
+          pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
+          sampleRate: input.sampleRate
+        }, {
+          timeoutMs: 60_000,
+          maxResponseBytes: 2 * 1024 * 1024
+        })
+      );
     });
     this.transcriptionTail = operation.then(
       () => undefined,
@@ -154,20 +161,22 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
         // observes started=true must use the worker's request tombstone/native
         // cancellation path; one that observes false never reaches the worker.
         state.started = true;
-        const result = await this.client.postJson("/v1/tts", {
-          requestId: input.requestId,
-          text: input.text,
-          voice: input.voice,
-          speed: input.speed,
-          language: input.language,
-          sampleRate: input.sampleRate
-        }, {
-          timeoutMs: 60_000,
-          maxResponseBytes: Math.min(
-            16 * 1024 * 1024,
-            Math.ceil(TTS_LIMITS.maxPcmBytes / 3) * 4 + 16_384
-          )
-        });
+        const result = await runWithWorkerRecycleOnTimeout(this.client, () =>
+          this.client.postJson("/v1/tts", {
+            requestId: input.requestId,
+            text: input.text,
+            voice: input.voice,
+            speed: input.speed,
+            language: input.language,
+            sampleRate: input.sampleRate
+          }, {
+            timeoutMs: 60_000,
+            maxResponseBytes: Math.min(
+              16 * 1024 * 1024,
+              Math.ceil(TTS_LIMITS.maxPcmBytes / 3) * 4 + 16_384
+            )
+          })
+        );
         return parseTtsResult(result);
       });
       synthesisTail = operation.then(
@@ -196,12 +205,14 @@ export class ManagedKokoroRuntime implements KokoroRuntime {
           state.cancelled = true;
           return;
         }
-        const result = await this.client.postJson("/v1/tts/cancel", {
-          requestId
-        }, {
-          timeoutMs: TTS_LIMITS.maxRuntimeCancellationWaitMs,
-          maxResponseBytes: 1_024
-        });
+        const result = await runWithWorkerRecycleOnTimeout(this.client, () =>
+          this.client.postJson("/v1/tts/cancel", {
+            requestId
+          }, {
+            timeoutMs: TTS_LIMITS.maxRuntimeCancellationWaitMs,
+            maxResponseBytes: 1_024
+          })
+        );
         if (!isRecord(result)
             || Object.keys(result).length !== 1
             || result["accepted"] !== true) {
@@ -259,6 +270,26 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+
+async function runWithWorkerRecycleOnTimeout<T>(
+  client: ManagedModelWorkerClient,
+  operation: () => Promise<T>
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!(error instanceof ManagedWorkerRequestTimeoutError)) throw error;
+    try {
+      await client.recycleAfterUncertainRequest();
+    } catch (recycleError) {
+      throw new AggregateError(
+        [error, recycleError],
+        "Managed local model worker timed out and could not be safely recycled"
+      );
+    }
+    throw error;
+  }
+}
 
 function abortError(): Error {
   const error = new Error("Managed local model operation was cancelled before native inference");
