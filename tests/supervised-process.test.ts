@@ -217,7 +217,7 @@ describe("supervised one-shot process execution", () => {
     expect(() => new SupervisedProcessRunner([{
       id: "fixture",
       executable: process.execPath,
-      isolatedHomeFiles: hostileFiles as Readonly<Record<string, string>>
+      isolatedHomeFiles: hostileFiles
     }])).toThrow(expect.objectContaining({ code: "INVALID_DEFINITION" }));
     expect(getterCalls).toBe(0);
   });
@@ -268,16 +268,17 @@ describe("supervised one-shot process execution", () => {
     }))).rejects.toMatchObject({ code: "EXECUTION_TIMEOUT" });
 
     const controller = new AbortController();
-    let processStarted = false;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
     const execution = runtime.execute(request([FIXTURE, "hang"], {
       signal: controller.signal,
       onProcessStart: () => {
-        processStarted = true;
+        markStarted?.();
       }
     }));
-    while (!processStarted) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 5));
-    }
+    await started;
     controller.abort();
 
     await expect(execution).rejects.toMatchObject({ code: "EXECUTION_CANCELLED" });
