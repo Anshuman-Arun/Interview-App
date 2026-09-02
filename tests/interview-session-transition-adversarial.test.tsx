@@ -7,6 +7,7 @@ import {
   type SessionId
 } from "../packages/domain/src/index.js";
 import {
+  TerminalSessionOutcomeUnknownError,
   useInterviewSession,
   type UseInterviewSessionResult
 } from "../apps/web/src/hooks/useInterviewSession.js";
@@ -593,6 +594,278 @@ describe("interview session transition authority", () => {
       await completing;
     });
     expect(rendered.current().sessionStatus).toBe("COMPLETED");
+
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
+  it("converges to terminal state when COMPLETE committed but its response was lost", async () => {
+    const sessionId = newSessionId();
+    let summaryCalls = 0;
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = (): void => {
+            const error = new Error("renderer stream aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (init.signal?.aborted === true) {
+            abort();
+            return;
+          }
+          init.signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") throw new Error("Command body must be JSON text");
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
+
+      if (command.type === "START_SESSION") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_STARTED",
+          sessionId
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: false,
+          error: { code: "INTERNAL_ERROR", message: "context unavailable" }
+        }, 500);
+      }
+      if (command.type === "COMPLETE_SESSION") {
+        throw new Error("connection reset after terminal commit");
+      }
+      if (command.type === "GET_SESSION_SUMMARY") {
+        summaryCalls += 1;
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_SUMMARY",
+          sessionId,
+          sequence: 2,
+          started: true,
+          status: "COMPLETED",
+          contextEpoch: 0,
+          deliveryStatuses: {},
+          history: []
+        });
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    await act(async () => {
+      await rendered.current().startSession(sessionId);
+    });
+
+    await act(async () => {
+      await rendered.current().completeSession();
+    });
+
+    expect(summaryCalls).toBe(1);
+    expect(rendered.current().sessionStatus).toBe("COMPLETED");
+    expect(rendered.current().error).toBeNull();
+    await expect(rendered.current().submitTypedInput("must stay closed"))
+      .rejects.toThrow("Cannot submit input without an active session");
+
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
+  it("restores mutation admission only when reconciliation confirms the session is ACTIVE", async () => {
+    const sessionId = newSessionId();
+    let commitCalls = 0;
+    const terminalError = new Error("complete command transport failed");
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = (): void => {
+            const error = new Error("renderer stream aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (init.signal?.aborted === true) {
+            abort();
+            return;
+          }
+          init.signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") throw new Error("Command body must be JSON text");
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
+
+      if (command.type === "START_SESSION") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_STARTED",
+          sessionId
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: false,
+          error: { code: "INTERNAL_ERROR", message: "context unavailable" }
+        }, 500);
+      }
+      if (command.type === "COMPLETE_SESSION") throw terminalError;
+      if (command.type === "GET_SESSION_SUMMARY") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_SUMMARY",
+          sessionId,
+          sequence: 1,
+          started: true,
+          status: "ACTIVE",
+          contextEpoch: 0,
+          deliveryStatuses: {},
+          history: []
+        });
+      }
+      if (command.type === "COMMIT_TYPED_INPUT") {
+        commitCalls += 1;
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "INPUT_COMMITTED",
+          inputEpisodeId: "episode_reconciled_active",
+          turnId: "turn_reconciled_active"
+        });
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    await act(async () => {
+      await rendered.current().startSession(sessionId);
+    });
+
+    await expect(rendered.current().completeSession()).rejects.toBe(terminalError);
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+    expect(rendered.current().error).toBe(terminalError.message);
+
+    await act(async () => {
+      await rendered.current().submitTypedInput("allowed after confirmed active");
+    });
+    expect(commitCalls).toBe(1);
+
+    act(() => rendered.current().disconnect());
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
+  it("remains fail-closed when terminal reconciliation itself is unavailable", async () => {
+    const sessionId = newSessionId();
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = (): void => {
+            const error = new Error("renderer stream aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (init.signal?.aborted === true) {
+            abort();
+            return;
+          }
+          init.signal?.addEventListener("abort", abort, { once: true });
+        });
+      }
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") throw new Error("Command body must be JSON text");
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
+
+      if (command.type === "START_SESSION") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_STARTED",
+          sessionId
+        });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({
+          protocolVersion: 1,
+          ok: false,
+          error: { code: "INTERNAL_ERROR", message: "context unavailable" }
+        }, 500);
+      }
+      if (command.type === "ARCHIVE_SESSION") {
+        throw new Error("archive acknowledgement lost");
+      }
+      if (command.type === "GET_SESSION_SUMMARY") {
+        throw new Error("summary transport unavailable");
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    await act(async () => {
+      await rendered.current().startSession(sessionId);
+    });
+
+    await expect(rendered.current().archiveSession())
+      .rejects.toBeInstanceOf(TerminalSessionOutcomeUnknownError);
+    expect(rendered.current().error).toContain("outcome is unknown");
+    await expect(rendered.current().submitTypedInput("must remain blocked"))
+      .rejects.toThrow("Cannot submit input without an active session");
+    expect(rendered.current().isConnected).toBe(false);
+    expect(rendered.current().isStreaming).toBe(false);
 
     await act(async () => {
       rendered.root.unmount();
