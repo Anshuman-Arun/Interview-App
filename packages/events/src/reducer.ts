@@ -828,6 +828,16 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       break;
     case "SESSION_COMPLETED":
       if (
+        (state.configuration?.mode === "QUANT_TRADING"
+          || state.configuration?.mode === "QUANT_RESEARCH")
+        && (
+          Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")
+          || Object.values(state.utterances).some((utterance) => utterance.status === "CAPTURING")
+        )
+      ) {
+        throw new Error("Quant sessions cannot complete with unresolved candidate input");
+      }
+      if (
         state.configuration?.mode === "QUANT_TRADING"
         && state.quantTrading?.result === undefined
       ) {
