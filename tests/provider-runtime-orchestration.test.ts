@@ -836,6 +836,59 @@ describe("production provider runtime resolution", () => {
     })).toThrow(expect.objectContaining({ code: "RUNTIME_CONFIGURATION_FAILED" }));
     expect(sourceGetterCalls).toBe(0);
 
+    let prototypeTrapCalls = 0;
+    const hostilePrototype = new Proxy({
+      resolveConfiguration() {
+        return undefined;
+      }
+    }, {
+      getOwnPropertyDescriptor() {
+        prototypeTrapCalls += 1;
+        throw new Error("prototype trap must not execute");
+      },
+      getPrototypeOf() {
+        prototypeTrapCalls += 1;
+        throw new Error("prototype trap must not execute");
+      }
+    });
+    const prototypeBackedSource = Object.create(hostilePrototype) as {
+      resolveConfiguration(): unknown;
+    };
+    expect(() => new ProviderRuntimeResolver({
+      configurationSource: prototypeBackedSource
+    })).toThrow(expect.objectContaining({ code: "RUNTIME_CONFIGURATION_FAILED" }));
+    expect(prototypeTrapCalls).toBe(0);
+
+    let drainPrototypeTrapCalls = 0;
+    const drainPrototype = new Proxy({
+      async drain() {}
+    }, {
+      getOwnPropertyDescriptor() {
+        drainPrototypeTrapCalls += 1;
+        throw new Error("drain prototype trap must not execute");
+      },
+      getPrototypeOf() {
+        drainPrototypeTrapCalls += 1;
+        throw new Error("drain prototype trap must not execute");
+      }
+    });
+    const runtimeSource = Object.create(drainPrototype) as {
+      resolveRuntime(selection: ProviderSelectionReference): unknown;
+      drain(): Promise<void>;
+    };
+    Object.defineProperty(runtimeSource, "resolveRuntime", {
+      enumerable: true,
+      configurable: true,
+      writable: true,
+      value() {
+        return undefined;
+      }
+    });
+    expect(() => new ProviderRuntimeResolver({
+      adapterRuntimeSource: runtimeSource
+    })).toThrow(expect.objectContaining({ code: "RUNTIME_DEPENDENCY_FAILED" }));
+    expect(drainPrototypeTrapCalls).toBe(0);
+
     let enteredResolve: (() => void) | undefined;
     let releaseResolve: (() => void) | undefined;
     const entered = new Promise<void>((resolve) => {
