@@ -823,6 +823,7 @@ function parseStrictJson(raw: string): unknown {
   };
 
   const parseNumber = (): void => {
+    const start = index;
     if (raw[index] === "-") index += 1;
     if (raw[index] === "0") {
       index += 1;
@@ -853,6 +854,11 @@ function parseStrictJson(raw: string): unknown {
         throw new Error("Invalid JSON exponent");
       }
       while (isAsciiDigit(raw.charCodeAt(index))) index += 1;
+    }
+
+    const represented = Number(raw.slice(start, index));
+    if (!Number.isFinite(represented)) {
+      throw new Error("JSON number exceeds finite representation");
     }
   };
 
