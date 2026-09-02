@@ -408,7 +408,7 @@ interface VoiceStreamContext {
   readonly sampleRate: SpeechSampleRate;
   readonly token: object;
   expectedSequence: number;
-  frameInFlight: boolean;
+  operationInFlight: boolean;
   active: boolean;
   authoritativeUtteranceId: UtteranceId | undefined;
   workerUtteranceId: UtteranceId | undefined;
@@ -478,7 +478,7 @@ export class VoiceInputCoordinator {
       sampleRate,
       token: {},
       expectedSequence: 0,
-      frameInFlight: false,
+      operationInFlight: false,
       active: true,
       authoritativeUtteranceId: undefined,
       workerUtteranceId: undefined,
@@ -501,15 +501,15 @@ export class VoiceInputCoordinator {
     if (context.sampleRate !== envelope.sampleRate) {
       throw new Error("PCM sample rate does not match the bound speech stream");
     }
-    if (context.frameInFlight) {
+    if (context.operationInFlight) {
       throw new Error("Only one PCM frame may be admitted per speech stream at a time");
     }
     if (envelope.sequence !== context.expectedSequence) {
       throw new Error("PCM sequence does not match the next admitted stream sequence");
     }
 
-    context.frameInFlight = true;
-    this.refreshIdleLease(context);
+    context.operationInFlight = true;
+    this.clearIdleLease(context);
     const token = context.token;
     try {
       const events = await this.speechWorker.submitFrame(envelope, payload);
@@ -517,7 +517,10 @@ export class VoiceInputCoordinator {
       context.expectedSequence += 1;
       return await this.applyEvents(context, token, events);
     } finally {
-      if (this.isCurrent(context, token)) context.frameInFlight = false;
+      if (this.isCurrent(context, token)) {
+        context.operationInFlight = false;
+        this.refreshIdleLease(context);
+      }
     }
   }
 
@@ -529,16 +532,27 @@ export class VoiceInputCoordinator {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const streamId = SpeechStreamIdSchema.parse(streamIdInput);
     const context = this.requireActiveStream(sessionId, streamId);
-    this.refreshIdleLease(context);
+    if (context.operationInFlight) {
+      throw new Error("Speech stream already has an operation in flight");
+    }
+    context.operationInFlight = true;
+    this.clearIdleLease(context);
     const token = context.token;
-    const events = await this.speechWorker.flush({
-      protocolVersion: 1,
-      type: "FLUSH_SPEECH",
-      requestId,
-      streamId
-    });
-    if (!this.isCurrent(context, token)) return { events: [], terminal: true };
-    return this.applyEvents(context, token, events);
+    try {
+      const events = await this.speechWorker.flush({
+        protocolVersion: 1,
+        type: "FLUSH_SPEECH",
+        requestId,
+        streamId
+      });
+      if (!this.isCurrent(context, token)) return { events: [], terminal: true };
+      return this.applyEvents(context, token, events);
+    } finally {
+      if (this.isCurrent(context, token)) {
+        context.operationInFlight = false;
+        this.refreshIdleLease(context);
+      }
+    }
   }
 
   public async cancelStream(
@@ -757,8 +771,14 @@ export class VoiceInputCoordinator {
     this.releaseStreamBinding(context);
   }
 
+  private clearIdleLease(context: VoiceStreamContext): void {
+    if (context.idleTimer === undefined) return;
+    clearTimeout(context.idleTimer);
+    context.idleTimer = undefined;
+  }
+
   private refreshIdleLease(context: VoiceStreamContext): void {
-    if (context.idleTimer !== undefined) clearTimeout(context.idleTimer);
+    this.clearIdleLease(context);
     const token = context.token;
     context.idleTimer = setTimeout(() => {
       void this.expireIdleStream(context, token);
@@ -767,6 +787,10 @@ export class VoiceInputCoordinator {
 
   private async expireIdleStream(context: VoiceStreamContext, token: object): Promise<void> {
     if (!this.isCurrent(context, token)) return;
+    if (context.operationInFlight) {
+      this.refreshIdleLease(context);
+      return;
+    }
     context.active = false;
     this.releaseStreamBinding(context);
     try {
@@ -787,10 +811,7 @@ export class VoiceInputCoordinator {
   }
 
   private releaseStreamBinding(context: VoiceStreamContext): void {
-    if (context.idleTimer !== undefined) {
-      clearTimeout(context.idleTimer);
-      context.idleTimer = undefined;
-    }
+    this.clearIdleLease(context);
     if (this.streams.get(context.streamId) === context) this.streams.delete(context.streamId);
     if (this.sessionStreams.get(context.sessionId) === context.streamId) {
       this.sessionStreams.delete(context.sessionId);
