@@ -384,6 +384,61 @@ describe("authenticated renderer stream transport", () => {
     await replacementConsumer;
   });
 
+  it("does not report SENT when renderer backpressure ends in a stalled socket", async () => {
+    const sessionId = newSessionId();
+    await primeCommandServer(commandAddress, sessionId);
+    const writer = registry.get(sessionId);
+    const controller = new AbortController();
+    const renderer = new RendererClient({
+      sessionId,
+      acknowledgementSender: { send: async () => undefined },
+      textPresenter: { presentText: () => undefined },
+      audioPlayer: { playAudio: () => undefined }
+    });
+    const consumer = consumeAuthenticatedRendererStream({
+      streamUrl: streamAddress.streamUrl,
+      sessionId,
+      authenticatedFetch: fetchWithAuth,
+      signal: controller.signal
+    }, renderer);
+    await waitFor(() => streamServer.activeConnectionCount() === 1);
+
+    const internals = streamServer as unknown as {
+      connections: Map<SessionId, Set<{
+        response: {
+          write: (chunk: string) => boolean;
+          destroy: () => void;
+        };
+      }>>;
+    };
+    const connection = [...(internals.connections.get(sessionId) ?? [])][0];
+    if (connection === undefined) throw new Error("Expected renderer connection");
+
+    const writeSpy = vi.spyOn(connection.response, "write").mockImplementation(() => {
+      queueMicrotask(() => connection.response.destroy());
+      return false;
+    });
+
+    try {
+      const atom = await queueDelivery(writer, {
+        medium: "TEXT",
+        text: "stalled renderer backpressure"
+      });
+      const result = await streamServer.publishDelivery(sessionId, atom.deliveryId);
+
+      expect(result).toMatchObject({
+        outcome: "NOT_DELIVERABLE",
+        deliveryId: atom.deliveryId,
+        status: "POSSIBLY_EXPOSED"
+      });
+      expect(writer.getState().deliveries[atom.deliveryId]?.status).toBe("POSSIBLY_EXPOSED");
+    } finally {
+      writeSpy.mockRestore();
+      controller.abort();
+      await consumer;
+    }
+  });
+
   it("does not physically write a delivery invalidated after DELIVERING admission", async () => {
     const sessionId = newSessionId();
     await primeCommandServer(commandAddress, sessionId);
