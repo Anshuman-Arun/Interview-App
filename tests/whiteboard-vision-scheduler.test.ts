@@ -140,6 +140,74 @@ describe("whiteboard vision dirty scheduler", () => {
     }
   });
 
+  it("retries one transient flush failure without dropping the dirty region", async () => {
+    vi.useFakeTimers();
+    const currentShape = shape("shape:a", 1);
+    let attempts = 0;
+    const scheduler = new WhiteboardVisionScheduler({
+      sessionId: newSessionId(),
+      debounceMs: 1,
+      getAuthoritativeRevision: () => BoardRevisionSchema.parse(1),
+      getStudentShapes: () => [currentShape],
+      captureRegion: async () => ({
+        bytes: new Uint8Array([1, 2, 3]),
+        width: 16,
+        height: 16
+      }),
+      submit: async (upload) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("transient loopback failure");
+        return acceptedResponse(upload);
+      }
+    });
+
+    try {
+      scheduler.record(addedChange(currentShape));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(attempts).toBe(1);
+      expect(scheduler.pendingDirtyBoxCount()).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(attempts).toBe(2);
+      expect(scheduler.pendingDirtyBoxCount()).toBe(0);
+      expect(scheduler.getLastResponse()?.status).toBe("ACCEPTED");
+    } finally {
+      scheduler.dispose();
+    }
+  });
+
+  it("bounds scheduler-level retries during a persistent flush failure", async () => {
+    vi.useFakeTimers();
+    const currentShape = shape("shape:a", 1);
+    let attempts = 0;
+    const scheduler = new WhiteboardVisionScheduler({
+      sessionId: newSessionId(),
+      debounceMs: 1,
+      getAuthoritativeRevision: () => BoardRevisionSchema.parse(1),
+      getStudentShapes: () => [currentShape],
+      captureRegion: async () => ({
+        bytes: new Uint8Array([1, 2, 3]),
+        width: 16,
+        height: 16
+      }),
+      submit: async () => {
+        attempts += 1;
+        throw new Error("persistent loopback failure");
+      }
+    });
+
+    try {
+      scheduler.record(addedChange(currentShape));
+      await vi.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(attempts).toBe(2);
+      expect(scheduler.pendingDirtyBoxCount()).toBe(0);
+    } finally {
+      scheduler.dispose();
+    }
+  });
+
   it("collapses a long dirty sequence into a bounded backlog", () => {
     const scheduler = new WhiteboardVisionScheduler({
       sessionId: newSessionId(),

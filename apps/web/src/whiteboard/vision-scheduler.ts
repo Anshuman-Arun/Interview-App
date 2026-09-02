@@ -20,6 +20,7 @@ import {
 import type { NormalizedStudentShapeChange } from "./normalized-board.js";
 
 const DEFAULT_DEBOUNCE_MS = 350;
+const MAX_TRANSIENT_FLUSH_RETRIES = 1;
 const MAX_DIRTY_BOXES = 128;
 const MAX_DIRTY_REGION_AREA = 4 * 1024 * 1024;
 
@@ -59,6 +60,7 @@ export class WhiteboardVisionScheduler {
   private activeController: AbortController | undefined;
   private disposed = false;
   private flushing = false;
+  private transientRetryCount = 0;
   private lastResponse: WhiteboardVisionSnapshotResponse | undefined;
 
   public constructor(options: WhiteboardVisionSchedulerOptions) {
@@ -83,6 +85,7 @@ export class WhiteboardVisionScheduler {
     this.activeController?.abort();
     const boxes = dirtyBoxesFromChange(change);
     if (boxes.length === 0) return;
+    this.transientRetryCount = 0;
     this.mergeDirtyBoxes(boxes);
     this.dueAt = this.now() + this.debounceMs;
     this.reschedule();
@@ -110,6 +113,7 @@ export class WhiteboardVisionScheduler {
     this.activeController?.abort();
     this.activeController = undefined;
     this.dirtyBoxes = [];
+    this.transientRetryCount = 0;
   }
 
   private reschedule(): void {
@@ -220,9 +224,15 @@ export class WhiteboardVisionScheduler {
         pngBase64: bytesToBase64(image.bytes)
       });
       this.lastResponse = await this.submitVision(upload, controller.signal);
+      this.transientRetryCount = 0;
     } catch {
       if (this.activeController?.signal.aborted === true) {
         this.requeue(batchBoxes);
+      } else if (this.transientRetryCount < MAX_TRANSIENT_FLUSH_RETRIES) {
+        this.transientRetryCount += 1;
+        this.requeue(batchBoxes);
+      } else {
+        this.transientRetryCount = 0;
       }
     } finally {
       this.activeController = undefined;
