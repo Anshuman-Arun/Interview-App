@@ -13,8 +13,12 @@ import {
   type SessionWriter
 } from "../../../packages/interview-engine/src/index.js";
 
+export type TurnRecoveryDisposition = "COMPLETE" | "RETRYABLE";
+
 export interface TurnRecoveryDelegate {
-  readonly recoverPendingTurns: (sessionId: SessionId) => Promise<void>;
+  readonly recoverPendingTurns: (
+    sessionId: SessionId
+  ) => Promise<TurnRecoveryDisposition | void>;
 }
 
 /**
@@ -111,21 +115,35 @@ export class SessionRecoveryCoordinator {
     const existing = this.recoveries.get(sessionId);
     if (existing !== undefined) return existing;
 
+    let cacheSuccessfulRecovery = true;
     const recovery = (async () => {
       const writer = await this.getWriterAsync(sessionId);
       const deliveryIds = await new DeliveryCoordinator(writer).recoverUncertainDeliveries();
       if (this.delegate !== undefined) {
-        await this.delegate.recoverPendingTurns(sessionId);
+        const disposition = await this.delegate.recoverPendingTurns(sessionId);
+        if (disposition === "RETRYABLE") {
+          cacheSuccessfulRecovery = false;
+        }
       }
       return deliveryIds;
     })();
 
     this.recoveries.set(sessionId, recovery);
-    void recovery.catch(() => {
-      if (this.recoveries.get(sessionId) === recovery) {
-        this.recoveries.delete(sessionId);
+    void recovery.then(
+      () => {
+        if (
+          !cacheSuccessfulRecovery
+          && this.recoveries.get(sessionId) === recovery
+        ) {
+          this.recoveries.delete(sessionId);
+        }
+      },
+      () => {
+        if (this.recoveries.get(sessionId) === recovery) {
+          this.recoveries.delete(sessionId);
+        }
       }
-    });
+    );
     return recovery;
   }
 }
