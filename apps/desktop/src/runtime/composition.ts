@@ -43,6 +43,8 @@ const SPEECH_COMPONENT_ID = "desktop-local-speech";
 const TTS_COMPONENT_ID = "desktop-local-tts";
 const WORKER_COMPONENT_VERSION = "1";
 const WORKER_PROTOCOL_VERSION = 1;
+const SPEECH_RUNTIME_VERSION = "moonshine-voice/0.1.5;onnxruntime/1.29.0";
+const TTS_RUNTIME_VERSION = "moonshine-voice/0.1.5";
 const MAX_ASSET_BYTES = 128 * 1024 * 1024;
 const MAX_CACHE_BYTES = 512 * 1024 * 1024;
 
@@ -252,6 +254,7 @@ export class DesktopLocalRuntimeComposition {
       component: "speech",
       token,
       modelIdentity: SPEECH_WORKER_MODEL_IDENTITY,
+      runtimeVersion: SPEECH_RUNTIME_VERSION,
       capabilities: ["vad", "stt"],
       args: [
         "--component", "speech",
@@ -324,6 +327,7 @@ export class DesktopLocalRuntimeComposition {
       component: "tts",
       token,
       modelIdentity: TTS_WORKER_MODEL_IDENTITY,
+      runtimeVersion: TTS_RUNTIME_VERSION,
       capabilities: ["tts"],
       args: [
         "--component", "tts",
@@ -382,6 +386,7 @@ export class DesktopLocalRuntimeComposition {
     readonly component: "speech" | "tts";
     readonly token: string;
     readonly modelIdentity: string;
+    readonly runtimeVersion: string;
     readonly capabilities: readonly string[];
     readonly args: readonly string[];
   }): LocalComponentDefinition {
@@ -412,6 +417,8 @@ export class DesktopLocalRuntimeComposition {
       expectedHandshake: {
         componentVersion: WORKER_COMPONENT_VERSION,
         protocolVersion: WORKER_PROTOCOL_VERSION,
+        workerType: input.component,
+        runtimeVersion: input.runtimeVersion,
         modelVersionOrHash: input.modelIdentity,
         capabilities: input.capabilities
       },
