@@ -501,7 +501,24 @@ export function useInterviewSession(
         }
       };
 
-      const whiteboardPresenter: WhiteboardPresenter | undefined = options.whiteboardAdapter;
+      const whiteboardPresenter: WhiteboardPresenter | undefined =
+        options.whiteboardAdapter === undefined
+          ? undefined
+          : {
+              presentWhiteboard: async (action, deliveryId) => {
+                const authority = boardSyncRef.current;
+                if (
+                  boardSyncSessionRef.current !== targetSessionId
+                  || authority === null
+                  || !authority.canBindCurrentCanvasToAuthority()
+                ) {
+                  throw new RendererPresentationNotExposedError(
+                    "Whiteboard canvas is not bound to current authoritative state"
+                  );
+                }
+                await options.whiteboardAdapter?.presentWhiteboard(action, deliveryId);
+              }
+            };
 
       const acknowledgementSender = createLoopbackAcknowledgementSender({
         commandUrl: `${baseUrl}/v1/commands`,
