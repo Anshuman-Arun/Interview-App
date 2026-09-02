@@ -146,7 +146,8 @@ export class LocalInterviewTransportRuntime {
         this.orchestrator,
         speechWorker,
         this.audioAssets,
-        this.voiceSynthesis
+        this.voiceSynthesis,
+        (sessionId) => this.rendererStreamServer.closeSession(sessionId)
       );
     this.voiceTransportServer = new VoiceTransportServer({
       security: options.security,
