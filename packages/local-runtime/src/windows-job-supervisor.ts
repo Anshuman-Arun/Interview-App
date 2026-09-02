@@ -9,7 +9,7 @@ import { Buffer } from "node:buffer";
  * crashing the bootstrap closes the handle and the kernel terminates every
  * process that remains in the job.
  */
-const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw\`
+const WINDOWS_JOB_SUPERVISOR_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
 
 $configPath = $env:INTERVIEW_SUPERVISED_CONFIG
@@ -349,7 +349,7 @@ try {
 catch {
   exit 192
 }
-\`;
+`;
 
 export const WINDOWS_JOB_SUPERVISOR_ENCODED_COMMAND = Buffer.from(
   WINDOWS_JOB_SUPERVISOR_SCRIPT,
