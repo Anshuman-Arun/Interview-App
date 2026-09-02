@@ -62,10 +62,7 @@ export class WhiteboardVisionCoordinator {
     const tombstone = this.tombstones.get(upload.requestId);
     if (tombstone !== undefined) {
       if (tombstone.fingerprint !== fingerprint) {
-        return this.remember(upload.requestId, fingerprint, rejected(
-          upload,
-          "CONFLICTING_REQUEST_ID"
-        ));
+        return rejected(upload, "CONFLICTING_REQUEST_ID");
       }
       return WhiteboardVisionSnapshotResponseSchema.parse(tombstone.response);
     }
