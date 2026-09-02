@@ -980,6 +980,10 @@ export function useInterviewSession(
         const response = await client.resumeSession(targetSessionId);
         if (sessionTransitionEpochRef.current !== transitionEpoch) return null;
         if (sessionId !== targetSessionId) {
+          // A recovered ACTIVE session owns a different canvas authority.
+          // Never carry a detached or mounted page from the prior session into
+          // the newly recovered session.
+          options.whiteboardAdapter?.resetForNewSession();
           pendingSubmissionsRef.current.clear();
           resetBoardSync();
         }
@@ -1028,6 +1032,7 @@ export function useInterviewSession(
       beginSessionTransition,
       getCommandClient,
       launchRendererStream,
+      options.whiteboardAdapter,
       resetBoardSync,
       sessionId,
       sessionStatus,
