@@ -25,6 +25,7 @@ import {
   createValidatedImageSnapshot,
   prepareVisionBatch
 } from "../../../packages/vision/src/index.js";
+import type { SessionState, VisionRequestState } from "../../../packages/events/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 
 const PREPROCESSING_VERSION = "whiteboard-snapshot-v1";
@@ -108,18 +109,6 @@ export class WhiteboardVisionCoordinator {
       return WhiteboardVisionSnapshotResponseSchema.parse(tombstone.response);
     }
 
-    if (this.backend === undefined) {
-      return this.remember(upload.requestId, fingerprint, {
-        protocolVersion: 1,
-        requestId: upload.requestId,
-        sessionId: upload.sessionId,
-        status: "VISION_UNAVAILABLE",
-        reason: "No production vision inference backend is configured",
-        observationCount: 0,
-        evidenceCommittedCount: 0
-      });
-    }
-
     if (!this.sessions.hasSession(upload.sessionId)) {
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
@@ -129,6 +118,57 @@ export class WhiteboardVisionCoordinator {
     await this.sessions.ensureRecovered(upload.sessionId);
     const writer = this.sessions.getWriter(upload.sessionId);
     const state = writer.getState();
+    const persistedRequest = state.visionRequests[upload.requestId];
+    let snapshotBasis: VisionSnapshotBasis | undefined;
+
+    if (persistedRequest !== undefined) {
+      try {
+        snapshotBasis = prepareSnapshotBasis(upload);
+      } catch {
+        return this.remember(upload.requestId, fingerprint, rejected(
+          upload,
+          "INVALID_IMAGE"
+        ));
+      }
+      if (!persistedRequestMatchesUpload(persistedRequest, upload, snapshotBasis)) {
+        return rejected(upload, "CONFLICTING_REQUEST_ID");
+      }
+      if (persistedRequest.status === "ACCEPTED") {
+        if (persistedRequest.resultEventId === undefined || persistedRequest.observation === undefined) {
+          return rejected(upload, "PERSISTED_REQUEST_CORRUPT");
+        }
+        return this.remember(upload.requestId, fingerprint, {
+          protocolVersion: 1,
+          requestId: upload.requestId,
+          sessionId: upload.sessionId,
+          status: "ACCEPTED",
+          observationCount: 1,
+          evidenceCommittedCount: visionEvidenceWasCommitted(
+            state,
+            persistedRequest.resultEventId
+          ) ? 1 : 0
+        });
+      }
+      if (persistedRequest.status === "DISCARDED") {
+        const reason = persistedRequest.discardReason ?? "PREVIOUSLY_DISCARDED";
+        return this.remember(
+          upload.requestId,
+          fingerprint,
+          reason === "VISION_UNAVAILABLE"
+            ? visionUnavailable(upload)
+            : rejected(upload, reason)
+        );
+      }
+    }
+
+    const turn = new TurnCoordinator(writer);
+    if (this.backend === undefined) {
+      if (persistedRequest?.status === "PENDING") {
+        await turn.discardVisionRequest(upload.requestId, "VISION_UNAVAILABLE");
+      }
+      return this.remember(upload.requestId, fingerprint, visionUnavailable(upload));
+    }
+
     if (state.status !== "ACTIVE") {
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
@@ -172,16 +212,16 @@ export class WhiteboardVisionCoordinator {
       }
     }
 
-    let snapshotBasis: VisionSnapshotBasis;
-    try {
-      snapshotBasis = prepareSnapshotBasis(upload);
-    } catch {
-      return this.remember(upload.requestId, fingerprint, rejected(
-        upload,
-        "INVALID_IMAGE"
-      ));
+    if (snapshotBasis === undefined) {
+      try {
+        snapshotBasis = prepareSnapshotBasis(upload);
+      } catch {
+        return this.remember(upload.requestId, fingerprint, rejected(
+          upload,
+          "INVALID_IMAGE"
+        ));
+      }
     }
-    const turn = new TurnCoordinator(writer);
     const requested = await turn.requestVision(
       upload.region.regionId,
       authoritativeShapeIds,
@@ -472,4 +512,60 @@ function prepareSnapshotBasis(
     preprocessingVersion: PREPROCESSING_VERSION,
     sourceBoardRevision: upload.sourceBoardRevision
   };
+}
+
+function visionUnavailable(
+  upload: WhiteboardVisionSnapshotUpload
+): WhiteboardVisionSnapshotResponse {
+  return WhiteboardVisionSnapshotResponseSchema.parse({
+    protocolVersion: 1,
+    requestId: upload.requestId,
+    sessionId: upload.sessionId,
+    status: "VISION_UNAVAILABLE",
+    reason: "No production vision inference backend is configured",
+    observationCount: 0,
+    evidenceCommittedCount: 0
+  });
+}
+
+function persistedRequestMatchesUpload(
+  request: VisionRequestState,
+  upload: WhiteboardVisionSnapshotUpload,
+  snapshotBasis: VisionSnapshotBasis
+): boolean {
+  return request.sourceBoardRevision === upload.sourceBoardRevision
+    && request.regionId === upload.region.regionId
+    && sameStringSet(request.relevantShapeIds, upload.region.relevantShapeIds)
+    && request.snapshotBasis !== undefined
+    && JSON.stringify(request.snapshotBasis) === JSON.stringify(snapshotBasis)
+    && request.relevantShapeRevisions !== undefined
+    && sameShapeRevisions(request.relevantShapeRevisions, upload.relevantShapeRevisions)
+    && request.regionBounds !== undefined
+    && JSON.stringify(request.regionBounds) === JSON.stringify(upload.region.bounds)
+    && request.requestedObservationKind === upload.requestedObservationKind;
+}
+
+function sameShapeRevisions(
+  left: readonly { readonly shapeId: string; readonly expectedRevision: number }[],
+  right: readonly { readonly shapeId: string; readonly expectedRevision: number }[]
+): boolean {
+  if (left.length !== right.length) return false;
+  const rightById = new Map(right.map((binding) => [
+    binding.shapeId,
+    binding.expectedRevision
+  ] as const));
+  return left.every((binding) =>
+    rightById.get(binding.shapeId) === binding.expectedRevision
+  );
+}
+
+function visionEvidenceWasCommitted(
+  state: SessionState,
+  visionResultEventId: string
+): boolean {
+  return Object.values(state.evidenceHistory).some((records) =>
+    records.some((record) =>
+      record.value.evidenceEventIds.includes(visionResultEventId)
+    )
+  );
 }
