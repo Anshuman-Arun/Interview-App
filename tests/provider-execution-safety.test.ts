@@ -253,9 +253,10 @@ describe("provider execution admission", () => {
     expect(replacementCloseCalls).toBe(0);
 
     let getterCalls = 0;
-    const accessorSession = Object.defineProperty({
+    const accessorSessionCandidate: object = {
       async close() {}
-    }, "sendTurn", {
+    };
+    Object.defineProperty(accessorSessionCandidate, "sendTurn", {
       enumerable: true,
       get() {
         getterCalls += 1;
@@ -263,7 +264,8 @@ describe("provider execution admission", () => {
           yield PROPOSAL;
         };
       }
-    }) as ReasoningSession;
+    });
+    const accessorSession = accessorSessionCandidate as unknown as ReasoningSession;
     await expect(openProviderExecutionSession({
       provider: testProvider({ createSession: async () => accessorSession }),
       policy: NO_METERED_POLICY,
