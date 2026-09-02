@@ -31,6 +31,37 @@ function frame(sampleRate: number, sampleCount = 1): AudioFrame {
   };
 }
 
+function decodePcmBody(init: RequestInit): Float32Array {
+  if (!(init.body instanceof ArrayBuffer)) {
+    throw new Error("Expected voice PCM request body to be an ArrayBuffer");
+  }
+  const view = new DataView(init.body);
+  const samples = new Float32Array(init.body.byteLength / 4);
+  for (let index = 0; index < samples.length; index += 1) {
+    samples[index] = view.getFloat32(index * 4, true);
+  }
+  return samples;
+}
+
+function admittedFrameResponse(init: RequestInit): Response {
+  const headers = new Headers(init.headers);
+  const requestId = headers.get("x-speech-request-id");
+  const streamId = headers.get("x-speech-stream-id");
+  if (requestId === null || streamId === null) {
+    throw new Error("Expected voice frame identity headers");
+  }
+  return new Response(JSON.stringify({
+    protocolVersion: 1,
+    ok: true,
+    type: "VOICE_FRAME_RESULT",
+    events: [],
+    terminal: false
+  }), {
+    status: 200,
+    headers: { "content-type": "application/json" }
+  });
+}
+
 describe("browser voice client adversarial boundaries", () => {
   it("derives an exact localhost voice origin without weakening loopback validation", () => {
     expect(deriveDefaultVoiceBaseUrl("http://localhost:43123"))
@@ -56,6 +87,127 @@ describe("browser voice client adversarial boundaries", () => {
     await expect(stream.sendFrame(frame(0.000_001, 2_048)))
       .rejects.toThrow(/bounded speech duration|resampling size/u);
     expect(authenticatedFetch).not.toHaveBeenCalled();
+  });
+
+  it("preserves 44.1 kHz interpolation phase across microphone callback boundaries", async () => {
+    const requests: Array<{
+      readonly samples: Float32Array;
+      readonly frameSamples: number;
+      readonly timestampMs: number;
+    }> = [];
+    const authenticatedFetch: typeof fetch = async (_input, init = {}) => {
+      const headers = new Headers(init.headers);
+      requests.push({
+        samples: decodePcmBody(init),
+        frameSamples: Number(headers.get("x-speech-frame-samples")),
+        timestampMs: Number(headers.get("x-speech-timestamp-ms"))
+      });
+      return admittedFrameResponse(init);
+    };
+    const stream = new BrowserVoiceStream(
+      new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch }),
+      newSessionId(),
+      "speech_stream_44100_phase"
+    );
+    const first = frame(44_100, 4);
+    first.samples.set([0, 0.1, 0.2, 0.3]);
+    const second = frame(44_100, 4);
+    second.samples.set([0.4, 0.5, 0.6, 0.7]);
+
+    await stream.sendFrame(first);
+    await stream.sendFrame(second);
+
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.frameSamples).toBe(4);
+    expect(requests[1]?.frameSamples).toBe(4);
+    expect(requests[1]?.samples[0]).toBeCloseTo(0.3675, 6);
+    expect(requests[1]?.timestampMs).toBeCloseTo(4 / 48_000 * 1_000, 6);
+  });
+
+  it("does not accumulate per-frame rounding drift while resampling 44.1 kHz capture", async () => {
+    const frameSampleCounts: number[] = [];
+    const authenticatedFetch: typeof fetch = async (_input, init = {}) => {
+      frameSampleCounts.push(Number(
+        new Headers(init.headers).get("x-speech-frame-samples")
+      ));
+      return admittedFrameResponse(init);
+    };
+    const stream = new BrowserVoiceStream(
+      new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch }),
+      newSessionId(),
+      "speech_stream_44100_count"
+    );
+
+    for (let index = 0; index < 100; index += 1) {
+      await stream.sendFrame(frame(44_100, 2_048));
+    }
+
+    const total = frameSampleCounts.reduce((sum, count) => sum + count, 0);
+    const sourceSamples = 100 * 2_048;
+    const exactStreamingCount = Math.floor(
+      (sourceSamples - 1) * 48_000 / 44_100
+    ) + 1;
+    expect(total).toBe(exactStreamingCount);
+    expect(new Set(frameSampleCounts).size).toBeGreaterThan(1);
+  });
+
+  it("does not consume resampler phase when a voice frame transport fails", async () => {
+    const attempts: Array<{
+      readonly sequence: string | null;
+      readonly timestamp: string | null;
+      readonly samples: Float32Array;
+    }> = [];
+    let failFirst = true;
+    const authenticatedFetch: typeof fetch = async (_input, init = {}) => {
+      const headers = new Headers(init.headers);
+      attempts.push({
+        sequence: headers.get("x-speech-sequence"),
+        timestamp: headers.get("x-speech-timestamp-ms"),
+        samples: decodePcmBody(init)
+      });
+      if (failFirst) {
+        failFirst = false;
+        throw new Error("synthetic frame transport failure");
+      }
+      return admittedFrameResponse(init);
+    };
+    const stream = new BrowserVoiceStream(
+      new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch }),
+      newSessionId(),
+      "speech_stream_resample_retry"
+    );
+    const captured = frame(44_100, 2_048);
+    captured.samples[0] = 0.25;
+
+    await expect(stream.sendFrame(captured)).rejects.toThrow(/synthetic frame transport/u);
+    await expect(stream.sendFrame(captured)).resolves.toMatchObject({ terminal: false });
+
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]?.sequence).toBe("0");
+    expect(attempts[1]?.sequence).toBe("0");
+    expect(attempts[0]?.timestamp).toBe("0");
+    expect(attempts[1]?.timestamp).toBe("0");
+    expect(Array.from(attempts[1]?.samples ?? [])).toEqual(
+      Array.from(attempts[0]?.samples ?? [])
+    );
+  });
+
+  it("rejects microphone sample-rate mutation within one voice stream", async () => {
+    let requestCount = 0;
+    const authenticatedFetch: typeof fetch = async (_input, init = {}) => {
+      requestCount += 1;
+      return admittedFrameResponse(init);
+    };
+    const stream = new BrowserVoiceStream(
+      new BrowserVoiceClient({ baseUrl: BASE_URL, authenticatedFetch }),
+      newSessionId(),
+      "speech_stream_rate_mutation"
+    );
+
+    await stream.sendFrame(frame(44_100, 2_048));
+    await expect(stream.sendFrame(frame(48_000, 2_048)))
+      .rejects.toThrow(/sample rate changed/u);
+    expect(requestCount).toBe(1);
   });
 
   it("retires a known stream identity when an open success response is unusable", async () => {
