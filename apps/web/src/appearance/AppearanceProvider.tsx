@@ -108,22 +108,6 @@ export function AppearanceProvider({
     root.dataset["borders"] = settings.borders;
     root.style.setProperty("--accent-wash", `${String(settings.accentIntensity)}%`);
 
-    const bridge = (globalThis as typeof globalThis & {
-      readonly interviewDesktop?: DesktopAppearanceBridge;
-    }).interviewDesktop;
-    const scaleFactor = SCALE_FACTORS[settings.scale];
-    if (bridge?.setZoomFactor !== undefined) {
-      root.style.removeProperty("font-size");
-      try {
-        bridge.setZoomFactor(scaleFactor);
-      } catch {
-        // Desktop zoom is presentation-only. Fallback keeps browser UI usable.
-        root.style.fontSize = `${String(16 * scaleFactor)}px`;
-      }
-    } else {
-      root.style.fontSize = `${String(16 * scaleFactor)}px`;
-    }
-
     try {
       window.localStorage.setItem(
         APPEARANCE_STORAGE_KEY,
@@ -133,6 +117,26 @@ export function AppearanceProvider({
       // Appearance persistence is best-effort and never session-authoritative.
     }
   }, [prefersDark, settings]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const bridge = (globalThis as typeof globalThis & {
+      readonly interviewDesktop?: DesktopAppearanceBridge;
+    }).interviewDesktop;
+    const scaleFactor = SCALE_FACTORS[settings.scale];
+
+    if (bridge?.setZoomFactor !== undefined) {
+      root.style.removeProperty("font-size");
+      try {
+        bridge.setZoomFactor(scaleFactor);
+        return;
+      } catch {
+        // Desktop zoom is presentation-only. Fallback keeps browser UI usable.
+      }
+    }
+
+    root.style.fontSize = `${String(16 * scaleFactor)}px`;
+  }, [settings.scale]);
 
   const patch = useCallback((next: Partial<AppearanceSettings>): void => {
     setSettings((current) => normalizeAppearance({ ...current, ...next }));

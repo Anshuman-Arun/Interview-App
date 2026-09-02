@@ -35,6 +35,16 @@ describe("expressive UI appearance foundations", () => {
     expect(source).toContain('initialState="draw"');
   });
 
+  it("isolates native zoom work to interface-scale changes", () => {
+    const source = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/appearance/AppearanceProvider.tsx"),
+      "utf8"
+    );
+
+    expect(source).toContain("}, [settings.scale]);");
+    expect(source).toContain("bridge.setZoomFactor(scaleFactor)");
+  });
+
   it("avoids expensive decorative UI loops and blur effects", () => {
     const files = [
       "apps/web/src/components/AppearanceDock.css",
