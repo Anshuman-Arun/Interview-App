@@ -43,17 +43,29 @@ export class SessionRecoveryCoordinator {
 
     const events = this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
     const state = replaySession(sessionId, events);
-    const queuedContent = new Map<DeliveryId, { readonly text: string }>();
+    const queuedContent = new Map<DeliveryId, {
+      readonly text: string;
+      readonly generationId: string;
+      readonly medium: "TEXT" | "AUDIO";
+    }>();
+    const exposedTextKeys = new Set(
+      Object.values(state.deliveries)
+        .filter((delivery) =>
+          delivery.content.medium === "TEXT"
+          && (delivery.status === "EXPOSED" || delivery.status === "COMPLETED")
+        )
+        .map((delivery) => semanticDeliveryKey(delivery.generationId, delivery.content.text))
+    );
     const history: SessionHistoryEntry[] = [];
     for (const event of events) {
       if (event.type === "DELIVERY_QUEUED") {
         const content = event.payload.atom.content;
-        // AUDIO deliveries are derived physical presentations of an already
-        // admitted TEXT delivery in voice v1. Durable transcript history is
-        // semantic conversation history, so recording AUDIO here would
-        // duplicate the same interviewer utterance after recovery.
-        if (content.medium === "TEXT") {
-          queuedContent.set(event.payload.atom.deliveryId, { text: content.text });
+        if (content.medium === "TEXT" || content.medium === "AUDIO") {
+          queuedContent.set(event.payload.atom.deliveryId, {
+            text: content.text,
+            generationId: event.payload.atom.generationId,
+            medium: content.medium
+          });
         }
         continue;
       }
@@ -82,14 +94,19 @@ export class SessionRecoveryCoordinator {
         content !== undefined
         && (current?.status === "EXPOSED" || current?.status === "COMPLETED")
       ) {
-        history.push(SessionHistoryEntrySchema.parse({
-          role: "INTERVIEWER",
-          sequence: event.sequence,
-          occurredAt: event.wallTime,
-          deliveryId: event.payload.deliveryId,
-          text: content.text,
-          status: current.status
-        }));
+        const derivedAudioDuplicate =
+          content.medium === "AUDIO"
+          && exposedTextKeys.has(semanticDeliveryKey(content.generationId, content.text));
+        if (!derivedAudioDuplicate) {
+          history.push(SessionHistoryEntrySchema.parse({
+            role: "INTERVIEWER",
+            sequence: event.sequence,
+            occurredAt: event.wallTime,
+            deliveryId: event.payload.deliveryId,
+            text: content.text,
+            status: current.status
+          }));
+        }
       }
     }
     return history;
@@ -132,4 +149,8 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function semanticDeliveryKey(generationId: string, text: string): string {
+  return `${generationId}\u0000${text}`;
 }
