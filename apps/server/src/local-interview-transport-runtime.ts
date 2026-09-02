@@ -64,6 +64,7 @@ export class LocalInterviewTransportRuntime {
   private readonly registry: SessionRuntimeRegistry;
   private readonly voiceDeliveryOperations = new Set<Promise<void>>();
   private voiceDeliveryShutdown = false;
+  private voiceWorkersTerminated = false;
 
   public constructor(options: LocalInterviewTransportRuntimeOptions) {
     if (
@@ -158,6 +159,11 @@ export class LocalInterviewTransportRuntime {
   }
 
   public start(): Promise<BoundLocalInterviewTransport> {
+    if (this.voiceWorkersTerminated) {
+      return Promise.reject(new Error(
+        "Local interview transport cannot restart after voice worker shutdown; construct a new runtime"
+      ));
+    }
     if (this.stopping !== undefined) {
       return this.stopping.then(async () => this.start());
     }
@@ -215,6 +221,11 @@ export class LocalInterviewTransportRuntime {
     // on the very work that teardown has not yet been allowed to cancel.
     const voiceTransportStopping = this.voiceTransportServer.stop();
     this.voiceDeliveryShutdown = true;
+    if (this.voiceInput !== undefined || this.voiceSynthesis !== undefined) {
+      // Speech/TTS worker shutdown is terminal. Never let a later start()
+      // resurrect only the HTTP shells around already-shut-down workers.
+      this.voiceWorkersTerminated = true;
+    }
     try {
       await this.voiceInput?.shutdown();
     } catch (error) {
