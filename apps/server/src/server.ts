@@ -28,9 +28,14 @@ export interface ServerConfig {
 
 export async function createAndStartServer(config: ServerConfig = {}) {
   const host = config.host ?? "127.0.0.1";
-  const commandPort = config.commandPort ?? (process.env["COMMAND_PORT"] ? parseInt(process.env["COMMAND_PORT"], 10) : DEFAULT_COMMAND_PORT);
-  const rendererStreamPort = config.rendererStreamPort ?? (process.env["RENDERER_STREAM_PORT"] ? parseInt(process.env["RENDERER_STREAM_PORT"], 10) : DEFAULT_RENDERER_STREAM_PORT);
-  const voicePort = config.voicePort ?? (process.env["VOICE_PORT"] ? parseInt(process.env["VOICE_PORT"], 10) : DEFAULT_VOICE_PORT);
+  const commandPort = resolvePort(config.commandPort, process.env["COMMAND_PORT"], DEFAULT_COMMAND_PORT, "COMMAND_PORT");
+  const rendererStreamPort = resolvePort(
+    config.rendererStreamPort,
+    process.env["RENDERER_STREAM_PORT"],
+    DEFAULT_RENDERER_STREAM_PORT,
+    "RENDERER_STREAM_PORT"
+  );
+  const voicePort = resolvePort(config.voicePort, process.env["VOICE_PORT"], DEFAULT_VOICE_PORT, "VOICE_PORT");
   const clientToken = config.clientToken ?? process.env["INTERVIEW_CLIENT_TOKEN"] ?? generateSecureToken();
   const rawOrigins = config.allowedOrigins ?? (process.env["CLIENT_ORIGIN"] ? [process.env["CLIENT_ORIGIN"], ...DEFAULT_ALLOWED_ORIGINS] : DEFAULT_ALLOWED_ORIGINS);
   const allowedOrigins = new Set(rawOrigins);
@@ -113,6 +118,34 @@ if (process.argv[1] && (process.argv[1].endsWith("server.ts") || process.argv[1]
     console.error("Fatal error starting interview server.");
     process.exit(1);
   });
+}
+
+function resolvePort(
+  configured: number | undefined,
+  environmentValue: string | undefined,
+  fallback: number,
+  label: string
+): number {
+  const value = configured ?? (
+    environmentValue === undefined
+      ? fallback
+      : parseStrictPort(environmentValue, label)
+  );
+  if (!Number.isSafeInteger(value) || value < 0 || value > 65_535) {
+    throw new Error(`${label} must be an integer between 0 and 65535`);
+  }
+  return value;
+}
+
+function parseStrictPort(value: string, label: string): number {
+  if (!/^(?:0|[1-9][0-9]{0,4})$/u.test(value)) {
+    throw new Error(`${label} must contain only a decimal port number`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 65_535) {
+    throw new Error(`${label} must be an integer between 0 and 65535`);
+  }
+  return parsed;
 }
 
 function configHasVoiceRuntime(runtime: LocalInterviewTransportRuntime): boolean {
