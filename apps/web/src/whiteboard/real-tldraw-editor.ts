@@ -1,4 +1,9 @@
 import {
+  MAX_WHITEBOARD_VISION_DIMENSION,
+  MAX_WHITEBOARD_VISION_PIXELS,
+  MAX_WHITEBOARD_VISION_PNG_BYTES
+} from "../../../packages/domain/src/index.js";
+import {
   Box,
   type Editor,
   type TLShape,
@@ -216,6 +221,9 @@ export class RealTldrawEditorBridge implements TldrawEditor {
       || !Number.isFinite(bounds.height)
       || bounds.width <= 0
       || bounds.height <= 0
+      || bounds.width > MAX_WHITEBOARD_VISION_DIMENSION
+      || bounds.height > MAX_WHITEBOARD_VISION_DIMENSION
+      || bounds.width * bounds.height > MAX_WHITEBOARD_VISION_PIXELS
     ) {
       throw new RangeError("Whiteboard vision export bounds are invalid");
     }
@@ -232,8 +240,14 @@ export class RealTldrawEditorBridge implements TldrawEditor {
       || !Number.isSafeInteger(result.height)
       || result.width <= 0
       || result.height <= 0
+      || result.width > MAX_WHITEBOARD_VISION_DIMENSION
+      || result.height > MAX_WHITEBOARD_VISION_DIMENSION
+      || result.width * result.height > MAX_WHITEBOARD_VISION_PIXELS
     ) {
       throw new Error("tldraw returned invalid whiteboard export dimensions");
+    }
+    if (result.blob.size <= 0 || result.blob.size > MAX_WHITEBOARD_VISION_PNG_BYTES) {
+      throw new Error("tldraw whiteboard export exceeded the encoded byte limit");
     }
     const bytes = new Uint8Array(await result.blob.arrayBuffer());
     return { bytes, width: result.width, height: result.height };

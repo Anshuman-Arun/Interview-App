@@ -1,6 +1,7 @@
 import {
   MAX_VISION_REGION_DIMENSION,
   MAX_VISION_REGION_SHAPES,
+  MAX_WHITEBOARD_VISION_DIMENSION,
   MAX_WHITEBOARD_VISION_PNG_BYTES,
   RequestIdSchema,
   SessionIdSchema,
@@ -21,7 +22,6 @@ import type { NormalizedStudentShapeChange } from "./normalized-board.js";
 const DEFAULT_DEBOUNCE_MS = 350;
 const MAX_DIRTY_BOXES = 128;
 const MAX_DIRTY_REGION_AREA = 4 * 1024 * 1024;
-const MAX_EXPORT_DIMENSION = 4096;
 
 export interface StudentRegionPng {
   readonly bytes: Uint8Array;
@@ -152,8 +152,8 @@ export class WhiteboardVisionScheduler {
       const bounds = VisionBoundsSchema.safeParse(dirty.bounds);
       if (
         !bounds.success
-        || bounds.data.width > Math.min(MAX_VISION_REGION_DIMENSION, MAX_EXPORT_DIMENSION)
-        || bounds.data.height > Math.min(MAX_VISION_REGION_DIMENSION, MAX_EXPORT_DIMENSION)
+        || bounds.data.width > Math.min(MAX_VISION_REGION_DIMENSION, MAX_WHITEBOARD_VISION_DIMENSION)
+        || bounds.data.height > Math.min(MAX_VISION_REGION_DIMENSION, MAX_WHITEBOARD_VISION_DIMENSION)
         || bounds.data.width * bounds.data.height > MAX_DIRTY_REGION_AREA
       ) return;
 
@@ -184,8 +184,8 @@ export class WhiteboardVisionScheduler {
         || image.bytes.byteLength > MAX_WHITEBOARD_VISION_PNG_BYTES
         || image.width <= 0
         || image.height <= 0
-        || image.width > MAX_EXPORT_DIMENSION
-        || image.height > MAX_EXPORT_DIMENSION
+        || image.width > MAX_WHITEBOARD_VISION_DIMENSION
+        || image.height > MAX_WHITEBOARD_VISION_DIMENSION
       ) return;
 
       if (

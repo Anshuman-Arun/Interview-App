@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import {
   MAX_VISION_REGION_SHAPES,
+  MAX_WHITEBOARD_VISION_DIMENSION,
+  MAX_WHITEBOARD_VISION_PIXELS,
   MAX_WHITEBOARD_VISION_PNG_BYTES,
   VisionInferenceRequestSchema,
   WhiteboardVisionSnapshotResponseSchema,
@@ -26,9 +28,6 @@ import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.
 
 const PREPROCESSING_VERSION = "whiteboard-snapshot-v1";
 const MAX_RESPONSE_TOMBSTONES = 64;
-const MAX_SNAPSHOT_WIDTH = 4096;
-const MAX_SNAPSHOT_HEIGHT = 4096;
-const MAX_SNAPSHOT_PIXELS = 8 * 1024 * 1024;
 const DEFAULT_BACKEND_TIMEOUT_MS = 15_000;
 const MAX_BACKEND_TIMEOUT_MS = 120_000;
 
@@ -166,9 +165,9 @@ export class WhiteboardVisionCoordinator {
         encodedBytes: bytes
       }, {
         maxEncodedBytes: MAX_WHITEBOARD_VISION_PNG_BYTES,
-        maxWidth: MAX_SNAPSHOT_WIDTH,
-        maxHeight: MAX_SNAPSHOT_HEIGHT,
-        maxPixels: MAX_SNAPSHOT_PIXELS
+        maxWidth: MAX_WHITEBOARD_VISION_DIMENSION,
+        maxHeight: MAX_WHITEBOARD_VISION_DIMENSION,
+        maxPixels: MAX_WHITEBOARD_VISION_PIXELS
       });
       prepareVisionBatch(
         [snapshot],
@@ -176,7 +175,7 @@ export class WhiteboardVisionCoordinator {
         {
           maxImages: 1,
           maxTotalBytes: MAX_WHITEBOARD_VISION_PNG_BYTES,
-          maxTotalPixels: MAX_SNAPSHOT_PIXELS,
+          maxTotalPixels: MAX_WHITEBOARD_VISION_PIXELS,
           maxCropsOrTiles: 1
         },
         "FAIL"
