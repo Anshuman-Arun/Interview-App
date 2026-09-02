@@ -506,6 +506,37 @@ describe("QueuedRendererAudioPlayer exposure semantics", () => {
     expect(onCompleted).not.toHaveBeenCalled();
   });
 
+  it("bounds concurrent logical audio resolution before Blob/network work can fan out", async () => {
+    const resolver = vi.fn(async () => new Promise<never>(() => undefined));
+    const playback = new BrowserAudioPlayback(() => new AudioElement());
+    const adapter = new QueuedRendererAudioPlayer(playback, {
+      resolveAudioSource: resolver
+    });
+    const pending: Promise<void>[] = [];
+    for (let index = 0; index < 32; index += 1) {
+      pending.push(adapter.playAudio({
+        deliveryId: newDeliveryId(),
+        audioRef: `logical-${String(index)}`,
+        text: "bounded resolver",
+        callbacks: { onStarted: vi.fn(), onCompleted: vi.fn() }
+      }));
+    }
+    await Promise.resolve();
+    expect(resolver).toHaveBeenCalledTimes(32);
+
+    await expect(adapter.playAudio({
+      deliveryId: newDeliveryId(),
+      audioRef: "overflow",
+      text: "overflow",
+      callbacks: { onStarted: vi.fn(), onCompleted: vi.fn() }
+    })).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+    expect(resolver).toHaveBeenCalledTimes(32);
+
+    adapter.cancelAll();
+    const settled = await Promise.allSettled(pending);
+    expect(settled.every((result) => result.status === "rejected")).toBe(true);
+  });
+
   it("bounds a hung logical audio resolution before playback admission", async () => {
     vi.useFakeTimers();
     try {
