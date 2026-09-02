@@ -230,16 +230,14 @@ export class WhiteboardVisionCoordinator {
     });
     const manager = this.managerFor(upload.sessionId);
     let timedOut = false;
+    const admissionPromise = manager.submit(request, this.backend);
     const timeout = setTimeout(() => {
       const cancellation = manager.cancel(upload.requestId);
       timedOut = cancellation.cancelled;
     }, this.backendTimeoutMs);
-    let admission;
-    try {
-      admission = await manager.submit(request, this.backend);
-    } finally {
+    const admission = await admissionPromise.finally(() => {
       clearTimeout(timeout);
-    }
+    });
     if (!admission.accepted) {
       const reason = timedOut ? "BACKEND_TIMEOUT" : admission.reason;
       await turn.discardVisionRequest(upload.requestId, reason);
