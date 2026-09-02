@@ -577,8 +577,14 @@ body {
   font: 590 8.5px/1 var(--font-ui) !important;
 }
 
-.panel-tabs button[data-testid="tab-whiteboard"] {
+.panel-tabs button[aria-selected="true"] {
+  border-bottom: 2px solid var(--accent) !important;
+  background: var(--surface-raised) !important;
   color: var(--text-primary) !important;
+}
+
+.panel-tabs button[aria-selected="false"] {
+  color: var(--text-muted) !important;
 }
 
 .panel-tabs > .text-\[11px\] {

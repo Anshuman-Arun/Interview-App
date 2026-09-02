@@ -169,6 +169,23 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("if (!recoverySessionInput.trim() || sessionEntryPendingRef.current) return");
   });
 
+  it("styles Whiteboard and Details from actual tab selection state", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+    const css = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/styles/app.css"),
+      "utf8"
+    );
+
+    expect(app).toContain('role="tablist"');
+    expect(app).toContain('aria-selected={activeTab === "whiteboard"}');
+    expect(app).toContain('aria-selected={activeTab === "formulation"}');
+    expect(css).toContain('.panel-tabs button[aria-selected="true"]');
+    expect(css).not.toContain('button[data-testid="tab-whiteboard"] {');
+  });
+
   it("does not add expensive decorative effects", () => {
     for (const file of STYLE_FILES) {
       const css = fs.readFileSync(path.resolve(process.cwd(), file), "utf8");

@@ -783,9 +783,15 @@ export const App: React.FC = () => {
         <section className="right-panel w-1/2 flex flex-col bg-slate-50 overflow-hidden">
           {/* Panel Tab Header */}
           <div className="panel-tabs bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
+            <div
+              className="flex items-center gap-2"
+              role="tablist"
+              aria-label="Whiteboard view"
+            >
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeTab === "whiteboard"}
                 onClick={() => setActiveTab("whiteboard")}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
                   activeTab === "whiteboard"
@@ -798,6 +804,8 @@ export const App: React.FC = () => {
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeTab === "formulation"}
                 onClick={() => setActiveTab("formulation")}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
                   activeTab === "formulation"
