@@ -817,7 +817,14 @@ export const App: React.FC = () => {
             <div className="flex-1 min-h-[220px]">
               <TranscriptFeed
                 items={session.transcript}
-                onRetry={session.retrySubmission}
+                onRetry={(itemId) => {
+                  if (
+                    sessionEntryPendingRef.current
+                    || sessionTerminalPendingRef.current
+                  ) return;
+                  void session.retrySubmission(itemId);
+                }}
+                retryDisabled={sessionEntryPending || sessionTerminalPending}
                 className="h-full"
               />
             </div>
@@ -828,11 +835,29 @@ export const App: React.FC = () => {
             <VoiceControls
               state={session.voice}
               controls={session.voiceControls}
-              disabled={!session.isSessionStarted || session.sessionStatus !== "ACTIVE"}
+              disabled={
+                !session.isSessionStarted
+                || session.sessionStatus !== "ACTIVE"
+                || sessionEntryPending
+                || sessionTerminalPending
+              }
             />
             <StudentInputArea
-              onSubmit={(text) => session.submitTypedInput(text)}
-              disabled={!session.isSessionStarted || session.sessionStatus !== "ACTIVE"}
+              onSubmit={(text) => {
+                if (
+                  sessionEntryPendingRef.current
+                  || sessionTerminalPendingRef.current
+                ) {
+                  throw new Error("Session transition is in progress");
+                }
+                return session.submitTypedInput(text);
+              }}
+              disabled={
+                !session.isSessionStarted
+                || session.sessionStatus !== "ACTIVE"
+                || sessionEntryPending
+                || sessionTerminalPending
+              }
               placeholder={
                 session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"
                   ? `Session is ${session.sessionStatus.toLowerCase()}. Reasoning input is closed.`
@@ -925,6 +950,8 @@ export const App: React.FC = () => {
                     readOnly={
                       !session.isSessionStarted
                       || session.sessionStatus !== "ACTIVE"
+                      || sessionEntryPending
+                      || sessionTerminalPending
                       || session.whiteboardSync.status === "UNSYNCHRONIZED"
                     }
                     onEditorMount={handleWhiteboardEditorMount}
