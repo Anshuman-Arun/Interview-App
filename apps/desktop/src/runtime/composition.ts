@@ -366,7 +366,8 @@ export class DesktopLocalRuntimeComposition {
         this.runtimeManager,
         SPEECH_COMPONENT_ID,
         "speech",
-        token
+        token,
+        this.lifecycleAbort.signal
       );
       const vad = new SileroVadBackend(
         new ManagedSileroVadRuntime(client, sileroPath),
@@ -441,7 +442,8 @@ export class DesktopLocalRuntimeComposition {
         this.runtimeManager,
         TTS_COMPONENT_ID,
         "tts",
-        token
+        token,
+        this.lifecycleAbort.signal
       );
       const synthesizer = await KokoroSpeechSynthesizer.create({
         runtime: new ManagedKokoroRuntime(client, modelPath, configPath),
