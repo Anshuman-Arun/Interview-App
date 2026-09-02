@@ -27,12 +27,12 @@ The transport is intentionally frame-oriented rather than a giant JSON/base64 co
 Every endpoint:
 
 - binds only to `127.0.0.1` or `::1`;
-- requires the exact configured browser Origin;
-- requires the local client-token capability;
-- uses strict request identities and bounded bodies;
+- snapshots a bounded exact HTTP-loopback Origin allowlist at construction;
+- requires the exact configured browser Origin and local client-token capability;
+- uses strict request identities, bounded body bytes/chunks, and bounded HTTP connection concurrency;
 - rejects sequence gaps/duplicates and stream/session mismatches;
 - exposes no filesystem path;
-- has explicit cancellation and a bounded server-side idle lease.
+- has explicit cancellation, bounded request/header/keep-alive deadlines, and a bounded server-side idle lease.
 
 If an in-flight PCM HTTP request is dropped, the transport immediately cancels the exact bound speech stream; the bounded server-side idle lease remains a second fail-closed backstop. A dropped browser connection therefore cannot create an unbounded PCM backlog or leave a speech stream authoritative forever.
 
@@ -42,8 +42,8 @@ If an in-flight PCM HTTP request is dropped, the transport immediately cancels t
 
 1. enable microphone;
 2. capture mono browser PCM;
-3. retain at most eight frames waiting for local transport;
-4. stop/fail the voice cycle if backpressure exceeds that bound;
+3. retain continuing capture only inside three simultaneous bounds: at most 256 frames, 3 seconds of audio, and 2 MiB of Float32 PCM;
+4. stop/fail the voice cycle if any backpressure bound is exceeded;
 5. cancel the current speech stream on disable, session replacement, or unmount;
 6. suppress late results with a local integration epoch.
 
@@ -141,7 +141,7 @@ TTS receives exact application-admitted interviewer text. It does not receive au
 - TTS model/runtime identity;
 - bounded ordered PCM chunks.
 
-Every worker callback must preserve the request identity and request-basis hash. Begin/end model identity must agree. Aggregate PCM is hash-checked before it becomes a browser-resolvable asset.
+Every worker callback must preserve the request identity and request-basis hash. The application also checks the complete assembly: admitted sample rate, planned segment count/order/hash, chunk sequence, aggregate byte/frame bounds, end totals, and begin/end model identity. Aggregate PCM is hash-checked before it becomes a browser-resolvable asset.
 
 If TTS is cancelled late, ignores runtime cancellation, returns malformed metadata, changes basis/model identity, or finishes after barge-in, application admission fails closed.
 
@@ -178,7 +178,7 @@ The reference commits to session, generation, source delivery, text hash, synthe
 
 PCM/WAV bytes live only in a bounded process-local `EphemeralAudioAssetStore`. The browser resolves the logical reference through the authenticated voice transport, creates a temporary Blob URL, and `QueuedRendererAudioPlayer` revokes that URL when playback settles or is cancelled.
 
-The server-side copy is one-shot and removed when transferred to the browser.
+The server-side copy is one-shot and removed when transferred to the browser. Browser resolution and physical-playback start each have bounded deadlines, pre-playback resolution concurrency is capped, and late cancellation-ignoring resolvers have any returned temporary resource reclaimed.
 
 ## Crash and reconnect behavior
 
@@ -238,4 +238,4 @@ The deterministic voice E2E covers the complete integration sequence:
 11. new Turn commit;
 12. normal `ServerTurnOrchestrator` execution.
 
-Additional focused adversarial coverage verifies false onset, empty transcripts, origin/authentication rejection, frame-size limits, sequence gaps, dropped PCM transport cancellation, buffered renderer-command suppression after barge-in, and the authority race between `DELIVERY_STARTED` persistence and physical SSE write. Existing audio lifecycle, renderer crash, speech-worker, VAD/STT, TTS, delivery crash/reconnect, and property suites remain part of the full CI gate.
+Additional focused adversarial coverage verifies false onset, empty transcripts, origin/authentication rejection, frame-size limits, sequence gaps and duplicates, dropped PCM transport cancellation, late cancellation-ignoring STT suppression, max-duration frame carry, late uncancelled TTS rejection, acknowledged-AUDIO barge-in semantics, bounded audio resolution/start hangs, malformed temporary-resource cleanup, buffered renderer-command suppression after barge-in, and the authority race between `DELIVERY_STARTED` persistence and physical SSE write. Existing audio lifecycle, renderer crash, speech-worker, VAD/STT, TTS, delivery crash/reconnect, and property suites remain part of the full CI gate.
