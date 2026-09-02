@@ -41,19 +41,19 @@ export const DEFAULT_PROVIDER_RUNTIME_POLICY: ProviderPolicy = Object.freeze({
 export interface ProviderRuntimeConfigurationSource {
   readonly resolveConfiguration: (
     selection: ProviderSelectionReference
-  ) => unknown | Promise<unknown>;
+  ) => unknown;
 }
 
 export interface ProviderAdapterRuntimeSource {
   readonly resolveRuntime: (
     selection: ProviderSelectionReference
-  ) => unknown | Promise<unknown>;
+  ) => unknown;
 }
 
 export interface ProviderRuntimePolicySource {
   readonly resolvePolicy: (
     selection: ProviderSelectionReference
-  ) => ProviderPolicy | Promise<ProviderPolicy>;
+  ) => unknown;
 }
 
 export interface ProviderRuntimeResolverOptions {
@@ -151,7 +151,7 @@ export class ProviderRuntimeResolver {
       throw controlPlaneResolutionError(error);
     }
 
-    let rawPolicy: ProviderPolicy;
+    let rawPolicy: unknown;
     try {
       rawPolicy = this.policySource === undefined
         ? DEFAULT_PROVIDER_RUNTIME_POLICY
@@ -203,7 +203,11 @@ function snapshotRuntimeConfiguration(value: unknown): {
   try {
     descriptors = Object.getOwnPropertyDescriptors(value);
     symbols = Object.getOwnPropertySymbols(value);
-    prototype = Object.getPrototypeOf(value);
+    const prototypeCandidate: unknown = Object.getPrototypeOf(value);
+    if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+      throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
+    }
+    prototype = prototypeCandidate;
   } catch {
     throw new ProviderRuntimeResolutionError("RUNTIME_CONFIGURATION_FAILED");
   }
@@ -232,7 +236,7 @@ function snapshotRuntimeConfiguration(value: unknown): {
   return Object.freeze(output);
 }
 
-function snapshotProviderPolicy(value: ProviderPolicy): ProviderPolicy {
+function snapshotProviderPolicy(value: unknown): ProviderPolicy {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
   }
@@ -243,7 +247,11 @@ function snapshotProviderPolicy(value: ProviderPolicy): ProviderPolicy {
   try {
     descriptors = Object.getOwnPropertyDescriptors(value);
     symbols = Object.getOwnPropertySymbols(value);
-    prototype = Object.getPrototypeOf(value);
+    const prototypeCandidate: unknown = Object.getPrototypeOf(value);
+    if (prototypeCandidate !== null && typeof prototypeCandidate !== "object") {
+      throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
+    }
+    prototype = prototypeCandidate;
   } catch {
     throw new ProviderRuntimeResolutionError("POLICY_RESOLUTION_FAILED");
   }
