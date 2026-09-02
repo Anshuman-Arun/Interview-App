@@ -14,6 +14,7 @@ import {
 } from "../apps/web/src/whiteboard/real-tldraw-editor.js";
 import {
   BoardRevisionSchema,
+  newDeliveryId,
   newRequestId,
   newSessionId,
   type BoardAction
@@ -23,11 +24,16 @@ import {
   TurnCoordinator,
   createCommandEnvelope
 } from "../packages/interview-engine/src/index.js";
+import {
+  RendererStreamMessageSchema,
+  type RendererAcknowledgementCommand
+} from "../packages/delivery/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   AuthoritativeBoardSyncCoordinator
 } from "../apps/web/src/whiteboard/authoritative-board-sync.js";
+import { RendererClient } from "../apps/web/src/renderer-client.js";
 import type { NormalizedStudentShapeChange } from "../apps/web/src/whiteboard/normalized-board.js";
 
 function requireRealTldrawBridge(
@@ -1076,20 +1082,62 @@ describe("Real tldraw mounted browser integration", () => {
       })).rejects.toThrow(/revision mismatch/u);
       expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(2));
 
-      await act(async () => {
-        await adapter.applyAiOverlayAction({
-          operation: "circle",
-          layer: "AI_ANNOTATION",
-          annotationPurpose: "authorized mounted overlay",
-          targetShapeId: studentId,
-          expectedShapeRevision: 2
-        });
+      const acknowledgements: RendererAcknowledgementCommand[] = [];
+      const renderer = new RendererClient({
+        sessionId,
+        acknowledgementSender: {
+          send: (command) => {
+            acknowledgements.push(command);
+          }
+        },
+        textPresenter: { presentText: () => undefined },
+        audioPlayer: { playAudio: () => undefined },
+        whiteboardPresenter: adapter,
+        requestIdFactory: () => newRequestId()
       });
-      await Promise.resolve();
+      const deliveryId = newDeliveryId();
+      const message = RendererStreamMessageSchema.parse({
+        protocolVersion: 1,
+        type: "DELIVERY_COMMAND",
+        command: {
+          deliveryId,
+          content: {
+            medium: "WHITEBOARD",
+            action: {
+              operation: "circle",
+              layer: "AI_ANNOTATION",
+              annotationPurpose: "authorized mounted overlay",
+              targetShapeId: studentId,
+              expectedShapeRevision: 2
+            }
+          }
+        }
+      });
+
+      await act(async () => {
+        const first = await renderer.handleMessage(message);
+        expect(first.duplicate).toBe(false);
+      });
+      const annotationAfterFirstDelivery = adapter.getCanvasSnapshot().aiAnnotations;
+      expect(annotationAfterFirstDelivery).toHaveLength(1);
+      expect(acknowledgements.map((command) => command.type)).toEqual([
+        "ACK_DELIVERY_EXPOSED",
+        "ACK_DELIVERY_COMPLETED"
+      ]);
+
+      await act(async () => {
+        const reconnectDuplicate = await renderer.handleMessage(message);
+        expect(reconnectDuplicate.duplicate).toBe(true);
+      });
 
       expect(writer.getState().boardRevision).toBe(BoardRevisionSchema.parse(2));
       expect(bridge.getShape(studentId)).toEqual(studentBeforeOverlay);
-      expect(adapter.getCanvasSnapshot().aiAnnotations).toHaveLength(1);
+      expect(adapter.getCanvasSnapshot().aiAnnotations)
+        .toEqual(annotationAfterFirstDelivery);
+      expect(acknowledgements.map((command) => command.type)).toEqual([
+        "ACK_DELIVERY_EXPOSED",
+        "ACK_DELIVERY_COMPLETED"
+      ]);
       expect(store.load(sessionId)
         .filter((event) => event.type === "BOARD_PATCH_COMMITTED"))
         .toHaveLength(2);
