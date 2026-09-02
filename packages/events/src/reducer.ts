@@ -254,6 +254,9 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       break;
     }
     case "VISION_REQUESTED": {
+      if (state.visionRequests[event.payload.visionRequestId] !== undefined) {
+        throw new Error("Vision request already exists");
+      }
       const request: VisionRequestState = {
         visionRequestId: event.payload.visionRequestId,
         sourceBoardRevision: event.payload.sourceBoardRevision,
@@ -284,13 +287,64 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
     }
     case "VISION_RESULT_ACCEPTED": {
       const request = state.visionRequests[event.payload.visionRequestId];
-      if (request === undefined || request.status !== "PENDING") throw new Error("Vision request is not pending");
-      if (
-        event.payload.admission !== undefined
-        && event.payload.admission.requestId !== event.payload.visionRequestId
-      ) {
-        throw new Error("Accepted vision admission request does not match persisted request");
+      if (request === undefined || request.status !== "PENDING") {
+        throw new Error("Vision request is not pending");
       }
+      const observation = event.payload.observation;
+      if (
+        observation.sourceBoardRevision !== request.sourceBoardRevision
+        || observation.regionId !== request.regionId
+      ) {
+        throw new Error("Accepted vision observation does not match its persisted request basis");
+      }
+
+      const admission = event.payload.admission;
+      const dependencyShapeIds = admission === undefined
+        ? observation.relevantShapeIds
+        : admission.sourceRelevantShapeIds;
+      if (!sameStringSet(dependencyShapeIds, request.relevantShapeIds)) {
+        throw new Error("Accepted vision dependencies do not match the persisted request");
+      }
+
+      if (admission !== undefined) {
+        if (
+          admission.requestId !== event.payload.visionRequestId
+          || admission.sessionId !== state.sessionId
+          || admission.admittedAtBoardRevision !== state.boardRevision
+          || !jsonDataEqual(admission.observation, observation)
+        ) {
+          throw new Error("Accepted vision admission identity does not match replay authority");
+        }
+        if (
+          request.snapshotBasis !== undefined
+          && !jsonDataEqual(admission.snapshotBasis, request.snapshotBasis)
+        ) {
+          throw new Error("Accepted vision snapshot basis does not match the persisted request");
+        }
+        if (
+          request.relevantShapeRevisions !== undefined
+          && !sameShapeRevisionBindings(
+            admission.shapeRevisionBindings,
+            request.relevantShapeRevisions
+          )
+        ) {
+          throw new Error("Accepted vision shape revisions do not match the persisted request");
+        }
+        if (
+          request.regionBounds !== undefined
+          && !jsonDataEqual(admission.observation.bounds, request.regionBounds)
+        ) {
+          throw new Error("Accepted vision region bounds do not match the persisted request");
+        }
+        if (
+          request.requestedObservationKind !== undefined
+          && request.requestedObservationKind !== "ANY"
+          && admission.observationKind !== request.requestedObservationKind
+        ) {
+          throw new Error("Accepted vision observation kind does not match the persisted request");
+        }
+      }
+
       next = {
         ...state,
         visionRequests: {
@@ -298,10 +352,8 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
           [event.payload.visionRequestId]: {
             ...request,
             status: "ACCEPTED",
-            observation: event.payload.observation,
-            ...(event.payload.admission === undefined
-              ? {}
-              : { acceptedObservation: event.payload.admission }),
+            observation,
+            ...(admission === undefined ? {} : { acceptedObservation: admission }),
             resultEventId: event.eventId
           }
         }
@@ -567,4 +619,28 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
 
 export function replaySession(sessionId: SessionState["sessionId"], events: readonly SessionEvent[]): SessionState {
   return events.reduce(reduceSessionEvent, initialSessionState(sessionId));
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((value) => rightSet.has(value));
+}
+
+function sameShapeRevisionBindings(
+  left: readonly { readonly shapeId: string; readonly expectedRevision: number }[],
+  right: readonly { readonly shapeId: string; readonly expectedRevision: number }[]
+): boolean {
+  if (left.length !== right.length) return false;
+  const rightById = new Map(right.map((binding) => [
+    binding.shapeId,
+    binding.expectedRevision
+  ] as const));
+  return left.every((binding) =>
+    rightById.get(binding.shapeId) === binding.expectedRevision
+  );
+}
+
+function jsonDataEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
