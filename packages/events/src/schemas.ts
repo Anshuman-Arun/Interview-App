@@ -425,6 +425,18 @@ export const QuantTradingRoundEvidenceEventSchema = z.object({
       message: "Student fills require an incoming market side"
     });
   }
+  if (
+    value.incomingMarketSide !== undefined
+    && value.studentFills.some(
+      (fill) => fill.side !== (value.incomingMarketSide === "BUY" ? "SELL" : "BUY")
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["studentFills"],
+      message: "Student fill side must oppose the incoming market side"
+    });
+  }
 });
 export type QuantTradingRoundEvidenceEvent = z.infer<typeof QuantTradingRoundEvidenceEventSchema>;
 
