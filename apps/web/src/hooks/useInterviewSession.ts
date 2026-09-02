@@ -301,6 +301,7 @@ export function useInterviewSession(
   const rendererClientRef = useRef<RendererClient | null>(null);
   const boardSyncRef = useRef<AuthoritativeBoardSyncCoordinator | null>(null);
   const boardSyncSessionRef = useRef<SessionId | null>(null);
+  const boardBootstrapSessionRef = useRef<SessionId | null>(null);
   const visionSchedulerRef = useRef<WhiteboardVisionScheduler | null>(null);
   const visionSchedulerSessionRef = useRef<SessionId | null>(null);
   const fetchImpl = useMemo(
@@ -320,6 +321,7 @@ export function useInterviewSession(
     boardSyncRef.current?.reset();
     boardSyncRef.current = null;
     boardSyncSessionRef.current = null;
+    boardBootstrapSessionRef.current = null;
     setWhiteboardSync({ status: "UNINITIALIZED", pendingMutationCount: 0 });
   }, []);
 
@@ -398,10 +400,16 @@ export function useInterviewSession(
     const adapter = options.whiteboardAdapter;
     if (adapter === undefined || adapter.getEditor() === null) return;
     const coordinator = getBoardSyncCoordinator(targetSessionId);
+    const allowBootstrap =
+      boardBootstrapSessionRef.current === targetSessionId;
     const snapshot = await coordinator.synchronize(
       targetSessionId,
-      adapter.getNormalizedStudentShapes()
+      adapter.getNormalizedStudentShapes(),
+      { allowBootstrapIntoEmptyAuthority: allowBootstrap }
     );
+    if (allowBootstrap && snapshot.status === "SYNCED") {
+      boardBootstrapSessionRef.current = null;
+    }
     setWhiteboardSync(snapshot);
     getVisionScheduler(targetSessionId)?.wake();
   }, [
@@ -555,8 +563,12 @@ export function useInterviewSession(
           setError("Session started, but session context could not be loaded");
         }
         if (sessionId !== targetSessionId) {
+          const mayBootstrapFreshCanvas = sessionId === null;
           pendingSubmissionsRef.current.clear();
           resetBoardSync();
+          if (mayBootstrapFreshCanvas) {
+            boardBootstrapSessionRef.current = targetSessionId;
+          }
         }
         setSessionId(targetSessionId);
         setIsSessionStarted(true);
@@ -585,7 +597,13 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, attachRendererStream, resetBoardSync, synchronizeWhiteboardFor]
+    [
+      getCommandClient,
+      attachRendererStream,
+      resetBoardSync,
+      sessionId,
+      synchronizeWhiteboardFor
+    ]
   );
 
   const recoverSession = useCallback(
@@ -629,7 +647,13 @@ export function useInterviewSession(
         throw err;
       }
     },
-    [getCommandClient, attachRendererStream, resetBoardSync, synchronizeWhiteboardFor]
+    [
+      getCommandClient,
+      attachRendererStream,
+      resetBoardSync,
+      sessionId,
+      synchronizeWhiteboardFor
+    ]
   );
 
   const synchronizeWhiteboard = useCallback(async (): Promise<void> => {
