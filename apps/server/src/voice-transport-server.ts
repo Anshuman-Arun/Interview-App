@@ -96,6 +96,7 @@ class VoiceHttpError extends Error {
  */
 export class VoiceTransportServer {
   private readonly server: Server;
+  private readonly security: LocalTransportSecurity;
   private readonly maxFrameRequests: number;
   private activeFrameRequests = 0;
   private boundAddress: BoundVoiceTransportAddress | undefined;
@@ -103,7 +104,7 @@ export class VoiceTransportServer {
   private stoppingPromise: Promise<void> | undefined;
 
   public constructor(private readonly options: VoiceTransportServerOptions) {
-    validateSecurity(options.security);
+    this.security = snapshotSecurity(options.security);
     const maxFrameRequests = options.maxFrameRequests ?? DEFAULT_MAX_FRAME_REQUESTS;
     if (!Number.isSafeInteger(maxFrameRequests) || maxFrameRequests < 1 || maxFrameRequests > 64) {
       throw new Error("Voice frame concurrency limit is invalid");
@@ -127,7 +128,7 @@ export class VoiceTransportServer {
       const onError = (error: Error): void => reject(error);
       this.server.once("error", onError);
       this.server.listen({
-        host: this.options.security.host,
+        host: this.security.host,
         port: this.options.port ?? 0,
         exclusive: true
       }, () => {
@@ -139,7 +140,7 @@ export class VoiceTransportServer {
     if (address === null || typeof address === "string") {
       throw new Error("Voice transport server has no TCP address");
     }
-    this.boundAddress = toBoundAddress(this.options.security.host, address);
+    this.boundAddress = toBoundAddress(this.security.host, address);
     return this.boundAddress;
   }
 
@@ -509,25 +510,29 @@ export class VoiceTransportServer {
 
   private authorize(request: IncomingMessage, origin: string | undefined): void {
     const token = headerValue(request, "x-interview-client-token");
-    if (token === undefined || !constantTimeEquals(token, this.options.security.clientToken)) {
+    if (token === undefined || !constantTimeEquals(token, this.security.clientToken)) {
       throw new VoiceHttpError(401, "UNAUTHORIZED", "Client authentication failed");
     }
     this.authorizeOrigin(origin);
   }
 
   private authorizeOrigin(origin: string | undefined): void {
-    if (origin === undefined || !this.options.security.allowedOrigins.has(origin)) {
+    if (origin === undefined || !this.security.allowedOrigins.has(origin)) {
       throw new VoiceHttpError(403, "ORIGIN_FORBIDDEN", "Client origin is not allowed");
     }
   }
 
   private allowedOrigin(origin: string | undefined): boolean {
-    return origin !== undefined && this.options.security.allowedOrigins.has(origin);
+    return origin !== undefined && this.security.allowedOrigins.has(origin);
   }
 }
 
-function validateSecurity(security: LocalTransportSecurity): void {
-  if (!LOOPBACK_HOSTS.has(security.host)) {
+function snapshotSecurity(security: LocalTransportSecurity): LocalTransportSecurity {
+  if (
+    typeof security !== "object"
+    || security === null
+    || !LOOPBACK_HOSTS.has(security.host)
+  ) {
     throw new Error("Voice transport may bind only to a loopback address");
   }
   if (
@@ -536,26 +541,61 @@ function validateSecurity(security: LocalTransportSecurity): void {
     || security.clientToken.length > MAX_CLIENT_TOKEN_CHARACTERS
     || /[\r\n]/u.test(security.clientToken)
   ) {
-    throw new Error("Voice transport client token must contain at least 32 safe characters");
+    throw new Error("Voice transport client token must contain between 32 and 256 safe characters");
   }
-  if (security.allowedOrigins.size === 0 || security.allowedOrigins.size > MAX_ALLOWED_ORIGINS) {
-    throw new Error("Voice transport requires a bounded non-empty client origin allowlist");
+  if (!(security.allowedOrigins instanceof Set)) {
+    throw new Error("Voice transport requires a Set of exact client origins");
   }
-  for (const origin of security.allowedOrigins) {
-    if (origin.length === 0 || origin.length > MAX_ALLOWED_ORIGIN_CHARACTERS) {
-      throw new Error("Voice allowed origin exceeds its bounded length");
+
+  const origins = new Set<string>();
+  let iterator: IterableIterator<unknown>;
+  try {
+    iterator = Set.prototype.values.call(security.allowedOrigins) as IterableIterator<unknown>;
+  } catch {
+    throw new Error("Voice transport origin allowlist could not be inspected");
+  }
+  try {
+    for (const rawOrigin of iterator) {
+      if (origins.size >= MAX_ALLOWED_ORIGINS) {
+        throw new Error("Voice transport client origin allowlist exceeds its bound");
+      }
+      if (
+        typeof rawOrigin !== "string"
+        || rawOrigin.length === 0
+        || rawOrigin.length > MAX_ALLOWED_ORIGIN_CHARACTERS
+      ) {
+        throw new Error("Voice allowed origin is invalid or exceeds its bounded length");
+      }
+      let parsed: URL;
+      try {
+        parsed = new URL(rawOrigin);
+      } catch {
+        throw new Error("Voice allowed origin is not a valid URL origin");
+      }
+      if (
+        parsed.origin !== rawOrigin
+        || parsed.protocol !== "http:"
+        || !LOOPBACK_ORIGIN_HOSTS.has(parsed.hostname)
+        || parsed.username.length > 0
+        || parsed.password.length > 0
+      ) {
+        throw new Error("Voice allowed origins must be exact HTTP loopback origins");
+      }
+      origins.add(rawOrigin);
     }
-    const parsed = new URL(origin);
-    if (
-      parsed.origin !== origin
-      || parsed.protocol !== "http:"
-      || !LOOPBACK_ORIGIN_HOSTS.has(parsed.hostname)
-      || parsed.username.length > 0
-      || parsed.password.length > 0
-    ) {
-      throw new Error("Voice allowed origins must be exact HTTP loopback origins");
-    }
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error("Voice transport origin allowlist could not be inspected");
   }
+  if (origins.size === 0) {
+    throw new Error("Voice transport requires at least one exact client origin");
+  }
+
+  return Object.freeze({
+    host: security.host,
+    clientToken: security.clientToken,
+    allowedOrigins: origins
+  });
 }
 
 function assertJsonContentType(request: IncomingMessage): void {
@@ -580,7 +620,7 @@ function parseHeaderSafeInteger(request: IncomingMessage, name: string): number 
 }
 
 function parseStrictNonnegativeInteger(value: string): number {
-  if (!/^(?:0|[1-9][0-9]*)$/u.test(value)) {
+  if (value.length === 0 || value.length > 16 || !/^(?:0|[1-9][0-9]*)$/u.test(value)) {
     throw new VoiceHttpError(400, "INVALID_FRAME", "PCM numeric header is malformed");
   }
   const parsed = Number(value);
@@ -592,7 +632,12 @@ function parseStrictNonnegativeInteger(value: string): number {
 
 function parseHeaderFiniteNumber(request: IncomingMessage, name: string): number {
   const value = headerValue(request, name);
-  if (value === undefined || !/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/u.test(value)) {
+  if (
+    value === undefined
+    || value.length === 0
+    || value.length > 32
+    || !/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/u.test(value)
+  ) {
     throw new VoiceHttpError(400, "INVALID_FRAME", `Invalid ${name} header`);
   }
   const parsed = Number(value);
@@ -604,7 +649,11 @@ function parseHeaderFiniteNumber(request: IncomingMessage, name: string): number
 
 async function readBody(request: IncomingMessage, maximumBytes: number): Promise<string> {
   const bytes = await readBinaryBody(request, maximumBytes);
-  return Buffer.from(bytes).toString("utf8");
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new VoiceHttpError(400, "INVALID_CONTROL", "Voice control body is not valid UTF-8");
+  }
 }
 
 async function readBinaryBody(
@@ -639,6 +688,9 @@ function headerValue(request: IncomingMessage, name: string): string | undefined
 }
 
 function constantTimeEquals(received: string, expected: string): boolean {
+  if (received.length > MAX_CLIENT_TOKEN_CHARACTERS || received.length !== expected.length) {
+    return false;
+  }
   const left = Buffer.from(received, "utf8");
   const right = Buffer.from(expected, "utf8");
   return left.length === right.length && timingSafeEqual(left, right);
@@ -653,16 +705,18 @@ function allowedPreflightMethod(rawUrl: string | undefined): "GET" | "POST" | un
   ) {
     return "POST";
   }
-  if (rawUrl === undefined || rawUrl.includes("?") || rawUrl.includes("#")) return undefined;
+  if (
+    rawUrl === undefined
+    || rawUrl.includes("?")
+    || rawUrl.includes("#")
+    || !rawUrl.startsWith(VOICE_AUDIO_PREFIX)
+  ) return undefined;
   const encodedRef = rawUrl.slice(VOICE_AUDIO_PREFIX.length);
-  if (!rawUrl.startsWith(VOICE_AUDIO_PREFIX) || encodedRef.length === 0) return undefined;
-  let audioRef: string;
-  try {
-    audioRef = decodeURIComponent(encodedRef);
-  } catch {
-    return undefined;
-  }
-  return AUDIO_REF_PATTERN.test(audioRef) ? "GET" : undefined;
+  if (
+    encodedRef.length !== 73
+    || !/^audio_v1_[0-9a-f]{64}$/u.test(encodedRef)
+  ) return undefined;
+  return "GET";
 }
 
 function assertValidPreflight(
@@ -675,7 +729,14 @@ function assertValidPreflight(
   }
   const requestedHeaders = headerValue(request, "access-control-request-headers");
   if (requestedHeaders === undefined || requestedHeaders.trim().length === 0) return;
-  for (const header of requestedHeaders.split(",")) {
+  if (requestedHeaders.length > 1_024) {
+    throw new VoiceHttpError(400, "INVALID_PREFLIGHT", "Voice preflight header list exceeds its bound");
+  }
+  const headers = requestedHeaders.split(",");
+  if (headers.length > ALLOWED_REQUEST_HEADERS.size) {
+    throw new VoiceHttpError(400, "INVALID_PREFLIGHT", "Voice preflight requested too many headers");
+  }
+  for (const header of headers) {
     const normalized = header.trim().toLowerCase();
     if (normalized.length === 0 || !ALLOWED_REQUEST_HEADERS.has(normalized)) {
       throw new VoiceHttpError(400, "INVALID_PREFLIGHT", "Voice preflight requested an unsupported header");
