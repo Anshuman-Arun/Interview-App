@@ -835,16 +835,18 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       next = { ...state, problemStateRevision: event.payload.problemStateRevision, contextEpoch: event.payload.contextEpoch };
       break;
     case "SESSION_COMPLETED": {
+      const legacyUninitializedQuant = isLegacyUninitializedQuantState(state);
       const isQuantSession =
         state.configuration?.mode === "QUANT_TRADING"
         || state.configuration?.mode === "QUANT_RESEARCH"
         || state.quantTrading !== undefined
         || state.quantResearch !== undefined;
-      if (isQuantSession && state.status !== "ACTIVE") {
+      if (isQuantSession && !legacyUninitializedQuant && state.status !== "ACTIVE") {
         throw new Error("Quant sessions can complete only from active state");
       }
       if (
         isQuantSession
+        && !legacyUninitializedQuant
         && (
           Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")
           || Object.values(state.utterances).some((utterance) => utterance.status === "CAPTURING")
@@ -853,7 +855,8 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         throw new Error("Quant sessions cannot complete with unresolved candidate input");
       }
       if (
-        (
+        !legacyUninitializedQuant
+        && (
           state.configuration?.mode === "QUANT_TRADING"
           || state.quantTrading !== undefined
         )
@@ -862,7 +865,8 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
         throw new Error("Quant Trading sessions complete only after deterministic scenario completion");
       }
       if (
-        (
+        !legacyUninitializedQuant
+        && (
           state.configuration?.mode === "QUANT_RESEARCH"
           || state.quantResearch !== undefined
         )
@@ -886,6 +890,7 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
           || state.quantTrading !== undefined
           || state.quantResearch !== undefined
         )
+        && !isLegacyUninitializedQuantState(state)
         && state.status !== "COMPLETED"
       ) {
         throw new Error("Quant sessions can be archived only after deterministic session completion");
@@ -902,6 +907,13 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       break;
   }
   return { ...next, sequence: event.sequence, eventIds: [...next.eventIds, event.eventId] };
+}
+
+function isLegacyUninitializedQuantState(state: Readonly<SessionState>): boolean {
+  if (!state.started || state.problem !== undefined) return false;
+  if (state.quantTrading !== undefined || state.quantResearch !== undefined) return false;
+  return state.configuration?.mode === "QUANT_TRADING"
+    || state.configuration?.mode === "QUANT_RESEARCH";
 }
 
 export function replaySession(sessionId: SessionState["sessionId"], events: readonly SessionEvent[]): SessionState {
