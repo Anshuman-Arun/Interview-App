@@ -46,6 +46,20 @@ switch (mode) {
       process.exit(0);
     });
     break;
+  case "write-forever":
+    collectStdin(() => {
+      const target = args[0] === "stderr" ? process.stderr : process.stdout;
+      const chunk = Buffer.alloc(4_096, args[0] === "stderr" ? 0x65 : 0x78);
+      const writeMore = () => {
+        while (target.write(chunk)) {
+          // Keep filling until backpressure; resume from drain.
+        }
+      };
+      target.on("drain", writeMore);
+      writeMore();
+      setInterval(() => undefined, 1_000);
+    });
+    break;
   case "huge-stderr":
     collectStdin(() => {
       process.stderr.write("e".repeat(Number(args[0] ?? 100_000)));
