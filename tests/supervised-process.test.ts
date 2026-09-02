@@ -187,6 +187,7 @@ describe("supervised one-shot process execution", () => {
     const firstPayload = JSON.parse(first.stdout) as {
       readonly home: string;
       readonly cwd: string;
+      readonly temp: string;
       readonly configuredContent: string;
       readonly mutationExisted: boolean;
     };
@@ -198,6 +199,9 @@ describe("supervised one-shot process execution", () => {
     expect(secondPayload.mutationExisted).toBe(false);
     expect(firstPayload.home).not.toBe(secondPayload.home);
     expect(firstPayload.cwd).not.toBe(secondPayload.cwd);
+    expect(firstPayload.temp).toContain(firstPayload.home);
+    expect(secondPayload.temp).toContain(secondPayload.home);
+    expect(firstPayload.temp).not.toBe(secondPayload.temp);
     expect(existsSync(firstPayload.home)).toBe(false);
     expect(existsSync(secondPayload.home)).toBe(false);
     expect(existsSync(firstPayload.cwd)).toBe(false);
