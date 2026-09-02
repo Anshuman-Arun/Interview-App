@@ -9,6 +9,8 @@ import {
   type TurnId
 } from "../../../packages/domain/src/index.js";
 import {
+  SpeechSampleRateSchema,
+  SpeechStreamIdSchema,
   SpeechWorkerEventSchema,
   type SpeechWorkerEvent
 } from "../../../packages/local-compute/src/index.js";
@@ -20,6 +22,22 @@ const FAILED_OPEN_CANCEL_TIMEOUT_MS = 1_000;
 const MAX_WAV_ASSET_BYTES = 8 * 1024 * 1024;
 const TARGET_SPEECH_SAMPLE_RATE = 48_000 as const;
 const AUDIO_REF_PATTERN = /^audio_v1_[0-9a-f]{64}$/u;
+
+const VoiceOpenResponseSchema = z.object({
+  protocolVersion: z.literal(1),
+  ok: z.literal(true),
+  type: z.literal("VOICE_STREAM_OPENED"),
+  sessionId: SessionIdSchema,
+  streamId: SpeechStreamIdSchema,
+  sampleRate: SpeechSampleRateSchema
+}).strict();
+
+const VoiceCancelResponseSchema = z.object({
+  protocolVersion: z.literal(1),
+  ok: z.literal(true),
+  type: z.literal("VOICE_STREAM_CANCELLED"),
+  streamId: SpeechStreamIdSchema
+}).strict();
 
 const VoiceCommitSchema = z.object({
   inputEpisodeId: InputEpisodeIdSchema,
@@ -134,12 +152,19 @@ export class BrowserVoiceClient {
     const sessionId = SessionIdSchema.parse(sessionIdInput);
     const streamId = `speech_stream_${globalThis.crypto.randomUUID()}`;
     try {
-      await this.requestJson("/v1/voice/streams", {
+      const opened = VoiceOpenResponseSchema.parse(await this.requestJson("/v1/voice/streams", {
         protocolVersion: 1,
         sessionId,
         streamId,
         sampleRate: TARGET_SPEECH_SAMPLE_RATE
-      }, signal);
+      }, signal));
+      if (
+        opened.sessionId !== sessionId
+        || opened.streamId !== streamId
+        || opened.sampleRate !== TARGET_SPEECH_SAMPLE_RATE
+      ) {
+        throw new Error("Voice stream-open response did not match the admitted request");
+      }
       return new BrowserVoiceStream(this, sessionId, streamId);
     } catch (error) {
       // The server may have accepted the stream even if the success response
@@ -263,12 +288,15 @@ export class BrowserVoiceClient {
     streamId: string,
     signal?: AbortSignal
   ): Promise<void> {
-    await this.requestJson("/v1/voice/cancel", {
+    const cancelled = VoiceCancelResponseSchema.parse(await this.requestJson("/v1/voice/cancel", {
       protocolVersion: 1,
       sessionId,
       streamId,
       requestId: `request_${globalThis.crypto.randomUUID()}`
-    }, signal);
+    }, signal));
+    if (cancelled.streamId !== streamId) {
+      throw new Error("Voice stream-cancel response did not match the admitted request");
+    }
   }
 
   private async bestEffortCancelFailedOpen(
