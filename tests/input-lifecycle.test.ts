@@ -89,7 +89,7 @@ describe("utterance and multimodal InputEpisode lifecycle", () => {
       await expect(turns.finalizeUtterance({
         utteranceId,
         text: "late transcript"
-      })).rejects.toThrow(/active session/u);
+      })).rejects.toThrow(/Cannot finalize utterance in status COMPLETED/u);
 
       await turns.discardUtterance(utteranceId, "late worker cleanup after completion");
       expect(writer.getState().utterances[utteranceId]?.status).toBe("DISCARDED");
