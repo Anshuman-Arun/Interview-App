@@ -581,6 +581,7 @@ export interface KokoroRuntimeSession {
   readonly supportedLanguages: readonly TtsLanguage[];
   readonly supportedSampleRates: readonly TtsSampleRate[];
   synthesize(input: {
+    readonly requestId: TtsSynthesizeRequest["requestId"];
     readonly text: string;
     readonly voice: string;
     readonly speed: number;
@@ -761,6 +762,7 @@ export class KokoroSpeechSynthesizer implements SpeechSynthesizer {
     }
     try {
       return await this.runtimeSynthesize({
+        requestId: request.requestId,
         text: request.text,
         voice: request.voice,
         speed: request.speed,
