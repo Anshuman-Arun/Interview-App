@@ -30,8 +30,10 @@ public static class InterviewJobSupervisor
     private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
     private const int JobObjectExtendedLimitInformation = 9;
     private const uint CREATE_SUSPENDED = 0x00000004;
+    private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
     private const uint CREATE_NO_WINDOW = 0x08000000;
     private const uint STARTF_USESTDHANDLES = 0x00000100;
+    private const int PROC_THREAD_ATTRIBUTE_HANDLE_LIST = 0x00020002;
     private const uint HANDLE_FLAG_INHERIT = 0x00000001;
     private const uint INFINITE = 0xFFFFFFFF;
     private const uint WAIT_OBJECT_0 = 0x00000000;
@@ -99,6 +101,13 @@ public static class InterviewJobSupervisor
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct STARTUPINFOEX
+    {
+        public STARTUPINFO StartupInfo;
+        public IntPtr lpAttributeList;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct PROCESS_INFORMATION
     {
         public IntPtr hProcess;
@@ -130,8 +139,28 @@ public static class InterviewJobSupervisor
         uint creationFlags,
         IntPtr environment,
         string currentDirectory,
-        ref STARTUPINFO startupInfo,
+        ref STARTUPINFOEX startupInfo,
         out PROCESS_INFORMATION processInformation);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool InitializeProcThreadAttributeList(
+        IntPtr attributeList,
+        int attributeCount,
+        int flags,
+        ref IntPtr size);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool UpdateProcThreadAttribute(
+        IntPtr attributeList,
+        uint flags,
+        IntPtr attribute,
+        IntPtr value,
+        IntPtr size,
+        IntPtr previousValue,
+        IntPtr returnSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern void DeleteProcThreadAttributeList(IntPtr attributeList);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint ResumeThread(IntPtr thread);
@@ -289,30 +318,74 @@ public static class InterviewJobSupervisor
             RequireInheritable(stdout);
             RequireInheritable(stderr);
 
-            var startup = new STARTUPINFO();
-            startup.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFO));
-            startup.dwFlags = STARTF_USESTDHANDLES;
-            startup.hStdInput = stdin;
-            startup.hStdOutput = stdout;
-            startup.hStdError = stderr;
+            var startup = new STARTUPINFOEX();
+            startup.StartupInfo.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFOEX));
+            startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+            startup.StartupInfo.hStdInput = stdin;
+            startup.StartupInfo.hStdOutput = stdout;
+            startup.StartupInfo.hStdError = stderr;
 
-            PROCESS_INFORMATION info;
-            if (!CreateProcessW(
-                executable,
-                CommandLine(executable, arguments ?? new string[0]),
-                IntPtr.Zero,
-                IntPtr.Zero,
-                true,
-                CREATE_SUSPENDED | CREATE_NO_WINDOW,
-                IntPtr.Zero,
-                String.IsNullOrEmpty(currentDirectory) ? null : currentDirectory,
-                ref startup,
-                out info))
-            {
+            IntPtr attributeSize = IntPtr.Zero;
+            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref attributeSize);
+            if (attributeSize == IntPtr.Zero)
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+
+            startup.lpAttributeList = Marshal.AllocHGlobal(attributeSize);
+            IntPtr handleList = Marshal.AllocHGlobal(IntPtr.Size * 3);
+            try
+            {
+                if (!InitializeProcThreadAttributeList(
+                    startup.lpAttributeList,
+                    1,
+                    0,
+                    ref attributeSize))
+                {
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                }
+
+                Marshal.WriteIntPtr(handleList, 0 * IntPtr.Size, stdin);
+                Marshal.WriteIntPtr(handleList, 1 * IntPtr.Size, stdout);
+                Marshal.WriteIntPtr(handleList, 2 * IntPtr.Size, stderr);
+
+                if (!UpdateProcThreadAttribute(
+                    startup.lpAttributeList,
+                    0,
+                    new IntPtr(PROC_THREAD_ATTRIBUTE_HANDLE_LIST),
+                    handleList,
+                    new IntPtr(IntPtr.Size * 3),
+                    IntPtr.Zero,
+                    IntPtr.Zero))
+                {
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                }
+
+                PROCESS_INFORMATION info;
+                if (!CreateProcessW(
+                    executable,
+                    CommandLine(executable, arguments ?? new string[0]),
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    true,
+                    CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
+                    IntPtr.Zero,
+                    String.IsNullOrEmpty(currentDirectory) ? null : currentDirectory,
+                    ref startup,
+                    out info))
+                {
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                }
+                process = info.hProcess;
+                thread = info.hThread;
             }
-            process = info.hProcess;
-            thread = info.hThread;
+            finally
+            {
+                if (startup.lpAttributeList != IntPtr.Zero)
+                {
+                    DeleteProcThreadAttributeList(startup.lpAttributeList);
+                    Marshal.FreeHGlobal(startup.lpAttributeList);
+                }
+                Marshal.FreeHGlobal(handleList);
+            }
 
             if (!AssignProcessToJobObject(job, process))
             {
