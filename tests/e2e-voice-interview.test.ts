@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   newRequestId,
@@ -99,6 +100,24 @@ class ControlledAudioElement implements BrowserAudioElementLike {
 
   public emit(type: "playing" | "ended" | "error"): void {
     for (const listener of [...(this.listeners.get(type) ?? [])]) listener();
+  }
+}
+
+class CountingShutdownSpeechWorker extends SpeechWorkerCore {
+  public shutdownCalls = 0;
+
+  public override shutdown(): Promise<void> {
+    this.shutdownCalls += 1;
+    return super.shutdown();
+  }
+}
+
+class CountingShutdownTtsWorker extends TtsWorkerCore {
+  public shutdownCalls = 0;
+
+  public override async shutdown(): Promise<void> {
+    this.shutdownCalls += 1;
+    await super.shutdown();
   }
 }
 
@@ -451,6 +470,59 @@ describe("voice input, TTS delivery, and authoritative barge-in", () => {
     if (server !== undefined) {
       await server.stop();
       server = undefined;
+    }
+  });
+
+  it("shuts down owned voice workers when server startup fails", async () => {
+    const blocker = createServer();
+    await new Promise<void>((resolve, reject) => {
+      blocker.once("error", reject);
+      blocker.listen({ host: "127.0.0.1", port: 0, exclusive: true }, () => {
+        blocker.off("error", reject);
+        resolve();
+      });
+    });
+    const address = blocker.address();
+    if (address === null || typeof address === "string") {
+      blocker.close();
+      throw new Error("Failed to reserve a loopback port for startup-failure coverage");
+    }
+
+    const speechWorker = new CountingShutdownSpeechWorker({
+      vadBackend: new ScriptedVadBackend([0]),
+      recognizer: new DeterministicFakeRecognizer()
+    });
+    const ttsWorker = new CountingShutdownTtsWorker(
+      new DeterministicFakeSpeechSynthesizer()
+    );
+
+    try {
+      await expect(createAndStartServer({
+        host: "127.0.0.1",
+        commandPort: address.port,
+        rendererStreamPort: 0,
+        voicePort: 0,
+        clientToken: TEST_CLIENT_TOKEN,
+        allowedOrigins: [TEST_ORIGIN],
+        databasePath: ":memory:",
+        voiceRuntime: {
+          speechWorker,
+          tts: {
+            worker: ttsWorker,
+            voice: "fake-neutral",
+            language: "en-US",
+            sampleRate: 24_000,
+            speed: 1
+          }
+        }
+      })).rejects.toBeDefined();
+
+      expect(speechWorker.shutdownCalls).toBe(1);
+      expect(ttsWorker.shutdownCalls).toBe(1);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        blocker.close((error) => error === undefined ? resolve() : reject(error));
+      });
     }
   });
 
