@@ -225,8 +225,13 @@ function snapshotVoiceTtsRuntimeConfiguration(
   const parsedVoice = TtsVoiceSchema.parse(voice);
   const parsedLanguage = TtsLanguageSchema.parse(language);
   const parsedSampleRate = TtsSampleRateSchema.parse(sampleRate);
-  const parsedSpeed = speed === undefined ? 1 : Number(speed);
-  if (!Number.isFinite(parsedSpeed) || parsedSpeed < 0.5 || parsedSpeed > 2) {
+  const parsedSpeed = speed === undefined ? 1 : speed;
+  if (
+    typeof parsedSpeed !== "number"
+    || !Number.isFinite(parsedSpeed)
+    || parsedSpeed < 0.5
+    || parsedSpeed > 2
+  ) {
     throw new Error("Voice TTS speed is outside the supported range");
   }
   return Object.freeze({
