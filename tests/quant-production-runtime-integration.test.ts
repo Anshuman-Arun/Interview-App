@@ -1926,6 +1926,14 @@ describe("adversarial quant lifecycle invariants", () => {
         informedFlowCount: result.roundsCompleted,
         noiseFlowCount: result.roundsCompleted
       }).success).toBe(false);
+      expect(QuantTradingResultEventSchema.safeParse({
+        ...result,
+        riskBreaches: [{
+          round: result.plannedRounds + 1,
+          source: "FAIR_VALUE_UPDATE",
+          reason: "forged future breach"
+        }]
+      }).success).toBe(false);
     } finally {
       await writer.close();
       store.close();
