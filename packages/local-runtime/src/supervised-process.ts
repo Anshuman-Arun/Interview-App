@@ -1155,49 +1155,52 @@ function tryInspectExecutableSync(
   }
 }
 
-async function sha256Executable(
-  executable: string,
-  signal: AbortSignal | undefined
-): Promise<string> {
-  if (signal?.aborted) {
-    throw new SupervisedProcessError("EXECUTION_CANCELLED");
-  }
+async function sha256Executable(executable: string): Promise<string> {
   const hash = createHash("sha256");
   const stream = createReadStream(executable);
-  const onAbort = (): void => {
-    stream.destroy();
-  };
-  signal?.addEventListener("abort", onAbort, { once: true });
   try {
     for await (const chunk of stream) {
-      if (signal?.aborted) {
-        throw new SupervisedProcessError("EXECUTION_CANCELLED");
-      }
       const chunkValue: unknown = chunk;
       if (!Buffer.isBuffer(chunkValue)) {
         throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
       }
       hash.update(chunkValue);
     }
-    if (signal?.aborted) {
-      throw new SupervisedProcessError("EXECUTION_CANCELLED");
-    }
     return hash.digest("hex");
   } catch (error) {
-    if (
-      error instanceof SupervisedProcessError
-      && error.code === "EXECUTION_CANCELLED"
-    ) {
-      throw error;
-    }
-    if (signal?.aborted) {
-      throw new SupervisedProcessError("EXECUTION_CANCELLED");
-    }
+    if (error instanceof SupervisedProcessError) throw error;
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
   } finally {
-    signal?.removeEventListener("abort", onAbort);
     stream.destroy();
   }
+}
+
+function waitForOperationOrAbort(
+  operation: Promise<void>,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  if (signal === undefined) return operation;
+  if (signal.aborted) {
+    return Promise.reject(new SupervisedProcessError("EXECUTION_CANCELLED"));
+  }
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (error?: unknown): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      if (error === undefined) resolve();
+      else reject(error);
+    };
+    const onAbort = (): void => {
+      finish(new SupervisedProcessError("EXECUTION_CANCELLED"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    void operation.then(
+      () => finish(),
+      (error: unknown) => finish(error)
+    );
+  });
 }
 
 function windowsCommandLineWithinBudget(
