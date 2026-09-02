@@ -1170,4 +1170,65 @@ describe("interview session transition authority", () => {
     rendered.container.remove();
   });
 
+  it("converges stale recovery directly to terminal summary without issuing RESUME_SESSION", async () => {
+    const sessionId = newSessionId();
+    let resumeCalls = 0;
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") throw new Error("Command body must be JSON text");
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (typeof command.requestId !== "string") throw new Error("Command requestId is missing");
+
+      if (command.type === "GET_SESSION_SUMMARY") {
+        return jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSION_SUMMARY",
+          sessionId,
+          sequence: 4,
+          started: true,
+          status: "COMPLETED",
+          contextEpoch: 2,
+          deliveryStatuses: {},
+          history: []
+        });
+      }
+      if (command.type === "RESUME_SESSION") {
+        resumeCalls += 1;
+      }
+      throw new Error(`Unexpected command type: ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    let recoveredStatus: Awaited<ReturnType<UseInterviewSessionResult["recoverSession"]>>;
+    await act(async () => {
+      recoveredStatus = await rendered.current().recoverSession(sessionId);
+    });
+
+    expect(recoveredStatus!).toBe("COMPLETED");
+    expect(resumeCalls).toBe(0);
+    expect(rendered.current().sessionId).toBe(sessionId);
+    expect(rendered.current().sessionStatus).toBe("COMPLETED");
+    expect(rendered.current().isSessionStarted).toBe(true);
+    expect(rendered.current().sequence).toBe(4);
+    expect(rendered.current().contextEpoch).toBe(2);
+
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
 });
