@@ -164,6 +164,102 @@ export const QuantTradingPublicStateSchema = z.object({
       message: "Quant Trading completion metrics must exist only for terminal state"
     });
   }
+  if (value.currentRound > value.plannedRounds) {
+    context.addIssue({
+      code: "custom",
+      path: ["currentRound"],
+      message: "Quant Trading current round cannot exceed planned rounds"
+    });
+  }
+  if (value.marketUpdates.some((update) => update.round !== value.currentRound)) {
+    context.addIssue({
+      code: "custom",
+      path: ["marketUpdates"],
+      message: "Current Quant Trading market updates must belong to the current round"
+    });
+  }
+  if (
+    value.quoteRequest !== undefined
+    && (
+      value.quoteRequest.round !== value.currentRound
+      || value.quoteRequest.fairValue !== value.fairValue
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["quoteRequest"],
+      message: "Quant Trading quote request must match current public round and fair value"
+    });
+  }
+  if (value.lastRound !== undefined && value.lastRound.round > value.currentRound) {
+    context.addIssue({
+      code: "custom",
+      path: ["lastRound"],
+      message: "Quant Trading last resolved round cannot be in the future"
+    });
+  }
+  if (
+    active
+    && (
+      (value.currentRound === 1) !== (value.lastRound === undefined)
+      || (
+        value.lastRound !== undefined
+        && value.lastRound.round !== value.currentRound - 1
+      )
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["lastRound"],
+      message: "Active Quant Trading state must expose the immediately preceding resolved round"
+    });
+  }
+  if (value.completion !== undefined) {
+    const expectedCompletionStatus = value.status === "COMPLETED"
+      ? "COMPLETED"
+      : "RISK_STOPPED";
+    if (
+      value.completion.completionStatus !== expectedCompletionStatus
+      || value.completion.plannedRounds !== value.plannedRounds
+      || value.completion.roundsCompleted > value.plannedRounds
+      || value.completion.completionRate
+        !== value.completion.roundsCompleted / value.completion.plannedRounds
+      || value.completion.tradeCount !== value.portfolio.tradeCount
+      || value.lastRound?.round !== value.completion.roundsCompleted
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["completion"],
+        message: "Quant Trading completion metrics do not match terminal public state"
+      });
+    }
+    if (
+      value.status === "COMPLETED"
+      && (
+        value.currentRound !== value.plannedRounds
+        || value.completion.roundsCompleted !== value.plannedRounds
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["completion"],
+        message: "Completed Quant Trading state must resolve every planned round"
+      });
+    }
+    if (
+      value.status === "RISK_STOPPED"
+      && (
+        value.currentRound < value.completion.roundsCompleted
+        || value.currentRound > value.completion.roundsCompleted + 1
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["currentRound"],
+        message: "Risk-stopped Quant Trading state has inconsistent round progress"
+      });
+    }
+  }
 });
 export type QuantTradingPublicState = z.infer<typeof QuantTradingPublicStateSchema>;
 
@@ -197,5 +293,13 @@ export const QuantResearchPublicStateSchema = z.object({
   }).strict()).max(128),
   acceptedActionCount: NonnegativeSafeIntegerSchema.max(64),
   actionLimit: PositiveSafeIntegerSchema.max(64)
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.acceptedActionCount > value.actionLimit) {
+    context.addIssue({
+      code: "custom",
+      path: ["acceptedActionCount"],
+      message: "Quant Research accepted action count cannot exceed its action limit"
+    });
+  }
+});
 export type QuantResearchPublicState = z.infer<typeof QuantResearchPublicStateSchema>;
