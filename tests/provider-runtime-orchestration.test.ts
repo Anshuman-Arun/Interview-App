@@ -73,7 +73,9 @@ describe("production provider runtime resolution", () => {
       configurationSource: {
         async resolveConfiguration() {
           enteredResolution?.();
-          return await new Promise<never>(() => undefined);
+          return await new Promise<never>(() => {
+            // Intentionally never resolves; shutdown must detach from this source.
+          });
         }
       }
     });
