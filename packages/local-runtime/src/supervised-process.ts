@@ -260,11 +260,17 @@ export class SupervisedProcessRunner {
   private async drainActiveOperations(): Promise<void> {
     if (this.containmentCompromised || this.quarantinedExecutableIds.size !== 0) {
       for (const controller of this.activeControllers) controller.abort();
-      await Promise.allSettled([...this.activeOperations]);
+      await Promise.allSettled([
+        ...this.activeOperations,
+        ...this.identityInitializations.values()
+      ]);
       throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
     }
     for (const controller of this.activeControllers) controller.abort();
-    const operations = [...this.activeOperations];
+    const operations = [
+      ...this.activeOperations,
+      ...this.identityInitializations.values()
+    ];
     const results = await Promise.allSettled(operations);
     if (
       this.quarantinedExecutableIds.size !== 0
