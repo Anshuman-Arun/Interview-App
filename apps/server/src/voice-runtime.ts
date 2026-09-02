@@ -772,6 +772,7 @@ export class VoiceInputCoordinator {
       throw new Error("Speech worker emitted an invalid or excessive event batch");
     }
     const validatedEvents = events.map((event) => SpeechWorkerEventSchema.parse(event));
+    const admittedEvents: SpeechWorkerEvent[] = [];
     let commit: VoiceInputCommit | undefined;
     let terminal = false;
 
@@ -780,6 +781,7 @@ export class VoiceInputCoordinator {
       if (event.streamId !== context.streamId) {
         throw new Error("Speech worker callback escaped its bound stream");
       }
+      admittedEvents.push(event);
 
       if (event.type === "SPEECH_STARTED") {
         if (context.authoritativeUtteranceId !== undefined) {
@@ -914,7 +916,7 @@ export class VoiceInputCoordinator {
     }
 
     return {
-      events: validatedEvents,
+      events: admittedEvents,
       terminal,
       ...(commit === undefined ? {} : { commit })
     };
