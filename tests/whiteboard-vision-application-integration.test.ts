@@ -19,6 +19,7 @@ import {
   type VisionInferenceBackend
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
+import { createValidatedImageSnapshot } from "../packages/vision/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
   SessionRecoveryCoordinator
@@ -505,6 +506,71 @@ describe("application whiteboard vision integration", () => {
         .toBe("ACCEPTED");
     } finally {
       coordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("terminally discards a recovered pending request when its board basis became stale", async () => {
+    const harness = await startedBoardSession();
+    const request = upload(harness.sessionId);
+    const encodedBytes = Buffer.from(request.pngBase64, "base64");
+    const snapshot = createValidatedImageSnapshot({
+      snapshotId: request.snapshotId,
+      sourceType: "WHITEBOARD_SNAPSHOT",
+      sourceRevision: request.sourceBoardRevision,
+      capturedAtMs: request.capturedAtMs,
+      mimeType: "image/png",
+      declaredWidth: request.declaredWidth,
+      declaredHeight: request.declaredHeight,
+      encodedBytes
+    });
+    await harness.turns.requestVision(
+      request.region.regionId,
+      request.region.relevantShapeIds,
+      {
+        visionRequestId: request.requestId,
+        snapshotBasis: {
+          snapshotId: request.snapshotId,
+          snapshotHash: snapshot.metadata.contentDigest,
+          preprocessingVersion: "whiteboard-snapshot-v1",
+          sourceBoardRevision: request.sourceBoardRevision
+        },
+        relevantShapeRevisions: request.relevantShapeRevisions,
+        regionBounds: request.region.bounds,
+        requestedObservationKind: request.requestedObservationKind
+      }
+    );
+    expect(harness.writer.getState().visionRequests[request.requestId]?.status)
+      .toBe("PENDING");
+
+    await harness.turns.commitBoardMutation({
+      baseBoardRevision: BoardRevisionSchema.parse(1),
+      added: [],
+      updated: [{
+        beforeRevision: 1,
+        shape: graphShape(2, 20)
+      }],
+      deleted: []
+    });
+
+    const backend = new DeterministicFakeVisionBackend([]);
+    const restarted = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend
+    });
+    try {
+      const result = await restarted.process(request);
+      expect(result).toMatchObject({
+        status: "REJECTED",
+        reason: "STALE_BOARD"
+      });
+      expect(backend.analyzeCallCount).toBe(0);
+      expect(harness.writer.getState().visionRequests[request.requestId]).toMatchObject({
+        status: "DISCARDED",
+        discardReason: "STALE_BOARD"
+      });
+    } finally {
+      restarted.shutdown();
       harness.store.close();
     }
   });
