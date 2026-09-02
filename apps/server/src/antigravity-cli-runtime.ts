@@ -1,6 +1,3 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import process from "node:process";
 import type { ProviderSelectionReference } from "../../../packages/domain/src/index.js";
 import {
@@ -35,31 +32,28 @@ export interface ApplicationProviderAdapterRuntimeSource {
 }
 
 export function createApplicationProviderAdapterRuntimeSource(): ApplicationProviderAdapterRuntimeSource {
-  const executable = defaultAntigravityCliExecutablePath();
+  const runner = new SupervisedProcessRunner([{
+    id: ANTIGRAVITY_EXECUTABLE_ID,
+    executable: defaultAntigravityCliExecutablePath(),
+    environment: antigravityEnvironment(),
+    isolatedWorkingDirectory: true,
+    isolatedHomeFiles: {
+      ".gemini/antigravity-cli/settings.json": ANTIGRAVITY_SAFE_SETTINGS_JSON
+    }
+  }]);
 
   const executor: SupervisedCliExecutor = Object.freeze({
     execute: async (request: SupervisedCliExecutionRequest) => {
-      const profile = await createIsolatedAntigravityProfile();
-      try {
-        const runner = new SupervisedProcessRunner([{
-          id: ANTIGRAVITY_EXECUTABLE_ID,
-          executable,
-          environment: antigravityEnvironment(profile),
-          isolatedWorkingDirectory: true
-        }]);
-        return await runner.execute({
-          executableId: ANTIGRAVITY_EXECUTABLE_ID,
-          args: request.args,
-          stdin: request.stdin,
-          timeoutMs: request.timeoutMs,
-          maxStdoutBytes: request.maxStdoutBytes,
-          maxStderrBytes: request.maxStderrBytes,
-          signal: request.signal,
-          onProcessStart: request.onProcessStart
-        });
-      } finally {
-        await rm(profile, { recursive: true, force: true }).catch(() => undefined);
-      }
+      return await runner.execute({
+        executableId: ANTIGRAVITY_EXECUTABLE_ID,
+        args: request.args,
+        stdin: request.stdin,
+        timeoutMs: request.timeoutMs,
+        maxStdoutBytes: request.maxStdoutBytes,
+        maxStderrBytes: request.maxStderrBytes,
+        signal: request.signal,
+        onProcessStart: request.onProcessStart
+      });
     }
   });
   const runtime = Object.freeze({ executor });
@@ -77,40 +71,7 @@ export function createApplicationProviderAdapterRuntimeSource(): ApplicationProv
   });
 }
 
-async function createIsolatedAntigravityProfile(): Promise<string> {
-  const profile = await mkdtemp(path.join(tmpdir(), "interview-antigravity-profile-"));
-  try {
-    if (process.platform !== "win32") {
-      await chmod(profile, 0o700);
-    }
-    const settingsDirectory = path.join(
-      profile,
-      ".gemini",
-      "antigravity-cli"
-    );
-    await mkdir(settingsDirectory, {
-      recursive: true,
-      ...(process.platform === "win32" ? {} : { mode: 0o700 })
-    });
-    await writeFile(
-      path.join(settingsDirectory, "settings.json"),
-      ANTIGRAVITY_SAFE_SETTINGS_JSON,
-      {
-        encoding: "utf8",
-        flag: "wx",
-        ...(process.platform === "win32" ? {} : { mode: 0o600 })
-      }
-    );
-    return profile;
-  } catch {
-    await rm(profile, { recursive: true, force: true }).catch(() => undefined);
-    throw new Error("Antigravity isolated runtime profile could not be prepared");
-  }
-}
-
-function antigravityEnvironment(
-  isolatedProfile: string
-): {
+function antigravityEnvironment(): {
   readonly inherit: readonly string[];
   readonly values: Readonly<Record<string, string>>;
 } {
@@ -118,9 +79,6 @@ function antigravityEnvironment(
     return Object.freeze({
       inherit: Object.freeze(["USERNAME"]),
       values: Object.freeze({
-        USERPROFILE: isolatedProfile,
-        APPDATA: path.join(isolatedProfile, "AppData", "Roaming"),
-        LOCALAPPDATA: path.join(isolatedProfile, "AppData", "Local"),
         AGY_CLI_DISABLE_AUTO_UPDATE: "true"
       })
     });
@@ -134,10 +92,6 @@ function antigravityEnvironment(
       "XDG_RUNTIME_DIR"
     ]),
     values: Object.freeze({
-      HOME: isolatedProfile,
-      XDG_CONFIG_HOME: path.join(isolatedProfile, ".config"),
-      XDG_DATA_HOME: path.join(isolatedProfile, ".local", "share"),
-      XDG_CACHE_HOME: path.join(isolatedProfile, ".cache"),
       AGY_CLI_DISABLE_AUTO_UPDATE: "true"
     })
   });
