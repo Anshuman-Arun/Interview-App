@@ -569,6 +569,7 @@ export class LoopbackCommandServer {
           writer,
           composition,
           command.action,
+          command.expectedRound,
           envelope
         );
         if (writer.getState().status === "COMPLETED") {
