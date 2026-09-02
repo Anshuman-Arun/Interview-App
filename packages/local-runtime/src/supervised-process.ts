@@ -272,12 +272,12 @@ export class SupervisedProcessRunner {
     const operation = this.executeSnapshot(trackedRequest);
     this.activeOperations.add(operation);
 
+    let interruptionError =
+      new SupervisedProcessError("EXECUTION_CANCELLED");
     const deadlineTimer = setTimeout(() => {
       interruptionError = new SupervisedProcessError("EXECUTION_TIMEOUT");
       controller.abort(interruptionError);
     }, request.timeoutMs);
-    let interruptionError =
-      new SupervisedProcessError("EXECUTION_CANCELLED");
     let removeInterruptListener = (): void => undefined;
     const interrupted = new Promise<never>((_resolve, reject) => {
       const onInterrupt = (): void => {
