@@ -210,19 +210,42 @@ export class ProviderCoordinator {
     },
     context: unknown
   ): Promise<ProviderGenerationOutcome> {
-    const stream = record.session?.sendTurn({
-      context,
-      generationId: record.generationId
-    });
-    if (stream === undefined) {
-      await this.supersedeIfPossible(record.generationId, "Provider returned no proposal");
-      return failed(record.generationId, "NO_PROPOSAL", "NO_PROPOSAL");
-    }
+    let iterator: AsyncIterator<unknown> | undefined;
+    let nextOperation: (() => Promise<IteratorResult<unknown>>) | undefined;
+    let returnOperation: ((value?: unknown) => Promise<IteratorResult<unknown>>) | undefined;
 
-    const iterator = stream[Symbol.asyncIterator]();
     try {
+      const stream = record.session?.sendTurn({
+        context,
+        generationId: record.generationId
+      });
+      if (stream === undefined) {
+        await this.supersedeIfPossible(record.generationId, "Provider returned no proposal");
+        return failed(record.generationId, "NO_PROPOSAL", "NO_PROPOSAL");
+      }
+
+      const iteratorCandidate = stream[Symbol.asyncIterator]();
+      if (typeof iteratorCandidate !== "object" || iteratorCandidate === null) {
+        throw new Error("Provider stream iterator is malformed");
+      }
+      iterator = iteratorCandidate as AsyncIterator<unknown>;
+
+      const rawNext: unknown = iterator.next;
+      const rawReturn: unknown = iterator.return;
+      if (typeof rawNext !== "function") {
+        throw new Error("Provider stream iterator next operation is malformed");
+      }
+      nextOperation = () => Reflect.apply(rawNext, iterator, []) as Promise<IteratorResult<unknown>>;
+      if (rawReturn !== undefined) {
+        if (typeof rawReturn !== "function") {
+          throw new Error("Provider stream iterator return operation is malformed");
+        }
+        returnOperation = (value?: unknown) =>
+          Reflect.apply(rawReturn, iterator, [value]) as Promise<IteratorResult<unknown>>;
+      }
+
       while (true) {
-        const next = Promise.resolve(iterator.next()).then(
+        const next = Promise.resolve(nextOperation()).then(
           (result) => ({ kind: "NEXT" as const, result }),
           (error: unknown) => ({ kind: "ERROR" as const, error })
         );
@@ -232,7 +255,7 @@ export class ProviderCoordinator {
         ]);
 
         if (raced.kind === "CANCELLED") {
-          this.requestIteratorReturn(iterator);
+          this.requestIteratorReturn(returnOperation);
           return this.finishCancellation(record);
         }
         if (raced.kind === "ERROR") {
@@ -249,7 +272,7 @@ export class ProviderCoordinator {
         if (raced.result.done === true) break;
 
         if (this.cancellationRequested(record.generationId)) {
-          this.requestIteratorReturn(iterator);
+          this.requestIteratorReturn(returnOperation);
           return this.finishCancellation(record);
         }
 
@@ -330,11 +353,11 @@ export class ProviderCoordinator {
   }
 
   private requestIteratorReturn(
-    iterator: AsyncIterator<unknown>
+    returnOperation: ((value?: unknown) => Promise<IteratorResult<unknown>>) | undefined
   ): void {
-    if (iterator.return === undefined) return;
+    if (returnOperation === undefined) return;
     try {
-      void Promise.resolve(iterator.return()).catch(() => undefined);
+      void Promise.resolve(returnOperation()).catch(() => undefined);
     } catch {
       // Iterator cleanup is best effort after authoritative cancellation.
     }
