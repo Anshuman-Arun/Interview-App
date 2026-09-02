@@ -781,13 +781,15 @@ export class VoiceInputCoordinator {
       if (event.streamId !== context.streamId) {
         throw new Error("Speech worker callback escaped its bound stream");
       }
-      admittedEvents.push(event);
 
       if (event.type === "SPEECH_STARTED") {
         if (context.authoritativeUtteranceId !== undefined) {
           if (context.workerUtteranceId !== event.utteranceId) {
             throw new Error("Speech worker changed utterance identity after onset");
           }
+          // Duplicate worker onset for the already-admitted utterance does not
+          // create a second authority transition and must not trigger a second
+          // physical browser barge-in.
           continue;
         }
         const writer = this.sessions.getWriter(context.sessionId);
@@ -813,6 +815,7 @@ export class VoiceInputCoordinator {
         // weakening the supersession state written by beginUtterance().
         void this.synthesis.cancelSession(context.sessionId).catch(() => undefined);
         this.assets.pruneUnauthorizedSessionAssets(context.sessionId, writer.getState());
+        admittedEvents.push(event);
         continue;
       }
 
@@ -827,6 +830,7 @@ export class VoiceInputCoordinator {
         await this.discardCapturingUtterance(context, `Speech worker discarded utterance: ${event.reason}`);
         terminal = true;
         await this.terminateContext(context);
+        admittedEvents.push(event);
         continue;
       }
 
@@ -844,6 +848,7 @@ export class VoiceInputCoordinator {
         context.finalizedBasis = basis;
         context.pcmLedger = [];
         context.pcmLedgerBytes = 0;
+        admittedEvents.push(event);
         continue;
       }
 
@@ -861,6 +866,7 @@ export class VoiceInputCoordinator {
           await this.discardCapturingUtterance(context, "Speech recognizer returned an empty transcript");
           terminal = true;
           await this.terminateContext(context);
+          admittedEvents.push(event);
           continue;
         }
 
@@ -905,6 +911,7 @@ export class VoiceInputCoordinator {
         });
         terminal = true;
         await this.terminateContext(context);
+        admittedEvents.push(event);
         continue;
       }
 
@@ -912,6 +919,7 @@ export class VoiceInputCoordinator {
         await this.discardCapturingUtterance(context, "Speech worker failed before a committed transcript");
         terminal = true;
         await this.terminateContext(context);
+        admittedEvents.push(event);
       }
     }
 
