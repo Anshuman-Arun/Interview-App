@@ -570,7 +570,8 @@ export class VoiceInputCoordinator {
     private readonly orchestrator: ServerTurnOrchestrator,
     private readonly speechWorker: SpeechWorkerCore,
     private readonly assets: EphemeralAudioAssetStore,
-    private readonly synthesis: VoiceSynthesisCoordinator
+    private readonly synthesis: VoiceSynthesisCoordinator,
+    private readonly interruptPhysicalPlayback?: (sessionId: SessionId) => void
   ) {}
 
   public async openStream(
@@ -810,6 +811,16 @@ export class VoiceInputCoordinator {
         const authoritativeUtteranceId = await new TurnCoordinator(writer).beginUtterance();
         context.workerUtteranceId = event.utteranceId;
         context.authoritativeUtteranceId = authoritativeUtteranceId;
+        // beginUtterance() has already invalidated stale delivery authority.
+        // Interrupt through the renderer transport independently of this PCM
+        // request's response so a dropped response cannot leave old audio
+        // physically playing.
+        try {
+          this.interruptPhysicalPlayback?.(context.sessionId);
+        } catch {
+          // Physical interruption is best-effort. Never roll back or obscure
+          // the authoritative transition if renderer teardown itself fails.
+        }
         if (!this.isCurrent(context, token)) {
           await this.discardCapturingUtterance(
             context,
