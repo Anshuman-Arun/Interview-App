@@ -57,6 +57,12 @@ export const App: React.FC = () => {
   const { route, navigate } = useProductNavigation();
 
   const [inputUrl, setInputUrl] = useState(session.baseUrl);
+  const recoverySessionParse = SessionIdSchema.safeParse(recoverySessionInput.trim());
+  const recoverySessionId = recoverySessionParse.success
+    ? recoverySessionParse.data
+    : null;
+  const recoverySessionInputInvalid =
+    recoverySessionInput.trim().length > 0 && recoverySessionId === null;
 
   useEffect(() => {
     setInputUrl(session.baseUrl);
@@ -179,15 +185,14 @@ export const App: React.FC = () => {
   const handleManualRecover = async (e: React.SyntheticEvent): Promise<void> => {
     e.preventDefault();
     if (
-      !recoverySessionInput.trim()
+      recoverySessionId === null
       || sessionEntryPendingRef.current
       || sessionTerminalPendingRef.current
     ) return;
     sessionEntryPendingRef.current = true;
     setSessionEntryPending(true);
     try {
-      const parsed = SessionIdSchema.parse(recoverySessionInput.trim());
-      await session.recoverSession(parsed);
+      await session.recoverSession(recoverySessionId);
       setShowSessionsModal(false);
       navigate({ page: "interview" });
     } catch {
@@ -492,10 +497,15 @@ export const App: React.FC = () => {
       {/* Sessions Management Modal */}
       {showSessionsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden border border-slate-200">
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden border border-slate-200"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stored-sessions-title"
+          >
             <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                <span className="text-base font-bold text-slate-900">Stored Interview Sessions</span>
+                <span id="stored-sessions-title" className="text-base font-bold text-slate-900">Stored Interview Sessions</span>
                 <span className="text-xs text-slate-500 font-mono">
                   ({session.availableSessions.length})
                 </span>
@@ -504,6 +514,7 @@ export const App: React.FC = () => {
                 type="button"
                 onClick={() => setShowSessionsModal(false)}
                 className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+                aria-label="Close stored sessions"
               >
                 ✕
               </button>
@@ -709,7 +720,10 @@ export const App: React.FC = () => {
           type="button"
           role="tab"
           aria-selected={compactPane === "whiteboard"}
-          onClick={() => setCompactPane("whiteboard")}
+          onClick={() => {
+            setActiveTab("whiteboard");
+            setCompactPane("whiteboard");
+          }}
         >
           Whiteboard
         </button>
@@ -765,14 +779,20 @@ export const App: React.FC = () => {
                   <input
                     type="text"
                     value={recoverySessionInput}
-                    disabled={sessionEntryPending}
+                    disabled={sessionEntryPending || sessionTerminalPending}
                     onChange={(e) => setRecoverySessionInput(e.target.value)}
+                    aria-invalid={recoverySessionInputInvalid}
+                    title={recoverySessionInputInvalid ? "Enter a valid session ID" : undefined}
                     placeholder="session_..."
                     className="w-28 px-2 py-1 text-xs border border-indigo-200 rounded bg-white font-mono"
                   />
                   <button
                     type="submit"
-                    disabled={sessionEntryPending}
+                    disabled={
+                      sessionEntryPending
+                      || sessionTerminalPending
+                      || recoverySessionId === null
+                    }
                     className="px-2.5 py-1 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 text-xs font-medium rounded"
                   >
                     {sessionEntryPending ? "Opening…" : "Recover"}
@@ -803,7 +823,7 @@ export const App: React.FC = () => {
             />
             <StudentInputArea
               onSubmit={(text) => session.submitTypedInput(text)}
-              disabled={!session.isSessionStarted || session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"}
+              disabled={!session.isSessionStarted || session.sessionStatus !== "ACTIVE"}
               placeholder={
                 session.sessionStatus === "COMPLETED" || session.sessionStatus === "ARCHIVED"
                   ? `Session is ${session.sessionStatus.toLowerCase()}. Reasoning input is closed.`
