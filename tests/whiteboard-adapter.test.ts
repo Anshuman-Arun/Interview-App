@@ -67,6 +67,32 @@ describe("TldrawWhiteboardAdapter & AI Overlay Subsystem", () => {
       expect(studentShape.meta?.["shapeRevision"]).toBe(1);
     });
 
+    it("resets all mounted shapes and the local revision for a genuinely new session", async () => {
+      const editor = new InMemoryTldrawEditor();
+      const adapter = new TldrawWhiteboardAdapter(editor);
+
+      adapter.createStudentShape({
+        type: "geo",
+        x: 10,
+        y: 10,
+        props: { text: "old-session work" }
+      });
+      await adapter.applyAiOverlayAction({
+        operation: "write_text",
+        layer: "AI_ANNOTATION",
+        content: "old hint",
+        annotationPurpose: "old-session annotation"
+      });
+      expect(adapter.getBoardRevision()).toBeGreaterThan(0);
+      expect(editor.getCurrentPageShapes().length).toBeGreaterThan(0);
+
+      adapter.resetForNewSession();
+
+      expect(editor.getCurrentPageShapes()).toEqual([]);
+      expect(adapter.getBoardRevision()).toBe(0);
+      expect(adapter.getNormalizedStudentShapes()).toEqual([]);
+    });
+
     it("increments shapeRevision when updating student shapes", () => {
       const editor = new InMemoryTldrawEditor();
       const adapter = new TldrawWhiteboardAdapter(editor);
