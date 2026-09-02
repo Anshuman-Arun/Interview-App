@@ -1,7 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
+  authoritativeBoardShapeCanonicalJson,
   ClientCommandSchema,
   MAX_WHITEBOARD_VISION_BASE64_LENGTH,
   ProtocolErrorResponseSchema,
@@ -460,7 +461,13 @@ export class LoopbackCommandServer {
           boardRevision: state.boardRevision,
           shapeAuthorityKnown: state.boardShapeAuthorityKnown,
           shapeRevisions: Object.values(state.boardShapes)
-            .map((shape) => ({ shapeId: shape.id, revision: shape.revision }))
+            .map((shape) => ({
+              shapeId: shape.id,
+              revision: shape.revision,
+              contentSha256: createHash("sha256")
+                .update(authoritativeBoardShapeCanonicalJson(shape), "utf8")
+                .digest("hex")
+            }))
             .sort((left, right) => left.shapeId.localeCompare(right.shapeId))
         };
       }

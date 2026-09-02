@@ -3,6 +3,7 @@ import {
   MAX_BOARD_MUTATION_SHAPES,
   NormalizedBoardMutationSchema,
   RequestIdSchema,
+  authoritativeBoardShapeCanonicalJson,
   type AuthoritativeStudentShape,
   type BoardRevision,
   type NormalizedBoardMutation,
@@ -107,7 +108,10 @@ export class AuthoritativeBoardSyncCoordinator {
       return this.failClosed("Recovered board shape authority is unavailable");
     }
 
-    if (this.pending.length > 0 && shapesMatch(localShapes, state.shapeRevisions)) {
+    if (
+      this.pending.length > 0
+      && await shapesMatch(localShapes, state.shapeRevisions)
+    ) {
       this.authoritativeRevision = state.boardRevision;
       this.pending.splice(0).forEach((entry) => entry.resolve());
       this.status = "SYNCED";
@@ -119,7 +123,7 @@ export class AuthoritativeBoardSyncCoordinator {
       return this.failClosed("Authoritative state changed while whiteboard mutations were pending");
     }
 
-    if (shapesMatch(localShapes, state.shapeRevisions)) {
+    if (await shapesMatch(localShapes, state.shapeRevisions)) {
       this.authoritativeRevision = state.boardRevision;
       this.status = "SYNCED";
       this.reason = undefined;
@@ -132,7 +136,7 @@ export class AuthoritativeBoardSyncCoordinator {
       );
     }
 
-    const remoteSubset = authoritativeSubsetOfLocal(
+    const remoteSubset = await authoritativeSubsetOfLocal(
       state.shapeRevisions,
       localShapes
     );
@@ -310,18 +314,26 @@ function toAuthoritativeShape(shape: StudentShape): AuthoritativeStudentShape {
   };
 }
 
-function shapesMatch(
+async function shapesMatch(
   localShapes: readonly StudentShape[],
-  remote: readonly { readonly shapeId: string; readonly revision: number }[]
-): boolean {
+  remote: readonly {
+    readonly shapeId: string;
+    readonly revision: number;
+    readonly contentSha256: string;
+  }[]
+): Promise<boolean> {
   if (localShapes.length !== remote.length) return false;
-  const local = localShapes
-    .map((shape) => ({ shapeId: shape.id, revision: shape.revision }))
-    .sort((left, right) => left.shapeId.localeCompare(right.shapeId));
+  const local = await Promise.all(localShapes.map(async (shape) => ({
+    shapeId: shape.id,
+    revision: shape.revision,
+    contentSha256: await shapeContentSha256(shape)
+  })));
+  local.sort((left, right) => left.shapeId.localeCompare(right.shapeId));
   for (let index = 0; index < local.length; index += 1) {
     if (
       local[index]?.shapeId !== remote[index]?.shapeId
       || local[index]?.revision !== remote[index]?.revision
+      || local[index]?.contentSha256 !== remote[index]?.contentSha256
     ) return false;
   }
   return true;
@@ -338,16 +350,39 @@ function rememberFingerprint(recent: string[], fingerprint: string): void {
   while (recent.length > MAX_RECENT_FINGERPRINTS) recent.shift();
 }
 
-function authoritativeSubsetOfLocal(
-  remote: readonly { readonly shapeId: string; readonly revision: number }[],
+async function authoritativeSubsetOfLocal(
+  remote: readonly {
+    readonly shapeId: string;
+    readonly revision: number;
+    readonly contentSha256: string;
+  }[],
   localShapes: readonly StudentShape[]
-): boolean {
+): Promise<boolean> {
   if (remote.length > localShapes.length) return false;
-  const localById = new Map(localShapes.map((shape) => [
+  const localEntries = await Promise.all(localShapes.map(async (shape) => [
     shape.id,
-    shape.revision
+    {
+      revision: shape.revision,
+      contentSha256: await shapeContentSha256(shape)
+    }
   ] as const));
-  return remote.every((entry) =>
-    localById.get(entry.shapeId) === entry.revision
+  const localById = new Map(localEntries);
+  return remote.every((entry) => {
+    const local = localById.get(entry.shapeId);
+    return local?.revision === entry.revision
+      && local.contentSha256 === entry.contentSha256;
+  });
+}
+
+async function shapeContentSha256(shape: StudentShape): Promise<string> {
+  if (globalThis.crypto?.subtle === undefined) {
+    throw new Error("Web Crypto is required for authoritative whiteboard synchronization");
+  }
+  const payload = new TextEncoder().encode(
+    authoritativeBoardShapeCanonicalJson(toAuthoritativeShape(shape))
   );
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", payload);
+  return Array.from(new Uint8Array(digest), (value) =>
+    value.toString(16).padStart(2, "0")
+  ).join("");
 }

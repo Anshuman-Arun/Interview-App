@@ -262,7 +262,8 @@ export const BoardStateResponseSchema = ResponseBaseSchema.extend({
     revision: z.number().refine(
       (value) => Number.isSafeInteger(value) && value >= 1,
       { message: "Shape revision must be a positive safe integer" }
-    )
+    ),
+    contentSha256: z.string().regex(/^[0-9a-f]{64}$/u)
   }).strict()).max(MAX_AUTHORITATIVE_BOARD_SHAPES)
 }).strict().superRefine((response, context) => {
   const ids = response.shapeRevisions.map((entry) => entry.shapeId);
