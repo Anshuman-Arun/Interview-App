@@ -501,8 +501,9 @@ export function useInterviewSession(
         }
       };
 
+      const whiteboardAdapter = options.whiteboardAdapter;
       const whiteboardPresenter: WhiteboardPresenter | undefined =
-        options.whiteboardAdapter === undefined
+        whiteboardAdapter === undefined
           ? undefined
           : {
               presentWhiteboard: async (action, deliveryId) => {
@@ -516,7 +517,7 @@ export function useInterviewSession(
                     "Whiteboard canvas is not bound to current authoritative state"
                   );
                 }
-                await options.whiteboardAdapter?.presentWhiteboard(action, deliveryId);
+                await whiteboardAdapter.presentWhiteboard(action, deliveryId);
               }
             };
 
