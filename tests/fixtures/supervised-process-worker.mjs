@@ -69,7 +69,12 @@ switch (mode) {
           ? process.env.TEMP
           : process.env.TMPDIR,
         configuredContent: readFileSync(target, "utf8"),
-        mutationExisted: existsSync(marker)
+        mutationExisted: existsSync(marker),
+        supervisorVariablesExisted:
+          process.env.INTERVIEW_SUPERVISED_CONFIG !== undefined
+          || process.env.INTERVIEW_SUPERVISED_BOOTSTRAP !== undefined,
+        powershellModulePathExisted:
+          process.env.PSModulePath !== undefined
       };
       writeFileSync(marker, "created", "utf8");
       process.stdout.write(JSON.stringify(payload), () => process.exit(0));
