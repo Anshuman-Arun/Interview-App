@@ -66,6 +66,8 @@ export interface ProviderGenerationExecution {
 interface ExecutionRecord {
   readonly generationId: GenerationId;
   readonly proposalRequestId: RequestId;
+  readonly cancellationSignal: Promise<void>;
+  readonly signalCancellation: () => void;
   session?: ProviderExecutionSession;
   cancellation?: Promise<ProviderCancellationReport | undefined>;
 }
@@ -96,9 +98,18 @@ export class ProviderCoordinator {
     const providerName = ProviderNameSchema.parse(input.provider.name);
     const proposalRequestId = RequestIdSchema.parse(input.proposalRequestId ?? newRequestId());
     const started = await this.turns.startGeneration(input.inputEpisodeId, input.turnId, providerName);
+    let signalCancellation: (() => void) | undefined;
+    const cancellationSignal = new Promise<void>((resolve) => {
+      signalCancellation = resolve;
+    });
+    if (signalCancellation === undefined) {
+      throw new Error("Cancellation signal initialization failed");
+    }
     const record: ExecutionRecord = {
       generationId: started.generationId,
-      proposalRequestId
+      proposalRequestId,
+      cancellationSignal,
+      signalCancellation
     };
     this.executions.set(started.generationId, record);
     const completion = this.run(record, input).finally(() => {
@@ -119,7 +130,10 @@ export class ProviderCoordinator {
   ): Promise<ProviderCancellationReport | undefined> {
     const parsedGenerationId = GenerationIdSchema.parse(generationId);
     const record = this.executions.get(parsedGenerationId);
-    if (record !== undefined) this.cancellationRequests.add(parsedGenerationId);
+    if (record !== undefined) {
+      this.cancellationRequests.add(parsedGenerationId);
+      record.signalCancellation();
+    }
     const normalizedReason = normalizeReason(reason);
     await this.supersedeIfPossible(parsedGenerationId, normalizedReason);
     await this.cancelQueuedDeliveries(parsedGenerationId, normalizedReason);
@@ -173,7 +187,14 @@ export class ProviderCoordinator {
         outcome = await this.consumeOneProposal(record, input, compilation.value.context);
       }
     } finally {
-      await session.close().catch(() => undefined);
+      if (this.cancellationRequested(record.generationId)) {
+        // Authoritative cancellation must not wait for a provider that ignores
+        // or hangs during close. The guarded session still receives a best-effort
+        // close request, but application progress is independent of acknowledgement.
+        void session.close().catch(() => undefined);
+      } else {
+        await session.close().catch(() => undefined);
+      }
     }
     if (this.cancellationRequested(record.generationId)) {
       outcome = await this.finishCancellation(record);
@@ -189,16 +210,60 @@ export class ProviderCoordinator {
     },
     context: unknown
   ): Promise<ProviderGenerationOutcome> {
+    const stream = record.session?.sendTurn({
+      context,
+      generationId: record.generationId
+    });
+    if (stream === undefined) {
+      await this.supersedeIfPossible(record.generationId, "Provider returned no proposal");
+      return failed(record.generationId, "NO_PROPOSAL", "NO_PROPOSAL");
+    }
+
+    const iterator = stream[Symbol.asyncIterator]();
     try {
-      for await (const proposal of record.session?.sendTurn({ context, generationId: record.generationId }) ?? []) {
-        if (this.cancellationRequested(record.generationId)) {
-          return await this.finishCancellation(record);
+      while (true) {
+        const next = Promise.resolve(iterator.next()).then(
+          (result) => ({ kind: "NEXT" as const, result }),
+          (error: unknown) => ({ kind: "ERROR" as const, error })
+        );
+        const raced = await Promise.race([
+          next,
+          record.cancellationSignal.then(() => ({ kind: "CANCELLED" as const }))
+        ]);
+
+        if (raced.kind === "CANCELLED") {
+          this.requestIteratorReturn(iterator);
+          return this.finishCancellation(record);
         }
+        if (raced.kind === "ERROR") {
+          if (this.cancellationRequested(record.generationId)) {
+            return this.finishCancellation(record);
+          }
+          await this.supersedeIfPossible(record.generationId, "Provider stream failed");
+          return failed(
+            record.generationId,
+            "PROVIDER_STREAM",
+            safeProviderFailureCode(raced.error)
+          );
+        }
+        if (raced.result.done === true) break;
+
+        if (this.cancellationRequested(record.generationId)) {
+          this.requestIteratorReturn(iterator);
+          return this.finishCancellation(record);
+        }
+
+        const proposal = raced.result.value;
         const state = this.writer.getState();
         const generation = state.generations[record.generationId];
         if (generation === undefined) {
-          return { status: "REJECTED", generationId: record.generationId, reason: "Unknown generation" };
+          return {
+            status: "REJECTED",
+            generationId: record.generationId,
+            reason: "Unknown generation"
+          };
         }
+
         let result;
         try {
           result = await this.turns.processProposal({
@@ -207,7 +272,9 @@ export class ProviderCoordinator {
               producer: generation.provider,
               requestId: record.proposalRequestId,
               generationId: record.generationId,
-              ...(generation.basis.inputEpisodeId === undefined ? {} : { inputEpisodeId: generation.basis.inputEpisodeId }),
+              ...(generation.basis.inputEpisodeId === undefined
+                ? {}
+                : { inputEpisodeId: generation.basis.inputEpisodeId }),
               turnId: generation.basis.turnId,
               contextEpoch: generation.basis.contextEpoch,
               sourceRevision: generation.basis.committedInputSequence
@@ -218,13 +285,21 @@ export class ProviderCoordinator {
           });
         } catch {
           if (this.cancellationRequested(record.generationId)) {
-            return await this.finishCancellation(record);
+            return this.finishCancellation(record);
           }
-          await this.supersedeIfPossible(record.generationId, "Provider proposal admission failed");
-          return failed(record.generationId, "PROPOSAL_ADMISSION", "PROPOSAL_ADMISSION_FAILED");
+          await this.supersedeIfPossible(
+            record.generationId,
+            "Provider proposal admission failed"
+          );
+          return failed(
+            record.generationId,
+            "PROPOSAL_ADMISSION",
+            "PROPOSAL_ADMISSION_FAILED"
+          );
         }
+
         if (this.cancellationRequested(record.generationId)) {
-          return await this.finishCancellation(record);
+          return this.finishCancellation(record);
         }
         if (!result.accepted) {
           return {
@@ -254,6 +329,17 @@ export class ProviderCoordinator {
     return failed(record.generationId, "NO_PROPOSAL", "NO_PROPOSAL");
   }
 
+  private requestIteratorReturn(
+    iterator: AsyncIterator<unknown>
+  ): void {
+    if (iterator.return === undefined) return;
+    try {
+      void Promise.resolve(iterator.return()).catch(() => undefined);
+    } catch {
+      // Iterator cleanup is best effort after authoritative cancellation.
+    }
+  }
+
   private async cancelProvider(record: ExecutionRecord): Promise<ProviderCancellationReport | undefined> {
     if (record.session === undefined) return undefined;
     record.cancellation ??= record.session.cancelTurn(record.generationId).catch(() => undefined);
@@ -263,7 +349,11 @@ export class ProviderCoordinator {
   private async finishCancellation(record: ExecutionRecord): Promise<ProviderGenerationOutcome> {
     await this.supersedeIfPossible(record.generationId, "Generation execution was cancelled");
     await this.cancelQueuedDeliveries(record.generationId, "Generation cancelled before exposure");
-    return cancelled(record.generationId, await this.cancelProvider(record));
+    // Provider acknowledgement is optional evidence, never an authority gate.
+    // cancelGeneration() callers may await the report separately; generation
+    // completion does not wait for an uncooperative provider.
+    void this.cancelProvider(record);
+    return cancelled(record.generationId);
   }
 
   private cancellationRequested(generationId: GenerationId): boolean {
