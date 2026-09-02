@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  EvidenceProposalSchema,
   MAX_VISION_REGION_SHAPES,
   MAX_WHITEBOARD_VISION_DIMENSION,
   MAX_WHITEBOARD_VISION_PIXELS,
@@ -170,18 +171,27 @@ export class WhiteboardVisionCoordinator {
     }
 
     if (state.status !== "ACTIVE") {
+      if (persistedRequest?.status === "PENDING") {
+        await turn.discardVisionRequest(upload.requestId, "SESSION_NOT_ACTIVE");
+      }
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
         "SESSION_NOT_ACTIVE"
       ));
     }
     if (!state.boardShapeAuthorityKnown) {
+      if (persistedRequest?.status === "PENDING") {
+        await turn.discardVisionRequest(upload.requestId, "BOARD_AUTHORITY_UNKNOWN");
+      }
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
         "BOARD_AUTHORITY_UNKNOWN"
       ));
     }
     if (state.boardRevision !== upload.sourceBoardRevision) {
+      if (persistedRequest?.status === "PENDING") {
+        await turn.discardVisionRequest(upload.requestId, "STALE_BOARD");
+      }
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
         "STALE_BOARD"
@@ -197,6 +207,9 @@ export class WhiteboardVisionCoordinator {
       || authoritativeShapeIds.length > MAX_VISION_REGION_SHAPES
       || !sameStringSet(authoritativeShapeIds, upload.region.relevantShapeIds)
     ) {
+      if (persistedRequest?.status === "PENDING") {
+        await turn.discardVisionRequest(upload.requestId, "REGION_MISMATCH");
+      }
       return this.remember(upload.requestId, fingerprint, rejected(
         upload,
         "REGION_MISMATCH"
@@ -205,6 +218,9 @@ export class WhiteboardVisionCoordinator {
     for (const binding of upload.relevantShapeRevisions) {
       const current = state.boardShapes[binding.shapeId];
       if (current === undefined || current.revision !== binding.expectedRevision) {
+        if (persistedRequest?.status === "PENDING") {
+          await turn.discardVisionRequest(upload.requestId, "STALE_SHAPE");
+        }
         return this.remember(upload.requestId, fingerprint, rejected(
           upload,
           "STALE_SHAPE"
@@ -222,17 +238,37 @@ export class WhiteboardVisionCoordinator {
         ));
       }
     }
-    const requested = await turn.requestVision(
-      upload.region.regionId,
-      authoritativeShapeIds,
-      {
-        visionRequestId: upload.requestId,
-        snapshotBasis,
-        relevantShapeRevisions: upload.relevantShapeRevisions,
-        regionBounds: upload.region.bounds,
-        requestedObservationKind: upload.requestedObservationKind
+    let requested;
+    try {
+      requested = await turn.requestVision(
+        upload.region.regionId,
+        authoritativeShapeIds,
+        {
+          visionRequestId: upload.requestId,
+          snapshotBasis,
+          relevantShapeRevisions: upload.relevantShapeRevisions,
+          regionBounds: upload.region.bounds,
+          requestedObservationKind: upload.requestedObservationKind
+        }
+      );
+    } catch (error) {
+      const latest = writer.getState();
+      if (!latest.boardShapeAuthorityKnown) {
+        return this.remember(
+          upload.requestId,
+          fingerprint,
+          rejected(upload, "BOARD_AUTHORITY_UNKNOWN")
+        );
       }
-    );
+      if (latest.boardRevision !== upload.sourceBoardRevision) {
+        return this.remember(
+          upload.requestId,
+          fingerprint,
+          rejected(upload, "STALE_BOARD")
+        );
+      }
+      throw error;
+    }
     if (requested.sourceBoardRevision !== upload.sourceBoardRevision) {
       await turn.discardVisionRequest(upload.requestId, "STALE_BOARD");
       return this.remember(upload.requestId, fingerprint, rejected(
@@ -319,11 +355,20 @@ export class WhiteboardVisionCoordinator {
       && evidenceEventId !== undefined
       && problemId !== undefined
     ) {
-      const proposal = this.evidenceInterpreter.propose({
-        observation: accepted,
-        problemId,
-        evidenceEventId
-      });
+      let proposal;
+      try {
+        const candidate = this.evidenceInterpreter.propose({
+          observation: accepted,
+          problemId,
+          evidenceEventId
+        });
+        if (candidate !== undefined) {
+          const parsed = EvidenceProposalSchema.safeParse(candidate);
+          if (parsed.success) proposal = parsed.data;
+        }
+      } catch {
+        proposal = undefined;
+      }
       if (proposal !== undefined) {
         const evidenceResult = await turn.processEvidenceProposal({
           envelope: createCommandEnvelope({
