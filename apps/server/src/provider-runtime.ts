@@ -272,7 +272,7 @@ async function invokeRuntimeSource(
     operation.operation,
     operation.receiver,
     [selection]
-  ) as unknown;
+  );
 }
 
 function snapshotProviderSelection(
