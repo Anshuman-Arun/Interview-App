@@ -50,7 +50,7 @@ const REPLAY_FILTERS: readonly {
   { value: "RECOVERY", label: "Recovery" }
 ];
 
-function failureMessage(reason: GroundedReadFailureReason): string {
+export function failureMessage(reason: GroundedReadFailureReason): string {
   switch (reason) {
     case "SESSION_NOT_TERMINAL":
       return "Grounded evaluation is available after the session is completed or archived.";
