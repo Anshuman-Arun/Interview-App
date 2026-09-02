@@ -161,9 +161,6 @@ export interface ReplayQuantTradingDetail {
   readonly version?: string;
   readonly round?: number;
   readonly actionType?: "QUOTE" | "PASS";
-  readonly fillCount?: number;
-  readonly riskBreached?: boolean;
-  readonly completionStatus?: "COMPLETED" | "RISK_STOPPED";
   readonly roundsCompleted?: number;
   readonly specializedValidationRequired: true;
 }
