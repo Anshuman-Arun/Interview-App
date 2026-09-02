@@ -574,6 +574,34 @@ describe("desktop local model runtime", () => {
     expect(runtime.getStatus("speech-recycle-reset").state).toBe("READY");
   }, 20_000);
 
+  it("does not reset uncertain recycle budget after a request-level 4xx", async () => {
+    const token = "8".repeat(64);
+    const runtime = fixtureManager(
+      "speech-recycle-4xx",
+      "speech",
+      "fixture-speech-1",
+      token
+    );
+    await runtime.start("speech-recycle-4xx");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-recycle-4xx",
+      "speech",
+      token
+    );
+
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    await expect(client.postJson("/v1/tts", {
+      requestId: "not-a-speech-request"
+    })).rejects.toMatchObject({ statusCode: 404 });
+
+    await client.recycleAfterUncertainRequest(client.workerInstanceIdentity());
+    await expect(
+      client.recycleAfterUncertainRequest(client.workerInstanceIdentity())
+    ).rejects.toBeInstanceOf(ManagedWorkerRecoveryExhaustedError);
+    expect(runtime.getStatus("speech-recycle-4xx").state).toBe("STOPPED");
+  }, 20_000);
+
   it("does not respawn a timed-out model worker after desktop lifecycle abort", async () => {
     const token = "5".repeat(64);
     const runtime = fixtureManager("speech-timeout-shutdown", "speech", "fixture-speech-1", token);
