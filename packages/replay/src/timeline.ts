@@ -237,7 +237,6 @@ function entryForKnownEvent(
         version: event.payload.result.version,
         completionStatus: event.payload.result.completionStatus,
         roundsCompleted: event.payload.result.roundsCompleted,
-        objectiveScore: event.payload.result.objectiveScore,
         specializedValidationRequired: true
       };
       break;
