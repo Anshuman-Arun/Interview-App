@@ -818,6 +818,23 @@ describe("VisionRequestManager cancellation, idempotency, and resource bounds", 
       contentDigest: snapshotHash
     };
 
+    let oversizedRead = false;
+    const oversized = await manager.submit(req, backend, {
+      metadata: {
+        ...metadata,
+        byteSize: 64 * 1024 * 1024 + 1
+      },
+      readBytes: () => {
+        oversizedRead = true;
+        return expectedBytes;
+      }
+    });
+    expect(oversized).toMatchObject({
+      accepted: false,
+      reason: "SNAPSHOT_MISMATCH"
+    });
+    expect(oversizedRead).toBe(false);
+
     const spoofed = await manager.submit(req, backend, {
       metadata,
       readBytes: () => Uint8Array.from([9, 9, 9, 9, 9, 9])

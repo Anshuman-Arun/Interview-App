@@ -39,7 +39,7 @@ UNKNOWN never becomes fresh.
 
 ## Backend seam
 
-VisionInferenceBackend exposes bounded application-owned provenance plus analyze(request, executionOptions). executionOptions always carries AbortSignal and may carry an ephemeral validated imagePayload whose digest is bound to request.snapshotBasis.snapshotHash. AbortSignal is a cancellation request only; the application does not claim that provider compute stopped.
+VisionInferenceBackend exposes bounded application-owned provenance plus analyze(request, executionOptions). executionOptions always carries AbortSignal and may carry an ephemeral validated imagePayload whose actual bytes are SHA-256 checked against request.snapshotBasis.snapshotHash before backend execution. Execution payload metadata is also capped at the preprocessing hard envelope (64 MiB encoded bytes, 16384 px per dimension, 64 MiPixels) before bytes are copied, and the backend receives a defensive snapshot rather than the caller-owned buffer. AbortSignal is a cancellation request only; the application does not claim that provider compute stopped.
 
 DeterministicFakeVisionBackend is provided for tests. No Gemini, local model, provider-control-plane, or OCR wiring is included.
 

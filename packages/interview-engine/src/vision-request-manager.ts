@@ -25,6 +25,10 @@ import type {
   VisionInferenceImagePayload
 } from "./vision-inference.js";
 
+const MAX_INFERENCE_IMAGE_BYTES = 64 * 1024 * 1024;
+const MAX_INFERENCE_IMAGE_DIMENSION = 16_384;
+const MAX_INFERENCE_IMAGE_PIXELS = 64 * 1024 * 1024;
+
 const ManagerOptionsSchema = z.object({
   maxInFlight: z.number().int().positive().max(64).default(8),
   maxTombstones: z.number().int().positive().max(128).default(64),
@@ -119,13 +123,21 @@ function prepareImagePayloadForExecution(
       mimeType !== "image/png"
       || !Number.isSafeInteger(width)
       || width <= 0
+      || width > MAX_INFERENCE_IMAGE_DIMENSION
       || !Number.isSafeInteger(height)
       || height <= 0
+      || height > MAX_INFERENCE_IMAGE_DIMENSION
       || !Number.isSafeInteger(byteSize)
       || byteSize <= 0
+      || byteSize > MAX_INFERENCE_IMAGE_BYTES
       || contentDigest !== request.snapshotBasis.snapshotHash
       || typeof readBytes !== "function"
     ) {
+      return undefined;
+    }
+
+    const pixels = width * height;
+    if (!Number.isSafeInteger(pixels) || pixels > MAX_INFERENCE_IMAGE_PIXELS) {
       return undefined;
     }
 
