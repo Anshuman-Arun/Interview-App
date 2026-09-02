@@ -743,6 +743,12 @@ describe("application whiteboard vision integration", () => {
       confidence: 0.95,
       relevantShapeIds: ["shape:graph-model"]
     }]);
+    let turnRecoverySawEvidence = false;
+    harness.sessions.setTurnRecoveryDelegate({
+      recoverPendingTurns: async () => {
+        turnRecoverySawEvidence = Object.keys(harness.writer.getState().studentEvidence).length === 1;
+      }
+    });
     const resumedCoordinator = new WhiteboardVisionCoordinator({
       sessions: harness.sessions,
       backend,
@@ -752,12 +758,8 @@ describe("application whiteboard vision integration", () => {
       }
     });
     try {
-      const resumed = await resumedCoordinator.process(request);
-      expect(resumed).toMatchObject({
-        status: "ACCEPTED",
-        observationCount: 1,
-        evidenceCommittedCount: 1
-      });
+      await harness.sessions.ensureRecovered(harness.sessionId);
+      expect(turnRecoverySawEvidence).toBe(true);
       expect(backend.analyzeCallCount).toBe(0);
       expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
         .toMatchObject({
@@ -765,6 +767,14 @@ describe("application whiteboard vision integration", () => {
           decision: "PROPOSAL",
           interpreterFingerprint: acceptedFingerprint
         });
+
+      const resumed = await resumedCoordinator.process(request);
+      expect(resumed).toMatchObject({
+        status: "ACCEPTED",
+        observationCount: 1,
+        evidenceCommittedCount: 1
+      });
+      expect(backend.analyzeCallCount).toBe(0);
     } finally {
       resumedCoordinator.shutdown();
       harness.store.close();
@@ -792,10 +802,8 @@ describe("application whiteboard vision integration", () => {
       }
     });
     try {
-      expect(await mismatched.process(request)).toMatchObject({
-        status: "REJECTED",
-        reason: "EVIDENCE_INTERPRETER_MISMATCH"
-      });
+      await expect(harness.sessions.ensureRecovered(harness.sessionId))
+        .rejects.toThrow(/EVIDENCE_INTERPRETER_MISMATCH/u);
       expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
         .toMatchObject({ status: "PENDING", interpreterFingerprint: acceptedFingerprint });
       expect(Object.keys(harness.writer.getState().studentEvidence)).toHaveLength(0);
@@ -811,6 +819,7 @@ describe("application whiteboard vision integration", () => {
       }
     });
     try {
+      await harness.sessions.ensureRecovered(harness.sessionId);
       expect(await resumed.process(request)).toMatchObject({
         status: "ACCEPTED",
         evidenceCommittedCount: 1
@@ -872,6 +881,8 @@ describe("application whiteboard vision integration", () => {
       }
     });
     try {
+      await harness.sessions.ensureRecovered(harness.sessionId);
+      expect(proposeCalls).toBe(0);
       const resumed = await resumedCoordinator.process(request);
       expect(resumed).toMatchObject({
         status: "ACCEPTED",
@@ -885,6 +896,47 @@ describe("application whiteboard vision integration", () => {
       expect(proposeCalls).toBe(0);
     } finally {
       resumedCoordinator.shutdown();
+      harness.store.close();
+    }
+  });
+
+  it("isolates authoritative accepted observations from interpreter mutation attempts", async () => {
+    const harness = await startedBoardSession();
+    const backend = new DeterministicFakeVisionBackend([{
+      observationKind: "DIAGRAM_RELATION",
+      interpretation: "Authoritative interpretation must remain unchanged.",
+      confidence: 0.95,
+      relevantShapeIds: ["shape:graph-model"]
+    }]);
+    const coordinator = new WhiteboardVisionCoordinator({
+      sessions: harness.sessions,
+      backend,
+      evidenceInterpreter: {
+        fingerprint: "e".repeat(64),
+        propose: (context) => {
+          const mutable = context.observation as unknown as {
+            observation: { interpretation: string };
+          };
+          mutable.observation.interpretation = "MUTATED BY INTERPRETER";
+          return undefined;
+        }
+      }
+    });
+
+    try {
+      const request = upload(harness.sessionId);
+      expect(await coordinator.process(request)).toMatchObject({
+        status: "ACCEPTED",
+        evidenceCommittedCount: 0
+      });
+      expect(
+        harness.writer.getState().visionRequests[request.requestId]
+          ?.acceptedObservation?.observation.interpretation
+      ).toBe("Authoritative interpretation must remain unchanged.");
+      expect(harness.writer.getState().visionRequests[request.requestId]?.evidenceBridge)
+        .toMatchObject({ status: "DECIDED", decision: "NO_PROPOSAL" });
+    } finally {
+      coordinator.shutdown();
       harness.store.close();
     }
   });
