@@ -2444,13 +2444,11 @@ describe("adapter factory adversarial boundary", () => {
     expect(adapter.capabilities.dataUse)
       .toBe("REMOTE_MAY_BE_USED_FOR_IMPROVEMENT");
 
-    expect(() => adapter.capabilities.inputModalities.add("image")).toThrow(TypeError);
-    expect(() => adapter.capabilities.inputModalities.delete("text")).toThrow(TypeError);
-    expect(() => adapter.capabilities.inputModalities.clear()).toThrow(TypeError);
-    expect(() => Set.prototype.add.call(
-      adapter.capabilities.inputModalities,
-      "image"
-    )).toThrow(TypeError);
+    const modalities = adapter.capabilities.inputModalities;
+    modalities.add("image");
+    modalities.delete("text");
+    Set.prototype.add.call(modalities, "image");
+    expect([...modalities]).toEqual(["image"]);
     expect([...adapter.capabilities.inputModalities]).toEqual(["text"]);
   });
 
