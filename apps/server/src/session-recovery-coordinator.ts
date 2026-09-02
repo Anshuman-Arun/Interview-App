@@ -58,27 +58,29 @@ export class SessionRecoveryCoordinator {
 
   public listSessions(): readonly StoredSessionSummary[] {
     const summaries = this.store?.listSessions() ?? this.registry.listSessions();
-    return summaries.map((summary): StoredSessionSummary => {
+    const trusted: StoredSessionSummary[] = [];
+    for (const summary of summaries) {
       const events = this.store?.load(summary.sessionId) ?? this.registry.loadEvents(summary.sessionId);
 
       const state = replaySession(summary.sessionId, events);
-      if (!isQuantSessionState(state)) return summary;
+      if (!isQuantSessionState(state)) {
+        trusted.push(summary);
+        continue;
+      }
 
       if (isLegacyUninitializedQuantSessionState(state)) {
         assertSessionInventoryMatchesState(summary, state, events);
       } else {
-        // The SQLite session index is a rebuildable convenience projection. Do not
-        // let schema-valid but semantically forged deterministic Quant history be
-        // advertised as a trusted ACTIVE/COMPLETED inventory entry.
+        // Fail closed per deterministic session, not for the entire local
+        // inventory. A single corrupt historical Quant stream must never be
+        // advertised as trusted, but it also must not prevent healthy sessions
+        // from being listed or a new interview from being started.
         try {
           assertReplayPrefixValidForRecovery(summary.sessionId, events);
           resolveSessionStateComposition(state);
           assertSessionInventoryMatchesState(summary, state, events);
         } catch {
-          // Persisted-history validation failures are server-authority failures,
-          // not candidate command conflicts, even when the deterministic engine
-          // happens to report them with an action-shaped error type.
-          throw new Error("Authoritative quant session inventory validation failed");
+          continue;
         }
       }
 
@@ -86,8 +88,9 @@ export class SessionRecoveryCoordinator {
       // replay can retain chronology. LIST_SESSIONS has no mode discriminator,
       // so exposing that identity as problemId/problemVersion would make it
       // indistinguishable from an Oxford problem to legacy consumers.
-      return sanitizedQuantInventorySummary(summary);
-    });
+      trusted.push(sanitizedQuantInventorySummary(summary));
+    }
+    return trusted;
   }
 
   public hasSession(sessionId: SessionId): boolean {
