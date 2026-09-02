@@ -13,7 +13,9 @@ import {
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { sixPeopleProblem } from "../packages/problems/src/index.js";
 import {
+  ANTIGRAVITY_CLI_AGENT_ID,
   ANTIGRAVITY_CLI_MODEL_ID,
+  ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT,
   ANTIGRAVITY_CLI_PROVIDER_ID,
   type ProviderSecretResolver,
   type SupervisedCliExecutionRequest,
@@ -1653,22 +1655,29 @@ function safeProbeProposal(): InterviewerProposal {
 }
 
 function createAntigravityResponse(proposal: InterviewerProposal): string {
+  const jsonSchema = JSON.parse(ANTIGRAVITY_CLI_PROPOSAL_SCHEMA_ARGUMENT) as unknown;
+  const conversationId = "orchestration-test-conversation";
   return [
     JSON.stringify({
       event: "init",
+      conversation_id: conversationId,
       init: {
         cwd: "/isolated",
         tools: [],
         permission_mode: "strict",
-        model: ANTIGRAVITY_CLI_MODEL_ID
+        model: ANTIGRAVITY_CLI_MODEL_ID,
+        agent: ANTIGRAVITY_CLI_AGENT_ID,
+        json_schema: jsonSchema
       }
     }),
     JSON.stringify({
       event: "result",
       result: {
+        conversation_id: conversationId,
         status: "SUCCESS",
         num_turns: 1,
-        structured_output: proposal
+        structured_output: proposal,
+        json_schema: jsonSchema
       }
     })
   ].join("\n") + "\n";
