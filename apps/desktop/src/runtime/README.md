@@ -101,8 +101,8 @@ does not inherit `PYTHONPATH` or other ambient Python injection variables.
 A worker is trusted only after a bounded stdout JSON readiness message matches
 all application-owned expectations:
 
-- component version;
-- protocol version;
+- component version (currently exact production worker implementation v2);
+- protocol version (currently local worker protocol v2);
 - worker type;
 - runtime version;
 - model/version identity;
