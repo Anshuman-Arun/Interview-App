@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   EvidenceProposalSchema,
+  RequestIdSchema,
   MAX_VISION_REGION_SHAPES,
   MAX_WHITEBOARD_VISION_DIMENSION,
   MAX_WHITEBOARD_VISION_PIXELS,
@@ -10,6 +11,7 @@ import {
   WhiteboardVisionSnapshotUploadSchema,
   type AuthoritativeBoardBounds,
   type EventId,
+  type RequestId,
   type SessionId,
   type VisionInferenceRequest,
   type VisionSnapshotBasis,
@@ -20,6 +22,7 @@ import {
   TurnCoordinator,
   VisionRequestManager,
   createCommandEnvelope,
+  type SessionWriter,
   type VisionEvidenceInterpreter,
   type VisionInferenceBackend
 } from "../../../packages/interview-engine/src/index.js";
@@ -145,16 +148,21 @@ export class WhiteboardVisionCoordinator {
         if (persistedRequest.resultEventId === undefined || persistedRequest.observation === undefined) {
           return rejected(upload, "PERSISTED_REQUEST_CORRUPT");
         }
+        const bridge = await this.completeEvidenceBridge(
+          writer,
+          new TurnCoordinator(writer),
+          upload.requestId
+        );
+        if (!bridge.completed) {
+          return rejected(upload, bridge.reason);
+        }
         return this.remember(upload.requestId, fingerprint, {
           protocolVersion: 1,
           requestId: upload.requestId,
           sessionId: upload.sessionId,
           status: "ACCEPTED",
           observationCount: 1,
-          evidenceCommittedCount: visionEvidenceWasCommitted(
-            state,
-            persistedRequest.resultEventId
-          ) ? 1 : 0
+          evidenceCommittedCount: bridge.evidenceCommittedCount
         });
       }
       if (persistedRequest.status === "DISCARDED") {
@@ -360,7 +368,8 @@ export class WhiteboardVisionCoordinator {
         sourceRevision: upload.sourceBoardRevision
       }),
       observation: accepted.observation,
-      admission: accepted
+      admission: accepted,
+      evidenceInterpreterFingerprint: this.evidenceInterpreter?.fingerprint ?? null
     });
     if (!persisted.accepted) {
       return this.remember(upload.requestId, fingerprint, rejected(
@@ -369,42 +378,13 @@ export class WhiteboardVisionCoordinator {
       ));
     }
 
-    let evidenceCommittedCount = 0;
-    const acceptedState = writer.getState();
-    const requestState = acceptedState.visionRequests[upload.requestId];
-    const evidenceEventId = requestState?.resultEventId;
-    const problemId = acceptedState.problem?.id;
-    if (
-      this.evidenceInterpreter !== undefined
-      && evidenceEventId !== undefined
-      && problemId !== undefined
-    ) {
-      let proposal;
-      try {
-        const candidate = this.evidenceInterpreter.propose({
-          observation: accepted,
-          problemId,
-          evidenceEventId
-        });
-        if (candidate !== undefined) {
-          const parsed = EvidenceProposalSchema.safeParse(candidate);
-          if (parsed.success) proposal = parsed.data;
-        }
-      } catch {
-        proposal = undefined;
-      }
-      if (proposal !== undefined) {
-        const evidenceResult = await turn.processEvidenceProposal({
-          envelope: createCommandEnvelope({
-            sessionId: upload.sessionId,
-            producer: "vision-evidence",
-            correlationId: upload.requestId
-          }),
-          proposal,
-          requiredBoardRevision: accepted.admittedAtBoardRevision
-        });
-        if (evidenceResult.committed) evidenceCommittedCount = 1;
-      }
+    const bridge = await this.completeEvidenceBridge(
+      writer,
+      turn,
+      upload.requestId
+    );
+    if (!bridge.completed) {
+      return rejected(upload, bridge.reason);
     }
 
     return this.remember(upload.requestId, fingerprint, {
@@ -413,8 +393,110 @@ export class WhiteboardVisionCoordinator {
       sessionId: upload.sessionId,
       status: "ACCEPTED",
       observationCount: 1,
-      evidenceCommittedCount
+      evidenceCommittedCount: bridge.evidenceCommittedCount
     });
+  }
+
+  private async completeEvidenceBridge(
+    writer: SessionWriter,
+    turn: TurnCoordinator,
+    visionRequestId: RequestId
+  ): Promise<
+    | { readonly completed: true; readonly evidenceCommittedCount: 0 | 1 }
+    | { readonly completed: false; readonly reason: string }
+  > {
+    let state = writer.getState();
+    let request = state.visionRequests[visionRequestId];
+    if (
+      request === undefined
+      || request.status !== "ACCEPTED"
+      || request.resultEventId === undefined
+      || request.acceptedObservation === undefined
+    ) {
+      return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
+    }
+
+    if (request.evidenceBridge === undefined) {
+      return {
+        completed: true,
+        evidenceCommittedCount: visionEvidenceWasCommitted(state, request.resultEventId) ? 1 : 0
+      };
+    }
+    if (request.evidenceBridge.status === "SKIPPED_NO_INTERPRETER") {
+      return { completed: true, evidenceCommittedCount: 0 };
+    }
+
+    if (request.evidenceBridge.status === "PENDING") {
+      const interpreter = this.evidenceInterpreter;
+      if (
+        interpreter === undefined
+        || interpreter.fingerprint !== request.evidenceBridge.interpreterFingerprint
+      ) {
+        return {
+          completed: false,
+          reason: "EVIDENCE_INTERPRETER_MISMATCH"
+        };
+      }
+
+      let proposal;
+      try {
+        const problemId = state.problem?.id;
+        if (problemId === undefined) {
+          return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
+        }
+        const candidate = interpreter.propose({
+          observation: request.acceptedObservation,
+          problemId,
+          evidenceEventId: request.resultEventId
+        });
+        if (candidate !== undefined) {
+          const parsed = EvidenceProposalSchema.safeParse(candidate);
+          if (parsed.success) proposal = parsed.data;
+        }
+      } catch {
+        proposal = undefined;
+      }
+
+      await turn.recordVisionEvidenceBridgeDecision({
+        envelope: createCommandEnvelope({
+          sessionId: writer.sessionId,
+          producer: "vision-evidence-bridge",
+          requestId: RequestIdSchema.parse(`vision-evidence-decision:${visionRequestId}`),
+          correlationId: visionRequestId
+        }),
+        interpreterFingerprint: interpreter.fingerprint,
+        ...(proposal === undefined ? {} : { proposal })
+      });
+
+      state = writer.getState();
+      request = state.visionRequests[visionRequestId];
+      if (
+        request === undefined
+        || request.status !== "ACCEPTED"
+        || request.evidenceBridge?.status !== "DECIDED"
+      ) {
+        return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
+      }
+    }
+
+    if (request.evidenceBridge.decision === "NO_PROPOSAL") {
+      return { completed: true, evidenceCommittedCount: 0 };
+    }
+
+    const evidenceResult = await turn.processEvidenceProposal({
+      envelope: createCommandEnvelope({
+        sessionId: writer.sessionId,
+        producer: "vision-evidence",
+        requestId: RequestIdSchema.parse(`vision-evidence-commit:${visionRequestId}`),
+        correlationId: visionRequestId
+      }),
+      proposal: request.evidenceBridge.proposal,
+      requiredBoardRevision: request.acceptedObservation.admittedAtBoardRevision
+    });
+    return {
+      completed: true,
+      evidenceCommittedCount: evidenceResult.committed ? 1 : 0
+    };
   }
 
   public supersedeStaleRequests(sessionId: SessionId): number {
