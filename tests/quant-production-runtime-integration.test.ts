@@ -710,15 +710,21 @@ describe("production quant runtime integration", () => {
 
     expect(trading.status).toBe("COMPLETED");
     expect(research.status).toBe("COMPLETE");
-    for (const sessionId of [tradingId, researchId]) {
+    const archiveCommands = [tradingId, researchId].map((sessionId) => ({
+      sessionId,
+      requestId: newRequestId()
+    }));
+    const archivedEventCounts = new Map<SessionId, number>();
+    for (const { sessionId, requestId } of archiveCommands) {
       await expectStatus(post({
         protocolVersion: 1,
         type: "ARCHIVE_SESSION",
-        requestId: newRequestId(),
+        requestId,
         sessionId,
         reason: "finished"
       }), 200);
       expect(registry.get(sessionId).getState().status).toBe("ARCHIVED");
+      archivedEventCounts.set(sessionId, store.eventCount(sessionId));
     }
 
     await restart();
@@ -728,6 +734,25 @@ describe("production quant runtime integration", () => {
     expect(QuantResearchStateResponseSchema.parse(
       await responseJson(await getQuantState(researchId))
     ).state.status).toBe("COMPLETE");
+    for (const { sessionId, requestId } of archiveCommands) {
+      await expectStatus(post({
+        protocolVersion: 1,
+        type: "ARCHIVE_SESSION",
+        requestId,
+        sessionId,
+        reason: "finished"
+      }), 200);
+      expect(store.eventCount(sessionId)).toBe(archivedEventCounts.get(sessionId));
+
+      await expectProtocolError(post({
+        protocolVersion: 1,
+        type: "ARCHIVE_SESSION",
+        requestId: newRequestId(),
+        sessionId,
+        reason: "duplicate-with-new-request"
+      }), 409, "CONFLICT");
+      expect(store.eventCount(sessionId)).toBe(archivedEventCounts.get(sessionId));
+    }
   });
 
   async function restart(): Promise<void> {
