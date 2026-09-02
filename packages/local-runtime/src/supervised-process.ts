@@ -23,6 +23,7 @@ const MAX_STDIN_BYTES = 256 * 1024;
 const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_STDERR_BYTES = 512 * 1024;
 const MAX_EXECUTION_MS = 5 * 60_000;
+const MAX_EXECUTABLE_BYTES = 512n * 1024n * 1024n;
 const MAX_ISOLATED_HOME_FILES = 16;
 const MAX_ISOLATED_HOME_FILE_BYTES = 64 * 1024;
 const MAX_ISOLATED_HOME_TOTAL_BYTES = 128 * 1024;
@@ -149,6 +150,7 @@ export class SupervisedProcessRunner {
   private readonly platform: NodeJS.Platform;
   private readonly pinnedIdentities = new Map<string, ExecutableIdentity>();
   private readonly quarantinedExecutableIds = new Set<string>();
+  private readonly identityInitializations = new Map<string, Promise<void>>();
   private containmentCompromised = false;
   private windowsSupervisorIdentity: ExecutableIdentity | undefined;
   private readonly activeControllers = new Set<AbortController>();
@@ -1040,7 +1042,12 @@ async function inspectExecutable(
       lstat(executable, { bigint: true }),
       realpath(executable)
     ]);
-    if (!info.isFile() || info.isSymbolicLink()) {
+    if (
+      !info.isFile()
+      || info.isSymbolicLink()
+      || info.size <= 0n
+      || info.size > MAX_EXECUTABLE_BYTES
+    ) {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
     const configured = path.resolve(executable);
@@ -1074,7 +1081,12 @@ function tryInspectExecutableSync(
   try {
     const info = lstatSync(executable, { bigint: true });
     const canonicalPath = realpathSync(executable);
-    if (!info.isFile() || info.isSymbolicLink()) return undefined;
+    if (
+      !info.isFile()
+      || info.isSymbolicLink()
+      || info.size <= 0n
+      || info.size > MAX_EXECUTABLE_BYTES
+    ) return undefined;
     const configured = path.resolve(executable);
     const actual = path.resolve(canonicalPath);
     if (
