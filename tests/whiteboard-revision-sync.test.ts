@@ -74,7 +74,7 @@ describe("TldrawWhiteboardAdapter board revision authority", () => {
       x: 1,
       y: 2,
       props: { geo: "rectangle", w: 10, h: 10 }
-    })).toThrow(/revision mirror cannot exceed Number\.MAX_SAFE_INTEGER/u);
+    })).toThrow(/BoardRevision mirror cannot exceed Number\.MAX_SAFE_INTEGER/u);
     expect(editor.getShape("shape:overflow-create")).toBeUndefined();
 
     (adapter as unknown as { localBoardRevision: number }).localBoardRevision = 0;
