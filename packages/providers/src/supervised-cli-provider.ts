@@ -1,4 +1,5 @@
 import {
+  GenerationIdSchema,
   ModelCapabilitiesSchema,
   type GenerationId,
   type InterviewerProposal,
@@ -103,7 +104,17 @@ class SupervisedCliReasoningSession implements ReasoningSession {
   ) {}
 
   public sendTurn(input: ReasoningTurnInput): AsyncIterable<InterviewerProposal> {
-    return this.iterateTurn(input);
+    if (this.closed) throw new Error("Supervised CLI session is closed");
+    const snapshot = snapshotReasoningTurnInput(input);
+    if (this.active.has(snapshot.generationId)) {
+      throw new Error("Generation already has an active supervised CLI execution");
+    }
+    const record: ActiveExecution = {
+      controller: new AbortController(),
+      processStarted: false
+    };
+    this.active.set(snapshot.generationId, record);
+    return this.iterateTurn(snapshot, record);
   }
 
   public async cancelTurn(
@@ -132,6 +143,7 @@ class SupervisedCliReasoningSession implements ReasoningSession {
       if (record.completion !== undefined) completions.push(record.completion);
     }
     await Promise.allSettled(completions);
+    this.active.clear();
   }
 
   private isClosed(): boolean {
@@ -139,34 +151,73 @@ class SupervisedCliReasoningSession implements ReasoningSession {
   }
 
   private async *iterateTurn(
-    input: ReasoningTurnInput
+    input: ReasoningTurnInput,
+    record: ActiveExecution
   ): AsyncIterable<InterviewerProposal> {
-    if (this.closed) throw new Error("Supervised CLI session is closed");
-    if (this.active.has(input.generationId)) {
-      throw new Error("Generation already has an active supervised CLI execution");
+    if (record.controller.signal.aborted || this.closed) {
+      if (this.active.get(input.generationId) === record) {
+        this.active.delete(input.generationId);
+      }
+      return;
     }
 
-    const controller = new AbortController();
-    const record: ActiveExecution = {
-      controller,
-      processStarted: false
-    };
-    this.active.set(input.generationId, record);
-
-    const completion = this.executeTurn(input, {
-      signal: controller.signal,
-      onProcessStart: () => {
-        record.processStarted = true;
+    const completion = Promise.resolve().then(async () => {
+      if (record.controller.signal.aborted || this.closed) {
+        throw new Error("Supervised CLI execution was cancelled before start");
       }
+      return await this.executeTurn(input, {
+        signal: record.controller.signal,
+        onProcessStart: () => {
+          record.processStarted = true;
+        }
+      });
     });
     record.completion = completion;
 
     try {
       const proposal = await completion;
-      if (controller.signal.aborted || this.isClosed()) return;
+      if (record.controller.signal.aborted || this.isClosed()) return;
       yield proposal;
     } finally {
-      this.active.delete(input.generationId);
+      if (this.active.get(input.generationId) === record) {
+        this.active.delete(input.generationId);
+      }
     }
   }
 }
+function snapshotReasoningTurnInput(input: unknown): ReasoningTurnInput {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new Error("Supervised CLI turn input is invalid");
+  }
+  const prototype = Object.getPrototypeOf(input);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error("Supervised CLI turn input is invalid");
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(input);
+  const allowedKeys = new Set(["generationId", "context"]);
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (
+      !allowedKeys.has(key)
+      || descriptor.enumerable !== true
+      || !("value" in descriptor)
+    ) {
+      throw new Error("Supervised CLI turn input is invalid");
+    }
+  }
+  const generationId = GenerationIdSchema.safeParse(
+    descriptors.generationId?.value
+  );
+  const context = descriptors.context;
+  if (
+    !generationId.success
+    || context === undefined
+    || !("value" in context)
+  ) {
+    throw new Error("Supervised CLI turn input is invalid");
+  }
+  return Object.freeze({
+    generationId: generationId.data,
+    context: context.value
+  });
+}
+
