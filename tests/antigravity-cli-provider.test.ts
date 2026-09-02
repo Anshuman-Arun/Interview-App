@@ -286,6 +286,41 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("detaches nested context before the async iterator starts", async () => {
+    let captured: SupervisedCliExecutionRequest | undefined;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        captured = request;
+        request.onProcessStart();
+        return executionResult(antigravityStream());
+      })
+    );
+    const session = await provider.createSession();
+    const context = {
+      recentStudentWork: "original",
+      nested: { value: "before" }
+    };
+    const stream = session.sendTurn(turnInput(context));
+
+    context.recentStudentWork = "mutated";
+    context.nested.value = "after";
+
+    await expect(collectProposals(stream)).resolves.toEqual([PROPOSAL]);
+    const stdinMessage = JSON.parse((captured?.stdin ?? "").trim()) as {
+      readonly message?: { readonly content?: unknown };
+    };
+    const content = stdinMessage.message?.content;
+    expect(typeof content).toBe("string");
+    if (typeof content !== "string") throw new Error("Expected string prompt content");
+    const markerText = "APPLICATION_SELECTED_CONTEXT_JSON\n";
+    const serialized = content.slice(content.indexOf(markerText) + markerText.length);
+    expect(JSON.parse(serialized)).toEqual({
+      recentStudentWork: "original",
+      nested: { value: "before" }
+    });
+    await session.close();
+  });
+
   it("rejects malformed, ambiguous, tool-bearing, and non-proposal output", async () => {
     const invalidStreams = [
       "terminal prose\n",
