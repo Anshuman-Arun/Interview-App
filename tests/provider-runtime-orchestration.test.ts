@@ -1766,6 +1766,7 @@ function createAntigravityResponse(proposal: InterviewerProposal): string {
       result: {
         conversation_id: conversationId,
         status: "SUCCESS",
+        response: JSON.stringify(proposal),
         num_turns: 1,
         structured_output: proposal,
         json_schema: jsonSchema
