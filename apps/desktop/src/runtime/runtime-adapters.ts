@@ -1,4 +1,5 @@
 import {
+  MAX_SPEECH_CONCURRENT_STREAMS,
   TTS_LIMITS,
   type KokoroRuntime,
   type KokoroRuntimeSession,
@@ -60,6 +61,10 @@ export class ManagedSileroVadRuntime implements SileroVadRuntime {
 export class ManagedMoonshineRuntime implements MoonshineRuntime {
   public readonly runtimeVersion: string;
   public readonly supportsAbort = false;
+  public readonly observesPreStartAbort = true;
+  private transcriptionTail: Promise<void> = Promise.resolve();
+  private transcriptionReservations = 0;
+  private readonly activeRequestIds = new Set<string>();
 
   public constructor(
     private readonly client: ManagedModelWorkerClient,
@@ -68,19 +73,42 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
     this.runtimeVersion = client.runtimeVersion();
   }
 
-  public async transcribe(input: Parameters<MoonshineRuntime["transcribe"]>[0]): Promise<unknown> {
+  public transcribe(input: Parameters<MoonshineRuntime["transcribe"]>[0]): Promise<unknown> {
     if (input.modelPath !== this.expectedModelPath || input.configPath !== undefined) {
-      throw new Error("Moonshine runtime rejected unexpected model configuration");
+      return Promise.reject(new Error("Moonshine runtime rejected unexpected model configuration"));
     }
-    return this.client.postJson("/v1/stt", {
-      requestId: input.requestId,
-      utteranceId: input.utteranceId,
-      pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
-      sampleRate: input.sampleRate
-    }, {
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
-      timeoutMs: 60_000,
-      maxResponseBytes: 2 * 1024 * 1024
+    if (this.transcriptionReservations >= MAX_SPEECH_CONCURRENT_STREAMS) {
+      return Promise.reject(new Error("Moonshine runtime transcription queue is full"));
+    }
+    if (this.activeRequestIds.has(input.requestId)) {
+      return Promise.reject(new Error("Moonshine runtime request ID is already queued"));
+    }
+
+    this.transcriptionReservations += 1;
+    this.activeRequestIds.add(input.requestId);
+    const operation = this.transcriptionTail.then(async () => {
+      if (input.signal?.aborted === true) throw abortError();
+      // Once this request reaches the single native lane, do not wire the
+      // application AbortSignal into fetch. Moonshine batch STT is not
+      // preemptible; letting fetch reject early would falsely free the local
+      // lane while Python is still executing the same native call.
+      return this.client.postJson("/v1/stt", {
+        requestId: input.requestId,
+        utteranceId: input.utteranceId,
+        pcmF32Base64: Buffer.from(input.pcmBytes).toString("base64"),
+        sampleRate: input.sampleRate
+      }, {
+        timeoutMs: 60_000,
+        maxResponseBytes: 2 * 1024 * 1024
+      });
+    });
+    this.transcriptionTail = operation.then(
+      () => undefined,
+      () => undefined
+    );
+    return operation.finally(() => {
+      this.activeRequestIds.delete(input.requestId);
+      this.transcriptionReservations = Math.max(0, this.transcriptionReservations - 1);
     });
   }
 }
@@ -209,4 +237,11 @@ function parseTtsResult(value: unknown): KokoroRuntimeSynthesisResult {
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+
+function abortError(): Error {
+  const error = new Error("Managed Moonshine recognition was cancelled before native inference");
+  error.name = "AbortError";
+  return error;
 }
