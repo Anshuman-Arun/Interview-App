@@ -189,7 +189,6 @@ export class SupervisedProcessRunner {
     new Map<string, AbortController>();
   private containmentCompromised = false;
   private windowsSupervisorIdentity: ExecutableIdentity | undefined;
-  private windowsSupervisorAssemblyEntry: WindowsSupervisorAssemblyEntry | undefined;
   private readonly activeControllers = new Set<AbortController>();
   private readonly activeOperations = new Set<Promise<SupervisedProcessExecutionResult>>();
   private draining: Promise<void> | undefined;
@@ -349,7 +348,6 @@ export class SupervisedProcessRunner {
     for (const controller of this.identityInitializationControllers.values()) {
       controller.abort();
     }
-    this.windowsSupervisorAssemblyEntry?.controller.abort();
   }
 
   private async drainActiveOperations(): Promise<void> {
@@ -357,14 +355,10 @@ export class SupervisedProcessRunner {
     for (const controller of this.identityInitializationControllers.values()) {
       controller.abort();
     }
-    this.windowsSupervisorAssemblyEntry?.controller.abort();
 
     const operations: Promise<unknown>[] = [
       ...this.activeOperations,
-      ...this.identityInitializations.values(),
-      ...(this.windowsSupervisorAssemblyEntry === undefined
-        ? []
-        : [this.windowsSupervisorAssemblyEntry.promise])
+      ...this.identityInitializations.values()
     ];
     const results = await settleWithin(operations, DRAIN_TIMEOUT_MS);
     if (results === undefined) {
@@ -831,7 +825,6 @@ export class SupervisedProcessRunner {
       this.temporaryRoot,
       environment
     );
-    this.windowsSupervisorAssemblyEntry = assemblyEntry;
     let assembly = await waitForOperationOrAbort(
       assemblyEntry.promise,
       request.signal
@@ -850,8 +843,7 @@ export class SupervisedProcessRunner {
         this.temporaryRoot,
         environment
       );
-      this.windowsSupervisorAssemblyEntry = assemblyEntry;
-      assembly = await waitForOperationOrAbort(
+        assembly = await waitForOperationOrAbort(
         assemblyEntry.promise,
         request.signal
       );
