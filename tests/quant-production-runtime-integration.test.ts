@@ -248,12 +248,12 @@ describe("production quant runtime integration", () => {
   });
 
   it("keeps legacy pre-runtime Quant sessions discoverable without reseeding or resuming them", async () => {
-    const legacySessions = [
-      { sessionId: newSessionId(), configuration: tradingConfiguration() },
-      { sessionId: newSessionId(), configuration: researchConfiguration() }
-    ] as const;
-
-    for (const legacy of legacySessions) {
+    const activeTrading = newSessionId();
+    const activeResearch = newSessionId();
+    for (const legacy of [
+      { sessionId: activeTrading, configuration: tradingConfiguration() },
+      { sessionId: activeResearch, configuration: researchConfiguration() }
+    ] as const) {
       await new TurnCoordinator(registry.get(legacy.sessionId)).startConfiguredSession(
         { configuration: legacy.configuration },
         createCommandEnvelope({
@@ -268,6 +268,21 @@ describe("production quant runtime integration", () => {
       expect(state.quantResearch).toBeUndefined();
     }
 
+    const completedTrading = injectLegacyTerminalQuant(
+      tradingConfiguration(),
+      "COMPLETED"
+    );
+    const archivedResearch = injectLegacyTerminalQuant(
+      researchConfiguration(),
+      "ARCHIVED"
+    );
+    const legacySessions = [
+      { sessionId: activeTrading, status: "ACTIVE" },
+      { sessionId: activeResearch, status: "ACTIVE" },
+      { sessionId: completedTrading, status: "COMPLETED" },
+      { sessionId: archivedResearch, status: "ARCHIVED" }
+    ] as const;
+
     const listed = SessionsListResponseSchema.parse(
       await responseJson(await post({
         protocolVersion: 1,
@@ -279,7 +294,7 @@ describe("production quant runtime integration", () => {
       const summary = listed.sessions.find((item) => item.sessionId === legacy.sessionId);
       expect(summary).toMatchObject({
         sessionId: legacy.sessionId,
-        status: "ACTIVE"
+        status: legacy.status
       });
       expect(summary?.problemId).toBeUndefined();
       const countBefore = store.eventCount(legacy.sessionId);
@@ -292,6 +307,47 @@ describe("production quant runtime integration", () => {
         sessionId: legacy.sessionId
       }), 409, "CONFLICT");
       expect(store.eventCount(legacy.sessionId)).toBe(countBefore);
+    }
+
+    function injectLegacyTerminalQuant(
+      configuration: InterviewSessionConfiguration,
+      status: "COMPLETED" | "ARCHIVED"
+    ): SessionId {
+      const sessionId = newSessionId();
+      const requestId = newRequestId();
+      const terminalAt = new Date().toISOString();
+      store.appendIdempotent({
+        sessionId,
+        requestId,
+        causationId: requestId,
+        correlationId: requestId,
+        elapsedMs: 0,
+        expectedPriorSequence: 0,
+        commandFingerprint: status === "COMPLETED" ? "8".repeat(64) : "9".repeat(64),
+        drafts: [
+          {
+            source: "APPLICATION",
+            type: "SESSION_STARTED",
+            payload: {
+              startedAt: terminalAt,
+              configuration
+            }
+          },
+          status === "COMPLETED"
+            ? {
+                source: "APPLICATION",
+                type: "SESSION_COMPLETED",
+                payload: { completedAt: terminalAt }
+              }
+            : {
+                source: "APPLICATION",
+                type: "SESSION_ARCHIVED",
+                payload: { archivedAt: terminalAt }
+              }
+        ],
+        result: { injected: true }
+      });
+      return sessionId;
     }
   });
 
