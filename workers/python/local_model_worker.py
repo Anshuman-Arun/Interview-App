@@ -295,7 +295,10 @@ class SpeechRuntime:
         if getattr(ort, "__version__", None) != ONNXRUNTIME_VERSION:
             raise RuntimeError("onnxruntime version mismatch")
 
-        providers = ["CPUExecutionProvider"] if "CPUExecutionProvider" in ort.get_available_providers() else None
+        available_providers = ort.get_available_providers()
+        if "CPUExecutionProvider" not in available_providers:
+            raise RuntimeError("onnxruntime CPUExecutionProvider is unavailable")
+        providers = ["CPUExecutionProvider"]
         session_options = ort.SessionOptions()
         session_options.inter_op_num_threads = 1
         session_options.intra_op_num_threads = 1
