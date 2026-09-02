@@ -16,6 +16,7 @@ import {
 } from "../apps/web/src/tldraw-whiteboard-adapter.js";
 
 const BASE_URL = "http://127.0.0.1:43123";
+const OTHER_BASE_URL = "http://127.0.0.1:44123";
 const RENDERER_URL = "http://127.0.0.1:43124/v1/renderer-stream";
 const VOICE_URL = "http://127.0.0.1:43125";
 const CLIENT_TOKEN = "session-transition-test-token-0123456789abcdef";
@@ -374,4 +375,108 @@ describe("interview session transition authority", () => {
     });
     rendered.container.remove();
   });
+  it("refuses command-endpoint changes while an ACTIVE session owns transport", async () => {
+    const sessionId = newSessionId();
+    const harness = makeFetchHarness([]);
+    const rendered = renderHook(harness.fetchImpl);
+
+    await act(async () => {
+      await rendered.current().startSession(sessionId);
+    });
+    expect(rendered.current().sessionStatus).toBe("ACTIVE");
+
+    act(() => {
+      rendered.current().setBaseUrl(OTHER_BASE_URL);
+    });
+
+    expect(rendered.current().baseUrl).toBe(BASE_URL);
+    expect(rendered.current().sessionId).toBe(sessionId);
+    expect(rendered.current().error).toContain(
+      "cannot change while an interview is active"
+    );
+
+    act(() => rendered.current().disconnect());
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
+  it("does not let a stale session list repopulate state after endpoint replacement", async () => {
+    const staleSessionId = newSessionId();
+    let releaseList: (() => void) | undefined;
+    let markListSeen: (() => void) | undefined;
+    const listSeen = new Promise<void>((resolve) => {
+      markListSeen = resolve;
+    });
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url !== `${BASE_URL}/v1/commands`) {
+        throw new Error(`Unexpected transport URL: ${url}`);
+      }
+      if (typeof init.body !== "string") {
+        throw new Error("Command body must be JSON text");
+      }
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+        readonly requestId?: string;
+      };
+      if (command.type !== "LIST_SESSIONS" || typeof command.requestId !== "string") {
+        throw new Error(`Unexpected command type: ${String(command.type)}`);
+      }
+      markListSeen?.();
+      return new Promise<Response>((resolve) => {
+        releaseList = () => resolve(jsonResponse({
+          protocolVersion: 1,
+          requestId: command.requestId,
+          ok: true,
+          type: "SESSIONS_LIST",
+          sessions: [{
+            sessionId: staleSessionId,
+            problemId: "stale-problem",
+            problemVersion: "1",
+            status: "ACTIVE",
+            sequence: 1,
+            createdAt: "2026-09-02T12:00:00.000Z",
+            updatedAt: "2026-09-02T12:01:00.000Z",
+            eventCount: 1
+          }]
+        }));
+      });
+    };
+
+    const rendered = renderHook(fetchImpl);
+    let pendingList: Promise<readonly unknown[]> | undefined;
+    await act(async () => {
+      pendingList = rendered.current().fetchAvailableSessions();
+      await listSeen;
+    });
+
+    act(() => {
+      rendered.current().setBaseUrl(OTHER_BASE_URL);
+    });
+    expect(rendered.current().baseUrl).toBe(OTHER_BASE_URL);
+    expect(rendered.current().availableSessions).toEqual([]);
+
+    if (releaseList === undefined) throw new Error("LIST_SESSIONS was not deferred");
+    releaseList();
+    await act(async () => {
+      await pendingList;
+    });
+
+    expect(rendered.current().availableSessions).toEqual([]);
+    expect(rendered.current().baseUrl).toBe(OTHER_BASE_URL);
+
+    act(() => rendered.current().disconnect());
+    await act(async () => {
+      rendered.root.unmount();
+    });
+    rendered.container.remove();
+  });
+
 });
