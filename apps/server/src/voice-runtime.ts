@@ -298,6 +298,10 @@ export class VoiceSynthesisCoordinator {
       }
 
       const generationId = GenerationIdSchema.parse(source.generationId);
+      const initialGeneration = initialState.generations[generationId];
+      if (initialGeneration === undefined || initialGeneration.status !== "VALIDATED") {
+        return undefined;
+      }
       const exactText = source.content.text;
       const existingAudio = Object.values(initialState.deliveries).find((atom) =>
         atom.content.medium === "AUDIO"
@@ -387,6 +391,29 @@ export class VoiceSynthesisCoordinator {
         });
 
         if (summary.kind !== "SYNTHESIS" || summary.summary.outcome !== "DONE") return undefined;
+
+        // This is still only an early resource guard. The authoritative
+        // queueAudioDeliveryFromValidatedText() transaction below rechecks the
+        // same source/generation plus full generation-basis compatibility.
+        const postSynthesisState = writer.getState();
+        const postSynthesisSource = postSynthesisState.deliveries[sourceDeliveryId];
+        const postSynthesisGeneration = postSynthesisState.generations[generationId];
+        if (
+          postSynthesisGeneration === undefined
+          || postSynthesisGeneration.status !== "VALIDATED"
+          || postSynthesisSource === undefined
+          || postSynthesisSource.generationId !== generationId
+          || postSynthesisSource.content.medium !== "TEXT"
+          || postSynthesisSource.content.text !== exactText
+          || (
+            postSynthesisSource.status !== "DELIVERING"
+            && postSynthesisSource.status !== "EXPOSED"
+            && postSynthesisSource.status !== "COMPLETED"
+          )
+        ) {
+          return undefined;
+        }
+
         const begin = assembly.begin;
         const end = assembly.end;
         if (begin === undefined || end === undefined || assembly.chunks.length === 0) {
