@@ -1186,8 +1186,17 @@ function windowsPowerShellExecutablePath(
   ) {
     throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
   }
+  const normalizedRoot = win32Path.normalize(systemRoot);
+  const parsedRoot = win32Path.parse(normalizedRoot);
+  if (
+    win32Path.basename(normalizedRoot).toLowerCase() !== "windows"
+    || win32Path.dirname(normalizedRoot).toLowerCase()
+      !== parsedRoot.root.replace(/[\\/]$/u, "").toLowerCase()
+  ) {
+    throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
+  }
   return win32Path.join(
-    systemRoot,
+    normalizedRoot,
     "System32",
     "WindowsPowerShell",
     "v1.0",
@@ -1551,7 +1560,14 @@ export function defaultAntigravityCliExecutablePath(
   homeDirectory: string = homedir()
 ): string {
   if (platform === "win32") {
-    return path.join(homeDirectory, "AppData", "Local", "agy", "bin", "agy.exe");
+    return win32Path.join(
+      homeDirectory,
+      "AppData",
+      "Local",
+      "agy",
+      "bin",
+      "agy.exe"
+    );
   }
   return path.join(homeDirectory, ".local", "bin", "agy");
 }
