@@ -596,6 +596,70 @@ describe("production provider runtime resolution", () => {
     }
   });
 
+  it("performs zero Antigravity execution under denied provider policy and never falls back to mock", async () => {
+    const harness = createHarness();
+    try {
+      const committed = await startConfiguredTurn(harness, ANTIGRAVITY_SELECTION);
+      let executeCalls = 0;
+      const resolver = new ProviderRuntimeResolver({
+        adapterRuntimeSource: {
+          resolveRuntime(selection) {
+            if (
+              selection.providerId !== ANTIGRAVITY_SELECTION.providerId
+              || selection.modelId !== ANTIGRAVITY_SELECTION.modelId
+            ) {
+              return undefined;
+            }
+            return {
+              executor: {
+                async execute() {
+                  executeCalls += 1;
+                  throw new Error("policy-denied runtime must not execute");
+                }
+              }
+            };
+          }
+        },
+        policySource: {
+          resolvePolicy() {
+            return {
+              allowMeteredUsage: false,
+              maximumDataUse: "LOCAL_ONLY" as const,
+              billingVerificationMaxAgeMs: 60_000
+            };
+          }
+        }
+      });
+      const orchestrator = new ServerTurnOrchestrator(
+        harness.sessions,
+        () => undefined,
+        undefined,
+        resolver
+      );
+
+      await orchestrator.orchestrateTurn({
+        sessionId: harness.sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId,
+        studentText: STUDENT_TEXT
+      });
+
+      expect(executeCalls).toBe(0);
+      const generations = Object.values(harness.writer.getState().generations);
+      expect(generations).toHaveLength(1);
+      expect(generations[0]).toMatchObject({
+        provider: ANTIGRAVITY_CLI_PROVIDER_ID,
+        status: "SUPERSEDED"
+      });
+      expect(generations.some(
+        (generation) => generation.provider === "mock-model"
+      )).toBe(false);
+      expect(Object.keys(harness.writer.getState().deliveries)).toHaveLength(0);
+    } finally {
+      await harness.close();
+    }
+  });
+
   it("performs zero network dispatch for Gemini under no-metered policy without a technical billing proof and never falls back to mock", async () => {
     const harness = createHarness();
     try {
