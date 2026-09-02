@@ -470,7 +470,15 @@ describe("production quant runtime integration", () => {
       .toBe(true);
     // Generic replay is intentionally specialized-unverified. Never surface a
     // persisted score there before deterministic Trading replay authenticates it.
-    expect(JSON.stringify(history.timeline)).not.toContain("objectiveScore");
+    const serializedGenericTimeline = JSON.stringify(history.timeline);
+    for (const withheldOutcomeField of [
+      "objectiveScore",
+      "fillCount",
+      "riskBreached",
+      "completionStatus"
+    ]) {
+      expect(serializedGenericTimeline).not.toContain(withheldOutcomeField);
+    }
     const replayRead = projectSessionReplayReadModel(history);
     expect(replayRead.entries.some((entry) => entry.kind === "QUANT_TRADING_ROUND_RESOLVED"))
       .toBe(true);
