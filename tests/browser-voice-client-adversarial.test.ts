@@ -84,14 +84,14 @@ describe("browser voice client adversarial boundaries", () => {
       const url = String(input);
       const body = init.body === undefined
         ? undefined
-        : JSON.parse(String(init.body)) as { streamId?: string };
+        : JSON.parse(String(init.body)) as { sessionId?: string; streamId?: string };
       if (url.endsWith("/v1/voice/streams")) {
         requestedStreamId = body?.streamId;
         return new Response(JSON.stringify({
           protocolVersion: 1,
           ok: true,
           type: "VOICE_STREAM_OPENED",
-          sessionId: body === undefined ? "" : newSessionId(),
+          sessionId: body?.sessionId,
           streamId: "speech_stream_wrong_identity",
           sampleRate: 48_000
         }), {
