@@ -71,9 +71,15 @@ interface TrackedDelivery {
   exposedAcknowledged: boolean;
   completedAcknowledged: boolean;
   acknowledgementTail: Promise<void>;
+  exposedAcknowledgementFailures: number;
+  completedAcknowledgementFailures: number;
+  acknowledgementRetryTimer: ReturnType<typeof setTimeout> | undefined;
 }
 
 const DEFAULT_MAX_TRACKED_DELIVERIES = 256;
+const MAX_TRACKED_DELIVERIES = 4_096;
+const MAX_ACKNOWLEDGEMENT_RETRIES = 3;
+const ACKNOWLEDGEMENT_RETRY_BASE_MS = 50;
 
 export class RendererPresentationNotExposedError extends Error {}
 
@@ -89,15 +95,19 @@ export class RendererClient {
 
   public constructor(options: RendererClientOptions) {
     this.sessionId = RendererStreamSessionIdSchema.parse(options.sessionId);
-    if (!Number.isInteger(options.maxTrackedDeliveries ?? DEFAULT_MAX_TRACKED_DELIVERIES)
-      || (options.maxTrackedDeliveries ?? DEFAULT_MAX_TRACKED_DELIVERIES) < 1) {
-      throw new Error("Renderer delivery cache bound must be a positive integer");
+    const maxTrackedDeliveries = options.maxTrackedDeliveries ?? DEFAULT_MAX_TRACKED_DELIVERIES;
+    if (
+      !Number.isSafeInteger(maxTrackedDeliveries)
+      || maxTrackedDeliveries < 1
+      || maxTrackedDeliveries > MAX_TRACKED_DELIVERIES
+    ) {
+      throw new Error("Renderer delivery cache bound must be a safe integer within the hard limit");
     }
     this.acknowledgementSender = options.acknowledgementSender;
     this.textPresenter = options.textPresenter;
     this.audioPlayer = options.audioPlayer;
     this.whiteboardPresenter = options.whiteboardPresenter;
-    this.maxTrackedDeliveries = options.maxTrackedDeliveries ?? DEFAULT_MAX_TRACKED_DELIVERIES;
+    this.maxTrackedDeliveries = maxTrackedDeliveries;
     this.requestIdFactory = options.requestIdFactory ?? defaultRequestIdFactory;
   }
 
@@ -128,7 +138,10 @@ export class RendererClient {
       presentationCompleted: false,
       exposedAcknowledged: false,
       completedAcknowledged: false,
-      acknowledgementTail: Promise.resolve()
+      acknowledgementTail: Promise.resolve(),
+      exposedAcknowledgementFailures: 0,
+      completedAcknowledgementFailures: 0,
+      acknowledgementRetryTimer: undefined
     };
     this.tracked.set(command.deliveryId, entry);
 
@@ -226,7 +239,14 @@ export class RendererClient {
       try {
         await this.acknowledgementSender.send(command);
         entry.exposedAcknowledged = true;
+        entry.exposedAcknowledgementFailures = 0;
+        this.clearAcknowledgementRetry(entry);
       } catch {
+        entry.exposedAcknowledgementFailures += 1;
+        this.scheduleAcknowledgementRetry(
+          entry,
+          entry.exposedAcknowledgementFailures
+        );
         return;
       }
     }
@@ -243,10 +263,41 @@ export class RendererClient {
       try {
         await this.acknowledgementSender.send(command);
         entry.completedAcknowledged = true;
+        entry.completedAcknowledgementFailures = 0;
+        this.clearAcknowledgementRetry(entry);
       } catch {
+        entry.completedAcknowledgementFailures += 1;
+        this.scheduleAcknowledgementRetry(
+          entry,
+          entry.completedAcknowledgementFailures
+        );
         return;
       }
     }
+  }
+
+  private scheduleAcknowledgementRetry(
+    entry: TrackedDelivery,
+    failureCount: number
+  ): void {
+    if (
+      failureCount > MAX_ACKNOWLEDGEMENT_RETRIES
+      || entry.acknowledgementRetryTimer !== undefined
+      || entry.completedAcknowledged
+    ) return;
+
+    const delayMs = ACKNOWLEDGEMENT_RETRY_BASE_MS * 2 ** (failureCount - 1);
+    entry.acknowledgementRetryTimer = globalThis.setTimeout(() => {
+      entry.acknowledgementRetryTimer = undefined;
+      if (!this.tracked.has(entry.deliveryId)) return;
+      void this.scheduleAcknowledgementFlush(entry);
+    }, delayMs);
+  }
+
+  private clearAcknowledgementRetry(entry: TrackedDelivery): void {
+    if (entry.acknowledgementRetryTimer === undefined) return;
+    globalThis.clearTimeout(entry.acknowledgementRetryTimer);
+    entry.acknowledgementRetryTimer = undefined;
   }
 
   private reserveCacheSlot(): void {

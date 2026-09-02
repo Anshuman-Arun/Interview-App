@@ -48,13 +48,22 @@ export class SessionRecoveryCoordinator {
 
     const events = this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
     const state = replaySession(sessionId, events);
-    const queuedContent = new Map<DeliveryId, { readonly text: string }>();
+    const queuedContent = new Map<DeliveryId, {
+      readonly text: string;
+      readonly generationId: string;
+      readonly medium: "TEXT" | "AUDIO";
+    }>();
+    const exposedSemanticKeys = new Set<string>();
     const history: SessionHistoryEntry[] = [];
     for (const event of events) {
       if (event.type === "DELIVERY_QUEUED") {
         const content = event.payload.atom.content;
         if (content.medium === "TEXT" || content.medium === "AUDIO") {
-          queuedContent.set(event.payload.atom.deliveryId, { text: content.text });
+          queuedContent.set(event.payload.atom.deliveryId, {
+            text: content.text,
+            generationId: event.payload.atom.generationId,
+            medium: content.medium
+          });
         }
         continue;
       }
@@ -83,14 +92,18 @@ export class SessionRecoveryCoordinator {
         content !== undefined
         && (current?.status === "EXPOSED" || current?.status === "COMPLETED")
       ) {
-        history.push(SessionHistoryEntrySchema.parse({
-          role: "INTERVIEWER",
-          sequence: event.sequence,
-          occurredAt: event.wallTime,
-          deliveryId: event.payload.deliveryId,
-          text: content.text,
-          status: current.status
-        }));
+        const semanticKey = semanticDeliveryKey(content.generationId, content.text);
+        if (!exposedSemanticKeys.has(semanticKey)) {
+          exposedSemanticKeys.add(semanticKey);
+          history.push(SessionHistoryEntrySchema.parse({
+            role: "INTERVIEWER",
+            sequence: event.sequence,
+            occurredAt: event.wallTime,
+            deliveryId: event.payload.deliveryId,
+            text: content.text,
+            status: current.status
+          }));
+        }
       }
     }
     return history;
@@ -108,11 +121,6 @@ export class SessionRecoveryCoordinator {
     return this.registry.getAsync(sessionId);
   }
 
-  /**
-   * Explicitly re-arms a pending turn after application runtime configuration
-   * changes (for example, a credential becomes available). Ordinary reads and
-   * attaches do not repeatedly redispatch a failed provider.
-   */
   public retryPendingTurnRecovery(
     sessionId: SessionId
   ): Promise<readonly DeliveryId[]> {
@@ -138,9 +146,6 @@ export class SessionRecoveryCoordinator {
       if (this.delegate !== undefined) {
         const disposition = await this.delegate.recoverPendingTurns(sessionId);
         if (disposition === "DEFERRED") {
-          // Shutdown-cancelled provider work did not recover the pending turn.
-          // Reject this recovery attempt so the process-lifetime cache is
-          // cleared by the common failure path and a later restart can retry.
           this.retryableTurnRecoveries.delete(sessionId);
           throw new Error("Turn recovery was deferred during provider shutdown");
         }
@@ -161,4 +166,8 @@ export class SessionRecoveryCoordinator {
     });
     return recovery;
   }
+}
+
+function semanticDeliveryKey(generationId: string, text: string): string {
+  return `${generationId}\u0000${text}`;
 }

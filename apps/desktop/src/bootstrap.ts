@@ -5,6 +5,7 @@ export interface DesktopRendererBootstrap {
   readonly protocolVersion: 1;
   readonly commandBaseUrl: string;
   readonly rendererStreamUrl: string;
+  readonly voiceBaseUrl: string;
   readonly authentication: {
     readonly mode: "DESKTOP_MANAGED";
     readonly headerValue: typeof DESKTOP_AUTH_HEADER_VALUE;
@@ -16,17 +17,20 @@ export interface DesktopRendererBootstrap {
 export function createDesktopRendererBootstrap(input: {
   readonly commandBaseUrl: string;
   readonly rendererStreamUrl: string;
+  readonly voiceBaseUrl: string;
   readonly appVersion: string;
   readonly platform: string;
 }): DesktopRendererBootstrap {
   const commandBaseUrl = exactLoopbackOrigin(input.commandBaseUrl);
   const rendererStreamUrl = exactRendererStreamUrl(input.rendererStreamUrl);
+  const voiceBaseUrl = exactLoopbackOrigin(input.voiceBaseUrl);
   if (input.appVersion.trim().length === 0) throw new Error("Desktop app version is unavailable");
   if (input.platform.trim().length === 0) throw new Error("Desktop platform is unavailable");
   return {
     protocolVersion: 1,
     commandBaseUrl,
     rendererStreamUrl,
+    voiceBaseUrl,
     authentication: {
       mode: "DESKTOP_MANAGED",
       headerValue: DESKTOP_AUTH_HEADER_VALUE
@@ -78,6 +82,7 @@ export function validateDesktopRendererBootstrap(value: unknown): DesktopRendere
       "protocolVersion",
       "commandBaseUrl",
       "rendererStreamUrl",
+      "voiceBaseUrl",
       "authentication",
       "appVersion",
       "platform"
@@ -86,6 +91,7 @@ export function validateDesktopRendererBootstrap(value: unknown): DesktopRendere
     || record["protocolVersion"] !== 1
     || typeof record["commandBaseUrl"] !== "string"
     || typeof record["rendererStreamUrl"] !== "string"
+    || typeof record["voiceBaseUrl"] !== "string"
     || auth["mode"] !== "DESKTOP_MANAGED"
     || auth["headerValue"] !== DESKTOP_AUTH_HEADER_VALUE
     || typeof record["appVersion"] !== "string"
@@ -96,6 +102,7 @@ export function validateDesktopRendererBootstrap(value: unknown): DesktopRendere
   return createDesktopRendererBootstrap({
     commandBaseUrl: record["commandBaseUrl"],
     rendererStreamUrl: record["rendererStreamUrl"],
+    voiceBaseUrl: record["voiceBaseUrl"],
     appVersion: record["appVersion"],
     platform: record["platform"]
   });

@@ -313,6 +313,35 @@ class AudioElement implements BrowserAudioElementLike {
 }
 
 describe("QueuedRendererAudioPlayer exposure semantics", () => {
+  it("does not let a throwing speaking-status observer suppress exposure callbacks", async () => {
+    const element = new AudioElement();
+    const adapter = new QueuedRendererAudioPlayer(
+      new BrowserAudioPlayback(() => element),
+      {
+        onSpeakingChanged: () => {
+          throw new Error("UI observer failure");
+        }
+      }
+    );
+    const onStarted = vi.fn();
+    const onCompleted = vi.fn();
+    const presentation = adapter.playAudio({
+      deliveryId: newDeliveryId(),
+      audioRef: "observer.wav",
+      text: "observer",
+      callbacks: { onStarted, onCompleted }
+    });
+
+    await Promise.resolve();
+    element.emit("playing");
+    await presentation;
+    expect(onStarted).toHaveBeenCalledTimes(1);
+
+    element.emit("ended");
+    await Promise.resolve();
+    expect(onCompleted).toHaveBeenCalledTimes(1);
+  });
+
   it("resolves presentation only on physical playing and completes only on ended", async () => {
     const elements: AudioElement[] = [];
     const playback = new BrowserAudioPlayback(() => {
@@ -504,6 +533,151 @@ describe("QueuedRendererAudioPlayer exposure semantics", () => {
 
     expect(onStarted).toHaveBeenCalledTimes(1);
     expect(onCompleted).not.toHaveBeenCalled();
+  });
+
+  it("reclaims a resolver-owned resource when its resolved shape is malformed", async () => {
+    const release = vi.fn();
+    const adapter = new QueuedRendererAudioPlayer(
+      new BrowserAudioPlayback(() => new AudioElement()),
+      {
+        resolveAudioSource: async () => ({
+          source: "",
+          release
+        })
+      }
+    );
+
+    await expect(adapter.playAudio({
+      deliveryId: newDeliveryId(),
+      audioRef: "logical-malformed",
+      text: "malformed",
+      callbacks: { onStarted: vi.fn(), onCompleted: vi.fn() }
+    })).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("bounds concurrent logical audio resolution before Blob/network work can fan out", async () => {
+    const resolver = vi.fn(async () => new Promise<never>(() => undefined));
+    const playback = new BrowserAudioPlayback(() => new AudioElement());
+    const adapter = new QueuedRendererAudioPlayer(playback, {
+      resolveAudioSource: resolver
+    });
+    const pending: Promise<void>[] = [];
+    for (let index = 0; index < 32; index += 1) {
+      pending.push(adapter.playAudio({
+        deliveryId: newDeliveryId(),
+        audioRef: `logical-${String(index)}`,
+        text: "bounded resolver",
+        callbacks: { onStarted: vi.fn(), onCompleted: vi.fn() }
+      }));
+    }
+    await Promise.resolve();
+    expect(resolver).toHaveBeenCalledTimes(32);
+
+    await expect(adapter.playAudio({
+      deliveryId: newDeliveryId(),
+      audioRef: "overflow",
+      text: "overflow",
+      callbacks: { onStarted: vi.fn(), onCompleted: vi.fn() }
+    })).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+    expect(resolver).toHaveBeenCalledTimes(32);
+
+    adapter.cancelAll();
+    const settled = await Promise.allSettled(pending);
+    expect(settled.every((result) => result.status === "rejected")).toBe(true);
+  });
+
+  it("bounds a hung logical audio resolution before playback admission", async () => {
+    vi.useFakeTimers();
+    try {
+      let observedSignal: AbortSignal | undefined;
+      const playback = new BrowserAudioPlayback(() => new AudioElement());
+      const adapter = new QueuedRendererAudioPlayer(playback, {
+        resolveAudioSource: async (_audioRef, _deliveryId, signal) => {
+          observedSignal = signal;
+          return new Promise(() => undefined);
+        }
+      });
+      const onStarted = vi.fn();
+      const onCompleted = vi.fn();
+      const presentation = adapter.playAudio({
+        deliveryId: newDeliveryId(),
+        audioRef: "logical-ref",
+        text: "bounded resolution",
+        callbacks: { onStarted, onCompleted }
+      });
+
+      const rejected = expect(presentation).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+      await vi.advanceTimersByTimeAsync(5_000);
+      await rejected;
+      expect(observedSignal?.aborted).toBe(true);
+      expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
+      expect(onStarted).not.toHaveBeenCalled();
+      expect(onCompleted).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bounds playback that never reaches the physical playing event", async () => {
+    vi.useFakeTimers();
+    try {
+      const element = new AudioElement();
+      const playback = new BrowserAudioPlayback(() => element);
+      const adapter = new QueuedRendererAudioPlayer(playback);
+      const onStarted = vi.fn();
+      const onCompleted = vi.fn();
+      const presentation = adapter.playAudio({
+        deliveryId: newDeliveryId(),
+        audioRef: "never-starts.wav",
+        text: "bounded start",
+        callbacks: { onStarted, onCompleted }
+      });
+
+      await Promise.resolve();
+      const rejected = expect(presentation).rejects.toBeInstanceOf(RendererPresentationNotExposedError);
+      await vi.advanceTimersByTimeAsync(5_000);
+      await rejected;
+      expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
+      expect(onStarted).not.toHaveBeenCalled();
+      expect(onCompleted).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reclaims started voice audio that never emits ended without claiming completion", async () => {
+    vi.useFakeTimers();
+    try {
+      const element = new AudioElement();
+      const playback = new BrowserAudioPlayback(() => element);
+      const adapter = new QueuedRendererAudioPlayer(playback);
+      const onStarted = vi.fn();
+      const onCompleted = vi.fn();
+      const presentation = adapter.playAudio({
+        deliveryId: newDeliveryId(),
+        audioRef: "never-ends.wav",
+        text: "bounded completion",
+        callbacks: { onStarted, onCompleted }
+      });
+
+      await Promise.resolve();
+      element.emit("playing");
+      await presentation;
+      expect(onStarted).toHaveBeenCalledTimes(1);
+      expect(onCompleted).not.toHaveBeenCalled();
+      expect(playback.snapshot().currentId).toBeDefined();
+
+      await vi.advanceTimersByTimeAsync(130_000);
+      await Promise.resolve();
+
+      expect(playback.snapshot()).toEqual({ currentId: undefined, queuedIds: [] });
+      expect(onStarted).toHaveBeenCalledTimes(1);
+      expect(onCompleted).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("preserves FIFO order, rejects duplicate pending ids, and disposal clears owned elements", async () => {

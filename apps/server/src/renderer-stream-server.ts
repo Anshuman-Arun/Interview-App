@@ -24,9 +24,16 @@ import {
 } from "../../../packages/interview-engine/src/index.js";
 import type { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 
-const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "::1"]);
 const DEFAULT_MAX_CONNECTIONS = 4;
 const DEFAULT_MAX_CONNECTIONS_PER_SESSION = 1;
+const RENDERER_DRAIN_TIMEOUT_MS = 2_000;
+const RENDERER_STREAM_MAX_TOKEN_CHARACTERS = 256;
+const RENDERER_STREAM_MAX_ALLOWED_ORIGINS = 16;
+const RENDERER_STREAM_MAX_ORIGIN_CHARACTERS = 2_048;
+const RENDERER_STREAM_MAX_ATTACH_CHUNKS = 128;
+const RENDERER_STREAM_REQUEST_TIMEOUT_MS = 5_000;
+const RENDERER_STREAM_HEADERS_TIMEOUT_MS = 5_000;
+const LOOPBACK_ORIGIN_HOSTS: ReadonlySet<string> = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 export interface RendererStreamServerOptions {
   readonly security: LocalTransportSecurity;
@@ -35,6 +42,8 @@ export interface RendererStreamServerOptions {
   readonly maxConnections?: number;
   readonly maxConnectionsPerSession?: number;
   readonly maxMessageBytes?: number;
+  readonly audioAssetAvailable?: (sessionId: SessionId, audioRef: string) => boolean;
+  readonly onDeliverySent?: (sessionId: SessionId, deliveryId: DeliveryId) => void | Promise<void>;
 }
 
 export interface BoundRendererStreamAddress {
@@ -83,6 +92,7 @@ class RendererStreamHttpError extends Error {
 
 export class RendererStreamServer {
   private readonly server: Server;
+  private readonly security: LocalTransportSecurity;
   private readonly connections = new Map<SessionId, Set<ActiveConnection>>();
   private readonly maxConnections: number;
   private readonly maxConnectionsPerSession: number;
@@ -95,7 +105,7 @@ export class RendererStreamServer {
   private stoppingPromise: Promise<void> | undefined;
 
   public constructor(private readonly options: RendererStreamServerOptions) {
-    validateSecurity(options.security);
+    this.security = snapshotRendererSecurity(options.security);
     this.maxConnections = positiveInteger(options.maxConnections ?? DEFAULT_MAX_CONNECTIONS, "maxConnections");
     this.maxConnectionsPerSession = positiveInteger(
       options.maxConnectionsPerSession ?? DEFAULT_MAX_CONNECTIONS_PER_SESSION,
@@ -112,6 +122,8 @@ export class RendererStreamServer {
     this.server = createServer((request, response) => {
       void this.handle(request, response);
     });
+    this.server.requestTimeout = RENDERER_STREAM_REQUEST_TIMEOUT_MS;
+    this.server.headersTimeout = RENDERER_STREAM_HEADERS_TIMEOUT_MS;
   }
 
   public async start(): Promise<BoundRendererStreamAddress> {
@@ -124,7 +136,7 @@ export class RendererStreamServer {
       const onError = (error: Error): void => reject(error);
       this.server.once("error", onError);
       this.server.listen({
-        host: this.options.security.host,
+        host: this.security.host,
         port: this.options.port ?? 0,
         exclusive: true
       }, () => {
@@ -137,8 +149,20 @@ export class RendererStreamServer {
     if (address === null || typeof address === "string") {
       throw new Error("Renderer stream server has no TCP address");
     }
-    this.boundAddress = toBoundAddress(this.options.security.host, address);
+    this.boundAddress = toBoundAddress(this.security.host, address);
     return this.boundAddress;
+  }
+
+  public closeSession(sessionId: SessionId): void {
+    const set = this.connections.get(sessionId);
+    if (set === undefined) return;
+    for (const connection of [...set]) {
+      // Terminal authority must not gracefully flush stale buffered commands.
+      // Destroy the transport and let disconnect classification preserve any
+      // already-started exposure uncertainty.
+      if (!connection.response.destroyed) connection.response.destroy();
+      this.removeConnection(connection);
+    }
   }
 
   public stop(): Promise<void> {
@@ -221,9 +245,18 @@ export class RendererStreamServer {
     }
     const sessionId = RendererStreamSessionIdSchema.parse(sessionIdInput);
     const deliveryId = RendererStreamDeliveryIdSchema.parse(deliveryIdInput);
-    return this.serializePublication(sessionId, async () =>
+    const result = await this.serializePublication(sessionId, async () =>
       this.publishDeliveryNow(sessionId, deliveryId)
     );
+    if (result.outcome === "SENT" && this.options.onDeliverySent !== undefined) {
+      try {
+        await this.options.onDeliverySent(sessionId, deliveryId);
+      } catch {
+        // Post-publication work such as TTS may fail closed without changing
+        // the already-authoritative delivery transition.
+      }
+    }
+    return result;
   }
 
   private async publishDeliveryNow(
@@ -252,6 +285,30 @@ export class RendererStreamServer {
       return { outcome: "SENT", deliveryId, status: "DELIVERING" };
     }
 
+    if (
+      atom.content.medium === "AUDIO"
+      && this.options.audioAssetAvailable !== undefined
+      && !safelyCheckAudioAsset(
+        this.options.audioAssetAvailable,
+        sessionId,
+        atom.content.audioRef
+      )
+    ) {
+      const deliveries = new DeliveryCoordinator(writer);
+      if (atom.status === "QUEUED") {
+        await deliveries.cancelBeforeExposure(
+          deliveryId,
+          "Ephemeral audio asset is unavailable before physical delivery"
+        );
+        return { outcome: "NOT_DELIVERABLE", deliveryId, status: "CANCELLED" };
+      }
+      await deliveries.markPossiblyExposed(
+        deliveryId,
+        "Audio delivery began but its ephemeral asset is unavailable for safe replay"
+      );
+      return { outcome: "NOT_DELIVERABLE", deliveryId, status: "POSSIBLY_EXPOSED" };
+    }
+
     const previewCommand = RendererStreamDeliveryCommandSchema.parse({
       deliveryId,
       content: atom.content
@@ -266,12 +323,13 @@ export class RendererStreamServer {
       return { outcome: "MESSAGE_TOO_LARGE", deliveryId, status: atom.status };
     }
 
-    if (connection.response.destroyed || connection.response.writableEnded) {
+    if (rendererConnectionClosed(connection.response)) {
       this.removeConnection(connection);
       return { outcome: "NO_CLIENT", deliveryId };
     }
 
     connection.sentDeliveryIds.add(deliveryId);
+    let physicalWriteAttempted = false;
     try {
       const envelope = createCommandEnvelope({
         sessionId,
@@ -294,11 +352,91 @@ export class RendererStreamServer {
         return { outcome: "MESSAGE_TOO_LARGE", deliveryId, status: reconnected.status };
       }
 
-      connection.response.write(wire);
+      // reconnect() persists DELIVERING before this transport performs the
+      // physical write. Another authority transition (notably
+      // beginUtterance()) may run while reconnect() is awaited. Re-read the
+      // authoritative atom with no further await before response.write(), so a
+      // delivery invalidated in that gap can never begin physical exposure.
+      const beforePhysicalWrite = writer.getState().deliveries[deliveryId];
+      if (beforePhysicalWrite === undefined) {
+        connection.sentDeliveryIds.delete(deliveryId);
+        throw new Error("Renderer delivery disappeared before physical write");
+      }
+      if (beforePhysicalWrite.status !== "DELIVERING") {
+        connection.sentDeliveryIds.delete(deliveryId);
+        return {
+          outcome: "NOT_DELIVERABLE",
+          deliveryId,
+          status: beforePhysicalWrite.status
+        };
+      }
+      if (rendererConnectionClosed(connection.response)) {
+        this.removeConnection(connection);
+        return { outcome: "NO_CLIENT", deliveryId };
+      }
+
+      let acceptedWithoutBackpressure: boolean;
+      try {
+        physicalWriteAttempted = true;
+        acceptedWithoutBackpressure = connection.response.write(wire);
+      } catch {
+        await new DeliveryCoordinator(writer).markPossiblyExposed(
+          deliveryId,
+          "Renderer write failed after physical delivery became uncertain"
+        );
+        this.removeConnection(connection);
+        return {
+          outcome: "NOT_DELIVERABLE",
+          deliveryId,
+          status: "POSSIBLY_EXPOSED"
+        };
+      }
+      if (!acceptedWithoutBackpressure) {
+        const drained = await waitForRendererDrain(connection.response);
+        if (!drained) {
+          await new DeliveryCoordinator(writer).markPossiblyExposed(
+            deliveryId,
+            "Renderer socket stalled after the delivery write became physically uncertain"
+          );
+          if (!connection.response.destroyed) connection.response.destroy();
+          this.removeConnection(connection);
+
+          const stalledStatus = writer.getState().deliveries[deliveryId]?.status;
+          if (stalledStatus === "EXPOSED" || stalledStatus === "COMPLETED") {
+            // SENT describes the transport admission that already occurred;
+            // this result variant intentionally carries the send-time
+            // DELIVERING status even if a concurrent ACK has advanced state.
+            return { outcome: "SENT", deliveryId, status: "DELIVERING" };
+          }
+          return {
+            outcome: "NOT_DELIVERABLE",
+            deliveryId,
+            status: stalledStatus ?? "POSSIBLY_EXPOSED"
+          };
+        }
+      }
       return { outcome: "SENT", deliveryId, status: "DELIVERING" };
     } catch (error) {
-      if (writer.getState().deliveries[deliveryId]?.status !== "DELIVERING") {
+      if (!physicalWriteAttempted) {
         connection.sentDeliveryIds.delete(deliveryId);
+      } else {
+        // Once response.write() was attempted, the browser may have received
+        // some or all of the command even if later transport/ledger work
+        // failed. Never reuse this connection for a same-ID "already sent"
+        // shortcut after an exceptional path.
+        this.removeConnection(connection);
+        const currentStatus = writer.getState().deliveries[deliveryId]?.status;
+        if (currentStatus === "DELIVERING") {
+          try {
+            await new DeliveryCoordinator(writer).markPossiblyExposed(
+              deliveryId,
+              "Renderer publication failed after the physical write became uncertain"
+            );
+          } catch {
+            // Preserve the original error. Disconnect recovery / restart will
+            // still fail closed rather than replay on this removed connection.
+          }
+        }
       }
       throw error;
     }
@@ -336,6 +474,14 @@ export class RendererStreamServer {
 
       await this.awaitDisconnectClassification(attach.sessionId);
       await this.options.sessions.ensureRecovered(attach.sessionId);
+      const recoveredState = this.options.sessions.getWriter(attach.sessionId).getState();
+      if (!recoveredState.started || recoveredState.status !== "ACTIVE") {
+        throw new RendererStreamHttpError(
+          409,
+          "INVALID_STREAM_REQUEST",
+          "Renderer stream requires an active interview session"
+        );
+      }
       if (this.stoppingRequested) {
         throw new RendererStreamHttpError(
           503,
@@ -486,44 +632,99 @@ export class RendererStreamServer {
 
   private authorize(request: IncomingMessage, origin: string | undefined): void {
     const token = headerValue(request, "x-interview-client-token");
-    if (token === undefined || !constantTimeEquals(token, this.options.security.clientToken)) {
+    if (token === undefined || !constantTimeEquals(token, this.security.clientToken)) {
       throw new RendererStreamHttpError(401, "UNAUTHORIZED", "Client authentication failed");
     }
     this.authorizeOrigin(origin);
   }
 
   private authorizeOrigin(origin: string | undefined): void {
-    if (origin === undefined || !this.options.security.allowedOrigins.has(origin)) {
+    if (origin === undefined || !this.security.allowedOrigins.has(origin)) {
       throw new RendererStreamHttpError(403, "ORIGIN_FORBIDDEN", "Client origin is not allowed");
     }
   }
 
   private allowedOrigin(origin: string | undefined): boolean {
-    return origin !== undefined && this.options.security.allowedOrigins.has(origin);
+    return origin !== undefined && this.security.allowedOrigins.has(origin);
   }
 
 }
 
-function validateSecurity(security: LocalTransportSecurity): void {
-  if (!LOOPBACK_HOSTS.has(security.host)) {
+function snapshotRendererSecurity(securityInput: unknown): LocalTransportSecurity {
+  if (typeof securityInput !== "object" || securityInput === null) {
+    throw new Error("Renderer stream security configuration must be an object");
+  }
+
+  let host: unknown;
+  let clientToken: unknown;
+  let allowedOrigins: unknown;
+  try {
+    host = Reflect.get(securityInput, "host");
+    clientToken = Reflect.get(securityInput, "clientToken");
+    allowedOrigins = Reflect.get(securityInput, "allowedOrigins");
+  } catch (error) {
+    throw new Error("Renderer stream security configuration could not be inspected", { cause: error });
+  }
+
+  if (host !== "127.0.0.1" && host !== "::1") {
     throw new Error("Renderer stream server may bind only to a loopback address");
   }
   if (
-    typeof security.clientToken !== "string"
-    || security.clientToken.length < 32
-    || /[\r\n]/u.test(security.clientToken)
+    typeof clientToken !== "string"
+    || clientToken.length < 32
+    || clientToken.length > RENDERER_STREAM_MAX_TOKEN_CHARACTERS
+    || /[\r\n]/u.test(clientToken)
   ) {
-    throw new Error("Client token must contain at least 32 characters");
+    throw new Error("Renderer stream client token must contain between 32 and 256 safe characters");
   }
-  if (security.allowedOrigins.size === 0) {
-    throw new Error("At least one exact client origin is required");
+  if (!(allowedOrigins instanceof Set)) {
+    throw new Error("Renderer stream requires a Set of exact client origins");
   }
-  for (const origin of security.allowedOrigins) {
-    const parsed = new URL(origin);
-    if (parsed.origin !== origin) {
-      throw new Error("Allowed origins must be exact URL origins without paths");
+
+  const origins = new Set<string>();
+  let iterator: IterableIterator<unknown>;
+  try {
+    iterator = Set.prototype.values.call(allowedOrigins) as IterableIterator<unknown>;
+  } catch (error) {
+    throw new Error("Renderer stream origin allowlist could not be inspected", { cause: error });
+  }
+  for (const rawOrigin of iterator) {
+    if (origins.size >= RENDERER_STREAM_MAX_ALLOWED_ORIGINS) {
+      throw new Error("Renderer stream origin allowlist exceeds its bound");
     }
+    if (
+      typeof rawOrigin !== "string"
+      || rawOrigin.length === 0
+      || rawOrigin.length > RENDERER_STREAM_MAX_ORIGIN_CHARACTERS
+    ) {
+      throw new Error("Renderer stream allowed origin is invalid or too long");
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(rawOrigin);
+    } catch (error) {
+      throw new Error("Renderer stream allowed origin is not a valid URL origin", { cause: error });
+    }
+    if (
+      parsed.origin !== rawOrigin
+      || parsed.protocol !== "http:"
+      || !LOOPBACK_ORIGIN_HOSTS.has(parsed.hostname)
+      || parsed.username.length > 0
+      || parsed.password.length > 0
+    ) {
+      throw new Error("Renderer stream allowed origins must be exact HTTP loopback origins");
+    }
+    origins.add(rawOrigin);
   }
+  if (origins.size === 0) {
+    throw new Error("Renderer stream requires at least one exact client origin");
+  }
+
+  return Object.freeze({
+    host,
+    clientToken,
+    allowedOrigins: origins
+  });
 }
 
 function positiveInteger(value: number, label: string): number {
@@ -553,6 +754,10 @@ function headerValue(request: IncomingMessage, name: string): string | undefined
 }
 
 function constantTimeEquals(received: string, expected: string): boolean {
+  if (
+    received.length > RENDERER_STREAM_MAX_TOKEN_CHARACTERS
+    || received.length !== expected.length
+  ) return false;
   const receivedBytes = Buffer.from(received, "utf8");
   const expectedBytes = Buffer.from(expected, "utf8");
   return receivedBytes.length === expectedBytes.length
@@ -562,8 +767,17 @@ function constantTimeEquals(received: string, expected: string): boolean {
 async function readBody(request: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   let byteLength = 0;
+  let chunkCount = 0;
 
   for await (const chunk of request) {
+    chunkCount += 1;
+    if (chunkCount > RENDERER_STREAM_MAX_ATTACH_CHUNKS) {
+      throw new RendererStreamHttpError(
+        413,
+        "BODY_TOO_LARGE",
+        "Renderer stream request exceeds the fragmentation limit"
+      );
+    }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
     byteLength += buffer.byteLength;
     if (byteLength > MAX_RENDERER_STREAM_ATTACH_BYTES) {
@@ -576,7 +790,15 @@ async function readBody(request: IncomingMessage): Promise<string> {
     chunks.push(buffer);
   }
 
-  return Buffer.concat(chunks).toString("utf8");
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
+  } catch {
+    throw new RendererStreamHttpError(
+      400,
+      "INVALID_STREAM_REQUEST",
+      "Renderer stream request is not valid UTF-8"
+    );
+  }
 }
 
 function parseAttachRequest(body: string) {
@@ -654,4 +876,43 @@ function sendJsonError(
   }
   response.writeHead(error.status, headers);
   response.end(json);
+}
+
+function waitForRendererDrain(response: ServerResponse): Promise<boolean> {
+  if (rendererConnectionClosed(response)) return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (drained: boolean): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      response.off("drain", onDrain);
+      response.off("close", onClose);
+      response.off("error", onError);
+      resolve(drained);
+    };
+    const onDrain = (): void => finish(true);
+    const onClose = (): void => finish(false);
+    const onError = (): void => finish(false);
+    const timer = setTimeout(() => finish(false), RENDERER_DRAIN_TIMEOUT_MS);
+    response.once("drain", onDrain);
+    response.once("close", onClose);
+    response.once("error", onError);
+  });
+}
+
+function rendererConnectionClosed(response: ServerResponse): boolean {
+  return response.destroyed || response.writableEnded;
+}
+
+function safelyCheckAudioAsset(
+  check: (sessionId: SessionId, audioRef: string) => boolean,
+  sessionId: SessionId,
+  audioRef: string
+): boolean {
+  try {
+    return check(sessionId, audioRef);
+  } catch {
+    return false;
+  }
 }

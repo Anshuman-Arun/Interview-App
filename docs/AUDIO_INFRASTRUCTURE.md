@@ -121,7 +121,7 @@ BrowserAudioPlayback
 started / completed / interrupted
 ```
 
-This PR does not implement TTS generation or barge-in policy. A later runtime task must decide when an interruption semantically supersedes model work; this layer only stops physical playback when instructed.
+This low-level audio module does not own TTS generation or barge-in policy; it only stops physical playback when instructed. Application integration is documented in `docs/VOICE_INTEGRATION.md`, where admitted speech onset first updates authoritative session state and then invokes this interruption primitive.
 
 ## Hardware verification still required
 
@@ -137,4 +137,4 @@ Automated tests use fakes for media devices, streams, audio contexts, tracks, an
 8. cancellation while a microphone permission prompt is still open;
 9. device-change behavior on any supported target browser that does not expose `devicechange` events.
 
-No Silero VAD, Moonshine STT, Kokoro TTS, browser speech recognition, acoustic echo-cancellation policy, conversational endpointing, automatic turn commit, or Electron device integration is included here.
+This infrastructure module still does not claim live Silero VAD, Moonshine STT, or Kokoro TTS model inference. The application-level voice integration composes the existing worker seams with deterministic/injected runtimes, browser capability-based echo cancellation, endpointing, authoritative turn commit, and Electron transport/bootstrap support; real model assets and hardware-quality validation remain deferred.
