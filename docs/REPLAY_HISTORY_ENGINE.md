@@ -46,7 +46,7 @@ validate event provenance/transition semantics before recovery writes; this
 returns no replay projection or internal state. Raw normalization/upcaster hooks
 and collection/text slicing helpers remain internal implementation details.
 
-The current event-type catalog is compile-time exhaustive: all 50 current
+The current event-type catalog is compile-time exhaustive: all 52 current
 authoritative `EventType` values require an explicit timeline mapping and
 source-policy decision before TypeScript will accept the replay package. Specialized
 domains may additionally require an explicit validation-boundary decision rather
