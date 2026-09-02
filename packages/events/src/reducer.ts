@@ -426,6 +426,57 @@ export function reduceSessionEvent(state: SessionState, event: SessionEvent): Se
       };
       break;
     }
+    case "VISION_EVIDENCE_BRIDGE_COMPLETED": {
+      const request = state.visionRequests[event.payload.visionRequestId];
+      if (
+        request === undefined
+        || request.status !== "ACCEPTED"
+        || request.resultEventId === undefined
+        || request.evidenceBridge?.status !== "DECIDED"
+        || request.evidenceBridge.decision !== "PROPOSAL"
+      ) {
+        throw new Error("Vision evidence bridge completion requires a decided proposal");
+      }
+      if (request.evidenceBridge.interpreterFingerprint !== event.payload.interpreterFingerprint) {
+        throw new Error("Vision evidence bridge completion fingerprint does not match its decision");
+      }
+      const proposalWasAdmitted = state.evidenceProposals.some((proposal) =>
+        jsonDataEqual(proposal, request.evidenceBridge?.status === "DECIDED"
+          && request.evidenceBridge.decision === "PROPOSAL"
+          ? request.evidenceBridge.proposal
+          : undefined)
+      );
+      if (!proposalWasAdmitted) {
+        throw new Error("Vision evidence bridge completion requires an evidence admission attempt");
+      }
+      const evidenceCommitted = Object.values(state.evidenceHistory).some((records) =>
+        records.some((record) =>
+          record.value.evidenceEventIds.includes(request.resultEventId as EventId)
+        )
+      );
+      if (evidenceCommitted !== event.payload.evidenceCommitted) {
+        throw new Error("Vision evidence bridge completion does not match authoritative evidence history");
+      }
+      next = {
+        ...state,
+        visionRequests: {
+          ...state.visionRequests,
+          [event.payload.visionRequestId]: {
+            ...request,
+            evidenceBridge: {
+              status: "COMPLETED",
+              interpreterFingerprint: request.evidenceBridge.interpreterFingerprint,
+              decision: "PROPOSAL",
+              proposal: request.evidenceBridge.proposal,
+              decisionEventId: request.evidenceBridge.decisionEventId,
+              evidenceCommitted,
+              completionEventId: event.eventId
+            }
+          }
+        }
+      };
+      break;
+    }
     case "VISION_RESULT_DISCARDED": {
       const request = state.visionRequests[event.payload.visionRequestId];
       if (request === undefined || request.status !== "PENDING") throw new Error("Vision request is not pending");

@@ -85,6 +85,15 @@ export type VisionEvidenceBridgeState =
       readonly decision: "PROPOSAL";
       readonly proposal: EvidenceProposal;
       readonly decisionEventId: EventId;
+    }
+  | {
+      readonly status: "COMPLETED";
+      readonly interpreterFingerprint: VisionEvidenceInterpreterFingerprint;
+      readonly decision: "PROPOSAL";
+      readonly proposal: EvidenceProposal;
+      readonly decisionEventId: EventId;
+      readonly evidenceCommitted: boolean;
+      readonly completionEventId: EventId;
     };
 
 export interface VisionRequestState {

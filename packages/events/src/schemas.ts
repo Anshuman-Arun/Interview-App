@@ -446,6 +446,11 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
       });
     }
   })),
+  event("VISION_EVIDENCE_BRIDGE_COMPLETED", z.object({
+    visionRequestId: RequestIdSchema,
+    interpreterFingerprint: VisionEvidenceInterpreterFingerprintSchema,
+    evidenceCommitted: z.boolean()
+  }).strict()),
   event("VISION_RESULT_DISCARDED", z.object({
     visionRequestId: RequestIdSchema,
     reason: z.string().min(1).max(240)
