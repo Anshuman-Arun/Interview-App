@@ -354,8 +354,11 @@ export class QuantTradingSessionCoordinator {
       ];
 
       if (engine.getState().status !== "ACTIVE") {
-        if (Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")) {
-          throw new Error("Cannot complete Quant Trading while an input episode is active");
+        if (
+          Object.values(state.inputEpisodes).some((episode) => episode.status === "ACTIVE")
+          || Object.values(state.utterances).some((utterance) => utterance.status === "CAPTURING")
+        ) {
+          throw new Error("Cannot complete Quant Trading while candidate input is unresolved");
         }
         const result = terminalResultEvent(engine.getResult());
         const completedAt = new Date().toISOString();
