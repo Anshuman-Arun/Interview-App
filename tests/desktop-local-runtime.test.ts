@@ -1054,6 +1054,59 @@ describe("desktop local model runtime", () => {
       .not.toContain(`STT_STARTED:${secondRequestId}`);
   });
 
+  it("cancels queued Moonshine STT before it reaches the single native lane", async () => {
+    const token = "7".repeat(64);
+    const runtime = fixtureManager(
+      "speech-serialize-fixture",
+      "speech",
+      "fixture-speech-1",
+      token,
+      "blocking-stt"
+    );
+    await runtime.start("speech-serialize-fixture");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "speech-serialize-fixture",
+      "speech",
+      token
+    );
+    const adapter = new ManagedMoonshineRuntime(client, "/verified/moonshine");
+    expect(adapter.supportsAbort).toBe(false);
+    expect(adapter.observesPreStartAbort).toBe(true);
+
+    const firstController = new AbortController();
+    const first = adapter.transcribe({
+      requestId: SpeechRequestIdSchema.parse("speech-stt-serialized-1"),
+      utteranceId: SpeechUtteranceIdSchema.parse("speech-utt-serialized-1"),
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.1, 0]).buffer),
+      sampleRate: 16_000,
+      modelPath: "/verified/moonshine",
+      signal: firstController.signal
+    });
+    await waitForStatus(runtime, "speech-serialize-fixture", (status) =>
+      status.stdout.lines.includes("STT_STARTED:speech-stt-serialized-1")
+    );
+
+    const secondController = new AbortController();
+    const second = adapter.transcribe({
+      requestId: SpeechRequestIdSchema.parse("speech-stt-serialized-2"),
+      utteranceId: SpeechUtteranceIdSchema.parse("speech-utt-serialized-2"),
+      pcmBytes: new Uint8Array(new Float32Array([0, 0.2, 0]).buffer),
+      sampleRate: 16_000,
+      modelPath: "/verified/moonshine",
+      signal: secondController.signal
+    });
+    secondController.abort();
+
+    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    expect(runtime.getStatus("speech-serialize-fixture").stdout.lines)
+      .not.toContain("STT_STARTED:speech-stt-serialized-2");
+
+    firstController.abort();
+    await runtime.stop("speech-serialize-fixture");
+    await expect(first).rejects.toThrow();
+  });
+
   it("queues the second concrete Kokoro synthesis instead of racing the single native synthesizer", async () => {
     const token = "9".repeat(64);
     const runtime = fixtureManager(
