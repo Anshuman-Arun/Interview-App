@@ -101,6 +101,12 @@ interface IsolatedHomeFile {
   readonly content: string;
 }
 
+interface ExecutionIsolation {
+  readonly environment: NodeJS.ProcessEnv;
+  readonly workingDirectory?: string;
+  readonly homeDirectory?: string;
+}
+
 interface ExecutableIdentity {
   readonly device: bigint;
   readonly inode: bigint;
@@ -466,21 +472,44 @@ function snapshotIsolatedHomeFiles(
   value: unknown
 ): readonly IsolatedHomeFile[] | undefined {
   if (value === undefined) return undefined;
-  const record = inspectPlainRecord(
-    value,
-    new Set(Object.keys(value as object)),
-    "INVALID_DEFINITION"
-  );
-  const entries = Object.entries(record);
+  if (
+    typeof value !== "object"
+    || value === null
+    || utilTypes.isProxy(value)
+    || Array.isArray(value)
+  ) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+
+  let prototype: object | null;
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let symbols: readonly symbol[];
+  try {
+    prototype = Object.getPrototypeOf(value) as object | null;
+    descriptors = Object.getOwnPropertyDescriptors(value);
+    symbols = Object.getOwnPropertySymbols(value);
+  } catch {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+  if (
+    (prototype !== Object.prototype && prototype !== null)
+    || symbols.length !== 0
+  ) {
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+
+  const entries = Object.entries(descriptors);
   if (entries.length > MAX_ISOLATED_HOME_FILES) {
     throw new SupervisedProcessError("INVALID_DEFINITION");
   }
 
   const output: IsolatedHomeFile[] = [];
   let totalBytes = 0;
-  for (const [relativePath, content] of entries) {
+  for (const [relativePath, descriptor] of entries) {
     if (
-      relativePath.length === 0
+      descriptor.enumerable !== true
+      || !("value" in descriptor)
+      || relativePath.length === 0
       || relativePath.includes("\\")
       || relativePath.startsWith("/")
       || relativePath.includes("\0")
@@ -498,6 +527,7 @@ function snapshotIsolatedHomeFiles(
     ) {
       throw new SupervisedProcessError("INVALID_DEFINITION");
     }
+    const content: unknown = descriptor.value;
     if (typeof content !== "string" || content.includes("\0")) {
       throw new SupervisedProcessError("INVALID_DEFINITION");
     }
@@ -512,7 +542,11 @@ function snapshotIsolatedHomeFiles(
     output.push(Object.freeze({ relativePath, content }));
   }
 
-  output.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+  output.sort((left, right) =>
+    left.relativePath < right.relativePath
+      ? -1
+      : left.relativePath > right.relativePath ? 1 : 0
+  );
   return Object.freeze(output);
 }
 
@@ -704,6 +738,35 @@ async function inspectExecutable(
   }
 }
 
+function tryInspectExecutableSync(
+  executable: string,
+  platform: NodeJS.Platform
+): ExecutableIdentity | undefined {
+  try {
+    const info = lstatSync(executable, { bigint: true });
+    const canonicalPath = realpathSync(executable);
+    if (!info.isFile() || info.isSymbolicLink()) return undefined;
+    const configured = path.resolve(executable);
+    const actual = path.resolve(canonicalPath);
+    if (
+      platform === "win32"
+        ? configured.toLowerCase() !== actual.toLowerCase()
+        : configured !== actual
+    ) {
+      return undefined;
+    }
+    return Object.freeze({
+      device: info.dev,
+      inode: info.ino,
+      size: info.size,
+      modifiedNanoseconds: info.mtimeNs,
+      canonicalPath: actual
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 function sameExecutableIdentity(
   left: ExecutableIdentity,
   right: ExecutableIdentity,
@@ -717,6 +780,111 @@ function sameExecutableIdentity(
     && left.inode === right.inode
     && left.size === right.size
     && left.modifiedNanoseconds === right.modifiedNanoseconds;
+}
+
+async function createExecutionIsolation(
+  definition: RegisteredExecutable,
+  platform: NodeJS.Platform
+): Promise<ExecutionIsolation> {
+  let workingDirectory: string | undefined;
+  let homeDirectory: string | undefined;
+  try {
+    const environment = Object.create(null) as NodeJS.ProcessEnv;
+    for (const [key, value] of Object.entries(definition.environment)) {
+      if (typeof value === "string") environment[key] = value;
+    }
+
+    if (definition.isolatedHomeFiles !== undefined) {
+      homeDirectory = await mkdtemp(path.join(tmpdir(), "interview-provider-home-"));
+      if (platform !== "win32") await chmod(homeDirectory, 0o700);
+      await populateIsolatedHome(
+        homeDirectory,
+        definition.isolatedHomeFiles,
+        platform
+      );
+      applyIsolatedHomeEnvironment(environment, homeDirectory, platform);
+    }
+
+    if (definition.isolatedWorkingDirectory) {
+      workingDirectory = await createIsolatedWorkingDirectory();
+    }
+
+    return Object.freeze({
+      environment: Object.freeze(environment),
+      ...(workingDirectory === undefined ? {} : { workingDirectory }),
+      ...(homeDirectory === undefined ? {} : { homeDirectory })
+    });
+  } catch (error) {
+    await cleanupExecutionIsolation({
+      environment: Object.freeze(Object.create(null) as NodeJS.ProcessEnv),
+      ...(workingDirectory === undefined ? {} : { workingDirectory }),
+      ...(homeDirectory === undefined ? {} : { homeDirectory })
+    }).catch(() => undefined);
+    if (error instanceof SupervisedProcessError) throw error;
+    throw new SupervisedProcessError("INVALID_DEFINITION");
+  }
+}
+
+async function populateIsolatedHome(
+  homeDirectory: string,
+  files: readonly IsolatedHomeFile[],
+  platform: NodeJS.Platform
+): Promise<void> {
+  for (const file of files) {
+    const segments = file.relativePath.split("/");
+    const target = path.join(homeDirectory, ...segments);
+    const parent = path.dirname(target);
+    await mkdir(parent, {
+      recursive: true,
+      ...(platform === "win32" ? {} : { mode: 0o700 })
+    });
+    await writeFile(target, file.content, {
+      encoding: "utf8",
+      flag: "wx",
+      ...(platform === "win32" ? {} : { mode: 0o600 })
+    });
+  }
+}
+
+function applyIsolatedHomeEnvironment(
+  environment: NodeJS.ProcessEnv,
+  homeDirectory: string,
+  platform: NodeJS.Platform
+): void {
+  if (platform === "win32") {
+    environment.USERPROFILE = homeDirectory;
+    environment.APPDATA = path.join(homeDirectory, "AppData", "Roaming");
+    environment.LOCALAPPDATA = path.join(homeDirectory, "AppData", "Local");
+    return;
+  }
+
+  environment.HOME = homeDirectory;
+  environment.XDG_CONFIG_HOME = path.join(homeDirectory, ".config");
+  environment.XDG_DATA_HOME = path.join(homeDirectory, ".local", "share");
+  environment.XDG_CACHE_HOME = path.join(homeDirectory, ".cache");
+}
+
+async function cleanupExecutionIsolation(
+  isolation: ExecutionIsolation
+): Promise<void> {
+  let failed = false;
+  if (isolation.workingDirectory !== undefined) {
+    try {
+      await rm(isolation.workingDirectory, { recursive: true, force: true });
+    } catch {
+      failed = true;
+    }
+  }
+  if (isolation.homeDirectory !== undefined) {
+    try {
+      await rm(isolation.homeDirectory, { recursive: true, force: true });
+    } catch {
+      failed = true;
+    }
+  }
+  if (failed) {
+    throw new SupervisedProcessError("PROCESS_TREE_CLEANUP_FAILED");
+  }
 }
 
 async function createIsolatedWorkingDirectory(): Promise<string> {
