@@ -180,7 +180,7 @@ describe("authenticated renderer stream transport", () => {
           clientToken
         },
         sessions
-      })).toThrow(/Client token must contain at least 32 characters/u);
+      })).toThrow(/Renderer stream client token must contain between 32 and 256 safe characters/u);
     }
   });
 
