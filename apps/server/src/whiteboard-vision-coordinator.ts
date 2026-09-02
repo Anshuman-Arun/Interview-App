@@ -530,9 +530,6 @@ export class WhiteboardVisionCoordinator {
     }
 
     const bridge = request.evidenceBridge;
-    if (bridge.status !== "DECIDED" || bridge.decision !== "PROPOSAL") {
-      return { completed: false, reason: "PERSISTED_REQUEST_CORRUPT" };
-    }
 
     const evidenceResult = await turn.processEvidenceProposal({
       envelope: createCommandEnvelope({

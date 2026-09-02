@@ -120,8 +120,7 @@ function prepareImagePayloadForExecution(
     const contentDigest = metadata.contentDigest;
     const readBytes = payload.readBytes;
     if (
-      mimeType !== "image/png"
-      || !Number.isSafeInteger(width)
+      !Number.isSafeInteger(width)
       || width <= 0
       || width > MAX_INFERENCE_IMAGE_DIMENSION
       || !Number.isSafeInteger(height)
