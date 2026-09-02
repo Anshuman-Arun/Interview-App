@@ -267,7 +267,7 @@ describe("supervised one-shot process execution", () => {
 
     const crashed = await runtime.execute(request([FIXTURE, "crash"]));
     expect(crashed.exitCode).toBe(7);
-    expect(crashed.stdout).toBe("private-stdout-value");
+    expect(crashed.stdout).toBe("SENSITIVE_STDOUT_SENTINEL");
     expect(crashed.stderrBytes).toBeGreaterThan(0);
 
     await expect(runtime.execute(request([FIXTURE, "echo"], { stdin: "after-crash" })))
