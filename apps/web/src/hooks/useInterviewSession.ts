@@ -632,7 +632,7 @@ export function useInterviewSession(
   const quantActionFailureMessage = useCallback((err: unknown): string => {
     if (err instanceof BrowserCommandProtocolError) {
       if (err.code === "CONFLICT") {
-        return "The scenario changed before this action was admitted. The latest public state has been refreshed; review it before submitting again.";
+        return "The action conflicts with the current scenario state, such as stale progress. The latest public state has been refreshed; review it before submitting again.";
       }
       if (err.code === "INVALID_COMMAND") {
         return "The authoritative Quant runtime rejected this action. Check the entered values and current public constraints.";
@@ -1946,6 +1946,7 @@ export function useInterviewSession(
     void voiceIntegration.voiceControls.disableMicrophone().catch(() => undefined);
     stopRendererTransport();
     quantReadEpochRef.current += 1;
+    quantActionEpochRef.current += 1;
     quantActionInFlightRef.current = false;
     setQuantState(null);
     setQuantStateLoading(false);
@@ -1961,6 +1962,9 @@ export function useInterviewSession(
       sessionTransitionEpochRef.current += 1;
       terminalTransitionInFlightRef.current = false;
       sessionMutationAdmissionRef.current = false;
+      quantReadEpochRef.current += 1;
+      quantActionEpochRef.current += 1;
+      quantActionInFlightRef.current = false;
       rendererLaunchEpochRef.current += 1;
       rendererRestartRef.current = null;
       if (abortControllerRef.current !== null) {
