@@ -20,16 +20,18 @@ import {
   type ManagedModelWorkerClient
 } from "./managed-worker-client.js";
 
+import {
+  RAPID_LATEX_OCR_MODEL_SET_SHA256,
+  VISION_WORKER_MODEL_IDENTITY
+} from "./model-assets.js";
+
 const MAX_VISION_QUEUE_RESERVATIONS = 4;
 const MAX_VISION_WORKER_RESPONSE_BYTES = 16 * 1024;
 const VISION_WORKER_TIMEOUT_MS = 60_000;
 
-export const LOCAL_VISION_MODEL_SET_SHA256 =
-  "ea51bb3eebca460eeded83ccc81f4d0a50aae0e4aadcf64aa8eead1e50410a4d";
-export const LOCAL_VISION_MODEL_IDENTITY =
-  `rapid-latex-ocr@v0.0.0+set-${LOCAL_VISION_MODEL_SET_SHA256}`;
 export const LOCAL_VISION_RUNTIME_VERSION =
   "onnxruntime/1.29.0;numpy/2.5.2;vision/1";
+export const LOCAL_VISION_MODEL_IDENTITY = VISION_WORKER_MODEL_IDENTITY;
 
 const LOCAL_VISION_PROVENANCE: VisionBackendProvenance =
   VisionBackendProvenanceSchema.parse({
@@ -37,7 +39,7 @@ const LOCAL_VISION_PROVENANCE: VisionBackendProvenance =
     backendVersion: "1.0.0",
     providerId: "local-offline",
     modelId: "rapid-latex-ocr",
-    modelVersion: `v0.0.0+${LOCAL_VISION_MODEL_SET_SHA256}`,
+    modelVersion: `v0.0.0+${RAPID_LATEX_OCR_MODEL_SET_SHA256}`,
     visionCapabilityVersion: "1"
   });
 
