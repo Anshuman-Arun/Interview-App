@@ -600,7 +600,7 @@ describe("staleness, terminal sessions, idempotency, and races", () => {
       if (release === undefined) throw new Error("Expected delayed provider release function");
       release(providerResultFor(request, [candidate(request)]));
       const result = await execution;
-      expect(result).toMatchObject({ status: "STALE", reason: "BASIS_INCOMPATIBLE" });
+      expect(result).toMatchObject({ status: "STALE", reason: "GENERATION_NOT_ACTIVE" });
       expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
     } finally {
       harness.store.close();
@@ -771,9 +771,9 @@ describe("staleness, terminal sessions, idempotency, and races", () => {
         result: verifierResult,
         verifier
       });
-      expect(processed.value).toMatchObject({ accepted: false, reason: "SESSION_NOT_ACTIVE" });
+      expect(processed.value).toMatchObject({ accepted: false, reason: "REQUEST_NOT_PENDING" });
       expect(resultHarness.writer.getState().verificationRequests[admitted.value.workItem.verificationRequestId])
-        .toMatchObject({ status: "DISCARDED", discardReason: "SESSION_NOT_ACTIVE" });
+        .toMatchObject({ status: "DISCARDED", discardReason: "Session completed" });
     } finally {
       resultHarness.store.close();
     }
