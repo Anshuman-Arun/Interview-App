@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream, lstatSync, realpathSync, rmSync } from "node:fs";
+import { appendFileSync, createReadStream, lstatSync, realpathSync, rmSync } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path, { win32 as win32Path } from "node:path";
@@ -840,6 +840,7 @@ export class SupervisedProcessRunner {
       throw new SupervisedProcessError("EXECUTABLE_UNSAFE");
     }
 
+    traceWindowsSupervisorStage("NODE_HELPER_ACQUIRE");
     let assemblyLease = acquireSharedWindowsSupervisorAssembly(
       identity.canonicalPath,
       this.temporaryRoot,
@@ -851,6 +852,7 @@ export class SupervisedProcessRunner {
         assemblyLease.entry.promise,
         request.signal
       );
+      traceWindowsSupervisorStage("NODE_HELPER_READY");
       if (request.signal !== undefined && abortSignalAborted(request.signal)) {
         throw new SupervisedProcessError("EXECUTION_CANCELLED");
       }
@@ -948,6 +950,26 @@ export class SupervisedProcessRunner {
       identity,
       bootstrapStdin: ""
     });
+  }
+}
+
+function traceWindowsSupervisorStage(stage: string): void {
+  if (
+    process.platform !== "win32"
+    || process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG"] !== "1"
+  ) {
+    return;
+  }
+  const target = process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"];
+  if (typeof target !== "string" || target.length === 0) return;
+  try {
+    appendFileSync(
+      target,
+      `INTERVIEW_SUPERVISOR_STAGE:${stage}\n`,
+      { encoding: "utf8" }
+    );
+  } catch {
+    // Temporary diagnostic only; never affect supervised execution semantics.
   }
 }
 
