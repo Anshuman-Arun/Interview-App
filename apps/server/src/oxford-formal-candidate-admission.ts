@@ -45,36 +45,66 @@ export function isOxfordFormalAnalysisSourceRelevant(
         "sixty-two",
         "62"
       ]);
-    case "listed-prime-remainder":
-      return containsAny(text, [
-        "remainder",
-        "modulo",
-        " mod ",
+    case "listed-prime-remainder": {
+      const constructionLanguage = containsAny(text, [
         "product plus one",
         "product-plus-one",
         "multiply all",
+        "product of",
         "plus one"
-      ]) || (
-        containsAny(text, ["listed", "list"])
-        && containsAny(text, ["divide", "divides", "divisor"])
-      );
-    case "prefix-residue-arithmetic":
-      return containsAny(text, [
+      ]);
+      const residueLanguage = containsAny(text, [
+        "remainder",
+        "modulo",
+        " mod ",
+        "mod "
+      ]);
+      const primeContext = containsAny(text, [
+        "prime",
+        "listed",
+        "list",
+        "product",
+        "constructed",
+        "new number",
+        "each p",
+        "p_"
+      ]);
+      return constructionLanguage
+        || (residueLanguage && primeContext)
+        || (
+          containsAny(text, ["listed", "list", "prime"])
+          && containsAny(text, ["divide", "divides", "divisor"])
+        );
+    }
+    case "prefix-residue-arithmetic": {
+      const structuralContext = containsAny(text, [
         "prefix",
         "partial sum",
-        "residue",
         "consecutive block",
         "block sum",
+        "s_i",
+        "s_j"
+      ]);
+      const residueLanguage = containsAny(text, [
+        "residue",
         "same remainder",
         "same residue",
         "modulo n",
         "mod n"
       ]);
-    case "median-ratio-arithmetic":
-      return containsAny(text, [
+      return structuralContext
+        || (residueLanguage && containsAny(text, ["sum", "sums", "prefix", "block"]));
+    }
+    case "median-ratio-arithmetic": {
+      const geometryContext = containsAny(text, [
         "median",
         "centroid",
         "midpoint",
+        "m_a",
+        "m_b",
+        "m_c"
+      ]);
+      const ratioLanguage = containsAny(text, [
         "ratio",
         "two third",
         "two-third",
@@ -84,6 +114,9 @@ export function isOxfordFormalAnalysisSourceRelevant(
         "two to one",
         "one to two"
       ]);
+      return geometryContext
+        || (ratioLanguage && containsAny(text, ["vertex", "along", "segment", "point g"]));
+    }
     case "divisibility-step":
       return containsAny(text, [
         "odd part",
