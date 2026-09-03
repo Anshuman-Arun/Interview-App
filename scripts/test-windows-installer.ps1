@@ -97,7 +97,7 @@ try {
   if (Test-Path $installedExe) {
     throw "Uninstall left application binaries installed"
   }
-  if (Test-Path $desktopShortcut -or Test-Path $startMenuShortcut) {
+  if ((Test-Path $desktopShortcut) -or (Test-Path $startMenuShortcut)) {
     throw "Uninstall left application shortcuts behind"
   }
   if (-not (Test-Path $database) -or -not (Test-Path $modelMarker)) {
