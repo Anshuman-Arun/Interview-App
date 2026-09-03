@@ -1,7 +1,6 @@
 import {
   MAX_SPEECH_CONCURRENT_STREAMS,
-  MAX_SPEECH_TRANSCRIPT_CHARS,
-  MAX_SPEECH_WORD_TIMINGS,
+  parseMoonshineRuntimeResult,
   SPEECH_RECOGNIZER_TIMEOUT_ABORT_REASON,
   SPEECH_VAD_TIMEOUT_ABORT_REASON,
   TTS_LIMITS,
@@ -191,7 +190,7 @@ export class ManagedMoonshineRuntime implements MoonshineRuntime {
           );
           let validatedResult: unknown;
           try {
-            validatedResult = validateMoonshineWorkerResult(rawResult);
+            validatedResult = parseMoonshineRuntimeResult(rawResult);
           } catch (protocolError) {
             await recycleAfterProtocolFailure(
               this.client,
