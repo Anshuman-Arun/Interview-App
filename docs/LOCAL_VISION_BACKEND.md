@@ -83,7 +83,9 @@ Alternatives considered:
 - **The upstream RapidLaTeXOCR Python package.** Not installed. Its published
   dependency constraints conflict with the desktop's pinned NumPy 2.x runtime.
   The application instead consumes only the fixed ONNX/tokenizer assets and
-  implements the small bounded preprocessing/decoding layer locally.
+  implements the bounded preprocessing/decoding layer locally. Pillow and the
+  Hugging Face `tokenizers` runtime, including their transitive runtime
+  dependencies, are version-pinned and validated before any model download.
 
 This is intentionally a narrow backend. Rough diagram topology remains a known
 limitation rather than a reason to silently add cloud vision or a large VLM.
@@ -161,9 +163,12 @@ structural sanity receives a score of `0.69`. Unstable recognition stays at
 `0.55` or below; blank/illegible content is lower still. Both OCR scores are
 intentionally below the evidence bridge's `0.7` minimum.
 
-These values are conservative stability/admission scores. They are **not**
-claimed calibrated probabilities. The existing evidence bridge continues to
-enforce its own minimum threshold (at least 0.7).
+These values are conservative OCR stability scores. They are **not** claimed
+calibrated probabilities. The production backend intentionally caps them below
+the evidence bridge's minimum threshold of 0.7, so OCR repeatability alone can
+never become application-owned evidence. A future evidence-producing vision
+backend would need an explicit calibrated-confidence/version change plus the
+existing application-owned interpreter/admission path.
 
 Prompt-like text is explicitly represented as board content, for example:
 
@@ -229,14 +234,16 @@ The ordinary cross-platform CI jobs do not download production vision weights.
 They run deterministic protocol/integration tests and import the production
 preprocessing runtime without model construction.
 
-A separate Windows real-model smoke job does download the exact pinned assets
-through the same `ModelAssetManager` policy used by production. It then fetches
-the four upstream RapidLaTeXOCR regression images from the exact pinned source
-revision as ephemeral CI inputs, verifies each byte size and Git blob identity,
-and requires exact expected LaTeX on all four. Those third-party PNGs are not
-tracked or redistributed by this repository. The smoke also records cold-load
-time, inference latency, peak working set, and bounded outputs on generated
-whiteboard-like diagram/cross-out cases.
+A separate Windows real-model smoke job downloads the exact pinned assets
+through the same `ModelAssetManager` policy used by production. Four small
+canonical RapidLaTeXOCR regression PNGs are tracked byte-for-byte in
+`tests/fixtures/rapid-latex-ocr/` from upstream source revision
+`21a6365738e6ae74006983ee023755f508739532`; the harness verifies each fixture's
+byte size and Git blob identity before inference and requires exact expected
+LaTeX on all four. The fixture README records upstream provenance/license.
+The smoke also records cold-load time, bounded-crop inference latency, peak
+Windows working set, and bounded outputs on generated equation, inequality,
+summation, modular, diagram, graph, cross-out, arrow, and prompt-like cases.
 
 Covered adversarial cases include:
 
