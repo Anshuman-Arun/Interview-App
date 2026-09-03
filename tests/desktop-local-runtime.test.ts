@@ -963,13 +963,14 @@ describe("desktop local model runtime", () => {
       modelPath: "/verified/moonshine",
       signal: controller.signal
     });
+    const secondRejected = expect(second).rejects.toMatchObject({ name: "AbortError" });
     controller.abort();
 
     await expect(first).resolves.toEqual({
       text: "fixture transcript",
       confidence: 0.9
     });
-    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    await secondRejected;
     expect(runtime.getStatus("speech-stt-queue-fixture").stdout.lines)
       .not.toContain(`STT_STARTED:${secondRequestId}`);
   });
@@ -1041,8 +1042,9 @@ describe("desktop local model runtime", () => {
     );
 
     if (session.cancel === undefined) throw new Error("Expected Kokoro runtime cancellation");
+    const synthesisRejected = expect(synthesis).rejects.toThrow("rejected");
     await expect(session.cancel(requestId)).resolves.toBeUndefined();
-    await expect(synthesis).rejects.toThrow("rejected");
+    await synthesisRejected;
   });
 
   it("fails an active VAD stream if the supervised speech worker restarts between frames", async () => {
@@ -1116,10 +1118,11 @@ describe("desktop local model runtime", () => {
       modelPath: "/verified/moonshine",
       signal: secondController.signal
     });
+    const secondRejected = expect(second).rejects.toMatchObject({ name: "AbortError" });
     secondController.abort();
 
     await expect(first).resolves.toMatchObject({ text: "fixture transcript" });
-    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    await secondRejected;
     expect(runtime.getStatus("stt-serialize-fixture").stdout.lines)
       .not.toContain(`STT_STARTED:${secondRequestId}`);
   });
@@ -1166,15 +1169,17 @@ describe("desktop local model runtime", () => {
       modelPath: "/verified/moonshine",
       signal: secondController.signal
     });
+    const secondRejected = expect(second).rejects.toMatchObject({ name: "AbortError" });
     secondController.abort();
 
-    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    await secondRejected;
     expect(runtime.getStatus("speech-serialize-fixture").stdout.lines)
       .not.toContain("STT_STARTED:speech-stt-serialized-2");
 
+    const firstRejected = expect(first).rejects.toThrow();
     firstController.abort();
     await runtime.stop("speech-serialize-fixture");
-    await expect(first).rejects.toThrow();
+    await firstRejected;
   });
 
   it("queues the second concrete Kokoro synthesis instead of racing the single native synthesizer", async () => {
@@ -1229,10 +1234,12 @@ describe("desktop local model runtime", () => {
       .not.toContain(`TTS_STARTED:${secondRequestId}`);
 
     if (session.cancel === undefined) throw new Error("Expected Kokoro runtime cancellation");
+    const firstRejected = expect(first).rejects.toThrow("rejected");
+    const secondRejected = expect(second).rejects.toMatchObject({ name: "AbortError" });
     await session.cancel(secondRequestId);
     await session.cancel(firstRequestId);
-    await expect(first).rejects.toThrow("rejected");
-    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    await firstRejected;
+    await secondRejected;
     expect(runtime.getStatus("tts-serialize-fixture").stdout.lines)
       .not.toContain(`TTS_STARTED:${secondRequestId}`);
   });
