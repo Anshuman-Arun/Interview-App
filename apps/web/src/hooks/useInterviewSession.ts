@@ -663,6 +663,7 @@ export function useInterviewSession(
     const transitionEpoch = sessionTransitionEpochRef.current;
     const actionEpoch = quantActionEpochRef.current + 1;
     quantActionEpochRef.current = actionEpoch;
+    quantReadEpochRef.current += 1;
     quantActionInFlightRef.current = true;
     setQuantActionPending(true);
     setError(null);
@@ -673,6 +674,7 @@ export function useInterviewSession(
         action
       );
       if (sessionTransitionEpochRef.current === transitionEpoch) {
+        quantReadEpochRef.current += 1;
         const next: QuantSessionPublicState = {
           mode: "QUANT_TRADING",
           state: response.state
@@ -737,6 +739,7 @@ export function useInterviewSession(
     const transitionEpoch = sessionTransitionEpochRef.current;
     const actionEpoch = quantActionEpochRef.current + 1;
     quantActionEpochRef.current = actionEpoch;
+    quantReadEpochRef.current += 1;
     quantActionInFlightRef.current = true;
     setQuantActionPending(true);
     setError(null);
@@ -747,6 +750,7 @@ export function useInterviewSession(
         action
       );
       if (sessionTransitionEpochRef.current === transitionEpoch) {
+        quantReadEpochRef.current += 1;
         const next: QuantSessionPublicState = {
           mode: "QUANT_RESEARCH",
           state: response.state
