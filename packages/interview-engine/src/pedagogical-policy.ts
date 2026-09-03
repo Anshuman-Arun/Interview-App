@@ -219,6 +219,7 @@ interface VerificationSignal {
 interface VerificationEvidenceLink {
   readonly key: EvidenceKey;
   readonly basis: GenerationBasis;
+  readonly boardRevisionIndependent?: true;
   readonly sourceGenerationId?: string;
   readonly result: VerificationResult;
   readonly resultSequence: number;
@@ -828,7 +829,7 @@ function collectActiveEvidence(
       if (isVerificationBasisStillCompatible(
         verificationLink.basis,
         state,
-        verificationLink.sourceGenerationId
+        verificationLink.boardRevisionIndependent === true
       ) !== "COMPATIBLE") {
         staleVerificationDerivedEvidence = true;
       }
@@ -929,6 +930,7 @@ function collectVerificationSignals(
     const verifier = rawRequest["verifier"];
     const interpretationConfidence = rawRequest["interpretationConfidence"];
     const sourceGenerationId = rawRequest["sourceGenerationId"];
+    const boardRevisionIndependent = rawRequest["boardRevisionIndependent"];
     const evidenceEventIds = rawRequest["evidenceEventIds"];
     if (
       !result.success
@@ -947,6 +949,7 @@ function collectVerificationSignals(
         sourceGenerationId !== undefined
         && (!boundedString(sourceGenerationId, MAX_POLICY_ID_CHARACTERS))
       )
+      || (boardRevisionIndependent !== undefined && boardRevisionIndependent !== true)
       || interpretationConfidence !== result.data.interpretationConfidence
       || verifier !== result.data.verifier
       || !Array.isArray(evidenceEventIds)
@@ -986,6 +989,7 @@ function collectVerificationSignals(
       evidenceLinks.set(requestedEventId, {
         key: key.data,
         basis: basis.data,
+        ...(boardRevisionIndependent === true ? { boardRevisionIndependent: true as const } : {}),
         ...(sourceGenerationId === undefined ? {} : { sourceGenerationId }),
         result: result.data,
         resultSequence
@@ -996,7 +1000,7 @@ function collectVerificationSignals(
     if (isVerificationBasisStillCompatible(
       basis.data,
       state,
-      sourceGenerationId
+      boardRevisionIndependent === true
     ) !== "COMPATIBLE") {
       continue;
     }
