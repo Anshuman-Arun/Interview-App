@@ -823,6 +823,45 @@ describe("Antigravity CLI one-turn protocol", () => {
     await Promise.all([first.close(), second.close()]);
   });
 
+  it("omits explicit undefined optionals using Context Compiler JSON semantics", async () => {
+    let captured: SupervisedCliExecutionRequest | undefined;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        captured = request;
+        request.onProcessStart();
+        return executionResult(antigravityStream());
+      })
+    );
+    const session = await provider.createSession();
+
+    await expect(collectProposals(session.sendTurn(turnInput({
+      required: "kept",
+      target: undefined,
+      nested: {
+        allowedDisclosureIds: undefined,
+        maximumDisclosure: 0
+      }
+    })))).resolves.toEqual([PROPOSAL]);
+
+    const stdinMessage = JSON.parse((captured?.stdin ?? "").trim()) as {
+      readonly message?: { readonly content?: unknown };
+    };
+    const content = stdinMessage.message?.content;
+    expect(typeof content).toBe("string");
+    if (typeof content !== "string") throw new Error("Expected string prompt content");
+    const contextMarker = "APPLICATION_SELECTED_CONTEXT_JSON\n";
+    const contextIndex = content.indexOf(contextMarker);
+    expect(contextIndex).toBeGreaterThanOrEqual(0);
+    expect(JSON.parse(content.slice(contextIndex + contextMarker.length))).toEqual({
+      required: "kept",
+      nested: {
+        maximumDisclosure: 0
+      }
+    });
+
+    await session.close();
+  });
+
   it("rejects accessor, toJSON, cyclic, sparse, and non-finite context without invoking user code", async () => {
     let calls = 0;
     const provider = createAntigravityCliReasoningProvider(
