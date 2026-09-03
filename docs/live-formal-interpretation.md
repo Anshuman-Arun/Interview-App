@@ -18,7 +18,7 @@ There is no fallback to mock, Gemini API, another paid provider, or an applicati
 
 ## Separate request and runtime
 
-Formal interpretation is not interviewer generation. It has a deterministic application-owned formal request identity, a dedicated no-tools formal-interpreter agent, its own native JSON schema and purpose-specific prompt, a 4.5 second supervised process budget, a 5 second end-to-end pre-policy analysis deadline, a 256 KiB stdout bound, a 64 KiB stderr bound, a 16,384-character aggregate formal-statement bound, and an AbortSignal propagated from supersession/timeout to the supervised process.
+Formal interpretation is not interviewer generation. It has a deterministic application-owned formal request identity, a dedicated no-tools formal-interpreter agent, its own native JSON schema and purpose-specific prompt, a 1.25 second supervised process budget, a 1.5 second end-to-end pre-policy analysis deadline, a 256 KiB stdout bound, a 64 KiB stderr bound, a 16,384-character aggregate formal-statement bound, and an AbortSignal propagated from supersession/timeout to the supervised process.
 
 StudentReasoningAnalysisCoordinator still runs before pedagogical policy selection. Timeout or provider unavailability produces no new deterministic evidence and policy continues from application-owned state.
 
@@ -70,7 +70,7 @@ On the trusted Windows host with the reviewed Antigravity profile available, set
 
     corepack pnpm smoke:formal-interpretation
 
-The command first runs the exact product launch/readiness checks so one-time executable hashing and zero-turn profile verification are not counted as interpretation latency. It then prints median interpretation latency, approximate worst-case latency, abstention rate, malformed-result rate, deterministic-verification acceptance rate, and per-sample statuses.
+The command first runs the exact product launch/readiness checks so one-time executable hashing and zero-turn profile verification are not counted as interpretation latency. If the measured corpus repeatedly exceeds the 1.25/1.5 second budgets, change those bounds only with the smoke evidence recorded rather than extending the synchronous interview path speculatively. It then prints median interpretation latency, approximate worst-case latency, abstention rate, malformed-result rate, deterministic-verification acceptance rate, and per-sample statuses.
 
 Do not report fixture timings as real-provider timings. Record the JSON emitted by this command in the PR before treating it as real latency evidence.
 
