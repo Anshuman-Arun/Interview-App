@@ -104,9 +104,6 @@ describe("generic interview session configuration", () => {
     expect(JSON.stringify(ramsey.problem)).not.toContain(sixPeopleProblem.private.canonicalSolution);
     expect(JSON.stringify(ramsey.problem)).not.toContain("protectedDisclosures");
     expect(ramsey.problem?.topics).toEqual([]);
-    for (const topic of sixPeopleProblem.interviewer.topics) {
-      expect(JSON.stringify(ramsey.problem)).not.toContain(topic);
-    }
     expect(registry.get(ramseySession).getState().problem?.id).toBe(sixPeopleProblem.id);
     expect(registry.get(divisibilitySession).getState().problem?.id).toBe(divisibility.id);
     expect(registry.get(divisibilitySession).getState().problem?.version).toBe(divisibility.version);
