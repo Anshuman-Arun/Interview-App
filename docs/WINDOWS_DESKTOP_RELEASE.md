@@ -47,9 +47,11 @@ compatible system CPython 3.12 or 3.13 installation plus the exact versions in
 `requirements-local-model-runtime.txt`. Typed interviews do not require
 Python and stay available when the local runtime is missing or invalid.
 
-The desktop Settings page reports the voice capability and the Python
-prerequisite. A missing interpreter is reported as unavailable rather than
-falling back to a fixture worker.
+The desktop Settings page reports the voice capability and validates the
+interpreter through the production worker's authoritative runtime check before
+model setup is enabled. Missing Python, unsupported bitness/version, or drift
+from the pinned package graph blocks model download rather than falling back to
+a fixture worker or wasting a large asset download.
 
 For voice on a clean machine, install CPython 3.12 or 3.13 and install the
 pinned requirements with that interpreter. On Windows the desktop checks the
