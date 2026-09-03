@@ -121,11 +121,14 @@ describe("Windows desktop packaging contract", () => {
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain('"apps/desktop/**"');
     expect(workflow).toContain('"tests/desktop-packaging.test.ts"');
-    expect(workflow).toContain("group: windows-installer-${{ github.sha }}");
+    expect(workflow).toContain(
+      "group: windows-installer-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+    );
     expect(workflow).toContain("cancel-in-progress: false");
     expect(workflow).toContain("Check current PR head");
     expect(workflow).toContain("id: current_head");
     expect(workflow).toContain("steps.current_head.outputs.current");
+    expect(workflow).toContain("EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}");
     expect(workflow).toContain("pull-requests: read");
     expect(workflow).toContain('CSC_IDENTITY_AUTO_DISCOVERY: "false"');
     expect(workflow).toContain("Get-AuthenticodeSignature");
