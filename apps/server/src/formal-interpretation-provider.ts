@@ -78,6 +78,7 @@ implements FormalInterpretationProvider {
       || resolved.providerId !== selection.providerId
       || resolved.modelId !== selection.modelId
       || resolved.runtime === undefined
+      || resolved.provider.capabilities.structuredOutput === "NONE"
       || !requestRemainsCurrent(this.sessions, request)
     ) {
       return abstain(request);
