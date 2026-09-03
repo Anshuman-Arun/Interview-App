@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import subprocess
 import importlib.util
 import sys
 import tempfile
@@ -133,6 +134,26 @@ class ProductionWorkerUnitTests(unittest.TestCase):
 
     def test_runtime_environment_accepts_the_exact_installed_lock(self) -> None:
         worker.require_runtime_environment()
+
+    def test_runtime_check_cli_uses_authoritative_environment_validation(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-I", str(WORKER_PATH), "--check-runtime"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), '{"runtimeCompatible":true}')
+
+    def test_runtime_environment_rejects_32_bit_interpreter(self) -> None:
+        original = worker.sys.maxsize
+        worker.sys.maxsize = 2**31 - 1
+        try:
+            with self.assertRaisesRegex(RuntimeError, "64-bit CPython"):
+                worker.require_runtime_environment()
+        finally:
+            worker.sys.maxsize = original
 
     def test_runtime_environment_rejects_distribution_drift(self) -> None:
         original = worker.version
