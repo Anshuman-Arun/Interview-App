@@ -716,6 +716,45 @@ describe("desktop local model runtime", () => {
     expect(runtime.getStatus("speech-stt-recycle-budget").state).toBe("STOPPED");
   }, 20_000);
 
+  it("does not let successful TTS cancel traffic reset synthesis recovery budget", async () => {
+    const token = "b".repeat(64);
+    const runtime = fixtureManager(
+      "tts-synthesis-recycle-budget",
+      "tts",
+      "fixture-tts-1",
+      token
+    );
+    await runtime.start("tts-synthesis-recycle-budget");
+    const client = new ManagedModelWorkerClient(
+      runtime,
+      "tts-synthesis-recycle-budget",
+      "tts",
+      token
+    );
+
+    await client.recycleAfterUncertainRequest(
+      client.workerInstanceIdentity(),
+      "tts"
+    );
+    await expect(client.postJson("/v1/tts/cancel", {
+      requestId: "health-cancel-1"
+    })).resolves.toEqual({ accepted: false });
+
+    await client.recycleAfterUncertainRequest(
+      client.workerInstanceIdentity(),
+      "tts"
+    );
+    await expect(client.postJson("/v1/tts/cancel", {
+      requestId: "health-cancel-2"
+    })).resolves.toEqual({ accepted: false });
+
+    await expect(client.recycleAfterUncertainRequest(
+      client.workerInstanceIdentity(),
+      "tts"
+    )).rejects.toBeInstanceOf(ManagedWorkerRecoveryExhaustedError);
+    expect(runtime.getStatus("tts-synthesis-recycle-budget").state).toBe("STOPPED");
+  }, 20_000);
+
   it("does not reset uncertain recycle budget after a request-level 4xx", async () => {
     const token = "8".repeat(64);
     const runtime = fixtureManager(
