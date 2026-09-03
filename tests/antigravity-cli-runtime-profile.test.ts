@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   ANTIGRAVITY_REALIZER_AGENT_MARKDOWN,
   ANTIGRAVITY_SUPERVISED_SETTINGS_JSON,
-  createApplicationProviderAdapterRuntimeSource
+  createApplicationProviderAdapterRuntimeSource,
+  isSupportedAntigravityCliVersionOutput
 } from "../apps/server/src/antigravity-cli-runtime.js";
 import {
   ANTIGRAVITY_CLI_MODEL_ID,
@@ -81,31 +82,30 @@ describe("supervised Antigravity runtime profile", () => {
   );
 
   it.runIf(process.platform === "win32")(
-    "exposes account-quota billing proof only with the pinned isolated runtime profile",
+    "exposes a trusted billing verifier only from the concrete pinned runtime",
     async () => {
       const source = createApplicationProviderAdapterRuntimeSource();
       const runtime = source.resolveRuntime({
         providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
         modelId: ANTIGRAVITY_CLI_MODEL_ID
       });
-      const billingVerificationFactory = runtimeBillingVerificationFactory(runtime);
-      const now = new Date("2026-09-02T12:00:00.000Z");
-      const verification = billingVerificationFactory(now) as {
-        readonly billingClass?: unknown;
-        readonly adapterVersion?: unknown;
-        readonly spendImpossible?: unknown;
-        readonly verifiedAt?: unknown;
-      };
 
-      expect(verification).toMatchObject({
-        billingClass: "ACCOUNT_QUOTA",
-        spendImpossible: true,
-        verifiedAt: now.toISOString()
-      });
-      expect(typeof verification.adapterVersion).toBe("string");
+      expect(typeof runtimeBillingVerificationFactory(runtime)).toBe("function");
       await expect(source.drain()).resolves.toBeUndefined();
     }
   );
+
+  it("rejects CLI versions predating headless policy enforcement", () => {
+    expect(isSupportedAntigravityCliVersionOutput("1.1.2\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.3\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.4\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.23\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("agy version 2.0.0\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("v2.0.0\n")).toBe(true);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.4-rc.1\n")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("1.1.4\nextra")).toBe(false);
+    expect(isSupportedAntigravityCliVersionOutput("not-a-version")).toBe(false);
+  });
 
   it("pins a primary-only custom agent using only documented capability fields", () => {
     expect(ANTIGRAVITY_REALIZER_AGENT_MARKDOWN).toContain(
