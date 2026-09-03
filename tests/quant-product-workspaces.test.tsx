@@ -285,6 +285,87 @@ describe("Quant product hook authority", () => {
     rendered.container.remove();
   });
 
+  it("does not let a superseded public-state read overwrite an admitted Trading action", async () => {
+    const sessionId: SessionId = newSessionId();
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: { id: "BASIC_MARKET_MAKING", version: "1.0.0" },
+      interventionPolicy: "BALANCED"
+    });
+    const round1 = activeTradingState(1);
+    const round2 = activeTradingState(2);
+    let readCount = 0;
+    let staleReadRequestId: string | undefined;
+    let resolveStaleRead: ((response: Response) => void) | undefined;
+
+    const fetchImpl: typeof fetch = async (_input, init = {}) => {
+      if (typeof init.body !== "string") throw new Error("Expected JSON command");
+      const command = JSON.parse(init.body) as Record<string, unknown>;
+      const requestId = command.requestId;
+      if (typeof requestId !== "string") throw new Error("Missing request ID");
+      if (command.type === "START_CONFIGURED_SESSION") {
+        return jsonResponse({ protocolVersion: 1, requestId, ok: true, type: "CONFIGURED_SESSION_STARTED", sessionId, configuration });
+      }
+      if (command.type === "GET_INTERVIEW_SESSION_CONTEXT") {
+        return jsonResponse({ protocolVersion: 1, requestId, ok: true, type: "INTERVIEW_SESSION_CONTEXT", sessionId, configuration, configurationSource: "CONFIGURED" });
+      }
+      if (command.type === "GET_QUANT_SESSION_STATE") {
+        readCount += 1;
+        if (readCount === 1) {
+          return jsonResponse({ protocolVersion: 1, requestId, ok: true, type: "QUANT_TRADING_STATE", sessionId, state: round1 });
+        }
+        staleReadRequestId = requestId;
+        return new Promise<Response>((resolve) => {
+          resolveStaleRead = resolve;
+        });
+      }
+      if (command.type === "SUBMIT_QUANT_TRADING_ACTION") {
+        return jsonResponse({ protocolVersion: 1, requestId, ok: true, type: "QUANT_TRADING_STATE", sessionId, state: round2 });
+      }
+      throw new Error(`Unexpected command ${String(command.type)}`);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    await act(async () => {
+      await rendered.current().startConfiguredSession(configuration, sessionId);
+    });
+    await act(async () => {
+      await rendered.current().refreshQuantState();
+    });
+
+    let staleRead!: Promise<unknown>;
+    act(() => {
+      staleRead = rendered.current().refreshQuantState();
+    });
+    expect(rendered.current().quantStateLoading).toBe(true);
+
+    await act(async () => {
+      await rendered.current().submitQuantTradingAction({ type: "PASS" });
+    });
+    expect(rendered.current().quantState).toEqual({ mode: "QUANT_TRADING", state: round2 });
+    expect(rendered.current().quantStateLoading).toBe(false);
+
+    if (resolveStaleRead === undefined) throw new Error("Expected a held Quant read");
+    resolveStaleRead(jsonResponse({
+      protocolVersion: 1,
+      requestId: staleReadRequestId,
+      ok: true,
+      type: "QUANT_TRADING_STATE",
+      sessionId,
+      state: round1
+    }));
+    await act(async () => {
+      await staleRead;
+    });
+
+    expect(rendered.current().quantState).toEqual({ mode: "QUANT_TRADING", state: round2 });
+    expect(rendered.current().quantStateLoading).toBe(false);
+
+    await act(async () => rendered.root.unmount());
+    rendered.container.remove();
+  });
+
   it("refreshes stale Trading progress without resubmitting candidate intent", async () => {
     const sessionId: SessionId = newSessionId();
     const configuration = InterviewSessionConfigurationSchema.parse({
