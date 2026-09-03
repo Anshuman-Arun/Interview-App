@@ -499,6 +499,7 @@ Write-InterviewSupervisorStage "PS_ENTER"
 $configJson = $env:INTERVIEW_SUPERVISED_CONFIG_JSON
 $assemblyPath = $env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH
 $assemblySha256 = $env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256
+Write-InterviewSupervisorStage "PS_ENV_READ"
 if (
   [string]::IsNullOrWhiteSpace($configJson) -or
   [string]::IsNullOrWhiteSpace($assemblyPath) -or
@@ -506,10 +507,15 @@ if (
 ) {
   exit 191
 }
+Write-InterviewSupervisorStage "PS_REQUIRED_OK"
 Remove-Item Env:INTERVIEW_SUPERVISED_CONFIG_JSON -ErrorAction SilentlyContinue
+Write-InterviewSupervisorStage "PS_REMOVE_CONFIG"
 Remove-Item Env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH -ErrorAction SilentlyContinue
+Write-InterviewSupervisorStage "PS_REMOVE_PATH"
 Remove-Item Env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256 -ErrorAction SilentlyContinue
+Write-InterviewSupervisorStage "PS_REMOVE_SHA"
 Remove-Item Env:INTERVIEW_SUPERVISED_BOOTSTRAP -ErrorAction SilentlyContinue
+Write-InterviewSupervisorStage "PS_REMOVE_BOOTSTRAP"
 Remove-Item Env:INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE -ErrorAction SilentlyContinue
 Write-InterviewSupervisorStage "PS_CONFIG_OK"
 
