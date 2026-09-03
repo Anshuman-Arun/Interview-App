@@ -177,6 +177,10 @@ export function createFormalProviderContext(
   });
 }
 
+function abortRequested(signal: AbortSignal): boolean {
+  return signal.aborted;
+}
+
 function supportsLiveFormalInterpretation(
   selection: ProviderSelectionReference | undefined
 ): selection is ProviderSelectionReference {
