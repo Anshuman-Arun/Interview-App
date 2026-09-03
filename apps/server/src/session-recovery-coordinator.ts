@@ -484,7 +484,7 @@ function inferUnmarkedConfigurationSource(
   }
 
   const exactLegacyShape =
-    candidate.problem?.version === legacy.problem.version
+    candidate.problem.version === legacy.problem.version
     && candidate.difficulty === legacy.difficulty;
 
   // Before provenance was persisted, configured sessions already stored their
