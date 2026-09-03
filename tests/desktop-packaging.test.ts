@@ -164,6 +164,10 @@ describe("Windows desktop packaging contract", () => {
     expect(smoke).not.toContain("$host =");
     expect(installer).toContain("preserve-across-upgrade-and-uninstall");
     expect(installer).toContain("PriorInstaller");
+    expect(installer).toContain("Resolve-InstalledExecutable");
+    expect(installer).toContain("WScript.Shell");
+    expect(installer).toContain("escaped the per-user LOCALAPPDATA Programs directory");
+    expect(installer).toContain("Versioned upgrade changed the stable per-user installation target");
     expect(installer).toContain("Versioned upgrade did not replace");
     expect(installer).toContain("INTERVIEW_PACKAGED_SMOKE_REPORT");
     expect(installer).toContain("INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT");
