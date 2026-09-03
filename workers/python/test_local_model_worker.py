@@ -155,6 +155,15 @@ class ProductionWorkerUnitTests(unittest.TestCase):
         finally:
             worker.sys.maxsize = original
 
+    def test_runtime_environment_rejects_non_x86_64_interpreter(self) -> None:
+        original = worker.platform.machine
+        worker.platform.machine = lambda: "ARM64"
+        try:
+            with self.assertRaisesRegex(RuntimeError, "x86-64 CPython"):
+                worker.require_runtime_environment()
+        finally:
+            worker.platform.machine = original
+
     def test_runtime_environment_rejects_distribution_drift(self) -> None:
         original = worker.version
 
