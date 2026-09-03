@@ -1,9 +1,9 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { createAndStartServer } from "../../server/src/server.js";
-import { newSessionId } from "../../../packages/domain/src/index.js";
+import { SessionIdSchema, newSessionId, type SessionId } from "../../../packages/domain/src/index.js";
 import {
   app,
   BrowserWindow,
@@ -50,6 +50,8 @@ import {
 } from "./window-config.js";
 
 const OPTIONAL_LOCAL_RUNTIME_STARTUP_BUDGET_MS = 60_000;
+const PACKAGED_SMOKE_PROOF_MAX_BYTES = 64 * 1024;
+const PACKAGED_SMOKE_INPUT = PACKAGED_SMOKE_INPUT;
 
 let localRuntime: DesktopLocalRuntimeComposition | undefined;
 const startupAbort = new AbortController();
@@ -406,6 +408,106 @@ async function postPackagedSmokeCommand(
   }
 }
 
+function packagedSmokeProofPath(name: string): string | undefined {
+  const candidate = process.env[name];
+  if (candidate === undefined) return undefined;
+  if (
+    candidate.length === 0
+    || candidate.length > 4_096
+    || candidate.includes("\0")
+    || !path.isAbsolute(candidate)
+  ) {
+    throw new Error("Packaged smoke proof path must be a bounded absolute path");
+  }
+  return candidate;
+}
+
+async function verifyPriorPackagedSmokeSession(
+  server: Awaited<ReturnType<DesktopBackendController["start"]>>
+): Promise<void> {
+  const proofPath = packagedSmokeProofPath("INTERVIEW_PACKAGED_SMOKE_EXPECT_REPORT");
+  if (proofPath === undefined) return;
+
+  const metadata = await lstat(proofPath);
+  if (
+    !metadata.isFile()
+    || metadata.isSymbolicLink()
+    || metadata.size <= 0
+    || metadata.size > PACKAGED_SMOKE_PROOF_MAX_BYTES
+  ) {
+    throw new Error("Packaged upgrade smoke proof is not a bounded regular file");
+  }
+  const raw = await readFile(proofPath, "utf8");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Packaged upgrade smoke proof is malformed");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Packaged upgrade smoke proof is malformed");
+  }
+  const record = parsed as Record<string, unknown>;
+  if (
+    Object.keys(record).sort().join(",")
+      !== "expectedStudentText,minimumSequence,protocolVersion,sessionId"
+    || record["protocolVersion"] !== 1
+    || record["expectedStudentText"] !== PACKAGED_SMOKE_INPUT
+    || typeof record["minimumSequence"] !== "number"
+    || !Number.isSafeInteger(record["minimumSequence"])
+    || record["minimumSequence"] < 0
+  ) {
+    throw new Error("Packaged upgrade smoke proof is malformed");
+  }
+  const sessionIdResult = SessionIdSchema.safeParse(record["sessionId"]);
+  if (
+    !sessionIdResult.success
+    || !sessionIdResult.data.startsWith("session_")
+    || sessionIdResult.data.length > 128
+  ) {
+    throw new Error("Packaged upgrade smoke proof contains an invalid session ID");
+  }
+  const sessionId = sessionIdResult.data;
+  let state: ReturnType<ReturnType<typeof server.registry.get>["getState"]>;
+  try {
+    state = server.registry.get(sessionId).getState();
+  } catch {
+    throw new Error("Upgraded package could not reload the prior persisted session");
+  }
+  if (
+    state.sessionId !== sessionId
+    || !state.started
+    || state.sequence < record["minimumSequence"]
+    || !Object.values(state.turns).some(
+      (turn) => turn.studentText === PACKAGED_SMOKE_INPUT
+    )
+  ) {
+    throw new Error("Upgraded package did not preserve the prior authoritative session");
+  }
+}
+
+async function writePackagedSmokeProof(
+  sessionId: SessionId,
+  minimumSequence: number
+): Promise<void> {
+  const proofPath = packagedSmokeProofPath("INTERVIEW_PACKAGED_SMOKE_REPORT");
+  if (proofPath === undefined) return;
+  const payload = JSON.stringify({
+    protocolVersion: 1,
+    sessionId,
+    expectedStudentText: PACKAGED_SMOKE_INPUT,
+    minimumSequence
+  });
+  if (Buffer.byteLength(payload, "utf8") > PACKAGED_SMOKE_PROOF_MAX_BYTES) {
+    throw new Error("Packaged smoke proof exceeded its bounded size");
+  }
+  await writeFile(proofPath, payload, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600
+  });
+}
+
 async function runPackagedSmoke(
   server: Awaited<ReturnType<DesktopBackendController["start"]>>,
   backendConfig: Parameters<DesktopBackendController["start"]>[0]
@@ -453,6 +555,8 @@ async function runPackagedSmoke(
     throw new Error("Packaged smoke backend authentication configuration is unavailable");
   }
 
+  await verifyPriorPackagedSmokeSession(server);
+
   const commandUrl = `${server.bound.command.url}/v1/commands`;
   const sessionId = newSessionId();
   await postPackagedSmokeCommand(commandUrl, token, origin, {
@@ -466,14 +570,14 @@ async function runPackagedSmoke(
     type: "COMMIT_TYPED_INPUT",
     requestId: `request_${randomUUID()}`,
     sessionId,
-    text: "Packaged Windows desktop smoke input."
+    text: PACKAGED_SMOKE_INPUT
   });
   const beforeRestart = server.registry.get(sessionId).getState();
   if (
     !beforeRestart.started
     || beforeRestart.status !== "ACTIVE"
     || !Object.values(beforeRestart.turns).some(
-      (turn) => turn.studentText === "Packaged Windows desktop smoke input."
+      (turn) => turn.studentText === PACKAGED_SMOKE_INPUT
     )
   ) {
     throw new Error("Packaged command smoke did not commit the typed turn authoritatively");
@@ -487,11 +591,12 @@ async function runPackagedSmoke(
     || !afterRestart.started
     || afterRestart.sequence < beforeRestart.sequence
     || !Object.values(afterRestart.turns).some(
-      (turn) => turn.studentText === "Packaged Windows desktop smoke input."
+      (turn) => turn.studentText === PACKAGED_SMOKE_INPUT
     )
   ) {
     throw new Error("Packaged SQLite persistence smoke validation failed");
   }
+  await writePackagedSmokeProof(sessionId, afterRestart.sequence);
 }
 
 function installBootstrapHandler(): void {
