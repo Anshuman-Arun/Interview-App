@@ -84,7 +84,7 @@ capabilities therefore declare both local process execution and remote execution
 remote data use, and unknown metered-execution status. The standalone adapter remains fail-closed
 under no-metered policy unless a trusted runtime supplies current billing evidence.
 
-The concrete Windows application runtime requires the audited `agy 1.1.x >= 1.1.9` stream-json
+The concrete Windows application runtime requires the audited `agy 1.1.x >= 1.1.15` stream-json
 contract, forces AI-credit fallback off, leaves `modelProvider` absent, and does not inherit
 API-key/custom-endpoint environment variables. The CLI still authenticates through its OS-native
 account keyring, which can represent subscription, enterprise, or Google Cloud project modes.

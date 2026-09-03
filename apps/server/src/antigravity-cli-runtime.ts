@@ -13,7 +13,7 @@ import {
 } from "../../../packages/providers/src/index.js";
 
 const ANTIGRAVITY_EXECUTABLE_ID = "antigravity-cli";
-const ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 9] as const);
+const ANTIGRAVITY_MINIMUM_SAFE_CLI_VERSION = Object.freeze([1, 1, 15] as const);
 const ANTIGRAVITY_VERSION_CHECK_TIMEOUT_MS = 10_000;
 const ANTIGRAVITY_VERSION_STDOUT_BYTES = 256;
 const ANTIGRAVITY_VERSION_STDERR_BYTES = 4 * 1024;
