@@ -273,6 +273,22 @@ describe("Antigravity CLI provider registration and policy truthfulness", () => 
     })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
     expect(getterCalls).toBe(0);
 
+    let billingGetterCalls = 0;
+    const runtimeWithBillingGetter = Object.defineProperty({
+      executor: fakeExecutor(async () => executionResult(antigravityStream()))
+    }, "billingVerificationFactory", {
+      enumerable: true,
+      get() {
+        billingGetterCalls += 1;
+        return () => ({ spendImpossible: true });
+      }
+    });
+    await expect(factory.createAdapter({
+      resolved,
+      runtime: runtimeWithBillingGetter
+    })).rejects.toMatchObject({ code: "INVALID_FACTORY_INPUT" });
+    expect(billingGetterCalls).toBe(0);
+
     let proxyTrapCalls = 0;
     const hostileProxy = new Proxy({}, {
       ownKeys() {
