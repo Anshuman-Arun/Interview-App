@@ -84,7 +84,8 @@ class ProtocolHttpError extends Error {
   public constructor(
     public readonly status: number,
     public readonly code: ProtocolErrorResponse["error"]["code"],
-    message: string
+    message: string,
+    public readonly providerLaunchReason?: ProviderLaunchAvailabilityReason
   ) {
     super(message);
   }
@@ -245,7 +246,13 @@ export class LoopbackCommandServer {
       sendJson(response, protocolError.status, ProtocolErrorResponseSchema.parse({
         protocolVersion: 1,
         ok: false,
-        error: { code: protocolError.code, message: protocolError.message }
+        error: {
+          code: protocolError.code,
+          message: protocolError.message,
+          ...(protocolError.providerLaunchReason === undefined
+            ? {}
+            : { providerLaunchReason: protocolError.providerLaunchReason })
+        }
       }), this.allowedOrigin(origin) ? origin : undefined);
     }
   }
@@ -362,7 +369,8 @@ export class LoopbackCommandServer {
         throw new ProtocolHttpError(
           409,
           "CONFLICT",
-          providerLaunchFailureMessage(provider.reason)
+          providerLaunchFailureMessage(provider.reason),
+          provider.reason
         );
       }
     }
