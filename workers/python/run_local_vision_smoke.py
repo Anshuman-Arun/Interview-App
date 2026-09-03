@@ -66,16 +66,28 @@ def peak_working_set_bytes() -> int | None:
             ("PeakPagefileUsage", ctypes.c_size_t),
         ]
 
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.argtypes = []
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(PROCESS_MEMORY_COUNTERS),
+        wintypes.DWORD,
+    ]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+
     counters = PROCESS_MEMORY_COUNTERS()
     counters.cb = ctypes.sizeof(counters)
-    handle = ctypes.windll.kernel32.GetCurrentProcess()
-    ok = ctypes.windll.psapi.GetProcessMemoryInfo(
+    handle = kernel32.GetCurrentProcess()
+    ok = psapi.GetProcessMemoryInfo(
         handle,
         ctypes.byref(counters),
         counters.cb,
     )
     if not ok:
-        raise RuntimeError("GetProcessMemoryInfo failed")
+        error_code = ctypes.get_last_error()
+        raise OSError(error_code, "GetProcessMemoryInfo failed")
     return int(counters.PeakWorkingSetSize)
 
 
