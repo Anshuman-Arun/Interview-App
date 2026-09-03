@@ -36,6 +36,8 @@ BOS_TOKEN = 1
 EOS_TOKEN = 2
 FIRST_CONTENT_TOKEN = 4
 REPETITION_CUTOFF = 8
+MAX_HEURISTIC_CONFIDENCE = 0.69
+UNSTABLE_HEURISTIC_CONFIDENCE = 0.55
 MODEL_SPECS: dict[str, tuple[int, str]] = {
     "image_resizer.onnx": (
         38_967_751,
@@ -153,7 +155,7 @@ class VisionRuntime:
         )
         # Repeatability is not calibrated semantic confidence. Keep even the
         # strongest OCR heuristic below the evidence bridge's 0.7 admission floor.
-        confidence = 0.69 if stable else 0.55
+        confidence = MAX_HEURISTIC_CONFIDENCE if stable else UNSTABLE_HEURISTIC_CONFIDENCE
         kind = _classify(primary_text)
         if requested_kind != "ANY" and kind != requested_kind:
             return {
