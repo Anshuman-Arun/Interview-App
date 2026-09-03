@@ -9,6 +9,7 @@ been installed.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import statistics
@@ -17,7 +18,19 @@ import time
 from pathlib import Path
 from typing import Any
 
-from local_vision_runtime import VisionRuntime, _decode_png, _prepare_gray
+_RUNTIME_PATH = Path(__file__).resolve().with_name("local_vision_runtime.py")
+_SPEC = importlib.util.spec_from_file_location(
+    "interview_local_vision_runtime_smoke",
+    _RUNTIME_PATH,
+)
+if _SPEC is None or _SPEC.loader is None:
+    raise RuntimeError("Could not load local vision runtime for smoke testing")
+_runtime_module = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = _runtime_module
+_SPEC.loader.exec_module(_runtime_module)
+VisionRuntime = _runtime_module.VisionRuntime
+_decode_png = _runtime_module._decode_png
+_prepare_gray = _runtime_module._prepare_gray
 
 EXPECTED_MODEL_BYTES = 178_952_787
 
