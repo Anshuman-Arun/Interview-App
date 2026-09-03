@@ -22,7 +22,9 @@ import {
   QuantTradingSessionCoordinator,
   SessionRuntimeRegistry,
   TurnCoordinator,
-  createCommandEnvelope
+  createCommandEnvelope,
+  createProviderContextSpecFingerprintSync,
+  fingerprintCommand
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
@@ -386,6 +388,102 @@ describe("generic interview session configuration", () => {
       result: { started: true }
     });
     expect(sessions.getConfigurationSource(quantSessionId)).toBe("CONFIGURED");
+  });
+
+  it("distinguishes an ambiguous pre-marker Ramsey configured start from legacy by durable fingerprint", () => {
+    const configuredSessionId = newSessionId();
+    const configuredRequestId = newRequestId();
+    const configuredEnvelope = createCommandEnvelope({
+      sessionId: configuredSessionId,
+      requestId: configuredRequestId,
+      producer: "authenticated-local-client"
+    });
+    const configuration = oxfordConfiguration(
+      sixPeopleProblem.id,
+      sixPeopleProblem.version,
+      sixPeopleProblem.interviewer.difficulty
+    );
+    const providerContextSpecSha256 =
+      createProviderContextSpecFingerprintSync(sixPeopleProblem);
+    const problemIdentity = {
+      problemId: sixPeopleProblem.id,
+      problemVersion: sixPeopleProblem.version,
+      prompt: sixPeopleProblem.public.prompt,
+      providerContextSpecSha256
+    };
+
+    store.appendIdempotent({
+      sessionId: configuredSessionId,
+      requestId: configuredRequestId,
+      causationId: configuredEnvelope.causationId,
+      correlationId: configuredEnvelope.correlationId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: fingerprintCommand(configuredEnvelope, {
+        operation: "START_SESSION",
+        payload: {
+          configuration,
+          problem: problemIdentity
+        }
+      }),
+      drafts: [
+        {
+          source: "APPLICATION",
+          type: "SESSION_STARTED",
+          payload: {
+            startedAt: "2026-09-02T12:00:03.000Z",
+            configuration
+          }
+        },
+        {
+          source: "APPLICATION",
+          type: "PROBLEM_PRESENTED",
+          payload: problemIdentity
+        }
+      ],
+      result: { started: true }
+    });
+
+    const persistedSessions = new SessionRecoveryCoordinator(registry, store);
+    expect(persistedSessions.getConfigurationSource(configuredSessionId)).toBe("CONFIGURED");
+
+    const legacySessionId = newSessionId();
+    const legacyRequestId = newRequestId();
+    const legacyEnvelope = createCommandEnvelope({
+      sessionId: legacySessionId,
+      requestId: legacyRequestId,
+      producer: "authenticated-local-client"
+    });
+    store.appendIdempotent({
+      sessionId: legacySessionId,
+      requestId: legacyRequestId,
+      causationId: legacyEnvelope.causationId,
+      correlationId: legacyEnvelope.correlationId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: fingerprintCommand(legacyEnvelope, {
+        operation: "START_SESSION",
+        payload: problemIdentity
+      }),
+      drafts: [
+        {
+          source: "APPLICATION",
+          type: "SESSION_STARTED",
+          payload: {
+            startedAt: "2026-09-02T12:00:04.000Z",
+            configuration
+          }
+        },
+        {
+          source: "APPLICATION",
+          type: "PROBLEM_PRESENTED",
+          payload: problemIdentity
+        }
+      ],
+      result: { started: true }
+    });
+    expect(persistedSessions.getConfigurationSource(legacySessionId))
+      .toBe("LEGACY_COMPATIBILITY");
   });
 
   it("keeps exact configured retries idempotent even if provider readiness later changes", async () => {
