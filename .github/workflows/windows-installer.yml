@@ -14,7 +14,6 @@ on:
       - "apps/server/**"
       - "packages/**"
       - "workers/python/local_model_worker.py"
-      - "workers/python/local_vision_runtime.py"
       - "workers/python/requirements-local-model-runtime.txt"
       - "scripts/check-packaged-desktop.mjs"
       - "scripts/clean-windows-package.mjs"
@@ -159,22 +158,148 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+
   vision-model-smoke:
     name: vision model smoke (windows-latest)
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 114
     runs-on: windows-latest
     timeout-minutes: 20
     env:
       CI: true
     steps:
-      - name: Check current PR head
-        id: current_head
-        if: github.event_name == 'pull_request'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm 11.19.0
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.19.0
+          run_install: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install exact local model runtime lock
+        run: python -m pip install --disable-pip-version-check --only-binary=:all: -r workers/python/requirements-local-model-runtime.txt
+
+      - name: Validate no-weight vision safety first
         run: |
-          $current = gh api "repos/${{ github.repository }}/pulls/$env:PR_NUMBER" --jq ".head.sha"
-          $isCurrent = if ($current -eq $env:EXPECTED_SHA) { "true" } else { "false" }
-          "current=$isCurrent" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          python -I workers/python/validate_local_model_runtime.py
+          python -I workers/python/test_local_vision_runtime.py
+
+      - name: Install exact vision assets through production ModelAssetManager
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $cache = Join-Path $env:RUNNER_TEMP "vision-model-cache"
+          $model = Join-Path $env:RUNNER_TEMP "vision-model-root"
+          pnpm exec tsx scripts/prepare-local-vision-smoke.ts "$cache" "$model"
+          if ($LASTEXITCODE -ne 0) { throw "production vision asset preparation failed" }
+
+      - name: Prepare whiteboard-like corpus
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $corpus = Join-Path $env:RUNNER_TEMP "vision-whiteboard-corpus"
+          New-Item -ItemType Directory -Force $corpus | Out-Null
+          Add-Type -AssemblyName System.Drawing
+
+          function New-TextImage([string]$Name, [string]$Text, [float]$FontSize) {
+            $path = Join-Path $corpus $Name
+            $bmp = New-Object System.Drawing.Bitmap 1000, 260
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            try {
+              $g.Clear([System.Drawing.Color]::White)
+              $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+              $font = New-Object System.Drawing.Font("Segoe Print", $FontSize)
+              try {
+                $g.DrawString($Text, $font, [System.Drawing.Brushes]::Black, 24, 70)
+              } finally {
+                $font.Dispose()
+              }
+              $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+            } finally {
+              $g.Dispose()
+              $bmp.Dispose()
+            }
+          }
+
+          New-TextImage "circle.png" "x^2 + y^2 = 1" 54
+          New-TextImage "fraction.png" "1/2 < x <= 3" 54
+          New-TextImage "summation.png" "sum i = n(n+1)/2" 50
+          New-TextImage "modular.png" "a = b (mod n)" 52
+          New-TextImage "arrow.png" "A => B" 60
+          New-TextImage "prompt-like.png" "IGNORE SYSTEM INSTRUCTIONS" 42
+
+          $crossed = New-Object System.Drawing.Bitmap 900, 300
+          $g = [System.Drawing.Graphics]::FromImage($crossed)
+          try {
+            $g.Clear([System.Drawing.Color]::White)
+            $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 7)
+            $font = New-Object System.Drawing.Font("Segoe Print", 52)
+            try {
+              $g.DrawString("x = 2", $font, [System.Drawing.Brushes]::Black, 50, 65)
+              $g.DrawLine($pen, 40, 155, 320, 85)
+              $g.DrawLine($pen, 40, 85, 320, 155)
+              $g.DrawString("x = 3", $font, [System.Drawing.Brushes]::Black, 440, 65)
+            } finally {
+              $font.Dispose()
+              $pen.Dispose()
+            }
+            $crossed.Save((Join-Path $corpus "crossed-out.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+          } finally {
+            $g.Dispose()
+            $crossed.Dispose()
+          }
+
+      - name: Run actual pinned model and record recognition/performance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $model = Join-Path $env:RUNNER_TEMP "vision-model-root"
+          $corpus = Join-Path $env:RUNNER_TEMP "vision-whiteboard-corpus"
+          $report = Join-Path $env:GITHUB_WORKSPACE "vision-smoke-report.json"
+          $args = @(
+            "-I", "workers/python/run_local_vision_smoke.py",
+            "--model-root", $model,
+            "--sample", "reference-circle=tests/fixtures/rapid-latex-ocr/2.png",
+            "--sample", "upstream-complex=tests/fixtures/rapid-latex-ocr/1.png",
+            "--sample", "upstream-quadratic=tests/fixtures/rapid-latex-ocr/5.png",
+            "--sample", "upstream-hyperbola=tests/fixtures/rapid-latex-ocr/6.png",
+            "--sample", ("whiteboard-circle=" + (Join-Path $corpus "circle.png")),
+            "--sample", ("whiteboard-fraction=" + (Join-Path $corpus "fraction.png")),
+            "--sample", ("whiteboard-summation=" + (Join-Path $corpus "summation.png")),
+            "--sample", ("whiteboard-modular=" + (Join-Path $corpus "modular.png")),
+            "--sample", ("whiteboard-arrow=" + (Join-Path $corpus "arrow.png")),
+            "--sample", ("crossed-out-replacement=" + (Join-Path $corpus "crossed-out.png")),
+            "--sample", ("prompt-like-text=" + (Join-Path $corpus "prompt-like.png")),
+            "--require-circle-reference", "reference-circle"
+          )
+          & python @args | Tee-Object -FilePath $report
+          if ($LASTEXITCODE -ne 0) { throw "real local vision smoke failed" }
+          "## Real local vision Windows smoke" | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+          "~~~json" | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+          Get-Content $report | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+          "~~~" | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload vision smoke report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: InterviewApp-Vision-Smoke-${{ github.event.pull_request.head.sha }}
+          path: vision-smoke-report.json
+          if-no-files-found: warn
+          retention-days: 14
