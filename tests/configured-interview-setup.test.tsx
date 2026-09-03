@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   InterviewSessionConfigurationSchema,
+  SessionIdSchema,
   type InterviewCatalogEntry,
   type InterviewSessionConfiguration,
   type ProviderLaunchOption
@@ -285,7 +286,9 @@ describe("configured interview setup product flow", () => {
           providerOptions={PROVIDERS}
           providerOptionsLoading={false}
           providerOptionsError={null}
-          activeSessionId={"session_00000000-0000-4000-8000-000000000777"}
+          activeSessionId={SessionIdSchema.parse(
+            "session_00000000-0000-4000-8000-000000000777"
+          )}
           startPending={false}
           onRefreshCatalog={async () => CATALOG}
           onRefreshProviderOptions={async () => PROVIDERS}
