@@ -338,7 +338,8 @@ export const App: React.FC = () => {
     navigate,
     route.page,
     session.isPaused,
-    session.pauseSession
+    session.pauseSession,
+    sessionEntryPending
   ]);
 
   const productRoute = displayRoute.page === "interview" ? null : displayRoute;
