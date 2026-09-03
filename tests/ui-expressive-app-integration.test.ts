@@ -230,9 +230,13 @@ describe("expressive product integration invariants", () => {
     );
 
     expect(app).toContain('displayRoute.page !== "interview" && !hasActiveInterview');
-    expect(app).toContain('hidden={displayRoute.page !== "interview"}');
+    expect(app).toContain("interviewBackgrounded");
+    expect(app).toContain('data-backgrounded={String(interviewBackgrounded)}');
+    expect(app).toContain("interview-app-container--backgrounded");
+    expect(app).toContain('aria-hidden={interviewBackgrounded}');
     expect(app).toContain('{productPage}');
     expect(app).toContain("tldraw retains the exact browser-native student canvas");
+    expect(app).not.toContain('hidden={displayRoute.page !== "interview"}');
   });
 
   it("does not mount history or review UI inside the focused live workspace", () => {
