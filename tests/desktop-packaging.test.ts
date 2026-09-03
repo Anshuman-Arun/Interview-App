@@ -27,6 +27,7 @@ describe("Windows desktop packaging contract", () => {
     expect(config).toContain("appId: com.anshuman.interviewapp");
     expect(config).toContain("artifactName: InterviewApp-Setup-${version}.${ext}");
     expect(config).toContain("asar: true");
+    expect(config).toContain('"!**/*.map"');
     expect(config).toContain("deleteAppDataOnUninstall: false");
     expect(config).toContain("runAfterFinish: false");
   });
@@ -86,6 +87,17 @@ describe("Windows desktop packaging contract", () => {
     expect(preload).not.toMatch(/require\(["'](?:node:)?(?:fs|child_process)["']\)/u);
     expect(preload).not.toContain("process.env");
     expect(preload).not.toContain("shell.");
+  });
+
+  it("keeps installer CI scoped, explicitly unsigned, and independent of mock inference", async () => {
+    const workflow = await source(".github/workflows/windows-installer.yml");
+    const generalCi = await source(".github/workflows/ci.yml");
+
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain('"apps/desktop/**"');
+    expect(workflow).toContain('CSC_IDENTITY_AUTO_DISCOVERY: "false"');
+    expect(workflow).not.toContain("INTERVIEW_CI_PROVIDER_MODE");
+    expect(generalCi).not.toContain("package Windows installer");
   });
 
   it("provides artifact, process-lifecycle, installer and release-hygiene gates", async () => {
