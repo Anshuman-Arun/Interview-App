@@ -27,8 +27,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-installer-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Use the immutable head SHA. Pull-request events can be delivered out of
+  # order, so an older delayed event must never cancel validation for a newer
+  # release candidate.
+  group: windows-installer-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   build:
