@@ -408,9 +408,11 @@ describe("production formal interpretation provider", () => {
         inputEpisodeId: harness.committed.inputEpisodeId
       });
 
-      expect(outcome).toEqual({
-        status: "SKIPPED",
-        reason: "SOURCE_NOT_RELEVANT"
+      expect(outcome).toMatchObject({
+        status: "ANALYZED",
+        interpretation: {
+          status: "NO_SUPPORTED_INTERPRETATION"
+        }
       });
       expect(runtimeCalls).toBe(0);
       expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
