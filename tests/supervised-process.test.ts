@@ -15,7 +15,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  SupervisedProcessRunner
+  SupervisedProcessRunner,
+  defaultAntigravityCliExecutablePath
 } from "../packages/local-runtime/src/index.js";
 
 const FIXTURE = fileURLToPath(
@@ -89,6 +90,29 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+describe("Antigravity CLI executable discovery", () => {
+  it("honors redirected Windows LOCALAPPDATA instead of assuming it is under USERPROFILE", () => {
+    expect(defaultAntigravityCliExecutablePath(
+      "win32",
+      "C:\\Users\\profile",
+      "D:\\Redirected Local"
+    )).toBe("D:\\Redirected Local\\agy\\bin\\agy.exe");
+  });
+
+  it("falls back to the profile-local path for malformed or network LOCALAPPDATA values", () => {
+    expect(defaultAntigravityCliExecutablePath(
+      "win32",
+      "C:\\Users\\profile",
+      "\\\\server\\share"
+    )).toBe("C:\\Users\\profile\\AppData\\Local\\agy\\bin\\agy.exe");
+    expect(defaultAntigravityCliExecutablePath(
+      "win32",
+      "C:\\Users\\profile",
+      "relative-local-app-data"
+    )).toBe("C:\\Users\\profile\\AppData\\Local\\agy\\bin\\agy.exe");
+  });
+});
+
 describe("supervised one-shot process execution", () => {
   it.runIf(process.platform === "win32")(
     "does not let one runner drain cancel another runner's shared helper setup",
@@ -125,6 +149,31 @@ describe("supervised one-shot process execution", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("literal ; $(not-a-shell) & payload");
     expect(result.stderrBytes).toBe(0);
+  });
+
+  it("launches an executable from a path containing spaces and non-ASCII characters", async () => {
+    const root = mkdtempSync(join(tmpdir(), "supervised path ☃-"));
+    temporaryRoots.push(root);
+    const executable = join(
+      root,
+      process.platform === "win32" ? "node copy ☃.exe" : "node copy ☃"
+    );
+    copyFileSync(process.execPath, executable);
+    if (process.platform !== "win32") chmodSync(executable, 0o755);
+
+    const runtime = new SupervisedProcessRunner([{
+      id: "unicode-path",
+      executable,
+      isolatedWorkingDirectory: true
+    }]);
+
+    await expect(runtime.execute(request([FIXTURE, "echo"], {
+      executableId: "unicode-path",
+      stdin: "unicode-path-ok"
+    }))).resolves.toMatchObject({
+      exitCode: 0,
+      stdout: "unicode-path-ok"
+    });
   });
 
   it("round-trips hostile argument boundaries without shell or quoting reinterpretation", async () => {

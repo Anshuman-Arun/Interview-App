@@ -585,7 +585,7 @@ describe("Antigravity CLI one-turn protocol", () => {
       antigravityStream({
         ...PROPOSAL,
         claimedDisclosureIds: Array.from(
-          { length: 257 },
+          { length: 65 },
           (_, index) => DisclosureIdSchema.parse(
             `disclosure-${String(index)}`
           )
@@ -593,12 +593,49 @@ describe("Antigravity CLI one-turn protocol", () => {
       }),
       antigravityStream({
         ...PROPOSAL,
+        claimedDisclosureIds: [
+          DisclosureIdSchema.parse("d".repeat(129))
+        ]
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: Array.from({ length: 13 }, () => ({
+          operation: "write_text" as const,
+          layer: "AI_ANNOTATION" as const,
+          content: "bounded",
+          annotationPurpose: "bounded annotation"
+        }))
+      }),
+      antigravityStream({
+        ...PROPOSAL,
         speechText: undefined,
         boardActions: [{
           operation: "write_text",
           layer: "AI_ANNOTATION",
-          content: "x".repeat(8_001),
+          content: "x".repeat(2_001),
           annotationPurpose: "bounded annotation"
+        }]
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: [{
+          operation: "write_text",
+          layer: "AI_ANNOTATION",
+          content: "bounded",
+          targetShapeId: "x".repeat(257),
+          annotationPurpose: "bounded annotation"
+        }]
+      }),
+      antigravityStream({
+        ...PROPOSAL,
+        speechText: undefined,
+        boardActions: [{
+          operation: "write_text",
+          layer: "AI_ANNOTATION",
+          content: "bounded",
+          annotationPurpose: "x".repeat(513)
         }]
       })
     ];
@@ -631,18 +668,38 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
-  it("accepts bounded structured output above the former 128 KiB text ceiling", async () => {
-    const largeButBounded: InterviewerProposal = {
-      ...PROPOSAL,
-      boardActions: Array.from({ length: 18 }, (_, index) => ({
+  it("keeps a worst-case escaped proposal inside the real stream transport budget", async () => {
+    const transportBounded: InterviewerProposal = {
+      realizedAction: "CLARIFY",
+      claimedDisclosureLevel: 5,
+      claimedDisclosureIds: Array.from(
+        { length: 64 },
+        (_, index) => DisclosureIdSchema.parse(
+          `d${String(index).padStart(3, "0")}-${"\\".repeat(120)}`
+        )
+      ),
+      speechText: "\\".repeat(12_000),
+      boardActions: Array.from({ length: 12 }, () => ({
         operation: "write_text" as const,
         layer: "AI_ANNOTATION" as const,
-        content: `${String(index)}:${"x".repeat(7_500)}`,
-        annotationPurpose: "bounded large-output regression"
+        content: "\\".repeat(2_000),
+        targetShapeId: "\\".repeat(256),
+        expectedShapeRevision: Number.MAX_SAFE_INTEGER,
+        annotationPurpose: "\\".repeat(512)
       }))
     };
-    const stdout = antigravityStream(largeButBounded);
-    expect(new TextEncoder().encode(stdout).byteLength).toBeLessThan(384 * 1024);
+    const response = JSON.stringify(transportBounded);
+    const stdout = antigravityStream(transportBounded, [{
+      event: "step_update",
+      step_update: {
+        conversation_id: "fake-conversation",
+        step_index: 1,
+        state: "DONE",
+        step_type: "agent_response",
+        text_delta: response
+      }
+    }]);
+    expect(new TextEncoder().encode(stdout).byteLength).toBeLessThan(1024 * 1024);
 
     const provider = createAntigravityCliReasoningProvider(
       fakeExecutor(async () => executionResult(stdout))
@@ -650,7 +707,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     const session = await provider.createSession();
     await expect(collectProposals(
       session.sendTurn(turnInput({ safe: true }))
-    )).resolves.toEqual([largeButBounded]);
+    )).resolves.toEqual([transportBounded]);
     await session.close();
   });
 
@@ -1032,6 +1089,24 @@ describe("Antigravity CLI one-turn protocol", () => {
     await session.close();
   });
 
+  it("accepts a substantial context below the conservative headless reliability margin", async () => {
+    let calls = 0;
+    const provider = createAntigravityCliReasoningProvider(
+      fakeExecutor(async (request) => {
+        calls += 1;
+        request.onProcessStart();
+        return executionResult(antigravityStream(PROPOSAL));
+      })
+    );
+    const session = await provider.createSession();
+
+    await expect(collectProposals(session.sendTurn(turnInput({
+      substantial: "x".repeat(28 * 1024)
+    })))).resolves.toEqual([PROPOSAL]);
+    expect(calls).toBe(1);
+    await session.close();
+  });
+
   it("rejects escape-heavy context when the actual stream-json stdin exceeds its wire budget", async () => {
     let calls = 0;
     const provider = createAntigravityCliReasoningProvider(
@@ -1060,7 +1135,7 @@ describe("Antigravity CLI one-turn protocol", () => {
     const session = await provider.createSession();
 
     await expect(collectProposals(session.sendTurn(turnInput({
-      oversized: "x".repeat(48 * 1024)
+      oversized: "x".repeat(40 * 1024)
     })))).rejects.toMatchObject({ code: "INVALID_CONTEXT" });
     expect(calls).toBe(0);
     await session.close();

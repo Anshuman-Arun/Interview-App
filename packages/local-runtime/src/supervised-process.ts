@@ -2647,17 +2647,26 @@ function supervisedProcessErrorMessage(code: SupervisedProcessErrorCode): string
 
 export function defaultAntigravityCliExecutablePath(
   platform: NodeJS.Platform = process.platform,
-  homeDirectory: string = homedir()
+  homeDirectory: string = homedir(),
+  localAppDataDirectory: string | undefined =
+    platform === "win32" ? process.env["LOCALAPPDATA"] : undefined
 ): string {
   if (platform === "win32") {
-    return win32Path.join(
+    const fallbackLocalAppData = win32Path.join(
       homeDirectory,
       "AppData",
-      "Local",
-      "agy",
-      "bin",
-      "agy.exe"
+      "Local"
     );
+    const localAppData = (
+      typeof localAppDataDirectory === "string"
+      && localAppDataDirectory.length > 0
+      && !localAppDataDirectory.includes("\0")
+      && win32Path.isAbsolute(localAppDataDirectory)
+      && !localAppDataDirectory.startsWith("\\\\")
+    )
+      ? win32Path.normalize(localAppDataDirectory)
+      : fallbackLocalAppData;
+    return win32Path.join(localAppData, "agy", "bin", "agy.exe");
   }
   return path.join(homeDirectory, ".local", "bin", "agy");
 }
