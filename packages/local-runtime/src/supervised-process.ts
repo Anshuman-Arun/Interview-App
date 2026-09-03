@@ -668,6 +668,17 @@ export class SupervisedProcessRunner {
     });
     child.stderr.on("data", (value: Buffer) => {
       if (!Buffer.isBuffer(value) || settled) return;
+      if (
+        this.platform === "win32"
+        && process.env["INTERVIEW_SUPERVISOR_STAGE_DEBUG"] === "1"
+      ) {
+        const diagnosticText = value.toString("utf8");
+        for (const match of diagnosticText.matchAll(
+          /INTERVIEW_SUPERVISOR_STAGE:[A-Z_]+/gu
+        )) {
+          process.stderr.write(match[0] + "\n");
+        }
+      }
       if (stderrBytes + value.length > request.maxStderrBytes) {
         requestCleanup("OUTPUT_LIMIT_EXCEEDED");
         return;
