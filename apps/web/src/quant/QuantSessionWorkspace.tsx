@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import type {
   InterviewSessionConfiguration,
   QuantResearchCandidateAction,
@@ -47,15 +47,20 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
   onSubmitTrading,
   onSubmitResearch
 }) => {
+  const actionPendingRef = useRef(quantActionPending);
+  useEffect(() => {
+    actionPendingRef.current = quantActionPending;
+  }, [quantActionPending]);
+
   useEffect(() => {
     if (
       productHidden
       || paused
-      || quantActionPending
       || sessionStatus !== "ACTIVE"
     ) return;
 
     const refresh = (): void => {
+      if (actionPendingRef.current) return;
       void onRefresh().catch(() => undefined);
     };
     refresh();
@@ -71,7 +76,6 @@ export const QuantSessionWorkspace: React.FC<QuantSessionWorkspaceProps> = ({
     onRefresh,
     paused,
     productHidden,
-    quantActionPending,
     sessionStatus
   ]);
 
