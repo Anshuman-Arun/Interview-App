@@ -80,7 +80,7 @@ function formalContext(execution: SupervisedCliExecutionRequest) {
 
 function formalStream(
   execution: SupervisedCliExecutionRequest,
-  mode: "CORRECT" | "FALSE" | "ABSTAIN"
+  mode: "CORRECT" | "FALSE" | "ABSTAIN" | "UNRELATED_TRUE"
 ): string {
   const schemaIndex = execution.args.indexOf("--json-schema");
   const schemaRaw = schemaIndex < 0 ? undefined : execution.args[schemaIndex + 1];
@@ -102,22 +102,39 @@ function formalStream(
           formalStatement: JSON.stringify({
             protocol: "INTERVIEW_APP_RATIONAL_ARITHMETIC_CLAIM",
             protocolVersion: 1,
-            claim: {
-              kind: "EQUALITY",
-              left: {
-                kind: "RATIONAL",
-                value: { numerator: "1", denominator: "2" }
-              },
-              right: mode === "CORRECT"
-                ? {
+            claim: mode === "UNRELATED_TRUE"
+              ? {
+                  kind: "EQUALITY",
+                  left: {
                     kind: "RATIONAL",
-                    value: { numerator: "2", denominator: "4" }
-                  }
-                : {
+                    value: { numerator: "2", denominator: "1" }
+                  },
+                  right: {
                     kind: "RATIONAL",
-                    value: { numerator: "3", denominator: "4" }
+                    value: { numerator: "2", denominator: "1" }
                   }
-            }
+                }
+              : {
+                  kind: "EQUALITY",
+                  left: {
+                    kind: "SUBTRACT",
+                    left: {
+                      kind: "RATIONAL",
+                      value: { numerator: "32", denominator: "1" }
+                    },
+                    right: {
+                      kind: "RATIONAL",
+                      value: { numerator: "2", denominator: "1" }
+                    }
+                  },
+                  right: {
+                    kind: "RATIONAL",
+                    value: {
+                      numerator: mode === "CORRECT" ? "30" : "31",
+                      denominator: "1"
+                    }
+                  }
+                }
           }),
           confidence: 1,
           target: context.target,
@@ -153,7 +170,7 @@ function formalStream(
 
 async function configuredHarness(
   selection: ProviderSelectionReference = ANTIGRAVITY_SELECTION,
-  studentText = "One half equals two fourths."
+  studentText = "Thirty-two minus two equals thirty."
 ) {
   const store = new SqliteEventStore(":memory:");
   const registry = new SessionRuntimeRegistry(store);
@@ -266,7 +283,7 @@ describe("production formal interpretation provider", () => {
   it("preserves a false model-interpreted claim as deterministic contradiction, not correctness evidence", async () => {
     const harness = await configuredHarness(
       ANTIGRAVITY_SELECTION,
-      "One half equals three fourths."
+      "Thirty-two minus two equals thirty-one."
     );
     const resolver = new ProviderRuntimeResolver({
       adapterRuntimeSource: {
@@ -317,7 +334,7 @@ describe("production formal interpretation provider", () => {
   it("allows strategy statements to abstain with no verifier work", async () => {
     const harness = await configuredHarness(
       ANTIGRAVITY_SELECTION,
-      "Maybe induction would work here."
+      "Maybe the checkerboard coloring is useful, but I am not sure what arithmetic follows."
     );
     let executeCalls = 0;
     const resolver = new ProviderRuntimeResolver({
@@ -357,6 +374,97 @@ describe("production formal interpretation provider", () => {
       });
       expect(executeCalls).toBe(1);
       expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      await harness.registry.closeAll();
+      harness.store.close();
+    }
+  });
+
+  it("skips target-irrelevant arithmetic before resolving any provider runtime", async () => {
+    const harness = await configuredHarness(
+      ANTIGRAVITY_SELECTION,
+      "One half equals two fourths."
+    );
+    let runtimeCalls = 0;
+    const resolver = new ProviderRuntimeResolver({
+      adapterRuntimeSource: {
+        resolveRuntime() {
+          runtimeCalls += 1;
+          throw new Error("irrelevant source must not reach provider resolution");
+        }
+      },
+      policySource: {
+        resolvePolicy: remoteAllowedPolicy
+      }
+    });
+
+    try {
+      const outcome = await new StudentReasoningAnalysisCoordinator(
+        harness.sessions,
+        new ProviderBackedFormalInterpretationProvider(harness.sessions, resolver)
+      ).analyze({
+        sessionId: harness.sessionId,
+        turnId: harness.committed.turnId,
+        inputEpisodeId: harness.committed.inputEpisodeId
+      });
+
+      expect(outcome).toEqual({
+        status: "SKIPPED",
+        reason: "SOURCE_NOT_RELEVANT"
+      });
+      expect(runtimeCalls).toBe(0);
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      await harness.registry.closeAll();
+      harness.store.close();
+    }
+  });
+
+  it("rejects a grounded-source provider that substitutes an unrelated true arithmetic fact", async () => {
+    const harness = await configuredHarness();
+    let executeCalls = 0;
+    const resolver = new ProviderRuntimeResolver({
+      adapterRuntimeSource: {
+        resolveRuntime() {
+          return {
+            executor: {
+              async execute(execution: SupervisedCliExecutionRequest) {
+                executeCalls += 1;
+                execution.onProcessStart();
+                return executionResult(formalStream(execution, "UNRELATED_TRUE"));
+              }
+            }
+          };
+        }
+      },
+      policySource: {
+        resolvePolicy: remoteAllowedPolicy
+      }
+    });
+
+    try {
+      const outcome = await new StudentReasoningAnalysisCoordinator(
+        harness.sessions,
+        new ProviderBackedFormalInterpretationProvider(harness.sessions, resolver)
+      ).analyze({
+        sessionId: harness.sessionId,
+        turnId: harness.committed.turnId,
+        inputEpisodeId: harness.committed.inputEpisodeId
+      });
+
+      expect(outcome).toMatchObject({
+        status: "ANALYZED",
+        interpretation: {
+          status: "NO_SUPPORTED_INTERPRETATION"
+        }
+      });
+      expect(executeCalls).toBe(1);
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+      const profile = resolveOxfordFormalAnalysisProfile(harness.selectedProblem);
+      if (profile === undefined) throw new Error("Expected formal profile");
+      expect(
+        harness.writer.getState().studentEvidence[evidenceKeyToString(profile.target)]
+      ).toBeUndefined();
     } finally {
       await harness.registry.closeAll();
       harness.store.close();
@@ -552,7 +660,7 @@ describe("production formal interpretation provider", () => {
       });
 
       const second = await harness.turns.commitInput(
-        "One half equals two fourths."
+        "Thirty-two minus two equals thirty."
       );
       await expect(analysis.analyze({
         sessionId: harness.sessionId,
@@ -564,7 +672,7 @@ describe("production formal interpretation provider", () => {
       });
 
       const third = await harness.turns.commitInput(
-        "One half equals two fourths."
+        "Thirty-two minus two equals thirty."
       );
       const recovered = await analysis.analyze({
         sessionId: harness.sessionId,
