@@ -39,8 +39,22 @@ function canonicalJson(value: unknown): string {
 
 export function fingerprintFormalInterpretationRequest(input: unknown): CommandFingerprint {
   const request = FormalInterpretationRequestSchema.parse(input);
+  const fingerprintInput = request.generationId === undefined
+    ? {
+        ...request,
+        basis: {
+          contextEpoch: request.basis.contextEpoch,
+          committedInputSequence: request.basis.committedInputSequence,
+          transcriptRevision: request.basis.transcriptRevision,
+          problemStateRevision: request.basis.problemStateRevision,
+          policyRevision: request.basis.policyRevision,
+          inputEpisodeId: request.basis.inputEpisodeId,
+          turnId: request.basis.turnId
+        }
+      }
+    : request;
   return CommandFingerprintSchema.parse(
-    createHash("sha256").update(canonicalJson(request)).digest("hex")
+    createHash("sha256").update(canonicalJson(fingerprintInput)).digest("hex")
   );
 }
 
