@@ -25,6 +25,17 @@ worker's request/image echo.
 
 A model response is therefore never equivalent to correctness evidence.
 
+The production desktop currently injects the real observation backend but does
+**not** install a generic vision-to-evidence interpreter. That is deliberate:
+the existing rule interpreter maps observation classes to problem evidence, and
+the problem catalog does not yet contain reviewed per-problem vision mappings.
+For example, "an equation was recognized accurately" is not evidence that the
+equation is correct or that a particular milestone was reached. Accepted
+observations are persisted behind the existing freshness gate; only an
+explicitly supplied application-owned `VisionEvidenceInterpreter` may convert
+one into an `EvidenceProposal`. Integration tests exercise that complete seam
+with reviewed fixture rules without granting the model evidence authority.
+
 ## Chosen model
 
 The production backend uses the RapidAI RapidLaTeXOCR `v0.0.0` ONNX release
@@ -213,9 +224,18 @@ functionality.
 
 ## CI and real-model validation
 
-CI does **not** download the production vision weights. It runs deterministic
-protocol/integration tests and imports the production preprocessing runtime
-without model construction.
+The ordinary cross-platform CI jobs do not download production vision weights.
+They run deterministic protocol/integration tests and import the production
+preprocessing runtime without model construction.
+
+A separate Windows real-model smoke job does download the exact pinned assets
+through the same `ModelAssetManager` policy used by production. It then fetches
+the four upstream RapidLaTeXOCR regression images from the exact pinned source
+revision as ephemeral CI inputs, verifies each byte size and Git blob identity,
+and requires exact expected LaTeX on all four. Those third-party PNGs are not
+tracked or redistributed by this repository. The smoke also records cold-load
+time, inference latency, peak working set, and bounded outputs on generated
+whiteboard-like diagram/cross-out cases.
 
 Covered adversarial cases include:
 
@@ -232,19 +252,19 @@ Covered adversarial cases include:
 - missing model assets while typed/voice paths remain available;
 - packaged resource digest checks.
 
-Before this backend is called merge-ready, run the exact pinned assets on a
-Windows x64 machine and record:
+Before this backend is called merge-ready, the dedicated Windows x64
+real-model job must pass on the current PR head and its report must be reviewed.
+Required review fields are:
 
 - installed model size;
 - cold worker/model load time;
 - bounded-crop inference latency;
 - peak RAM;
-- representative results for equations, fractions, inequalities, summation,
-  modular congruence, a labeled triangle, graph vertices, crossed-out/replaced
-  expressions, and implication arrows.
+- exact results for the pinned upstream formula regressions;
+- representative bounded behavior for diagram, graph, crossed-out/replaced,
+  and arrow-like whiteboard inputs.
 
-Until those measurements exist, the pull request should remain draft. Do not
-substitute mocked CI for this real-model smoke requirement.
+A no-weight green CI result is not a substitute for this real-model gate.
 
 ## Known limitations
 
