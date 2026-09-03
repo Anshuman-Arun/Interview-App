@@ -309,6 +309,58 @@ export class ProviderRuntimeResolver {
   }
 }
 
+function unavailableLaunchOption(
+  selection: ProviderSelectionReference,
+  reason: ProviderLaunchAvailabilityReason
+): ProviderLaunchOption {
+  return ProviderLaunchOptionSchema.parse({
+    providerId: selection.providerId,
+    providerDisplayName: selection.providerId,
+    providerKind: "OTHER",
+    modelId: selection.modelId,
+    modelDisplayName: selection.modelId,
+    availability: "UNAVAILABLE",
+    reason
+  });
+}
+
+function mapReadinessReason(
+  state: "UNAVAILABLE" | "MISCONFIGURED" | "CREDENTIALS_REQUIRED" | "DISABLED" | "UNKNOWN"
+): ProviderLaunchAvailabilityReason {
+  switch (state) {
+    case "CREDENTIALS_REQUIRED":
+      return "CREDENTIALS_REQUIRED";
+    case "DISABLED":
+      return "DISABLED";
+    case "MISCONFIGURED":
+      return "CAPABILITY_UNAVAILABLE";
+    case "UNAVAILABLE":
+      return "PROVIDER_UNAVAILABLE";
+    case "UNKNOWN":
+      return "UNKNOWN";
+  }
+}
+
+function providerModelFitsPolicy(
+  capabilities: {
+    readonly dataUse: "LOCAL_ONLY" | "REMOTE_NO_TRAINING" | "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT" | "UNKNOWN";
+    readonly meteredExecution: "SUPPORTED" | "UNSUPPORTED" | "UNKNOWN";
+  },
+  policy: ProviderPolicy
+): boolean {
+  const rank = {
+    LOCAL_ONLY: 0,
+    REMOTE_NO_TRAINING: 1,
+    REMOTE_MAY_BE_USED_FOR_IMPROVEMENT: 2
+  } as const;
+  if (capabilities.dataUse === "UNKNOWN") return false;
+  if (rank[capabilities.dataUse] > rank[policy.maximumDataUse]) return false;
+  if (!policy.allowMeteredUsage && capabilities.meteredExecution !== "UNSUPPORTED") {
+    return false;
+  }
+  return true;
+}
+
 function assertRuntimeResolutionActive(
   cancellationRequested: (() => boolean) | undefined
 ): void {
