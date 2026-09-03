@@ -38,10 +38,20 @@ function Resolve-InstalledExecutable {
   }
 
   $shell = New-Object -ComObject WScript.Shell
+  $desktopLink = $null
+  $startMenuLink = $null
   try {
-    $desktopTarget = $shell.CreateShortcut($desktopShortcut).TargetPath
-    $startMenuTarget = $shell.CreateShortcut($startMenuShortcut).TargetPath
+    $desktopLink = $shell.CreateShortcut($desktopShortcut)
+    $startMenuLink = $shell.CreateShortcut($startMenuShortcut)
+    $desktopTarget = $desktopLink.TargetPath
+    $startMenuTarget = $startMenuLink.TargetPath
   } finally {
+    if ($null -ne $desktopLink) {
+      [Runtime.InteropServices.Marshal]::FinalReleaseComObject($desktopLink) | Out-Null
+    }
+    if ($null -ne $startMenuLink) {
+      [Runtime.InteropServices.Marshal]::FinalReleaseComObject($startMenuLink) | Out-Null
+    }
     [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null
   }
 
@@ -62,6 +72,26 @@ function Resolve-InstalledExecutable {
     throw "Installed executable was not found at the shortcut target"
   }
   return $desktopTarget
+}
+
+function Wait-ForUninstallCleanup {
+  param([int]$TimeoutMilliseconds = 15000)
+  $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
+  do {
+    $binaryGone = -not (Test-Path $installedExe)
+    $desktopGone = -not (Test-Path $desktopShortcut)
+    $startMenuGone = -not (Test-Path $startMenuShortcut)
+    if ($binaryGone -and $desktopGone -and $startMenuGone) {
+      return
+    }
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $deadline)
+
+  $remaining = @()
+  if (Test-Path $installedExe) { $remaining += "application executable" }
+  if (Test-Path $desktopShortcut) { $remaining += "desktop shortcut" }
+  if (Test-Path $startMenuShortcut) { $remaining += "Start Menu shortcut" }
+  throw "Uninstall cleanup timed out; remaining: $($remaining -join ', ')"
 }
 
 function Run-Installer {
@@ -165,14 +195,7 @@ try {
   if ($uninstall.ExitCode -ne 0) {
     throw "NSIS uninstaller failed with exit code $($uninstall.ExitCode)"
   }
-  Start-Sleep -Seconds 2
-
-  if (Test-Path $installedExe) {
-    throw "Uninstall left application binaries installed"
-  }
-  if ((Test-Path $desktopShortcut) -or (Test-Path $startMenuShortcut)) {
-    throw "Uninstall left application shortcuts behind"
-  }
+  Wait-ForUninstallCleanup
   if (-not (Test-Path $database) -or -not (Test-Path $modelMarker)) {
     throw "Default uninstall deleted interview history/model-cache data"
   }
