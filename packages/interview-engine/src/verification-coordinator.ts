@@ -436,7 +436,6 @@ export class VerificationCoordinator {
       if (
         request === undefined
         || request.status !== "PENDING"
-        || !this.isScopeAuthorized(request.verifier, request.evidenceKey)
       ) {
         return {
           drafts: [],
