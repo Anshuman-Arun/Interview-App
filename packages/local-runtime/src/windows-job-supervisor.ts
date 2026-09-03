@@ -8,6 +8,8 @@
  */
 export const WINDOWS_JOB_SUPERVISOR_CSHARP_SOURCE = String.raw`
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -266,9 +268,45 @@ public static class InterviewJobSupervisor
         }
     }
 
+    private static string[] ParseArguments(string packed)
+    {
+        if (packed == null)
+            throw new ArgumentNullException("packed");
+
+        var output = new List<string>();
+        int index = 0;
+        while (index < packed.Length)
+        {
+            if (output.Count >= 64)
+                throw new InvalidOperationException("too many arguments");
+
+            int colon = packed.IndexOf(':', index);
+            if (colon <= index)
+                throw new InvalidOperationException("invalid argument framing");
+
+            int length;
+            if (!Int32.TryParse(
+                packed.Substring(index, colon - index),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out length)
+                || length < 0)
+            {
+                throw new InvalidOperationException("invalid argument length");
+            }
+
+            index = colon + 1;
+            if (length > packed.Length - index)
+                throw new InvalidOperationException("truncated argument");
+            output.Add(packed.Substring(index, length));
+            index += length;
+        }
+        return output.ToArray();
+    }
+
     public static int Run(
         string executable,
-        string[] arguments,
+        string packedArguments,
         string currentDirectory,
         string expectedSha256,
         string stdinPath,
@@ -279,6 +317,7 @@ public static class InterviewJobSupervisor
         IntPtr process = IntPtr.Zero;
         IntPtr thread = IntPtr.Zero;
         bool resumed = false;
+        string[] arguments = ParseArguments(packedArguments);
         try
         {
             Console.Error.WriteLine("INTERVIEW_SUPERVISOR_STAGE:RUN_ENTER");
@@ -496,32 +535,64 @@ function Write-InterviewSupervisorStage([string]$stage) {
 }
 Write-InterviewSupervisorStage "PS_ENTER"
 
-$configJson = $env:INTERVIEW_SUPERVISED_CONFIG_JSON
+$executable = $env:INTERVIEW_SUPERVISED_EXECUTABLE
+$argumentsPacked = $env:INTERVIEW_SUPERVISED_ARGUMENTS
+$currentDirectoryValue = $env:INTERVIEW_SUPERVISED_CWD
+$expectedSha256 = $env:INTERVIEW_SUPERVISED_EXPECTED_SHA256
+$stdinPath = $env:INTERVIEW_SUPERVISED_STDIN_PATH
+$stdinBytesValue = $env:INTERVIEW_SUPERVISED_STDIN_BYTES
+$stdinSha256 = $env:INTERVIEW_SUPERVISED_STDIN_SHA256
 $assemblyPath = $env:INTERVIEW_SUPERVISED_ASSEMBLY_PATH
 $assemblySha256 = $env:INTERVIEW_SUPERVISED_ASSEMBLY_SHA256
 Write-InterviewSupervisorStage "PS_ENV_READ"
+
 if (
-  [string]::IsNullOrWhiteSpace($configJson) -or
+  [string]::IsNullOrWhiteSpace($executable) -or
+  $null -eq $argumentsPacked -or
+  $null -eq $currentDirectoryValue -or
+  [string]::IsNullOrWhiteSpace($expectedSha256) -or
+  [string]::IsNullOrWhiteSpace($stdinPath) -or
+  [string]::IsNullOrWhiteSpace($stdinBytesValue) -or
+  [string]::IsNullOrWhiteSpace($stdinSha256) -or
   [string]::IsNullOrWhiteSpace($assemblyPath) -or
   [string]::IsNullOrWhiteSpace($assemblySha256)
 ) {
   exit 191
 }
-Write-InterviewSupervisorStage "PS_REQUIRED_OK"
-[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISED_CONFIG_JSON", $null, "Process")
-Write-InterviewSupervisorStage "PS_REMOVE_CONFIG"
-[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISED_ASSEMBLY_PATH", $null, "Process")
-Write-InterviewSupervisorStage "PS_REMOVE_PATH"
-[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISED_ASSEMBLY_SHA256", $null, "Process")
-Write-InterviewSupervisorStage "PS_REMOVE_SHA"
-[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISED_BOOTSTRAP", $null, "Process")
-Write-InterviewSupervisorStage "PS_REMOVE_BOOTSTRAP"
-[Environment]::SetEnvironmentVariable("INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE", $null, "Process")
-Write-InterviewSupervisorStage "PS_CONFIG_OK"
 
-$config = $configJson | ConvertFrom-Json
-Write-InterviewSupervisorStage "PS_JSON_OK"
-$configJson = $null
+[long]$stdinBytes = 0
+if (-not [long]::TryParse(
+  $stdinBytesValue,
+  [System.Globalization.NumberStyles]::None,
+  [System.Globalization.CultureInfo]::InvariantCulture,
+  [ref]$stdinBytes
+) -or $stdinBytes -lt 0) {
+  exit 191
+}
+$currentDirectory = if ($currentDirectoryValue.Length -eq 0) {
+  $null
+} else {
+  $currentDirectoryValue
+}
+Write-InterviewSupervisorStage "PS_REQUIRED_OK"
+
+$controlNames = @(
+  "INTERVIEW_SUPERVISED_EXECUTABLE",
+  "INTERVIEW_SUPERVISED_ARGUMENTS",
+  "INTERVIEW_SUPERVISED_CWD",
+  "INTERVIEW_SUPERVISED_EXPECTED_SHA256",
+  "INTERVIEW_SUPERVISED_STDIN_PATH",
+  "INTERVIEW_SUPERVISED_STDIN_BYTES",
+  "INTERVIEW_SUPERVISED_STDIN_SHA256",
+  "INTERVIEW_SUPERVISED_ASSEMBLY_PATH",
+  "INTERVIEW_SUPERVISED_ASSEMBLY_SHA256",
+  "INTERVIEW_SUPERVISED_BOOTSTRAP",
+  "INTERVIEW_SUPERVISOR_STAGE_DEBUG_FILE"
+)
+foreach ($name in $controlNames) {
+  [Environment]::SetEnvironmentVariable($name, $null, "Process")
+}
+Write-InterviewSupervisorStage "PS_CONFIG_OK"
 
 $stream = New-Object System.IO.FileStream(
   $assemblyPath,
@@ -587,32 +658,17 @@ catch {
 }
 Write-InterviewSupervisorStage "PS_METHOD_OK"
 
-$allowed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
-foreach ($name in $config.environmentKeys) {
-  [void]$allowed.Add([string]$name)
-}
-foreach ($name in @([Environment]::GetEnvironmentVariables().Keys)) {
-  if (-not $allowed.Contains([string]$name)) {
-    [Environment]::SetEnvironmentVariable([string]$name, $null, 'Process')
-  }
-}
-
-$arguments = @()
-foreach ($argument in $config.arguments) {
-  $arguments += [string]$argument
-}
-$currentDirectory = if ($null -eq $config.cwd) { $null } else { [string]$config.cwd }
 Write-InterviewSupervisorStage "PS_ENV_OK"
 
 try {
   $invokeArguments = New-Object object[] 7
-  $invokeArguments[0] = [string]$config.executable
-  $invokeArguments[1] = [string[]]$arguments
+  $invokeArguments[0] = [string]$executable
+  $invokeArguments[1] = [string]$argumentsPacked
   $invokeArguments[2] = $currentDirectory
-  $invokeArguments[3] = [string]$config.expectedSha256
-  $invokeArguments[4] = [string]$config.stdinPath
-  $invokeArguments[5] = [long]$config.stdinBytes
-  $invokeArguments[6] = [string]$config.stdinSha256
+  $invokeArguments[3] = [string]$expectedSha256
+  $invokeArguments[4] = [string]$stdinPath
+  $invokeArguments[5] = [long]$stdinBytes
+  $invokeArguments[6] = [string]$stdinSha256
   Write-InterviewSupervisorStage "PS_INVOKE"
   $exitCode = [int]$runMethod.Invoke($null, $invokeArguments)
   Write-InterviewSupervisorStage "PS_RETURN"
