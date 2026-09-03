@@ -17,7 +17,6 @@ const ANTIGRAVITY_SAFE_SETTINGS = Object.freeze({
   toolPermission: "strict",
   artifactReviewPolicy: "asks-for-review",
   allowNonWorkspaceAccess: false,
-  enableTerminalSandbox: true,
   useG1Credits: false,
   enableTelemetry: false,
   notifications: false,
