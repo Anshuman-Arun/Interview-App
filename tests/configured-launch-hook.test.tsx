@@ -245,6 +245,70 @@ describe("configured interview hook launch", () => {
     rendered.container.remove();
   });
 
+  it("surfaces a bounded provider explanation if readiness changes between setup and Start", async () => {
+    const sessionId: SessionId = newSessionId();
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: {
+        id: "BASIC_MARKET_MAKING",
+        version: "1.0.0"
+      },
+      interventionPolicy: "BALANCED",
+      providerSelection: {
+        providerId: "mock-model",
+        modelId: "mock-default"
+      }
+    });
+    let rendererRequests = 0;
+
+    const fetchImpl: typeof fetch = async (input, init = {}) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+      if (url === RENDERER_URL) {
+        rendererRequests += 1;
+        throw new Error("Rejected launch must not attach the renderer");
+      }
+      if (url !== `${BASE_URL}/v1/commands` || typeof init.body !== "string") {
+        throw new Error("Unexpected transport request");
+      }
+      const command = JSON.parse(init.body) as {
+        readonly type?: string;
+      };
+      if (command.type !== "START_CONFIGURED_SESSION") {
+        throw new Error(`Unexpected command type: ${String(command.type)}`);
+      }
+      return jsonResponse({
+        protocolVersion: 1,
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: "Selected provider requires configured authentication"
+        }
+      }, 409);
+    };
+
+    const rendered = renderHook(fetchImpl);
+    await act(async () => {
+      await expect(
+        rendered.current().startConfiguredSession(configuration, sessionId)
+      ).rejects.toThrow("Selected provider requires configured authentication");
+    });
+
+    expect(rendered.current().sessionId).toBeNull();
+    expect(rendered.current().configuration).toBeNull();
+    expect(rendered.current().error).toBe(
+      "Selected provider requires configured authentication"
+    );
+    expect(rendererRequests).toBe(0);
+
+    await act(async () => rendered.root.unmount());
+    rendered.container.remove();
+  });
+
   it("fails launch metadata reads closed on malformed catalog and provider transport failure", async () => {
     const fetchImpl: typeof fetch = async (input, init = {}) => {
       const url = typeof input === "string"
