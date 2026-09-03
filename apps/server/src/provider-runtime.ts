@@ -83,6 +83,11 @@ export interface ProviderRuntimeResolution {
   readonly modelId: string;
   readonly provider: ReasoningProvider;
   readonly policy: ProviderPolicy;
+  /**
+   * Application-owned adapter runtime used to construct the resolved provider.
+   * This is intentionally opaque outside the server composition layer.
+   */
+  readonly runtime?: unknown;
 }
 
 export type ProviderRuntimeResolutionErrorCode =
@@ -379,7 +384,8 @@ export class ProviderRuntimeResolver {
       providerId: resolved.provider.id,
       modelId: resolved.model.id,
       provider,
-      policy
+      policy,
+      ...(runtime === undefined ? {} : { runtime })
     });
   }
 

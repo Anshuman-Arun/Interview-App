@@ -153,7 +153,10 @@ export const InterpretationDiagnosticSchema = z.object({
 export type InterpretationDiagnostic = z.infer<typeof InterpretationDiagnosticSchema>;
 
 export interface FormalInterpretationProvider {
-  readonly interpret: (request: FormalInterpretationRequest) => Promise<unknown>;
+  readonly interpret: (
+    request: FormalInterpretationRequest,
+    runtime?: { readonly signal: AbortSignal }
+  ) => Promise<unknown>;
 }
 
 export type DeterministicInterpretationResponder =
@@ -191,6 +194,7 @@ interface RequestRecord {
   settled: boolean;
   readonly cancelSignal: Promise<void>;
   readonly resolveCancel: () => void;
+  readonly providerAbortController: AbortController;
   promise: Promise<InterpretationExecutionOutcome>;
 }
 
@@ -392,6 +396,7 @@ export class InterpretationCoordinator {
     if (record === undefined || record.settled || record.dispatchStarted) return false;
     record.cancelled = true;
     record.resolveCancel();
+    record.providerAbortController.abort();
     return true;
   }
 
@@ -406,6 +411,7 @@ export class InterpretationCoordinator {
     if (record === undefined || record.settled) return false;
     record.cancelled = true;
     record.resolveCancel();
+    record.providerAbortController.abort();
     if (record.verificationRequestId !== undefined) {
       void this.verification.discardPendingVerification({
         verificationRequestId: record.verificationRequestId,
@@ -467,6 +473,7 @@ export class InterpretationCoordinator {
       settled: false,
       cancelSignal,
       resolveCancel,
+      providerAbortController: new AbortController(),
       promise: Promise.resolve(failed("INVALID_REQUEST", "MALFORMED_REQUEST", 0, request.requestId))
     };
     this.records.set(request.requestId, record);
@@ -515,7 +522,10 @@ export class InterpretationCoordinator {
     });
 
     const providerWork = Promise.resolve()
-      .then(() => this.provider.interpret(deepFreeze(structuredClone(request))))
+      .then(() => this.provider.interpret(
+        deepFreeze(structuredClone(request)),
+        { signal: record.providerAbortController.signal }
+      ))
       .then(
         (value) => ({ kind: "RESULT" as const, value }),
         () => ({ kind: "ERROR" as const })
