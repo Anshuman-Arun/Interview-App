@@ -337,8 +337,12 @@ export const App: React.FC = () => {
     session.pauseSession
   ]);
 
-  if (displayRoute.page !== "interview") {
-    return (
+  // Pausing is presentation-only. Keep the live tree mounted behind Home so
+  // tldraw retains the exact browser-native student canvas that is later
+  // verified against authoritative shape revisions/hashes on resume.
+  const productPage = displayRoute.page === "interview"
+    ? null
+    : (
       <ProductPageRouter
         route={displayRoute}
         sessions={session.availableSessions}
@@ -404,10 +408,18 @@ export const App: React.FC = () => {
         )}
       />
     );
+
+  if (displayRoute.page !== "interview" && !hasActiveInterview) {
+    return productPage;
   }
 
   return (
-    <div className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
+    <>
+      {productPage}
+      <div
+        hidden={displayRoute.page !== "interview"}
+        className="interview-app-container flex flex-col h-screen w-screen bg-slate-100 font-sans text-slate-900 overflow-hidden"
+      >
       {/* Focused live interview header */}
       <header className="app-header">
         <button
@@ -717,6 +729,7 @@ export const App: React.FC = () => {
           </div>
         </section>
       </main>
-    </div>
+      </div>
+    </>
   );
 };

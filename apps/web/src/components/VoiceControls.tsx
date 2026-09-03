@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type {
   InterviewVoiceControls,
   InterviewVoiceState
@@ -38,6 +38,52 @@ function DevicePicker({
   readonly onSelect: (deviceId: string | undefined) => void;
 }) {
   const choices = devices.filter((device) => !device.isDefault);
+  const options = [
+    { deviceId: undefined, label: "System default" },
+    ...choices.map((device) => ({
+      deviceId: device.deviceId,
+      label: device.label ?? fallbackLabel
+    }))
+  ];
+  const selectedIndex = Math.max(
+    0,
+    options.findIndex((option) => option.deviceId === selectedId)
+  );
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const moveSelection = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentIndex: number
+  ): void => {
+    if (disabled || options.length === 0) return;
+
+    let nextIndex: number | undefined;
+    switch (event.key) {
+      case "ArrowDown":
+      case "ArrowRight":
+        nextIndex = (currentIndex + 1) % options.length;
+        break;
+      case "ArrowUp":
+      case "ArrowLeft":
+        nextIndex = (currentIndex - 1 + options.length) % options.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = options.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    const next = options[nextIndex];
+    if (next === undefined) return;
+    onSelect(next.deviceId);
+    optionRefs.current[nextIndex]?.focus();
+  };
+
   return (
     <section className="voice-device-picker">
       <div className="voice-device-picker__heading">
@@ -50,27 +96,22 @@ function DevicePicker({
         aria-label={label}
         aria-disabled={disabled}
       >
-        <button
-          type="button"
-          role="radio"
-          aria-checked={selectedId === undefined}
-          disabled={disabled}
-          onClick={() => onSelect(undefined)}
-        >
-          <span className="voice-device-picker__choice-mark" aria-hidden="true" />
-          <span>System default</span>
-        </button>
-        {choices.map((device) => (
+        {options.map((option, index) => (
           <button
-            key={device.deviceId}
+            key={option.deviceId ?? "system-default"}
+            ref={(node) => {
+              optionRefs.current[index] = node;
+            }}
             type="button"
             role="radio"
-            aria-checked={selectedId === device.deviceId}
+            aria-checked={selectedId === option.deviceId}
+            tabIndex={selectedIndex === index ? 0 : -1}
             disabled={disabled}
-            onClick={() => onSelect(device.deviceId)}
+            onClick={() => onSelect(option.deviceId)}
+            onKeyDown={(event) => moveSelection(event, index)}
           >
             <span className="voice-device-picker__choice-mark" aria-hidden="true" />
-            <span>{device.label ?? fallbackLabel}</span>
+            <span>{option.label}</span>
           </button>
         ))}
       </div>

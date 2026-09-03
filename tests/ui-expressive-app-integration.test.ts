@@ -223,13 +223,25 @@ describe("expressive product integration invariants", () => {
     expect(app).toContain("|| sessionTerminalPending");
   });
 
+  it("keeps the live whiteboard mounted behind paused Home navigation", () => {
+    const app = fs.readFileSync(
+      path.resolve(process.cwd(), "apps/web/src/App.tsx"),
+      "utf8"
+    );
+
+    expect(app).toContain('displayRoute.page !== "interview" && !hasActiveInterview');
+    expect(app).toContain('hidden={displayRoute.page !== "interview"}');
+    expect(app).toContain('{productPage}');
+    expect(app).toContain("tldraw retains the exact browser-native student canvas");
+  });
+
   it("does not mount history or review UI inside the focused live workspace", () => {
     const app = fs.readFileSync(
       path.resolve(process.cwd(), "apps/web/src/App.tsx"),
       "utf8"
     );
 
-    expect(app).toContain('if (displayRoute.page !== "interview")');
+    expect(app).toContain('if (displayRoute.page !== "interview" && !hasActiveInterview)');
     expect(app).toContain("<ProductPageRouter");
     expect(app).not.toContain("Stored Interview Sessions");
     expect(app).not.toContain("Grounded history");
