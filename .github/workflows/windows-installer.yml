@@ -16,6 +16,7 @@ on:
       - "workers/python/local_model_worker.py"
       - "workers/python/requirements-local-model-runtime.txt"
       - "scripts/check-packaged-desktop.mjs"
+      - "scripts/clean-windows-package.mjs"
       - "scripts/check-public-release.mjs"
       - "scripts/run-packaged-desktop-smoke.ps1"
       - "scripts/test-windows-installer.ps1"
