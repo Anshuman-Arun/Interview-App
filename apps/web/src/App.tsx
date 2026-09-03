@@ -35,7 +35,7 @@ const QUANT_REATTACH_SESSION_KEY = "interview.quant.active-session";
 
 function readQuantReattachSessionId(): SessionId | null {
   try {
-    const value = globalThis.sessionStorage?.getItem(QUANT_REATTACH_SESSION_KEY);
+    const value = globalThis.sessionStorage.getItem(QUANT_REATTACH_SESSION_KEY);
     if (value === null || value === undefined) return null;
     const parsed = SessionIdSchema.safeParse(value);
     return parsed.success ? parsed.data : null;
@@ -46,7 +46,7 @@ function readQuantReattachSessionId(): SessionId | null {
 
 function writeQuantReattachSessionId(sessionId: SessionId): void {
   try {
-    globalThis.sessionStorage?.setItem(QUANT_REATTACH_SESSION_KEY, sessionId);
+    globalThis.sessionStorage.setItem(QUANT_REATTACH_SESSION_KEY, sessionId);
   } catch {
     // Reattachment is a convenience only; server authority never depends on browser storage.
   }
@@ -54,7 +54,7 @@ function writeQuantReattachSessionId(sessionId: SessionId): void {
 
 function clearQuantReattachSessionId(): void {
   try {
-    globalThis.sessionStorage?.removeItem(QUANT_REATTACH_SESSION_KEY);
+    globalThis.sessionStorage.removeItem(QUANT_REATTACH_SESSION_KEY);
   } catch {
     // Reattachment is a convenience only; server authority never depends on browser storage.
   }
