@@ -18,7 +18,8 @@ $priorInstallerPath = if ([string]::IsNullOrWhiteSpace($PriorInstaller)) {
 } else {
   (Resolve-Path $PriorInstaller).Path
 }
-$installRoot = Join-Path $env:LOCALAPPDATA "Programs\Interview App"
+$programsRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA "Programs"))
+$installRoot = $null
 $userData = Join-Path $env:APPDATA "Interview App"
 $database = Join-Path $userData "data\interview-session.sqlite"
 $modelMarker = Join-Path $userData "data\model-assets\packaging-preserve.marker"
@@ -26,9 +27,42 @@ $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Intervie
 $startMenuShortcut = Join-Path ([Environment]::GetFolderPath("Programs")) "Interview App.lnk"
 $smokeProof = Join-Path $env:RUNNER_TEMP "InterviewApp-Prior-Smoke-Proof.json"
 
-Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue
+Remove-Item -Force $desktopShortcut -ErrorAction SilentlyContinue
+Remove-Item -Force $startMenuShortcut -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force $userData -ErrorAction SilentlyContinue
 Remove-Item -Force $smokeProof -ErrorAction SilentlyContinue
+
+function Resolve-InstalledExecutable {
+  if (-not (Test-Path $desktopShortcut) -or -not (Test-Path $startMenuShortcut)) {
+    throw "Installer did not create both desktop and Start Menu shortcuts"
+  }
+
+  $shell = New-Object -ComObject WScript.Shell
+  try {
+    $desktopTarget = $shell.CreateShortcut($desktopShortcut).TargetPath
+    $startMenuTarget = $shell.CreateShortcut($startMenuShortcut).TargetPath
+  } finally {
+    [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null
+  }
+
+  if ([string]::IsNullOrWhiteSpace($desktopTarget) -or [string]::IsNullOrWhiteSpace($startMenuTarget)) {
+    throw "Installer shortcut target is missing"
+  }
+  $desktopTarget = [IO.Path]::GetFullPath($desktopTarget)
+  $startMenuTarget = [IO.Path]::GetFullPath($startMenuTarget)
+  if (-not $desktopTarget.Equals($startMenuTarget, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Desktop and Start Menu shortcuts target different executables"
+  }
+
+  $programsPrefix = $programsRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+  if (-not $desktopTarget.StartsWith($programsPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Installed executable escaped the per-user LOCALAPPDATA Programs directory"
+  }
+  if ([IO.Path]::GetFileName($desktopTarget) -ne "Interview App.exe" -or -not (Test-Path $desktopTarget)) {
+    throw "Installed executable was not found at the shortcut target"
+  }
+  return $desktopTarget
+}
 
 function Run-Installer {
   param([string]$Path = $installerPath)
@@ -44,16 +78,8 @@ function Run-Installer {
 
 try {
   Run-Installer -Path $priorInstallerPath
-  $installedExe = Join-Path $installRoot "Interview App.exe"
-  if (-not (Test-Path $installedExe)) {
-    throw "Installed executable was not found in the per-user install directory"
-  }
-  if (-not (Test-Path $desktopShortcut)) {
-    throw "Desktop shortcut was not created"
-  }
-  if (-not (Test-Path $startMenuShortcut)) {
-    throw "Start Menu shortcut was not created"
-  }
+  $installedExe = Resolve-InstalledExecutable
+  $installRoot = Split-Path -Parent $installedExe
   $priorProductVersion = (Get-Item $installedExe).VersionInfo.ProductVersion
 
   $oldPython = $env:INTERVIEW_LOCAL_PYTHON
@@ -89,6 +115,10 @@ try {
   $markerHashBefore = (Get-FileHash -Algorithm SHA256 $modelMarker).Hash
 
   Run-Installer -Path $installerPath
+  $upgradedExe = Resolve-InstalledExecutable
+  if (-not $upgradedExe.Equals($installedExe, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Versioned upgrade changed the stable per-user installation target"
+  }
   if (-not (Test-Path $database) -or -not (Test-Path $modelMarker)) {
     throw "Upgrade/reinstall destroyed durable session/model-cache data"
   }
@@ -158,7 +188,11 @@ try {
   }
   Write-Host "Silent prior-install/upgrade/uninstall persistence and shortcut smoke passed."
 } finally {
-  Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue
+  if ($null -ne $installRoot -and (Test-Path $installRoot)) {
+    Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue
+  }
+  Remove-Item -Force $desktopShortcut -ErrorAction SilentlyContinue
+  Remove-Item -Force $startMenuShortcut -ErrorAction SilentlyContinue
   Remove-Item -Recurse -Force $userData -ErrorAction SilentlyContinue
   Remove-Item -Force $smokeProof -ErrorAction SilentlyContinue
 }
