@@ -92,6 +92,10 @@ class LocalVisionRuntimeUnitTests(unittest.TestCase):
         with self.assertRaises(vision.VisionProtocolError):
             vision._decode_png(png(2, 2) + b"trailing")
 
+    def test_uncalibrated_confidence_cannot_cross_evidence_floor(self) -> None:
+        self.assertLess(vision.MAX_HEURISTIC_CONFIDENCE, 0.7)
+        self.assertLess(vision.UNSTABLE_HEURISTIC_CONFIDENCE, 0.7)
+
     def test_uncertainty_requires_stable_structural_output(self) -> None:
         self.assertTrue(vision._structurally_plausible(r"x^2+y^2=1"))
         self.assertFalse(vision._structurally_plausible(r"\\frac{x}{y"))
