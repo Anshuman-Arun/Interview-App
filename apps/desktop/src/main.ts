@@ -1,5 +1,5 @@
-import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { lstat, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { createAndStartServer } from "../../server/src/server.js";
@@ -14,6 +14,7 @@ import {
 } from "electron";
 import { DesktopBackendController } from "./backend-controller.js";
 import { DesktopLocalRuntimeComposition } from "./runtime/index.js";
+import { PACKAGED_DESKTOP_PRELOAD_SHA256 } from "./runtime/packaged-resource-integrity.js";
 import {
   DESKTOP_BOOTSTRAP_CHANNEL,
   DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL,
@@ -148,6 +149,9 @@ async function startDesktop(): Promise<void> {
     isPackaged: app.isPackaged
   });
   await mkdir(paths.appDataRoot, { recursive: true });
+  if (app.isPackaged) {
+    await assertPackagedPreloadIntegrity(paths.preloadPath);
+  }
 
   const configuredPython = process.env["INTERVIEW_LOCAL_PYTHON"];
   const runtime = new DesktopLocalRuntimeComposition({
@@ -334,6 +338,19 @@ function rendererCapability(
     state: status.state,
     ...(status.reasonCode === undefined ? {} : { reasonCode: status.reasonCode })
   });
+}
+
+async function assertPackagedPreloadIntegrity(preloadPath: string): Promise<void> {
+  const metadata = await lstat(preloadPath);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new Error("Packaged preload is missing or is not a regular file");
+  }
+  const digest = createHash("sha256")
+    .update(await readFile(preloadPath))
+    .digest("hex");
+  if (digest !== PACKAGED_DESKTOP_PRELOAD_SHA256) {
+    throw new Error("Packaged preload failed integrity validation");
+  }
 }
 
 async function configurePackagedSmokeUserData(): Promise<void> {
