@@ -2,6 +2,7 @@ import {
   SessionHistoryEntrySchema,
   StoredSessionSummarySchema,
   type DeliveryId,
+  type SessionConfigurationSource,
   type SessionHistoryEntry,
   type SessionId,
   type StoredSessionSummary
@@ -116,6 +117,22 @@ export class SessionRecoveryCoordinator {
 
   public hasSession(sessionId: SessionId): boolean {
     return this.store?.hasSession(sessionId) ?? this.registry.hasSession(sessionId);
+  }
+
+  public getConfigurationSource(sessionId: SessionId): SessionConfigurationSource {
+    if (!this.hasSession(sessionId)) {
+      throw new Error("Session not found in authoritative event stream");
+    }
+    const events = this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
+    for (const event of events) {
+      if (event.type === "SESSION_STARTED") {
+        // Unmarked histories predate explicit launch provenance. Classify them
+        // conservatively as legacy rather than silently reinterpreting them as
+        // newly configured sessions.
+        return event.payload.configurationSource ?? "LEGACY_COMPATIBILITY";
+      }
+    }
+    throw new Error("Authoritative session history has no SESSION_STARTED event");
   }
 
   public getHistory(sessionId: SessionId): readonly SessionHistoryEntry[] {
