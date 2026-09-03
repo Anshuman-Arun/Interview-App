@@ -420,6 +420,54 @@ describe("production formal interpretation provider", () => {
     }
   });
 
+  it("rejects a provider that substitutes a different prompt-grounded number for the committed claim", async () => {
+    const harness = await configuredHarness();
+    let executeCalls = 0;
+    const resolver = new ProviderRuntimeResolver({
+      adapterRuntimeSource: {
+        resolveRuntime() {
+          return {
+            executor: {
+              async execute(execution: SupervisedCliExecutionRequest) {
+                executeCalls += 1;
+                execution.onProcessStart();
+                // The committed sentence says 30. The prompt contains 31, but
+                // importing that different number would change the student's claim.
+                return executionResult(formalStream(execution, "FALSE"));
+              }
+            }
+          };
+        }
+      },
+      policySource: {
+        resolvePolicy: remoteAllowedPolicy
+      }
+    });
+
+    try {
+      const outcome = await new StudentReasoningAnalysisCoordinator(
+        harness.sessions,
+        new ProviderBackedFormalInterpretationProvider(harness.sessions, resolver)
+      ).analyze({
+        sessionId: harness.sessionId,
+        turnId: harness.committed.turnId,
+        inputEpisodeId: harness.committed.inputEpisodeId
+      });
+
+      expect(outcome).toMatchObject({
+        status: "ANALYZED",
+        interpretation: {
+          status: "NO_SUPPORTED_INTERPRETATION"
+        }
+      });
+      expect(executeCalls).toBe(1);
+      expect(Object.values(harness.writer.getState().verificationRequests)).toHaveLength(0);
+    } finally {
+      await harness.registry.closeAll();
+      harness.store.close();
+    }
+  });
+
   it("rejects a grounded-source provider that substitutes an unrelated true arithmetic fact", async () => {
     const harness = await configuredHarness();
     let executeCalls = 0;
