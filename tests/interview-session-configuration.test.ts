@@ -103,6 +103,10 @@ describe("generic interview session configuration", () => {
     });
     expect(JSON.stringify(ramsey.problem)).not.toContain(sixPeopleProblem.private.canonicalSolution);
     expect(JSON.stringify(ramsey.problem)).not.toContain("protectedDisclosures");
+    expect(ramsey.problem?.topics).toEqual([]);
+    for (const topic of sixPeopleProblem.interviewer.topics) {
+      expect(JSON.stringify(ramsey.problem)).not.toContain(topic);
+    }
     expect(registry.get(ramseySession).getState().problem?.id).toBe(sixPeopleProblem.id);
     expect(registry.get(divisibilitySession).getState().problem?.id).toBe(divisibility.id);
     expect(registry.get(divisibilitySession).getState().problem?.version).toBe(divisibility.version);
@@ -516,7 +520,7 @@ describe("generic interview session configuration", () => {
     const failure = ProtocolErrorResponseSchema.parse(await json(response));
     expect(failure.error).toEqual({
       code: "CONFLICT",
-      message: "Selected provider or model is not registered"
+      message: "Selected provider is unavailable"
     });
   });
 
@@ -586,7 +590,7 @@ describe("generic interview session configuration", () => {
       interventionPolicy: "BALANCED"
     })).toThrow();
 
-    expect(() => resolveInterviewSessionConfiguration({
+    const unresolvedProviderComposition = resolveInterviewSessionConfiguration({
       configurationVersion: 1,
       mode: "QUANT_TRADING",
       scenario: { id: "BASIC_MARKET_MAKING", version: QUANT_TRADER_SCENARIO_VERSION },
@@ -595,7 +599,11 @@ describe("generic interview session configuration", () => {
         providerId: "unregistered-provider",
         modelId: "unregistered-model"
       }
-    })).toThrow(/provider selection identity/);
+    });
+    expect(unresolvedProviderComposition.configuration.providerSelection).toEqual({
+      providerId: "unregistered-provider",
+      modelId: "unregistered-model"
+    });
   });
 
   it("enumerates only bounded public launch metadata", async () => {
