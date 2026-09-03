@@ -435,10 +435,7 @@ export const App: React.FC = () => {
           type="button"
           className="app-header__identity"
           disabled={sessionEntryPending || sessionTerminalPending}
-          onClick={() => {
-            if (hasActiveInterview) session.pauseSession();
-            navigateProductPage("home");
-          }}
+          onClick={() => navigateProductPage("home")}
           aria-label={hasActiveInterview ? "Pause interview and open Home" : "Open Home"}
         >
           <BrandMark size={28} title="Interview" />
@@ -466,10 +463,7 @@ export const App: React.FC = () => {
             <div className="app-header__session-actions">
               <button
                 type="button"
-                onClick={() => {
-                  session.pauseSession();
-                  navigateProductPage("home");
-                }}
+                onClick={() => navigateProductPage("home")}
                 disabled={sessionTerminalPending || sessionEntryPending}
                 className="app-header__quiet"
               >
