@@ -461,6 +461,13 @@ async function runPackagedSmoke(
     requestId: `request_${randomUUID()}`,
     sessionId
   });
+  await postPackagedSmokeCommand(commandUrl, token, origin, {
+    protocolVersion: 1,
+    type: "COMMIT_TYPED_INPUT",
+    requestId: `request_${randomUUID()}`,
+    sessionId,
+    text: "Packaged Windows desktop smoke input."
+  });
   const beforeRestart = server.registry.get(sessionId).getState();
   if (
     !beforeRestart.started
