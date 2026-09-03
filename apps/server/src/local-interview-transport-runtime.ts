@@ -16,7 +16,7 @@ import {
 } from "./renderer-stream-server.js";
 import { SessionRecoveryCoordinator } from "./session-recovery-coordinator.js";
 import { SessionReadService } from "./session-read-service.js";
-import type { ProviderRuntimeResolver } from "./provider-runtime.js";
+import { ProviderRuntimeResolver } from "./provider-runtime.js";
 import { ServerTurnOrchestrator } from "./turn-orchestrator.js";
 import { WhiteboardVisionCoordinator } from "./whiteboard-vision-coordinator.js";
 import {
@@ -85,6 +85,8 @@ export class LocalInterviewTransportRuntime {
         "Local interview transport cannot accept both an orchestrator and a provider runtime resolver"
       );
     }
+    const orchestratorProviderRuntime =
+      options.orchestrator?.getProviderRuntimeResolver();
     if (
       options.orchestrator !== undefined
       && options.formalInterpretationProvider !== undefined
@@ -96,6 +98,10 @@ export class LocalInterviewTransportRuntime {
     const voiceRuntime = options.voiceRuntime;
     const speechWorker = voiceRuntime?.speechWorker;
     const ttsRuntime = voiceRuntime?.tts;
+    const providerRuntimeResolver =
+      orchestratorProviderRuntime
+      ?? options.providerRuntimeResolver
+      ?? new ProviderRuntimeResolver();
 
     this.registry = options.registry;
     this.sessions = new SessionRecoveryCoordinator(options.registry, options.store);
@@ -113,7 +119,7 @@ export class LocalInterviewTransportRuntime {
         this.sessions,
         () => this.rendererStreamServer,
         undefined,
-        options.providerRuntimeResolver,
+        providerRuntimeResolver,
         options.formalInterpretationProvider
       );
     this.sessions.setTurnRecoveryDelegate(this.orchestrator);
@@ -145,6 +151,7 @@ export class LocalInterviewTransportRuntime {
       sessions: this.sessions,
       reads: this.readService,
       orchestrator: this.orchestrator,
+      providerRuntimeResolver,
       whiteboardVision: this.whiteboardVision,
       onSessionTerminal: (sessionId) => this.handleSessionTerminal(sessionId),
       ...(options.commandPort === undefined ? {} : { port: options.commandPort })

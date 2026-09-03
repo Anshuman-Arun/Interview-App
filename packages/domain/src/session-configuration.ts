@@ -123,3 +123,41 @@ export const InterviewCatalogEntrySchema = z.discriminatedUnion("mode", [
   }).strict()
 ]);
 export type InterviewCatalogEntry = z.infer<typeof InterviewCatalogEntrySchema>;
+
+export const SessionConfigurationSourceSchema = z.enum([
+  "CONFIGURED",
+  "LEGACY_COMPATIBILITY"
+]);
+export type SessionConfigurationSource = z.infer<typeof SessionConfigurationSourceSchema>;
+
+export const ProviderLaunchAvailabilityReasonSchema = z.enum([
+  "CREDENTIALS_REQUIRED",
+  "DISABLED",
+  "RUNTIME_CONFIGURATION_UNAVAILABLE",
+  "RUNTIME_DEPENDENCY_UNAVAILABLE",
+  "POLICY_UNAVAILABLE",
+  "POLICY_DENIED",
+  "CAPABILITY_UNAVAILABLE",
+  "PROVIDER_UNAVAILABLE",
+  "UNKNOWN"
+]);
+export type ProviderLaunchAvailabilityReason = z.infer<typeof ProviderLaunchAvailabilityReasonSchema>;
+
+export const ProviderLaunchOptionSchema = z.object({
+  providerId: ProviderMachineIdSchema,
+  providerDisplayName: z.string().min(1).max(160),
+  providerKind: z.enum(["MOCK", "REMOTE_API", "LOCAL_PROCESS", "OTHER"]),
+  modelId: ProviderMachineIdSchema,
+  modelDisplayName: z.string().min(1).max(160),
+  availability: z.enum(["AVAILABLE", "UNAVAILABLE"]),
+  reason: ProviderLaunchAvailabilityReasonSchema.optional()
+}).strict().superRefine((option, context) => {
+  if ((option.availability === "AVAILABLE") === (option.reason !== undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["reason"],
+      message: "Unavailable provider options require a bounded reason and available options must not include one"
+    });
+  }
+});
+export type ProviderLaunchOption = z.infer<typeof ProviderLaunchOptionSchema>;

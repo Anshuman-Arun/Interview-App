@@ -6,6 +6,7 @@ import {
   InterviewSessionContextResponseSchema,
   OxfordInterviewSessionConfigurationSchema,
   ProtocolErrorResponseSchema,
+  ProviderOptionsResponseSchema,
   SessionStartedResponseSchema,
   newRequestId,
   newSessionId,
@@ -21,12 +22,15 @@ import {
   QuantTradingSessionCoordinator,
   SessionRuntimeRegistry,
   TurnCoordinator,
-  createCommandEnvelope
+  createCommandEnvelope,
+  createProviderContextSpecFingerprintSync,
+  fingerprintCommand
 } from "../packages/interview-engine/src/index.js";
 import { SqliteEventStore } from "../packages/persistence/src/index.js";
 import { BrowserCommandClient } from "../apps/web/src/command-client.js";
 import {
   LoopbackCommandServer,
+  ProviderRuntimeResolver,
   ServerTurnOrchestrator,
   SessionRecoveryCoordinator,
   listInterviewCatalogEntries,
@@ -101,6 +105,7 @@ describe("generic interview session configuration", () => {
     });
     expect(JSON.stringify(ramsey.problem)).not.toContain(sixPeopleProblem.private.canonicalSolution);
     expect(JSON.stringify(ramsey.problem)).not.toContain("protectedDisclosures");
+    expect(ramsey.problem?.topics).toEqual([]);
     expect(registry.get(ramseySession).getState().problem?.id).toBe(sixPeopleProblem.id);
     expect(registry.get(divisibilitySession).getState().problem?.id).toBe(divisibility.id);
     expect(registry.get(divisibilitySession).getState().problem?.version).toBe(divisibility.version);
@@ -250,6 +255,10 @@ describe("generic interview session configuration", () => {
       title: "A Divisibility Pair in {1,...,2n}",
       prompt: problem.public.prompt
     });
+    const context = await client.getInterviewSessionContext(sessionId);
+    expect(context.configuration).toEqual(configuration);
+    expect(context.configurationSource).toBe("CONFIGURED");
+    expect(context.problem?.id).toBe(problem.id);
     expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
   });
 
@@ -285,8 +294,306 @@ describe("generic interview session configuration", () => {
     expect(contextResponse.status).toBe(200);
     const context = InterviewSessionContextResponseSchema.parse(await json(contextResponse));
     expect(context.configuration.mode).toBe("OXFORD_MATHEMATICS");
+    expect(context.configurationSource).toBe("LEGACY_COMPATIBILITY");
     expect(context.problem?.id).toBe(sixPeopleProblem.id);
     expect(store.eventCount(sessionId)).toBe(eventCount);
+  });
+
+  it("infers pre-marker session provenance without treating every unmarked configuration as legacy", () => {
+    const configuredSessionId = newSessionId();
+    const configuredRequestId = newRequestId();
+    const divisibility = getProblemByIdentity("oxford-divisibility-chain", "1.0.0");
+    expect(divisibility).toBeDefined();
+    if (divisibility === undefined) return;
+    const configured = oxfordConfiguration(
+      divisibility.id,
+      divisibility.version,
+      divisibility.interviewer.difficulty
+    );
+
+    store.appendIdempotent({
+      sessionId: configuredSessionId,
+      requestId: configuredRequestId,
+      causationId: configuredRequestId,
+      correlationId: configuredRequestId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: "1".repeat(64),
+      drafts: [{
+        source: "APPLICATION",
+        type: "SESSION_STARTED",
+        payload: {
+          startedAt: "2026-09-02T12:00:00.000Z",
+          configuration: configured
+        }
+      }],
+      result: { started: true }
+    });
+    expect(sessions.getConfigurationSource(configuredSessionId)).toBe("CONFIGURED");
+
+    const legacySessionId = newSessionId();
+    const legacyRequestId = newRequestId();
+    const legacyShape = oxfordConfiguration(
+      sixPeopleProblem.id,
+      sixPeopleProblem.version,
+      sixPeopleProblem.interviewer.difficulty
+    );
+    store.appendIdempotent({
+      sessionId: legacySessionId,
+      requestId: legacyRequestId,
+      causationId: legacyRequestId,
+      correlationId: legacyRequestId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: "2".repeat(64),
+      drafts: [{
+        source: "APPLICATION",
+        type: "SESSION_STARTED",
+        payload: {
+          startedAt: "2026-09-02T12:00:01.000Z",
+          configuration: legacyShape
+        }
+      }],
+      result: { started: true }
+    });
+    expect(sessions.getConfigurationSource(legacySessionId)).toBe("LEGACY_COMPATIBILITY");
+
+    const quantSessionId = newSessionId();
+    const quantRequestId = newRequestId();
+    const quantConfiguration = InterviewSessionConfigurationSchema.parse({
+      configurationVersion: 1,
+      mode: "QUANT_TRADING",
+      scenario: {
+        id: "BASIC_MARKET_MAKING",
+        version: QUANT_TRADER_SCENARIO_VERSION
+      },
+      interventionPolicy: "BALANCED"
+    });
+    store.appendIdempotent({
+      sessionId: quantSessionId,
+      requestId: quantRequestId,
+      causationId: quantRequestId,
+      correlationId: quantRequestId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: "3".repeat(64),
+      drafts: [{
+        source: "APPLICATION",
+        type: "SESSION_STARTED",
+        payload: {
+          startedAt: "2026-09-02T12:00:02.000Z",
+          configuration: quantConfiguration
+        }
+      }],
+      result: { started: true }
+    });
+    expect(sessions.getConfigurationSource(quantSessionId)).toBe("CONFIGURED");
+  });
+
+  it("distinguishes an ambiguous pre-marker Ramsey configured start from legacy by durable fingerprint", () => {
+    const configuredSessionId = newSessionId();
+    const configuredRequestId = newRequestId();
+    const configuredEnvelope = createCommandEnvelope({
+      sessionId: configuredSessionId,
+      requestId: configuredRequestId,
+      producer: "authenticated-local-client"
+    });
+    const configuration = oxfordConfiguration(
+      sixPeopleProblem.id,
+      sixPeopleProblem.version,
+      sixPeopleProblem.interviewer.difficulty
+    );
+    const providerContextSpecSha256 =
+      createProviderContextSpecFingerprintSync(sixPeopleProblem);
+    const problemIdentity = {
+      problemId: sixPeopleProblem.id,
+      problemVersion: sixPeopleProblem.version,
+      prompt: sixPeopleProblem.public.prompt,
+      providerContextSpecSha256
+    };
+
+    store.appendIdempotent({
+      sessionId: configuredSessionId,
+      requestId: configuredRequestId,
+      causationId: configuredEnvelope.causationId,
+      correlationId: configuredEnvelope.correlationId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: fingerprintCommand(configuredEnvelope, {
+        operation: "START_SESSION",
+        payload: {
+          configuration,
+          problem: problemIdentity
+        }
+      }),
+      drafts: [
+        {
+          source: "APPLICATION",
+          type: "SESSION_STARTED",
+          payload: {
+            startedAt: "2026-09-02T12:00:03.000Z",
+            configuration
+          }
+        },
+        {
+          source: "APPLICATION",
+          type: "PROBLEM_PRESENTED",
+          payload: problemIdentity
+        }
+      ],
+      result: { started: true }
+    });
+
+    const persistedSessions = new SessionRecoveryCoordinator(registry, store);
+    expect(persistedSessions.getConfigurationSource(configuredSessionId)).toBe("CONFIGURED");
+
+    const legacySessionId = newSessionId();
+    const legacyRequestId = newRequestId();
+    const legacyEnvelope = createCommandEnvelope({
+      sessionId: legacySessionId,
+      requestId: legacyRequestId,
+      producer: "authenticated-local-client"
+    });
+    store.appendIdempotent({
+      sessionId: legacySessionId,
+      requestId: legacyRequestId,
+      causationId: legacyEnvelope.causationId,
+      correlationId: legacyEnvelope.correlationId,
+      elapsedMs: 0,
+      expectedPriorSequence: 0,
+      commandFingerprint: fingerprintCommand(legacyEnvelope, {
+        operation: "START_SESSION",
+        payload: problemIdentity
+      }),
+      drafts: [
+        {
+          source: "APPLICATION",
+          type: "SESSION_STARTED",
+          payload: {
+            startedAt: "2026-09-02T12:00:04.000Z",
+            configuration
+          }
+        },
+        {
+          source: "APPLICATION",
+          type: "PROBLEM_PRESENTED",
+          payload: problemIdentity
+        }
+      ],
+      result: { started: true }
+    });
+    expect(persistedSessions.getConfigurationSource(legacySessionId))
+      .toBe("LEGACY_COMPATIBILITY");
+  });
+
+  it("keeps exact configured retries idempotent even if provider readiness later changes", async () => {
+    let readinessCalls = 0;
+    const retryStore = new SqliteEventStore(":memory:");
+    const retryRegistry = new SessionRuntimeRegistry(retryStore);
+    const retrySessions = recoveryCoordinator(retryRegistry);
+    const providerRuntimeResolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => {
+          readinessCalls += 1;
+          return { enabled: readinessCalls === 1 };
+        }
+      }
+    });
+    const retryServer = new LoopbackCommandServer({
+      security: {
+        host: "127.0.0.1",
+        allowedOrigins: new Set([CLIENT_ORIGIN]),
+        clientToken: CLIENT_TOKEN
+      },
+      sessions: retrySessions,
+      providerRuntimeResolver
+    });
+    const retryAddress = await retryServer.start();
+
+    try {
+      const sessionId = newSessionId();
+      const requestId = newRequestId();
+      const configuration = InterviewSessionConfigurationSchema.parse({
+        ...oxfordConfiguration(
+          sixPeopleProblem.id,
+          sixPeopleProblem.version,
+          sixPeopleProblem.interviewer.difficulty
+        ),
+        providerSelection: {
+          providerId: "mock-model",
+          modelId: "mock-default"
+        }
+      });
+      const postRetry = (body: unknown): Promise<Response> => fetch(
+        `${retryAddress.url}/v1/commands`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-interview-client-token": CLIENT_TOKEN,
+            origin: CLIENT_ORIGIN
+          },
+          body: JSON.stringify(body)
+        }
+      );
+      const command = {
+        protocolVersion: 1 as const,
+        type: "START_CONFIGURED_SESSION" as const,
+        requestId,
+        sessionId,
+        configuration
+      };
+
+      const first = await postRetry(command);
+      expect(first.status).toBe(200);
+      expect(readinessCalls).toBe(1);
+      const eventCount = retryStore.eventCount(sessionId);
+
+      const retried = await postRetry(command);
+      expect(retried.status).toBe(200);
+      expect(readinessCalls).toBe(1);
+      expect(retryStore.eventCount(sessionId)).toBe(eventCount);
+      expect(retryRegistry.get(sessionId).getState().configuration).toEqual(configuration);
+    } finally {
+      await retryServer.stop();
+      await retryRegistry.closeAll();
+      retryStore.close();
+    }
+  });
+
+  it("keeps an exact configured retry idempotent after its provider registration disappears", async () => {
+    const sessionId = newSessionId();
+    const requestId = newRequestId();
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      ...oxfordConfiguration(
+        sixPeopleProblem.id,
+        sixPeopleProblem.version,
+        sixPeopleProblem.interviewer.difficulty
+      ),
+      providerSelection: {
+        providerId: "retired-provider",
+        modelId: "retired-model"
+      }
+    });
+    const writer = registry.get(sessionId);
+    const envelope = createCommandEnvelope({
+      sessionId,
+      requestId,
+      producer: "authenticated-local-client"
+    });
+
+    await new TurnCoordinator(writer).startConfiguredSession({
+      configuration,
+      problem: sixPeopleProblem
+    }, envelope);
+    const eventCount = store.eventCount(sessionId);
+
+    const retried = await postStart(sessionId, configuration, requestId);
+    expect(retried.status).toBe(200);
+    expect(ConfiguredSessionStartedResponseSchema.parse(await json(retried)).configuration)
+      .toEqual(configuration);
+    expect(store.eventCount(sessionId)).toBe(eventCount);
+    expect(registry.get(sessionId).getState().configuration).toEqual(configuration);
   });
 
   it("serializes concurrent starts so only one authoritative configuration can win", async () => {
@@ -344,22 +651,13 @@ describe("generic interview session configuration", () => {
       }
     });
 
-    expect((await postStart(sessionId, configuration)).status).toBe(200);
-    const writer = registry.get(sessionId);
-    const committed = await new TurnCoordinator(writer).commitInput(
-      "Choose one person and consider the five relationships from them."
-    );
-    const orchestrator = new ServerTurnOrchestrator(sessions, () => undefined);
-    await orchestrator.orchestrateTurn({
-      sessionId,
-      turnId: committed.turnId,
-      inputEpisodeId: committed.inputEpisodeId,
-      studentText: "Choose one person and consider the five relationships from them."
-    });
-
-    expect(Object.keys(writer.getState().generations)).toHaveLength(0);
-    expect(Object.keys(writer.getState().deliveries)).toHaveLength(0);
-    expect(writer.getState().configuration).toEqual(configuration);
+    const response = await postStart(sessionId, configuration);
+    expect(response.status).toBe(409);
+    const failure = ProtocolErrorResponseSchema.parse(await json(response));
+    expect(failure.error.code).toBe("CONFLICT");
+    expect(failure.error.message).toMatch(/provider|authentication|policy/i);
+    expect(failure.error.providerLaunchReason).toBeDefined();
+    expect(registry.hasSession(sessionId)).toBe(false);
   });
 
   it("rejects any later attempt to mutate a started session configuration", async () => {
@@ -425,6 +723,28 @@ describe("generic interview session configuration", () => {
     expect(response.status).toBe(404);
     const failure = ProtocolErrorResponseSchema.parse(await json(response));
     expect(failure.error.code).toBe("NOT_FOUND");
+  });
+
+  it("rejects an unknown provider with a bounded provider-specific conflict", async () => {
+    const configuration = InterviewSessionConfigurationSchema.parse({
+      ...oxfordConfiguration(
+        sixPeopleProblem.id,
+        sixPeopleProblem.version,
+        sixPeopleProblem.interviewer.difficulty
+      ),
+      providerSelection: {
+        providerId: "unknown-provider",
+        modelId: "unknown-model"
+      }
+    });
+    const response = await postStart(newSessionId(), configuration);
+    expect(response.status).toBe(409);
+    const failure = ProtocolErrorResponseSchema.parse(await json(response));
+    expect(failure.error).toEqual({
+      code: "CONFLICT",
+      message: "Selected provider is unavailable",
+      providerLaunchReason: "PROVIDER_UNAVAILABLE"
+    });
   });
 
   it("treats request-id reuse with a different configuration as a conflict", async () => {
@@ -493,7 +813,7 @@ describe("generic interview session configuration", () => {
       interventionPolicy: "BALANCED"
     })).toThrow();
 
-    expect(() => resolveInterviewSessionConfiguration({
+    const unresolvedProviderComposition = resolveInterviewSessionConfiguration({
       configurationVersion: 1,
       mode: "QUANT_TRADING",
       scenario: { id: "BASIC_MARKET_MAKING", version: QUANT_TRADER_SCENARIO_VERSION },
@@ -502,7 +822,62 @@ describe("generic interview session configuration", () => {
         providerId: "unregistered-provider",
         modelId: "unregistered-model"
       }
-    })).toThrow(/provider selection identity/);
+    });
+    expect(unresolvedProviderComposition.configuration.providerSelection).toEqual({
+      providerId: "unregistered-provider",
+      modelId: "unregistered-model"
+    });
+  });
+
+  it("classifies failed credential resolution as credentials-required launch state", async () => {
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => ({
+          enabled: true,
+          credentialRef: {
+            id: "gemini-test-key",
+            purpose: "API_KEY"
+          }
+        })
+      },
+      policySource: {
+        resolvePolicy: () => ({
+          allowMeteredUsage: true,
+          maximumDataUse: "REMOTE_MAY_BE_USED_FOR_IMPROVEMENT",
+          billingVerificationMaxAgeMs: 60_000
+        })
+      },
+      secretResolver: {
+        hasSecret: async () => true,
+        resolveSecret: async () => undefined
+      }
+    });
+
+    const option = await resolver.evaluateLaunchOption({
+      providerId: "gemini-api",
+      modelId: "gemini-2.5-flash"
+    });
+    expect(option).toMatchObject({
+      availability: "UNAVAILABLE",
+      reason: "CREDENTIALS_REQUIRED"
+    });
+  });
+
+  it("reports disabled provider runtime state as disabled instead of a capability failure", async () => {
+    const resolver = new ProviderRuntimeResolver({
+      configurationSource: {
+        resolveConfiguration: () => ({ enabled: false })
+      }
+    });
+
+    const option = await resolver.evaluateLaunchOption({
+      providerId: "mock-model",
+      modelId: "mock-default"
+    });
+    expect(option).toMatchObject({
+      availability: "UNAVAILABLE",
+      reason: "DISABLED"
+    });
   });
 
   it("enumerates only bounded public launch metadata", async () => {
@@ -528,6 +903,24 @@ describe("generic interview session configuration", () => {
     expect(serialized).not.toContain(sixPeopleProblem.private.verificationNotes);
     expect(serialized).not.toContain("generatedParameters");
     expect(serialized).not.toContain("gradingData");
+
+    const providersResponse = await post({
+      protocolVersion: 1,
+      type: "LIST_PROVIDER_OPTIONS",
+      requestId: newRequestId()
+    });
+    expect(providersResponse.status).toBe(200);
+    const providers = ProviderOptionsResponseSchema.parse(await json(providersResponse));
+    const mock = providers.options.find(
+      (option) => option.providerId === "mock-model" && option.modelId === "mock-default"
+    );
+    const gemini = providers.options.find(
+      (option) => option.providerId === "gemini-api" && option.modelId === "gemini-2.5-flash"
+    );
+    expect(mock).toMatchObject({ availability: "AVAILABLE" });
+    expect(gemini).toMatchObject({ availability: "UNAVAILABLE" });
+    const providerSerialized = JSON.stringify(providers);
+    expect(providerSerialized).not.toMatch(/api[_-]?key|credentialRef|token|executable|path/i);
   });
 
   function postStart(

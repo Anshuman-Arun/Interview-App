@@ -52,12 +52,18 @@ const REMOTE_NO_METERED_POLICY = Object.freeze({
 });
 
 describe("production provider runtime resolution", () => {
-  it("rejects ambiguous composition instead of silently ignoring a provider runtime resolver", async () => {
+  it("rejects ambiguous composition instead of accepting an orchestrator plus provider resolver", async () => {
     const store = new SqliteEventStore(":memory:");
     const registry = new SessionRuntimeRegistry(store);
     try {
       const sessions = new SessionRecoveryCoordinator(registry, store);
-      const orchestrator = new ServerTurnOrchestrator(sessions, () => undefined);
+      const sharedResolver = new ProviderRuntimeResolver();
+      const orchestrator = new ServerTurnOrchestrator(
+        sessions,
+        () => undefined,
+        undefined,
+        sharedResolver
+      );
 
       expect(() => new LocalInterviewTransportRuntime({
         security: {
@@ -68,7 +74,7 @@ describe("production provider runtime resolution", () => {
         registry,
         store,
         orchestrator,
-        providerRuntimeResolver: new ProviderRuntimeResolver()
+        providerRuntimeResolver: sharedResolver
       })).toThrow(/both an orchestrator and a provider runtime resolver/u);
     } finally {
       await registry.closeAll();

@@ -2,6 +2,7 @@ import {
   SessionHistoryEntrySchema,
   StoredSessionSummarySchema,
   type DeliveryId,
+  type SessionConfigurationSource,
   type SessionHistoryEntry,
   type SessionId,
   type StoredSessionSummary
@@ -17,7 +18,9 @@ import {
 } from "../../../packages/persistence/src/index.js";
 import { assertReplayPrefixValidForRecovery } from "../../../packages/replay/src/index.js";
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
+import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
 import {
+  fingerprintCommand,
   type SessionRuntimeRegistry,
   type SessionWriter
 } from "../../../packages/interview-engine/src/index.js";
@@ -116,6 +119,29 @@ export class SessionRecoveryCoordinator {
 
   public hasSession(sessionId: SessionId): boolean {
     return this.store?.hasSession(sessionId) ?? this.registry.hasSession(sessionId);
+  }
+
+  public getConfigurationSource(sessionId: SessionId): SessionConfigurationSource {
+    if (!this.hasSession(sessionId)) {
+      throw new Error("Session not found in authoritative event stream");
+    }
+    const events = this.store?.load(sessionId) ?? this.registry.loadEvents(sessionId);
+    for (const event of events) {
+      if (event.type === "SESSION_STARTED") {
+        if (event.payload.configurationSource !== undefined) {
+          return event.payload.configurationSource;
+        }
+        const fingerprintSource = inferUnmarkedConfigurationSourceFromFingerprint({
+          store: this.store,
+          sessionId,
+          startedEvent: event,
+          events
+        });
+        return fingerprintSource
+          ?? inferUnmarkedConfigurationSource(event.payload.configuration);
+      }
+    }
+    throw new Error("Authoritative session history has no SESSION_STARTED event");
   }
 
   public getHistory(sessionId: SessionId): readonly SessionHistoryEntry[] {
@@ -416,6 +442,137 @@ function isQuantSessionState(state: Readonly<ReturnType<SessionWriter["getState"
     || state.configuration?.mode === "QUANT_RESEARCH"
     || state.quantTrading !== undefined
     || state.quantResearch !== undefined;
+}
+
+
+function inferUnmarkedConfigurationSourceFromFingerprint(input: {
+  readonly store: SqliteEventStore | undefined;
+  readonly sessionId: SessionId;
+  readonly startedEvent: Extract<SessionEvent, { readonly type: "SESSION_STARTED" }>;
+  readonly events: readonly SessionEvent[];
+}): SessionConfigurationSource | undefined {
+  if (input.store === undefined || input.startedEvent.payload.configuration === undefined) {
+    return undefined;
+  }
+
+  let processed: ReturnType<SqliteEventStore["getProcessedResult"]>;
+  try {
+    processed = input.store.getProcessedResult(
+      input.sessionId,
+      input.startedEvent.causationId
+    );
+  } catch {
+    return undefined;
+  }
+  if (!processed.found || processed.commandFingerprint === null) {
+    return undefined;
+  }
+
+  const problemPresented = input.events.find(
+    (event): event is Extract<SessionEvent, { readonly type: "PROBLEM_PRESENTED" }> =>
+      event.type === "PROBLEM_PRESENTED"
+      && event.causationId === input.startedEvent.causationId
+  );
+  if (
+    problemPresented === undefined
+    || problemPresented.payload.providerContextSpecSha256 === undefined
+  ) {
+    return undefined;
+  }
+
+  const problemIdentity = {
+    problemId: problemPresented.payload.problemId,
+    problemVersion: problemPresented.payload.problemVersion,
+    prompt: problemPresented.payload.prompt,
+    providerContextSpecSha256: problemPresented.payload.providerContextSpecSha256
+  };
+  const producers = ["authenticated-local-client", "application"] as const;
+  let legacyMatch = false;
+  let configuredMatch = false;
+
+  for (const producer of producers) {
+    const envelope = {
+      requestId: input.startedEvent.causationId,
+      sessionId: input.sessionId,
+      producer,
+      causationId: input.startedEvent.causationId,
+      correlationId: input.startedEvent.correlationId
+    };
+    const legacyFingerprint = fingerprintCommand(envelope, {
+      operation: "START_SESSION",
+      payload: problemIdentity
+    });
+    const configuredFingerprint = fingerprintCommand(envelope, {
+      operation: "START_SESSION",
+      payload: {
+        configuration: input.startedEvent.payload.configuration,
+        problem: problemIdentity
+      }
+    });
+    legacyMatch ||= processed.commandFingerprint === legacyFingerprint;
+    configuredMatch ||= processed.commandFingerprint === configuredFingerprint;
+  }
+
+  if (configuredMatch && !legacyMatch) return "CONFIGURED";
+  if (legacyMatch && !configuredMatch) return "LEGACY_COMPATIBILITY";
+  return undefined;
+}
+
+function inferUnmarkedConfigurationSource(
+  configuration: unknown
+): SessionConfigurationSource {
+  if (configuration === undefined || configuration === null || typeof configuration !== "object") {
+    return "LEGACY_COMPATIBILITY";
+  }
+
+  const candidate = configuration as {
+    readonly mode?: string;
+    readonly problem?: { readonly id?: string; readonly version?: string };
+    readonly difficulty?: string;
+    readonly interventionPolicy?: string;
+    readonly durationMinutes?: number;
+    readonly providerSelection?: unknown;
+  };
+
+  if (candidate.mode !== "OXFORD_MATHEMATICS") {
+    return "CONFIGURED";
+  }
+
+  // Historical START_SESSION could only emit the Ramsey compatibility target,
+  // with no duration/provider override and BALANCED intervention. Reject
+  // impossible legacy shapes before consulting today's problem registry so a
+  // configured non-Ramsey session never depends on Ramsey still being present.
+  if (
+    candidate.problem?.id !== "oxford-six-people"
+    || candidate.durationMinutes !== undefined
+    || candidate.providerSelection !== undefined
+    || candidate.interventionPolicy !== "BALANCED"
+  ) {
+    return "CONFIGURED";
+  }
+
+  let legacy: ReturnType<typeof createLegacyDefaultSessionConfiguration>;
+  try {
+    legacy = createLegacyDefaultSessionConfiguration();
+  } catch {
+    // If the historical compatibility target itself is no longer available,
+    // the remaining Ramsey-like unmarked shape is genuinely ambiguous. Do not
+    // promote it to CONFIGURED on a guess.
+    return "LEGACY_COMPATIBILITY";
+  }
+  if (legacy.mode !== "OXFORD_MATHEMATICS") {
+    return "LEGACY_COMPATIBILITY";
+  }
+
+  const exactLegacyShape =
+    candidate.problem.version === legacy.problem.version
+    && candidate.difficulty === legacy.difficulty;
+
+  // Before provenance was persisted, configured sessions already stored their
+  // exact configuration. Any shape legacy START_SESSION could not have emitted
+  // is therefore known to be configured. The one historically indistinguishable
+  // Ramsey/default shape remains conservatively legacy.
+  return exactLegacyShape ? "LEGACY_COMPATIBILITY" : "CONFIGURED";
 }
 
 function semanticDeliveryKey(generationId: string, text: string): string {
