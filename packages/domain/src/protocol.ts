@@ -4,6 +4,7 @@ import {
   InterviewCatalogEntrySchema,
   InterviewProblemPublicViewSchema,
   InterviewSessionConfigurationSchema,
+  ProviderLaunchAvailabilityReasonSchema,
   ProviderLaunchOptionSchema,
   SessionConfigurationSourceSchema
 } from "./session-configuration.js";
@@ -399,7 +400,19 @@ export const ProtocolErrorResponseSchema = z.object({
   ok: z.literal(false),
   error: z.object({
     code: ProtocolErrorCodeSchema,
-    message: z.string().min(1).max(200)
+    message: z.string().min(1).max(200),
+    providerLaunchReason: ProviderLaunchAvailabilityReasonSchema.optional()
   }).strict()
-}).strict();
+}).strict().superRefine((response, context) => {
+  if (
+    response.error.providerLaunchReason !== undefined
+    && response.error.code !== "CONFLICT"
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["error", "providerLaunchReason"],
+      message: "Provider launch reasons are valid only for bounded conflict responses"
+    });
+  }
+});
 export type ProtocolErrorResponse = z.infer<typeof ProtocolErrorResponseSchema>;
