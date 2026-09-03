@@ -683,4 +683,63 @@ describe("live Oxford formal reasoning analysis", () => {
     }
   });
 
+
+  it("fails closed when the session completes while direct interpretation is still pending", async () => {
+    const store = new SqliteEventStore(":memory:");
+    try {
+      const registry = new SessionRuntimeRegistry(store);
+      const sessionId = newSessionId();
+      const writer = registry.get(sessionId);
+      const turns = new TurnCoordinator(writer);
+      const selectedProblem = problem("oxford-euclid-primes");
+      await turns.startSession(selectedProblem);
+      const committed = await turns.commitInput("The product-plus-one remainder claim is one.");
+
+      let capturedRequest: FormalInterpretationRequest | undefined;
+      let releaseProvider: ((value: unknown) => void) | undefined;
+      let signalProviderStarted: (() => void) | undefined;
+      const providerStarted = new Promise<void>((resolve) => {
+        signalProviderStarted = resolve;
+      });
+      const provider: FormalInterpretationProvider = {
+        interpret(request) {
+          capturedRequest = request;
+          signalProviderStarted?.();
+          return new Promise((resolve) => {
+            releaseProvider = resolve;
+          });
+        }
+      };
+      const analysis = new StudentReasoningAnalysisCoordinator(
+        new SessionRecoveryCoordinator(registry, store),
+        provider,
+        5_000
+      );
+      const pending = analysis.analyze({
+        sessionId,
+        turnId: committed.turnId,
+        inputEpisodeId: committed.inputEpisodeId
+      });
+
+      await providerStarted;
+      await turns.completeSession();
+      if (capturedRequest === undefined || releaseProvider === undefined) {
+        throw new Error("Provider did not receive the formal request");
+      }
+      releaseProvider(interpretationResult(capturedRequest, "CORRECT"));
+
+      const outcome = await pending;
+      expect(outcome.status).toBe("ANALYZED");
+      if (outcome.status !== "ANALYZED") throw new Error("Expected analysis");
+      expect(outcome.interpretation).toMatchObject({
+        status: "STALE",
+        reason: "SESSION_NOT_ACTIVE"
+      });
+      expect(Object.values(writer.getState().verificationRequests)).toHaveLength(0);
+      expect(Object.values(writer.getState().studentEvidence)).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
 });
