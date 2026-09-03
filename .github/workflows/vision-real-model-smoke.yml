@@ -1,0 +1,113 @@
+name: Real local vision model smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/vision-real-model-smoke.yml"
+      - "apps/desktop/src/runtime/composition.ts"
+      - "apps/desktop/src/runtime/local-vision-backend.ts"
+      - "apps/desktop/src/runtime/model-assets.ts"
+      - "packages/model-assets/**"
+      - "scripts/prepare-local-vision-smoke.ts"
+      - "workers/python/local_model_worker.py"
+      - "workers/python/local_vision_runtime.py"
+      - "workers/python/run_local_vision_smoke.py"
+      - "workers/python/requirements-local-model-runtime.txt"
+      - "tests/fixtures/rapid-latex-ocr/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: vision-real-model-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  windows-real-model:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      CI: true
+    steps:
+      - name: Check current PR head
+        id: current_head
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $current = gh api "repos/${{ github.repository }}/pulls/$env:PR_NUMBER" --jq ".head.sha"
+          $isCurrent = if ($current -eq $env:EXPECTED_SHA) { "true" } else { "false" }
+          "current=$isCurrent" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Checkout
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm 11.19.0
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.19.0
+          run_install: false
+
+      - name: Set up Node 22
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Python 3.13
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install JavaScript dependencies
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pinned local runtime wheels
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        run: "python -m pip install --disable-pip-version-check --only-binary=:all: -r workers/python/requirements-local-model-runtime.txt"
+
+      - name: Validate pinned runtime before model download
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        run: python -I workers/python/validate_local_model_runtime.py
+
+      - name: Download and verify production vision assets
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: |
+          $cacheRoot = Join-Path $env:RUNNER_TEMP "vision-asset-cache"
+          $modelRoot = Join-Path $env:RUNNER_TEMP "vision-model"
+          pnpm exec tsx scripts/prepare-local-vision-smoke.ts $cacheRoot $modelRoot
+          "INTERVIEW_VISION_SMOKE_MODEL_ROOT=$modelRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Run exact real-model regression and whiteboard smoke
+        id: smoke
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP "vision-smoke-report.json"
+          python -I workers/python/run_local_vision_smoke.py --model-root "$env:INTERVIEW_VISION_SMOKE_MODEL_ROOT" --fixtures "tests/fixtures/rapid-latex-ocr" --report "$report"
+          if (-not (Test-Path $report)) {
+            throw "Real vision smoke did not produce its report"
+          }
+          "report=$report" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload real-model smoke report
+        if: (github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true') && always() && steps.smoke.outputs.report != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: local-vision-smoke-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          path: ${{ steps.smoke.outputs.report }}
+          if-no-files-found: error
+          retention-days: 14
