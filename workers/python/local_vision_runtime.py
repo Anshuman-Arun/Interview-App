@@ -8,7 +8,6 @@ request supplies only bounded PNG bytes plus an observation-class hint.
 
 from __future__ import annotations
 
-import json
 import math
 import re
 import struct
@@ -18,6 +17,8 @@ from typing import Any
 
 import numpy as np
 import onnxruntime as ort
+from PIL import Image
+from tokenizers import Tokenizer
 
 MAX_PNG_BYTES = 2 * 1024 * 1024
 MAX_IMAGE_DIMENSION = 4096
@@ -29,7 +30,6 @@ MAX_MODEL_HEIGHT = 192
 MIN_MODEL_WIDTH = 32
 MIN_MODEL_HEIGHT = 32
 PAD_DIVISOR = 32
-INK_BORDER = 8
 NORM_MEAN = 0.7931
 NORM_STD = 0.1738
 BOS_TOKEN = 1
@@ -113,7 +113,7 @@ class VisionRuntime:
             sess_options=options,
             providers=providers,
         )
-        self._tokens = _load_tokenizer(root / "tokenizer.json")
+        self._tokenizer = _load_tokenizer(root / "tokenizer.json")
 
     def close(self) -> None:
         # Process teardown owns ONNX session release; expose the common managed
@@ -128,18 +128,15 @@ class VisionRuntime:
         if requested_kind not in REQUESTED_KINDS:
             raise VisionProtocolError("INVALID_OBSERVATION_KIND")
         rgb = _decode_png(png_bytes)
-        gray = _prepare_gray(rgb)
-        if gray is None:
+        if not _has_visible_ink(rgb):
             return _uncertain_observation(
                 "No stable mathematical ink was visible in the bounded board crop."
             )
 
-        primary = self._recognize(gray)
-        # A second deterministic perturbation is used only as a stability gate.
-        # Its agreement score is not presented as a calibrated probability.
-        threshold = float(np.median(gray))
-        perturbed = np.where(gray <= threshold, 0.0, 255.0).astype(np.float32)
-        secondary = self._recognize(perturbed)
+        primary = self._recognize(rgb)
+        # A deterministic binarization perturbation is only a repeatability
+        # gate. It is deliberately not presented as a calibrated probability.
+        secondary = self._recognize(_stability_perturbation(rgb))
 
         primary_text, primary_ended_cleanly = primary
         secondary_text, secondary_ended_cleanly = secondary
@@ -157,8 +154,6 @@ class VisionRuntime:
         confidence = 0.72 if stable else 0.55
         kind = _classify(primary_text)
         if requested_kind != "ANY" and kind != requested_kind:
-            # Do not relabel a model result merely to satisfy a request hint.
-            # A mismatched specific request degrades to bounded uncertainty.
             return {
                 "observationKind": "GENERAL_BOARD_DESCRIPTION",
                 "interpretation": (
@@ -184,8 +179,8 @@ class VisionRuntime:
             "confidence": confidence,
         }
 
-    def _recognize(self, gray: np.ndarray) -> tuple[str, bool]:
-        tensor = self._adaptive_tensor(gray)
+    def _recognize(self, rgb: np.ndarray) -> tuple[str, bool]:
+        tensor = self._adaptive_tensor(rgb)
         context = self._encoder.run(
             None,
             {self._encoder.get_inputs()[0].name: tensor},
@@ -197,6 +192,10 @@ class VisionRuntime:
         if len(decoder_inputs) != 3:
             raise RuntimeError("vision decoder input contract changed")
 
+        # Upstream samples top-k logits at temperature 1e-5. With a unique
+        # maximum this converges to greedy argmax; using argmax here removes
+        # stochasticity from a production observation backend while preserving
+        # the effective upstream decode for non-tied logits.
         for _ in range(MAX_TOKEN_COUNT):
             window = token_ids[-MAX_TOKEN_COUNT:]
             x = np.asarray(window, dtype=np.int64)[None, :]
@@ -226,33 +225,42 @@ class VisionRuntime:
                 break
 
         content_ids = [value for value in token_ids[1:] if value >= FIRST_CONTENT_TOKEN]
-        raw = _decode_tokens(content_ids, self._tokens)
+        raw = _decode_tokens(content_ids, self._tokenizer)
         return _post_process(raw), ended_cleanly
 
-    def _adaptive_tensor(self, gray: np.ndarray) -> np.ndarray:
-        source_h, source_w = gray.shape
-        scale = min(
-            1.0,
-            MAX_MODEL_WIDTH / max(1, source_w),
-            MAX_MODEL_HEIGHT / max(1, source_h),
-        )
-        width = max(1, int(round(source_w * scale)))
-        height = max(1, int(round(source_h * scale)))
-        tensor = _render_tensor(gray, width, height)
+    def _adaptive_tensor(self, rgb: np.ndarray) -> np.ndarray:
+        input_image = _initial_expression_image(rgb)
+        if input_image is None:
+            raise RuntimeError("vision preprocessing found no expression bounds")
 
+        ratio = 1.0
+        width, height = input_image.size
+        tensor: np.ndarray | None = None
         input_name = self._resizer.get_inputs()[0].name
+
+        # Match RapidLaTeXOCR's release preprocessing loop: predict a padded
+        # width, rescale the original bounded expression, then ask again.
         for _ in range(10):
+            height = max(1, int(height * ratio))
+            tensor, padded_width = _preprocess_iteration(
+                input_image,
+                ratio,
+                width,
+                height,
+            )
             output = np.asarray(self._resizer.run(None, {input_name: tensor})[0])
             if output.size == 0 or not np.isfinite(output).all():
                 raise RuntimeError("vision resizer returned invalid output")
-            predicted_width = (int(np.argmax(output.reshape(-1, output.shape[-1])[-1])) + 1) * PAD_DIVISOR
-            current_padded = _pad_up(max(width, MIN_MODEL_WIDTH), PAD_DIVISOR)
-            if predicted_width == current_padded:
+            predicted_width = (
+                int(np.argmax(output.reshape(-1, output.shape[-1])[-1])) + 1
+            ) * PAD_DIVISOR
+            if predicted_width == padded_width:
                 break
-            ratio = predicted_width / max(1, current_padded)
-            width = min(MAX_MODEL_WIDTH, max(1, int(round(width * ratio))))
-            height = min(MAX_MODEL_HEIGHT, max(1, int(round(height * ratio))))
-            tensor = _render_tensor(gray, width, height)
+            width = predicted_width
+            ratio = predicted_width / max(1, padded_width)
+
+        if tensor is None:
+            raise RuntimeError("vision preprocessing did not produce a tensor")
         return tensor
 
 
