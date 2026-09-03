@@ -32,6 +32,16 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function setInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value"
+  )?.set;
+  if (setter === undefined) throw new Error("HTML input value setter is unavailable");
+  setter.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 function renderHook(fetchImpl: typeof fetch): {
   readonly root: Root;
   readonly container: HTMLDivElement;
@@ -593,16 +603,6 @@ describe("Quant workspace lifecycle refresh", () => {
 });
 
 describe("Quant Research client admission boundaries", () => {
-  function setInputValue(input: HTMLInputElement, value: string): void {
-    const setter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value"
-    )?.set;
-    if (setter === undefined) throw new Error("HTML input value setter is unavailable");
-    setter.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  }
-
   it("blocks runtime-rejected allocation budget overflow but submits scoreable infeasible optimization points", async () => {
     const allocationState = researchState(
       "EXPERIMENTAL_ALLOCATION",
@@ -693,6 +693,101 @@ describe("Quant Research client admission boundaries", () => {
 
     await act(async () => root.unmount());
     container.remove();
+  });
+});
+
+describe("Quant Trading client admission boundaries", () => {
+  async function submitQuoteThroughDom(
+    state: ReturnType<typeof activeTradingState>,
+    values: readonly [string, string, string, string]
+  ): Promise<{
+    readonly submit: ReturnType<typeof vi.fn>;
+    readonly text: string;
+  }> {
+    const submit = vi.fn(async () => activeTradingState(2));
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <QuantTradingWorkspace
+          state={state}
+          loading={false}
+          actionPending={false}
+          disabled={false}
+          onRefresh={async () => undefined}
+          onSubmit={submit}
+          onReview={() => undefined}
+        />
+      );
+    });
+
+    const inputs = [...container.querySelectorAll("input")];
+    if (inputs.length !== 4) throw new Error("Expected four Trading quote inputs");
+    await act(async () => {
+      for (let index = 0; index < inputs.length; index += 1) {
+        const input = inputs[index];
+        const value = values[index];
+        if (input === undefined || value === undefined) {
+          throw new Error("Quote input/value alignment failed");
+        }
+        setInputValue(input, value);
+      }
+    });
+
+    const form = container.querySelector("form");
+    if (form === null) throw new Error("Expected Trading quote form");
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+    const text = container.textContent ?? "";
+
+    await act(async () => root.unmount());
+    container.remove();
+    return { submit, text };
+  }
+
+  it("matches deterministic tick admission and public hard-position limits", async () => {
+    const offTick = await submitQuoteThroughDom(
+      activeTradingState(1),
+      ["99.50000001", "1", "100.5", "1"]
+    );
+    expect(offTick.submit).not.toHaveBeenCalled();
+    expect(offTick.text).toContain("public tick size");
+
+    const base = activeTradingState(1);
+    const hardLimitState = QuantTradingPublicStateSchema.parse({
+      ...base,
+      portfolio: portfolio(4),
+      quoteRequest: {
+        ...base.quoteRequest,
+        maxPosition: 4,
+        hardPositionLimit: true
+      }
+    });
+    const hardLimit = await submitQuoteThroughDom(
+      hardLimitState,
+      ["99.5", "1", "100.5", "1"]
+    );
+    expect(hardLimit.submit).not.toHaveBeenCalled();
+    expect(hardLimit.text).toContain("hard position limit");
+
+    const valid = await submitQuoteThroughDom(
+      activeTradingState(1),
+      ["99.5", "1", "100.5", "1"]
+    );
+    expect(valid.submit).toHaveBeenCalledTimes(1);
+    expect(valid.submit.mock.calls[0]?.[0]).toEqual({
+      type: "QUOTE",
+      quote: {
+        bidPrice: 99.5,
+        bidSize: 1,
+        askPrice: 100.5,
+        askSize: 1
+      }
+    });
   });
 });
 
