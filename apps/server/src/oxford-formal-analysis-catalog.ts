@@ -1,8 +1,8 @@
 import type {
   EvidenceKey,
-  FormalProtocolRef,
-  InterviewProblem
+  FormalProtocolRef
 } from "../../../packages/domain/src/index.js";
+import { getProblemByIdentity } from "../../../packages/problems/src/index.js";
 import {
   FORMAL_PROTOCOL_ROUTES,
   type FormalProtocolRoutingScope
@@ -93,13 +93,17 @@ const PROFILES = new Map<string, OxfordFormalAnalysisProfile>(
 );
 
 export function resolveOxfordFormalAnalysisProfile(
-  problem: InterviewProblem
+  problem: { readonly id: string; readonly version: string }
 ): OxfordFormalAnalysisProfile | undefined {
   const profile = PROFILES.get(problem.id + "\u0000" + problem.version);
-  if (profile === undefined) return undefined;
-  if (profile.target.subject.kind !== "MILESTONE") return undefined;
+  if (profile === undefined || profile.target.subject.kind !== "MILESTONE") return undefined;
+
+  const catalogProblem = getProblemByIdentity(problem.id, problem.version);
+  if (catalogProblem === undefined) return undefined;
   const milestoneId = profile.target.subject.milestoneId;
-  const milestone = problem.interviewer.reasoningGraph.milestones.find((item) => item.id === milestoneId);
+  const milestone = catalogProblem.interviewer.reasoningGraph.milestones.find(
+    (item) => item.id === milestoneId
+  );
   return milestone === undefined ? undefined : profile;
 }
 
