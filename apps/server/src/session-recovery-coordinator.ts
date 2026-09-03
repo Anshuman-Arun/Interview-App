@@ -20,6 +20,7 @@ import { assertReplayPrefixValidForRecovery } from "../../../packages/replay/src
 import { resolveSessionStateComposition } from "./interview-session-composition.js";
 import { createLegacyDefaultSessionConfiguration } from "./legacy-session-compatibility.js";
 import {
+  fingerprintCommand,
   type SessionRuntimeRegistry,
   type SessionWriter
 } from "../../../packages/interview-engine/src/index.js";
@@ -130,7 +131,14 @@ export class SessionRecoveryCoordinator {
         if (event.payload.configurationSource !== undefined) {
           return event.payload.configurationSource;
         }
-        return inferUnmarkedConfigurationSource(event.payload.configuration);
+        const fingerprintSource = inferUnmarkedConfigurationSourceFromFingerprint({
+          store: this.store,
+          sessionId,
+          startedEvent: event,
+          events
+        });
+        return fingerprintSource
+          ?? inferUnmarkedConfigurationSource(event.payload.configuration);
       }
     }
     throw new Error("Authoritative session history has no SESSION_STARTED event");
@@ -436,6 +444,74 @@ function isQuantSessionState(state: Readonly<ReturnType<SessionWriter["getState"
     || state.quantResearch !== undefined;
 }
 
+
+function inferUnmarkedConfigurationSourceFromFingerprint(input: {
+  readonly store: SqliteEventStore | undefined;
+  readonly sessionId: SessionId;
+  readonly startedEvent: Extract<SessionEvent, { readonly type: "SESSION_STARTED" }>;
+  readonly events: readonly SessionEvent[];
+}): SessionConfigurationSource | undefined {
+  if (input.store === undefined || input.startedEvent.payload.configuration === undefined) {
+    return undefined;
+  }
+
+  let processed: ReturnType<SqliteEventStore["getProcessedResult"]>;
+  try {
+    processed = input.store.getProcessedResult(
+      input.sessionId,
+      input.startedEvent.causationId
+    );
+  } catch {
+    return undefined;
+  }
+  if (!processed.found || processed.commandFingerprint === null) {
+    return undefined;
+  }
+
+  const problemPresented = input.events.find(
+    (event): event is Extract<SessionEvent, { readonly type: "PROBLEM_PRESENTED" }> =>
+      event.type === "PROBLEM_PRESENTED"
+      && event.causationId === input.startedEvent.causationId
+  );
+  if (problemPresented === undefined) return undefined;
+
+  const problemIdentity = {
+    problemId: problemPresented.payload.problemId,
+    problemVersion: problemPresented.payload.problemVersion,
+    prompt: problemPresented.payload.prompt,
+    providerContextSpecSha256: problemPresented.payload.providerContextSpecSha256
+  };
+  const producers = ["authenticated-local-client", "application"] as const;
+  let legacyMatch = false;
+  let configuredMatch = false;
+
+  for (const producer of producers) {
+    const envelope = {
+      requestId: input.startedEvent.causationId,
+      sessionId: input.sessionId,
+      producer,
+      causationId: input.startedEvent.causationId,
+      correlationId: input.startedEvent.correlationId
+    };
+    const legacyFingerprint = fingerprintCommand(envelope, {
+      operation: "START_SESSION",
+      payload: problemIdentity
+    });
+    const configuredFingerprint = fingerprintCommand(envelope, {
+      operation: "START_SESSION",
+      payload: {
+        configuration: input.startedEvent.payload.configuration,
+        problem: problemIdentity
+      }
+    });
+    legacyMatch ||= processed.commandFingerprint === legacyFingerprint;
+    configuredMatch ||= processed.commandFingerprint === configuredFingerprint;
+  }
+
+  if (configuredMatch && !legacyMatch) return "CONFIGURED";
+  if (legacyMatch && !configuredMatch) return "LEGACY_COMPATIBILITY";
+  return undefined;
+}
 
 function inferUnmarkedConfigurationSource(
   configuration: unknown
