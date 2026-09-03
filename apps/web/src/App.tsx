@@ -31,6 +31,35 @@ import { useAppearance } from "./appearance/AppearanceProvider.js";
 import "./styles/app.css";
 import "./styles/transcript.css";
 
+const QUANT_REATTACH_SESSION_KEY = "interview.quant.active-session";
+
+function readQuantReattachSessionId(): SessionId | null {
+  try {
+    const value = globalThis.sessionStorage?.getItem(QUANT_REATTACH_SESSION_KEY);
+    if (value === null || value === undefined) return null;
+    const parsed = SessionIdSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeQuantReattachSessionId(sessionId: SessionId): void {
+  try {
+    globalThis.sessionStorage?.setItem(QUANT_REATTACH_SESSION_KEY, sessionId);
+  } catch {
+    // Reattachment is a convenience only; server authority never depends on browser storage.
+  }
+}
+
+function clearQuantReattachSessionId(): void {
+  try {
+    globalThis.sessionStorage?.removeItem(QUANT_REATTACH_SESSION_KEY);
+  } catch {
+    // Reattachment is a convenience only; server authority never depends on browser storage.
+  }
+}
+
 export const App: React.FC = () => {
   const { resolvedTheme } = useAppearance();
   const [recoverySessionInput, setRecoverySessionInput] = useState("");
@@ -44,6 +73,8 @@ export const App: React.FC = () => {
   const sessionTerminalPendingRef = useRef(false);
   const [sessionEntryPending, setSessionEntryPending] = useState(false);
   const [sessionTerminalPending, setSessionTerminalPending] = useState(false);
+  const [reloadQuantSessionId] = useState<SessionId | null>(() => readQuantReattachSessionId());
+  const reloadQuantRecoveryAttemptedRef = useRef(false);
 
   const whiteboardAdapter = useMemo(() => {
     return new TldrawWhiteboardAdapter();
@@ -302,6 +333,82 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (
+      session.sessionId !== null
+      && session.isSessionStarted
+      && session.sessionStatus === "ACTIVE"
+    ) {
+      if (
+        session.configuration?.mode === "QUANT_TRADING"
+        || session.configuration?.mode === "QUANT_RESEARCH"
+      ) {
+        writeQuantReattachSessionId(session.sessionId);
+      } else if (session.configuration?.mode === "OXFORD_MATHEMATICS") {
+        clearQuantReattachSessionId();
+      }
+      return;
+    }
+    if (
+      session.sessionStatus === "COMPLETED"
+      || session.sessionStatus === "ARCHIVED"
+    ) {
+      clearQuantReattachSessionId();
+    }
+  }, [
+    session.configuration?.mode,
+    session.isSessionStarted,
+    session.sessionId,
+    session.sessionStatus
+  ]);
+
+  useEffect(() => {
+    if (
+      reloadQuantSessionId === null
+      || route.page !== "interview"
+      || session.isSessionStarted
+      || sessionEntryPendingRef.current
+      || sessionTerminalPendingRef.current
+      || reloadQuantRecoveryAttemptedRef.current
+    ) {
+      return;
+    }
+
+    reloadQuantRecoveryAttemptedRef.current = true;
+    sessionEntryPendingRef.current = true;
+    setSessionEntryPending(true);
+    void session.recoverSession(reloadQuantSessionId)
+      .then((status) => {
+        if (status === "ACTIVE") {
+          navigate({ page: "interview" }, { replace: true });
+          return;
+        }
+        clearQuantReattachSessionId();
+        if (status === "COMPLETED" || status === "ARCHIVED") {
+          navigate({
+            page: "review",
+            sessionId: reloadQuantSessionId,
+            view: "replay"
+          }, { replace: true });
+          return;
+        }
+        navigate({ page: "home" }, { replace: true });
+      })
+      .catch(() => {
+        clearQuantReattachSessionId();
+        navigate({ page: "home" }, { replace: true });
+      })
+      .finally(() => {
+        sessionEntryPendingRef.current = false;
+        setSessionEntryPending(false);
+      });
+  }, [
+    navigate,
+    reloadQuantSessionId,
+    route.page,
+    session.isSessionStarted,
+    session.recoverSession
+  ]);
 
   const handleWhiteboardEditorMount = useCallback((): void => {
     void session.synchronizeWhiteboard().catch(() => {
