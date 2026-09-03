@@ -513,12 +513,10 @@ describe("Quant workspace lifecycle refresh", () => {
   it("performs exactly one deferred refresh after a pending action spans pause/resume", async () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
-      value: (_query: string): MediaQueryList => ({
+      value: (_query: string) => ({
         matches: false,
         media: "",
         onchange: null,
-        addListener: () => undefined,
-        removeListener: () => undefined,
         addEventListener: () => undefined,
         removeEventListener: () => undefined,
         dispatchEvent: () => false
