@@ -89,7 +89,7 @@ jobs:
       - name: Run supervised provider process safety tests
         env:
           INTERVIEW_SUPERVISOR_STAGE_DEBUG: "1"
-        run: pnpm exec vitest run tests/supervised-process.test.ts
+        run: pnpm exec vitest run tests/supervised-process.test.ts -t "passes bounded stdin literally and returns bounded UTF-8 stdout"
 
       - name: Run complete Vitest suite
         # The CI variant keeps full discovery while bounding file-level
