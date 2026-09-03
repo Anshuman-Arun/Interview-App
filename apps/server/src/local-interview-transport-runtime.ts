@@ -106,8 +106,9 @@ export class LocalInterviewTransportRuntime {
     // runtime source. Both interviewer generation and formal interpretation
     // resolve the selected Antigravity executor through this same source, so
     // formal analysis never creates a parallel raw CLI supervisor. When a
-    // caller injects a custom resolver, it must explicitly inject a matching
-    // formal provider too; otherwise formal analysis remains fail-closed.
+    // caller injects a custom resolver, the default formal provider derives
+    // from that same resolver and abstains unless it exposes the exact supported
+    // supervised runtime; callers may still inject a purpose-specific provider.
     const defaultAdapterRuntimeSource =
       options.orchestrator === undefined
       && options.providerRuntimeResolver === undefined
