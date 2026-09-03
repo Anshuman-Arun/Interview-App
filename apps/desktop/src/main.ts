@@ -60,7 +60,10 @@ const backend = new DesktopBackendController(async (config) =>
     ...config,
     ...(localRuntime?.voiceRuntime === undefined
       ? {}
-      : { voiceRuntime: localRuntime.voiceRuntime })
+      : { voiceRuntime: localRuntime.voiceRuntime }),
+    ...(localRuntime?.visionBackend === undefined
+      ? {}
+      : { visionBackend: localRuntime.visionBackend })
   })
 );
 let frontendServer: DesktopFrontendServer | undefined;
@@ -81,7 +84,10 @@ const packagedSingleInstanceSmokeHost = process.argv.includes(
 );
 
 if (!app.requestSingleInstanceLock()) {
-  if (process.argv.includes("--install-local-models")) {
+  if (
+    process.argv.includes("--install-local-models")
+    || process.argv.includes("--install-local-vision-models")
+  ) {
     console.error(
       "Local model setup requires the running Interview App instance to be closed."
     );
@@ -167,6 +173,18 @@ async function startDesktop(): Promise<void> {
   if (process.argv.includes("--install-local-models")) {
     try {
       await runtime.installVoiceAssets(startupAbort.signal);
+    } catch (error) {
+      if (startupAbort.signal.aborted) return;
+      throw error;
+    }
+    await runtime.stopWorkers();
+    shutdownComplete = true;
+    app.quit();
+    return;
+  }
+  if (process.argv.includes("--install-local-vision-models")) {
+    try {
+      await runtime.installVisionAssets(startupAbort.signal);
     } catch (error) {
       if (startupAbort.signal.aborted) return;
       throw error;
@@ -316,6 +334,7 @@ function localRuntimeStatusForRenderer(): DesktopRendererLocalRuntimeStatus {
     protocolVersion: 1,
     speech: rendererCapability(snapshot?.speech),
     tts: rendererCapability(snapshot?.tts),
+    vision: rendererCapability(snapshot?.vision),
     python: Object.freeze({
       strategy: "SYSTEM_CPYTHON",
       supportedVersions: Object.freeze(["3.12", "3.13"] as const)
@@ -518,396 +537,3 @@ async function runPackagedSmoke(
   }
   const rendererReady: unknown = await window.webContents.executeJavaScript(
     `new Promise((resolve) => {
-      const deadline = Date.now() + 5000;
-      const check = () => {
-        const root = document.getElementById("root");
-        const mounted = root instanceof HTMLElement
-          && root.childElementCount > 0
-          && typeof globalThis.interviewDesktop?.getBootstrap === "function"
-          && typeof globalThis.interviewDesktop?.getLocalRuntimeStatus === "function"
-          && typeof globalThis.interviewDesktop?.installLocalModels === "function";
-        if (mounted) {
-          resolve(true);
-          return;
-        }
-        if (Date.now() >= deadline) {
-          resolve(false);
-          return;
-        }
-        setTimeout(check, 50);
-      };
-      check();
-    })`
-  );
-  if (rendererReady !== true) {
-    throw new Error("Packaged renderer did not mount the product shell");
-  }
-
-  const token = backendConfig.clientToken;
-  const origin = backendConfig.allowedOrigins?.[0];
-  if (
-    typeof token !== "string"
-    || token.length < 32
-    || typeof origin !== "string"
-    || origin.length === 0
-  ) {
-    throw new Error("Packaged smoke backend authentication configuration is unavailable");
-  }
-
-  await verifyPriorPackagedSmokeSession(server);
-
-  const commandUrl = `${server.bound.command.url}/v1/commands`;
-  const sessionId = newSessionId();
-  await postPackagedSmokeCommand(commandUrl, token, origin, {
-    protocolVersion: 1,
-    type: "START_SESSION",
-    requestId: `request_${randomUUID()}`,
-    sessionId
-  });
-  await postPackagedSmokeCommand(commandUrl, token, origin, {
-    protocolVersion: 1,
-    type: "COMMIT_TYPED_INPUT",
-    requestId: `request_${randomUUID()}`,
-    sessionId,
-    text: PACKAGED_SMOKE_INPUT
-  });
-  const beforeRestart = server.registry.get(sessionId).getState();
-  if (
-    !beforeRestart.started
-    || beforeRestart.status !== "ACTIVE"
-    || !Object.values(beforeRestart.turns).some(
-      (turn) => turn.studentText === PACKAGED_SMOKE_INPUT
-    )
-  ) {
-    throw new Error("Packaged command smoke did not commit the typed turn authoritatively");
-  }
-
-  await backend.stop();
-  const restarted = await backend.start(backendConfig);
-  const afterRestart = restarted.registry.get(sessionId).getState();
-  if (
-    afterRestart.sessionId !== sessionId
-    || !afterRestart.started
-    || afterRestart.sequence < beforeRestart.sequence
-    || !Object.values(afterRestart.turns).some(
-      (turn) => turn.studentText === PACKAGED_SMOKE_INPUT
-    )
-  ) {
-    throw new Error("Packaged SQLite persistence smoke validation failed");
-  }
-  await writePackagedSmokeProof(sessionId, afterRestart.sequence);
-}
-
-function installBootstrapHandler(): void {
-  ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
-  ipcMain.on(DESKTOP_BOOTSTRAP_CHANNEL, (event: IpcMainEvent) => {
-    const currentWindow = mainWindow;
-    const currentBootstrap = bootstrap;
-    const currentFrontendUrl = frontendUrl;
-    if (
-      currentWindow === undefined
-      || currentBootstrap === undefined
-      || currentFrontendUrl === undefined
-      || !isAuthorizedDesktopBootstrapRequest({
-        shuttingDown,
-        senderWebContentsId: event.sender.id,
-        trustedWebContentsId: currentWindow.webContents.id,
-        senderFrame: event.senderFrame,
-        trustedMainFrame: currentWindow.webContents.mainFrame,
-        senderFrameUrl: event.senderFrame?.url,
-        trustedFrontendUrl: currentFrontendUrl
-      })
-    ) {
-      event.returnValue = null;
-      return;
-    }
-    event.returnValue = currentBootstrap;
-  });
-}
-
-function installZoomHandler(): void {
-  ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
-  ipcMain.on(DESKTOP_ZOOM_CHANNEL, (event: IpcMainEvent, requestedFactor: unknown) => {
-    const currentWindow = mainWindow;
-    const currentBootstrap = bootstrap;
-    const currentFrontendUrl = frontendUrl;
-    if (
-      currentWindow === undefined
-      || currentBootstrap === undefined
-      || currentFrontendUrl === undefined
-      || !isAuthorizedDesktopBootstrapRequest({
-        shuttingDown,
-        senderWebContentsId: event.sender.id,
-        trustedWebContentsId: currentWindow.webContents.id,
-        senderFrame: event.senderFrame,
-        trustedMainFrame: currentWindow.webContents.mainFrame,
-        senderFrameUrl: event.senderFrame?.url,
-        trustedFrontendUrl: currentFrontendUrl
-      })
-      || !isDesktopZoomFactor(requestedFactor)
-    ) {
-      event.returnValue = false;
-      return;
-    }
-
-    applyDesktopZoomFactor(currentWindow, requestedFactor, false);
-    event.returnValue = true;
-  });
-}
-
-function applyDesktopZoomFactor(
-  window: BrowserWindow,
-  factor: DesktopZoomFactor,
-  notifyRenderer: boolean
-): void {
-  window.webContents.setZoomFactor(factor);
-  if (notifyRenderer) {
-    window.webContents.send(DESKTOP_ZOOM_CHANGED_CHANNEL, factor);
-  }
-}
-
-function stepDesktopZoom(window: BrowserWindow, direction: -1 | 1): void {
-  const current = window.webContents.getZoomFactor();
-  const unclamped = current + direction * 0.1;
-  const target = Math.min(
-    DESKTOP_MAX_ZOOM_FACTOR,
-    Math.max(DESKTOP_MIN_ZOOM_FACTOR, Math.round(unclamped * 100) / 100)
-  );
-  applyDesktopZoomFactor(window, target, true);
-}
-
-function installDesktopZoomShortcuts(window: BrowserWindow): void {
-  window.webContents.on("before-input-event", (event, input) => {
-    if (
-      input.type !== "keyDown"
-      || (!input.control && !input.meta)
-      || input.alt
-    ) {
-      return;
-    }
-
-    if (input.key === "+" || input.key === "=") {
-      event.preventDefault();
-      stepDesktopZoom(window, 1);
-      return;
-    }
-    if (input.key === "-") {
-      event.preventDefault();
-      stepDesktopZoom(window, -1);
-      return;
-    }
-    if (input.key === "0") {
-      event.preventDefault();
-      applyDesktopZoomFactor(window, 1, true);
-    }
-  });
-}
-
-async function createMainWindow(preloadPath?: string): Promise<void> {
-  const targetUrl = frontendUrl;
-  const currentBootstrap = bootstrap;
-  const token = clientToken;
-  if (targetUrl === undefined || currentBootstrap === undefined || token === undefined) {
-    throw new Error("Desktop runtime is not ready");
-  }
-
-  const resolvedPreload = preloadPath ?? resolveDesktopPaths({
-    cwd: process.cwd(),
-    resourcesPath: process.resourcesPath,
-    userDataPath: app.getPath("userData"),
-    isPackaged: app.isPackaged
-  }).preloadPath;
-
-  const window = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: DESKTOP_MIN_WIDTH,
-    minHeight: DESKTOP_MIN_HEIGHT,
-    show: false,
-    autoHideMenuBar: true,
-    webPreferences: createSecureWebPreferences(resolvedPreload)
-  });
-  mainWindow = window;
-  const electronSession = window.webContents.session;
-
-  removeTokenInjector?.();
-  const thisRemoveTokenInjector = installDesktopClientTokenInjector(
-    electronSession.webRequest,
-    {
-      commandUrl: `${currentBootstrap.commandBaseUrl}/v1/commands`,
-      rendererStreamUrl: currentBootstrap.rendererStreamUrl,
-      voiceBaseUrl: currentBootstrap.voiceBaseUrl,
-      clientToken: token,
-      webContentsId: window.webContents.id,
-      getTrustedMainFrame: () => {
-        if (window.isDestroyed()) return null;
-        return window.webContents.mainFrame;
-      }
-    }
-  );
-  removeTokenInjector = thisRemoveTokenInjector;
-
-  removePermissionCapability?.();
-  const thisRemovePermissionCapability = installDesktopPermissionCapability(
-    electronSession,
-    {
-      trustedWebContentsId: window.webContents.id,
-      trustedFrontendOrigin: new URL(targetUrl).origin
-    }
-  );
-  removePermissionCapability = thisRemovePermissionCapability;
-
-  installDesktopZoomShortcuts(window);
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  const guardNavigation = (details: { preventDefault(): void; url: string }): void => {
-    if (!isTrustedDesktopNavigation(details.url, targetUrl)) details.preventDefault();
-  };
-  // Electron's current navigation API passes the destination on the details
-  // object. Guard every frame, not only the main frame, so an iframe cannot
-  // navigate away from the trusted loopback origin.
-  window.webContents.on("will-frame-navigate", guardNavigation);
-  window.webContents.on("will-redirect", guardNavigation);
-  window.webContents.on("will-attach-webview", (event) => {
-    event.preventDefault();
-  });
-  window.once("closed", () => {
-    if (mainWindow === window) mainWindow = undefined;
-
-    const permissionCleanup = tryDesktopCleanup(thisRemovePermissionCapability);
-    if (
-      permissionCleanup.ok
-      && removePermissionCapability === thisRemovePermissionCapability
-    ) {
-      removePermissionCapability = undefined;
-    }
-
-    const tokenCleanup = tryDesktopCleanup(thisRemoveTokenInjector);
-    if (tokenCleanup.ok && removeTokenInjector === thisRemoveTokenInjector) {
-      removeTokenInjector = undefined;
-    }
-  });
-
-  await window.loadURL(targetUrl);
-  if (!window.isDestroyed()) {
-    window.show();
-    window.focus();
-  }
-}
-
-async function failStartup(message: string): Promise<void> {
-  process.exitCode = 1;
-  if (process.argv.includes("--install-local-models")) {
-    console.error("Local model setup failed.");
-    app.quit();
-    return;
-  }
-  if (!app.isReady()) {
-    app.quit();
-    return;
-  }
-  if (process.argv.includes("--packaged-smoke-test")) {
-    console.error(message);
-    app.quit();
-    return;
-  }
-  try {
-    await dialog.showMessageBox({
-      type: "error",
-      title: "Interview App startup failed",
-      message
-    });
-  } catch {
-    // Startup failure must still converge to process shutdown if the dialog itself fails.
-  } finally {
-    app.quit();
-  }
-}
-
-function shutdownDesktop(): Promise<void> {
-  if (shutdownPromise !== undefined) return shutdownPromise;
-  shuttingDown = true;
-  startupAbort.abort();
-  bootstrap = undefined;
-  ipcMain.removeAllListeners(DESKTOP_BOOTSTRAP_CHANNEL);
-  ipcMain.removeAllListeners(DESKTOP_ZOOM_CHANNEL);
-  ipcMain.removeHandler(DESKTOP_LOCAL_RUNTIME_STATUS_CHANNEL);
-  ipcMain.removeHandler(DESKTOP_INSTALL_LOCAL_MODELS_CHANNEL);
-
-  const failures: unknown[] = [];
-
-  let capabilityRevocationFailed = false;
-  const permissionCleanup = removePermissionCapability;
-  if (permissionCleanup !== undefined) {
-    const result = tryDesktopCleanup(permissionCleanup);
-    if (result.ok) removePermissionCapability = undefined;
-    else {
-      failures.push(result.error);
-      capabilityRevocationFailed = true;
-    }
-  }
-
-  const tokenCleanup = removeTokenInjector;
-  if (tokenCleanup !== undefined) {
-    const result = tryDesktopCleanup(tokenCleanup);
-    if (result.ok) removeTokenInjector = undefined;
-    else {
-      failures.push(result.error);
-      capabilityRevocationFailed = true;
-    }
-  }
-
-  if (capabilityRevocationFailed) {
-    // A failed permission or authentication-hook revocation leaves capability
-    // state ambiguous. Destroy the only WebContents that could exercise it
-    // before backend/frontend teardown continues.
-    const currentWindow = mainWindow;
-    if (currentWindow !== undefined && !currentWindow.isDestroyed()) {
-      try {
-        currentWindow.destroy();
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-  }
-
-  clientToken = undefined;
-
-  shutdownPromise = (async () => {
-    try {
-      await backend.stop();
-    } catch (error) {
-      failures.push(error);
-    }
-
-    const activeModelInstall = modelInstallPromise;
-    if (activeModelInstall !== undefined) {
-      await activeModelInstall.catch(() => undefined);
-    }
-
-    const currentLocalRuntime = localRuntime;
-    if (currentLocalRuntime !== undefined) {
-      try {
-        await currentLocalRuntime.stopWorkers();
-        if (localRuntime === currentLocalRuntime) localRuntime = undefined;
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-
-    const currentFrontendServer = frontendServer;
-    if (currentFrontendServer !== undefined) {
-      try {
-        await currentFrontendServer.stop();
-        if (frontendServer === currentFrontendServer) frontendServer = undefined;
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-
-    frontendUrl = undefined;
-    if (failures.length > 0) {
-      throw new AggregateError(failures, "Desktop shutdown failed");
-    }
-  })();
-  return shutdownPromise;
-}
