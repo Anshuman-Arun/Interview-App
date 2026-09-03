@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -218,11 +218,13 @@ describe("desktop local model runtime", () => {
     });
     compositions.push(composition);
 
-    await composition.start();
-
     const mutable = composition as unknown as {
       pythonExecutable?: string;
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
     };
+    mutable.pythonRuntimeCompatible = () => true;
+    await composition.start();
+
     expect(mutable.pythonExecutable).toBe(launcher);
   });
 
@@ -254,6 +256,95 @@ describe("desktop local model runtime", () => {
       vision: {
         state: "UNAVAILABLE",
         reasonCode: "NO_PRODUCTION_BACKEND_CONFIGURED"
+      }
+    });
+  });
+
+  it("refuses model downloads before asset admission when Python is unavailable", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-model-install-python-missing-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: join(
+        temporaryRoot("desktop-model-install-python-bin-"),
+        process.platform === "win32" ? "python.exe" : "python3"
+      )
+    });
+    compositions.push(composition);
+
+    let cleanupCalls = 0;
+    let installCalls = 0;
+    const mutable = composition as unknown as {
+      assetManager: {
+        cleanupTemporary(signal?: AbortSignal): Promise<void>;
+        install(...args: readonly unknown[]): Promise<unknown>;
+      };
+    };
+    mutable.assetManager.cleanupTemporary = async () => {
+      cleanupCalls += 1;
+    };
+    mutable.assetManager.install = async () => {
+      installCalls += 1;
+      return {};
+    };
+
+    await expect(composition.installVoiceAssets()).rejects.toThrow(
+      "compatible Python runtime"
+    );
+    expect(cleanupCalls).toBe(0);
+    expect(installCalls).toBe(0);
+  });
+
+  it("reports an incompatible Python runtime before model admission", async () => {
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-python-incompatible-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: false,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    await expect(composition.start()).resolves.toBeUndefined();
+
+    expect(composition.getCapabilityStatus()).toMatchObject({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_INCOMPATIBLE"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "PYTHON_RUNTIME_INCOMPATIBLE"
+      }
+    });
+  });
+
+  it("rejects a tampered packaged Python worker before interpreter execution", async () => {
+    const workerRoot = temporaryRoot("desktop-packaged-worker-tamper-");
+    const workerPath = join(workerRoot, "local_model_worker.py");
+    writeFileSync(workerPath, "print('tampered worker')\n", "utf8");
+
+    const composition = new DesktopLocalRuntimeComposition({
+      appDataRoot: temporaryRoot("desktop-packaged-worker-appdata-"),
+      cwd: process.cwd(),
+      resourcesPath: process.cwd(),
+      isPackaged: true,
+      workerScriptPath: workerPath,
+      pythonExecutable: process.execPath
+    });
+    compositions.push(composition);
+
+    await expect(composition.start()).resolves.toBeUndefined();
+    expect(composition.voiceRuntime).toBeUndefined();
+    expect(composition.getCapabilityStatus()).toMatchObject({
+      speech: {
+        state: "UNAVAILABLE",
+        reasonCode: "WORKER_EXECUTABLE_UNAVAILABLE"
+      },
+      tts: {
+        state: "UNAVAILABLE",
+        reasonCode: "WORKER_EXECUTABLE_UNAVAILABLE"
       }
     });
   });
@@ -301,9 +392,11 @@ describe("desktop local model runtime", () => {
 
     const mutable = composition as unknown as {
       speechStatus: { state: string; reasonCode?: string };
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
       startSpeech(signal?: AbortSignal): Promise<void>;
       startTts(signal?: AbortSignal): Promise<void>;
     };
+    mutable.pythonRuntimeCompatible = () => true;
     mutable.startSpeech = async () => {
       mutable.speechStatus = {
         state: "FAILED",
@@ -330,6 +423,10 @@ describe("desktop local model runtime", () => {
     });
     compositions.push(composition);
 
+    const mutable = composition as unknown as {
+      pythonRuntimeCompatible(executable: string, signal?: AbortSignal): boolean;
+    };
+    mutable.pythonRuntimeCompatible = () => true;
     await composition.start();
 
     expect(composition.voiceRuntime).toBeUndefined();

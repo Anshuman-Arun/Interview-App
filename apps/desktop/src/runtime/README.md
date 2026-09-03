@@ -265,18 +265,20 @@ instead of silently running an unvalidated production stack.
 
 ## Packaged executable boundary
 
-This repository currently builds the Electron runtime with TypeScript but does
-not yet contain an Electron Builder/Forge packaging configuration or an
-`extraResources` stage. The packaged-path branch intentionally resolves the
-worker as:
+Windows packaging is owned by the root `electron-builder.yml`. The production
+worker remains outside ASAR and is copied through `extraResources` to the exact
+path this runtime resolves:
 
 ```text
 <process.resourcesPath>/workers/python/local_model_worker.py
 ```
 
-A future installer/package step must copy the production worker (and any
-installation/bootstrap metadata it needs) into that exact application-owned
-resource location. CI in this PR validates production-mode Electron startup and
-the real worker code, but it does **not** produce or validate a self-contained
-packaged executable. Do not interpret `app.isPackaged` path support as proof
-that an installer already bundles the worker.
+The pinned Python runtime requirements file is copied beside it. The Vite
+renderer and preload are also explicit external resources; model weights remain
+per-user post-install data and are not part of the base installer.
+
+`scripts/check-packaged-desktop.mjs` verifies the exact worker/preload copies,
+inspects the ASAR inventory, and rejects fixture/test/database/environment
+material. Windows CI additionally starts the real packaged executable and NSIS
+installation path. See `docs/WINDOWS_DESKTOP_RELEASE.md` for the full release
+boundary and manual real-model checklist.

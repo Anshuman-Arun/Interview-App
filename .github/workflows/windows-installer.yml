@@ -1,0 +1,159 @@
+name: Build Windows installer
+
+on:
+  pull_request:
+    paths:
+      - ".gitattributes"
+      - ".github/workflows/windows-installer.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "electron-builder.yml"
+      - "tsconfig.json"
+      - "apps/desktop/**"
+      - "apps/web/**"
+      - "apps/server/**"
+      - "packages/**"
+      - "workers/python/local_model_worker.py"
+      - "workers/python/requirements-local-model-runtime.txt"
+      - "scripts/check-packaged-desktop.mjs"
+      - "scripts/clean-windows-package.mjs"
+      - "scripts/check-public-release.mjs"
+      - "scripts/run-packaged-desktop-smoke.ps1"
+      - "scripts/test-windows-installer.ps1"
+      - "tests/desktop-packaging.test.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  # Use the immutable head SHA. Pull-request events can be delivered out of
+  # order, so an older delayed event must never cancel validation for a newer
+  # release candidate.
+  group: windows-installer-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Check current PR head
+        id: current_head
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $current = gh api "repos/${{ github.repository }}/pulls/$env:PR_NUMBER" --jq ".head.sha"
+          $isCurrent = if ($current -eq $env:EXPECTED_SHA) { "true" } else { "false" }
+          "current=$isCurrent" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Checkout
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm 11.19.0
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.19.0
+          run_install: false
+
+      - name: Set up Node 22
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate packaging contract
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        run: pnpm test:package:win
+
+      - name: Validate PowerShell release scripts
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: |
+          $files = @(
+            "scripts/run-packaged-desktop-smoke.ps1",
+            "scripts/test-windows-installer.ps1"
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file).Path,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $messages = ($errors | ForEach-Object { $_.Message }) -join "; "
+              throw "PowerShell syntax validation failed for ${file}: ${messages}"
+            }
+          }
+
+      - name: Build synthetic prior-version installer
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: |
+          $backup = Join-Path $env:RUNNER_TEMP "package-current.json"
+          Copy-Item "package.json" $backup -Force
+          try {
+            $package = Get-Content -Raw "package.json" | ConvertFrom-Json
+            if ($package.version -eq "0.0.1") {
+              throw "Current release version collides with the synthetic prior version"
+            }
+            $package.version = "0.0.1"
+            $package | ConvertTo-Json -Depth 100 | Set-Content -Encoding utf8NoBOM "package.json"
+            pnpm dist:win
+            Copy-Item "dist/windows/InterviewApp-Setup-0.0.1.exe" (Join-Path $env:RUNNER_TEMP "InterviewApp-Prior.exe") -Force
+          } finally {
+            Copy-Item $backup "package.json" -Force
+          }
+
+      - name: Build unsigned NSIS installer
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        run: pnpm dist:win
+
+      - name: Assert development installer is unsigned
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "dist/windows/InterviewApp-Setup-*.exe" | Select-Object -First 1
+          if ($null -eq $installer) { throw "Installer artifact is missing" }
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          if ($signature.Status -ne "NotSigned") {
+            throw "Expected unsigned development installer, got Authenticode status $($signature.Status)"
+          }
+
+      - name: Run packaged executable smoke
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: ./scripts/run-packaged-desktop-smoke.ps1
+
+      - name: Run installer upgrade/persistence smoke
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        shell: pwsh
+        run: ./scripts/test-windows-installer.ps1 -PriorInstaller "$env:RUNNER_TEMP\InterviewApp-Prior.exe"
+
+      - name: Upload unsigned installer
+        if: github.event_name != 'pull_request' || steps.current_head.outputs.current == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: InterviewApp-Windows-unsigned-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          path: dist/windows/InterviewApp-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 14

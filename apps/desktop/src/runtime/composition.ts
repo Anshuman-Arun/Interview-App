@@ -1,6 +1,7 @@
-import { randomBytes } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { access, lstat, realpath } from "node:fs/promises";
+import { access, lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import {
   KokoroSpeechSynthesizer,
@@ -35,6 +36,7 @@ import {
   ManagedSileroVadRuntime,
   moonshineRecognizerVersion
 } from "./runtime-adapters.js";
+import { PACKAGED_LOCAL_MODEL_WORKER_SHA256 } from "./packaged-resource-integrity.js";
 import {
   cleanupStaleRuntimeAssetViews,
   materializeRuntimeAssetView,
@@ -84,6 +86,7 @@ export class DesktopLocalRuntimeComposition {
   private readonly runtimeViewsRoot: string;
   private readonly workerScriptPath: string;
   private readonly pythonExecutableCandidate: string;
+  private readonly enforcePackagedWorkerIntegrity: boolean;
   private pythonExecutable: string | undefined;
   private speechStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
   private ttsStatus: DesktopRuntimeCapabilityStatus = unavailable("NOT_STARTED");
@@ -121,6 +124,7 @@ export class DesktopLocalRuntimeComposition {
     );
     this.pythonExecutableCandidate = options.pythonExecutable
       ?? (process.platform === "win32" ? "python" : "python3");
+    this.enforcePackagedWorkerIntegrity = options.isPackaged;
   }
 
   public start(options: { readonly signal?: AbortSignal } = {}): Promise<void> {
@@ -148,6 +152,24 @@ export class DesktopLocalRuntimeComposition {
     if (!isProductionLocalModelPlatformSupported(process.platform, process.arch)) {
       throw new Error("Local model installation is unavailable on this platform");
     }
+    if (abortRequested(signal)) throw abortError();
+    if (!await this.workerScriptIsSafe()) {
+      throw new Error("Local model installation requires the verified production worker");
+    }
+    const pythonExecutable = await resolvePythonExecutable(
+      this.pythonExecutableCandidate,
+      process.platform,
+      process.env
+    );
+    if (pythonExecutable === undefined) {
+      throw new Error("Local model installation requires a compatible Python runtime");
+    }
+    if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
+      if (abortRequested(signal)) throw abortError();
+      throw new Error("Local model installation requires the pinned Python runtime");
+    }
+    this.pythonExecutable = pythonExecutable;
+
     await this.assetManager.cleanupTemporary(signal);
     for (const asset of DESKTOP_LOCAL_MODEL_ASSETS) {
       if (abortRequested(signal)) throw abortError();
@@ -284,6 +306,15 @@ export class DesktopLocalRuntimeComposition {
       return;
     }
     this.pythonExecutable = pythonExecutable;
+    if (!this.pythonRuntimeCompatible(pythonExecutable, signal)) {
+      if (abortRequested(signal)) {
+        this.markPendingCapabilitiesCancelled();
+        return;
+      }
+      this.speechStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
+      this.ttsStatus = unavailable("PYTHON_RUNTIME_INCOMPATIBLE");
+      return;
+    }
 
     // Runtime views copy large verified model artifacts onto the same app-data
     // filesystem. Start them sequentially so each disk-space check sees the
@@ -378,6 +409,13 @@ export class DesktopLocalRuntimeComposition {
         );
       }
     }
+  }
+
+  private pythonRuntimeCompatible(
+    executable: string,
+    signal?: AbortSignal
+  ): boolean {
+    return probePythonRuntime(executable, this.workerScriptPath, signal);
   }
 
   private async startSpeech(signal?: AbortSignal): Promise<void> {
@@ -691,7 +729,13 @@ export class DesktopLocalRuntimeComposition {
   private async workerScriptIsSafe(): Promise<boolean> {
     try {
       const metadata = await lstat(this.workerScriptPath);
-      return metadata.isFile() && !metadata.isSymbolicLink();
+      if (!metadata.isFile() || metadata.isSymbolicLink()) return false;
+      if (!this.enforcePackagedWorkerIntegrity) return true;
+
+      const digest = createHash("sha256")
+        .update(await readFile(this.workerScriptPath))
+        .digest("hex");
+      return digest === PACKAGED_LOCAL_MODEL_WORKER_SHA256;
     } catch {
       return false;
     }
@@ -727,23 +771,50 @@ async function resolvePythonExecutable(
     if (!path.isAbsolute(candidate)) return undefined;
     candidates.push(candidate);
   } else {
-    const rawPath = environment["PATH"];
-    if (typeof rawPath !== "string" || rawPath.length === 0) return undefined;
     const names = platform === "win32"
       ? [candidate.toLowerCase().endsWith(".exe") ? candidate : `${candidate}.exe`]
       : [candidate];
-    for (const rawEntry of rawPath.split(path.delimiter)) {
-      const entry = rawEntry.startsWith('"') && rawEntry.endsWith('"')
-        ? rawEntry.slice(1, -1)
-        : rawEntry;
-      if (entry.length === 0 || !path.isAbsolute(entry)) continue;
-      for (const name of names) candidates.push(path.join(entry, name));
+
+    if (
+      platform === "win32"
+      && (candidate.toLowerCase() === "python" || candidate.toLowerCase() === "python.exe")
+    ) {
+      const localAppData = environment["LOCALAPPDATA"];
+      if (typeof localAppData === "string" && path.isAbsolute(localAppData)) {
+        for (const version of ["Python313", "Python312"]) {
+          candidates.push(path.join(localAppData, "Programs", "Python", version, "python.exe"));
+        }
+      }
+      const programFiles = environment["ProgramFiles"];
+      if (typeof programFiles === "string" && path.isAbsolute(programFiles)) {
+        for (const version of ["Python313", "Python312"]) {
+          candidates.push(path.join(programFiles, version, "python.exe"));
+        }
+      }
     }
+
+    const rawPath = environment["PATH"];
+    if (typeof rawPath === "string" && rawPath.length > 0) {
+      for (const rawEntry of rawPath.split(path.delimiter)) {
+        const entry = rawEntry.startsWith('"') && rawEntry.endsWith('"')
+          ? rawEntry.slice(1, -1)
+          : rawEntry;
+        if (entry.length === 0 || !path.isAbsolute(entry)) continue;
+        for (const name of names) candidates.push(path.join(entry, name));
+      }
+    }
+    if (candidates.length === 0) return undefined;
   }
 
   for (const executableCandidate of candidates.slice(0, 256)) {
     try {
       const executable = path.resolve(executableCandidate);
+      if (
+        platform === "win32"
+        && executable.toLowerCase().includes("\\microsoft\\windowsapps\\")
+      ) {
+        continue;
+      }
       const launcherMetadata = await lstat(executable);
       const target = launcherMetadata.isSymbolicLink()
         ? await realpath(executable)
@@ -764,6 +835,34 @@ async function resolvePythonExecutable(
     }
   }
   return undefined;
+}
+
+function probePythonRuntime(
+  executable: string,
+  workerScriptPath: string,
+  signal: AbortSignal | undefined
+): boolean {
+  if (abortRequested(signal)) return false;
+  const result = spawnSync(
+    executable,
+    ["-I", workerScriptPath, "--check-runtime"],
+    {
+      cwd: path.dirname(workerScriptPath),
+      env: {
+        PATH: path.dirname(executable)
+      },
+      encoding: "utf8",
+      maxBuffer: 16 * 1024,
+      timeout: 5_000,
+      windowsHide: true,
+      shell: false
+    }
+  );
+  if (abortRequested(signal)) return false;
+  return result.error === undefined
+    && result.signal === null
+    && result.status === 0
+    && result.stdout.trim() === '{"runtimeCompatible":true}';
 }
 
 function requiredPythonExecutable(value: string | undefined): string {
